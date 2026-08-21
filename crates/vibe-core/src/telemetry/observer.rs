@@ -290,6 +290,7 @@ where
                 call_id,
                 name,
                 arguments,
+                ..
             } => {
                 turn.calls.insert(
                     call_id.clone(),

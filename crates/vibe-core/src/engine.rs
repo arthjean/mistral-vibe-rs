@@ -729,6 +729,7 @@ where
             call_id: appended.call_id.clone(),
             name: "skill".to_owned(),
             arguments: appended.arguments,
+            remote: None,
         })?;
         recorder.emit(EngineEvent::ToolResult {
             call_id: appended.call_id,
@@ -1102,6 +1103,10 @@ where
                 call_id: call.id.clone(),
                 name: call.name.clone(),
                 arguments: call.arguments.clone(),
+                // The registry is asked once, here, so the projection presents
+                // the call without reaching back into a catalog it does not
+                // hold.
+                remote: self.tools.remote_origin(&call.name),
             })?;
         }
         let mut pending = FuturesUnordered::new();

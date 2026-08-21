@@ -16,6 +16,7 @@ use serde_json::{Value, json};
 
 use super::detail::{
     CallbackDetail, CallbackOutput, EffectDetail, EffectResultDisplay, NoticeDetail,
+    RemoteSettlement,
 };
 use super::*;
 
@@ -187,6 +188,7 @@ pub(super) fn reduce_event(
             call_id,
             name,
             arguments,
+            remote,
         } => {
             require_active(state, "tool_call")?;
             complete_streaming_entries(state, emitted_at);
@@ -198,7 +200,10 @@ pub(super) fn reduce_event(
                     PublicEntryGenerationStatus::InProgress,
                 ),
                 title: name.clone(),
-                detail: Box::new(EffectDetail::for_encoded_call(name, arguments)),
+                detail: Box::new(match remote {
+                    Some(remote) => EffectDetail::for_proxied_call(name, arguments, remote),
+                    None => EffectDetail::for_encoded_call(name, arguments),
+                }),
                 state: PublicEffectState::Running {
                     output_text: String::new(),
                 },
@@ -272,18 +277,35 @@ pub(super) fn reduce_event(
                         },
                         output_text: content.clone(),
                         duration_ms: *duration_ms,
-                        display: EffectResultDisplay::failed(&detail.display),
+                        display: match &detail.remote {
+                            // The reference settles an errored call ahead of
+                            // the tool's own branch, so a remote failure names
+                            // what the server reported.
+                            Some(remote) => EffectResultDisplay::for_remote(
+                                remote,
+                                &detail.display,
+                                &RemoteSettlement::failed(content, &answered),
+                            ),
+                            None => EffectResultDisplay::failed(&detail.display),
+                        },
                     }
                 } else {
                     PublicEffectState::Completed {
                         output_text: content.clone(),
                         duration_ms: *duration_ms,
-                        display: EffectResultDisplay::completed(
-                            detail.kind,
-                            &detail.display,
-                            &answered,
-                            display,
-                        ),
+                        display: match &detail.remote {
+                            Some(remote) => EffectResultDisplay::for_remote(
+                                remote,
+                                &detail.display,
+                                &RemoteSettlement::answered(&answered),
+                            ),
+                            None => EffectResultDisplay::completed(
+                                detail.kind,
+                                &detail.display,
+                                &answered,
+                                display,
+                            ),
+                        },
                         output,
                     }
                 };

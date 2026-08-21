@@ -13,8 +13,9 @@ pub mod detail;
 pub use detail::{
     ApprovalDecision, ApprovalDecisionType, CallbackDetail, CallbackOutput, EffectCallDisplay,
     EffectDetail, EffectResultDisplay, HookNotice, HookScope, HookSeverity, NoticeDetail,
-    QuestionChoice, TodoEffectItem, TodoEffectPriority, TodoEffectStatus, ToolEffectKind,
-    UserAnswer, UserQuestion, UserQuestionRequest, UserQuestionResult,
+    QuestionChoice, RemoteSettlement, RemoteToolKind, RemoteToolOrigin, TodoEffectItem,
+    TodoEffectPriority, TodoEffectStatus, ToolEffectKind, UserAnswer, UserQuestion,
+    UserQuestionRequest, UserQuestionResult,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -53,6 +54,12 @@ pub enum EngineEvent {
         call_id: String,
         name: String,
         arguments: String,
+        /// The remote the session proxies this call to, absent for a tool it
+        /// implements itself. The registry is the only holder of the name the
+        /// server published, and the projection that renders the call has no
+        /// access to it, so the event carries it across.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        remote: Option<RemoteToolOrigin>,
     },
     ToolStream {
         call_id: String,
@@ -824,6 +831,7 @@ mod tests {
                 call_id: "call-1".to_owned(),
                 name: "bash".to_owned(),
                 arguments: "{}".to_owned(),
+                remote: None,
             },
         )
         .expect("the tool call projects");
@@ -1286,6 +1294,7 @@ mod tests {
                     call_id: "call-1".to_owned(),
                     name: "task".to_owned(),
                     arguments: r#"{"task":"audit","agent":"explore"}"#.to_owned(),
+                    remote: None,
                 },
             ),
             event(
@@ -1353,6 +1362,7 @@ mod tests {
                     call_id: "call-1".to_owned(),
                     name: "read".to_owned(),
                     arguments: "{}".to_owned(),
+                    remote: None,
                 },
             ),
             (
@@ -1361,6 +1371,7 @@ mod tests {
                     call_id: "call-2".to_owned(),
                     name: "read".to_owned(),
                     arguments: "{}".to_owned(),
+                    remote: None,
                 },
             ),
         ] {
@@ -1409,5 +1420,223 @@ mod tests {
             .expect("reasoning projects");
         let public = serde_json::to_string(reducer.state()).expect("public state serializes");
         assert!(!public.contains("provider-signature"));
+    }
+    /// Drives one proxied call through the reducer and hands back what the
+    /// projection published for it.
+    ///
+    /// The reducer is the only path a client's display ever comes from, so a
+    /// presentation claim measured anywhere else proves nothing about what a
+    /// terminal or an editor bridge renders.
+    fn proxied_effect(
+        remote: RemoteToolOrigin,
+        name: &str,
+        arguments: &str,
+        settle: EngineEvent,
+    ) -> (EffectDetail, PublicEffectState) {
+        let mut reducer = ProjectionReducer::new("session-1");
+        reducer
+            .apply(&event(
+                1,
+                EngineEvent::UserMessage {
+                    content: "go".to_owned(),
+                },
+            ))
+            .expect("the turn starts");
+        reducer
+            .apply(&event(
+                2,
+                EngineEvent::ToolCall {
+                    call_id: "call-1".to_owned(),
+                    name: name.to_owned(),
+                    arguments: arguments.to_owned(),
+                    remote: Some(remote),
+                },
+            ))
+            .expect("the proxied call projects");
+        reducer.apply(&event(3, settle)).expect("the call settles");
+        reducer
+            .state()
+            .history
+            .iter()
+            .find_map(|entry| match entry {
+                PublicHistoryEntry::Effect { detail, state, .. } => {
+                    Some(((**detail).clone(), state.clone()))
+                }
+                _ => None,
+            })
+            .expect("the projection holds the effect entry")
+    }
+
+    /// The event a server answers a proxied call with.
+    fn remote_answer(typed_result: Value, is_error: bool) -> EngineEvent {
+        EngineEvent::ToolResult {
+            call_id: "call-1".to_owned(),
+            content: "server unavailable".to_owned(),
+            typed_result,
+            projected_result: Value::Null,
+            display: Value::Null,
+            duration_ms: 4,
+            is_error,
+            cancelled: false,
+        }
+    }
+
+    fn settled_display(state: &PublicEffectState) -> EffectResultDisplay {
+        match state {
+            PublicEffectState::Completed { display, .. }
+            | PublicEffectState::Failed { display, .. } => Some(display.clone()),
+            _ => None,
+        }
+        .expect("the call settled into a completed or a failed state")
+    }
+
+    #[test]
+    fn a_proxied_call_projects_the_presentation_its_source_names() {
+        let (mcp, _) = proxied_effect(
+            RemoteToolOrigin::mcp("search"),
+            "mcp_docs_search",
+            r#"{"query":"parity"}"#,
+            remote_answer(json!({"ok": true, "tool": "search"}), false),
+        );
+        assert_eq!(mcp.display.summary, "mcp_docs_search");
+        assert_eq!(mcp.display.status_text, "Calling MCP tool search");
+        assert_eq!(
+            mcp.display.settled_message.as_deref(),
+            Some("mcp_docs_search")
+        );
+
+        let (connector, _) = proxied_effect(
+            RemoteToolOrigin::connector("issue"),
+            "connector_github_issue",
+            "",
+            remote_answer(json!({"ok": true, "tool": "issue"}), false),
+        );
+        // No arguments arrived, and the proxy renders none either way, so the
+        // summary is the published name with no empty parentheses behind it.
+        assert_eq!(connector.display.summary, "connector_github_issue");
+        assert_eq!(
+            connector.display.status_text,
+            "Calling connector tool issue"
+        );
+
+        // A builtin keeps the status text its kind publishes.
+        let mut reducer = ProjectionReducer::new("session-1");
+        reducer
+            .apply(&event(
+                1,
+                EngineEvent::UserMessage {
+                    content: "go".to_owned(),
+                },
+            ))
+            .expect("the turn starts");
+        reducer
+            .apply(&event(
+                2,
+                EngineEvent::ToolCall {
+                    call_id: "call-1".to_owned(),
+                    name: "bash".to_owned(),
+                    arguments: r#"{"command":"echo alpha"}"#.to_owned(),
+                    remote: None,
+                },
+            ))
+            .expect("the builtin call projects");
+        let PublicHistoryEntry::Effect { detail, .. } = reducer
+            .state()
+            .history
+            .last()
+            .expect("the effect entry")
+            .clone()
+        else {
+            unreachable!("the last entry is the effect just projected")
+        };
+        assert_eq!(
+            detail.display.status_text,
+            ToolEffectKind::Shell.status_text()
+        );
+        assert_eq!(
+            detail.display.settled_message.as_deref(),
+            Some("echo alpha")
+        );
+    }
+
+    #[test]
+    fn a_proxied_call_settles_from_what_its_server_answered() {
+        // A result the server answered names the remote tool.
+        let (_, answered) = proxied_effect(
+            RemoteToolOrigin::mcp("search"),
+            "mcp_docs_search",
+            "{}",
+            remote_answer(json!({"ok": true, "tool": "search"}), false),
+        );
+        let display = settled_display(&answered);
+        assert!(display.success);
+        assert_eq!(display.verb, "Ran");
+        assert_eq!(display.message, "search");
+
+        // The connector proxy prefixes it.
+        let (_, connector) = proxied_effect(
+            RemoteToolOrigin::connector("issue"),
+            "connector_github_issue",
+            "{}",
+            remote_answer(json!({"ok": true, "tool": "issue"}), false),
+        );
+        assert_eq!(settled_display(&connector).message, "connector issue");
+
+        // A proxy result reporting failure settles as one even though the call
+        // itself did not error.
+        let (_, refused) = proxied_effect(
+            RemoteToolOrigin::mcp("search"),
+            "mcp_docs_search",
+            "{}",
+            remote_answer(
+                json!({"ok": false, "server": "docs", "tool": "search"}),
+                false,
+            ),
+        );
+        let refused = settled_display(&refused);
+        assert!(!refused.success);
+        assert_eq!(refused.message, "search");
+
+        // An errored call reports what went wrong, ahead of the result branch.
+        let (_, errored) = proxied_effect(
+            RemoteToolOrigin::mcp("search"),
+            "mcp_docs_search",
+            "{}",
+            remote_answer(json!({"ok": true, "tool": "search"}), true),
+        );
+        let errored = settled_display(&errored);
+        assert!(!errored.success);
+        assert_eq!(errored.message, "server unavailable");
+
+        // An answer shaped like nothing the proxy declares settles as a failure
+        // rather than taking the reducer down.
+        let (_, unreadable) = proxied_effect(
+            RemoteToolOrigin::mcp("search"),
+            "mcp_docs_search",
+            "{}",
+            remote_answer(json!(["not", "a", "result"]), false),
+        );
+        let unreadable = settled_display(&unreadable);
+        assert!(!unreadable.success);
+        assert_eq!(unreadable.message, "No result");
+
+        // What a real peer publishes is the server's own `structuredContent`,
+        // which shares the proxy result's field names without carrying its
+        // meaning. A tool reporting `ok: false` about its own subject settled a
+        // successful call as a failure, and one carrying a `tool` key renamed
+        // the header, until the settlement stopped reading a payload that names
+        // no server.
+        let (_, structured) = proxied_effect(
+            RemoteToolOrigin::mcp("search"),
+            "mcp_docs_search",
+            "{}",
+            remote_answer(
+                json!({"ok": false, "tool": "the server's own field"}),
+                false,
+            ),
+        );
+        let structured = settled_display(&structured);
+        assert!(structured.success);
+        assert_eq!(structured.message, "search");
     }
 }

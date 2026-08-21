@@ -805,7 +805,12 @@ fn register_remote_tools(
             source: ToolSource::Mcp,
             selection_priority: 50,
         };
-        match tools.register_exclusive(spec, guarded, origin) {
+        match tools.register_exclusive(
+            spec,
+            guarded,
+            origin,
+            Some(crate::events::RemoteToolOrigin::mcp(&remote.name)),
+        ) {
             Ok(_) => registered.push(public_name),
             Err(error) => diagnostics.push(canonical_diagnostic(
                 alias,

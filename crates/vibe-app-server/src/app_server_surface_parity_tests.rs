@@ -1475,6 +1475,7 @@ async fn every_effect_kind_publishes_an_entry_that_validates_against_the_census(
                 call_id: "call-1".to_owned(),
                 name: tool.clone(),
                 arguments,
+                remote: None,
             },
             EngineEvent::ToolResult {
                 call_id: "call-1".to_owned(),
@@ -1541,6 +1542,7 @@ fn every_settled_effect_state_carries_the_display_its_variant_declares() {
         call_id: "call-1".to_owned(),
         name: "bash".to_owned(),
         arguments: r#"{"command":"cargo test"}"#.to_owned(),
+        remote: None,
     };
     let result = |typed_result: Value, is_error: bool, cancelled: bool| EngineEvent::ToolResult {
         call_id: "call-1".to_owned(),

@@ -13,6 +13,7 @@ use serde_json::{Map, Value};
 use thiserror::Error;
 
 use crate::engine::{ToolExecutor, ToolFuture, ToolStreamSink};
+use crate::events::RemoteToolOrigin;
 use crate::matching::NameFilter;
 use crate::text::truncate_utf8;
 
@@ -279,6 +280,10 @@ struct RegisteredTool {
     origin: String,
     /// The prerequisite this tool is published under, when it has one.
     condition: Option<ToolCondition>,
+    /// The remote this tool proxies, when it is not implemented here. The
+    /// published name does not carry it back, so the registration that knew it
+    /// is where it is kept.
+    remote: Option<RemoteToolOrigin>,
 }
 
 impl RegisteredTool {
@@ -383,7 +388,7 @@ impl ToolRegistry {
         handler: Arc<dyn ToolHandler>,
     ) -> Result<RegistrationOutcome, ToolError> {
         let origin = format!("{:?} tool `{}`", spec.source, spec.name);
-        self.insert(spec, handler, origin, false, None)
+        self.insert(spec, handler, origin, false, None, None)
     }
 
     /// Registers a tool published only while `condition` holds.
@@ -398,7 +403,7 @@ impl ToolRegistry {
         condition: ToolCondition,
     ) -> Result<RegistrationOutcome, ToolError> {
         let origin = format!("{:?} tool `{}`", spec.source, spec.name);
-        self.insert(spec, handler, origin, false, Some(condition))
+        self.insert(spec, handler, origin, false, Some(condition), None)
     }
 
     /// Registers a tool that must own its published name outright.
@@ -408,13 +413,25 @@ impl ToolRegistry {
     /// would let the later claim silently shadow the earlier one, so an
     /// exclusive registration that finds the name taken is rejected and both
     /// sources are named.
+    ///
+    /// `remote` names the server-side tool the registration proxies, which the
+    /// projection needs to present the call and which `{alias}_{tool}` cannot
+    /// be split back into.
     pub fn register_exclusive(
         &self,
         spec: ToolSpec,
         handler: Arc<dyn ToolHandler>,
         origin: impl Into<String>,
+        remote: Option<RemoteToolOrigin>,
     ) -> Result<RegistrationOutcome, ToolError> {
-        self.insert(spec, handler, origin.into(), true, None)
+        self.insert(spec, handler, origin.into(), true, None, remote)
+    }
+
+    /// The remote a published tool proxies, or nothing when this session
+    /// implements it.
+    #[must_use]
+    pub fn remote_origin(&self, name: &str) -> Option<RemoteToolOrigin> {
+        self.tools.read().ok()?.get(name)?.remote.clone()
     }
 
     fn insert(
@@ -424,6 +441,7 @@ impl ToolRegistry {
         origin: String,
         exclusive: bool,
         condition: Option<ToolCondition>,
+        remote: Option<RemoteToolOrigin>,
     ) -> Result<RegistrationOutcome, ToolError> {
         spec.validate()?;
         let discovery_index = self.next_discovery_index.fetch_add(1, Ordering::Relaxed);
@@ -461,6 +479,7 @@ impl ToolRegistry {
                     discovery_index,
                     origin,
                     condition,
+                    remote,
                 },
             );
             Ok(outcome)
@@ -626,6 +645,10 @@ impl ToolRegistry {
 }
 
 impl ToolExecutor for ToolRegistry {
+    fn remote_origin(&self, name: &str) -> Option<RemoteToolOrigin> {
+        Self::remote_origin(self, name)
+    }
+
     fn execute<'a>(&'a self, name: &'a str, arguments: &'a str) -> ToolFuture<'a> {
         Box::pin(async move {
             let arguments = serde_json::from_str(arguments)
@@ -930,7 +953,12 @@ mod tests {
     fn a_second_source_claiming_a_published_name_is_rejected_naming_both() {
         let tools = ToolRegistry::default();
         tools
-            .register_exclusive(spec(50), handler("first"), "MCP server `docs` tool `read`")
+            .register_exclusive(
+                spec(50),
+                handler("first"),
+                "MCP server `docs` tool `read`",
+                None,
+            )
             .expect("the first claim wins the name");
 
         let conflict = tools
@@ -938,6 +966,7 @@ mod tests {
                 spec(50),
                 handler("second"),
                 "MCP server `docs_read` tool ``",
+                None,
             )
             .expect_err("the second claim cannot take the name");
 
@@ -958,6 +987,7 @@ mod tests {
                 spec(50),
                 handler("refreshed"),
                 "MCP server `docs` tool `read`",
+                None,
             )
             .expect("a provider may republish its own tool");
     }

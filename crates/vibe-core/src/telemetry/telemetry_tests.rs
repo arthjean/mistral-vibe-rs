@@ -494,6 +494,7 @@ fn tool_events(content: &str, is_error: bool) -> [EventEnvelope; 2] {
                 call_id: "call-1".to_owned(),
                 name: "write_file".to_owned(),
                 arguments: json!({"file_path": "/oracle/workspace/File.RS"}).to_string(),
+                remote: None,
             },
         },
         EventEnvelope {

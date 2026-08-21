@@ -593,6 +593,7 @@ impl ConnectorRegistry {
                         spec,
                         guarded,
                         format!("connector `{connector_id}` tool `{}`", remote.name),
+                        Some(crate::events::RemoteToolOrigin::connector(&remote.name)),
                     )
                     .map_err(|error| IntegrationError::Tool(error.to_string()))?;
                 registered.push(public_name);
@@ -740,6 +741,13 @@ mod tests {
                 Arc::new(Approve),
             )
             .expect("register tools");
+        // The published name sanitizes the connector title and joins it to the
+        // tool name, so only the registration knows the connector publishes
+        // `search`, and the presentation of a proxied call reads it from there.
+        assert_eq!(
+            tools.remote_origin("connector_Tracker_search"),
+            Some(crate::events::RemoteToolOrigin::connector("search"))
+        );
         registry.invalidate_cache().expect("invalidate cache");
         let mut invalid = definition("two", "Broken");
         invalid.tools[0].input_schema = json!({"type": "object", "properties": []});

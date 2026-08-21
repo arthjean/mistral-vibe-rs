@@ -21,7 +21,9 @@ use super::{
     ToolFuture, ToolStreamSink, current_time_millis,
 };
 use crate::compaction::CompactionFailure;
-use crate::events::{EventEnvelope, ModelMessage, ProjectionSnapshot, SessionHandoffCause};
+use crate::events::{
+    EventEnvelope, ModelMessage, ProjectionSnapshot, RemoteToolOrigin, SessionHandoffCause,
+};
 use crate::provider::{
     ModelCallDescriptor, ProviderBackend, ProviderChunk, ProviderInput, ProviderStream,
     ProviderTransport, RetrySink,
@@ -183,6 +185,16 @@ impl RetrySink for ChannelRetrySink {
 }
 
 pub trait ToolExecutor: Send + Sync {
+    /// The remote a published tool proxies, when the executor publishes one.
+    ///
+    /// The projection presents a proxied call from the name its server gave it,
+    /// which only the registration holds, so the engine asks here before it
+    /// raises the call event. An executor that publishes nothing remote keeps
+    /// the default.
+    fn remote_origin(&self, _name: &str) -> Option<RemoteToolOrigin> {
+        None
+    }
+
     fn execute<'a>(&'a self, name: &'a str, arguments: &'a str) -> ToolFuture<'a>;
 
     fn execute_stream<'a>(

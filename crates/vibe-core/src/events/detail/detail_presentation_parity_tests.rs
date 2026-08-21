@@ -34,7 +34,7 @@ use crate::text::hex_encode;
 
 use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 
-use super::{EffectDetail, EffectResultDisplay};
+use super::{EffectDetail, EffectResultDisplay, RemoteSettlement, RemoteToolOrigin};
 
 const CORPUS_RELATIVE: &str = "crates/vibe-core/tests/tool-presentation/corpus.json";
 const CAPTURE_SCRIPT: &str = "scripts/parity/tool_presentation.py";
@@ -86,15 +86,6 @@ fn names_a_story(closed_by: &str) -> bool {
 /// reason is a property of the gap, not of the case that happens to reveal it.
 /// Each is stated once so a story landing removes one sentence rather than
 /// dozens.
-const REMOTE_SUMMARY: &str = "the reference routes a remote call through `ToolUIData`, whose \
-     summary is the published name alone; this port renders the generic argument form";
-const REMOTE_STATUS: &str = "the reference's remote proxies name the remote tool in their status \
-     text; this port publishes the generic kind label";
-const SETTLED_MESSAGE: &str = "the reference's adapter fills `settledMessage` from `summary` on \
-     every tool; this port publishes null and leaves the fallback to each client";
-const REMOTE_RESULT: &str = "the reference settles a remote call from its `MCPToolResult`; this \
-     port settles it from the generic kind, which names the call subject instead of the remote \
-     tool";
 const NO_ARGUMENTS: &str = "the reference answers a call whose arguments never arrived with \
      `get_no_args_display`, whose summary is the tool's display name alone; this port renders the \
      kind's header over empty arguments";
@@ -212,8 +203,8 @@ fn ledger() -> Vec<Divergence> {
             tool,
             "absent-arguments",
             "/display/settledMessage",
-            "US-258",
-            SETTLED_MESSAGE,
+            "US-268",
+            NO_ARGUMENTS,
         );
         add(
             tool,
@@ -233,15 +224,8 @@ fn ledger() -> Vec<Divergence> {
             tool,
             "wrong-argument-type",
             "/display/settledMessage",
-            "US-258",
-            SETTLED_MESSAGE,
-        );
-        add(
-            tool,
-            "valid-arguments",
-            "/display/settledMessage",
-            "US-258",
-            SETTLED_MESSAGE,
+            LICENSING,
+            INVALID_ARGUMENTS,
         );
         add(
             tool,
@@ -358,6 +342,20 @@ fn ledger() -> Vec<Divergence> {
     );
     add(
         PLAN_TOOL,
+        "valid-arguments",
+        "/display/settledMessage",
+        LICENSING,
+        PLAN_DISPLAY,
+    );
+    add(
+        FETCH_TOOL,
+        "valid-arguments",
+        "/display/settledMessage",
+        LICENSING,
+        FETCH_SUMMARY,
+    );
+    add(
+        PLAN_TOOL,
         "successful-result",
         "/display/message",
         "US-268",
@@ -380,62 +378,6 @@ fn ledger() -> Vec<Divergence> {
     for tool in REMOTE_TOOLS {
         add(
             tool,
-            "valid-arguments",
-            "/display/summary",
-            "US-256",
-            REMOTE_SUMMARY,
-        );
-        add(
-            tool,
-            "valid-arguments",
-            "/display/message",
-            "US-256",
-            REMOTE_SUMMARY,
-        );
-        add(
-            tool,
-            "valid-arguments",
-            "/display/settledMessage",
-            "US-258",
-            SETTLED_MESSAGE,
-        );
-        add(
-            tool,
-            "valid-arguments",
-            "/display/statusText",
-            "US-257",
-            REMOTE_STATUS,
-        );
-        add(
-            tool,
-            "absent-arguments",
-            "/display/summary",
-            "US-256",
-            REMOTE_SUMMARY,
-        );
-        add(
-            tool,
-            "absent-arguments",
-            "/display/message",
-            "US-256",
-            REMOTE_SUMMARY,
-        );
-        add(
-            tool,
-            "absent-arguments",
-            "/display/settledMessage",
-            "US-258",
-            SETTLED_MESSAGE,
-        );
-        add(
-            tool,
-            "absent-arguments",
-            "/display/statusText",
-            "US-257",
-            REMOTE_STATUS,
-        );
-        add(
-            tool,
             "wrong-argument-type",
             "/display/summary",
             LICENSING,
@@ -452,38 +394,10 @@ fn ledger() -> Vec<Divergence> {
             tool,
             "wrong-argument-type",
             "/display/settledMessage",
-            "US-258",
-            SETTLED_MESSAGE,
-        );
-        add(
-            tool,
-            "wrong-argument-type",
-            "/display/statusText",
-            "US-257",
-            REMOTE_STATUS,
-        );
-        add(
-            tool,
-            "successful-result",
-            "/display/message",
-            "US-259",
-            REMOTE_RESULT,
-        );
-        add(
-            tool,
-            "error-result",
-            "/display/message",
-            "US-259",
-            ERROR_FORWARDING,
+            LICENSING,
+            INVALID_ARGUMENTS,
         );
         add(tool, "error-result", "/display/verb", "US-268", ERROR_VERB);
-        add(
-            tool,
-            "skipped-result",
-            "/display/message",
-            "US-259",
-            SKIP_LABEL,
-        );
     }
     entries
 }
@@ -764,16 +678,30 @@ fn wrong_arguments() -> Value {
 /// too because a settled header is derived from the live one.
 fn call_detail(case: &Case) -> Option<EffectDetail> {
     let tool = case.tool.as_str();
-    Some(match case.case.as_str() {
+    let arguments = match case.case.as_str() {
         // A call whose arguments never arrived reaches this port as an
         // unparseable argument string, which is the state the engine records.
-        "absent-arguments" => EffectDetail::for_encoded_call(tool, ""),
-        "wrong-argument-type" => EffectDetail::for_call(tool, &wrong_arguments()),
+        "absent-arguments" => String::new(),
+        "wrong-argument-type" => wrong_arguments().to_string(),
         "valid-arguments" | "successful-result" | "error-result" | "skipped-result" => {
-            EffectDetail::for_call(tool, &case.arguments)
+            case.arguments.to_string()
         }
         _ => return None,
+    };
+    Some(match remote_origin(case) {
+        Some(remote) => EffectDetail::for_proxied_call(tool, &arguments, &remote),
+        None => EffectDetail::for_encoded_call(tool, &arguments),
     })
+}
+
+/// The remote a case's tool is published by, read from the source the capture
+/// recorded rather than guessed from the published name.
+fn remote_origin(case: &Case) -> Option<RemoteToolOrigin> {
+    match case.source.as_str() {
+        "mcp" => Some(RemoteToolOrigin::mcp(REMOTE_NAME)),
+        "connector" => Some(RemoteToolOrigin::connector(REMOTE_NAME)),
+        _ => None,
+    }
 }
 
 /// What this port publishes for one case, in the corpus's own shape.
@@ -782,12 +710,23 @@ fn observed(case: &Case) -> Value {
     if case.phase == "call" {
         return json!({"kind": detail.kind, "display": detail.display});
     }
-    let display = if !case.error.is_null() {
-        EffectResultDisplay::failed(&detail.display)
-    } else if case.skipped {
-        EffectResultDisplay::skipped(&case.tool)
-    } else {
-        EffectResultDisplay::completed(detail.kind, &detail.display, &case.output, &Value::Null)
+    let display = match &detail.remote {
+        Some(remote) => {
+            let error = case.error.as_str().unwrap_or_default();
+            let settled = if !error.is_empty() {
+                RemoteSettlement::failed(error, &case.output)
+            } else if case.skipped {
+                RemoteSettlement::skipped("", &case.output)
+            } else {
+                RemoteSettlement::answered(&case.output)
+            };
+            EffectResultDisplay::for_remote(remote, &detail.display, &settled)
+        }
+        None if !case.error.is_null() => EffectResultDisplay::failed(&detail.display),
+        None if case.skipped => EffectResultDisplay::skipped(&case.tool),
+        None => {
+            EffectResultDisplay::completed(detail.kind, &detail.display, &case.output, &Value::Null)
+        }
     };
     json!({"kind": detail.kind, "display": display})
 }

@@ -12,7 +12,10 @@
 //! the editor bridge and a reference client all render the same header instead
 //! of each deriving one from the raw arguments.
 
-use serde::{Deserialize, Serialize};
+use std::fmt;
+
+use serde::de::{IgnoredAny, MapAccess, Visitor};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
 
 use crate::policy::PermissionRequirement;
@@ -254,6 +257,28 @@ pub struct EffectCallDisplay {
 }
 
 impl EffectCallDisplay {
+    /// Fills the four defaults the reference's adapter applies after the tool
+    /// has spoken, so a display that named none of them still renders.
+    ///
+    /// `settledMessage` falls back to the summary and not to the message, which
+    /// is what makes a settled header name the whole call rather than the
+    /// subject the running header narrowed to. A display that named one of the
+    /// four keeps it: the adapter only fills what is missing.
+    fn fill_defaults(&mut self) {
+        if self.message.is_none() {
+            self.message = Some(self.summary.clone());
+        }
+        if self.verb.is_empty() {
+            self.verb = "Running".to_owned();
+        }
+        if self.settled_message.is_none() {
+            self.settled_message = Some(self.summary.clone());
+        }
+        if self.settled_verb.is_empty() {
+            self.settled_verb = "Ran".to_owned();
+        }
+    }
+
     /// The subject the header renders, falling back to the collapsed summary
     /// when a call arrived without the argument that names it.
     #[must_use]
@@ -279,6 +304,164 @@ pub struct EffectResultDisplay {
     pub suffix: String,
 }
 
+/// Which registry published a tool this session only proxies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RemoteToolKind {
+    Mcp,
+    Connector,
+}
+
+/// The remote a proxied call reaches, carried beside the published name.
+///
+/// The published name is not invertible: `public_tool_name` sanitizes an MCP
+/// name and joins it to a sanitized alias, so `acme_create_issue` no longer
+/// says where the alias stops. The presentation needs the name the server
+/// itself publishes, so the registration that knows it hands it forward rather
+/// than letting the projection guess.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteToolOrigin {
+    pub kind: RemoteToolKind,
+    /// The name the server publishes the tool under, which the alias prefix is
+    /// absent from.
+    pub remote_name: String,
+}
+
+impl RemoteToolOrigin {
+    /// The origin of a tool an MCP server publishes as `remote_name`.
+    #[must_use]
+    pub fn mcp(remote_name: impl Into<String>) -> Self {
+        Self {
+            kind: RemoteToolKind::Mcp,
+            remote_name: remote_name.into(),
+        }
+    }
+
+    /// The origin of a tool a connector publishes as `remote_name`.
+    #[must_use]
+    pub fn connector(remote_name: impl Into<String>) -> Self {
+        Self {
+            kind: RemoteToolKind::Connector,
+            remote_name: remote_name.into(),
+        }
+    }
+
+    /// What the loading indicator says while a proxied call runs.
+    ///
+    /// The reference's two proxy factories close over the remote tool, so the
+    /// sentence names the tool as its server published it and never the alias
+    /// prefix the session added. A registration that recorded no remote name
+    /// falls back to the published one rather than naming nothing.
+    #[must_use]
+    fn status_text(&self, published_name: &str) -> String {
+        let named = if self.remote_name.is_empty() {
+            published_name
+        } else {
+            &self.remote_name
+        };
+        match self.kind {
+            RemoteToolKind::Mcp => format!("Calling MCP tool {named}"),
+            RemoteToolKind::Connector => format!("Calling connector tool {named}"),
+        }
+    }
+
+    /// The subject the settled header names, which the connector prefixes.
+    fn settled_subject(&self, answered: &str) -> String {
+        match self.kind {
+            RemoteToolKind::Mcp => answered.to_owned(),
+            RemoteToolKind::Connector => format!("connector {answered}"),
+        }
+    }
+}
+
+/// What a settled proxied call reports, in the three fields the reference's
+/// adapter reads before it hands the result to the proxy.
+///
+/// They are named rather than positional because two of the three are strings
+/// that would otherwise be transposable, and reading an error as a skip reason
+/// would publish a failure as a skip.
+#[derive(Debug, Clone, Copy)]
+pub struct RemoteSettlement<'a> {
+    /// What the call failed with, empty when it did not fail.
+    pub error: &'a str,
+    /// Whether the call never ran, which a reason alone does not say.
+    pub skipped: bool,
+    /// Why it never ran, empty when nothing named a reason.
+    pub skip_reason: &'a str,
+    /// The typed result the server answered with.
+    pub output: &'a Value,
+}
+
+impl<'a> RemoteSettlement<'a> {
+    /// The settlement of a call that answered with `output`.
+    #[must_use]
+    pub fn answered(output: &'a Value) -> Self {
+        Self {
+            error: "",
+            skipped: false,
+            skip_reason: "",
+            output,
+        }
+    }
+
+    /// The settlement of a call that failed with `error`.
+    #[must_use]
+    pub fn failed(error: &'a str, output: &'a Value) -> Self {
+        Self {
+            error,
+            skipped: false,
+            skip_reason: "",
+            output,
+        }
+    }
+
+    /// The settlement of a call that never ran.
+    #[must_use]
+    pub fn skipped(skip_reason: &'a str, output: &'a Value) -> Self {
+        Self {
+            error: "",
+            skipped: true,
+            skip_reason,
+            output,
+        }
+    }
+}
+
+/// The result a remote server answered with, as far as the settled header
+/// reads it.
+///
+/// The reference models it as `MCPToolResult`, which its own proxy builds, so
+/// every field it reads is the proxy's. This port's peers publish the server's
+/// `structuredContent` verbatim as the typed result, so the same keys can be
+/// the server's instead: a tool answering `{"ok": false}` about its own subject
+/// is not a proxy reporting a failed call. `server` is the field that tells the
+/// two apart, because only the proxy's own result names the source, which is
+/// why it is required here rather than defaulted. A payload that is not an
+/// object at all is what the reference's `isinstance` check rejects, and it
+/// settles as a failure.
+#[derive(Debug, Deserialize)]
+struct RemoteToolResult {
+    #[serde(default = "remote_result_ok")]
+    ok: bool,
+    #[serde(default)]
+    tool: Option<String>,
+    #[serde(default)]
+    server: Option<String>,
+}
+
+impl RemoteToolResult {
+    /// Whether this payload is the proxy's own result rather than the content
+    /// the remote tool answered about its own subject.
+    const fn is_the_proxys_own(&self) -> bool {
+        self.server.is_some()
+    }
+}
+
+const fn remote_result_ok() -> bool {
+    true
+}
+
 // --------------------------------------------------------------------------
 // Effect detail
 // --------------------------------------------------------------------------
@@ -302,27 +485,69 @@ pub struct EffectDetail {
     /// wire form rather than being published as a surplus null.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub child_session_id: Option<String>,
+    /// The remote this call is proxied to, absent for a tool the session
+    /// implements itself. It routes the call header, the status text and the
+    /// settled header, which is why it travels with the detail instead of being
+    /// re-derived from the published name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote: Option<RemoteToolOrigin>,
 }
 
 impl EffectDetail {
     /// The detail for a call to `tool_name` with `arguments`.
     #[must_use]
     pub fn for_call(tool_name: &str, arguments: &Value) -> Self {
-        let kind = ToolEffectKind::from_tool_name(tool_name);
+        // A caller holding a decoded object holds no order to keep: the map it
+        // read them from iterates lexicographically already.
+        Self::for_decoded_call(tool_name, arguments, &[], None)
+    }
+
+    /// The shared constructor, told which order the arguments arrived in and
+    /// which remote the call is proxied to.
+    fn for_decoded_call(
+        tool_name: &str,
+        arguments: &Value,
+        wire_order: &[String],
+        remote: Option<&RemoteToolOrigin>,
+    ) -> Self {
+        // A proxy takes none of the per-kind presentations whatever its
+        // published name reads like, which the generic kind is what expresses.
+        let kind = if remote.is_some() {
+            ToolEffectKind::Tool
+        } else {
+            ToolEffectKind::from_tool_name(tool_name)
+        };
         Self {
             kind,
             tool_name: tool_name.to_owned(),
-            display: call_display(kind, tool_name, arguments),
+            display: call_display(kind, tool_name, arguments, remote, wire_order),
             input: project_input(kind, arguments),
             child_session_id: None,
+            remote: remote.cloned(),
         }
+    }
+
+    /// The detail for a call this session proxies to `remote`.
+    ///
+    /// The kind is the generic one whatever the published name reads like: the
+    /// reference routes a proxy through the base presentation, so a server that
+    /// publishes a tool called `bash` is still presented as a remote call and
+    /// not as a shell.
+    #[must_use]
+    pub fn for_proxied_call(tool_name: &str, arguments: &str, remote: &RemoteToolOrigin) -> Self {
+        Self::for_decoded_call(tool_name, &decode_arguments(arguments), &[], Some(remote))
     }
 
     /// The detail for a call whose arguments were recorded as a JSON string,
     /// which is how the engine carries them.
     #[must_use]
     pub fn for_encoded_call(tool_name: &str, arguments: &str) -> Self {
-        Self::for_call(tool_name, &decode_arguments(arguments))
+        Self::for_decoded_call(
+            tool_name,
+            &decode_arguments(arguments),
+            &wire_key_order(arguments),
+            None,
+        )
     }
 }
 
@@ -330,6 +555,54 @@ impl EffectDetail {
 /// string, already parsed, or never recorded.
 fn decode_arguments(arguments: &str) -> Value {
     serde_json::from_str(arguments).unwrap_or_else(|_| json!({}))
+}
+
+/// The order the top-level arguments arrived in.
+///
+/// The reference interpolates the `dict` its model was called with, which keeps
+/// insertion order, so the fallback summary names the first three arguments as
+/// the caller wrote them. Decoding into a [`serde_json::Map`] loses that: this
+/// port does not build `serde_json` with `preserve_order`, and turning it on
+/// would reorder every object it serializes, including the ones a measured
+/// parity claim compares byte for byte. Reading the keys back off the same text
+/// keeps the order where it is needed and nowhere else. Arguments that never
+/// decoded name no order, and the summary falls back to the map's own.
+fn wire_key_order(arguments: &str) -> Vec<String> {
+    serde_json::from_str::<KeyOrder>(arguments).map_or_else(|_| Vec::new(), |order| order.0)
+}
+
+/// The keys of a JSON object, in the order the text carries them.
+struct KeyOrder(Vec<String>);
+
+impl<'de> Deserialize<'de> for KeyOrder {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct Keys;
+
+        impl<'de> Visitor<'de> for Keys {
+            type Value = Vec<String>;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a JSON object")
+            }
+
+            fn visit_map<A>(self, mut entries: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut keys = Vec::new();
+                while let Some(key) = entries.next_key::<String>()? {
+                    entries.next_value::<IgnoredAny>()?;
+                    keys.push(key);
+                }
+                Ok(keys)
+            }
+        }
+
+        deserializer.deserialize_map(Keys).map(Self)
+    }
 }
 
 /// Projects raw call arguments onto the fields the kind's input model declares.
@@ -417,13 +690,39 @@ fn project_input(kind: ToolEffectKind, arguments: &Value) -> Value {
 /// The reference default read window, published when a call did not name one.
 const DEFAULT_READ_LIMIT: u64 = 2000;
 
+/// The label a settled header carries when nothing named why a call was
+/// skipped.
+const SKIPPED: &str = "Skipped";
+
+/// The label a proxied call settles under when its payload is not a result the
+/// remote model accepts.
+const NO_RESULT: &str = "No result";
+
 /// The header a client shows while the call runs.
-fn call_display(kind: ToolEffectKind, tool_name: &str, arguments: &Value) -> EffectCallDisplay {
+///
+/// A proxied call takes none of the per-kind branches: the reference presents
+/// it through the base class, whose display is the published name alone.
+fn call_display(
+    kind: ToolEffectKind,
+    tool_name: &str,
+    arguments: &Value,
+    remote: Option<&RemoteToolOrigin>,
+    wire_order: &[String],
+) -> EffectCallDisplay {
+    if let Some(remote) = remote {
+        let mut display = EffectCallDisplay {
+            summary: tool_name.to_owned(),
+            status_text: remote.status_text(tool_name),
+            ..EffectCallDisplay::default()
+        };
+        display.fill_defaults();
+        return display;
+    }
     let (verb, settled_verb, summary, message) = if kind == ToolEffectKind::Todo {
         todo_call_display(arguments)
     } else {
         let (verb, settled_verb) = kind.verbs();
-        let (summary, message) = call_summary(kind, tool_name, arguments);
+        let (summary, message) = call_summary(kind, tool_name, arguments, wire_order);
         (verb.to_owned(), settled_verb.to_owned(), summary, message)
     };
     // A call whose arguments never arrived would otherwise render a bare verb.
@@ -432,19 +731,29 @@ fn call_display(kind: ToolEffectKind, tool_name: &str, arguments: &Value) -> Eff
     } else {
         message
     };
-    EffectCallDisplay {
+    let mut display = EffectCallDisplay {
         summary,
         content: None,
         suffix: String::new(),
         verb,
-        message: Some(message),
+        // A kind that names its own subject names it in both headers, which is
+        // what keeps a settled call from renaming what it was acting on. Only a
+        // presentation that names none falls back to the summary below.
+        message: Some(message.clone()),
         settled_verb,
-        settled_message: None,
+        settled_message: Some(message),
         status_text: kind.status_text().to_owned(),
-    }
+    };
+    display.fill_defaults();
+    display
 }
 
-fn call_summary(kind: ToolEffectKind, tool_name: &str, arguments: &Value) -> (String, String) {
+fn call_summary(
+    kind: ToolEffectKind,
+    tool_name: &str,
+    arguments: &Value,
+    wire_order: &[String],
+) -> (String, String) {
     match kind {
         ToolEffectKind::Shell => {
             let command = string_argument(arguments, &["command", "cmd"]);
@@ -531,7 +840,7 @@ fn call_summary(kind: ToolEffectKind, tool_name: &str, arguments: &Value) -> (St
         // A tool with no presentation of its own shows its arguments, and the
         // summary is all there is to show.
         ToolEffectKind::Tool | ToolEffectKind::Todo => {
-            let summary = generic_call_summary(tool_name, arguments);
+            let summary = generic_call_summary(tool_name, arguments, wire_order);
             (summary.clone(), summary)
         }
     }
@@ -569,20 +878,69 @@ fn todo_call_display(arguments: &Value) -> (String, String, String, String) {
 }
 
 /// The fallback for tools without their own presentation: the first three
-/// arguments, in schema order.
-fn generic_call_summary(tool_name: &str, arguments: &Value) -> String {
-    let rendered = arguments
-        .as_object()
+/// arguments, in the order the call carried them.
+fn generic_call_summary(tool_name: &str, arguments: &Value, wire_order: &[String]) -> String {
+    let object = arguments.as_object();
+    let ordered = if wire_order.is_empty() {
+        object
+            .into_iter()
+            .flatten()
+            .map(|(key, value)| (key.as_str(), value))
+            .collect::<Vec<_>>()
+    } else {
+        wire_order
+            .iter()
+            .filter_map(|key| {
+                object.and_then(|fields| fields.get(key).map(|value| (key.as_str(), value)))
+            })
+            .collect()
+    };
+    let rendered = ordered
         .into_iter()
-        .flatten()
         .take(3)
-        .map(|(key, value)| match value {
-            Value::String(text) => format!("{key}='{text}'"),
-            value => format!("{key}={value}"),
-        })
+        .map(|(key, value)| format!("{key}={}", python_repr(value)))
         .collect::<Vec<_>>()
         .join(", ");
     format!("{tool_name}({rendered})")
+}
+
+/// One argument value, spelled the way the reference interpreter spells it.
+///
+/// The generic summary interpolates its arguments, so a value crossing it
+/// renders under Python's literal syntax rather than JSON's: the two disagree
+/// on booleans, on the null, and on the quote a key or a string carries.
+fn python_repr(value: &Value) -> String {
+    match value {
+        Value::Null => "None".to_owned(),
+        Value::Bool(true) => "True".to_owned(),
+        Value::Bool(false) => "False".to_owned(),
+        Value::String(text) => python_string(text),
+        Value::Array(items) => format!(
+            "[{}]",
+            items.iter().map(python_repr).collect::<Vec<_>>().join(", ")
+        ),
+        Value::Object(fields) => format!(
+            "{{{}}}",
+            fields
+                .iter()
+                .map(|(key, value)| format!("{}: {}", python_string(key), python_repr(value)))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        number => number.to_string(),
+    }
+}
+
+/// A string literal under Python's quoting rule: single quotes, unless the text
+/// carries one and no double quote, in which case the pair switches rather than
+/// escaping.
+fn python_string(text: &str) -> String {
+    let escaped = text.replace('\\', "\\\\");
+    if escaped.contains('\'') && !escaped.contains('"') {
+        format!("\"{escaped}\"")
+    } else {
+        format!("'{}'", escaped.replace('\'', "\\'"))
+    }
 }
 
 impl EffectResultDisplay {
@@ -606,6 +964,76 @@ impl EffectResultDisplay {
             success: false,
             verb: String::new(),
             message: format!("{tool_name}: skipped"),
+            warnings: Vec::new(),
+            suffix: String::new(),
+        }
+    }
+
+    /// The header a proxied call settles under.
+    ///
+    /// The reference reads the three branches in this order and stops at the
+    /// first that answers: an errored call reports what went wrong, a skipped
+    /// call reports why it never ran, and only then does the proxy read the
+    /// result its server sent. Ordering them anywhere but here would let a
+    /// remote failure render as a success.
+    #[must_use]
+    pub fn for_remote(
+        remote: &RemoteToolOrigin,
+        call: &EffectCallDisplay,
+        settled: &RemoteSettlement<'_>,
+    ) -> Self {
+        if !settled.error.is_empty() {
+            return Self {
+                success: false,
+                verb: call.settled_verb.clone(),
+                message: settled.error.to_owned(),
+                warnings: Vec::new(),
+                suffix: String::new(),
+            };
+        }
+        if settled.skipped {
+            return Self {
+                success: false,
+                verb: String::new(),
+                message: if settled.skip_reason.is_empty() {
+                    SKIPPED.to_owned()
+                } else {
+                    settled.skip_reason.to_owned()
+                },
+                warnings: Vec::new(),
+                suffix: String::new(),
+            };
+        }
+        // A payload the remote result model does not accept settles as a
+        // failure: the reference's proxies check the result's class before
+        // reading it and report having no result rather than presenting a shape
+        // they cannot read.
+        let Ok(result) = serde_json::from_value::<RemoteToolResult>(settled.output.clone()) else {
+            return Self {
+                success: false,
+                verb: String::new(),
+                message: NO_RESULT.to_owned(),
+                warnings: Vec::new(),
+                suffix: String::new(),
+            };
+        };
+        // Only the proxy's own result answers for the call. The server's own
+        // structured content says nothing about whether the call succeeded, so
+        // a payload that is not the proxy's settles from what this port knows:
+        // the call answered, under the name the origin carries.
+        let (ok, answered) = if result.is_the_proxys_own() {
+            let answered = result
+                .tool
+                .filter(|tool| !tool.is_empty())
+                .unwrap_or_else(|| remote.remote_name.clone());
+            (result.ok, answered)
+        } else {
+            (true, remote.remote_name.clone())
+        };
+        Self {
+            success: ok,
+            verb: "Ran".to_owned(),
+            message: remote.settled_subject(&answered),
             warnings: Vec::new(),
             suffix: String::new(),
         }

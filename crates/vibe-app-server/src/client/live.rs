@@ -23,7 +23,7 @@ use vibe_core::engine::{
     SessionTranscriptSink, ToolExecutor, ToolFuture, ToolStreamSink, TurnControl,
     TurnControlHandle, TurnOutcome, TurnStopReason,
 };
-use vibe_core::events::ModelMessage;
+use vibe_core::events::{ModelMessage, RemoteToolOrigin};
 use vibe_core::extensions::{
     AgentKind, AgentProfile, ChildContext, ChildLoggingPolicy, DelegationRequest, DiscoveryRoots,
     ExtensionSource, SubagentFuture, SubagentManager, SubagentRun, SubagentRunner,
@@ -281,6 +281,10 @@ impl SessionToolExecutor {
 }
 
 impl ToolExecutor for SessionToolExecutor {
+    fn remote_origin(&self, name: &str) -> Option<RemoteToolOrigin> {
+        self.tools.remote_origin(name)
+    }
+
     fn execute<'a>(&'a self, name: &'a str, arguments: &'a str) -> ToolFuture<'a> {
         if !self.permits(name) {
             return Box::pin(

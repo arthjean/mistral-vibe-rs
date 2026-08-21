@@ -353,3 +353,228 @@ fn a_callback_detail_names_what_it_asks_for() {
     assert_eq!(wire["kind"], "user_input");
     assert_eq!(wire["request"]["questions"][0]["multiSelect"], false);
 }
+
+#[test]
+fn a_proxied_call_display_names_the_published_tool_and_its_server() {
+    let mcp = EffectDetail::for_proxied_call(
+        "mcp_docs_search",
+        r#"{"query":"parity"}"#,
+        &RemoteToolOrigin::mcp("search"),
+    );
+    // The reference's `MCPTool` inherits the base `format_call_display`, which
+    // names the tool and renders none of its arguments.
+    assert_eq!(mcp.display.summary, "mcp_docs_search");
+    assert_eq!(mcp.display.status_text, "Calling MCP tool search");
+    assert_eq!(mcp.kind, ToolEffectKind::Tool);
+
+    let connector = EffectDetail::for_proxied_call(
+        "connector_github_issue",
+        r#"{"number":7}"#,
+        &RemoteToolOrigin::connector("issue"),
+    );
+    assert_eq!(connector.display.summary, "connector_github_issue");
+    assert_eq!(
+        connector.display.status_text,
+        "Calling connector tool issue"
+    );
+
+    // An unnamed remote leaves the label pointing at the published name rather
+    // than trailing off after the verb.
+    let unnamed = EffectDetail::for_proxied_call("mcp_bare", "{}", &RemoteToolOrigin::mcp(""));
+    assert_eq!(unnamed.display.status_text, "Calling MCP tool mcp_bare");
+
+    // Arguments that never decode reach the same display: the proxy renders
+    // none of them, so there is nothing for a broken payload to break.
+    for arguments in ["", "{not json", "[]"] {
+        let broken = EffectDetail::for_proxied_call(
+            "mcp_docs_search",
+            arguments,
+            &RemoteToolOrigin::mcp("search"),
+        );
+        assert_eq!(broken.display.summary, "mcp_docs_search", "{arguments}");
+        assert_eq!(
+            broken.display.status_text, "Calling MCP tool search",
+            "{arguments}"
+        );
+    }
+}
+
+#[test]
+fn every_call_display_publishes_a_settled_message() {
+    // A presentation that names its own subject keeps it across both headers.
+    let named = EffectDetail::for_encoded_call("bash", r#"{"command":"echo alpha"}"#);
+    assert_eq!(named.display.summary, "bash: echo alpha");
+    assert_eq!(named.display.settled_message.as_deref(), Some("echo alpha"));
+
+    // A presentation that names none falls back to the summary, not to the
+    // message, which is the rule the reference adapter applies.
+    let proxied =
+        EffectDetail::for_proxied_call("mcp_docs_search", "{}", &RemoteToolOrigin::mcp("search"));
+    assert_eq!(
+        proxied.display.settled_message.as_deref(),
+        Some("mcp_docs_search")
+    );
+    assert_eq!(proxied.display.message.as_deref(), Some("mcp_docs_search"));
+    assert_eq!(proxied.display.verb, "Running");
+    assert_eq!(proxied.display.settled_verb, "Ran");
+
+    // A call whose arguments never arrived still carries both, and neither is
+    // the empty string a bare verb would render.
+    let argumentless = EffectDetail::for_encoded_call("read_file", "");
+    assert_eq!(
+        argumentless.display.message.as_deref(),
+        Some(argumentless.display.summary.as_str())
+    );
+    assert_eq!(
+        argumentless.display.settled_message.as_deref(),
+        Some(argumentless.display.summary.as_str())
+    );
+    assert!(!argumentless.display.summary.is_empty());
+}
+
+#[test]
+fn a_stored_display_with_no_settled_message_still_hydrates() {
+    // A session recorded before the fill was published carries neither optional
+    // header, and hydrating it renders through the collapsed summary.
+    let stored = json!({
+        "summary": "bash: echo alpha",
+        "verb": "Running",
+        "settledVerb": "Ran",
+        "statusText": "Running command",
+    });
+    let display: EffectCallDisplay = serde_json::from_value(stored).expect("hydrates");
+    assert_eq!(display.message, None);
+    assert_eq!(display.settled_message, None);
+    assert_eq!(display.subject(), "bash: echo alpha");
+}
+
+#[test]
+fn the_generic_fallback_spells_its_arguments_the_way_the_interpreter_does() {
+    let detail = EffectDetail::for_encoded_call(
+        "custom_tool",
+        r#"{"a_flag":true,"b_missing":null,"c_nested":{"key":"value"},"d_dropped":1}"#,
+    );
+    // Three arguments at most, spelled under Python's literal syntax, in the
+    // order the call carried them.
+    assert_eq!(
+        detail.display.summary,
+        "custom_tool(a_flag=True, b_missing=None, c_nested={'key': 'value'})"
+    );
+
+    let more = EffectDetail::for_encoded_call(
+        "custom_tool",
+        r#"{"a_off":false,"b_items":["a",2],"c_text":"it's here"}"#,
+    );
+    assert_eq!(
+        more.display.summary,
+        r#"custom_tool(a_off=False, b_items=['a', 2], c_text="it's here")"#
+    );
+
+    // The reference interpolates the `dict` its model was called with, which
+    // keeps insertion order, and a `serde_json::Map` iterates lexicographically
+    // instead. Reading the keys back off the call text is what keeps the two
+    // agreeing on which three arguments are shown and in which order.
+    let unsorted =
+        EffectDetail::for_encoded_call("custom_tool", r#"{"zulu":1,"alpha":2,"mike":3,"bravo":4}"#);
+    assert_eq!(
+        unsorted.display.summary,
+        "custom_tool(zulu=1, alpha=2, mike=3)"
+    );
+
+    // Arguments that never decoded name no order, and the summary is still the
+    // published name with empty parentheses behind it.
+    let undecodable = EffectDetail::for_encoded_call("custom_tool", "not json");
+    assert_eq!(undecodable.display.summary, "custom_tool()");
+}
+
+#[test]
+fn a_remote_settlement_reads_the_three_branches_in_reference_order() {
+    let remote = RemoteToolOrigin::mcp("search");
+    let call = EffectDetail::for_proxied_call("mcp_docs_search", "{}", &remote).display;
+    // The shape the reference's proxy builds and the presentation corpus
+    // records: `server` is what names it as the proxy's own rather than as the
+    // content the remote tool answered with.
+    let answered = json!({"ok": true, "server": "docs", "tool": "search"});
+
+    // A result the server answered names the remote tool under the settled verb.
+    let completed =
+        EffectResultDisplay::for_remote(&remote, &call, &RemoteSettlement::answered(&answered));
+    assert!(completed.success);
+    assert_eq!(completed.verb, "Ran");
+    assert_eq!(completed.message, "search");
+
+    // The connector proxy prefixes the same name.
+    let connector = RemoteToolOrigin::connector("issue");
+    let connector_call =
+        EffectDetail::for_proxied_call("connector_github_issue", "{}", &connector).display;
+    let settled = EffectResultDisplay::for_remote(
+        &connector,
+        &connector_call,
+        &RemoteSettlement::answered(&json!({"ok": true, "server": "acme", "tool": "issue"})),
+    );
+    assert_eq!(settled.message, "connector issue");
+
+    // A proxy result that reported failure settles as one.
+    let refused = EffectResultDisplay::for_remote(
+        &remote,
+        &call,
+        &RemoteSettlement::answered(&json!({"ok": false, "server": "docs", "tool": "search"})),
+    );
+    assert!(!refused.success);
+    assert_eq!(refused.message, "search");
+
+    // What this port's peers actually publish is the server's own
+    // `structuredContent`, which shares the proxy result's field names without
+    // carrying its meaning. Nothing in it answers for the call, so the
+    // settlement is what the origin knows.
+    for payload in [
+        json!({"ok": false, "tool": "the server's own field"}),
+        json!({"content": [{"type": "text", "text": "done"}]}),
+        json!({}),
+    ] {
+        let structured =
+            EffectResultDisplay::for_remote(&remote, &call, &RemoteSettlement::answered(&payload));
+        assert!(structured.success, "{payload}");
+        assert_eq!(structured.message, "search", "{payload}");
+    }
+
+    // An error outranks the result branch.
+    let errored = EffectResultDisplay::for_remote(
+        &remote,
+        &call,
+        &RemoteSettlement::failed("server unavailable", &answered),
+    );
+    assert!(!errored.success);
+    assert_eq!(errored.message, "server unavailable");
+
+    // A skip outranks it too, and names its reason or the default label.
+    let skipped = EffectResultDisplay::for_remote(
+        &remote,
+        &call,
+        &RemoteSettlement::skipped("the user declined", &answered),
+    );
+    assert!(!skipped.success);
+    assert_eq!(skipped.verb, "");
+    assert_eq!(skipped.message, "the user declined");
+    let unexplained =
+        EffectResultDisplay::for_remote(&remote, &call, &RemoteSettlement::skipped("", &answered));
+    assert_eq!(unexplained.message, "Skipped");
+
+    // An output shaped like nothing the proxy declares settles as a failure
+    // rather than taking the process down.
+    for output in [json!("a bare string"), json!([1, 2]), Value::Null] {
+        let unreadable =
+            EffectResultDisplay::for_remote(&remote, &call, &RemoteSettlement::answered(&output));
+        assert!(!unreadable.success, "{output}");
+        assert_eq!(unreadable.message, "No result", "{output}");
+    }
+
+    // A proxy result carrying no tool name falls back to the remote name the
+    // origin carries, which is what the proxy knows it called.
+    let unnamed = EffectResultDisplay::for_remote(
+        &remote,
+        &call,
+        &RemoteSettlement::answered(&json!({"ok": true, "server": "docs"})),
+    );
+    assert_eq!(unnamed.message, "search");
+}
