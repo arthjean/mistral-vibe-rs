@@ -521,7 +521,12 @@ impl ToolRegistry {
     ///
     /// Reference `available_tools` narrows with `enabled_tools` only when that
     /// list carries an entry, and applies `disabled_tools` last, so a name both
-    /// lists match is withheld.
+    /// lists match is withheld. The narrowing is decided by the written list
+    /// rather than by what it compiled to, which is why `enabled` arrives as an
+    /// [`Option`]: upstream tests the list itself and then matches with
+    /// `name_matches`, where a blank entry and an uncompilable expression are
+    /// both skipped. A list of nothing but those therefore narrows to nothing,
+    /// and reading the compiled filter instead would publish everything.
     ///
     /// Reference `available_tool_specs` then prefers the description an
     /// operator wrote over the tool's own, which is why the override is applied
@@ -531,7 +536,7 @@ impl ToolRegistry {
     /// registry lock is taken, so a slow filesystem never holds it.
     pub fn available(
         &self,
-        enabled: &NameFilter,
+        enabled: Option<&NameFilter>,
         disabled: &NameFilter,
     ) -> Result<Vec<ToolSpec>, ToolError> {
         let overrides = self
@@ -543,7 +548,7 @@ impl ToolRegistry {
             .values()
             .filter(|tool| tool.available())
             .map(|tool| tool.spec.clone())
-            .filter(|spec| enabled.is_empty() || enabled.matches(&spec.name))
+            .filter(|spec| enabled.is_none_or(|enabled| enabled.matches(&spec.name)))
             .filter(|spec| !disabled.matches(&spec.name))
             .map(|mut spec| {
                 if let Some(text) = overrides.get(&spec.name) {
@@ -1366,7 +1371,7 @@ mod tests {
             .expect("register");
         let published = || {
             registry
-                .available(&NameFilter::default(), &NameFilter::default())
+                .available(None, &NameFilter::default())
                 .expect("available")
                 .into_iter()
                 .map(|spec| spec.name)

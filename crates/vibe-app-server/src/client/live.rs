@@ -215,7 +215,13 @@ impl Compactor for ProviderSessionCompactor {
 #[derive(Clone)]
 pub(super) struct SessionToolExecutor {
     tools: ToolRegistry,
-    enabled: NameFilter,
+    /// Absent when the session wrote no `enabled_tools`, which is the only
+    /// state that publishes everything. A list that carries entries narrows
+    /// even when none of them compiles into a usable pattern, because the
+    /// reference gates on the written list and matches with `name_matches`,
+    /// which skips a blank entry and an uncompilable expression rather than
+    /// widening the surface back out.
+    enabled: Option<NameFilter>,
     disabled: NameFilter,
     allowed: Option<BTreeSet<String>>,
     /// Tools this executor publishes but refuses to run, with the reason the
@@ -229,7 +235,8 @@ impl SessionToolExecutor {
     pub(super) fn new(tools: ToolRegistry, intent: &SessionIntent) -> Self {
         Self {
             tools,
-            enabled: NameFilter::new(&intent.enabled_tools),
+            enabled: (!intent.enabled_tools.is_empty())
+                .then(|| NameFilter::new(&intent.enabled_tools)),
             disabled: NameFilter::new(&intent.disabled_tools),
             allowed: None,
             refused: BTreeMap::new(),
@@ -254,7 +261,9 @@ impl SessionToolExecutor {
     }
 
     fn permits(&self, name: &str) -> bool {
-        (self.enabled.is_empty() || self.enabled.matches(name))
+        self.enabled
+            .as_ref()
+            .is_none_or(|enabled| enabled.matches(name))
             && !self.disabled.matches(name)
             && self
                 .allowed
@@ -264,7 +273,7 @@ impl SessionToolExecutor {
 
     pub(super) fn definitions(&self) -> Result<Vec<ToolDefinition>, DriverError> {
         self.tools
-            .available(&self.enabled, &self.disabled)
+            .available(self.enabled.as_ref(), &self.disabled)
             .map_err(|error| DriverError::Tool(error.to_string()))
             .map(|definitions| {
                 definitions

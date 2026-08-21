@@ -291,7 +291,7 @@ impl SubagentRunner for ProviderSubagentRunner {
                 .collect::<BTreeSet<_>>();
             let allowed = self
                 .tools
-                .available(&NameFilter::default(), &NameFilter::default())
+                .available(None, &NameFilter::default())
                 .map_err(|error| error.to_string())?
                 .into_iter()
                 .filter(|spec| {

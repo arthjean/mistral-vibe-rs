@@ -1257,7 +1257,7 @@ async fn a_windows_family_leaves_the_surface_when_its_interpreter_goes_away() {
         .expect("the Git Bash family registers");
     let published = || {
         registry
-            .available(&NameFilter::default(), &NameFilter::default())
+            .available(None, &NameFilter::default())
             .expect("available")
             .into_iter()
             .map(|spec| spec.name)

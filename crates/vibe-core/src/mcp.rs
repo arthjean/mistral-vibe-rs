@@ -1584,10 +1584,7 @@ mod tests {
             .await;
 
         let published = tools
-            .available(
-                &crate::matching::NameFilter::default(),
-                &crate::matching::NameFilter::default(),
-            )
+            .available(None, &crate::matching::NameFilter::default())
             .expect("available")
             .into_iter()
             .map(|spec| spec.name)

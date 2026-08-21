@@ -55,13 +55,6 @@ impl NameFilter {
         Self { patterns, invalid }
     }
 
-    /// Whether the list carries no usable entry, which is what tells
-    /// `enabled_tools` to narrow nothing.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.patterns.is_empty()
-    }
-
     /// The entries that could not compile, in the order they were given.
     #[must_use]
     pub fn invalid(&self) -> &[String] {
@@ -257,9 +250,8 @@ mod tests {
     }
 
     #[test]
-    fn blank_entries_are_skipped_and_leave_the_list_empty() {
+    fn blank_entries_are_skipped_and_leave_the_list_matching_nothing() {
         let blank = filter(&["", "   "]);
-        assert!(blank.is_empty());
         assert!(!blank.matches("read_file"));
         assert!(blank.invalid().is_empty());
         // Surrounding whitespace is stripped rather than making the entry miss.
@@ -272,7 +264,6 @@ mod tests {
         assert_eq!(broken.invalid(), ["re:[".to_owned()]);
         assert!(broken.matches("read_file"));
         assert!(!broken.matches("["));
-        assert!(!broken.is_empty());
     }
 
     #[test]

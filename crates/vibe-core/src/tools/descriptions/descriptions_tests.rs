@@ -233,7 +233,7 @@ fn registry(names: &[(&str, ToolSource)]) -> ToolRegistry {
 /// `SessionToolExecutor::definitions` sends to the model.
 fn published(registry: &ToolRegistry) -> BTreeMap<String, String> {
     registry
-        .available(&NameFilter::default(), &NameFilter::default())
+        .available(None, &NameFilter::default())
         .expect("the surface publishes")
         .into_iter()
         .map(|spec| (spec.name, spec.description))

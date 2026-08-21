@@ -729,6 +729,38 @@ fn configured_tool_filters_match_by_glob_regular_expression_and_case() {
     );
 }
 
+/// Reference `available_tools` gates on the written list rather than on the
+/// patterns it compiles to (`vibe/core/tools/manager.py:311`), so a session
+/// that writes `enabled_tools` at all narrows the surface even when nothing in
+/// it can ever match. The gate is decided again in `SessionToolExecutor::new`,
+/// which is the copy a session actually publishes through.
+#[test]
+fn an_enabled_list_that_matches_nothing_still_publishes_nothing() {
+    let every = [
+        "read_file",
+        "serena_find",
+        "serena_replace",
+        "web_fetch",
+        "web_search",
+    ];
+    // No list written at all is the only way to publish everything.
+    assert_eq!(published_under(&[], &[]), every);
+    // Blank entries compile to no pattern, and an expression that does not
+    // compile matches nothing: written, both still close the surface.
+    assert!(published_under(&["  "], &[]).is_empty());
+    assert!(published_under(&["re:("], &[]).is_empty());
+    assert!(published_under(&["", "re:("], &[]).is_empty());
+    // A blank entry alongside a usable one leaves the usable one deciding.
+    assert_eq!(
+        published_under(&["  ", "web_*"], &[]),
+        ["web_fetch", "web_search"]
+    );
+    // `disabled_tools` withholds by match alone, so an unusable entry there
+    // withholds nothing.
+    assert_eq!(published_under(&[], &["  "]), every);
+    assert_eq!(published_under(&[], &["re:("]), every);
+}
+
 /// The same rules guard execution, so a name the model remembers from an
 /// earlier turn cannot be called once a pattern covers it.
 #[tokio::test]
