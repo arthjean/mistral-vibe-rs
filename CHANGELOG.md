@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Say what the built-in tools answer differently, tool by tool. The parity
+  scorecard's single line about warning wording is now five rows that name
+  every tool whose authored result or error text is this port's own prose and
+  the field it lands in, plus the capped catalog an unknown skill name is
+  answered with, the HTML page stripped to prose, and the request envelope the
+  HTTP client adds. Every row is bound to what holds it, in both directions, so
+  a divergence that closes fails the suite until its scorecard row goes with it,
+  and the built-in tools row is remeasured from the widened execution oracle:
+  103 cases over 11 tools, none diverging outside the ledger.
+
 - Answer `web_fetch`'s contract edges the way the reference answers them. A
   `timeout` above `max_timeout` is now refused by name instead of being lowered
   to the cap, so a call that cannot run as asked is reported rather than quietly

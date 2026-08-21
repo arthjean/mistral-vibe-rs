@@ -3,7 +3,7 @@
     "file": "tasks/prd-builtin-tools-parity.md",
     "title": "Built-in Tools at Full Parity",
     "created_at": "2026-08-20",
-    "status": "IN_PROGRESS"
+    "status": "DONE"
   },
   "epics": [
     {
@@ -54,10 +54,11 @@
     {
       "id": "EP-079",
       "title": "Restate row 3 from its oracle",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 2,
-      "stories_done": 0
+      "stories_done": 2,
+      "started_at": "2026-08-21"
     }
   ],
   "stories": [
@@ -244,20 +245,23 @@
       "id": "US-252",
       "title": "Record the authored-text divergences by name",
       "epic": "EP-079",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "S",
       "blocked_by": [
         "US-245",
         "US-249",
         "US-250"
-      ]
+      ],
+      "started_at": "2026-08-21",
+      "completed_at": "2026-08-21",
+      "reviewed_at": "2026-08-21"
     },
     {
       "id": "US-253",
       "title": "Remeasure and restate row 3",
       "epic": "EP-079",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [
@@ -268,7 +272,10 @@
         "US-248",
         "US-251",
         "US-252"
-      ]
+      ],
+      "started_at": "2026-08-21",
+      "completed_at": "2026-08-21",
+      "reviewed_at": "2026-08-21"
     }
   ]
 }
