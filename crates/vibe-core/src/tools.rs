@@ -24,6 +24,7 @@ pub use validate::{apply_defaults, coerce_and_validate, validate_arguments};
 
 pub mod builtins;
 pub mod config;
+pub mod descriptions;
 pub mod reference_text;
 pub mod shell;
 
@@ -308,6 +309,12 @@ pub struct ToolRegistry {
     /// reads the session's own store, approval agent and configuration from
     /// here rather than being handed a second composition.
     guard: Arc<RwLock<Option<crate::policy::ToolGuard>>>,
+    /// Where the descriptions an operator wrote are read from, installed when
+    /// the session's workspace tools register. It is a source rather than a
+    /// resolved map because reference `ToolManager` recomputes its descriptions
+    /// per construction, so a file written mid-session reaches the next
+    /// publication.
+    descriptions: Arc<RwLock<Option<Arc<dyn descriptions::DescriptionSource>>>>,
 }
 
 impl fmt::Debug for ToolRegistry {
@@ -346,7 +353,24 @@ impl ToolRegistry {
             max_output_bytes,
             invoked_skills: Arc::new(RwLock::new(None)),
             guard: Arc::new(RwLock::new(None)),
+            descriptions: Arc::new(RwLock::new(None)),
         }
+    }
+
+    /// Installs where this session reads description overrides from, replacing
+    /// any earlier source so a re-registration after a working-directory change
+    /// reads the directories that change resolved.
+    pub fn set_descriptions(&self, source: Arc<dyn descriptions::DescriptionSource>) {
+        if let Ok(mut slot) = self.descriptions.write() {
+            *slot = Some(source);
+        }
+    }
+
+    /// The session's description source, absent until the workspace tools
+    /// register.
+    #[must_use]
+    pub fn descriptions(&self) -> Option<Arc<dyn descriptions::DescriptionSource>> {
+        self.descriptions.read().ok().and_then(|slot| slot.clone())
     }
 
     /// Installs the guard the session's tools are published behind, replacing
@@ -498,11 +522,22 @@ impl ToolRegistry {
     /// Reference `available_tools` narrows with `enabled_tools` only when that
     /// list carries an entry, and applies `disabled_tools` last, so a name both
     /// lists match is withheld.
+    ///
+    /// Reference `available_tool_specs` then prefers the description an
+    /// operator wrote over the tool's own, which is why the override is applied
+    /// here rather than at registration: it reaches a tool registered later
+    /// than the source, which is every MCP and connector tool, and it is re-read
+    /// per publication rather than cached. The directories are read before the
+    /// registry lock is taken, so a slow filesystem never holds it.
     pub fn available(
         &self,
         enabled: &NameFilter,
         disabled: &NameFilter,
     ) -> Result<Vec<ToolSpec>, ToolError> {
+        let overrides = self
+            .descriptions()
+            .map(|source| source.overrides())
+            .unwrap_or_default();
         let tools = self.tools.read().map_err(|_| ToolError::RegistryPoisoned)?;
         Ok(tools
             .values()
@@ -510,6 +545,12 @@ impl ToolRegistry {
             .map(|tool| tool.spec.clone())
             .filter(|spec| enabled.is_empty() || enabled.matches(&spec.name))
             .filter(|spec| !disabled.matches(&spec.name))
+            .map(|mut spec| {
+                if let Some(text) = overrides.get(&spec.name) {
+                    spec.description.clone_from(text);
+                }
+                spec
+            })
             .collect())
     }
 
