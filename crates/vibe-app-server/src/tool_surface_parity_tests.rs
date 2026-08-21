@@ -435,6 +435,111 @@ async fn published_registry_with(
     (directory, registry)
 }
 
+/// Answers connector calls for the ordering case, which never places one.
+struct UnreachableConnector;
+
+impl vibe_core::integrations::ConnectorBackend for UnreachableConnector {
+    fn call<'a>(
+        &'a self,
+        _connector_id: &'a str,
+        _tool: &'a str,
+        _arguments: Value,
+        _max_response_bytes: usize,
+    ) -> vibe_core::integrations::ConnectorFuture<'a> {
+        Box::pin(async {
+            Err(vibe_core::integrations::IntegrationError::Tool(
+                "the ordering case never calls a connector".to_owned(),
+            ))
+        })
+    }
+}
+
+/// The surface a session publishes carries the order its families registered
+/// in, and a connector integrated afterwards lands behind all of them.
+///
+/// This case states no reference expectation and therefore needs no checkout:
+/// the reference's own sequence comes from the `.py` import order of
+/// `_iter_tool_classes`, which this port does not reproduce. What is held here
+/// is the shape that order has, which is that the surface is published in the
+/// session's registration order rather than in the name order the registry
+/// stores under.
+#[tokio::test]
+async fn the_published_surface_carries_the_registration_order_not_the_name_order() {
+    let (directory, registry) =
+        published_registry_with(false, ShellRollout::Legacy, posix_host()).await;
+    let builtins = registry
+        .list()
+        .expect("the registered surface")
+        .into_iter()
+        .map(|spec| spec.name)
+        .collect::<Vec<_>>();
+    let mut alphabetical = builtins.clone();
+    alphabetical.sort();
+    assert_ne!(
+        builtins, alphabetical,
+        "the surface is published by name, which is the order this port used to carry"
+    );
+    // `BuiltinTools` registers the universal tools, `WorkspaceTools` the file
+    // family, `ShellTools` the shell, then the interactive tools and `task`.
+    assert_eq!(
+        &builtins[..7],
+        [
+            "todo",
+            "skill",
+            "web_fetch",
+            "read_file",
+            "grep",
+            "edit",
+            "write_file"
+        ]
+    );
+    assert_eq!(builtins.last().map(String::as_str), Some("task"));
+
+    let connectors = vibe_core::integrations::ConnectorRegistry::default();
+    connectors
+        .discover(
+            vec![vibe_core::integrations::ConnectorDefinition {
+                id: "drive-id".to_owned(),
+                name: "Drive".to_owned(),
+                base_url: url::Url::parse("https://connectors.example/drive")
+                    .expect("connector URL"),
+                auth_kind: vibe_core::integrations::ConnectorAuthKind::None,
+                tools: vec![vibe_core::integrations::ConnectorTool {
+                    name: "search".to_owned(),
+                    description: "Search files".to_owned(),
+                    input_schema: serde_json::json!({"type": "object"}),
+                    output_schema: None,
+                }],
+            }],
+            "credential",
+            &url::Url::parse("https://connectors.example").expect("catalog URL"),
+            0,
+        )
+        .await
+        .expect("the connector is discovered");
+    connectors
+        .register_tools(
+            &registry,
+            Arc::new(UnreachableConnector),
+            PermissionStore::default(),
+            Arc::new(RejectApproval),
+        )
+        .expect("the connector tool registers");
+    let published = registry
+        .list()
+        .expect("the registered surface")
+        .into_iter()
+        .map(|spec| spec.name)
+        .collect::<Vec<_>>();
+    assert_eq!(&published[..builtins.len()], builtins.as_slice());
+    assert_eq!(
+        &published[builtins.len()..],
+        ["connector_Drive_search"],
+        "a connector integrated after the builtins publishes behind them"
+    );
+    drop(directory);
+}
+
 /// Stands in for the live driver's subagent handler, which needs a provider and
 /// a session store the oracle has no reason to build: the oracle reads
 /// specifications and never invokes one.
