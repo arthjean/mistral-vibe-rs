@@ -34,6 +34,7 @@ use vibe_core::mcp::{
     McpError, McpFuture, SamplingHandler, SamplingRequest, SamplingResponse, SamplingRole,
 };
 use vibe_core::middleware::{CompactionSettings, ContextWarningMiddleware};
+use vibe_core::policy::{PolicyGuardedTool, resolve_task_tool_permission};
 use vibe_core::provider::{
     HttpTransport, ProviderBackend, ProviderInput, ProviderStyle, RequestLimits, ToolChoice,
     ToolDefinition,
@@ -41,6 +42,7 @@ use vibe_core::provider::{
 use vibe_core::schema::{ObjectSchema, Property};
 use vibe_core::session_id::rotate_session_id;
 use vibe_core::storage::SessionStore;
+use vibe_core::tools::config::SharedToolConfig;
 use vibe_core::tools::{
     OwnedToolHandlerFuture, ToolAvailability, ToolExecutionOutput, ToolHandler,
     ToolPresentationKind, ToolRegistry, ToolSource, ToolSpec, reference_text,

@@ -179,17 +179,54 @@ async fn a_flagged_context_injection_appends_the_pair_before_the_turn() {
 }
 
 /// Captures the tools one turn publishes and, when `task` is among them,
-/// calls it with an agent that does not exist.
+/// calls it with the agent this probe was built for.
+///
+/// The child turn reaches the same provider, so `child_turns` is what tells a
+/// delegation that started from one the policy refused before anything ran.
 struct TaskProbeProvider {
-    calls: AtomicUsize,
+    agent: String,
+    root_calls: AtomicUsize,
+    child_turns: AtomicUsize,
     published: std::sync::Mutex<Vec<String>>,
     delegation_error: std::sync::Mutex<Option<String>>,
+}
+
+impl TaskProbeProvider {
+    fn published_task(&self) -> bool {
+        self.published
+            .lock()
+            .expect("published")
+            .contains(&"task".to_owned())
+    }
+
+    fn delegated(&self) -> bool {
+        self.child_turns.load(Ordering::Acquire) > 0
+    }
+
+    fn refusal(&self) -> Option<String> {
+        self.delegation_error.lock().expect("observed").clone()
+    }
 }
 
 impl CompletionProvider for TaskProbeProvider {
     fn complete<'a>(&'a self, input: &'a ProviderInput) -> vibe_core::engine::ProviderFuture<'a> {
         Box::pin(async move {
-            let call = self.calls.fetch_add(1, Ordering::AcqRel);
+            let finished = AssistantMessage {
+                text: "done".to_owned(),
+                reasoning: None,
+                reasoning_signature: None,
+                reasoning_state: Vec::new(),
+                tool_calls: Vec::new(),
+                usage: Usage::default(),
+                refusal: None,
+                stop_reason: "stop".to_owned(),
+                correlation_id: None,
+            };
+            if input.metadata.contains_key("parent_session_id") {
+                self.child_turns.fetch_add(1, Ordering::AcqRel);
+                return Ok(finished);
+            }
+            let call = self.root_calls.fetch_add(1, Ordering::AcqRel);
             if call == 0 {
                 if let Ok(mut published) = self.published.lock() {
                     *published = input.tools.iter().map(|tool| tool.name.clone()).collect();
@@ -197,18 +234,13 @@ impl CompletionProvider for TaskProbeProvider {
                 if input.tools.iter().any(|tool| tool.name == "task") {
                     return Ok(AssistantMessage {
                         text: String::new(),
-                        reasoning: None,
-                        reasoning_signature: None,
-                        reasoning_state: Vec::new(),
                         tool_calls: vec![ModelToolCall {
                             id: "delegate-1".to_owned(),
                             name: "task".to_owned(),
-                            arguments: r#"{"task":"inspect","agent":"ghost"}"#.to_owned(),
+                            arguments: json!({"task": "inspect", "agent": self.agent}).to_string(),
                         }],
-                        usage: Usage::default(),
-                        refusal: None,
                         stop_reason: "tool_calls".to_owned(),
-                        correlation_id: None,
+                        ..finished
                     });
                 }
             }
@@ -222,30 +254,54 @@ impl CompletionProvider for TaskProbeProvider {
                     _ => None,
                 });
             }
-            Ok(AssistantMessage {
-                text: "done".to_owned(),
-                reasoning: None,
-                reasoning_signature: None,
-                reasoning_state: Vec::new(),
-                tool_calls: Vec::new(),
-                usage: Usage::default(),
-                refusal: None,
-                stop_reason: "stop".to_owned(),
-                correlation_id: None,
-            })
+            Ok(finished)
         })
     }
 }
 
-async fn run_task_probe(session_root: Option<PathBuf>) -> Arc<TaskProbeProvider> {
+/// One turn that publishes `task` and calls it, and what the provider and the
+/// approval agent saw while it ran.
+struct TaskProbe {
+    provider: Arc<TaskProbeProvider>,
+    approval: Arc<ScriptedApproval>,
+}
+
+/// Runs a turn that delegates to `agent` against a durable parent session, so
+/// the delegation can genuinely start and the policy in front of it is the only
+/// thing that can stop it.
+///
+/// `settings` is the operator's `tools` document, and `decision` is what the
+/// approval agent answers when the policy asks. `sessions` is [`None`] for a
+/// session with no store, which publishes no `task` at all.
+async fn run_task_probe(
+    sessions: Option<&Path>,
+    agent: &str,
+    settings: &str,
+    decision: ApprovalDecision,
+) -> TaskProbe {
     let temporary = tempfile::tempdir().expect("temporary workspace");
+    let working_directory = sessions.unwrap_or_else(|| temporary.path());
     let provider = Arc::new(TaskProbeProvider {
-        calls: AtomicUsize::new(0),
+        agent: agent.to_owned(),
+        root_calls: AtomicUsize::new(0),
+        child_turns: AtomicUsize::new(0),
         published: std::sync::Mutex::new(Vec::new()),
         delegation_error: std::sync::Mutex::new(None),
     });
     let driver = LiveTurnDriver::from_provider_for_tests(provider.clone(), "system")
-        .with_session_root_for_tests(session_root);
+        .with_session_root_for_tests(sessions.map(Path::to_path_buf));
+    let resume = sessions.map(|root| {
+        SessionStore::new(root)
+            .create(
+                "persisted-root",
+                &working_directory.to_string_lossy(),
+                None,
+                1,
+            )
+            .expect("durable parent");
+        "persisted-root".to_owned()
+    });
+    let (tools, approval) = guarded_registry(settings, decision);
     driver
         .run(&TurnReservation {
             session_id: "probe".to_owned(),
@@ -259,17 +315,18 @@ async fn run_task_probe(session_root: Option<PathBuf>) -> Arc<TaskProbeProvider>
             auto_title: None,
             user_display_content: None,
             mention_stats: None,
-            working_directory: temporary.path().to_string_lossy().into_owned(),
+            working_directory: working_directory.to_string_lossy().into_owned(),
             compaction: CompactionSettings::default(),
             intent: SessionIntent {
                 trusted: true,
+                resume,
                 ..SessionIntent::default()
             },
-            tools: ToolRegistry::default(),
+            tools,
         })
         .await
         .expect("the turn completes");
-    provider
+    TaskProbe { provider, approval }
 }
 
 /// Without a session store there is no subagent runner, and the reference
@@ -277,39 +334,174 @@ async fn run_task_probe(session_root: Option<PathBuf>) -> Arc<TaskProbeProvider>
 /// failed at call time.
 #[tokio::test]
 async fn task_is_withheld_when_no_subagent_runner_backs_the_session() {
-    let provider = run_task_probe(None).await;
+    let probe = run_task_probe(None, "explore", "", ApprovalDecision::ApproveOnce).await;
     assert!(
-        !provider
-            .published
-            .lock()
-            .expect("published")
-            .contains(&"task".to_owned()),
+        !probe.provider.published_task(),
         "task must not be published without a runner"
     );
 }
 
-/// An agent name nothing answers to is refused with the names that do
+/// US-249: an agent name nothing answers to is refused with the names that do
 /// exist, so a model that guessed can correct itself.
 #[tokio::test]
 async fn an_unknown_subagent_is_refused_with_the_available_names() {
     let temporary = tempfile::tempdir().expect("temporary sessions");
-    let provider = run_task_probe(Some(temporary.path().to_path_buf())).await;
+    let probe = run_task_probe(
+        Some(temporary.path()),
+        "ghost",
+        // The name is in neither list, so the policy asks and is answered, and
+        // the refusal the model reads is the handler's rather than the guard's.
+        "[task]\nallowlist = []\n",
+        ApprovalDecision::ApproveOnce,
+    )
+    .await;
     assert!(
-        provider
-            .published
-            .lock()
-            .expect("published")
-            .contains(&"task".to_owned()),
+        probe.provider.published_task(),
         "task is published once a runner backs the session"
     );
-    let refused = provider
-        .delegation_error
-        .lock()
-        .expect("observed")
-        .clone()
+    let refused = probe
+        .provider
+        .refusal()
         .expect("the delegation failed back to the model");
     assert!(refused.contains("ghost"), "{refused}");
     assert!(refused.contains("explore"), "{refused}");
+    assert!(
+        !probe.provider.delegated(),
+        "no child runs for a name nothing answers to"
+    );
+}
+
+/// US-248: `tools.task.allowlist` is unset here, so the declared default
+/// `["explore"]` is what resolves, and the built-in subagent is delegated to
+/// without the operator being asked. The approval agent would refuse if it were
+/// consulted, so a started child is proof that it was not.
+#[tokio::test]
+async fn the_default_task_allowlist_delegates_to_the_built_in_subagent_without_asking() {
+    let temporary = tempfile::tempdir().expect("temporary sessions");
+    let probe = run_task_probe(
+        Some(temporary.path()),
+        "explore",
+        "",
+        ApprovalDecision::Deny,
+    )
+    .await;
+    assert!(
+        !probe.approval.asked_for("task"),
+        "an allowlisted agent is granted outright"
+    );
+    assert!(
+        probe.provider.delegated(),
+        "the child turn ran: {:?}",
+        probe.provider.refusal()
+    );
+    assert_eq!(probe.provider.refusal(), None);
+}
+
+/// US-248: a denylisted agent is refused, and the refusal reaches the model as
+/// an error rather than a delegation nobody started.
+#[tokio::test]
+async fn a_denylisted_subagent_is_refused_before_any_child_starts() {
+    let temporary = tempfile::tempdir().expect("temporary sessions");
+    let probe = run_task_probe(
+        Some(temporary.path()),
+        "explore",
+        "[task]\ndenylist = [\"explore\"]\n",
+        ApprovalDecision::ApproveOnce,
+    )
+    .await;
+    assert!(
+        !probe.approval.asked_for("task"),
+        "a settled refusal never asks"
+    );
+    assert!(
+        !probe.provider.delegated(),
+        "no child starts for a denylisted agent"
+    );
+    assert!(
+        probe.provider.refusal().is_some(),
+        "the model reads the refusal"
+    );
+}
+
+/// US-248: the denylist is consulted first, so a name matching both lists is
+/// refused rather than granted.
+#[tokio::test]
+async fn the_task_denylist_is_consulted_before_the_allowlist() {
+    let temporary = tempfile::tempdir().expect("temporary sessions");
+    let probe = run_task_probe(
+        Some(temporary.path()),
+        "explore",
+        "[task]\nallowlist = [\"explore\"]\ndenylist = [\"explore\"]\n",
+        ApprovalDecision::ApproveOnce,
+    )
+    .await;
+    assert!(
+        !probe.provider.delegated(),
+        "a name in both lists is refused"
+    );
+    assert!(probe.provider.refusal().is_some());
+}
+
+/// US-248: both lists match by the reference's glob rules, so a wildcard names
+/// a family of subagents rather than a subagent literally called `expl*`.
+#[tokio::test]
+async fn the_task_lists_match_a_subagent_name_as_a_glob() {
+    let temporary = tempfile::tempdir().expect("temporary sessions");
+    let probe = run_task_probe(
+        Some(temporary.path()),
+        "explore",
+        "[task]\ndenylist = [\"expl*\"]\n",
+        ApprovalDecision::ApproveOnce,
+    )
+    .await;
+    assert!(
+        !probe.provider.delegated(),
+        "the wildcard matched `explore`"
+    );
+    assert!(probe.provider.refusal().is_some());
+}
+
+/// US-248: an agent in neither list falls to the `ask` default, and a declined
+/// prompt starts no subagent and hands the model the policy's refusal.
+#[tokio::test]
+async fn an_unlisted_subagent_asks_the_operator_and_a_decline_starts_no_child() {
+    let temporary = tempfile::tempdir().expect("temporary sessions");
+    let probe = run_task_probe(
+        Some(temporary.path()),
+        "explore",
+        "[task]\nallowlist = []\n",
+        ApprovalDecision::Deny,
+    )
+    .await;
+    assert!(probe.approval.asked_for("task"), "an unlisted agent asks");
+    assert!(
+        !probe.provider.delegated(),
+        "a declined call starts no subagent"
+    );
+    assert!(
+        probe.provider.refusal().is_some(),
+        "the model reads the refusal"
+    );
+}
+
+/// US-248: the same unlisted agent delegates once the operator approves, so the
+/// prompt is the whole of what stood between the call and the child.
+#[tokio::test]
+async fn an_unlisted_subagent_the_operator_approves_still_delegates() {
+    let temporary = tempfile::tempdir().expect("temporary sessions");
+    let probe = run_task_probe(
+        Some(temporary.path()),
+        "explore",
+        "[task]\nallowlist = []\n",
+        ApprovalDecision::ApproveOnce,
+    )
+    .await;
+    assert!(probe.approval.asked_for("task"));
+    assert!(
+        probe.provider.delegated(),
+        "the approved call delegated: {:?}",
+        probe.provider.refusal()
+    );
 }
 
 #[tokio::test]
@@ -334,7 +526,10 @@ async fn live_task_tool_runs_a_durable_child_session_through_the_provider() {
             1,
         )
         .expect("durable parent");
-    let tools = ToolRegistry::default();
+    // The child inherits the parent's surface, so the guard the session's
+    // builtin registration installs is what `task` is published behind here
+    // too; `explore` is allowlisted by default, so nothing is asked.
+    let (tools, _approval) = guarded_registry("", ApprovalDecision::Deny);
     for (name, presentation) in [
         ("read", ToolPresentationKind::Read),
         ("edit", ToolPresentationKind::Diff),

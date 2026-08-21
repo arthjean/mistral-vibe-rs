@@ -546,6 +546,11 @@ impl AppServer {
         // reference `init_scratchpad` gives the agent-loop runtime.
         let guard =
             ToolGuard::new(policy.clone(), approval).with_scratchpad(init_scratchpad(session_id));
+        // The registry carries the composition so a family published later than
+        // this one reads it: `task` registers when its turn resolves a subagent
+        // runner, and it must be guarded by this session's store and approval
+        // agent rather than by a second composition built at turn time.
+        tools.set_guard(guard.clone());
         self.builtin_tools
             .register(
                 session_id,

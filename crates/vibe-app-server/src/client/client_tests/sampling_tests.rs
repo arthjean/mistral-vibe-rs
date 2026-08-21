@@ -175,7 +175,7 @@ async fn plan_mode_states_its_directive_on_every_cycle_of_a_persisted_session() 
             mode: Some("plan".to_owned()),
             ..SessionIntent::default()
         },
-        tools: ToolRegistry::default(),
+        tools: guarded_registry("", ApprovalDecision::ApproveOnce).0,
     };
     let states_plan_mode = |label: &str| {
         let seen = seen.lock().expect("seen messages");

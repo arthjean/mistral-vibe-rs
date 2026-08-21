@@ -85,7 +85,7 @@ async fn live_driver_hydrates_and_extends_a_durable_resume() {
                 resume: Some("session-resume".to_owned()),
                 ..SessionIntent::default()
             },
-            tools: ToolRegistry::default(),
+            tools: guarded_registry("", ApprovalDecision::ApproveOnce).0,
         })
         .await
         .expect("resumed turn completes");
@@ -209,7 +209,7 @@ async fn the_context_warning_reaches_the_model_once_per_session() {
                         resume: Some("warned".to_owned()),
                         ..SessionIntent::default()
                     },
-                    tools: ToolRegistry::default(),
+                    tools: guarded_registry("", ApprovalDecision::ApproveOnce).0,
                 })
                 .await
                 .expect("the turn completes");

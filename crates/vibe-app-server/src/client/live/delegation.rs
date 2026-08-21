@@ -113,15 +113,48 @@ impl LiveTurnDriver {
             parent_intent: reservation.intent.clone(),
         });
         let manager = Arc::new(SubagentManager::new(store, runner));
+        // `task` is published behind the same composition as every other
+        // builtin. The guard travels on the registry because this registration
+        // happens a layer above the one that built it, and a session whose
+        // builtin surface never registered has no policy to delegate under, so
+        // the tool is withheld rather than published unguarded.
+        let guard = reservation.tools.guard().ok_or_else(|| {
+            DriverError::Tool(
+                "`task` cannot be published for a session with no permission guard".to_owned(),
+            )
+        })?;
+        let settings = guard.config.clone();
         reservation
             .tools
             .register(
                 task_spec(),
-                task_handler(manager, subagents, parent_session_id),
+                Arc::new(PolicyGuardedTool::new(
+                    "task",
+                    guard.policy.clone(),
+                    guard.approval.clone(),
+                    Arc::new(move |invocation: &vibe_core::tools::ToolInvocation| {
+                        Ok(resolve_task_tool_permission(
+                            requested_agent(&invocation.arguments),
+                            &settings.view::<SharedToolConfig>("task"),
+                        ))
+                    }),
+                    task_handler(manager, subagents, parent_session_id),
+                )),
             )
             .map(drop)
             .map_err(|error| DriverError::Tool(error.to_string()))
     }
+}
+
+/// Which subagent a call names, with the reference `TaskArgs.agent` default
+/// applied. The policy resolver and the handler read the argument through this
+/// one function, so an absent key cannot mean `explore` to one and nothing to
+/// the other.
+fn requested_agent(arguments: &Value) -> &str {
+    arguments
+        .get("agent")
+        .and_then(Value::as_str)
+        .unwrap_or(DEFAULT_SUBAGENT)
 }
 
 /// The subagent every session publishes before any extension is discovered.
@@ -166,12 +199,7 @@ pub(crate) fn task_handler(
             let parent_session_id = parent_session_id.clone();
             let arguments = invocation.arguments.clone();
             Box::pin(async move {
-                // `agent` carries the reference default, applied before the
-                // handler runs, so an absent key still names `explore`.
-                let agent_name = arguments
-                    .get("agent")
-                    .and_then(Value::as_str)
-                    .unwrap_or(DEFAULT_SUBAGENT);
+                let agent_name = requested_agent(&arguments);
                 let task = arguments
                     .get("task")
                     .and_then(Value::as_str)

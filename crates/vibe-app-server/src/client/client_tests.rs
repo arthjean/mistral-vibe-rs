@@ -80,6 +80,60 @@ impl vibe_core::policy::ApprovalAgent for DenyEveryApproval {
     }
 }
 
+/// An approval agent answering with one fixed decision and recording what it
+/// was asked, so a test can tell a policy that granted outright from one that
+/// prompted.
+struct ScriptedApproval {
+    decision: ApprovalDecision,
+    asked: std::sync::Mutex<Vec<String>>,
+}
+
+impl ScriptedApproval {
+    fn asked_for(&self, tool: &str) -> bool {
+        self.asked
+            .lock()
+            .expect("recorded approvals")
+            .iter()
+            .any(|name| name == tool)
+    }
+}
+
+impl ApprovalAgent for ScriptedApproval {
+    fn request<'a>(&'a self, request: ApprovalRequest) -> vibe_core::policy::ApprovalFuture<'a> {
+        if let Ok(mut asked) = self.asked.lock() {
+            asked.push(request.tool);
+        }
+        let decision = self.decision;
+        Box::pin(async move { Ok(decision) })
+    }
+}
+
+/// A registry carrying the guard a session's builtin surface installs.
+///
+/// A turn publishes `task` behind whatever composition it finds on the
+/// registry, so a driver test that hands it a bare one is testing a session
+/// that never registered its tools. `settings` is the operator's `tools`
+/// document, which is where the `task` allowlist and denylist are read from.
+fn guarded_registry(
+    settings: &str,
+    decision: ApprovalDecision,
+) -> (ToolRegistry, Arc<ScriptedApproval>) {
+    let resolver = vibe_core::tools::config::ToolConfigResolver::new();
+    if !settings.is_empty() {
+        resolver.update(settings.parse::<toml::Table>().expect("settings parse"));
+    }
+    let approval = Arc::new(ScriptedApproval {
+        decision,
+        asked: std::sync::Mutex::new(Vec::new()),
+    });
+    let tools = ToolRegistry::default();
+    tools.set_guard(vibe_core::policy::ToolGuard::new(
+        vibe_core::policy::PermissionStore::default().with_tool_config(resolver),
+        approval.clone(),
+    ));
+    (tools, approval)
+}
+
 struct ProgrammaticProjects;
 
 impl ProjectCloud for ProgrammaticProjects {
