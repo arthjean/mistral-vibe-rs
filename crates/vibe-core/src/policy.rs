@@ -1092,6 +1092,28 @@ pub fn resolve_file_tool_permission(
     context
 }
 
+/// Resolves what the `task` tool may delegate to `agent`.
+///
+/// Reference `TaskTool.resolve_permission`, in its order: the denylist refuses
+/// first, so a name matching both lists is refused, the allowlist then grants,
+/// and a name in neither list settles nothing and leaves the configured
+/// permission to decide. Both lists are matched by the same glob rules the file
+/// lists use rather than by equality, so `review-*` names a family.
+#[must_use]
+pub fn resolve_task_tool_permission(agent: &str, settings: &SharedToolConfig) -> PermissionContext {
+    if let Some(pattern) = matched_pattern(&settings.denylist, agent) {
+        return PermissionContext::settled(PermissionMode::Never).because(format!(
+            "subagent `{agent}` matches the `task` denylist entry `{pattern}`"
+        ));
+    }
+    if let Some(pattern) = matched_pattern(&settings.allowlist, agent) {
+        return PermissionContext::settled(PermissionMode::Always).because(format!(
+            "subagent `{agent}` matches the `task` allowlist entry `{pattern}`"
+        ));
+    }
+    PermissionContext::deferred()
+}
+
 /// The first entry of `patterns` matching `subject`, in the order the operator
 /// wrote them.
 fn matched_pattern<'a>(patterns: &'a [String], subject: &str) -> Option<&'a String> {

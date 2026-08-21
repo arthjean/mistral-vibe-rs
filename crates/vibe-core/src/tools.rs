@@ -297,6 +297,12 @@ pub struct ToolRegistry {
     /// `skill` tool registers so the synthetic pair and the tool answer from
     /// one catalog and one loaded ledger.
     invoked_skills: Arc<RwLock<Option<Arc<dyn crate::skills::InvokedSkillResolver>>>>,
+    /// The composition every tool family publishes behind, installed when the
+    /// session's builtin surface registers. A family that registers later than
+    /// that surface, as `task` does once its turn resolves a subagent runner,
+    /// reads the session's own store, approval agent and configuration from
+    /// here rather than being handed a second composition.
+    guard: Arc<RwLock<Option<crate::policy::ToolGuard>>>,
 }
 
 impl fmt::Debug for ToolRegistry {
@@ -334,7 +340,23 @@ impl ToolRegistry {
             next_discovery_index: Arc::new(AtomicU64::new(1)),
             max_output_bytes,
             invoked_skills: Arc::new(RwLock::new(None)),
+            guard: Arc::new(RwLock::new(None)),
         }
+    }
+
+    /// Installs the guard the session's tools are published behind, replacing
+    /// any earlier one so a re-registration after an agent switch carries the
+    /// approval agent that registration resolved.
+    pub fn set_guard(&self, guard: crate::policy::ToolGuard) {
+        if let Ok(mut slot) = self.guard.write() {
+            *slot = Some(guard);
+        }
+    }
+
+    /// The session's guard, absent until the builtin surface registers.
+    #[must_use]
+    pub fn guard(&self) -> Option<crate::policy::ToolGuard> {
+        self.guard.read().ok().and_then(|slot| slot.clone())
     }
 
     /// Installs the session's invoked-skill resolver, replacing any earlier
