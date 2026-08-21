@@ -3,7 +3,7 @@
     "file": "tasks/prd-tool-infrastructure-parity.md",
     "title": "Tool Infrastructure at Full Parity",
     "created_at": "2026-08-21",
-    "status": "IN_PROGRESS"
+    "status": "DONE"
   },
   "epics": [
     {
@@ -52,10 +52,11 @@
     {
       "id": "EP-085",
       "title": "Restate row 4 from its oracle",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 2,
-      "stories_done": 0
+      "stories_done": 2,
+      "started_at": "2026-08-21"
     }
   ],
   "stories": [
@@ -243,7 +244,7 @@
       "id": "US-267",
       "title": "Record the permanent divergences by name",
       "epic": "EP-085",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [
@@ -251,15 +252,15 @@
         "US-264",
         "US-266"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-21",
+      "completed_at": "2026-08-21",
+      "reviewed_at": "2026-08-21"
     },
     {
       "id": "US-268",
       "title": "Remeasure and restate row 4",
       "epic": "EP-085",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [
@@ -272,9 +273,9 @@
         "US-265",
         "US-267"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-21",
+      "completed_at": "2026-08-21",
+      "reviewed_at": "2026-08-21"
     }
   ]
 }
