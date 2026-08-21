@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Publish a connector only where the configuration names it. A connector the
+  service offers is now withheld whole until a `[[connectors]]` entry opts it in,
+  matching how the reference treats an unnamed connector exactly like a disabled
+  one; before, every connector the account carried published its tools by
+  default. An entry that sets `disabled` withholds the connector whole and its
+  `disabled_tools` list is not consulted, a list entry naming a tool the
+  connector does not expose is ignored instead of failing the session, and the
+  entry is read again every time the connectors are published, so a file
+  corrected by hand outranks the state a refresh carried forward. MCP servers are
+  unchanged: they stay opt-out.
+
+- Publish tools in the order the session discovered them. The surface now lists
+  the builtins first in registration order, then the MCP tools, then the
+  connector tools, where it used to list every tool by name; a name registered
+  twice keeps the position of its first registration, and withholding a tool
+  leaves the order of the rest untouched.
+
 - Close the tool gate on the list an operator wrote, not on the one this port
   could compile. `enabled_tools = ["  "]` and `enabled_tools = ["re:("]` now
   publish nothing, the way the reference narrows on a list that was written at
