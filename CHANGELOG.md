@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Let an operator rewrite what a tool tells the model. A `<tools-dir>/prompts/<name>.md`
+  file now replaces the description the matching tool publishes, read from the
+  `tool_paths` entries in configuration order, then from `.vibe/tools` in every
+  open project directory, then from `~/.vibe/tools`, with the later directory
+  winning and a directory named twice read once at its first position. A blank
+  file, a file that cannot be read, and a file named after no tool all leave the
+  surface as it was, and a session naming an unresolvable entry still opens. The
+  match is on the published name, so a tool served by an MCP server or by a
+  connector is redescribed the same way, and the files are re-read at every
+  publication, so a description written while a session is open reaches the next
+  turn.
+
 - Render a proxied tool call the way the reference renders it. A tool published
   by an MCP server or by a connector no longer borrows the generic fallback that
   spells its arguments into the header: the call now names the published tool
