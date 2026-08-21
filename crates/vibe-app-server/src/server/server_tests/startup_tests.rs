@@ -443,3 +443,97 @@ fn session_start_hydrates_bounded_public_resume_history() {
         Some(2)
     );
 }
+
+/// US-261: a description an operator wrote under a tools directory replaces the
+/// one the session publishes to the model, and the later search path wins.
+///
+/// The surface read here is the one `SessionToolExecutor::definitions` sends:
+/// `session/start` composes the registry, and `available` is the call that
+/// turns it into the tool list of the next turn.
+#[test]
+fn session_start_publishes_the_descriptions_an_operator_wrote() {
+    let temporary = tempfile::tempdir().expect("temporary workspace");
+    let working_directory = temporary.path().join("workspace");
+    let vibe_home = temporary.path().join("home");
+    let project_prompts = working_directory.join(".vibe/tools/prompts");
+    let user_prompts = vibe_home.join("tools/prompts");
+    fs::create_dir_all(&project_prompts).expect("project tools directory");
+    fs::create_dir_all(&user_prompts).expect("user tools directory");
+    fs::write(
+        project_prompts.join("read_file.md"),
+        "read a file, per project",
+    )
+    .expect("project description");
+    fs::write(user_prompts.join("read_file.md"), "read a file, per user")
+        .expect("user description");
+    fs::write(project_prompts.join("grep.md"), "search, per project").expect("project description");
+    fs::write(
+        project_prompts.join("weather.md"),
+        "no tool answers to this",
+    )
+    .expect("unmatched description");
+    fs::write(project_prompts.join("write_file.md"), "  \n ").expect("blank description");
+
+    let workspace = WorkspaceService::new(
+        crate::workspace::WorkspacePaths {
+            vibe_home,
+            working_directory: working_directory.clone(),
+            session_root: temporary.path().join("sessions"),
+        },
+        true,
+    )
+    .expect("workspace service");
+    let server = AppServer::with_workspace_service(workspace);
+    let mut connection = server.connect(TransportKind::InProcess);
+    initialize(&mut connection);
+    connection.dispatch(&request(
+        2,
+        "session/start",
+        json!({
+            "sessionId": "described",
+            "workingDirectory": working_directory,
+            "trustWorkspace": true
+        }),
+    ));
+
+    let published = |registry: &ToolRegistry| -> BTreeMap<String, String> {
+        registry
+            .available(&NameFilter::default(), &NameFilter::default())
+            .expect("the surface publishes")
+            .into_iter()
+            .map(|spec| (spec.name, spec.description))
+            .collect()
+    };
+    let registry = server.tool_registry("described").expect("session registry");
+    let surface = published(&registry);
+    assert_eq!(
+        surface.get("read_file").map(String::as_str),
+        Some("read a file, per user"),
+        "the user directory is searched after the project one, so it wins"
+    );
+    assert_eq!(
+        surface.get("grep").map(String::as_str),
+        Some("search, per project")
+    );
+    assert!(!surface.contains_key("weather"));
+    let compiled = surface
+        .get("write_file")
+        .expect("write_file is published")
+        .clone();
+    assert!(
+        !compiled.trim().is_empty(),
+        "a blank file must not publish a blank description"
+    );
+
+    // The source is re-read per publication, so a file written while the
+    // session is open reaches the next turn.
+    fs::write(
+        project_prompts.join("write_file.md"),
+        "write a file, per project",
+    )
+    .expect("mid-session description");
+    assert_eq!(
+        published(&registry).get("write_file").map(String::as_str),
+        Some("write a file, per project")
+    );
+}

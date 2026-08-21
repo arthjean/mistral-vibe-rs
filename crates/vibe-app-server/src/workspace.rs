@@ -50,6 +50,9 @@ use vibe_core::prompt::{
 use vibe_core::skills::{SearchInputs, SkillDiscovery, search_paths, skill_summary};
 use vibe_core::storage::{HydratedSession, SessionStore, StorageError};
 use vibe_core::tools::config::ToolConfigResolver;
+use vibe_core::tools::descriptions::{
+    DirectoryDescriptions, SearchInputs as ToolSearchInputs, search_paths as tool_search_paths,
+};
 
 /// The variable the reference reads the web-search credential from, and the one
 /// [`crate::server::AppServer`] resolves it through.

@@ -551,6 +551,14 @@ impl AppServer {
         // runner, and it must be guarded by this session's store and approval
         // agent rather than by a second composition built at turn time.
         tools.set_guard(guard.clone());
+        // The descriptions an operator wrote are read at every publication
+        // rather than resolved here, so the source installed now also covers
+        // the MCP and connector tools that register after this registration
+        // returns, and a file written mid-session reaches the next turn.
+        tools.set_descriptions(Arc::new(
+            self.workspace
+                .tool_descriptions(Path::new(working_directory), intent.trusted),
+        ));
         self.builtin_tools
             .register(
                 session_id,

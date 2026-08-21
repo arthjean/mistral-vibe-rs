@@ -528,6 +528,48 @@ impl WorkspaceService {
         }
     }
 
+    /// Where this session reads the descriptions an operator wrote.
+    ///
+    /// Reference `_compute_search_paths` walks `tool_paths`, the project tool
+    /// directories and the user tool directory, and `ToolManager` recomputes
+    /// them per construction rather than caching them across sessions, so the
+    /// snapshot is read here at call time the way [`Self::skill_discovery`]
+    /// reads it.
+    ///
+    /// The session's own working directory contributes its `.vibe/tools` first,
+    /// because a session may open a directory the service was not started in
+    /// and that directory is the project the operator is working on.
+    #[must_use]
+    pub fn tool_descriptions(
+        &self,
+        working_directory: &Path,
+        trusted: bool,
+    ) -> DirectoryDescriptions {
+        let snapshot = self.config.load().ok();
+        let configured = snapshot
+            .as_ref()
+            .map(ConfigSnapshot::tool_paths)
+            .unwrap_or_default();
+        let harness = self.config.harness_files();
+        let mut projects = Vec::new();
+        if trusted {
+            let session_tools = working_directory.join(".vibe").join("tools");
+            if session_tools.is_dir() {
+                projects.push(session_tools);
+            }
+            projects.extend(harness.project_tools_dirs());
+        }
+        DirectoryDescriptions::new(tool_search_paths(&ToolSearchInputs {
+            configured: &configured,
+            projects: &projects,
+            user: &harness.user_tools_dirs(),
+            // The operator's home is the Vibe home's parent, the spelling
+            // `skill_discovery` already resolves `~` against.
+            user_home: self.paths.vibe_home.parent(),
+            working_directory,
+        }))
+    }
+
     /// The skill files discovery could not load, as `(file, message)` pairs.
     ///
     /// Reference `project_diagnostics` reads `skill_manager.config_issues` into
