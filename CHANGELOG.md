@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- Close the tool gate on the list an operator wrote, not on the one this port
+  could compile. `enabled_tools = ["  "]` and `enabled_tools = ["re:("]` now
+  publish nothing, the way the reference narrows on a list that was written at
+  all rather than on the patterns it managed to read; before, a list whose every
+  entry was unusable was treated as no list and published the whole surface. A
+  blank entry beside a usable one still publishes what the usable one names, an
+  absent or empty list still publishes everything, and `disabled_tools` keeps
+  withholding nothing when every entry it carries is blank.
+
+- Match a sensitive pattern by path component instead of by string. The
+  `sensitive_patterns` list is now read the way the reference reads it: the
+  comparison is right-anchored and component by component, so `.env` names a
+  file called `.env` at any depth, `secrets/*` names a file directly inside a
+  `secrets` directory rather than anywhere under one, `/etc/*` names only a
+  direct child of `/etc`, and a `*` no longer crosses a separator. The shipped
+  `**/.env` and `**/.env.*` defaults keep naming a dotenv file at any depth, the
+  allowlist and the denylist keep the whole-string matcher they always had, and
+  a pattern nothing can read raises no requirement instead of stopping the scan.
+
+- Name every argument a tool refused, not only the first. A rejected tool call
+  now reports the tool that refused it and every place the payload was wrong, so
+  a call breaking three arguments at once is answered once with all three
+  instead of costing three round trips.
+
 - Let an operator rewrite what a tool tells the model. A `<tools-dir>/prompts/<name>.md`
   file now replaces the description the matching tool publishes, read from the
   `tool_paths` entries in configuration order, then from `.vibe/tools` in every
