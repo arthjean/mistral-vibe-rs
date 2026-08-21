@@ -25,6 +25,8 @@ one cannot import ``vibe``.
 from __future__ import annotations
 
 import argparse
+import asyncio
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -38,12 +40,34 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 DIGEST_SCHEMA_VERSION = 1
-FIXTURES_SCHEMA_VERSION = 1
+FIXTURES_SCHEMA_VERSION = 2
+GATES_SCHEMA_VERSION = 1
+
+#: The `enabled_tools` and `disabled_tools` pairs whose published names are
+#: recorded. They span the four combinations of the two lists being written and
+#: left out, and within the written ones they separate the list the operator
+#: typed from the patterns it compiles to: a blank entry and an uncompilable
+#: expression both narrow the surface without matching anything, which is the
+#: state a filter reading its compiled patterns gets wrong in the widening
+#: direction.
+GATE_CASES: tuple[tuple[str, list[str], list[str]], ...] = (
+    ("neither-list", [], []),
+    ("blank-enabled", ["  "], []),
+    ("uncompilable-enabled", ["re:("], []),
+    ("blank-and-glob-enabled", ["  ", "read_*"], []),
+    ("regex-enabled", ["re:read_.*"], []),
+    ("blank-disabled", [], ["  "]),
+    ("uncompilable-disabled", [], ["re:("]),
+    ("glob-disabled", [], ["read_*"]),
+    ("both-lists-match", ["read_*"], ["read_file"]),
+    ("both-lists-written", ["read_*", "write_file"], ["  "]),
+)
 DEFAULT_OUTPUT = Path(".parity/tool-surface-corpus.json")
 DEFAULT_DIGEST = Path("crates/vibe-app-server/tests/tool-surface/digest.json")
 DEFAULT_FIXTURES = Path("crates/vibe-app-server/tests/tool-surface/fixtures.json")
+DEFAULT_GATES = Path("crates/vibe-app-server/tests/tool-surface/gates.json")
 #: Stands in for every description string, so the digest records that a
 #: description exists without carrying reference prose into the repository.
 DESCRIBED = "<described>"
@@ -141,6 +165,11 @@ def capture_tools(reference: Path) -> tuple[list[dict[str, Any]], dict[str, Any]
             for name in sorted(available)
             for fixture in argument_fixtures(name, available[name])
         ]
+        multi_rejections = [
+            probe
+            for name in sorted(available)
+            for probe in multi_argument_probes(name, available[name])
+        ]
         # The managed rollout is a second surface, not a second corpus: the
         # variant it selects for `bash` and the four session tools it adds are
         # only reachable with the experiment variant resolved to `managed`.
@@ -151,6 +180,26 @@ def capture_tools(reference: Path) -> tuple[list[dict[str, Any]], dict[str, Any]
             {"name": name, "parameters": managed_available[name].get_parameters()}
             for name in sorted(managed_available)
         ]
+        # The two configured filters narrow the same surface, so the gate cases
+        # are captured from the manager rather than from a list comprehension
+        # over the default surface: what is measured is which names survive
+        # `available_tools`, filters included.
+        gates = [
+            {
+                "case": case,
+                "enabledTools": list(enabled),
+                "disabledTools": list(disabled),
+                "names": sorted(
+                    surface(
+                        VibeConfigSchema(
+                            enabled_tools=list(enabled),
+                            disabled_tools=list(disabled),
+                        )
+                    )
+                ),
+            }
+            for case, enabled, disabled in GATE_CASES
+        ]
     conditions = {
         "managedShellRollout": False,
         "managedShellRolloutCaptured": True,
@@ -160,6 +209,8 @@ def capture_tools(reference: Path) -> tuple[list[dict[str, Any]], dict[str, Any]
     return tools, {
         "conditions": conditions,
         "fixtures": fixtures,
+        "gates": gates,
+        "multiRejections": multi_rejections,
         "managedTools": managed_tools,
         "windowsTools": capture_windows_tools(),
     }
@@ -285,6 +336,109 @@ def mismatched_value(schema: dict[str, Any], root: dict[str, Any]) -> Any:
             return []
 
 
+def render_pointer(location: tuple[Any, ...]) -> str:
+    """A validation location in the pointer spelling this repository writes.
+
+    Pydantic reports a location as a tuple of field names and indices. The
+    rendering is authored here, in the `$.field[0].sub` form this port's own
+    violations carry, so the corpus records where the reference objected
+    without recording a single character it wrote.
+    """
+    rendered = "$"
+    for step in location:
+        if isinstance(step, int):
+            rendered += f"[{step}]"
+        else:
+            rendered += f".{step}"
+    return rendered
+
+
+def rejection_summary(
+    name: str, tool_class: Any, payload: dict[str, Any], error: Exception
+) -> dict[str, Any]:
+    """What the reference answers a rejected call, recorded structurally.
+
+    The message itself is reference-authored prose and `NOTICE` forbids
+    committing it, so what is stored is its shape: the exception type the model
+    sees, whether the text names the tool that rejected the call, which
+    arguments it objected to, and a digest of the full string so a change
+    upstream is still caught. The wrapper is driven rather than reconstructed:
+    ``invoke`` validates before it reaches ``run``, so advancing the generator
+    once over an already-rejected payload measures the error a model would read
+    without executing anything.
+    """
+
+    locations = [
+        tuple(entry.get("loc", ())) for entry in getattr(error, "errors", lambda: [])()
+    ]
+    text = ""
+    kind = type(error).__name__
+    try:
+        config_class = tool_class._get_tool_config_class()
+        instance = tool_class.from_config(config_class)
+        stream = instance.invoke(**payload)
+
+        async def advance() -> None:
+            async for _ in stream:
+                break
+
+        asyncio.run(advance())
+    except Exception as wrapped:  # noqa: BLE001 - the wrapper is the measurement
+        kind = type(wrapped).__name__
+        text = str(wrapped)
+    return {
+        "error": kind,
+        "namesTool": name in text,
+        "arguments": sorted(
+            {str(location[0]) for location in locations if location and isinstance(location[0], str)}
+        ),
+        "pointers": sorted({render_pointer(location) for location in locations}),
+        "digest": "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest(),
+    }
+
+
+def multi_argument_probes(name: str, tool_class: Any) -> list[dict[str, Any]]:
+    """Payloads breaking more than one argument at once, and the answer they get.
+
+    Every fixture in :func:`argument_fixtures` breaks a single argument, so the
+    fixture set cannot say whether a rejection names every argument it objected
+    to or stops at the first. These probes ask that question directly: the
+    payload is the valid one with every declared property overwritten by a value
+    of the wrong type, so more than one property is wrong at once, and what is
+    recorded is the pointer set the reference reports back.
+
+    They are kept out of the fixture list on purpose. A fixture is an
+    accept-or-reject verdict and the committed set is a fixed conformance count;
+    a probe is a second measurement over the same surface, so it is recorded
+    beside them rather than mixed in.
+    """
+    root = tool_class.get_parameters()
+    properties: dict[str, Any] = root.get("properties", {})
+    if len(properties) < 2:
+        return []
+    required: list[str] = list(root.get("required", []))
+    payload = {field: sample_value(properties[field], root) for field in required} | {
+        field: mismatched_value(subschema, root)
+        for field, subschema in properties.items()
+    }
+    try:
+        tool_class.validate_arguments(payload)
+    except Exception as error:  # noqa: BLE001 - the rejection is the measurement
+        rejection = rejection_summary(name, tool_class, payload, error)
+    else:
+        return []
+    if len(rejection["pointers"]) < 2:
+        return []
+    return [
+        {
+            "tool": name,
+            "case": "mismatched-every-property",
+            "arguments": payload,
+            "rejection": rejection,
+        }
+    ]
+
+
 def argument_fixtures(name: str, tool_class: Any) -> list[dict[str, Any]]:
     """Payloads spanning the reference's accept and reject envelope.
 
@@ -326,7 +480,7 @@ def argument_fixtures(name: str, tool_class: Any) -> list[dict[str, Any]]:
                     "case": case,
                     "arguments": payload,
                     "accepted": False,
-                    "rejection": type(error).__name__,
+                    "rejection": rejection_summary(name, tool_class, payload, error),
                 }
             )
         else:
@@ -397,6 +551,11 @@ def build_fixtures(corpus: dict[str, Any]) -> dict[str, Any]:
     here, and the verdict is a boolean. What the fixture set carries about the
     reference is the accept-or-reject decision, which is the measurement.
 
+    A rejected fixture carries a second measurement: the shape of the error the
+    model reads back, recorded by :func:`rejection_summary` as an exception
+    type, a flag, a list of argument names and a digest. None of it is the
+    reference's own text.
+
     The replay needs a schema, which it reads from the committed digest, so a
     fixture and the schema it is validated against always describe the same
     pinned surface.
@@ -407,8 +566,12 @@ def build_fixtures(corpus: dict[str, Any]) -> dict[str, Any]:
         "platform": corpus["platform"],
         "note": (
             "Argument fixtures with the verdict the reference Pydantic gave them. Payloads and "
-            "case names are authored by scripts/parity/tool_surface.py; the only captured value "
-            "is the accepted flag. Schemas come from digest.json. Regenerate with "
+            "case names are authored by scripts/parity/tool_surface.py; the captured values are "
+            "the accepted flag and, for a rejection, the shape of the error the model reads: its "
+            "type, whether it names the tool, which arguments it objected to, and a digest of "
+            "the text. multiArgument holds the same measurement for payloads breaking more "
+            "than one argument at once, which is what says whether a rejection names every "
+            "argument or only the first. Schemas come from digest.json. Regenerate with "
             "scripts/parity/tool_surface.py --fixtures when the pinned reference moves."
         ),
         "fixtures": sorted(
@@ -419,10 +582,37 @@ def build_fixtures(corpus: dict[str, Any]) -> dict[str, Any]:
                     "arguments": fixture["arguments"],
                     "accepted": fixture["accepted"],
                 }
+                | ({} if fixture["accepted"] else {"rejection": fixture["rejection"]})
                 for fixture in corpus["fixtures"]
             ),
             key=lambda fixture: (fixture["tool"], fixture["case"]),
         ),
+        "multiArgument": sorted(
+            corpus["multiRejections"],
+            key=lambda probe: (probe["tool"], probe["case"]),
+        ),
+    }
+
+
+def build_gates(corpus: dict[str, Any]) -> dict[str, Any]:
+    """The names the reference publishes under each configured filter pair.
+
+    Every value here is an observation: the two lists are written by
+    :data:`GATE_CASES` and the names are the reference's answer to them. The
+    corpus is what holds this port's gate to the reference's, which reads the
+    written list rather than the patterns it compiles to.
+    """
+    return {
+        "schemaVersion": GATES_SCHEMA_VERSION,
+        "referenceCommit": corpus["reference"]["commit"],
+        "platform": corpus["platform"],
+        "note": (
+            "Published tool names per `enabled_tools` and `disabled_tools` pair, captured from "
+            "the pinned reference by scripts/parity/tool_surface.py. The lists are authored "
+            "here; the names are the reference's answer. Regenerate with "
+            "scripts/parity/tool_surface.py --gates when the pinned reference moves."
+        ),
+        "gates": corpus["gates"],
     }
 
 
@@ -529,6 +719,17 @@ def parse_arguments() -> argparse.Namespace:
             f"unconditionally (default {DEFAULT_FIXTURES})"
         ),
     )
+    parser.add_argument(
+        "--gates",
+        type=Path,
+        nargs="?",
+        const=DEFAULT_GATES,
+        default=None,
+        help=(
+            "also write the committed filter-gate corpus, which the Rust replay reads "
+            f"unconditionally (default {DEFAULT_GATES})"
+        ),
+    )
     parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
     parser.add_argument(
         "--probe-endpoint",
@@ -554,6 +755,8 @@ def main() -> int:
             "managedTools": extra["managedTools"],
             "windowsTools": extra["windowsTools"],
             "fixtures": extra["fixtures"],
+            "gates": extra["gates"],
+            "multiRejections": extra["multiRejections"],
         }
         if arguments.probe_endpoint:
             corpus["endpointProbe"] = probe_endpoint(tools)
@@ -588,6 +791,16 @@ def main() -> int:
                 + "\n",
                 encoding="utf-8",
             )
+        # Written on request for the same reason: the gate corpus is what the
+        # filter is held to, so it is regenerated deliberately rather than by
+        # every run of the replay that reads it.
+        if arguments.gates is not None:
+            arguments.gates.parent.mkdir(parents=True, exist_ok=True)
+            arguments.gates.write_text(
+                json.dumps(build_gates(corpus), indent=2, sort_keys=True, ensure_ascii=False)
+                + "\n",
+                encoding="utf-8",
+            )
     except OracleError as error:
         print(f"tool-surface capture failed: {error}", file=sys.stderr)
         return 1
@@ -600,6 +813,8 @@ def main() -> int:
         print(f"wrote the canonical digest to {arguments.digest}")
     if arguments.fixtures is not None:
         print(f"wrote the argument fixtures to {arguments.fixtures}")
+    if arguments.gates is not None:
+        print(f"wrote {len(extra['gates'])} filter gates to {arguments.gates}")
     if probe := corpus.get("endpointProbe"):
         print(f"endpoint probe: {json.dumps(probe, sort_keys=True)}")
     return 0

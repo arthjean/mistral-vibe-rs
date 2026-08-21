@@ -1,0 +1,150 @@
+{
+  "gates": [
+    {
+      "case": "neither-list",
+      "disabledTools": [],
+      "enabledTools": [],
+      "names": [
+        "ask_user_question",
+        "bash",
+        "edit",
+        "exit_plan_mode",
+        "grep",
+        "read_file",
+        "skill",
+        "task",
+        "todo",
+        "web_fetch",
+        "web_search",
+        "write_file"
+      ]
+    },
+    {
+      "case": "blank-enabled",
+      "disabledTools": [],
+      "enabledTools": [
+        "  "
+      ],
+      "names": []
+    },
+    {
+      "case": "uncompilable-enabled",
+      "disabledTools": [],
+      "enabledTools": [
+        "re:("
+      ],
+      "names": []
+    },
+    {
+      "case": "blank-and-glob-enabled",
+      "disabledTools": [],
+      "enabledTools": [
+        "  ",
+        "read_*"
+      ],
+      "names": [
+        "read_file"
+      ]
+    },
+    {
+      "case": "regex-enabled",
+      "disabledTools": [],
+      "enabledTools": [
+        "re:read_.*"
+      ],
+      "names": [
+        "read_file"
+      ]
+    },
+    {
+      "case": "blank-disabled",
+      "disabledTools": [
+        "  "
+      ],
+      "enabledTools": [],
+      "names": [
+        "ask_user_question",
+        "bash",
+        "edit",
+        "exit_plan_mode",
+        "grep",
+        "read_file",
+        "skill",
+        "task",
+        "todo",
+        "web_fetch",
+        "web_search",
+        "write_file"
+      ]
+    },
+    {
+      "case": "uncompilable-disabled",
+      "disabledTools": [
+        "re:("
+      ],
+      "enabledTools": [],
+      "names": [
+        "ask_user_question",
+        "bash",
+        "edit",
+        "exit_plan_mode",
+        "grep",
+        "read_file",
+        "skill",
+        "task",
+        "todo",
+        "web_fetch",
+        "web_search",
+        "write_file"
+      ]
+    },
+    {
+      "case": "glob-disabled",
+      "disabledTools": [
+        "read_*"
+      ],
+      "enabledTools": [],
+      "names": [
+        "ask_user_question",
+        "bash",
+        "edit",
+        "exit_plan_mode",
+        "grep",
+        "skill",
+        "task",
+        "todo",
+        "web_fetch",
+        "web_search",
+        "write_file"
+      ]
+    },
+    {
+      "case": "both-lists-match",
+      "disabledTools": [
+        "read_file"
+      ],
+      "enabledTools": [
+        "read_*"
+      ],
+      "names": []
+    },
+    {
+      "case": "both-lists-written",
+      "disabledTools": [
+        "  "
+      ],
+      "enabledTools": [
+        "read_*",
+        "write_file"
+      ],
+      "names": [
+        "read_file",
+        "write_file"
+      ]
+    }
+  ],
+  "note": "Published tool names per `enabled_tools` and `disabled_tools` pair, captured from the pinned reference by scripts/parity/tool_surface.py. The lists are authored here; the names are the reference's answer. Regenerate with scripts/parity/tool_surface.py --gates when the pinned reference moves.",
+  "platform": "linux",
+  "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+  "schemaVersion": 1
+}

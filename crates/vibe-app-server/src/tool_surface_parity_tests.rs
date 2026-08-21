@@ -25,6 +25,7 @@ use std::sync::Arc;
 use secrecy::SecretString;
 use serde::Deserialize;
 use serde_json::{Map, Value};
+use vibe_core::matching::NameFilter;
 use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionStore, ToolGuard,
     TrustDecision, TrustRootKind,
@@ -49,7 +50,7 @@ use vibe_core::parity::{REFERENCE_COMMIT, off_pin_reason, pinned_interpreter, re
 const CORPUS_RELATIVE: &str = ".parity/tool-surface-corpus.json";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 3;
+const CORPUS_SCHEMA_VERSION: u32 = 4;
 const CAPTURE_SCRIPT: &str = "scripts/parity/tool_surface.py";
 const BASELINE_RELATIVE: &str = "crates/vibe-app-server/tests/tool-surface/baseline.json";
 /// The committed conformance target, which is what CI diffs against: it has no
@@ -64,10 +65,20 @@ const DIGEST_SCHEMA_VERSION: u32 = 1;
 const FIXTURES_RELATIVE: &str = "crates/vibe-app-server/tests/tool-surface/fixtures.json";
 /// The fixture layout this runner reads, matching `FIXTURES_SCHEMA_VERSION` in
 /// the capture script.
-const FIXTURES_SCHEMA_VERSION: u32 = 1;
+const FIXTURES_SCHEMA_VERSION: u32 = 2;
 /// The floor the fixture set commits to, so a regeneration that captured almost
 /// nothing fails instead of reporting a clean but empty run.
 const MINIMUM_FIXTURES: usize = 92;
+/// The committed filter gates: the names the reference publishes for each
+/// `enabled_tools` and `disabled_tools` pair. Replayed unconditionally for the
+/// same reason as the fixtures, since a gate case carries no prose either.
+const GATES_RELATIVE: &str = "crates/vibe-app-server/tests/tool-surface/gates.json";
+/// The gate layout this runner reads, matching `GATES_SCHEMA_VERSION` in the
+/// capture script.
+const GATES_SCHEMA_VERSION: u32 = 1;
+/// The floor the multi-argument probes commit to, so a regeneration that lost
+/// them reports a failure rather than a vacuous pass.
+const MINIMUM_MULTI_ARGUMENT_PROBES: usize = 6;
 /// Stands in for every description string so presence is compared and text is
 /// not, keeping the diff inside what `NOTICE` allows.
 const DESCRIBED: &str = "<described>";
@@ -116,6 +127,65 @@ struct Fixture {
     case: String,
     arguments: Value,
     accepted: bool,
+    /// Present exactly when the reference rejected the payload. It records the
+    /// shape of the error a model reads back, never the text: `NOTICE` forbids
+    /// committing reference prose, so the string itself is only a digest.
+    #[serde(default)]
+    rejection: Option<Rejection>,
+}
+
+/// What the reference answered a rejected call, recorded structurally.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Rejection {
+    /// The exception class the model saw, quoted in a divergence report so it
+    /// says what the reference raised rather than only where.
+    error: String,
+    /// Whether the message named the tool that refused the call.
+    names_tool: bool,
+    /// The top-level arguments it objected to.
+    #[expect(dead_code, reason = "the pointers carry the same names, spelled fully")]
+    arguments: Vec<String>,
+    /// Every place it objected to, in this repository's own pointer spelling.
+    pointers: Vec<String>,
+    /// A digest of the full text, so a message that changed upstream is caught
+    /// without the message ever being stored.
+    #[expect(
+        dead_code,
+        reason = "the digest is a re-pin signal, not a local assertion"
+    )]
+    digest: String,
+}
+
+/// A payload breaking more than one argument at once, and the answer it drew.
+#[derive(Debug, Deserialize)]
+struct MultiArgumentProbe {
+    tool: String,
+    case: String,
+    arguments: Value,
+    rejection: Rejection,
+}
+
+/// The names the reference publishes under each configured filter pair.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Gates {
+    schema_version: u32,
+    reference_commit: String,
+    #[expect(dead_code, reason = "the platform documents the capture host")]
+    platform: String,
+    #[expect(dead_code, reason = "the note documents the file for its readers")]
+    note: String,
+    gates: Vec<Gate>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Gate {
+    case: String,
+    enabled_tools: Vec<String>,
+    disabled_tools: Vec<String>,
+    names: Vec<String>,
 }
 
 /// The committed argument fixtures: payloads this repository authored and the
@@ -130,6 +200,11 @@ struct Fixtures {
     #[expect(dead_code, reason = "the note documents the file for its readers")]
     note: String,
     fixtures: Vec<Fixture>,
+    /// Payloads breaking more than one argument at once. They sit beside the
+    /// fixture list rather than in it, because a fixture is an accept-or-reject
+    /// verdict and these are a second measurement over the same surface: what a
+    /// rejection names when several arguments are wrong.
+    multi_argument: Vec<MultiArgumentProbe>,
 }
 
 /// The committed canonical surface: published names and schema structure, with
@@ -295,6 +370,20 @@ async fn published_specs_with(
     rollout: ShellRollout,
     host: HostShells,
 ) -> Vec<ToolSpec> {
+    let (_directory, registry) = published_registry_with(web_search, rollout, host).await;
+    registry.list().expect("list")
+}
+
+/// The same surface, kept as a registry so a test can ask it what the two
+/// configured filters publish rather than only what it holds.
+///
+/// The temporary directory is returned with it: the registered tools hold paths
+/// under it, so dropping it early would pull the workspace out from under them.
+async fn published_registry_with(
+    web_search: bool,
+    rollout: ShellRollout,
+    host: HostShells,
+) -> (tempfile::TempDir, ToolRegistry) {
     let directory = tempfile::tempdir().expect("tempdir");
     let workspace = Arc::new(Workspace::open(directory.path()).expect("workspace"));
     let review = Arc::new(ReviewManager::new(workspace.clone()));
@@ -343,7 +432,7 @@ async fn published_specs_with(
     registry
         .register(task_spec(), Arc::new(UnreachableHandler))
         .expect("the subagent tool registers");
-    registry.list().expect("list")
+    (directory, registry)
 }
 
 /// Stands in for the live driver's subagent handler, which needs a provider and
@@ -777,6 +866,8 @@ fn arguments_the_reference_rejects_are_rejected_here_too() {
     let mut checked = 0;
     let mut wrongly_accepted = Vec::new();
     let mut stricter_than_the_reference = Vec::new();
+    let mut anonymous = Vec::new();
+    let mut divergent_pointers = Vec::new();
     for fixture in &fixtures.fixtures {
         let Some(schema) = digest.tools.get(&fixture.tool) else {
             continue;
@@ -794,16 +885,31 @@ fn arguments_the_reference_rejects_are_rejected_here_too() {
             )),
             (true, Err(error)) => stricter_than_the_reference
                 .push(format!("{}/{}: {error}", fixture.tool, fixture.case)),
-            _ => {}
+            (false, Err(error)) => {
+                let Some(rejection) = &fixture.rejection else {
+                    continue;
+                };
+                audit_rejection(
+                    &fixture.tool,
+                    &fixture.case,
+                    &error,
+                    rejection,
+                    &mut anonymous,
+                    &mut divergent_pointers,
+                );
+            }
+            (true, Ok(())) => {}
         }
     }
 
     println!(
         "argument fixtures: {checked}/{} replayed with the reference verdict, {} wrongly accepted, \
-         {} stricter than the reference",
+         {} stricter than the reference, {} anonymous, {} with divergent pointers",
         fixtures.fixtures.len(),
         wrongly_accepted.len(),
-        stricter_than_the_reference.len()
+        stricter_than_the_reference.len(),
+        anonymous.len(),
+        divergent_pointers.len()
     );
     assert!(
         wrongly_accepted.is_empty(),
@@ -815,6 +921,16 @@ fn arguments_the_reference_rejects_are_rejected_here_too() {
         "arguments the reference accepts were rejected here: {}",
         stricter_than_the_reference.join("; ")
     );
+    assert!(
+        anonymous.is_empty(),
+        "a rejection must name the tool that refused the call: {}",
+        anonymous.join("; ")
+    );
+    assert!(
+        divergent_pointers.is_empty(),
+        "a rejection must name the same arguments the reference named: {}",
+        divergent_pointers.join("; ")
+    );
     assert_eq!(
         checked,
         fixtures.fixtures.len(),
@@ -823,6 +939,207 @@ fn arguments_the_reference_rejects_are_rejected_here_too() {
     assert!(
         checked >= MINIMUM_FIXTURES,
         "the fixture set shrank to {checked}"
+    );
+}
+
+/// Compares one rejection against the shape the reference gave the same payload.
+///
+/// Two things are held. The message must name the tool, which is what the
+/// reference does by raising from the tool wrapper and what a model needs to
+/// know which call it has to fix. And the places it objected to must be the
+/// places the reference objected to, which is only measurable because the
+/// capture renders a Pydantic location in this repository's own pointer
+/// spelling.
+fn audit_rejection(
+    tool: &str,
+    case: &str,
+    error: &ToolError,
+    rejection: &Rejection,
+    anonymous: &mut Vec<String>,
+    divergent_pointers: &mut Vec<String>,
+) {
+    let ToolError::InvalidArguments { violations, .. } = error else {
+        anonymous.push(format!(
+            "{tool}/{case}: {error} is not an argument rejection"
+        ));
+        return;
+    };
+    let message = error.to_string();
+    if rejection.names_tool && !message.contains(tool) {
+        anonymous.push(format!("{tool}/{case}: {message}"));
+    }
+    let reported = violations
+        .iter()
+        .map(|violation| violation.path.clone())
+        .collect::<BTreeSet<_>>();
+    let expected = rejection.pointers.iter().cloned().collect::<BTreeSet<_>>();
+    if reported != expected {
+        divergent_pointers.push(format!(
+            "{tool}/{case}: the reference {} named {expected:?}, this port named {reported:?}",
+            rejection.error
+        ));
+    }
+}
+
+/// Every pointer of a call breaking several arguments at once, not only the
+/// first.
+///
+/// The fixture set breaks one argument per payload, so it cannot answer this:
+/// a validator that stopped at the first violation would replay all 92 of them
+/// cleanly. These probes are the measurement that separates the two, and the
+/// reference's answer to each is a pointer set with more than one entry.
+#[test]
+fn a_rejection_names_every_argument_the_reference_names() {
+    let root = repo_root();
+    let raw = fs::read_to_string(root.join(FIXTURES_RELATIVE)).expect("the fixtures are committed");
+    let fixtures: Fixtures = serde_json::from_str(&raw).expect("the fixtures parse");
+    let digest = digest();
+
+    let mut checked = 0;
+    let mut anonymous = Vec::new();
+    let mut divergent_pointers = Vec::new();
+    let mut accepted = Vec::new();
+    for probe in &fixtures.multi_argument {
+        let Some(schema) = digest.tools.get(&probe.tool) else {
+            continue;
+        };
+        assert!(
+            probe.rejection.pointers.len() > 1,
+            "{}/{} is not a multi-argument probe",
+            probe.tool,
+            probe.case
+        );
+        checked += 1;
+        let mut arguments = probe.arguments.clone();
+        match coerce_and_validate(&probe.tool, &mut arguments, schema) {
+            Ok(()) => accepted.push(format!("{}/{}", probe.tool, probe.case)),
+            Err(error) => audit_rejection(
+                &probe.tool,
+                &probe.case,
+                &error,
+                &probe.rejection,
+                &mut anonymous,
+                &mut divergent_pointers,
+            ),
+        }
+    }
+
+    println!(
+        "multi-argument probes: {checked}/{} replayed, {} accepted, {} anonymous, {} with \
+         divergent pointers",
+        fixtures.multi_argument.len(),
+        accepted.len(),
+        anonymous.len(),
+        divergent_pointers.len()
+    );
+    assert!(
+        accepted.is_empty(),
+        "payloads the reference rejects were accepted here: {}",
+        accepted.join("; ")
+    );
+    assert!(
+        anonymous.is_empty(),
+        "a rejection must name the tool that refused the call: {}",
+        anonymous.join("; ")
+    );
+    assert!(
+        divergent_pointers.is_empty(),
+        "a rejection must name every argument the reference named: {}",
+        divergent_pointers.join("; ")
+    );
+    assert!(
+        checked >= MINIMUM_MULTI_ARGUMENT_PROBES,
+        "the multi-argument probe set shrank to {checked}"
+    );
+}
+
+/// Replays the two configured filters against the names the reference publishes
+/// under the same pair.
+///
+/// The gate is decided by the list an operator wrote, not by what it compiled
+/// to: a list of nothing but blanks or of one uncompilable expression narrows
+/// the surface to nothing, while an absent list publishes everything. A filter
+/// reading its compiled patterns gets those two cases backwards and fails open,
+/// which is the regression this holds shut.
+#[tokio::test]
+async fn the_configured_filters_publish_what_the_reference_publishes() {
+    let root = repo_root();
+    let raw = fs::read_to_string(root.join(GATES_RELATIVE)).expect("the gate corpus is committed");
+    let gates: Gates = serde_json::from_str(&raw).expect("the gate corpus parses");
+    assert_eq!(
+        gates.schema_version, GATES_SCHEMA_VERSION,
+        "the gate layout moved; regenerate with `--gates`"
+    );
+    assert_eq!(
+        gates.reference_commit, REFERENCE_COMMIT,
+        "the gates were captured from another commit than this build asserts"
+    );
+
+    // The surface itself still diverges from the reference's, which row 4 of the
+    // PRD records by name. What is compared here is the gate, so the comparison
+    // runs over the names both sides publish with neither list written.
+    let unfiltered = gates
+        .gates
+        .iter()
+        .find(|gate| gate.enabled_tools.is_empty() && gate.disabled_tools.is_empty())
+        .expect("the corpus records the unfiltered surface");
+    let (_directory, registry) =
+        published_registry_with(false, ShellRollout::Legacy, posix_host()).await;
+    let here = registry
+        .available(None, &NameFilter::default())
+        .expect("the unfiltered surface")
+        .into_iter()
+        .map(|spec| spec.name)
+        .collect::<BTreeSet<_>>();
+    let shared = unfiltered
+        .names
+        .iter()
+        .filter(|name| here.contains(*name))
+        .cloned()
+        .collect::<BTreeSet<_>>();
+
+    let mut divergent = Vec::new();
+    for gate in &gates.gates {
+        // An absent list is the only state that publishes everything, so the
+        // gate reads whether the operator wrote one rather than what it matched.
+        let enabled =
+            (!gate.enabled_tools.is_empty()).then(|| NameFilter::new(&gate.enabled_tools));
+        let disabled = NameFilter::new(&gate.disabled_tools);
+        let published = registry
+            .available(enabled.as_ref(), &disabled)
+            .expect("the filtered surface")
+            .into_iter()
+            .map(|spec| spec.name)
+            .filter(|name| shared.contains(name))
+            .collect::<BTreeSet<_>>();
+        let expected = gate
+            .names
+            .iter()
+            .filter(|name| shared.contains(*name))
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        if published != expected {
+            divergent.push(format!(
+                "{}: reference published {expected:?}, this port published {published:?}",
+                gate.case
+            ));
+        }
+    }
+
+    println!(
+        "filter gates: {}/{} replayed over {} shared names",
+        gates.gates.len() - divergent.len(),
+        gates.gates.len(),
+        shared.len()
+    );
+    assert!(
+        !shared.is_empty(),
+        "the two surfaces share no name, so the gate comparison would be vacuous"
+    );
+    assert!(
+        divergent.is_empty(),
+        "the configured filters diverge from the reference: {}",
+        divergent.join("; ")
     );
 }
 
