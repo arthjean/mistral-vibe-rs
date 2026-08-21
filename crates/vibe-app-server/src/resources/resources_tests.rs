@@ -175,6 +175,327 @@ fn oauth_connector() -> ConnectorDefinition {
     }
 }
 
+/// A connector that needs no authentication, so what its tools publish is
+/// decided by the configuration entry alone rather than by an auth state.
+fn open_connector() -> ConnectorDefinition {
+    ConnectorDefinition {
+        id: "drive-id".to_owned(),
+        name: "Drive".to_owned(),
+        base_url: Url::parse("https://connectors.example/drive").expect("connector URL"),
+        auth_kind: vibe_core::integrations::ConnectorAuthKind::None,
+        tools: ["search", "share"]
+            .into_iter()
+            .map(|name| vibe_core::integrations::ConnectorTool {
+                name: name.to_owned(),
+                description: format!("{name} files"),
+                input_schema: json!({"type": "object"}),
+                output_schema: None,
+            })
+            .collect(),
+    }
+}
+
+/// A session opened over [`open_connector`] with `config` as the whole user
+/// configuration, initialized through the same `connectors/read` dispatch a
+/// client sends.
+async fn gated_connector_session(
+    config: &str,
+) -> (tempfile::TempDir, CoreResourceBackend, ToolRegistry) {
+    let temporary = tempfile::tempdir().expect("temporary root");
+    let vibe_home = temporary.path().join("home/.vibe");
+    let workspace = temporary.path().join("workspace");
+    std::fs::create_dir_all(&vibe_home).expect("config directory");
+    std::fs::create_dir_all(&workspace).expect("workspace directory");
+    std::fs::write(vibe_home.join("config.toml"), config).expect("configuration fixture");
+    let store = LayeredConfig::new(
+        vibe_core::config::ConfigPaths {
+            vibe_home,
+            working_directory: workspace.clone(),
+        },
+        vibe_core::config::registry::default_document(),
+    );
+    let tools = ToolRegistry::default();
+    let backend = CoreResourceBackend::default()
+        .with_config(store)
+        .with_connectors(
+            vec![open_connector()],
+            Arc::new(FakeConnectorTransport),
+            "credential",
+            Url::parse("https://connectors.example").expect("catalog URL"),
+        );
+    backend
+        .open_session(ResourceSession {
+            session_id: "gated".to_owned(),
+            generation: 1,
+            working_directory: workspace.to_string_lossy().into_owned(),
+            project_trusted: false,
+            policy: PermissionStore::default(),
+            tools: tools.clone(),
+        })
+        .expect("session opens");
+    backend
+        .dispatch(backend_request("gated", "connectors/read", BTreeMap::new()))
+        .await
+        .expect("connector initializes");
+    (temporary, backend, tools)
+}
+
+/// What a turn would actually be offered, which is the surface the gate decides.
+fn callable_names(tools: &ToolRegistry) -> Vec<String> {
+    tools
+        .available(None, &vibe_core::matching::NameFilter::default())
+        .expect("available tools")
+        .into_iter()
+        .map(|spec| spec.name)
+        .collect()
+}
+
+fn gated_view(backend: &CoreResourceBackend) -> ConnectorView {
+    backend
+        .session("gated")
+        .expect("session")
+        .connectors
+        .views()
+        .expect("connector state")
+        .remove(0)
+}
+
+/// Reference `_build_source_disable_index` adds every connector the registry
+/// knows and the configuration does not name to the disabled set, which makes
+/// a connector opt-in where an MCP server is opt-out.
+#[tokio::test]
+async fn a_connector_the_configuration_never_names_publishes_nothing() {
+    let (_temporary, backend, tools) = gated_connector_session("").await;
+
+    assert!(
+        callable_names(&tools).is_empty(),
+        "an unconfigured connector published: {:?}",
+        callable_names(&tools)
+    );
+    assert!(!gated_view(&backend).enabled);
+}
+
+#[tokio::test]
+async fn an_entry_carrying_the_disabled_flag_publishes_nothing() {
+    let (_temporary, backend, tools) =
+        gated_connector_session("[[connectors]]\nname = \"Drive\"\ndisabled = true\n").await;
+
+    assert!(callable_names(&tools).is_empty());
+    assert!(!gated_view(&backend).enabled);
+}
+
+/// The per-tool key is the remote name the provider published, not the
+/// `connector_{alias}_` name this registry lists it under.
+#[tokio::test]
+async fn an_entry_withholds_only_the_tool_it_names_by_its_remote_name() {
+    let (_temporary, backend, tools) = gated_connector_session(
+        "[[connectors]]\nname = \"Drive\"\ndisabled_tools = [\"search\"]\n",
+    )
+    .await;
+
+    assert_eq!(callable_names(&tools), ["connector_Drive_share"]);
+    let view = gated_view(&backend);
+    assert!(view.enabled);
+    assert_eq!(
+        view.disabled_tools.iter().collect::<Vec<_>>(),
+        ["connector_Drive_search"]
+    );
+    let sources = backend
+        .dispatch(backend_request("gated", "mcp/read", BTreeMap::new()))
+        .await
+        .expect("the merged source list");
+    assert_eq!(
+        sources.result["mcp"]["sources"][0]["tools"],
+        json!([
+            {"name": "connector_Drive_search", "description": "search files", "enabled": false},
+            {"name": "connector_Drive_share", "description": "share files", "enabled": true},
+        ])
+    );
+}
+
+/// The reference tests the remote name against a set, so an entry naming a tool
+/// the connector stopped exposing is a member nothing looks up rather than a
+/// failure. This port used to refuse the whole initialization.
+#[tokio::test]
+async fn an_entry_naming_a_tool_the_connector_does_not_expose_is_inert() {
+    let (_temporary, backend, tools) = gated_connector_session(
+        "[[connectors]]\nname = \"Drive\"\ndisabled_tools = [\"retired\"]\n",
+    )
+    .await;
+
+    assert_eq!(
+        callable_names(&tools),
+        ["connector_Drive_search", "connector_Drive_share"]
+    );
+    assert!(gated_view(&backend).disabled_tools.is_empty());
+}
+
+/// `_build_source_disable_index` records a per-tool list only for an entry that
+/// is not disabled, so the two keys never combine.
+#[tokio::test]
+async fn a_disabled_entry_never_consults_its_tool_list() {
+    let (_temporary, backend, tools) = gated_connector_session(
+        "[[connectors]]\nname = \"Drive\"\ndisabled = true\ndisabled_tools = [\"search\"]\n",
+    )
+    .await;
+
+    assert!(callable_names(&tools).is_empty());
+    let view = gated_view(&backend);
+    assert!(!view.enabled);
+    assert!(
+        view.disabled_tools.is_empty(),
+        "the tool list was consulted for a fully disabled connector: {:?}",
+        view.disabled_tools
+    );
+}
+
+/// A refresh re-discovers the connector and carries the previous runtime state
+/// into the new views, so the entry has to be read again: a configuration
+/// edited between two publications must not lose to the state it corrects.
+#[tokio::test]
+async fn the_configuration_entry_outranks_the_state_a_refresh_carries_forward() {
+    let entry = "[[connectors]]\nname = \"Drive\"\n";
+    let (temporary, backend, tools) = gated_connector_session(entry).await;
+    let config_path = temporary.path().join("home/.vibe/config.toml");
+
+    backend
+        .dispatch(backend_request(
+            "gated",
+            "connectors/toggle",
+            params(json!({
+                "name": "Drive",
+                "toolName": "connector_Drive_search",
+                "disabled": true
+            })),
+        ))
+        .await
+        .expect("the operator disables one tool at runtime");
+    assert_eq!(callable_names(&tools), ["connector_Drive_share"]);
+
+    // The operator then restores the entry by hand, which is the state the
+    // next publication has to obey.
+    std::fs::write(&config_path, entry).expect("configuration restored by hand");
+    backend
+        .dispatch(backend_request(
+            "gated",
+            "connectors/refresh",
+            params(json!({"name": "Drive"})),
+        ))
+        .await
+        .expect("connector refreshes");
+
+    assert_eq!(
+        callable_names(&tools),
+        ["connector_Drive_search", "connector_Drive_share"]
+    );
+    assert!(gated_view(&backend).disabled_tools.is_empty());
+}
+
+/// A catalog that gains a connector between two discoveries, which is the
+/// change a refresh exists to observe.
+struct GrowingConnectorCatalog {
+    calls: std::sync::atomic::AtomicUsize,
+}
+
+impl ConnectorCatalogBackend for GrowingConnectorCatalog {
+    fn catalog<'a>(&'a self) -> ResourceFuture<'a, ConnectorCatalog> {
+        Box::pin(async move {
+            let seen = self.calls.fetch_add(1, Ordering::AcqRel);
+            let mut definitions = vec![open_connector()];
+            if seen > 0 {
+                definitions.push(ConnectorDefinition {
+                    id: "calendar-id".to_owned(),
+                    name: "Calendar".to_owned(),
+                    base_url: Url::parse("https://connectors.example/calendar")
+                        .expect("connector URL"),
+                    auth_kind: vibe_core::integrations::ConnectorAuthKind::None,
+                    tools: vec![vibe_core::integrations::ConnectorTool {
+                        name: "list".to_owned(),
+                        description: "list events".to_owned(),
+                        input_schema: json!({"type": "object"}),
+                        output_schema: None,
+                    }],
+                });
+            }
+            Ok(ConnectorCatalog {
+                definitions,
+                connected: BTreeSet::new(),
+            })
+        })
+    }
+}
+
+/// A refresh that finds a connector the catalog gained has to withhold it, not
+/// fail: its tools reach the registry for the first time in the registration
+/// that follows, so the gate cannot be applied through the registry.
+#[tokio::test]
+async fn a_refresh_withholds_a_connector_the_catalog_gained() {
+    let temporary = tempfile::tempdir().expect("temporary root");
+    let vibe_home = temporary.path().join("home/.vibe");
+    let workspace = temporary.path().join("workspace");
+    std::fs::create_dir_all(&vibe_home).expect("config directory");
+    std::fs::create_dir_all(&workspace).expect("workspace directory");
+    std::fs::write(
+        vibe_home.join("config.toml"),
+        "[[connectors]]\nname = \"Drive\"\n",
+    )
+    .expect("configuration fixture");
+    let tools = ToolRegistry::default();
+    let backend = CoreResourceBackend::default()
+        .with_config(LayeredConfig::new(
+            vibe_core::config::ConfigPaths {
+                vibe_home,
+                working_directory: workspace.clone(),
+            },
+            vibe_core::config::registry::default_document(),
+        ))
+        .with_connector_catalog(
+            Arc::new(GrowingConnectorCatalog {
+                calls: std::sync::atomic::AtomicUsize::new(0),
+            }),
+            Arc::new(FakeConnectorTransport),
+            "credential",
+            Url::parse("https://connectors.example").expect("catalog URL"),
+        );
+    backend
+        .open_session(ResourceSession {
+            session_id: "growing".to_owned(),
+            generation: 1,
+            working_directory: workspace.to_string_lossy().into_owned(),
+            project_trusted: false,
+            policy: PermissionStore::default(),
+            tools: tools.clone(),
+        })
+        .expect("session opens");
+    backend
+        .dispatch(backend_request(
+            "growing",
+            "connectors/read",
+            BTreeMap::new(),
+        ))
+        .await
+        .expect("connector initializes");
+    assert_eq!(
+        callable_names(&tools),
+        ["connector_Drive_search", "connector_Drive_share"]
+    );
+
+    backend
+        .dispatch(backend_request(
+            "growing",
+            "connectors/refresh",
+            params(json!({"name": "Drive"})),
+        ))
+        .await
+        .expect("the refresh observes the wider catalog");
+
+    assert_eq!(
+        callable_names(&tools),
+        ["connector_Drive_search", "connector_Drive_share"],
+        "the connector the configuration never names must be withheld"
+    );
+}
+
 #[test]
 fn trust_mutation_returns_a_canonical_notification_after_the_response() {
     let mut resources = ResourceService::default();
@@ -642,7 +963,26 @@ async fn connectors_initialize_lazily_and_route_auth_to_the_exact_source() {
         connected: true,
         calls: StdMutex::new(Vec::new()),
     });
+    // A connector publishes only where the configuration names it, so the
+    // entry is what lets this test observe the auth routing at all.
+    let temporary = tempfile::tempdir().expect("temporary root");
+    let vibe_home = temporary.path().join("home/.vibe");
+    let workspace = temporary.path().join("workspace");
+    std::fs::create_dir_all(&vibe_home).expect("config directory");
+    std::fs::create_dir_all(&workspace).expect("workspace directory");
+    std::fs::write(
+        vibe_home.join("config.toml"),
+        "[[connectors]]\nname = \"Drive\"\n",
+    )
+    .expect("connector entry");
     let backend = CoreResourceBackend::default()
+        .with_config(LayeredConfig::new(
+            vibe_core::config::ConfigPaths {
+                vibe_home,
+                working_directory: workspace.clone(),
+            },
+            vibe_core::config::registry::default_document(),
+        ))
         .with_connectors(
             vec![oauth_connector()],
             Arc::new(FakeConnectorTransport),
@@ -654,7 +994,7 @@ async fn connectors_initialize_lazily_and_route_auth_to_the_exact_source() {
         .open_session(ResourceSession {
             session_id: "s1".to_owned(),
             generation: 1,
-            working_directory: "/workspace".to_owned(),
+            working_directory: workspace.to_string_lossy().into_owned(),
             project_trusted: false,
             policy: PermissionStore::default(),
             tools: ToolRegistry::default(),
@@ -738,6 +1078,8 @@ async fn connector_persistence_failure_leaves_runtime_state_unchanged() {
     std::fs::create_dir_all(&vibe_home).expect("config directory");
     std::fs::create_dir_all(&workspace).expect("workspace directory");
     let config_path = vibe_home.join("config.toml");
+    std::fs::write(&config_path, "[[connectors]]\nname = \"Drive\"\n")
+        .expect("the entry that opts the connector in");
     let store = LayeredConfig::new(
         vibe_core::config::ConfigPaths {
             vibe_home,
@@ -856,7 +1198,11 @@ async fn a_preference_persisted_under_the_lowercased_alias_still_applies() {
         !view.enabled,
         "the persisted disable must survive the alias case change"
     );
-    assert!(view.disabled_tools.contains("connector_Drive_search"));
+    assert!(
+        view.disabled_tools.is_empty(),
+        "a fully disabled connector never consults its tool list: {:?}",
+        view.disabled_tools
+    );
 }
 
 #[tokio::test]

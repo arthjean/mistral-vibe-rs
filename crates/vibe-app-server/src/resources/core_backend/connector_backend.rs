@@ -65,6 +65,11 @@ impl CoreResourceBackend {
                         "connector transport backend is not configured".to_owned(),
                     )
                 })?;
+                // Re-discovery carries the previous enabled state and disabled
+                // list into the fresh views, so the entry is read again here:
+                // otherwise a configuration edited between two publications
+                // would lose to the runtime state it was meant to correct.
+                apply_connector_preferences(session).await?;
                 session
                     .connectors
                     .register_tools(
@@ -189,51 +194,7 @@ impl CoreResourceBackend {
                     .map_err(integration_error)?;
             }
         }
-        if let Some(store) = session.config() {
-            let preferences = store.connector_preferences().map_err(config_error)?;
-            for view in session.connectors.views().map_err(integration_error)? {
-                // The alias keeps the case the reference gives it, where this
-                // port used to lowercase it. A preference persisted by an
-                // older build therefore carries the lowercased alias, so the
-                // match ignores case rather than silently dropping it.
-                let Some(preference) = preferences
-                    .iter()
-                    .find(|(key, _)| {
-                        key.eq_ignore_ascii_case(&view.alias) || key.eq_ignore_ascii_case(&view.id)
-                    })
-                    .map(|(_, preference)| preference)
-                else {
-                    continue;
-                };
-                if view.enabled != preference.enabled {
-                    session
-                        .connectors
-                        .toggle(&view.id, None, preference.enabled)
-                        .await
-                        .map_err(integration_error)?;
-                }
-                for configured_tool in &preference.disabled_tools {
-                    let tool = view
-                        .tool_names
-                        .iter()
-                        .find(|tool| {
-                            *tool == configured_tool
-                                || tool.ends_with(&format!("_{configured_tool}"))
-                        })
-                        .ok_or_else(|| {
-                            ResourceError::Unavailable(format!(
-                                "connector `{}` has no configured tool `{configured_tool}`",
-                                view.alias
-                            ))
-                        })?;
-                    session
-                        .connectors
-                        .toggle(&view.id, Some(tool), false)
-                        .await
-                        .map_err(integration_error)?;
-                }
-            }
-        }
+        apply_connector_preferences(session).await?;
         session
             .connectors
             .register_tools(
@@ -258,4 +219,72 @@ impl CoreResourceBackend {
             }),
         }
     }
+}
+
+/// Reconciles every discovered connector against its configuration entry.
+///
+/// The reference rebuilds its disable index on every publication
+/// (`_apply_per_source_filtering`, vibe/core/tools/manager.py), so the file
+/// decides the surface each time it is published rather than once per session:
+/// a refresh that carries a runtime state forward is reconciled against the
+/// entry again before the tools are registered.
+async fn apply_connector_preferences(session: &CoreResourceSession) -> Result<(), ResourceError> {
+    // Reference `_build_source_disable_index` (vibe/core/tools/manager.py)
+    // makes a connector opt-in where an MCP server is opt-out: a connector
+    // the registry knows and the configuration never names joins the
+    // disabled set exactly like one whose entry carries `disabled`. The
+    // entry decides publication outright, so it also outranks the enabled
+    // state and the disabled list an earlier discovery carried into the
+    // view through its previous-state map.
+    let preferences = session
+        .config()
+        .map(|store| store.connector_preferences())
+        .transpose()
+        .map_err(config_error)?
+        .unwrap_or_default();
+    for view in session.connectors.views().map_err(integration_error)? {
+        // The alias keeps the case the reference gives it, where this
+        // port used to lowercase it. A preference persisted by an
+        // older build therefore carries the lowercased alias, so the
+        // match ignores case rather than silently dropping it.
+        let preference = preferences
+            .iter()
+            .find(|(key, _)| {
+                key.eq_ignore_ascii_case(&view.alias) || key.eq_ignore_ascii_case(&view.id)
+            })
+            .map(|(_, preference)| preference);
+        let enabled = preference.is_some_and(|preference| preference.enabled);
+        if view.enabled != enabled {
+            session
+                .connectors
+                .toggle(&view.id, None, enabled)
+                .await
+                .map_err(integration_error)?;
+        }
+        let Some(preference) = preference.filter(|_| enabled) else {
+            // The index records a per-tool list only for an entry that is
+            // not disabled, so a connector withheld whole never consults
+            // one.
+            continue;
+        };
+        // The list keys on the remote name: [`persisted_tool_names`] writes
+        // it by stripping the published prefix, and the reference tests
+        // `get_remote_name()` against the entry. Reading the published
+        // names back through that same prefix is what keeps an entry
+        // naming a tool this connector does not expose inert instead of
+        // failing the whole initialization.
+        let prefix = format!("connector_{}_", view.alias);
+        for tool in &view.tool_names {
+            let remote = tool.strip_prefix(&prefix).unwrap_or(tool);
+            let keep = !preference.disabled_tools.contains(remote);
+            if view.disabled_tools.contains(tool) == keep {
+                session
+                    .connectors
+                    .toggle(&view.id, Some(tool), keep)
+                    .await
+                    .map_err(integration_error)?;
+            }
+        }
+    }
+    Ok(())
 }
