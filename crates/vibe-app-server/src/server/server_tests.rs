@@ -41,7 +41,7 @@ impl SessionToolFactory for UnavailablePrerequisiteTools {
                     state: Value::Null,
                     availability: ToolAvailability::Available,
                     presentation: ToolPresentationKind::Generic,
-                    source: ToolSource::Custom,
+                    source: ToolSource::BuiltIn,
                     selection_priority: 0,
                 },
                 Arc::new(

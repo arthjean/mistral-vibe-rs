@@ -77,7 +77,7 @@ pub(crate) fn public_tool_name(source: ToolSource, alias: &str, tool: &str) -> S
     match source {
         ToolSource::Mcp => format!("{}_{}", sanitize_mcp_name(alias), sanitize_mcp_name(tool)),
         ToolSource::Connector => format!("connector_{}_{}", normalize_alias(alias), tool),
-        ToolSource::BuiltIn | ToolSource::Custom => tool.to_owned(),
+        ToolSource::BuiltIn => tool.to_owned(),
     }
 }
 

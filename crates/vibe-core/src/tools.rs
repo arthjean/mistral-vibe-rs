@@ -124,7 +124,6 @@ pub enum ToolSource {
     BuiltIn,
     Mcp,
     Connector,
-    Custom,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
