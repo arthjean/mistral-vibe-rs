@@ -19,8 +19,8 @@ use crate::text::truncate_utf8;
 
 mod validate;
 
-use validate::validate_at;
-pub use validate::{apply_defaults, coerce_and_validate, validate_arguments};
+pub use validate::{SchemaViolation, apply_defaults, coerce_and_validate, validate_arguments};
+use validate::{render_violations, validate_at};
 
 pub mod builtins;
 pub mod config;
@@ -642,7 +642,11 @@ impl ToolRegistry {
         if !registered.available() {
             return Err(ToolError::Unavailable(name.to_owned()));
         }
-        coerce_and_validate(&mut invocation.arguments, &registered.spec.input_schema)?;
+        coerce_and_validate(
+            name,
+            &mut invocation.arguments,
+            &registered.spec.input_schema,
+        )?;
         apply_defaults(&mut invocation.arguments, &registered.spec.input_schema);
         let output = ToolOutputSink::new(stream, self.max_output_bytes);
         let mut result =
@@ -658,7 +662,18 @@ impl ToolRegistry {
             output.emit(chunk)?;
         }
         if let Some(schema) = &registered.spec.output_schema {
-            validate_at(&result.typed_result, schema, schema, "$result", 0)?;
+            // A typed result is the tool's own output rather than the model's
+            // input, so it keeps the single-violation diagnostic: what a handler
+            // needs is the first place its result went wrong.
+            validate_at(&result.typed_result, schema, schema, "$result", 0).map_err(
+                |violations| match violations.into_iter().next() {
+                    Some(first) => ToolError::SchemaViolation {
+                        path: first.path,
+                        message: first.message,
+                    },
+                    None => ToolError::InvalidResult("unreported schema violation".to_owned()),
+                },
+            )?;
         }
         let non_json_bytes = result.model_text.len().saturating_add(output.bytes());
         if non_json_bytes > self.max_output_bytes {
@@ -761,6 +776,17 @@ pub enum ToolError {
     InvalidSchema { kind: &'static str, message: String },
     #[error("schema validation failed at {path}: {message}")]
     SchemaViolation { path: String, message: String },
+    /// One call's arguments failed the tool's schema, named by the tool that
+    /// refused them and carrying every place the payload was wrong.
+    ///
+    /// The reference raises from the tool wrapper and Pydantic collects, so a
+    /// model reads back which tool objected and to which arguments. Reporting
+    /// only the first would send it round the loop once per broken argument.
+    #[error("tool `{tool}` rejected the arguments: {}", render_violations(.violations))]
+    InvalidArguments {
+        tool: String,
+        violations: Vec<SchemaViolation>,
+    },
     #[error("invalid typed tool result: {0}")]
     InvalidResult(String),
     #[error("tool output is {actual} bytes, exceeding the {limit}-byte limit")]
@@ -939,6 +965,7 @@ mod tests {
     use super::*;
     use crate::schema::{ObjectSchema, Property};
     use serde_json::json;
+    use std::collections::BTreeSet;
 
     fn spec(priority: i32) -> ToolSpec {
         ToolSpec {
@@ -1152,7 +1179,8 @@ mod tests {
                 .await
                 .expect_err("a third type is rejected");
         assert!(
-            matches!(&wrong_variant, ToolError::SchemaViolation { path, .. } if path == "$.todos"),
+            matches!(&wrong_variant, ToolError::InvalidArguments { violations, .. }
+                if violations.len() == 1 && violations[0].path == "$.todos"),
             "{wrong_variant}"
         );
 
@@ -1163,7 +1191,8 @@ mod tests {
         .await
         .expect_err("an element violating the item schema is rejected");
         assert!(
-            matches!(&bad_element, ToolError::SchemaViolation { path, .. } if path == "$.todos[1].id"),
+            matches!(&bad_element, ToolError::InvalidArguments { violations, .. }
+                if violations.len() == 1 && violations[0].path == "$.todos[1].id"),
             "{bad_element}"
         );
 
@@ -1174,7 +1203,8 @@ mod tests {
         .await
         .expect_err("a value outside the referenced enum is rejected");
         assert!(
-            matches!(&enum_violation, ToolError::SchemaViolation { path, .. } if path == "$.todos[0].status"),
+            matches!(&enum_violation, ToolError::InvalidArguments { violations, .. }
+                if violations.len() == 1 && violations[0].path == "$.todos[0].status"),
             "{enum_violation}"
         );
     }
@@ -1199,14 +1229,54 @@ mod tests {
             .await
             .expect_err("extra=forbid rejects unknown keys");
         assert!(
-            matches!(&refused, ToolError::SchemaViolation { path, message }
-                if path == "$.extra" && message.contains("additional property")),
+            matches!(&refused, ToolError::InvalidArguments { violations, .. }
+                if violations.len() == 1
+                    && violations[0].path == "$.extra"
+                    && violations[0].message.contains("additional property")),
             "{refused}"
         );
         let defaulted = invoke_reference_shaped(strict, json!({"task": "go"}))
             .await
             .expect("default applies");
         assert_eq!(defaulted.typed_result["agent"], "explore");
+    }
+
+    /// The rejection a model reads back names the tool and every argument.
+    ///
+    /// The reference raises from the tool wrapper and Pydantic collects, so a
+    /// call breaking three arguments is answered with three. Reporting the
+    /// first alone would send the model round the loop once per broken
+    /// argument, and this goes through `invoke` so what is measured is the
+    /// error a real call produces rather than one a helper composed.
+    #[tokio::test]
+    async fn a_rejection_names_the_tool_and_every_argument_it_refused() {
+        let schema = ObjectSchema::new()
+            .required("action", Property::string())
+            .required("count", Property::integer())
+            .optional("label", Property::string())
+            .build();
+        let refused = invoke_reference_shaped(
+            schema,
+            json!({"action": 1, "count": "seventeen", "label": []}),
+        )
+        .await
+        .expect_err("three arguments carry the wrong type");
+        let ToolError::InvalidArguments { tool, violations } = &refused else {
+            panic!("expected an argument rejection, got {refused}");
+        };
+        assert_eq!(tool, "reference_shaped");
+        assert_eq!(
+            violations
+                .iter()
+                .map(|violation| violation.path.as_str())
+                .collect::<BTreeSet<_>>(),
+            BTreeSet::from(["$.action", "$.count", "$.label"])
+        );
+        let message = refused.to_string();
+        assert!(message.contains("reference_shaped"), "{message}");
+        for path in ["$.action", "$.count", "$.label"] {
+            assert!(message.contains(path), "{message}");
+        }
     }
 
     #[tokio::test]
@@ -1223,8 +1293,10 @@ mod tests {
             .await
             .expect_err("cycle is bounded");
         assert!(
-            matches!(&bounded, ToolError::SchemaViolation { message, .. }
-                if message.contains("exceeds the 32-level bound")),
+            matches!(&bounded, ToolError::InvalidArguments { violations, .. }
+            if violations.iter().any(|violation| {
+                violation.message.contains("exceeds the 32-level bound")
+            })),
             "{bounded}"
         );
     }
@@ -1260,8 +1332,8 @@ mod tests {
         .await
         .expect_err("minItems is enforced");
         assert!(
-            matches!(&too_few, ToolError::SchemaViolation { path, .. }
-                if path == "$.questions[0].options"),
+            matches!(&too_few, ToolError::InvalidArguments { violations, .. }
+                if violations.len() == 1 && violations[0].path == "$.questions[0].options"),
             "{too_few}"
         );
 
@@ -1272,8 +1344,10 @@ mod tests {
         .await
         .expect_err("minimum is enforced inside the non-null variant");
         assert!(
-            matches!(&below_minimum, ToolError::SchemaViolation { path, message }
-                if path == "$.offset" && message.contains("minimum")),
+            matches!(&below_minimum, ToolError::InvalidArguments { violations, .. }
+                if violations.len() == 1
+                    && violations[0].path == "$.offset"
+                    && violations[0].message.contains("minimum")),
             "{below_minimum}"
         );
 
@@ -1281,7 +1355,8 @@ mod tests {
             .await
             .expect_err("minItems is enforced on the outer array");
         assert!(
-            matches!(&empty_list, ToolError::SchemaViolation { path, .. } if path == "$.questions"),
+            matches!(&empty_list, ToolError::InvalidArguments { violations, .. }
+                if violations.len() == 1 && violations[0].path == "$.questions"),
             "{empty_list}"
         );
     }
@@ -1424,7 +1499,7 @@ mod tests {
                 },
             )
             .await;
-        assert!(matches!(missing, Err(ToolError::SchemaViolation { .. })));
+        assert!(matches!(missing, Err(ToolError::InvalidArguments { .. })));
 
         let invalid_result: Arc<dyn ToolHandler> = Arc::new(
             |_invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {

@@ -785,7 +785,8 @@ fn arguments_the_reference_rejects_are_rejected_here_too() {
         // The registry entry point, so the verdict this reports is the verdict a
         // real call gets rather than one a test-only path computed.
         let mut arguments = fixture.arguments.clone();
-        let verdict: Result<(), ToolError> = coerce_and_validate(&mut arguments, schema);
+        let verdict: Result<(), ToolError> =
+            coerce_and_validate(&fixture.tool, &mut arguments, schema);
         match (fixture.accepted, verdict) {
             (false, Ok(())) => wrongly_accepted.push(format!(
                 "{}/{}: {}",

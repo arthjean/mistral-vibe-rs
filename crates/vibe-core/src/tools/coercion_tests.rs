@@ -39,7 +39,7 @@ fn nullable_schema_of(declared: &str) -> Value {
 /// The value a handler would receive, or the rejection validation produced.
 fn coerce(schema: &Value, value: Value) -> Result<Value, ToolError> {
     let mut arguments = json!({ "v": value });
-    coerce_and_validate(&mut arguments, schema)?;
+    coerce_and_validate("probe", &mut arguments, schema)?;
     Ok(arguments
         .get("v")
         .cloned()
@@ -246,7 +246,8 @@ fn coercion_reaches_a_nested_property_and_an_array_item() {
         "nested": { "flag": "on" },
         "items": ["1", 2.0, true],
     });
-    coerce_and_validate(&mut arguments, &schema).expect("the reference accepts this payload");
+    coerce_and_validate("probe", &mut arguments, &schema)
+        .expect("the reference accepts this payload");
     assert_eq!(
         arguments,
         json!({ "nested": { "flag": true }, "items": [1, 2, 1] })
@@ -258,7 +259,16 @@ fn a_rejection_names_the_property_path() {
     let schema = schema_of("boolean");
     let error = coerce(&schema, json!("maybe")).expect_err("an unrecognized word is rejected");
     match error {
-        ToolError::SchemaViolation { path, .. } => assert_eq!(path, "$.v"),
+        ToolError::InvalidArguments { tool, violations } => {
+            assert_eq!(tool, "probe");
+            assert_eq!(
+                violations
+                    .iter()
+                    .map(|v| v.path.as_str())
+                    .collect::<Vec<_>>(),
+                ["$.v"]
+            );
+        }
         other => panic!("expected a schema violation, got {other}"),
     }
 }
@@ -385,7 +395,7 @@ async fn a_value_the_reference_rejects_never_reaches_the_handler() {
         .await
         .expect_err("an unrecognized word is refused before dispatch");
     assert!(
-        matches!(error, ToolError::SchemaViolation { .. }),
+        matches!(error, ToolError::InvalidArguments { .. }),
         "{error}"
     );
 }
@@ -396,6 +406,6 @@ fn an_uncoercible_value_is_left_alone_for_validation_to_report() {
     // diagnosis would name a value the caller never sent.
     let schema = schema_of("integer");
     let mut arguments = json!({ "v": "seventeen" });
-    let error = coerce_and_validate(&mut arguments, &schema).expect_err("rejected");
+    let error = coerce_and_validate("probe", &mut arguments, &schema).expect_err("rejected");
     assert_eq!(arguments, json!({ "v": "seventeen" }), "{error}");
 }

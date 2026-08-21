@@ -2,8 +2,8 @@
 //!
 //! The reference validates with Pydantic, which does more than reject a wrong
 //! type: it coerces the spellings Python accepts, fills declared defaults, and
-//! reports the first violation by its path. A model that sends `"3"` where an
-//! integer is declared is answered the same way on both sides only if the same
+//! reports every violation it found, each by its path. A model that sends `"3"`
+//! where an integer is declared is answered the same way on both sides only if the same
 //! coercions run here, which is why this is a coercion pass followed by a
 //! validation pass rather than a single type check.
 //!
@@ -15,6 +15,53 @@ use serde_json::{Map, Value};
 
 use super::{ToolError, resolve_reference};
 
+/// One place a call's arguments failed the tool's declared schema.
+///
+/// Validation reports every one of them rather than the first, because the
+/// reference validates with Pydantic and Pydantic collects: a call breaking
+/// three arguments is answered by naming three, and a model that reads back
+/// only the first has to guess at the rest.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SchemaViolation {
+    /// Where the value sits in the argument object, in the `$.field[0].sub`
+    /// spelling.
+    pub path: String,
+    /// What the schema wanted there.
+    pub message: String,
+}
+
+impl std::fmt::Display for SchemaViolation {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}: {}", self.path, self.message)
+    }
+}
+
+/// Renders a violation list into the one line a rejection carries.
+pub(super) fn render_violations(violations: &[SchemaViolation]) -> String {
+    violations
+        .iter()
+        .map(SchemaViolation::to_string)
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+/// A single violation in the shape the recursion passes around.
+fn violation(path: &str, message: impl Into<String>) -> Vec<SchemaViolation> {
+    vec![SchemaViolation {
+        path: path.to_owned(),
+        message: message.into(),
+    }]
+}
+
+/// Turns an accumulated list into the verdict for one subtree.
+fn verdict(violations: Vec<SchemaViolation>) -> Result<(), Vec<SchemaViolation>> {
+    if violations.is_empty() {
+        Ok(())
+    } else {
+        Err(violations)
+    }
+}
+
 /// Bounds `$ref` resolution and nesting so a cyclic schema fails instead of
 /// recursing until the stack gives out.
 const MAX_SCHEMA_DEPTH: usize = 32;
@@ -23,7 +70,7 @@ const MAX_SCHEMA_DEPTH: usize = 32;
 /// Pydantic: `$ref` resolved against `$defs`, `anyOf` accepted when any variant
 /// matches, `items` applied element by element, array-form `type` accepted, and
 /// unknown properties tolerated unless the schema forbids them.
-pub fn validate_arguments(arguments: &Value, schema: &Value) -> Result<(), ToolError> {
+pub fn validate_arguments(arguments: &Value, schema: &Value) -> Result<(), Vec<SchemaViolation>> {
     validate_at(arguments, schema, schema, "$", 0)
 }
 
@@ -46,9 +93,20 @@ pub fn apply_defaults(arguments: &mut Value, schema: &Value) {
 ///
 /// This is the single entry point for both: `ToolRegistry::invoke_stream` calls
 /// it before dispatch, and the fixture replay calls it to reproduce a verdict.
-pub fn coerce_and_validate(arguments: &mut Value, schema: &Value) -> Result<(), ToolError> {
+///
+/// The rejection names `tool` because the reference names it: upstream raises
+/// from the tool wrapper, so the model reads which tool refused the call rather
+/// than only where the payload was wrong.
+pub fn coerce_and_validate(
+    tool: &str,
+    arguments: &mut Value,
+    schema: &Value,
+) -> Result<(), ToolError> {
     coerce_at(arguments, schema, schema, 0);
-    validate_arguments(arguments, schema)
+    validate_arguments(arguments, schema).map_err(|violations| ToolError::InvalidArguments {
+        tool: tool.to_owned(),
+        violations,
+    })
 }
 
 /// Applies the reference scalar coercion in place, leaving anything it cannot
@@ -261,31 +319,31 @@ fn parse_integer(text: &str) -> Option<i64> {
     (parsed.fract() == 0.0 && parsed.is_finite()).then_some(parsed as i64)
 }
 
+/// Collects every violation the value carries against the schema.
+///
+/// The scalar checks short-circuit, because a value of the wrong type has
+/// nothing left to say, but the container checks accumulate: a missing
+/// property, an extra one and a mismatched sibling are three answers to one
+/// call and all three are reported.
 pub(super) fn validate_at(
     value: &Value,
     schema: &Value,
     root: &Value,
     path: &str,
     depth: usize,
-) -> Result<(), ToolError> {
+) -> Result<(), Vec<SchemaViolation>> {
     if depth > MAX_SCHEMA_DEPTH {
-        return Err(ToolError::SchemaViolation {
-            path: path.to_owned(),
-            message: format!("schema nesting exceeds the {MAX_SCHEMA_DEPTH}-level bound"),
-        });
+        return Err(violation(
+            path,
+            format!("schema nesting exceeds the {MAX_SCHEMA_DEPTH}-level bound"),
+        ));
     }
     let schema = schema
         .as_object()
-        .ok_or_else(|| ToolError::SchemaViolation {
-            path: path.to_owned(),
-            message: "schema is not an object".to_owned(),
-        })?;
+        .ok_or_else(|| violation(path, "schema is not an object"))?;
     if let Some(reference) = schema.get("$ref").and_then(Value::as_str) {
-        let target =
-            resolve_reference(reference, root).ok_or_else(|| ToolError::SchemaViolation {
-                path: path.to_owned(),
-                message: format!("unresolved $ref `{reference}`"),
-            })?;
+        let target = resolve_reference(reference, root)
+            .ok_or_else(|| violation(path, format!("unresolved $ref `{reference}`")))?;
         return validate_at(value, target, root, path, depth + 1);
     }
     if let Some(variants) = schema.get("anyOf").and_then(Value::as_array) {
@@ -308,10 +366,7 @@ pub(super) fn validate_at(
                 .into_iter()
                 .find(|(variant, _)| declares_type_of(variant, value, root))
                 .map(|(_, error)| error)
-                .unwrap_or_else(|| ToolError::SchemaViolation {
-                    path: path.to_owned(),
-                    message: "value matches no declared variant".to_owned(),
-                }));
+                .unwrap_or_else(|| violation(path, "value matches no declared variant")));
         }
     }
     match schema.get("type") {
@@ -322,10 +377,7 @@ pub(super) fn validate_at(
                 .filter_map(Value::as_str)
                 .any(|expected| validate_type(value, expected, path).is_ok());
             if !matched {
-                return Err(ToolError::SchemaViolation {
-                    path: path.to_owned(),
-                    message: "value matches no declared type".to_owned(),
-                });
+                return Err(violation(path, "value matches no declared type"));
             }
         }
         _ => {}
@@ -333,26 +385,25 @@ pub(super) fn validate_at(
     if let Some(variants) = schema.get("enum").and_then(Value::as_array)
         && !variants.contains(value)
     {
-        return Err(ToolError::SchemaViolation {
-            path: path.to_owned(),
-            message: "value is not in enum".to_owned(),
-        });
+        return Err(violation(path, "value is not in enum"));
     }
     validate_bounds(value, schema, path)?;
+    let mut violations = Vec::new();
     match value {
         Value::Array(items) => {
             if let Some(item_schema) = schema.get("items") {
                 for (index, item) in items.iter().enumerate() {
-                    validate_at(
+                    if let Err(found) = validate_at(
                         item,
                         item_schema,
                         root,
                         &format!("{path}[{index}]"),
                         depth + 1,
-                    )?;
+                    ) {
+                        violations.extend(found);
+                    }
                 }
             }
-            Ok(())
         }
         Value::Object(object) => {
             let empty = Map::new();
@@ -363,36 +414,41 @@ pub(super) fn validate_at(
             if let Some(required) = schema.get("required").and_then(Value::as_array) {
                 for field in required.iter().filter_map(Value::as_str) {
                     if !object.contains_key(field) {
-                        return Err(ToolError::SchemaViolation {
-                            path: format!("{path}.{field}"),
-                            message: "required property is missing".to_owned(),
-                        });
+                        violations.extend(violation(
+                            &format!("{path}.{field}"),
+                            "required property is missing",
+                        ));
                     }
                 }
             }
-            if schema.get("additionalProperties").and_then(Value::as_bool) == Some(false)
-                && let Some(field) = object.keys().find(|field| !properties.contains_key(*field))
-            {
-                return Err(ToolError::SchemaViolation {
-                    path: format!("{path}.{field}"),
-                    message: "additional property is not allowed".to_owned(),
-                });
+            if schema.get("additionalProperties").and_then(Value::as_bool) == Some(false) {
+                for field in object
+                    .keys()
+                    .filter(|field| !properties.contains_key(*field))
+                {
+                    violations.extend(violation(
+                        &format!("{path}.{field}"),
+                        "additional property is not allowed",
+                    ));
+                }
             }
             for (field, field_schema) in properties {
-                if let Some(field_value) = object.get(field) {
-                    validate_at(
+                if let Some(field_value) = object.get(field)
+                    && let Err(found) = validate_at(
                         field_value,
                         field_schema,
                         root,
                         &format!("{path}.{field}"),
                         depth + 1,
-                    )?;
+                    )
+                {
+                    violations.extend(found);
                 }
             }
-            Ok(())
         }
-        _ => Ok(()),
+        _ => {}
     }
+    verdict(violations)
 }
 
 /// True when `schema` declares the JSON type `value` carries, which is how an
@@ -417,11 +473,8 @@ fn validate_bounds(
     value: &Value,
     schema: &Map<String, Value>,
     path: &str,
-) -> Result<(), ToolError> {
-    let violation = |message: String| ToolError::SchemaViolation {
-        path: path.to_owned(),
-        message,
-    };
+) -> Result<(), Vec<SchemaViolation>> {
+    let violation = |message: String| violation(path, message);
     if let Some(number) = value.as_f64() {
         for keyword in ["minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"] {
             let Some(bound) = schema.get(keyword).and_then(Value::as_f64) else {
@@ -520,7 +573,7 @@ fn fill_defaults(value: &mut Value, schema: &Value, root: &Value, depth: usize) 
     }
 }
 
-fn validate_type(value: &Value, expected: &str, path: &str) -> Result<(), ToolError> {
+fn validate_type(value: &Value, expected: &str, path: &str) -> Result<(), Vec<SchemaViolation>> {
     let valid = match expected {
         "object" => value.is_object(),
         "array" => value.is_array(),
@@ -534,9 +587,6 @@ fn validate_type(value: &Value, expected: &str, path: &str) -> Result<(), ToolEr
     if valid {
         Ok(())
     } else {
-        Err(ToolError::SchemaViolation {
-            path: path.to_owned(),
-            message: format!("expected {expected}"),
-        })
+        Err(violation(path, format!("expected {expected}")))
     }
 }
