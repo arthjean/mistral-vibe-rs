@@ -1,0 +1,293 @@
+{
+  "builtinLabel": "<builtin>",
+  "cases": [
+    {
+      "builtinDescribedCount": 15,
+      "name": "no-configured-paths",
+      "overrides": {
+        "grep": ".vibe/tools/prompts/grep.md",
+        "read_file": "home/.vibe/tools/prompts/read_file.md",
+        "weather": ".vibe/tools/prompts/weather.md"
+      },
+      "publishedDescriptions": {
+        "grep": "search, per project\n",
+        "read_file": "read a file, per user\n"
+      },
+      "searchPaths": [
+        "<builtin>",
+        ".vibe/tools",
+        "home/.vibe/tools"
+      ],
+      "sources": [
+        "project",
+        "user"
+      ],
+      "toolPaths": [],
+      "trusted": true,
+      "unmatchedStems": [
+        "weather"
+      ],
+      "withheldStems": [
+        "bash",
+        "glob",
+        "todo_write",
+        "unreadable",
+        "write_file"
+      ]
+    },
+    {
+      "builtinDescribedCount": 14,
+      "name": "configured-paths-precede-the-discovered-ones",
+      "overrides": {
+        "bash": "extra/prompts/bash.md",
+        "grep": ".vibe/tools/prompts/grep.md",
+        "read_file": "home/.vibe/tools/prompts/read_file.md",
+        "todo_write": "module/prompts/todo_write.md",
+        "weather": ".vibe/tools/prompts/weather.md"
+      },
+      "publishedDescriptions": {
+        "bash": "run a command, from a tool_paths entry\n",
+        "grep": "search, per project\n",
+        "read_file": "read a file, per user\n"
+      },
+      "searchPaths": [
+        "<builtin>",
+        "extra",
+        "module/custom.py",
+        ".vibe/tools",
+        "home/.vibe/tools"
+      ],
+      "sources": [
+        "project",
+        "user"
+      ],
+      "toolPaths": [
+        "extra",
+        "module/custom.py"
+      ],
+      "trusted": true,
+      "unmatchedStems": [
+        "todo_write",
+        "weather"
+      ],
+      "withheldStems": [
+        "glob",
+        "unreadable",
+        "write_file"
+      ]
+    },
+    {
+      "builtinDescribedCount": 14,
+      "name": "a-directory-named-twice-keeps-its-first-position",
+      "overrides": {
+        "bash": "extra/prompts/bash.md",
+        "grep": ".vibe/tools/prompts/grep.md",
+        "read_file": "home/.vibe/tools/prompts/read_file.md",
+        "weather": ".vibe/tools/prompts/weather.md"
+      },
+      "publishedDescriptions": {
+        "bash": "run a command, from a tool_paths entry\n",
+        "grep": "search, per project\n",
+        "read_file": "read a file, per user\n"
+      },
+      "searchPaths": [
+        "<builtin>",
+        ".vibe/tools",
+        "extra",
+        "home/.vibe/tools"
+      ],
+      "sources": [
+        "project",
+        "user"
+      ],
+      "toolPaths": [
+        ".vibe/tools",
+        "extra"
+      ],
+      "trusted": true,
+      "unmatchedStems": [
+        "weather"
+      ],
+      "withheldStems": [
+        "glob",
+        "todo_write",
+        "unreadable",
+        "write_file"
+      ]
+    },
+    {
+      "builtinDescribedCount": 14,
+      "name": "an-entry-naming-nothing-is-skipped",
+      "overrides": {
+        "bash": "extra/prompts/bash.md",
+        "grep": ".vibe/tools/prompts/grep.md",
+        "read_file": "home/.vibe/tools/prompts/read_file.md",
+        "weather": ".vibe/tools/prompts/weather.md"
+      },
+      "publishedDescriptions": {
+        "bash": "run a command, from a tool_paths entry\n",
+        "grep": "search, per project\n",
+        "read_file": "read a file, per user\n"
+      },
+      "searchPaths": [
+        "<builtin>",
+        "absent-parent/absent",
+        "extra",
+        ".vibe/tools",
+        "home/.vibe/tools"
+      ],
+      "sources": [
+        "project",
+        "user"
+      ],
+      "toolPaths": [
+        "absent-parent/absent",
+        "extra"
+      ],
+      "trusted": true,
+      "unmatchedStems": [
+        "weather"
+      ],
+      "withheldStems": [
+        "glob",
+        "todo_write",
+        "unreadable",
+        "write_file"
+      ]
+    },
+    {
+      "builtinDescribedCount": 15,
+      "name": "a-relative-entry-anchors-on-the-working-directory",
+      "overrides": {
+        "glob": "tools/prompts/glob.md",
+        "grep": ".vibe/tools/prompts/grep.md",
+        "read_file": "home/.vibe/tools/prompts/read_file.md",
+        "weather": ".vibe/tools/prompts/weather.md"
+      },
+      "publishedDescriptions": {
+        "grep": "search, per project\n",
+        "read_file": "read a file, per user\n"
+      },
+      "searchPaths": [
+        "<builtin>",
+        "tools",
+        ".vibe/tools",
+        "home/.vibe/tools"
+      ],
+      "sources": [
+        "project",
+        "user"
+      ],
+      "toolPaths": [
+        "tools"
+      ],
+      "trusted": true,
+      "unmatchedStems": [
+        "glob",
+        "weather"
+      ],
+      "withheldStems": [
+        "bash",
+        "todo_write",
+        "unreadable",
+        "write_file"
+      ]
+    },
+    {
+      "builtinDescribedCount": 14,
+      "name": "the-user-source-disabled",
+      "overrides": {
+        "bash": "extra/prompts/bash.md",
+        "grep": ".vibe/tools/prompts/grep.md",
+        "read_file": ".vibe/tools/prompts/read_file.md",
+        "weather": ".vibe/tools/prompts/weather.md"
+      },
+      "publishedDescriptions": {
+        "bash": "run a command, from a tool_paths entry\n",
+        "grep": "search, per project\n",
+        "read_file": "read a file, per project\n"
+      },
+      "searchPaths": [
+        "<builtin>",
+        "extra",
+        ".vibe/tools"
+      ],
+      "sources": [
+        "project"
+      ],
+      "toolPaths": [
+        "extra"
+      ],
+      "trusted": true,
+      "unmatchedStems": [
+        "weather"
+      ],
+      "withheldStems": [
+        "glob",
+        "todo_write",
+        "unreadable",
+        "write_file"
+      ]
+    },
+    {
+      "builtinDescribedCount": 15,
+      "name": "an-untrusted-workspace",
+      "overrides": {
+        "bash": "extra/prompts/bash.md",
+        "read_file": "home/.vibe/tools/prompts/read_file.md"
+      },
+      "publishedDescriptions": {
+        "bash": "run a command, from a tool_paths entry\n",
+        "read_file": "read a file, per user\n"
+      },
+      "searchPaths": [
+        "<builtin>",
+        "extra",
+        "home/.vibe/tools"
+      ],
+      "sources": [
+        "project",
+        "user"
+      ],
+      "toolPaths": [
+        "extra"
+      ],
+      "trusted": false,
+      "unmatchedStems": [],
+      "withheldStems": [
+        "glob",
+        "grep",
+        "todo_write",
+        "unreadable",
+        "weather",
+        "write_file"
+      ]
+    }
+  ],
+  "note": "Captured from the pinned reference by scripts/parity/tool_descriptions.py. Every description file and every path label is authored by this repository; the reference contributes the resolution order, the winning file and the count of builtin tools it describes from its own package directory.",
+  "reference": {
+    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7"
+  },
+  "schemaVersion": 1,
+  "tree": {
+    "directories": [
+      "absent-parent"
+    ],
+    "files": {
+      ".vibe/tools/prompts/grep.md": "search, per project\n",
+      ".vibe/tools/prompts/read_file.md": "read a file, per project\n",
+      ".vibe/tools/prompts/weather.md": "no tool answers to this name\n",
+      ".vibe/tools/prompts/write_file.md": "   \n\t\n",
+      "extra/prompts/bash.md": "run a command, from a tool_paths entry\n",
+      "extra/prompts/read_file.md": "read a file, from a tool_paths entry\n",
+      "home/.vibe/tools/prompts/read_file.md": "read a file, per user\n",
+      "module/custom.py": "# A tool module that declares no tool class.\n",
+      "module/prompts/todo_write.md": "track a plan, from a module sibling\n",
+      "tools/prompts/glob.md": "match paths, from a relative entry\n"
+    },
+    "obstructions": [
+      ".vibe/tools/prompts/unreadable.md"
+    ]
+  },
+  "vibeHome": "home/.vibe"
+}
