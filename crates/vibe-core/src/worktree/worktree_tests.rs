@@ -408,3 +408,53 @@ fn the_name_refusal_names_the_flag_and_the_rule() {
         "the single-portable-segment rule is not stated: {message}"
     );
 }
+
+// --------------------------------------------------------------------------
+// US-277: the branch gate
+// --------------------------------------------------------------------------
+
+/// A name every filesystem can carry is still not always a ref git will make,
+/// and the gate has to run before anything exists.
+#[test]
+fn an_unusable_branch_is_refused_before_anything_is_created() {
+    let (_scratch, root) = case_root();
+    let checkout = checkout(&root, None);
+    let vibe_home = root.join("home");
+
+    let error = prepare_worktree("foo.lock", &checkout, &vibe_home)
+        .expect_err("a name git will not make a branch of is refused");
+    let WorktreeError::InvalidBranch { branch } = &error else {
+        panic!("expected an invalid-branch refusal, got {error:?}");
+    };
+    assert_eq!(branch, "foo.lock");
+    assert!(
+        !managed_directory(&vibe_home, &checkout)
+            .join("foo.lock")
+            .exists(),
+        "the refused run left a directory under the managed root"
+    );
+    assert!(
+        !branch_is_present(&checkout, "foo.lock"),
+        "the refused run created a branch"
+    );
+    assert!(
+        !git(&checkout, &["worktree", "list", "--porcelain"]).contains("foo.lock"),
+        "git records a worktree the refused run created"
+    );
+}
+
+/// The gate reads the branch it is handed, not the worktree it belongs to,
+/// which is what lets US-282 pass a branch of its own through it.
+#[test]
+fn the_branch_gate_judges_the_branch_it_is_given() {
+    let (_scratch, root) = case_root();
+    let checkout = checkout(&root, None);
+
+    super::validate_branch_name(&checkout, "review").expect("a plain branch passes");
+    let error = super::validate_branch_name(&checkout, "foo.lock")
+        .expect_err("a branch git refuses is refused");
+    assert!(
+        matches!(&error, WorktreeError::InvalidBranch { branch } if branch == "foo.lock"),
+        "the refusal does not name the branch: {error:?}"
+    );
+}

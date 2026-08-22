@@ -127,6 +127,15 @@ pub enum WorktreeError {
              no character a Windows path forbids, and no reserved device name"
     )]
     InvalidName,
+    /// A branch git itself refuses to name a ref with.
+    ///
+    /// Separate from [`Self::InvalidName`] because the two are asked at
+    /// different times of different strings: the reference validates the name
+    /// against a portability rule of its own and hands the branch to
+    /// `git check-ref-format --branch` (`vibe/core/worktree.py:320-325`), and a
+    /// branch is allowed to differ from the worktree it belongs to.
+    #[error("--worktree branch `{branch}` is not a valid Git branch name")]
+    InvalidBranch { branch: String },
     #[error("--worktree requires a git repository")]
     RepositoryRequired,
     #[error("git worktree operations require git on PATH: {0}")]
@@ -192,6 +201,13 @@ pub fn prepare_worktree(
             _ => WorktreeError::RepositoryRequired,
         })?;
     let checkout_root = canonical_directory(&checkout_root)?;
+    // The branch is validated before anything exists, which is the whole point
+    // of the gate: the reference asks git the question between opening the
+    // repository and reaching for the managed root
+    // (`vibe/core/worktree.py:114-120`), so a refusal leaves no directory and
+    // no branch behind.
+    let branch = name;
+    validate_branch_name(&checkout_root, branch)?;
     let git_dir = resolve_git_path(
         &checkout_root,
         &git_stdout(base, ["rev-parse", "--git-dir"], name)?,
@@ -508,6 +524,24 @@ fn is_portable_worktree_name(name: &str) -> bool {
     // already refused above, so what is left for this to catch is a component
     // the parser folds away.
     Path::new(name).components().count() == 1
+}
+
+/// Asks git whether `branch` is a name it would accept for a ref.
+///
+/// `check-ref-format` reads no repository, so the directory only decides where
+/// the process starts; a machine without git still reports
+/// [`WorktreeError::GitUnavailable`] rather than calling the branch invalid.
+/// The reference asks the same question through the same command
+/// (`vibe/core/worktree.py:320-325`).
+fn validate_branch_name(directory: &Path, branch: &str) -> Result<(), WorktreeError> {
+    let output = git_output(directory, ["check-ref-format", "--branch", branch], branch)?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(WorktreeError::InvalidBranch {
+            branch: branch.to_owned(),
+        })
+    }
 }
 
 fn resolve_git_path(base: &Path, value: &str) -> Result<PathBuf, WorktreeError> {

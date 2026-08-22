@@ -49,7 +49,7 @@ use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference
 
 use super::{
     inspect_worktree_for_cleanup, managed_worktree_root, prepare_worktree, target_cwd,
-    validate_worktree_name,
+    validate_branch_name, validate_worktree_name,
 };
 
 const CORPUS_RELATIVE: &str = "crates/vibe-core/tests/worktree/corpus.json";
@@ -116,9 +116,6 @@ const LICENSING: &str = "NOTICE";
 /// Why a gap stands, shared by every case that carries the same one: the reason
 /// is a property of the gap, not of the case that happens to reveal it. Each is
 /// stated once so a story landing removes one sentence rather than dozens.
-const NO_BRANCH_GATE: &str = "the reference runs `git check-ref-format --branch` before creating \
-     anything; this port has no branch gate at all, so it answers that every name is a usable \
-     branch. US-277 adds the gate";
 const NO_BRANCH_PARAMETER: &str = "the reference takes the branch as a parameter and defaults it \
      to the worktree name; this port has no branch parameter, so a case that asks for a branch \
      other than the name cannot be driven here at all. US-282 adds the parameter, which is what \
@@ -126,9 +123,10 @@ const NO_BRANCH_PARAMETER: &str = "the reference takes the branch as a parameter
 const COMMIT_PHRASING: &str = "the commit-count reason is this port's own sentence and the \
      reference's is shorter; the two booleans beside it match digest for digest. US-286 restates \
      the phrase from the reference's own form";
-const UNASKABLE_BRANCH_GATE: &str = "the case asks for a branch this port has no parameter \
-     for, so it cannot be driven here; once US-282 adds the parameter the case still needs the \
-     branch gate US-277 writes, and only then does it refuse the way the reference refuses";
+const UNASKABLE_BRANCH_GATE: &str = "the branch gate US-277 wrote refuses this branch, but the \
+     case asks for a branch other than the worktree name and this port has no parameter to carry \
+     one, so the refusal cannot be driven here. US-282 adds the parameter and the gate answers \
+     through it";
 const COMMON_DIR_BASE: &str = "`git rev-parse --git-common-dir` answers relative to the directory \
      git ran in, and from a subdirectory that answer is `../.git`; this port resolves it against \
      the checkout root instead, so a base below the checkout root fails to canonicalize and \
@@ -169,126 +167,6 @@ impl Divergence {
 /// A pointer is matched by prefix, so `/prepared` covers every field under it.
 /// Keep the list ordered by family then by case.
 const LEDGER: &[Divergence] = &[
-    // The branch gate this port does not have.
-    Divergence {
-        family: "name",
-        case: "colon",
-        pointer: "/branchValid",
-        closed_by: "US-277",
-        why: NO_BRANCH_GATE,
-    },
-    Divergence {
-        family: "name",
-        case: "dot",
-        pointer: "/branchValid",
-        closed_by: "US-277",
-        why: NO_BRANCH_GATE,
-    },
-    Divergence {
-        family: "name",
-        case: "dot-prefixed",
-        pointer: "/branchValid",
-        closed_by: "US-277",
-        why: NO_BRANCH_GATE,
-    },
-    Divergence {
-        family: "name",
-        case: "double-dot",
-        pointer: "/branchValid",
-        closed_by: "US-277",
-        why: NO_BRANCH_GATE,
-    },
-    Divergence {
-        family: "name",
-        case: "double-dot-alone",
-        pointer: "/branchValid",
-        closed_by: "US-277",
-        why: NO_BRANCH_GATE,
-    },
-    Divergence {
-        family: "name",
-        case: "drive-prefixed",
-        pointer: "/branchValid",
-        closed_by: "US-277",
-        why: NO_BRANCH_GATE,
-    },
-    Divergence {
-        family: "name",
-        case: "empty",
-        pointer: "/branchValid",
-        closed_by: "US-277",
-        why: NO_BRANCH_GATE,
-    },
-    Divergence {
-        family: "name",
-        case: "head",
-        pointer: "/branchValid",
-        closed_by: "US-277",
-        why: NO_BRANCH_GATE,
-    },
-    Divergence {
-        family: "name",
-        case: "inner-space",
-        pointer: "/branchValid",
-        closed_by: "US-277",
-        why: NO_BRANCH_GATE,
-    },
-    Divergence {
-        family: "name",
-        case: "lock-suffixed",
-        pointer: "/branchValid",
-        closed_by: "US-277",
-        why: NO_BRANCH_GATE,
-    },
-    Divergence {
-        family: "name",
-        case: "option-shaped",
-        pointer: "/branchValid",
-        closed_by: "US-277",
-        why: NO_BRANCH_GATE,
-    },
-    Divergence {
-        family: "name",
-        case: "question-mark",
-        pointer: "/branchValid",
-        closed_by: "US-277",
-        why: NO_BRANCH_GATE,
-    },
-    Divergence {
-        family: "name",
-        case: "star",
-        pointer: "/branchValid",
-        closed_by: "US-277",
-        why: NO_BRANCH_GATE,
-    },
-    Divergence {
-        family: "name",
-        case: "tab",
-        pointer: "/branchValid",
-        closed_by: "US-277",
-        why: NO_BRANCH_GATE,
-    },
-    Divergence {
-        family: "name",
-        case: "trailing-dot",
-        pointer: "/branchValid",
-        closed_by: "US-277",
-        why: NO_BRANCH_GATE,
-    },
-    Divergence {
-        family: "name",
-        case: "trailing-space",
-        pointer: "/branchValid",
-        closed_by: "US-277",
-        why: NO_BRANCH_GATE,
-    },
-    Divergence {
-        family: "name",
-        case: "windows-separator",
-        pointer: "/branchValid",
-        closed_by: "US-277",
-        why: NO_BRANCH_GATE,
-    },
     // Preparation.
     //
     // `prepare/missing-base` carries no entry, and the reason is worth stating
@@ -912,7 +790,7 @@ fn error_record(error: &super::WorktreeError) -> Value {
 
 fn observed_document(case: &Case, scratch: &Path, index: usize) -> Value {
     match case.family.as_str() {
-        "name" => observed_name(case),
+        "name" => observed_name(case, scratch),
         "managedRoot" => observed_managed_root(case),
         family => {
             let root = case_root(scratch, index);
@@ -934,13 +812,13 @@ fn observed_document(case: &Case, scratch: &Path, index: usize) -> Value {
     }
 }
 
-fn observed_name(case: &Case) -> Value {
+fn observed_name(case: &Case, root: &Path) -> Value {
     let name = case.input["name"].as_str().expect("a name case names one");
     json!({
         "portable": validate_worktree_name(name).is_ok(),
-        // Nothing in this port validates a branch name, so every name is a
-        // usable branch as far as it is concerned.
-        "branchValid": true,
+        // `check-ref-format` reads no repository, so the case root only decides
+        // where the process starts.
+        "branchValid": validate_branch_name(root, name).is_ok(),
     })
 }
 

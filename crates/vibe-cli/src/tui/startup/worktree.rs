@@ -22,6 +22,7 @@ impl From<WorktreeError> for StartupError {
     fn from(error: WorktreeError) -> Self {
         match error {
             WorktreeError::InvalidName => Self::InvalidWorktreeName,
+            WorktreeError::InvalidBranch { branch } => Self::InvalidWorktreeBranch { branch },
             WorktreeError::RepositoryRequired => Self::WorktreeRepositoryRequired,
             WorktreeError::GitUnavailable(message) => Self::WorktreeGitUnavailable(message),
             WorktreeError::Failed { name, message } => Self::Worktree { name, message },

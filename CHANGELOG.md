@@ -8,6 +8,11 @@
   `nul.txt` whatever its extension is now rejected before anything is created.
   A plain single segment, accents and emoji included, still passes.
 
+- Ask git whether the branch is usable before creating anything. `--worktree`
+  now runs `git check-ref-format --branch` first, so a name git would never make
+  a ref of, such as `foo.lock`, `foo..bar`, `HEAD`, or `-x`, fails naming the
+  branch instead of failing halfway through `git worktree add`.
+
 - Keep a worktree that carries a commit made on a detached `HEAD`. Session
   commits are now counted against the worktree's own `HEAD` rather than against
   its branch tip, so detaching `HEAD` to compare a revision and committing there

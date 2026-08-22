@@ -48,6 +48,8 @@ pub enum StartupError {
              no character a Windows path forbids, and no reserved device name"
     )]
     InvalidWorktreeName,
+    #[error("--worktree branch `{branch}` is not a valid Git branch name")]
+    InvalidWorktreeBranch { branch: String },
     #[error("--worktree requires a git repository")]
     WorktreeRepositoryRequired,
     #[error("git worktree operations require git on PATH: {0}")]
