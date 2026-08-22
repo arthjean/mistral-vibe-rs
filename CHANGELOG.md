@@ -13,6 +13,13 @@
   a ref of, such as `foo.lock`, `foo..bar`, `HEAD`, or `-x`, fails naming the
   branch instead of failing halfway through `git worktree add`.
 
+- Guard the directory a worktree hands the session. The working directory is
+  now resolved and refused when it does not exist, is not a directory, escapes
+  the worktree through a symbolic link, or sits below a nested repository, and a
+  managed path that crosses a symbolic link is no longer reused as a worktree.
+  A base spelled through a link is placed by where it resolves, and one outside
+  the checkout is refused naming both paths.
+
 - Resolve the managed worktree root. `VIBE_HOME` is now tilde-expanded, the
   managed root is resolved before the repository directory is placed under it,
   and a repository directory that resolves outside it is refused. `--worktree`

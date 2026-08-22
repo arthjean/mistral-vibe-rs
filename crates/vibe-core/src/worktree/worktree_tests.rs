@@ -90,18 +90,17 @@ fn checkout(root: &Path, separate_git_dir: Option<&Path>) -> PathBuf {
     checkout
 }
 
-/// A base inside the checkout that resolves to the checkout root itself but is
-/// not spelled as it.
+/// A base that exists in the checkout and cannot exist in the new worktree.
 ///
 /// Preparation records the base relative to the checkout and reopens it inside
-/// the new worktree, so a base that is an untracked symbolic link to the
-/// checkout root exists for every git question asked before the worktree is
-/// created and is missing from the worktree afterward. That is the only way to
-/// make construction fail after `git worktree add` has already run, which is
-/// exactly the span the rollback covers.
+/// the worktree it just created, so an untracked subdirectory answers every git
+/// question asked beforehand and is missing from the fresh checkout afterward.
+/// That is the way to make construction fail after `git worktree add` has
+/// already run, which is exactly the span the rollback covers, and it is the
+/// shape the corpus records as `prepare/missing-base`.
 fn vanishing_base(checkout: &Path) -> PathBuf {
-    let base = checkout.join("here");
-    symlink(Path::new("."), &base);
+    let base = checkout.join("scratch");
+    fs::create_dir_all(&base).expect("the untracked subdirectory is writable");
     base
 }
 
@@ -458,6 +457,77 @@ fn the_branch_gate_judges_the_branch_it_is_given() {
         matches!(&error, WorktreeError::InvalidBranch { branch } if branch == "foo.lock"),
         "the refusal does not name the branch: {error:?}"
     );
+}
+
+// --------------------------------------------------------------------------
+// US-278: what the worktree hands back
+// --------------------------------------------------------------------------
+
+/// The corpus drives the four `target_cwd` guards; the base guard sits one step
+/// earlier and refuses naming both paths.
+#[test]
+fn a_base_outside_the_checkout_names_both_paths() {
+    let (_scratch, root) = case_root();
+    let checkout = checkout(&root, None);
+    let outside = root.join("outside");
+    fs::create_dir_all(&outside).expect("the outside directory is writable");
+
+    let error = super::relative_base(&checkout, &outside, "review")
+        .expect_err("a base outside the checkout is refused");
+    let WorktreeError::Failed { name, message } = &error else {
+        panic!("expected a named worktree failure, got {error:?}");
+    };
+    assert_eq!(name, "review");
+    assert!(
+        message.contains(text(&outside)) && message.contains(text(&checkout)),
+        "both paths are not named: {message}"
+    );
+}
+
+/// A base spelled through a symbolic link is placed by where it resolves, which
+/// is what keeps the session directory inside the worktree.
+#[test]
+fn a_base_reached_through_a_link_is_placed_where_it_resolves() {
+    let (_scratch, root) = case_root();
+    let checkout = checkout(&root, None);
+    let real = checkout.join("docs");
+    fs::create_dir_all(&real).expect("the subdirectory is writable");
+    let alias = checkout.join("alias");
+    symlink(&real, &alias);
+
+    assert_eq!(
+        super::relative_base(&checkout, &alias, "review").expect("the alias resolves"),
+        PathBuf::from("docs")
+    );
+}
+
+/// A symbolic link anywhere below the first component under the anchor makes
+/// the path unstable, and that is what an existing worktree is checked for.
+#[test]
+fn a_link_below_the_anchor_is_a_linked_component() {
+    let (_scratch, root) = case_root();
+    let real = root.join("real");
+    fs::create_dir_all(real.join("inner")).expect("the real tree is writable");
+    let alias = root.join("alias");
+    symlink(&real, &alias);
+
+    assert!(super::has_linked_path_component(&alias.join("inner")));
+    assert!(!super::has_linked_path_component(&real.join("inner")));
+}
+
+/// The first component under the anchor is the operating system's business:
+/// refusing it would refuse every managed root on a platform that aliases one.
+#[cfg(unix)]
+#[test]
+fn a_root_level_alias_alone_is_not_a_linked_component() {
+    // Only the operating system can place a link directly under the anchor, so
+    // the assertion needs one that is already there. Most Linux distributions
+    // ship `/bin -> usr/bin`; on a system that does not, there is nothing here
+    // to observe.
+    let alias = Path::new("/bin");
+    if alias.is_symlink() {
+        assert!(!super::has_linked_path_component(alias));
+    }
 }
 
 // --------------------------------------------------------------------------

@@ -17,7 +17,7 @@
 //! scorecard row.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::LazyLock;
 
@@ -234,9 +234,8 @@ pub fn prepare_worktree(
         &git_stdout(&checkout_root, ["rev-parse", "--git-common-dir"], name)?,
     )?;
     let repo_root = primary_worktree_root(&checkout_root, &git_dir, &common_git_dir, name)?;
-    let relative_base = base.strip_prefix(&checkout_root).map_err(|_| {
-        WorktreeError::failed(name, "working directory is outside the Git checkout")
-    })?;
+    let relative_base = relative_base(&checkout_root, base, name)?;
+    let relative_base = relative_base.as_path();
     let target = managed_worktree_root(vibe_home, &repo_root, &common_git_dir)?.join(name);
 
     if target.is_dir() {
@@ -408,6 +407,30 @@ fn managed_worktree_root(
     }
 }
 
+/// Where `base` sits inside the checkout, as the worktree will spell it.
+///
+/// The base is resolved before it is measured, so a directory reached through
+/// a symbolic link is placed by where it actually is rather than by how the
+/// invocation spelled it. A base that resolves out of the checkout is refused
+/// naming both paths, which is the reference's own refusal
+/// (`vibe/core/worktree.py:360-367`).
+fn relative_base(checkout_root: &Path, base: &Path, name: &str) -> Result<PathBuf, WorktreeError> {
+    let resolved = resolve_lenient(base);
+    resolved
+        .strip_prefix(checkout_root)
+        .map(Path::to_path_buf)
+        .map_err(|_| {
+            WorktreeError::failed(
+                name,
+                format!(
+                    "path `{}` is outside Git worktree `{}`",
+                    resolved.display(),
+                    checkout_root.display()
+                ),
+            )
+        })
+}
+
 /// The path string the digest is taken over, without what Windows
 /// canonicalization prefixes it with.
 ///
@@ -509,19 +532,95 @@ fn build_prepared_worktree(
 }
 
 /// The directory a session runs in once the worktree exists.
+///
+/// Four questions, in the reference's own order
+/// (`vibe/core/worktree.py:427-450`): the path resolves, it is a directory, it
+/// still lies inside the worktree once resolved, and nothing between it and
+/// the worktree root carries a `.git` entry. The third is what a symbolic link
+/// planted in the checkout would otherwise walk through, and the fourth is
+/// what keeps a session from opening inside a nested repository the worktree
+/// merely contains. The worktree root itself is not asked the fourth question,
+/// because its own `.git` file is what makes it a worktree.
 fn target_cwd(root: &Path, relative_base: &Path, name: &str) -> Result<PathBuf, WorktreeError> {
+    let root = resolve_lenient(root);
     let path = root.join(relative_base);
-    if path.is_dir() {
-        Ok(path)
-    } else {
-        Err(WorktreeError::failed(
+    let resolved = fs::canonicalize(&path).map_err(|_| {
+        WorktreeError::failed(
             name,
             format!(
                 "worktree path `{}` does not exist after checkout",
                 path.display()
             ),
-        ))
+        )
+    })?;
+    if !resolved.is_dir() {
+        return Err(WorktreeError::failed(
+            name,
+            format!("worktree path `{}` is not a directory", path.display()),
+        ));
     }
+    if !resolved.starts_with(&root) {
+        return Err(WorktreeError::failed(
+            name,
+            format!(
+                "worktree path `{}` resolves outside worktree `{}`",
+                path.display(),
+                root.display()
+            ),
+        ));
+    }
+    let mut current = resolved.clone();
+    while current != root {
+        let marker = current.join(".git");
+        if marker.exists() || marker.is_symlink() {
+            return Err(WorktreeError::failed(
+                name,
+                format!(
+                    "worktree path `{}` belongs to a different Git repository",
+                    resolved.display()
+                ),
+            ));
+        }
+        let Some(parent) = current.parent().map(Path::to_path_buf) else {
+            break;
+        };
+        current = parent;
+    }
+    Ok(resolved)
+}
+
+/// Whether any component of `path` below the first one is a symbolic link.
+///
+/// The first component under the anchor is skipped: a root-level alias such as
+/// macOS's `/tmp` belongs to the operating system rather than to the worktree
+/// hierarchy, and refusing it would refuse every managed root on that
+/// platform. The reference states the same exemption
+/// (`vibe/core/worktree.py:415-418`).
+///
+/// On Windows the reference also asks whether a component is a junction. Rust
+/// reports the reparse points its own `symlink_metadata` recognizes through
+/// [`Path::is_symlink`], which is the closest this port can get without an
+/// unsafe volume query.
+fn has_linked_path_component(path: &Path) -> bool {
+    let mut current = PathBuf::new();
+    let mut anchored = false;
+    let mut skipped_first = false;
+    for component in path.components() {
+        if matches!(component, Component::Prefix(_) | Component::RootDir) {
+            anchored = true;
+            current.push(component.as_os_str());
+            continue;
+        }
+        current.push(component.as_os_str());
+        if anchored && !skipped_first {
+            skipped_first = true;
+            continue;
+        }
+        if current.is_symlink() {
+            return true;
+        }
+    }
+    false
 }
 
 fn validate_existing_worktree(
@@ -529,6 +628,15 @@ fn validate_existing_worktree(
     expected_branch: &str,
     expected_common_git_dir: &Path,
 ) -> Result<(), WorktreeError> {
+    if has_linked_path_component(target) {
+        return Err(WorktreeError::failed(
+            expected_branch,
+            format!(
+                "path `{}` crosses a symbolic link, which is not a stable Git worktree path",
+                target.display()
+            ),
+        ));
+    }
     if !target.join(".git").is_file() {
         return Err(WorktreeError::failed(
             expected_branch,

@@ -129,10 +129,6 @@ const UNASKABLE_BRANCH_GATE: &str = "the branch gate US-277 wrote refuses this b
      through it";
 const NO_ENUMERATION: &str = "the reference publishes `list_linked_worktrees`; this port has no \
      enumeration at all, so no case of this family can be driven here. US-280 writes it";
-const UNGUARDED_TARGET: &str = "the reference resolves the working directory the worktree hands \
-     back and refuses it when it escapes the worktree through a symlink or crosses a nested \
-     repository; this port only asks whether the joined path is a directory. US-278 adds the \
-     guards";
 
 /// One tolerated gap between this port and the reference.
 #[derive(Debug, Clone, Copy)]
@@ -236,28 +232,6 @@ const LEDGER: &[Divergence] = &[
         pointer: "/outcome",
         closed_by: "US-280",
         why: NO_ENUMERATION,
-    },
-    // The working directory the session opens in.
-    Divergence {
-        family: "targetCwd",
-        case: "aliased-component",
-        pointer: "/path",
-        closed_by: "US-278",
-        why: UNGUARDED_TARGET,
-    },
-    Divergence {
-        family: "targetCwd",
-        case: "escaping-symlink",
-        pointer: "/outcome",
-        closed_by: "US-278",
-        why: UNGUARDED_TARGET,
-    },
-    Divergence {
-        family: "targetCwd",
-        case: "nested-git",
-        pointer: "/outcome",
-        closed_by: "US-278",
-        why: UNGUARDED_TARGET,
     },
 ];
 
