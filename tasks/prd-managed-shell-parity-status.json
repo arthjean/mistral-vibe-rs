@@ -18,11 +18,11 @@
     {
       "id": "EP-093",
       "title": "The documents a model actually reads",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 4,
-      "stories_done": 0,
-      "started_at": null
+      "stories_done": 4,
+      "started_at": "2026-08-22"
     },
     {
       "id": "EP-094",
@@ -104,49 +104,49 @@
       "id": "US-292",
       "title": "Publish the managed command result with the reference's thirteen fields",
       "epic": "EP-093",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-290"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-22",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
     },
     {
       "id": "US-293",
       "title": "Publish the legacy command result with the reference's four fields",
       "epic": "EP-093",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [
         "US-290"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-22",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
     },
     {
       "id": "US-294",
       "title": "Publish the four session-tool results with their declared shapes",
       "epic": "EP-093",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-290"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-22",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
     },
     {
       "id": "US-295",
       "title": "Render the model text from the typed result",
       "epic": "EP-093",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
@@ -154,9 +154,9 @@
         "US-293",
         "US-294"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-22",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
     },
     {
       "id": "US-296",
