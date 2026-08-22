@@ -18,10 +18,11 @@
     {
       "id": "EP-087",
       "title": "The four defects in the lifecycle",
-      "status": "PENDING",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 4,
-      "stories_done": 0
+      "stories_done": 4,
+      "started_at": "2026-08-22"
     },
     {
       "id": "EP-088",
@@ -100,45 +101,57 @@
       "id": "US-272",
       "title": "Count session commits against the worktree HEAD",
       "epic": "EP-087",
-      "status": "PENDING",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [
         "US-271"
-      ]
+      ],
+      "started_at": "2026-08-22",
+      "completed_at": "2026-08-22",
+      "reviewed_at": "2026-08-22"
     },
     {
       "id": "US-273",
       "title": "Roll back a worktree whose preparation failed",
       "epic": "EP-087",
-      "status": "PENDING",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [
         "US-271"
-      ]
+      ],
+      "started_at": "2026-08-22",
+      "completed_at": "2026-08-22",
+      "reviewed_at": "2026-08-22"
     },
     {
       "id": "US-274",
       "title": "Resolve the primary checkout the way the reference resolves it",
       "epic": "EP-087",
-      "status": "PENDING",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-271"
-      ]
+      ],
+      "started_at": "2026-08-22",
+      "completed_at": "2026-08-22",
+      "reviewed_at": "2026-08-22"
     },
     {
       "id": "US-275",
       "title": "Discriminate a missing branch from a failing branch probe",
       "epic": "EP-087",
-      "status": "PENDING",
+      "status": "DONE",
       "priority": "P2",
       "size": "XS",
       "blocked_by": [
         "US-271"
-      ]
+      ],
+      "started_at": "2026-08-22",
+      "completed_at": "2026-08-22",
+      "reviewed_at": "2026-08-22"
     },
     {
       "id": "US-276",
