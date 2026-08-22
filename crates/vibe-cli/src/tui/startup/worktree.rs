@@ -7,7 +7,7 @@
 //! and whether a human at a terminal agreed to discard their work.
 
 use std::fs;
-use std::io::{BufRead, IsTerminal, Write};
+use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 
 use vibe_core::worktree::{
@@ -166,26 +166,19 @@ pub fn cleanup_is_offered(
         && matches!(exit_code, None | Some(0))
 }
 
-/// Offers cleanup on the terminal, reading `/dev/tty` when stdin is a pipe.
+/// Offers cleanup at the terminal, asking on stdin.
+///
+/// The reference asks through `input()`, which reads stdin and nothing else, so
+/// a piped stdin at end of file declines rather than reopening the controlling
+/// terminal behind the pipe (`vibe/cli/entrypoint.py:181-219`).
 pub fn cleanup_worktree_terminal(
     worktree: PreparedWorktree,
 ) -> Result<CleanupOutcome, StartupError> {
-    let mut output = std::io::stderr().lock();
-    if std::io::stdin().is_terminal() {
-        return cleanup_worktree(worktree, &mut std::io::stdin().lock(), &mut output);
-    }
-    #[cfg(unix)]
-    {
-        let terminal = fs::File::open("/dev/tty")
-            .map_err(|source| startup_io(Path::new("/dev/tty"), source))?;
-        cleanup_worktree(
-            worktree,
-            &mut std::io::BufReader::new(terminal),
-            &mut output,
-        )
-    }
-    #[cfg(not(unix))]
-    cleanup_worktree(worktree, &mut std::io::stdin().lock(), &mut output)
+    cleanup_worktree(
+        worktree,
+        &mut std::io::stdin().lock(),
+        &mut std::io::stderr().lock(),
+    )
 }
 
 /// Asks whether to discard the worktree, then removes it through the core.
@@ -279,10 +272,19 @@ fn confirm(
         .flush()
         .map_err(|source| startup_io(Path::new("stderr"), source))?;
     let mut answer = String::new();
+    // The reference catches `EOFError` and `KeyboardInterrupt` around `input()`,
+    // writes a bare newline so the cursor leaves the prompt line, and declines
+    // (`vibe/cli/entrypoint.py:196-201`). End of file reads zero bytes here and
+    // takes the same branch; an interrupt at the question is a signal the
+    // process dies on before this returns, which keeps the worktree as well.
     let read = input
         .read_line(&mut answer)
         .map_err(|source| startup_io(Path::new("stdin"), source))?;
-    Ok(read > 0 && accepted.contains(&answer.trim().to_ascii_lowercase().as_str()))
+    if read == 0 {
+        writeln!(output).map_err(|source| startup_io(Path::new("stderr"), source))?;
+        return Ok(false);
+    }
+    Ok(accepted.contains(&answer.trim().to_ascii_lowercase().as_str()))
 }
 
 fn canonical_directory(path: &Path) -> Result<PathBuf, StartupError> {
@@ -728,6 +730,38 @@ mod tests {
             &["worktree", "remove", "--force", path_text(&worktree_root)],
         );
         git(root.path(), &["branch", "-D", "refused"]);
+    }
+
+    /// The reference asks through `input()`, which raises at end of file and is
+    /// caught as a refusal, so a closed stdin keeps the work.
+    #[test]
+    fn end_of_input_declines_and_keeps_the_worktree() {
+        let root = repository();
+        let mut arguments = test_arguments(root.path());
+        arguments.worktree = Some("eof".to_owned());
+        let prepared = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
+            .expect("worktree prepared")
+            .worktree
+            .expect("prepared worktree");
+        fs::write(prepared.path.join("unsaved.txt"), "unsaved\n").expect("dirty file");
+        let worktree_root = prepared.root.clone();
+
+        let mut output = Vec::<u8>::new();
+        let outcome = cleanup_worktree(prepared, &mut Cursor::new(Vec::<u8>::new()), &mut output)
+            .expect("end of input is a decision, not a failure");
+        assert_eq!(outcome, CleanupOutcome::Kept);
+        assert!(worktree_root.is_dir());
+        let output = String::from_utf8(output).expect("output is UTF-8");
+        assert!(
+            output.contains(&format!("Keeping worktree: {}", worktree_root.display())),
+            "{output}"
+        );
+
+        git(
+            root.path(),
+            &["worktree", "remove", "--force", path_text(&worktree_root)],
+        );
+        git(root.path(), &["branch", "-D", "eof"]);
     }
 
     /// The gate is the reference's: this run's own worktree, no `--prompt`, and

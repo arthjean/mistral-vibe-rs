@@ -18,6 +18,12 @@
   startup; a run that failed keeps its worktree, and a reused worktree or a
   `--prompt` run is still never asked.
 
+- Ask the cleanup question on standard input alone. A stdin that is not a
+  terminal is no longer bypassed by opening the controlling terminal: end of
+  input declines and keeps the worktree. The reason a worktree is not clean now
+  reads `1 commit added during this session` in the singular and `2 commits` in
+  the plural.
+
 - Answer `workspace/worktrees/list`. The method the inventory has been
   advertising since v2.24.0 is now routed and answers before any session is
   open, with one entry per linked worktree carrying its name, branch, working
