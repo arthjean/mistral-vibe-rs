@@ -45,10 +45,12 @@
     {
       "id": "EP-090",
       "title": "The lifecycle the operator sees",
-      "status": "PENDING",
+      "status": "DONE",
       "priority": "P1",
       "stories_total": 3,
-      "stories_done": 0
+      "stories_done": 3,
+      "started_at": "2026-08-22",
+      "completed_at": "2026-08-22"
     },
     {
       "id": "EP-091",
@@ -269,34 +271,43 @@
       "id": "US-284",
       "title": "Say what the reference says while preparing and removing",
       "epic": "EP-090",
-      "status": "PENDING",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-270"
-      ]
+      ],
+      "started_at": "2026-08-22",
+      "completed_at": "2026-08-22",
+      "reviewed_at": "2026-08-22"
     },
     {
       "id": "US-285",
       "title": "Offer cleanup on a clean exit, not on a constructed runtime",
       "epic": "EP-090",
-      "status": "PENDING",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-270"
-      ]
+      ],
+      "started_at": "2026-08-22",
+      "completed_at": "2026-08-22",
+      "reviewed_at": "2026-08-22"
     },
     {
       "id": "US-286",
       "title": "Ask on stdin and decline at end of file",
       "epic": "EP-090",
-      "status": "PENDING",
+      "status": "DONE",
       "priority": "P2",
       "size": "S",
       "blocked_by": [
         "US-285"
-      ]
+      ],
+      "started_at": "2026-08-22",
+      "completed_at": "2026-08-22",
+      "reviewed_at": "2026-08-22"
     },
     {
       "id": "US-287",
