@@ -76,8 +76,77 @@ impl ServerConnection {
     /// asked for and the transcript it attaches to, the policy and tools the
     /// session runs under, and the registration that makes it addressable.
     fn start_session(&mut self, request: ServerRequest) -> Result<DispatchBatch, ProtocolFault> {
-        let params = from_params::<SessionStartParams>(&request.params)?;
-        let opening = self.open_session(&params)?;
+        let mut params = from_params::<SessionStartParams>(&request.params)?;
+        let prepared = self.resolve_local_workspace(&mut params)?;
+        match self.start_resolved_session(request, &params) {
+            Ok(batch) => Ok(batch),
+            Err(error) => {
+                self.discard_local_workspace(prepared.as_ref());
+                Err(error)
+            }
+        }
+    }
+
+    /// Resolves a `localWorkspaceSelection` into the directory the session runs
+    /// in, and answers the worktree it created to get there.
+    ///
+    /// The selection is cleared once it resolves, so nothing downstream reads a
+    /// directory decision that was already made. Resolution is synchronous,
+    /// which is what the reference goes out of its way to keep it
+    /// (`vibe/app_server/server.py:889-903`): an await point here would let a
+    /// pipelined follow-up overtake the session attachment, and a cancellation
+    /// landing mid-creation would strand the worktree the worker still makes.
+    pub(crate) fn resolve_local_workspace(
+        &self,
+        params: &mut SessionStartParams,
+    ) -> Result<Option<PreparedWorktree>, ProtocolFault> {
+        let Some(selection) = params.local_workspace_selection.clone() else {
+            return Ok(None);
+        };
+        // `session/start` also carries the two reopening intents this port
+        // spells as flags, and both hand the session the directory their
+        // recorded session was written against. Resolving a selection on the way
+        // to one would mint a worktree the session never opens and nothing takes
+        // back, which is what the reference refuses on its own two reopening
+        // methods (`vibe/app_server/server.py:1238-1247`).
+        if params.resume.is_some() || params.continue_session {
+            return Err(ProtocolFault::invalid_params(worktrees::REOPEN_REFUSAL));
+        }
+        let resolved = worktrees::resolve(
+            &selection,
+            params.working_directory.as_deref(),
+            self.server.workspace.vibe_home(),
+        )
+        .map_err(|error| ProtocolFault::invalid_params(error.to_string()))?;
+        params.add_directories = vec![resolved.cwd.clone()];
+        params.working_directory = Some(resolved.cwd);
+        params.local_workspace_selection = None;
+        Ok(resolved.created)
+    }
+
+    /// Takes back a worktree this start created, once the start has failed.
+    ///
+    /// A removal that fails is published on `diagnostics/list` rather than
+    /// replacing the error the client is owed, which is the one that failed the
+    /// start (`vibe/app_server/server.py:923-936`).
+    fn discard_local_workspace(&self, prepared: Option<&PreparedWorktree>) {
+        let Some(prepared) = prepared else {
+            return;
+        };
+        let Some(note) = worktrees::discard(prepared) else {
+            return;
+        };
+        if let Ok(mut resources) = self.server.resources.lock() {
+            resources.record_diagnostic(worktrees::WORKTREE_LABEL, &note);
+        }
+    }
+
+    fn start_resolved_session(
+        &mut self,
+        request: ServerRequest,
+        params: &SessionStartParams,
+    ) -> Result<DispatchBatch, ProtocolFault> {
+        let opening = self.open_session(params)?;
         let mcp_configs = self.server.workspace.mcp_servers_for_session(
             Path::new(&opening.working_directory),
             params.trusted,

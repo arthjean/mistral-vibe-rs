@@ -46,6 +46,7 @@ use crate::resources::{
 use crate::workspace::{
     RuntimeAttachment, WORKSPACE_METHODS, WorkspaceService, WorkspaceServiceError,
 };
+use crate::worktrees::{self, LocalWorkspaceSelection};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use thiserror::Error;
@@ -78,6 +79,7 @@ pub use vibe_core::tools::{
     ToolOutputSink, ToolPresentationKind, ToolRegistry, ToolSource, ToolSpec,
 };
 use vibe_core::workspace::{ReviewManager, Workspace, WorkspaceTools};
+use vibe_core::worktree::PreparedWorktree;
 use vibe_protocol::{
     CallbackKind, ClientCapabilities, Envelope, ErrorResponse, InitializeParams,
     InitializeResponse, InvalidParamsData, InvalidParamsIssue, JsonRpcVersion, Notification,

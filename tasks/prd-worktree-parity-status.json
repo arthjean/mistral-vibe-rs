@@ -36,10 +36,11 @@
     {
       "id": "EP-089",
       "title": "The half of the contract that does not exist here",
-      "status": "PENDING",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 4,
-      "stories_done": 0
+      "stories_done": 4,
+      "completed_at": "2026-08-22"
     },
     {
       "id": "EP-090",
@@ -242,23 +243,27 @@
       "id": "US-282",
       "title": "Accept a local workspace selection on session start",
       "epic": "EP-089",
-      "status": "PENDING",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-280"
-      ]
+      ],
+      "completed_at": "2026-08-22",
+      "reviewed_at": "2026-08-22"
     },
     {
       "id": "US-283",
       "title": "Clean up a worktree a failed startup created",
       "epic": "EP-089",
-      "status": "PENDING",
+      "status": "DONE",
       "priority": "P1",
       "size": "S",
       "blocked_by": [
         "US-282"
-      ]
+      ],
+      "completed_at": "2026-08-22",
+      "reviewed_at": "2026-08-22"
     },
     {
       "id": "US-284",

@@ -46,6 +46,10 @@ pub(crate) struct SessionStartParams {
     pub(crate) working_directory: Option<String>,
     #[serde(default, rename = "workspaceRoots", alias = "addDirectories")]
     pub(crate) add_directories: Vec<String>,
+    /// The worktree this session runs in, resolved into the two fields above
+    /// before anything is registered.
+    #[serde(default)]
+    pub(crate) local_workspace_selection: Option<LocalWorkspaceSelection>,
     #[serde(default, rename = "trustWorkspace", alias = "trusted")]
     pub(crate) trusted: bool,
     #[serde(default)]

@@ -8,6 +8,21 @@
   directory, root and repository root. A directory that is no repository, or a
   host with no git at all, answers an empty list rather than an error.
 
+- Start a session inside a worktree. `session/start` now accepts
+  `localWorkspaceSelection`, either naming a worktree the checkout already has
+  or creating one from a name and a branch, and opens the session with its
+  working directory and workspace roots set to it. A path that is not linked to
+  the project, a base that is not a directory, and a name or branch git refuses
+  each fail naming what was wrong, and every call that reopens a recorded
+  session refuses the field outright, since a saved session was recorded against
+  a directory of its own: `session/resume`, `session/continue`, and a
+  `session/start` carrying either intent.
+
+- Take back a worktree a failed session start created, along with the branch
+  created with it. A branch that predates the start survives, a worktree that
+  was only selected is left alone, and a removal that fails is published on
+  `diagnostics/list` rather than replacing the error that failed the start.
+
 - Refuse a `--worktree` name no filesystem can carry. A name that is empty,
   a relative alias, ends in a space or a dot, is unprintable, carries one of
   `<>:"/\|?*`, or collides with a Windows device name such as `aux` or
