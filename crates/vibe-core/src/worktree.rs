@@ -49,6 +49,18 @@ const RESERVED_DEVICE_NAMES: [&str; 25] = [
     "LPT8", "LPT9",
 ];
 
+/// The status git exits with when it refuses an option it does not know.
+///
+/// `git worktree list` learned `-z` in 2.36, and an older git answers this
+/// instead of a listing. It is the one status enumeration retries without the
+/// flag on; anything else is a real failure. The reference watches the same
+/// number (`vibe/core/worktree.py:464-476`).
+const GIT_USAGE_ERROR_STATUS: i32 = 129;
+
+/// What names an enumeration in a git failure, since it runs for no one
+/// worktree.
+const ENUMERATION: &str = "list";
+
 /// What Windows canonicalization prefixes an absolute path with.
 const VERBATIM_PREFIX: &str = r"\\?\";
 
@@ -81,6 +93,21 @@ pub struct PreparedWorktree {
     pub base_commit: String,
     pub created: bool,
     pub branch_created: bool,
+}
+
+/// A linked worktree of a checkout, as enumeration reports it.
+///
+/// Deliberately not a [`PreparedWorktree`]: nothing here was created by this
+/// process, so there is no base commit to measure against and no decision about
+/// whether removing it may delete a branch. The reference keeps the same two
+/// records apart for the same reason (`vibe/core/worktree.py:61-77`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LinkedWorktree {
+    pub name: String,
+    pub branch: String,
+    pub root: PathBuf,
+    pub path: PathBuf,
+    pub repo_root: PathBuf,
 }
 
 /// What a prepared worktree holds that removing it would destroy.
@@ -154,6 +181,13 @@ pub enum WorktreeError {
     GitUnavailable(String),
     #[error("worktree `{name}` failed: {message}")]
     Failed { name: String, message: String },
+    /// Git refused to enumerate the worktrees of a checkout that exists.
+    ///
+    /// Separate from [`Self::Failed`] because enumeration answers for no single
+    /// worktree, so there is no name to blame. The reference raises the base
+    /// exception with the same phrasing (`vibe/core/worktree.py:464-476`).
+    #[error("failed to list git worktrees: {message}")]
+    ListFailed { message: String },
     /// A failure that carries a second failure it did not replace.
     ///
     /// The reference attaches the rollback's own failure to the original
@@ -213,13 +247,7 @@ pub fn prepare_worktree(
     branch: Option<&str>,
 ) -> Result<PreparedWorktree, WorktreeError> {
     validate_worktree_name(name)?;
-    let checkout_root = git_stdout(base, ["rev-parse", "--show-toplevel"], name)
-        .map(PathBuf::from)
-        .map_err(|error| match error {
-            WorktreeError::GitUnavailable(_) => error,
-            _ => WorktreeError::RepositoryRequired,
-        })?;
-    let checkout_root = canonical_directory(&checkout_root)?;
+    let checkout_root = open_checkout(base, name)?;
     // The branch is validated before anything exists, which is the whole point
     // of the gate: the reference asks git the question between opening the
     // repository and reaching for the managed root
@@ -232,14 +260,7 @@ pub fn prepare_worktree(
     // from a subdirectory `--git-common-dir` answers `../.git`. The reference
     // reads them off a repository object anchored at its working directory
     // (`vibe/core/worktree.py:340-346`), which is the same anchor.
-    let git_dir = resolve_git_path(
-        &checkout_root,
-        &git_stdout(&checkout_root, ["rev-parse", "--git-dir"], name)?,
-    )?;
-    let common_git_dir = resolve_git_path(
-        &checkout_root,
-        &git_stdout(&checkout_root, ["rev-parse", "--git-common-dir"], name)?,
-    )?;
+    let (git_dir, common_git_dir) = checkout_git_directories(&checkout_root, name)?;
     let repo_root = primary_worktree_root(&checkout_root, &git_dir, &common_git_dir, name)?;
     let relative_base = relative_base(&checkout_root, base, name)?;
     let relative_base = relative_base.as_path();
@@ -304,6 +325,195 @@ pub fn prepare_worktree(
             None => error,
         }
     })
+}
+
+/// Every linked worktree of the checkout holding `base`, in path order.
+///
+/// The primary checkout is not one of them: git reports it first and this drops
+/// it, which is what makes the answer a list of *linked* worktrees. A record git
+/// marks prunable, one on a detached `HEAD`, and one this port would refuse to
+/// reuse are all dropped rather than raised, because a stale entry in another
+/// checkout is not a reason to refuse to answer at all. The reference draws the
+/// same four exclusions (`vibe/core/worktree.py:156-183`).
+///
+/// `path` is where a session would open inside each worktree: `base`'s own
+/// position in the checkout, carried across. Asking from a subdirectory
+/// therefore answers with the matching subdirectory of every worktree.
+pub fn list_linked_worktrees(base: &Path) -> Result<Vec<LinkedWorktree>, WorktreeError> {
+    let checkout_root = open_checkout(base, ENUMERATION)?;
+    let (git_dir, common_git_dir) = checkout_git_directories(&checkout_root, ENUMERATION)?;
+    let records = worktree_records(&checkout_root)?;
+    let repo_root = primary_worktree_root(&checkout_root, &git_dir, &common_git_dir, ENUMERATION)?;
+    let relative_base = relative_base(&checkout_root, base, ENUMERATION)?;
+
+    let mut linked = Vec::new();
+    for record in records.into_iter().skip(1) {
+        let (Some(branch), false) = (record.branch, record.prunable) else {
+            continue;
+        };
+        if validate_existing_worktree(&record.root, &branch, &common_git_dir).is_err() {
+            continue;
+        }
+        let root = resolve_lenient(&record.root);
+        let Ok(path) = target_cwd(&root, &relative_base, ENUMERATION) else {
+            continue;
+        };
+        let name = root
+            .file_name()
+            .map(|value| value.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        linked.push(LinkedWorktree {
+            name,
+            branch,
+            root,
+            path,
+            repo_root: repo_root.clone(),
+        });
+    }
+    // Ordered by the string form of the path rather than by the path itself,
+    // because that is the key the reference sorts on and the two disagree on
+    // any platform whose path comparison is not byte-wise.
+    linked.sort_by(|left, right| {
+        left.path
+            .to_string_lossy()
+            .cmp(&right.path.to_string_lossy())
+    });
+    Ok(linked)
+}
+
+/// The working directory of the checkout holding `base`.
+///
+/// A directory that is not inside a repository is [`WorktreeError::RepositoryRequired`]
+/// rather than whatever git said, which is the distinction every caller acts
+/// on; a machine without git keeps its own answer.
+fn open_checkout(base: &Path, name: &str) -> Result<PathBuf, WorktreeError> {
+    let root = git_stdout(base, ["rev-parse", "--show-toplevel"], name)
+        .map(PathBuf::from)
+        .map_err(|error| match error {
+            WorktreeError::GitUnavailable(_) => error,
+            _ => WorktreeError::RepositoryRequired,
+        })?;
+    canonical_directory(&root)
+}
+
+/// The checkout's own git directory and the one it shares with its siblings.
+///
+/// Both are read from the checkout root rather than from wherever the call
+/// started, because git reports them relative to the directory it ran in and
+/// from a subdirectory `--git-common-dir` answers `../.git`. The reference reads
+/// them off a repository object anchored at its working directory
+/// (`vibe/core/worktree.py:340-346`), which is the same anchor.
+fn checkout_git_directories(
+    checkout_root: &Path,
+    name: &str,
+) -> Result<(PathBuf, PathBuf), WorktreeError> {
+    let git_dir = resolve_git_path(
+        checkout_root,
+        &git_stdout(checkout_root, ["rev-parse", "--git-dir"], name)?,
+    )?;
+    let common_git_dir = resolve_git_path(
+        checkout_root,
+        &git_stdout(checkout_root, ["rev-parse", "--git-common-dir"], name)?,
+    )?;
+    Ok((git_dir, common_git_dir))
+}
+
+/// One entry of a porcelain worktree listing, reduced to what enumeration
+/// reads.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct WorktreeRecord {
+    root: PathBuf,
+    branch: Option<String>,
+    prunable: bool,
+}
+
+/// Asks git for the porcelain listing, in whichever of its two spellings this
+/// git understands.
+///
+/// `-z` is tried first because a NUL-separated listing is the only one that
+/// survives a path containing a newline. A git too old to know the flag answers
+/// [`GIT_USAGE_ERROR_STATUS`] and is asked again without it; any other refusal
+/// is reported. The reference makes the same two attempts
+/// (`vibe/core/worktree.py:464-476`).
+fn worktree_records(checkout_root: &Path) -> Result<Vec<WorktreeRecord>, WorktreeError> {
+    let terminated = git_output(
+        checkout_root,
+        ["worktree", "list", "--porcelain", "-z"],
+        ENUMERATION,
+    )?;
+    if terminated.status.success() {
+        return Ok(parse_worktree_records(
+            &String::from_utf8_lossy(&terminated.stdout),
+            '\0',
+        ));
+    }
+    if terminated.status.code() != Some(GIT_USAGE_ERROR_STATUS) {
+        return Err(WorktreeError::ListFailed {
+            message: git_message(&terminated),
+        });
+    }
+    let plain = git_output(
+        checkout_root,
+        ["worktree", "list", "--porcelain"],
+        ENUMERATION,
+    )?;
+    if !plain.status.success() {
+        return Err(WorktreeError::ListFailed {
+            message: git_message(&plain),
+        });
+    }
+    Ok(parse_worktree_records(
+        &String::from_utf8_lossy(&plain.stdout),
+        '\n',
+    ))
+}
+
+/// Splits a porcelain listing into records on `separator`.
+///
+/// An empty token ends the record being built, which is how both spellings
+/// separate their entries: the NUL form writes a bare NUL and the plain form a
+/// blank line. A `worktree` attribute also ends the previous record, so a
+/// listing whose last entry is not terminated still yields it. Attributes this
+/// does not name are skipped rather than refused, because git is free to add
+/// them. The reference reads the same three (`vibe/core/worktree.py:486-513`).
+fn parse_worktree_records(output: &str, separator: char) -> Vec<WorktreeRecord> {
+    let mut records = Vec::new();
+    let mut current: Option<WorktreeRecord> = None;
+    for token in output.split(separator) {
+        if token.is_empty() {
+            records.extend(current.take());
+            continue;
+        }
+        let (field, value) = token.split_once(' ').unwrap_or((token, ""));
+        match field {
+            "worktree" => {
+                records.extend(current.take());
+                current = Some(WorktreeRecord {
+                    root: PathBuf::from(value),
+                    branch: None,
+                    prunable: false,
+                });
+            }
+            "branch" => {
+                if let Some(record) = current.as_mut() {
+                    record.branch = Some(
+                        value
+                            .strip_prefix("refs/heads/")
+                            .unwrap_or(value)
+                            .to_owned(),
+                    );
+                }
+            }
+            "prunable" => {
+                if let Some(record) = current.as_mut() {
+                    record.prunable = true;
+                }
+            }
+            _ => {}
+        }
+    }
+    records.extend(current);
+    records
 }
 
 /// Undoes a worktree this call created, after preparation failed on it.

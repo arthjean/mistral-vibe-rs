@@ -214,14 +214,16 @@
       "id": "US-280",
       "title": "Enumerate the linked worktrees of a checkout",
       "epic": "EP-089",
-      "status": "PENDING",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-271",
         "US-274",
         "US-278"
-      ]
+      ],
+      "completed_at": "2026-08-22",
+      "reviewed_at": "2026-08-22"
     },
     {
       "id": "US-281",

@@ -33,6 +33,7 @@ impl From<WorktreeError> for StartupError {
             WorktreeError::RepositoryRequired => Self::WorktreeRepositoryRequired,
             WorktreeError::GitUnavailable(message) => Self::WorktreeGitUnavailable(message),
             WorktreeError::Failed { name, message } => Self::Worktree { name, message },
+            WorktreeError::ListFailed { message } => Self::WorktreeListFailed(message),
             WorktreeError::Io { path, source } => Self::Io { path, source },
             WorktreeError::Noted { name, source, note } => Self::Worktree {
                 name,

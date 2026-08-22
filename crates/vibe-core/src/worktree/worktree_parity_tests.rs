@@ -48,8 +48,8 @@ use sha2::{Digest, Sha256};
 use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 
 use super::{
-    inspect_worktree_for_cleanup, managed_worktree_root, prepare_worktree, target_cwd,
-    validate_branch_name, validate_worktree_name,
+    inspect_worktree_for_cleanup, list_linked_worktrees, managed_worktree_root, prepare_worktree,
+    target_cwd, validate_branch_name, validate_worktree_name,
 };
 
 const CORPUS_RELATIVE: &str = "crates/vibe-core/tests/worktree/corpus.json";
@@ -119,8 +119,6 @@ const LICENSING: &str = "NOTICE";
 const COMMIT_PHRASING: &str = "the commit-count reason is this port's own sentence and the \
      reference's is shorter; the two booleans beside it match digest for digest. US-286 restates \
      the phrase from the reference's own form";
-const NO_ENUMERATION: &str = "the reference publishes `list_linked_worktrees`; this port has no \
-     enumeration at all, so no case of this family can be driven here. US-280 writes it";
 
 /// One tolerated gap between this port and the reference.
 #[derive(Debug, Clone, Copy)]
@@ -185,35 +183,8 @@ const LEDGER: &[Divergence] = &[
         closed_by: "US-286",
         why: COMMIT_PHRASING,
     },
-    // The enumeration that does not exist here.
-    Divergence {
-        family: "list",
-        case: "none",
-        pointer: "/outcome",
-        closed_by: "US-280",
-        why: NO_ENUMERATION,
-    },
-    Divergence {
-        family: "list",
-        case: "not-a-repository",
-        pointer: "/outcome",
-        closed_by: "US-280",
-        why: NO_ENUMERATION,
-    },
-    Divergence {
-        family: "list",
-        case: "several",
-        pointer: "/outcome",
-        closed_by: "US-280",
-        why: NO_ENUMERATION,
-    },
-    Divergence {
-        family: "list",
-        case: "subdirectory-base",
-        pointer: "/outcome",
-        closed_by: "US-280",
-        why: NO_ENUMERATION,
-    },
+    // Enumeration carries no entry: US-280 wrote `list_linked_worktrees` and
+    // every case of the family now replays field for field.
 ];
 
 // --------------------------------------------------------------------------
@@ -745,7 +716,7 @@ fn observed_document(case: &Case, scratch: &Path, index: usize) -> Value {
             match family {
                 "prepare" => observed_prepare(case, &root),
                 "cleanup" => observed_cleanup(case, &root),
-                "list" => observed_list(),
+                "list" => observed_list(case, &root),
                 "targetCwd" => observed_target_cwd(case, &root),
                 // Unreachable: `assert_corpus_floor` already refused any family
                 // outside `FAMILIES`, and every one of them is answered above.
@@ -882,10 +853,33 @@ fn observed_cleanup(case: &Case, root: &Path) -> Value {
     }
 }
 
-fn observed_list() -> Value {
-    // This port has no enumeration to drive, so every case of the family
-    // reports the same thing rather than pretending to an empty list.
-    json!({ "outcome": "unsupported" })
+fn observed_list(case: &Case, root: &Path) -> Value {
+    let projection = Projection::new(root, None, None);
+    let base = match case.input["base"]
+        .as_str()
+        .expect("a list case names its base")
+    {
+        "." => root.to_path_buf(),
+        relative => root.join(relative),
+    };
+    match list_linked_worktrees(&base) {
+        Ok(linked) => json!({
+            "outcome": "listed",
+            "worktrees": linked
+                .iter()
+                .map(|worktree| {
+                    json!({
+                        "name": worktree.name,
+                        "branch": worktree.branch,
+                        "root": projection.path(&worktree.root),
+                        "path": projection.path(&worktree.path),
+                        "repoRoot": projection.path(&worktree.repo_root),
+                    })
+                })
+                .collect::<Vec<_>>(),
+        }),
+        Err(error) => error_record(&error),
+    }
 }
 
 fn observed_target_cwd(case: &Case, root: &Path) -> Value {

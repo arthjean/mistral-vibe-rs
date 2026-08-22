@@ -61,6 +61,8 @@ pub enum StartupError {
     WorktreeGitUnavailable(String),
     #[error("worktree `{name}` failed: {message}")]
     Worktree { name: String, message: String },
+    #[error("failed to list git worktrees: {0}")]
+    WorktreeListFailed(String),
     #[error("terminal startup interaction failed: {0}")]
     Terminal(String),
     #[error("stdin prompt could not be read: {0}")]

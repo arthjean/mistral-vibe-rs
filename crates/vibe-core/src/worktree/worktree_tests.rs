@@ -10,8 +10,9 @@
 use std::process::Command;
 
 use super::{
-    PreparedWorktree, WorktreeError, branch_exists, cleanup_failed_prepare,
-    inspect_worktree_for_cleanup, prepare_worktree, remove_worktree,
+    GIT_USAGE_ERROR_STATUS, PreparedWorktree, WorktreeError, branch_exists, cleanup_failed_prepare,
+    inspect_worktree_for_cleanup, list_linked_worktrees, parse_worktree_records, prepare_worktree,
+    remove_worktree, worktree_records,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -590,4 +591,89 @@ fn a_repository_directory_outside_the_managed_root_is_refused() {
     };
     assert_eq!(target, &outside);
     assert_eq!(reported, &managed_root);
+}
+
+/// A checkout at `root/repo` with one linked worktree on its own branch.
+fn checkout_with_one_linked_worktree(root: &Path) -> PathBuf {
+    let checkout = checkout(root, None);
+    let linked = root.join("linked");
+    git(
+        &checkout,
+        &["worktree", "add", "-b", "topic", text(&linked)],
+    );
+    checkout
+}
+
+#[test]
+fn the_two_porcelain_spellings_parse_into_the_same_records() {
+    let (_scratch, root) = case_root();
+    let checkout = checkout_with_one_linked_worktree(&root);
+
+    let terminated = parse_worktree_records(
+        &git(&checkout, &["worktree", "list", "--porcelain", "-z"]),
+        '\0',
+    );
+    let plain = parse_worktree_records(&git(&checkout, &["worktree", "list", "--porcelain"]), '\n');
+
+    assert_eq!(
+        terminated, plain,
+        "the two spellings list the same worktrees"
+    );
+    assert_eq!(terminated.len(), 2, "the primary checkout and its worktree");
+    assert_eq!(
+        terminated[1].branch.as_deref(),
+        Some("topic"),
+        "the branch is reported without its `refs/heads/` prefix"
+    );
+    assert!(!terminated[1].prunable);
+}
+
+#[test]
+fn git_answers_the_usage_status_the_null_terminated_attempt_falls_back_on() {
+    let (_scratch, root) = case_root();
+    let checkout = checkout(&root, None);
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(&checkout)
+        .args(["worktree", "list", "--porcelain", "--not-an-option"])
+        .output()
+        .expect("git runs");
+    assert_eq!(
+        output.status.code(),
+        Some(GIT_USAGE_ERROR_STATUS),
+        "an option git does not know is what the fallback watches for"
+    );
+}
+
+#[test]
+fn a_listing_git_refuses_for_another_reason_is_a_typed_failure() {
+    let (_scratch, root) = case_root();
+    let error = worktree_records(&root.join("absent"))
+        .expect_err("git cannot list a directory that is not there");
+    assert!(
+        matches!(error, WorktreeError::ListFailed { .. }),
+        "a refusal that is not a usage error is reported rather than retried: {error}"
+    );
+}
+
+#[test]
+fn enumeration_outside_a_repository_asks_for_one() {
+    let (_scratch, root) = case_root();
+    let error = list_linked_worktrees(&root).expect_err("the case root is not a repository");
+    assert!(matches!(error, WorktreeError::RepositoryRequired));
+}
+
+#[test]
+fn enumeration_answers_with_the_linked_worktrees_alone() {
+    let (_scratch, root) = case_root();
+    let checkout = checkout_with_one_linked_worktree(&root);
+
+    let linked = list_linked_worktrees(&checkout).expect("the checkout enumerates");
+
+    assert_eq!(linked.len(), 1, "the primary checkout is not one of them");
+    assert_eq!(linked[0].name, "linked");
+    assert_eq!(linked[0].branch, "topic");
+    assert_eq!(linked[0].root, root.join("linked"));
+    assert_eq!(linked[0].path, root.join("linked"));
+    assert_eq!(linked[0].repo_root, checkout);
 }
