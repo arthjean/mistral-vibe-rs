@@ -3,7 +3,7 @@
     "file": "tasks/prd-worktree-parity.md",
     "title": "Worktree at Full Parity",
     "created_at": "2026-08-22",
-    "status": "IN_PROGRESS"
+    "status": "DONE"
   },
   "epics": [
     {
@@ -55,10 +55,12 @@
     {
       "id": "EP-091",
       "title": "Restate row 5 from its oracle",
-      "status": "PENDING",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 2,
-      "stories_done": 0
+      "stories_done": 2,
+      "started_at": "2026-08-22",
+      "completed_at": "2026-08-22"
     }
   ],
   "stories": [
@@ -313,19 +315,22 @@
       "id": "US-287",
       "title": "Record the permanent divergences by name",
       "epic": "EP-091",
-      "status": "PENDING",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [
         "US-284",
         "US-286"
-      ]
+      ],
+      "started_at": "2026-08-22",
+      "completed_at": "2026-08-22",
+      "reviewed_at": "2026-08-22"
     },
     {
       "id": "US-288",
       "title": "Remeasure and restate row 5",
       "epic": "EP-091",
-      "status": "PENDING",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [
@@ -342,7 +347,10 @@
         "US-283",
         "US-285",
         "US-287"
-      ]
+      ],
+      "started_at": "2026-08-22",
+      "completed_at": "2026-08-22",
+      "reviewed_at": "2026-08-22"
     }
   ]
 }
