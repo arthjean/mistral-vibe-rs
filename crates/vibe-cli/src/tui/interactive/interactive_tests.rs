@@ -88,3 +88,40 @@ fn stale_inputs_are_drained_before_fatal_acknowledgment_arms() {
         }))))
     ));
 }
+
+/// A launch a startup gate refused still carries the exit code that gate chose,
+/// which is what decides whether the worktree it prepared is offered for
+/// cleanup.
+///
+/// The two gates that end at zero or none are the update prompt the operator
+/// quits (`UpdatePromptResult::Quit`) and every cancellation, Ctrl-C included,
+/// which preflight breaks out of with no code at all
+/// (`crates/vibe-cli/src/tui/startup/preflight.rs:51`). A gate that failed
+/// keeps the worktree.
+#[test]
+fn a_refused_startup_carries_the_exit_code_the_cleanup_gate_reads() {
+    let owned = startup::PreparedWorktree {
+        name: "gate".to_owned(),
+        branch: "gate".to_owned(),
+        root: std::path::PathBuf::from("/managed/gate"),
+        path: std::path::PathBuf::from("/managed/gate"),
+        repo_root: std::path::PathBuf::from("/checkout"),
+        base_commit: "0".repeat(40),
+        created: true,
+        branch_created: true,
+    };
+
+    for (exit_code, offered) in [
+        (updates::UpdatePromptResult::Quit.exit_code(), true),
+        (None, true),
+        (updates::UpdatePromptResult::UpdateFailed.exit_code(), false),
+    ] {
+        let exit = InteractiveExit::aborted(exit_code);
+        assert_eq!(exit.exit_code, exit_code);
+        assert_eq!(
+            startup::cleanup_is_offered(Some(&owned), None, exit.exit_code),
+            offered,
+            "exit code {exit_code:?}"
+        );
+    }
+}

@@ -12,6 +12,12 @@
   the branch, the trust it grants, and that `--setup` and `--check-upgrade`
   ignore it.
 
+- Offer worktree cleanup on the run's exit code. A run that ended with code 0
+  or no code at all is now asked whether to discard the worktree it created,
+  which includes quitting at the startup update prompt and cancelling during
+  startup; a run that failed keeps its worktree, and a reused worktree or a
+  `--prompt` run is still never asked.
+
 - Answer `workspace/worktrees/list`. The method the inventory has been
   advertising since v2.24.0 is now routed and answers before any session is
   open, with one entry per linked worktree carrying its name, branch, working

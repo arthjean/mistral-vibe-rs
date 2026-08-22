@@ -56,7 +56,6 @@ use super::{
 /// How an interactive launch ended.
 #[derive(Debug)]
 pub struct InteractiveExit {
-    pub session_started: bool,
     pub initialization_error: Option<CliError>,
     /// Reference `SessionExitSummary`, printed after the terminal is restored.
     pub summary: Option<exit::SessionExitSummary>,
@@ -71,7 +70,6 @@ impl InteractiveExit {
     /// beyond the exit code the gate decided.
     const fn aborted(exit_code: Option<u8>) -> Self {
         Self {
-            session_started: false,
             initialization_error: None,
             summary: None,
             exit_code,
@@ -104,7 +102,6 @@ struct Session {
     terminal: Terminal<CrosstermBackend<std::io::Stdout>>,
     /// A submission held back until path normalization settles.
     deferred_enter: Option<KeyEvent>,
-    session_started: bool,
     /// Reference `_pending_new_session_telemetry` and `_startup_telemetry_sent`:
     /// both are once-per-process latches, the first fired where the session
     /// settles and the second where the first frame has been drawn.
@@ -137,7 +134,6 @@ impl Session {
     /// painted: audio, narration, server updates, callbacks, the finished turn,
     /// the finished shell, and the next queued prompt.
     async fn settle(&mut self) -> Result<(), CliError> {
-        self.session_started |= self.runtime.is_some();
         if let Some(runtime) = self.runtime.as_ref()
             && !self.session_reported
         {
@@ -501,7 +497,6 @@ pub async fn run_interactive(
         .map_err(|error| CliError::Terminal(error.to_string()))?;
     state.waiting |= runtime.is_some();
     let mut session = Session {
-        session_started: runtime.is_some(),
         arguments,
         working_directory,
         fallback_banner,
@@ -687,7 +682,6 @@ async fn shut_down(
         mut terminal_guard,
         terminal,
         mounted_startup,
-        session_started,
         ..
     } = session;
     drop(terminal);
@@ -761,7 +755,6 @@ async fn shut_down(
         telemetry.flush().await;
     }
     result.map(|()| InteractiveExit {
-        session_started,
         initialization_error: mounted_startup.into_initialization_error(),
         summary,
         exit_code: None,

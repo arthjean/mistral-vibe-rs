@@ -149,6 +149,23 @@ pub enum CleanupOutcome {
     Failed,
 }
 
+/// Whether a finished run offers to discard the worktree it prepared.
+///
+/// Reference `_run_cli_with_worktree_cleanup`: only a worktree this run created,
+/// only without `--prompt`, and only when the run ended with exit code 0 or
+/// none. A startup that failed keeps the worktree, because a reused one and its
+/// branch must survive a bad configuration (`vibe/cli/entrypoint.py:334-356`).
+#[must_use]
+pub fn cleanup_is_offered(
+    worktree: Option<&PreparedWorktree>,
+    prompt: Option<&str>,
+    exit_code: Option<u8>,
+) -> bool {
+    worktree.is_some_and(|worktree| worktree.created)
+        && prompt.is_none()
+        && matches!(exit_code, None | Some(0))
+}
+
 /// Offers cleanup on the terminal, reading `/dev/tty` when stdin is a pipe.
 pub fn cleanup_worktree_terminal(
     worktree: PreparedWorktree,
@@ -711,6 +728,37 @@ mod tests {
             &["worktree", "remove", "--force", path_text(&worktree_root)],
         );
         git(root.path(), &["branch", "-D", "refused"]);
+    }
+
+    /// The gate is the reference's: this run's own worktree, no `--prompt`, and
+    /// an exit code of zero or none.
+    #[test]
+    fn cleanup_is_offered_only_for_an_owned_worktree_of_a_run_that_ended_well() {
+        let owned = PreparedWorktree {
+            name: "owned".to_owned(),
+            path: PathBuf::from("/managed/owned"),
+            root: PathBuf::from("/managed/owned"),
+            repo_root: PathBuf::from("/checkout"),
+            base_commit: "0".repeat(40),
+            branch: "owned".to_owned(),
+            created: true,
+            branch_created: true,
+        };
+        let reused = PreparedWorktree {
+            created: false,
+            ..owned.clone()
+        };
+
+        assert!(cleanup_is_offered(Some(&owned), None, Some(0)));
+        assert!(cleanup_is_offered(Some(&owned), None, None));
+        assert!(!cleanup_is_offered(Some(&owned), None, Some(1)));
+        assert!(!cleanup_is_offered(
+            Some(&owned),
+            Some("do the thing"),
+            None
+        ));
+        assert!(!cleanup_is_offered(Some(&reused), None, Some(0)));
+        assert!(!cleanup_is_offered(None, None, Some(0)));
     }
 
     #[test]

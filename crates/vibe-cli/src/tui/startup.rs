@@ -31,7 +31,10 @@ pub use update::{
     scheduled_update_gateway, update_cache_store, update_checks_enabled,
 };
 pub use vibe_core::worktree::{PreparedWorktree, WorktreeCleanupState};
-pub use worktree::{CleanupOutcome, LaunchWorkspace, cleanup_worktree, cleanup_worktree_terminal};
+pub use worktree::{
+    CleanupOutcome, LaunchWorkspace, cleanup_is_offered, cleanup_worktree,
+    cleanup_worktree_terminal,
+};
 
 #[derive(Debug, Error)]
 pub enum StartupError {

@@ -33,6 +33,11 @@ async fn main() -> ExitCode {
     // The span exporter is installed before any turn can open a span, and its
     // guard lives as long as the process: dropping it flushes the batch.
     let _tracing = vibe_cli::install_tracing(&arguments);
+    // The flag as it was parsed, kept before preparation consumes the
+    // arguments: the reference's cleanup gate reads that same value, and a
+    // prompt piped in later is not what it tests
+    // (`vibe/cli/entrypoint.py:349-353`).
+    let prompt = arguments.prompt.clone();
     let invocation = match PreparedInvocation::prepare(arguments, &mut std::io::stderr().lock()) {
         Ok(invocation) => invocation,
         Err(error) => {
@@ -65,7 +70,6 @@ async fn main() -> ExitCode {
             let worktree = invocation.workspace.worktree.clone();
             match vibe_cli::tui::run_interactive(invocation).await {
                 Ok(exit) => {
-                    let session_started = exit.session_started;
                     let initialization_error = exit.initialization_error;
                     if let Some(summary) = &exit.summary {
                         let mut stdout = std::io::stdout().lock();
@@ -73,8 +77,14 @@ async fn main() -> ExitCode {
                             let _ = writeln!(stdout, "{line}");
                         }
                     }
-                    if session_started
-                        && let Some(worktree) = worktree
+                    // The offer reads the run's own exit code, so a launch that
+                    // ended at the update prompt or under Ctrl-C is asked while
+                    // a failure keeps the worktree for the next attempt.
+                    if vibe_cli::tui::startup::cleanup_is_offered(
+                        worktree.as_ref(),
+                        prompt.as_deref(),
+                        exit.exit_code,
+                    ) && let Some(worktree) = worktree
                         && let Err(error) =
                             vibe_cli::tui::startup::cleanup_worktree_terminal(worktree)
                     {
