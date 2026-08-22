@@ -45,6 +45,7 @@ use crate::tools::{
 };
 
 mod decode;
+mod document;
 mod host;
 mod policy;
 mod session;
@@ -52,6 +53,7 @@ mod session_tools;
 mod specs;
 
 use decode::render_stream;
+use document::Document;
 pub use host::{HostShells, ShellRollout};
 use host::{ShellFamily, family_config, published_family};
 use policy::{
@@ -497,15 +499,7 @@ async fn delegated_command(
         .map_err(|error| {
             ToolError::Execution(format!("the client terminal failed: {error}: `{command}`"))
         })?;
-    command_output(
-        &command,
-        result.stdout,
-        result.stderr,
-        result.returncode,
-        result.truncated,
-        limit,
-    )
-    .map(Some)
+    command_output(&command, result.stdout, result.stderr, result.returncode).map(Some)
 }
 
 async fn run_legacy_command(
@@ -564,11 +558,12 @@ async fn run_legacy_command(
     let limit = settings
         .max_output_bytes
         .min(output.remaining_bytes().max(1));
-    let (stdout, stdout_truncated) = render_stream(&read.chunks, ProcessStream::Stdout, limit);
-    let (stderr, stderr_truncated) = render_stream(&read.chunks, ProcessStream::Stderr, limit);
-    let truncated = stdout_truncated || stderr_truncated || read.backpressure_dropped;
+    // Reference `_run_command` cuts each stream to the window and publishes no
+    // field saying so, so a truncated result is silent here too.
+    let (stdout, _) = render_stream(&read.chunks, ProcessStream::Stdout, limit);
+    let (stderr, _) = render_stream(&read.chunks, ProcessStream::Stderr, limit);
     let status = exit_status(&read.state);
-    command_output(&command, stdout, stderr, status, truncated, limit)
+    command_output(&command, stdout, stderr, status)
 }
 
 /// What one finished command reports, whether this host ran it or a client did.
@@ -580,8 +575,6 @@ fn command_output(
     stdout: String,
     stderr: String,
     status: i32,
-    truncated: bool,
-    limit: usize,
 ) -> Result<ToolExecutionOutput, ToolError> {
     if status != 0 {
         return Err(ToolError::Execution(format!(
@@ -589,23 +582,12 @@ fn command_output(
              stdout:\n{stdout}"
         )));
     }
-    let mut model_text = stdout.clone();
-    if !stderr.is_empty() {
-        model_text.push_str("\nstderr:\n");
-        model_text.push_str(&stderr);
-    }
-    if truncated {
-        model_text.push_str(&format!("\n[output truncated at {limit} bytes]"));
-    }
-    Ok(ToolExecutionOutput::new(model_text)
-        .displayed_as(json!({"kind": "shell", "command": command}))
-        .typed(json!({
-            "command": command,
-            "stdout": stdout,
-            "stderr": stderr,
-            "returncode": status,
-            "truncated": truncated,
-        })))
+    Ok(Document::new()
+        .field("command", command)
+        .field("stdout", stdout)
+        .field("stderr", stderr)
+        .field("returncode", status)
+        .into_output(json!({"kind": "shell", "command": command})))
 }
 
 fn process_spec(

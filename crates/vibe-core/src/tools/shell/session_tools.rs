@@ -18,11 +18,12 @@ use serde_json::{Value, json};
 use crate::tools::{ToolError, ToolExecutionOutput, ToolOutputSink};
 
 use super::decode::{read_file_window, skip_utf8_continuation_prefix};
+use super::document::Document;
 use super::host::ShellFamily;
 use super::policy::{byte_limit, string_argument};
 use super::session::{
     ManagedSession, SessionHandle, SessionLimits, SessionShell, SessionStatus,
-    kill_managed_session, managed_session, session_handle, session_output,
+    kill_managed_session, managed_session, session_document, session_handle, session_poll_document,
 };
 use super::specs::CONTROL_KEYS;
 use super::{PUMP_INTERVAL, process_error};
@@ -65,7 +66,8 @@ pub(super) async fn run_output(
             tokio::time::sleep(PUMP_INTERVAL).await;
         }
     }
-    session_output(&handle, cursor, limit)
+    let (document, display) = session_poll_document(&handle, cursor, limit)?;
+    Ok(document.into_output(display))
 }
 
 pub(super) fn log_size(path: &Path) -> u64 {
@@ -97,16 +99,11 @@ pub(super) async fn run_stdin(
         .write(&session.terminal_id, &bytes)
         .await
         .map_err(process_error)?;
-    Ok(ToolExecutionOutput::new(format!(
-        "Wrote {} bytes to session {session_id}",
-        bytes.len()
-    ))
-    .displayed_as(json!({"kind": "shell", "command": session.command}))
-    .typed(json!({
-        "sessionId": session_id,
-        "bytesWritten": bytes.len(),
-        "status": session.snapshot().0.as_str(),
-    })))
+    Ok(Document::new()
+        .field("session_id", session_id)
+        .field("bytes_written", bytes.len())
+        .field("status", session.snapshot().0.as_str())
+        .into_output(json!({"kind": "shell", "command": session.command})))
 }
 
 /// The bytes one stdin call writes.
@@ -155,6 +152,32 @@ pub(super) fn stdin_bytes(arguments: &Value) -> Result<Vec<u8>, ToolError> {
         })
 }
 
+/// Reference `BashSessionsResult`, whose seven fields every action answers:
+/// the ones an action has nothing to say about are published as null rather
+/// than left out, so the four actions publish one shape.
+#[derive(Default)]
+struct SessionsResult {
+    sessions: Vec<Document>,
+    session: Option<Document>,
+    output: Option<String>,
+    next_cursor: Option<u64>,
+    truncated: Option<bool>,
+    message: Option<String>,
+}
+
+impl SessionsResult {
+    fn document(self, action: &str) -> Document {
+        Document::new()
+            .field("action", action)
+            .nested_list("sessions", self.sessions)
+            .nested("session", self.session)
+            .field("output", json!(self.output))
+            .field("next_cursor", json!(self.next_cursor))
+            .field("truncated", json!(self.truncated))
+            .field("message", json!(self.message))
+    }
+}
+
 pub(super) async fn run_sessions(
     shell: Arc<SessionShell>,
     arguments: Value,
@@ -183,16 +206,15 @@ pub(super) async fn run_sessions(
                     .cmp(&created_at(right))
                     .then_with(|| session_id_of(left).cmp(&session_id_of(right)))
             });
-            Ok(ToolExecutionOutput::new(format!(
-                "{} {} sessions",
-                infos.len(),
-                shell.family.name()
-            ))
-            .displayed_as(json!({
+            Ok(SessionsResult {
+                sessions: infos.iter().map(session_document).collect(),
+                ..SessionsResult::default()
+            }
+            .document("list")
+            .into_output(json!({
                 "kind": "shell",
                 "command": shell.family.tool_name("sessions list"),
-            }))
-            .typed(json!({"action": "list", "sessions": infos})))
+            })))
         }
         "inspect" => {
             // Reference `inspect_session` positions the window at the end of
@@ -212,15 +234,15 @@ pub(super) async fn run_sessions(
                 .and_then(Value::as_str)
                 .unwrap_or_default()
                 .to_owned();
-            Ok(ToolExecutionOutput::new(output.clone())
-                .displayed_as(json!({"kind": "shell", "command": command}))
-                .typed(json!({
-                    "action": "inspect",
-                    "session": info,
-                    "output": output,
-                    "nextCursor": next_cursor,
-                    "truncated": truncated,
-                })))
+            Ok(SessionsResult {
+                session: Some(session_document(&info)),
+                output: Some(output),
+                next_cursor: Some(next_cursor),
+                truncated: Some(truncated),
+                ..SessionsResult::default()
+            }
+            .document("inspect")
+            .into_output(json!({"kind": "shell", "command": command})))
         }
         "kill" => {
             // A session is owned by the Vibe session, not by the turn that
@@ -229,11 +251,14 @@ pub(super) async fn run_sessions(
             let session = required_session(&shell, &arguments, "kill").await?;
             kill_managed_session(&shell, &session, SessionStatus::Killed).await?;
             shell.managed.lock().await.remove(&session.id);
-            Ok(
-                ToolExecutionOutput::new(format!("Killed session {}", session.id))
-                    .displayed_as(json!({"kind": "shell", "command": session.command}))
-                    .typed(json!({"action": "kill", "session": session.info()})),
-            )
+            let display = json!({"kind": "shell", "command": session.command});
+            Ok(SessionsResult {
+                session: Some(session_document(&session.info())),
+                message: Some(format!("Killed session {}", session.id)),
+                ..SessionsResult::default()
+            }
+            .document("kill")
+            .into_output(display))
         }
         "reset" => {
             let sessions = shell
@@ -270,21 +295,28 @@ pub(super) async fn run_sessions(
                     orphaned.clear();
                 }
             }
-            Ok(ToolExecutionOutput::new(format!(
-                "Stopped {} {} sessions",
-                killed.len(),
-                shell.family.name()
-            ))
-            .displayed_as(json!({
+            let message = format!("Stopped {} {} sessions", killed.len(), shell.family.name());
+            Ok(SessionsResult {
+                sessions: killed.iter().map(session_document).collect(),
+                message: Some(message),
+                ..SessionsResult::default()
+            }
+            .document("reset")
+            .into_output(json!({
                 "kind": "shell",
                 "command": shell.family.tool_name("sessions reset"),
-            }))
-            .typed(json!({"action": "reset", "sessions": killed})))
+            })))
         }
-        other => Err(ToolError::Execution(format!(
-            "unknown {} action `{other}`; use `list`, `inspect`, `kill` or `reset`",
-            shell.family.tool_name("sessions")
-        ))),
+        // The reference declares the four actions as a literal on the argument
+        // model, so a fifth is refused where an argument is refused rather than
+        // answered with a result naming an action that does not exist.
+        other => Err(ToolError::SchemaViolation {
+            path: "/action".to_owned(),
+            message: format!(
+                "`{other}` is not a {} action",
+                shell.family.tool_name("sessions")
+            ),
+        }),
     }
 }
 
@@ -344,18 +376,20 @@ pub(super) async fn run_log_file(
             let running = is_running_log(&shell, &path).await;
             let (content, next_cursor, truncated) =
                 read_file_window(&path, offset, limit, running)?;
-            Ok(ToolExecutionOutput::new(content.clone())
-                .displayed_as(json!({
-                    "kind": "shell",
-                    "command": shell.family.tool_name("log_file read"),
-                }))
-                .typed(json!({
-                    "action": "read",
-                    "path": path.to_string_lossy(),
-                    "content": content,
-                    "nextCursor": next_cursor,
-                    "truncated": truncated,
-                })))
+            Ok(log_file_document(
+                "read",
+                &path,
+                LogFileResult {
+                    content: Some(content),
+                    next_cursor: Some(next_cursor),
+                    truncated: Some(truncated),
+                    ..LogFileResult::default()
+                },
+            )
+            .into_output(json!({
+                "kind": "shell",
+                "command": shell.family.tool_name("log_file read"),
+            })))
         }
         "write" | "append" => {
             refuse_live_session_log(&shell, &path).await?;
@@ -380,26 +414,49 @@ pub(super) async fn run_log_file(
             file.write_all(content.as_bytes()).map_err(|error| {
                 ToolError::Execution(format!("`{}` cannot be written: {error}", path.display()))
             })?;
-            Ok(ToolExecutionOutput::new(format!(
-                "Wrote {} bytes to {}",
-                content.len(),
-                path.display()
-            ))
-            .displayed_as(json!({
+            Ok(log_file_document(
+                action,
+                &path,
+                LogFileResult {
+                    bytes_written: Some(content.len()),
+                    ..LogFileResult::default()
+                },
+            )
+            .into_output(json!({
                 "kind": "shell",
                 "command": shell.family.tool_name(&format!("log_file {action}")),
-            }))
-            .typed(json!({
-                "action": action,
-                "path": path.to_string_lossy(),
-                "bytesWritten": content.len(),
             })))
         }
-        other => Err(ToolError::Execution(format!(
-            "unknown {} action `{other}`; use `read`, `write` or `append`",
-            shell.family.tool_name("log_file")
-        ))),
+        // As with the sessions tool, the reference declares the actions as a
+        // literal on the argument model.
+        other => Err(ToolError::SchemaViolation {
+            path: "/action".to_owned(),
+            message: format!(
+                "`{other}` is not a {} action",
+                shell.family.tool_name("log_file")
+            ),
+        }),
     }
+}
+
+/// Reference `BashLogFileResult`: a read fills the window fields and a write
+/// fills the byte count, and each publishes the other as null.
+#[derive(Default)]
+struct LogFileResult {
+    content: Option<String>,
+    next_cursor: Option<u64>,
+    truncated: Option<bool>,
+    bytes_written: Option<usize>,
+}
+
+fn log_file_document(action: &str, path: &Path, result: LogFileResult) -> Document {
+    Document::new()
+        .field("action", action)
+        .field("path", path.to_string_lossy().into_owned())
+        .field("content", json!(result.content))
+        .field("next_cursor", json!(result.next_cursor))
+        .field("truncated", json!(result.truncated))
+        .field("bytes_written", json!(result.bytes_written))
 }
 
 /// The file a `<family>_log_file` call addresses.

@@ -34,6 +34,7 @@ use crate::tools::{
 };
 
 use super::decode::read_file_window;
+use super::document::Document;
 use super::host::{ShellFamily, windows_shell_arguments};
 use super::{
     PUMP_INTERVAL, SESSIONS_DIRECTORY, byte_limit, command_argument, exit_status,
@@ -133,6 +134,10 @@ impl SessionShell {
 // Managed sessions
 // --------------------------------------------------------------------------
 
+/// What `reader_error` names when this port's reader had to drop output rather
+/// than fall behind the process producing it.
+pub(super) const DROPPED_OUTPUT: &str = "output was dropped while the session outran its buffer";
+
 /// Reference `Status`, the states a managed session reports.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum SessionStatus {
@@ -199,6 +204,14 @@ impl ManagedSession {
             .state
             .lock()
             .map_or(self.created_at_ms, |state| state.updated_at_ms);
+        // The reference declares no field for a reader that fell behind: its
+        // own reader reports every failure through `reader_error`, so output
+        // this session had to drop is named there rather than through a field
+        // the reference does not publish.
+        let reader_error = self
+            .reader_error
+            .clone()
+            .or_else(|| dropped.then(|| DROPPED_OUTPUT.to_owned()));
         json!({
             "sessionId": self.id,
             "command": self.command,
@@ -210,8 +223,7 @@ impl ManagedSession {
             "outputPath": self.log_path.to_string_lossy(),
             "createdAtMs": self.created_at_ms.to_string(),
             "updatedAtMs": updated_at_ms.to_string(),
-            "backpressureDropped": dropped,
-            "readerError": self.reader_error,
+            "readerError": reader_error,
         })
     }
 
@@ -286,7 +298,8 @@ pub(super) async fn run_managed_command(
     let handle = SessionHandle::Live(session.clone());
     let background = arguments["background"].as_bool().unwrap_or(false);
     if background {
-        return session_output(&handle, 0, limit);
+        let (document, display) = managed_command_document(&handle, true, limit)?;
+        return Ok(document.into_output(display));
     }
     let hard_timeout =
         arguments["hard_timeout"].as_bool().unwrap_or(false) || arguments["timeout"].is_u64();
@@ -297,27 +310,34 @@ pub(super) async fn run_managed_command(
     }
     if session.is_running() {
         if !hard_timeout {
-            // A soft timeout leaves the session running: the model polls it
-            // with the family's output tool instead of losing the work.
-            return session_output(&handle, 0, limit);
+            // A soft timeout leaves the session running, and the reference
+            // reports it as a backgrounded one: the model polls it with the
+            // family's output tool instead of losing the work.
+            let (document, display) = managed_command_document(&handle, true, limit)?;
+            return Ok(document.into_output(display));
         }
         kill_managed_session(shell, &session, SessionStatus::TimedOut).await?;
-        let rendered = session_output(&handle, 0, limit)?;
+        let (document, _) = managed_command_document(&handle, false, limit)?;
         return Err(ToolError::Execution(format!(
             "the command timed out after {timeout}s and its process group was terminated: \
              `{command}`\nsession_id: {}\noutput:\n{}",
-            session.id, rendered.model_text
+            session.id,
+            document.model_text()
         )));
     }
-    let rendered = session_output(&handle, 0, limit)?;
-    let status = rendered.typed_result["exitCode"].as_i64().unwrap_or(0);
+    let (document, display) = managed_command_document(&handle, false, limit)?;
+    let status = document
+        .get("returncode")
+        .and_then(Value::as_i64)
+        .unwrap_or(0);
     if status != 0 {
         return Err(ToolError::Execution(format!(
             "the command failed with exit status {status}: `{command}`\nsession_id: {}\noutput:\n{}",
-            session.id, rendered.model_text
+            session.id,
+            document.model_text()
         )));
     }
-    Ok(rendered)
+    Ok(document.into_output(display))
 }
 
 pub(super) async fn start_managed_session(
@@ -641,49 +661,122 @@ pub(super) async fn managed_session(
     }
 }
 
-/// Reads one session's log from `cursor` and reports where the next read starts.
+/// One session's identity and state, in the order reference `SessionInfo`
+/// declares its fields.
 ///
-/// A live session and one a previous process left behind answer the same keys,
-/// read off the same [`SessionHandle::info`], so the two cannot drift apart.
-pub(super) fn session_output(
+/// A live session and one a previous process left behind are described from the
+/// same [`SessionHandle::info`], so the two cannot drift apart, and the order is
+/// applied here rather than at each of the tools that embed a session.
+pub(super) fn session_document(info: &Value) -> Document {
+    let field = |key: &str| info.get(key).cloned().unwrap_or(Value::Null);
+    Document::new()
+        .field("sessionId", field("sessionId"))
+        .field("command", field("command"))
+        .field("cwd", field("cwd"))
+        .field("shell", field("shell"))
+        .field("ptyBackend", field("ptyBackend"))
+        .field("status", field("status"))
+        .field("exitCode", field("exitCode"))
+        .field("outputPath", field("outputPath"))
+        .field("createdAtMs", field("createdAtMs"))
+        .field("updatedAtMs", field("updatedAtMs"))
+        .field("readerError", field("readerError"))
+}
+
+/// One read of a session's log, and the session it was read from.
+struct SessionWindow {
+    info: Value,
+    log_path: PathBuf,
+    output: String,
+    next_cursor: u64,
+    truncated: bool,
+}
+
+impl SessionWindow {
+    fn read(handle: &SessionHandle, cursor: u64, limit: usize) -> Result<Self, ToolError> {
+        let log_path = handle.log_path();
+        let (output, next_cursor, truncated) =
+            read_file_window(&log_path, cursor, limit, handle.is_running())?;
+        Ok(Self {
+            info: handle.info(),
+            log_path,
+            output,
+            next_cursor,
+            truncated,
+        })
+    }
+
+    fn field(&self, key: &str) -> Value {
+        self.info.get(key).cloned().unwrap_or(Value::Null)
+    }
+
+    fn command(&self) -> String {
+        self.field("command")
+            .as_str()
+            .unwrap_or_default()
+            .to_owned()
+    }
+
+    fn display(&self) -> Value {
+        json!({"kind": "shell", "command": self.command()})
+    }
+}
+
+/// What the family's command tool answers once a session has been started.
+///
+/// Reference `_result_from_session` reads the session once and fills the whole
+/// result from that one read: `output` is what the log held, `stdout` is the
+/// same bytes with the terminal's line endings normalized, `stderr` is empty
+/// because a managed session multiplexes both streams onto one log, and
+/// `returncode` falls back to zero while `exit_code` stays null for a session
+/// that has not exited.
+pub(super) fn managed_command_document(
+    handle: &SessionHandle,
+    background: bool,
+    limit: usize,
+) -> Result<(Document, Value), ToolError> {
+    let window = SessionWindow::read(handle, 0, limit)?;
+    let exit_code = window.field("exitCode");
+    let document = Document::new()
+        .field("command", window.command())
+        .field("session_id", window.field("sessionId"))
+        .field("status", window.field("status"))
+        .field("exit_code", exit_code.clone())
+        .field("shell", window.field("shell"))
+        .field("background", background)
+        .field("output", window.output.clone())
+        .field("next_cursor", window.next_cursor)
+        .field("truncated", window.truncated)
+        .field(
+            "output_path",
+            window.log_path.to_string_lossy().into_owned(),
+        )
+        .field("stdout", window.output.replace("\r\n", "\n"))
+        .field("stderr", "")
+        .field("returncode", exit_code.as_i64().unwrap_or(0));
+    Ok((document, window.display()))
+}
+
+/// What the family's output tool answers, which is the session's state and the
+/// window it just read rather than anything about the call that started it.
+pub(super) fn session_poll_document(
     handle: &SessionHandle,
     cursor: u64,
     limit: usize,
-) -> Result<ToolExecutionOutput, ToolError> {
-    let info = handle.info();
-    let log_path = handle.log_path();
-    let (output, next_cursor, truncated) =
-        read_file_window(&log_path, cursor, limit, handle.is_running())?;
-    let field = |key: &str| info.get(key).cloned().unwrap_or(Value::Null);
-    let command = info
-        .get("command")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_owned();
-    let dropped = info
-        .get("backpressureDropped")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
-    let mut model_text = output.clone();
-    if truncated {
-        model_text.push_str(&format!("\n[output truncated at {limit} bytes]"));
-    }
-    if dropped {
-        model_text.push_str("\n[output was dropped while the session outran its buffer]");
-    }
-    Ok(ToolExecutionOutput::new(model_text)
-        .displayed_as(json!({"kind": "shell", "command": command}))
-        .typed(json!({
-            "sessionId": field("sessionId"),
-            "command": command,
-            "status": field("status"),
-            "exitCode": field("exitCode"),
-            "output": output,
-            "nextCursor": next_cursor,
-            "truncated": truncated,
-            "outputPath": log_path.to_string_lossy(),
-            "backpressureDropped": dropped,
-        })))
+) -> Result<(Document, Value), ToolError> {
+    let window = SessionWindow::read(handle, cursor, limit)?;
+    let document = Document::new()
+        .field("session_id", window.field("sessionId"))
+        .field("status", window.field("status"))
+        .field("exit_code", window.field("exitCode"))
+        .field("output", window.output.clone())
+        .field("next_cursor", window.next_cursor)
+        .field("truncated", window.truncated)
+        .field(
+            "output_path",
+            window.log_path.to_string_lossy().into_owned(),
+        );
+    Ok((document, window.display()))
 }
 
 pub(super) async fn kill_managed_session(

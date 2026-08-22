@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Publish the shell results a model can actually read. All fifteen shell tools
+  now answer with the field names and field sets the reference declares, in
+  snake_case, and the text the model reads is that document rendered one
+  `key: value` line per field rather than prose composed per tool. Truncation is
+  silent as a result: a legacy command whose output exceeds the byte window is
+  still cut, but the `[output truncated at N bytes]` marker and the `truncated`
+  field are gone from the legacy result and its text. A managed session that
+  outran its reader buffer no longer publishes `backpressureDropped`; the
+  condition is reported as `readerError` on the session record instead. A
+  sessions or log-file action the reference does not declare is now refused at
+  the argument boundary rather than answered.
+
 - Narrate the worktree lifecycle the way the reference does. `--worktree` now
   announces the name it is preparing before git runs and the path it resolved
   once it succeeded, both on standard error, and reports a preparation failure

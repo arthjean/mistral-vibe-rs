@@ -581,7 +581,10 @@ async fn the_legacy_variant_ignores_the_managed_overrides() {
     assert_eq!(harness.approval_count(), 0);
     let root = harness.root().canonicalize().expect("canonical root");
     assert_eq!(
-        output.model_text.trim(),
+        output.typed_result["stdout"]
+            .as_str()
+            .expect("stdout")
+            .trim(),
         root.to_string_lossy(),
         "the command ran in the session root, not in the requested override"
     );
@@ -605,10 +608,11 @@ async fn a_failing_command_reports_its_status_and_its_output() {
     assert!(message.contains("err"), "{message}");
 }
 
-/// Output past the tool limit is cut inside the sink contract and the cut is
-/// stated to the model rather than left silent.
+/// Output past the tool limit is cut inside the sink contract, and the cut is
+/// silent: reference `_run_command` bounds each stream and publishes no field
+/// saying it did, so the result carries the four fields it always carries.
 #[tokio::test]
-async fn a_flood_of_output_is_bounded_and_the_truncation_is_reported() {
+async fn a_flood_of_output_is_bounded_and_the_cut_is_silent() {
     let harness = harness(ShellRollout::Legacy, ApprovalDecision::ApproveOnce).await;
     let output = harness
         .call(
@@ -617,19 +621,20 @@ async fn a_flood_of_output_is_bounded_and_the_truncation_is_reported() {
         )
         .await
         .expect("a chatty command still succeeds");
-    assert_eq!(output.typed_result["truncated"], json!(true));
+    let stdout = output.typed_result["stdout"].as_str().expect("stdout");
     assert!(
-        output.typed_result["stdout"]
-            .as_str()
-            .expect("stdout")
-            .len()
-            <= shell_settings().max_output_bytes,
+        stdout.len() <= shell_settings().max_output_bytes,
         "the captured stream stays inside the reference limit"
     );
+    assert_eq!(
+        output.typed_result.as_object().expect("an object").len(),
+        4,
+        "{output:?}"
+    );
     assert!(
-        output.model_text.contains("output truncated at"),
+        !output.model_text.contains("truncated"),
         "{}",
-        output.model_text
+        &output.model_text[..200]
     );
 }
 
@@ -697,7 +702,7 @@ async fn background_session(harness: &Harness, command: &str) -> String {
         .call("bash", json!({"command": command, "background": true}))
         .await
         .expect("a background session starts");
-    started.typed_result["sessionId"]
+    started.typed_result["session_id"]
         .as_str()
         .expect("session id")
         .to_owned()
@@ -727,7 +732,7 @@ async fn a_cursor_read_returns_only_the_bytes_that_followed_it() {
             .contains("first"),
         "{first:?}"
     );
-    let cursor = first.typed_result["nextCursor"].as_u64().expect("cursor");
+    let cursor = first.typed_result["next_cursor"].as_u64().expect("cursor");
 
     let second = harness
         .call(
@@ -739,7 +744,7 @@ async fn a_cursor_read_returns_only_the_bytes_that_followed_it() {
     let text = second.typed_result["output"].as_str().expect("output");
     assert!(text.contains("second"), "{second:?}");
     assert!(!text.contains("first"), "{second:?}");
-    assert!(second.typed_result["nextCursor"].as_u64().expect("cursor") > cursor);
+    assert!(second.typed_result["next_cursor"].as_u64().expect("cursor") > cursor);
 }
 
 /// A session that has exited still answers, with its last output and its exit
@@ -767,7 +772,7 @@ async fn an_exited_session_still_reports_its_output_and_status() {
             .expect("poll");
     }
     assert_eq!(polled.typed_result["status"], json!("completed"));
-    assert_eq!(polled.typed_result["exitCode"], json!(7));
+    assert_eq!(polled.typed_result["exit_code"], json!(7));
     assert!(
         polled.typed_result["output"]
             .as_str()
@@ -1083,8 +1088,10 @@ async fn a_live_session_log_cannot_be_written_but_a_scratch_file_can() {
 // Reporting and teardown
 // --------------------------------------------------------------------------
 
-/// A session whose buffer overflowed says so, rather than reporting a shorter
-/// output as if it were complete.
+/// A session whose buffer overflowed says so on its record, rather than
+/// reporting a shorter output as if it were complete. Reference `SessionInfo`
+/// carries one `reader_error` and no separate drop flag, so that is where a
+/// model reads it.
 #[tokio::test]
 async fn a_dropped_output_chunk_is_reported_to_the_model() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
@@ -1103,8 +1110,29 @@ async fn a_dropped_output_chunk_is_reported_to_the_model() {
         .call("bash_output", json!({"session_id": session}))
         .await
         .expect("poll");
-    assert_eq!(polled.typed_result["backpressureDropped"], json!(true));
-    assert!(polled.model_text.contains("dropped"), "{polled:?}");
+    assert_eq!(
+        polled.typed_result["session_id"],
+        session.as_str(),
+        "{polled:?}"
+    );
+
+    let inspected = harness
+        .call(
+            "bash_sessions",
+            json!({"action": "inspect", "session_id": session}),
+        )
+        .await
+        .expect("the session is inspected");
+    assert_eq!(
+        inspected.typed_result["session"]["readerError"],
+        json!(super::session::DROPPED_OUTPUT),
+        "{inspected:?}"
+    );
+    assert!(
+        inspected.model_text.contains("dropped"),
+        "{}",
+        inspected.model_text
+    );
 }
 
 /// Closing the Vibe session stops what it left running: a managed session
@@ -1549,7 +1577,7 @@ async fn a_git_bash_session_runs_and_answers_under_its_own_prefix() {
         )
         .await
         .expect("a Git Bash session starts");
-    let session_id = started.typed_result["sessionId"]
+    let session_id = started.typed_result["session_id"]
         .as_str()
         .expect("session id")
         .to_owned();
@@ -1913,7 +1941,10 @@ async fn a_client_hosting_a_terminal_runs_the_command_through_it() {
         .call("bash", json!({"command": "echo ok"}))
         .await
         .expect("the client answers the command");
-    assert_eq!(output.model_text, "from the editor\n");
+    assert_eq!(
+        output.model_text, "command: echo ok\nstdout: from the editor\n\nstderr: \nreturncode: 0",
+        "the delegated path publishes the same document as the local one"
+    );
     assert_eq!(
         client.methods(),
         [
@@ -1953,7 +1984,13 @@ async fn a_client_hosting_no_terminal_runs_the_command_on_this_host() {
         .call("bash", json!({"command": "echo local"}))
         .await
         .expect("this host answers the command");
-    assert_eq!(output.model_text.trim(), "local");
+    assert_eq!(
+        output.typed_result["stdout"]
+            .as_str()
+            .expect("stdout")
+            .trim(),
+        "local"
+    );
     assert!(
         client.methods().is_empty(),
         "an undeclared terminal still reached the client: {:?}",
@@ -2036,7 +2073,7 @@ async fn a_control_key_interrupts_the_foreground_program() {
         "{polled:?}"
     );
     assert_eq!(polled.typed_result["status"], "completed", "{polled:?}");
-    assert_eq!(polled.typed_result["exitCode"], json!(7), "{polled:?}");
+    assert_eq!(polled.typed_result["exit_code"], json!(7), "{polled:?}");
 }
 
 /// A hard timeout terminates the whole process group, so a grandchild that
@@ -2467,7 +2504,7 @@ async fn a_multibyte_boundary_is_adjusted_in_both_directions() {
     let output = leading.typed_result["output"].as_str().expect("output");
     assert_eq!(output, "日", "{leading:?}");
     assert!(!output.contains('\u{fffd}'), "{leading:?}");
-    assert_eq!(leading.typed_result["nextCursor"], json!(3), "{leading:?}");
+    assert_eq!(leading.typed_result["next_cursor"], json!(3), "{leading:?}");
 
     let trailing = harness
         .call(
