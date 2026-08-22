@@ -2,14 +2,16 @@
 //!
 //! The differential replay beside this file compares this module against the
 //! reference over scripted repositories, and it covers every shape that a
-//! capture can script. What is here is what a capture cannot ask for, driven
-//! through the same public functions the CLI calls.
+//! capture can script. Three things it cannot script: a rollback whose own
+//! removal fails, a repository git refuses to read, and what happens after a
+//! session ends. Those are here, driven through the same public functions the
+//! CLI calls.
 
 use std::process::Command;
 
 use super::{
-    PreparedWorktree, WorktreeError, cleanup_failed_prepare, inspect_worktree_for_cleanup,
-    prepare_worktree, remove_worktree,
+    PreparedWorktree, WorktreeError, branch_exists, cleanup_failed_prepare,
+    inspect_worktree_for_cleanup, prepare_worktree, remove_worktree,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -345,4 +347,44 @@ fn a_symlinked_managed_root_still_reads_as_the_same_repository() {
         "a symlinked path read as a different repository"
     );
     assert!(!second.branch_created);
+}
+
+// --------------------------------------------------------------------------
+// US-275: absent is not the same as unreadable
+// --------------------------------------------------------------------------
+
+/// Exit 0 is present and exit 1 is absent, which is the whole of what the probe
+/// is allowed to conclude.
+#[test]
+fn the_branch_probe_tells_present_from_absent() {
+    let (_scratch, root) = case_root();
+    let checkout = checkout(&root, None);
+    git(&checkout, &["branch", "review"]);
+
+    assert!(branch_exists(&checkout, "review", "review").expect("the probe answers"));
+    assert!(!branch_exists(&checkout, "missing", "missing").expect("the probe answers"));
+}
+
+/// Any other status is a repository git could not read, and reporting it as
+/// absent would take the create-a-branch path on it.
+#[test]
+fn a_failing_branch_probe_is_an_error_naming_the_branch() {
+    let (_scratch, root) = case_root();
+    let outside = root.join("outside");
+    fs::create_dir_all(&outside).expect("the outside directory is writable");
+
+    let error = branch_exists(&outside, "review", "review")
+        .expect_err("a non-repository refuses the probe");
+    let WorktreeError::Failed { name, message } = &error else {
+        panic!("expected a named worktree failure, got {error:?}");
+    };
+    assert_eq!(name, "review");
+    assert!(
+        message.contains("review"),
+        "the branch is not named: {message}"
+    );
+    assert!(
+        message.len() > "failed to inspect worktree branch `review`: ".len(),
+        "git's own refusal is not carried: {message}"
+    );
 }

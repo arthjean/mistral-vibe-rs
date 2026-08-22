@@ -182,16 +182,7 @@ pub fn prepare_worktree(
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent).map_err(|source| WorktreeError::io(parent, source))?;
     }
-    let branch_exists = git_status(
-        &checkout_root,
-        [
-            "show-ref",
-            "--verify",
-            "--quiet",
-            &format!("refs/heads/{name}"),
-        ],
-        name,
-    )?;
+    let branch_exists = branch_exists(&checkout_root, name, name)?;
     let target_text = path_text(&target)?;
     if branch_exists {
         git_checked(&checkout_root, ["worktree", "add", target_text, name], name)?;
@@ -500,12 +491,32 @@ fn git_checked<'a>(
     }
 }
 
-fn git_status<'a>(
-    directory: &Path,
-    arguments: impl IntoIterator<Item = &'a str>,
-    name: &str,
-) -> Result<bool, WorktreeError> {
-    git_output(directory, arguments, name).map(|output| output.status.success())
+/// Whether `branch` is a local branch of the repository `directory` sits in.
+///
+/// `show-ref --verify --quiet` answers 1 for a ref that is not there and any
+/// other non-zero status for a repository it could not read, and only the first
+/// of those means "absent". Reporting the second as absent would take the
+/// create-a-branch path on a repository git already refused to inspect, so it
+/// is an error here exactly as it is upstream
+/// (`vibe/core/worktree.py:327-335`).
+fn branch_exists(directory: &Path, branch: &str, name: &str) -> Result<bool, WorktreeError> {
+    let reference = format!("refs/heads/{branch}");
+    let output = git_output(
+        directory,
+        ["show-ref", "--verify", "--quiet", reference.as_str()],
+        name,
+    )?;
+    match output.status.code() {
+        Some(0) => Ok(true),
+        Some(1) => Ok(false),
+        _ => Err(WorktreeError::failed(
+            name,
+            format!(
+                "failed to inspect worktree branch `{branch}`: {}",
+                git_message(&output)
+            ),
+        )),
+    }
 }
 
 fn git_output<'a>(
@@ -531,15 +542,18 @@ fn git_output<'a>(
 }
 
 fn git_failure(name: &str, output: &Output) -> WorktreeError {
+    WorktreeError::failed(name, git_message(output))
+}
+
+/// What git said about a refusal: its own stderr, or its exit status when it
+/// said nothing.
+fn git_message(output: &Output) -> String {
     let message = String::from_utf8_lossy(&output.stderr).trim().to_owned();
-    WorktreeError::failed(
-        name,
-        if message.is_empty() {
-            format!("git exited with {}", output.status)
-        } else {
-            message
-        },
-    )
+    if message.is_empty() {
+        format!("git exited with {}", output.status)
+    } else {
+        message
+    }
 }
 
 fn canonical_directory(path: &Path) -> Result<PathBuf, WorktreeError> {

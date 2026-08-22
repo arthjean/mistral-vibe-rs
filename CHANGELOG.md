@@ -21,6 +21,10 @@
   a linked worktree of such a repository is refused by name instead of producing
   a root that no removal can run in.
 
+- Say when a branch cannot be checked. A failing `git show-ref` is now an error
+  naming the branch and carrying git's own refusal, where a repository git could
+  not read used to read as a branch that simply did not exist.
+
 - Say that git is missing when git is missing. A launch that asks for
   `--worktree` on a machine without git on `PATH` now fails with a sentence
   naming git and the search path, where it used to surface the raw spawn error
