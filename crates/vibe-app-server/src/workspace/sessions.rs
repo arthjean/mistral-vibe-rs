@@ -264,13 +264,37 @@ impl WorkspaceService {
                 optional_string(params, "systemPrompt")?.unwrap_or_default(),
                 config_map(params.get("config"))?,
             )
-            .map_err(storage_error)?;
+            .map_err(|error| self.continuation_error(&cwd, error))?;
         self.continuity
             .refresh(hydrated.clone())
             .map_err(|error| WorkspaceServiceError::Storage(error.to_string()))?;
         Ok(hydrated_result(
             &hydrated,
             Some(runtime_attachment(&hydrated)),
+        ))
+    }
+
+    /// The refusal a continuation reports, told apart by where the launch stands.
+    ///
+    /// A directory under the managed worktree root has its own answer: it is a
+    /// fresh worktree that has simply not been used yet, and saying so is what
+    /// keeps the operator from reading an empty history as a lost one. The
+    /// reference appends the same distinction to the same failure, testing the
+    /// working directory against `WORKTREES_DIR`
+    /// (`vibe/app_server/_runtime.py:640-648`). The sentence is this port's own.
+    fn continuation_error(&self, cwd: &str, error: StorageError) -> WorkspaceServiceError {
+        let mapped = storage_error(error);
+        let WorkspaceServiceError::NotFound(message) = &mapped else {
+            return mapped;
+        };
+        let managed_root = vibe_core::worktree::managed_worktrees_root(&self.paths.vibe_home);
+        let standing = fs::canonicalize(cwd).unwrap_or_else(|_| PathBuf::from(cwd));
+        if !standing.starts_with(&managed_root) {
+            return mapped;
+        }
+        WorkspaceServiceError::NotFound(format!(
+            "{message}. This worktree has no session of its own yet: start one here, or name an \
+             existing session with --resume <ID>"
         ))
     }
 

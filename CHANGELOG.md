@@ -24,6 +24,11 @@
   reads `1 commit added during this session` in the singular and `2 commits` in
   the plural.
 
+- Say why a worktree has no history to continue. `--continue` inside a managed
+  worktree that has never held a session now adds that this worktree has no
+  session of its own yet, instead of reporting the same empty history as any
+  other directory.
+
 - Answer `workspace/worktrees/list`. The method the inventory has been
   advertising since v2.24.0 is now routed and answers before any session is
   open, with one entry per linked worktree carrying its name, branch, working

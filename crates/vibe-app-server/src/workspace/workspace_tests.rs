@@ -1520,3 +1520,47 @@ fn app_server_advertises_and_dispatches_workspace_resources() {
         "saved"
     );
 }
+
+/// A continuation under the managed worktree root says why the history is
+/// empty, and one anywhere else keeps the plain refusal.
+///
+/// The reference draws the same distinction on the same failure, comparing the
+/// working directory against `WORKTREES_DIR` (`vibe/app_server/_runtime.py:640-648`).
+#[test]
+fn continuing_inside_a_fresh_managed_worktree_says_it_has_no_session_yet() {
+    let temporary = tempdir().expect("tempdir");
+    let vibe_home = temporary.path().join("home");
+    let managed = vibe_home.join("worktrees/feature");
+    let elsewhere = temporary.path().join("workspace");
+    std::fs::create_dir_all(&managed).expect("managed worktree");
+    std::fs::create_dir_all(&elsewhere).expect("workspace");
+
+    let service = WorkspaceService::new(
+        WorkspacePaths {
+            vibe_home,
+            working_directory: elsewhere.clone(),
+            session_root: temporary.path().join("sessions"),
+        },
+        true,
+    )
+    .expect("service");
+
+    let hint = "This worktree has no session of its own yet";
+    for (cwd, expected) in [(&managed, true), (&elsewhere, false)] {
+        let params: BTreeMap<String, Value> =
+            serde_json::from_value(json!({"cwd": cwd.to_string_lossy()}))
+                .expect("parameter object");
+        let error = service
+            .dispatch("session/continue", &params)
+            .expect_err("an empty history refuses the continuation");
+        let WorkspaceServiceError::NotFound(message) = &error else {
+            unreachable!("an empty history is a not-found: {error}");
+        };
+        assert_eq!(
+            message.contains(hint),
+            expected,
+            "cwd {}: {message}",
+            cwd.display()
+        );
+    }
+}

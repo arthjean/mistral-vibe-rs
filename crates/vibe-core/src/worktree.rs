@@ -608,6 +608,19 @@ pub fn remove_worktree(
     Ok(())
 }
 
+/// The directory every managed worktree of every checkout lives under.
+///
+/// The reference reads the same path as a global (`WORKTREES_DIR`, resolved
+/// from `VIBE_HOME`) and tests a working directory against it to decide whether
+/// a launch is standing in a worktree (`vibe/app_server/_runtime.py:643`). It is
+/// resolved here for the same reason the per-checkout root is: a vibe home
+/// reached through a symbolic link has to name the same directory as one
+/// reached directly.
+#[must_use]
+pub fn managed_worktrees_root(vibe_home: &Path) -> PathBuf {
+    resolve_lenient(&vibe_home.join(MANAGED_DIRECTORY))
+}
+
 /// The managed root a checkout's worktrees live under.
 ///
 /// The directory name is the repository's own name followed by twelve hex
@@ -632,7 +645,7 @@ fn managed_worktree_root(
         .file_name()
         .and_then(|value| value.to_str())
         .unwrap_or("repository");
-    let managed_root = resolve_lenient(&vibe_home.join(MANAGED_DIRECTORY));
+    let managed_root = managed_worktrees_root(vibe_home);
     let target = resolve_lenient(&managed_root.join(format!(
         "{repository_name}-{}",
         &digest[..REPOSITORY_DIGEST_LENGTH]
