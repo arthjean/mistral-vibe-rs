@@ -43,7 +43,10 @@ pub enum StartupError {
         #[source]
         source: std::io::Error,
     },
-    #[error("--worktree NAME must be a single path segment")]
+    #[error(
+        "--worktree NAME must be one portable path segment: no separator, no drive letter, \
+             no character a Windows path forbids, and no reserved device name"
+    )]
     InvalidWorktreeName,
     #[error("--worktree requires a git repository")]
     WorktreeRepositoryRequired,

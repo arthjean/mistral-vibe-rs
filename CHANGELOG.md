@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Refuse a `--worktree` name no filesystem can carry. A name that is empty,
+  a relative alias, ends in a space or a dot, is unprintable, carries one of
+  `<>:"/\|?*`, or collides with a Windows device name such as `aux` or
+  `nul.txt` whatever its extension is now rejected before anything is created.
+  A plain single segment, accents and emoji included, still passes.
+
 - Keep a worktree that carries a commit made on a detached `HEAD`. Session
   commits are now counted against the worktree's own `HEAD` rather than against
   its branch tip, so detaching `HEAD` to compare a revision and committing there

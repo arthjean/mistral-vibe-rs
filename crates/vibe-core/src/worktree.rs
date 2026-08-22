@@ -19,7 +19,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::sync::LazyLock;
 
+use regex::Regex;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
@@ -34,6 +36,33 @@ const MANAGED_DIRECTORY: &str = "worktrees";
 /// How many hex digits of the common git directory's digest name a managed
 /// root. The reference takes the same twelve (`vibe/core/worktree.py:349`).
 const REPOSITORY_DIGEST_LENGTH: usize = 12;
+
+/// The characters a Windows path cannot carry, which is the set the reference
+/// refuses a worktree name for (`vibe/core/worktree.py:19`).
+const INVALID_NAME_CHARACTERS: [char; 9] = ['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
+
+/// The device names Windows reserves whatever the extension, upper-cased for
+/// comparison. The reference builds the same set at `vibe/core/worktree.py:21`.
+const RESERVED_DEVICE_NAMES: [&str; 25] = [
+    "CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$", "CLOCK$", "COM1", "COM2", "COM3", "COM4",
+    "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7",
+    "LPT8", "LPT9",
+];
+
+/// One character Python calls non-printable: anything in the Unicode `Other`
+/// or `Separator` categories, minus the ASCII space.
+///
+/// `str.isprintable` is what the reference tests a name with
+/// (`vibe/core/worktree.py:311`) and the standard library exposes no general
+/// category, so the classes come from `regex`, which vibe-core already
+/// depends on and which carries the Unicode tables the check needs.
+#[expect(
+    clippy::expect_used,
+    reason = "the pattern is a compile-time constant that compiles"
+)]
+static NON_PRINTABLE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"[^\P{C} ]|[^\P{Z} ]").expect("the non-printable pattern compiles")
+});
 
 /// A worktree a session prepared, and everything cleanup needs to judge it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -93,7 +122,10 @@ impl WorktreeCleanupState {
 /// repository" and "git is not installed".
 #[derive(Debug, Error)]
 pub enum WorktreeError {
-    #[error("--worktree NAME must be a single path segment")]
+    #[error(
+        "--worktree NAME must be one portable path segment: no separator, no drive letter, \
+             no character a Windows path forbids, and no reserved device name"
+    )]
     InvalidName,
     #[error("--worktree requires a git repository")]
     RepositoryRequired,
@@ -440,20 +472,42 @@ fn validate_existing_worktree(
     Ok(())
 }
 
+/// Refuses a name no filesystem this port runs on can carry as one directory.
+///
+/// The rule is the reference's, question for question
+/// (`vibe/core/worktree.py:305-317`): not empty and not a relative alias, no
+/// trailing space or dot, printable, none of the characters a Windows path
+/// forbids, no collision with a reserved device name whatever follows the
+/// first dot, and one path segment. The name is refused before anything is
+/// created, so a refusal never leaves a directory behind.
 fn validate_worktree_name(name: &str) -> Result<(), WorktreeError> {
-    let is_single_segment = !name.is_empty()
-        && !matches!(name, "." | "..")
-        && Path::new(name).components().count() == 1
-        && !name.contains(['/', '\\'])
-        && !name
-            .as_bytes()
-            .get(1)
-            .is_some_and(|character| *character == b':');
-    if is_single_segment {
+    if is_portable_worktree_name(name) {
         Ok(())
     } else {
         Err(WorktreeError::InvalidName)
     }
+}
+
+fn is_portable_worktree_name(name: &str) -> bool {
+    if name.is_empty() || matches!(name, "." | "..") {
+        return false;
+    }
+    if name.ends_with(' ') || name.ends_with('.') || NON_PRINTABLE.is_match(name) {
+        return false;
+    }
+    if name.contains(INVALID_NAME_CHARACTERS) {
+        return false;
+    }
+    // Windows reserves the device names whatever extension follows, so the
+    // comparison is against what precedes the first dot.
+    let device = name.split('.').next().unwrap_or(name).to_uppercase();
+    if RESERVED_DEVICE_NAMES.contains(&device.as_str()) {
+        return false;
+    }
+    // Every separator and drive marker either path spelling recognizes is
+    // already refused above, so what is left for this to catch is a component
+    // the parser folds away.
+    Path::new(name).components().count() == 1
 }
 
 fn resolve_git_path(base: &Path, value: &str) -> Result<PathBuf, WorktreeError> {

@@ -116,10 +116,6 @@ const LICENSING: &str = "NOTICE";
 /// Why a gap stands, shared by every case that carries the same one: the reason
 /// is a property of the gap, not of the case that happens to reveal it. Each is
 /// stated once so a story landing removes one sentence rather than dozens.
-const UNPORTABLE_NAME: &str = "the reference refuses a name Windows cannot carry, testing it \
-     against the reserved device names and the characters a Windows path forbids; this port only \
-     asks whether the name is a single path segment, so it accepts what the reference rejects. \
-     US-276 replaces the segment rule with the portability rule";
 const NO_BRANCH_GATE: &str = "the reference runs `git check-ref-format --branch` before creating \
      anything; this port has no branch gate at all, so it answers that every name is a usable \
      branch. US-277 adds the gate";
@@ -173,135 +169,6 @@ impl Divergence {
 /// A pointer is matched by prefix, so `/prepared` covers every field under it.
 /// Keep the list ordered by family then by case.
 const LEDGER: &[Divergence] = &[
-    // The portability rule this port does not have. One entry per name,
-    // because the ledger names cases and not patterns: US-276 deletes this
-    // whole block in one edit.
-    Divergence {
-        family: "name",
-        case: "angle-bracket",
-        pointer: "/portable",
-        closed_by: "US-276",
-        why: UNPORTABLE_NAME,
-    },
-    Divergence {
-        family: "name",
-        case: "device-aux",
-        pointer: "/portable",
-        closed_by: "US-276",
-        why: UNPORTABLE_NAME,
-    },
-    Divergence {
-        family: "name",
-        case: "device-aux-extension",
-        pointer: "/portable",
-        closed_by: "US-276",
-        why: UNPORTABLE_NAME,
-    },
-    Divergence {
-        family: "name",
-        case: "device-aux-upper",
-        pointer: "/portable",
-        closed_by: "US-276",
-        why: UNPORTABLE_NAME,
-    },
-    Divergence {
-        family: "name",
-        case: "device-clock",
-        pointer: "/portable",
-        closed_by: "US-276",
-        why: UNPORTABLE_NAME,
-    },
-    Divergence {
-        family: "name",
-        case: "device-com1",
-        pointer: "/portable",
-        closed_by: "US-276",
-        why: UNPORTABLE_NAME,
-    },
-    Divergence {
-        family: "name",
-        case: "device-con",
-        pointer: "/portable",
-        closed_by: "US-276",
-        why: UNPORTABLE_NAME,
-    },
-    Divergence {
-        family: "name",
-        case: "device-conin",
-        pointer: "/portable",
-        closed_by: "US-276",
-        why: UNPORTABLE_NAME,
-    },
-    Divergence {
-        family: "name",
-        case: "device-lpt9",
-        pointer: "/portable",
-        closed_by: "US-276",
-        why: UNPORTABLE_NAME,
-    },
-    Divergence {
-        family: "name",
-        case: "device-nul",
-        pointer: "/portable",
-        closed_by: "US-276",
-        why: UNPORTABLE_NAME,
-    },
-    Divergence {
-        family: "name",
-        case: "device-nul-extension",
-        pointer: "/portable",
-        closed_by: "US-276",
-        why: UNPORTABLE_NAME,
-    },
-    Divergence {
-        family: "name",
-        case: "pipe",
-        pointer: "/portable",
-        closed_by: "US-276",
-        why: UNPORTABLE_NAME,
-    },
-    Divergence {
-        family: "name",
-        case: "question-mark",
-        pointer: "/portable",
-        closed_by: "US-276",
-        why: UNPORTABLE_NAME,
-    },
-    Divergence {
-        family: "name",
-        case: "quote",
-        pointer: "/portable",
-        closed_by: "US-276",
-        why: UNPORTABLE_NAME,
-    },
-    Divergence {
-        family: "name",
-        case: "star",
-        pointer: "/portable",
-        closed_by: "US-276",
-        why: UNPORTABLE_NAME,
-    },
-    Divergence {
-        family: "name",
-        case: "tab",
-        pointer: "/portable",
-        closed_by: "US-276",
-        why: UNPORTABLE_NAME,
-    },
-    Divergence {
-        family: "name",
-        case: "trailing-dot",
-        pointer: "/portable",
-        closed_by: "US-276",
-        why: UNPORTABLE_NAME,
-    },
-    Divergence {
-        family: "name",
-        case: "trailing-space",
-        pointer: "/portable",
-        closed_by: "US-276",
-        why: UNPORTABLE_NAME,
-    },
     // The branch gate this port does not have.
     Divergence {
         family: "name",
@@ -453,13 +320,6 @@ const LEDGER: &[Divergence] = &[
         pointer: "/outcome",
         closed_by: "US-279",
         why: COMMON_DIR_BASE,
-    },
-    Divergence {
-        family: "prepare",
-        case: "unportable-name",
-        pointer: "/outcome",
-        closed_by: "US-276",
-        why: UNPORTABLE_NAME,
     },
     // Cleanup.
     Divergence {
@@ -1077,8 +937,6 @@ fn observed_document(case: &Case, scratch: &Path, index: usize) -> Value {
 fn observed_name(case: &Case) -> Value {
     let name = case.input["name"].as_str().expect("a name case names one");
     json!({
-        // This port's single-segment rule stands where the reference's
-        // portability rule stands, which is what the ledger records.
         "portable": validate_worktree_name(name).is_ok(),
         // Nothing in this port validates a branch name, so every name is a
         // usable branch as far as it is concerned.

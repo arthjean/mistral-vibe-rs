@@ -388,3 +388,23 @@ fn a_failing_branch_probe_is_an_error_naming_the_branch() {
         "git's own refusal is not carried: {message}"
     );
 }
+
+// --------------------------------------------------------------------------
+// US-276: the refusal a name earns
+// --------------------------------------------------------------------------
+
+/// The corpus proves which names are refused; what it cannot carry is the
+/// sentence, because the sentence is this port's own and the reference's stays
+/// out of the repository.
+#[test]
+fn the_name_refusal_names_the_flag_and_the_rule() {
+    let message = WorktreeError::InvalidName.to_string();
+    assert!(
+        message.contains("--worktree NAME"),
+        "the flag is not named: {message}"
+    );
+    assert!(
+        message.contains("portable") && message.contains("segment"),
+        "the single-portable-segment rule is not stated: {message}"
+    );
+}
