@@ -196,6 +196,12 @@ impl WorktreeError {
 
 /// Prepares the managed worktree named `name` for the checkout holding `base`.
 ///
+/// `branch` is what the worktree is checked out on, and [`None`] means the
+/// worktree's own name. The two are separate because a client that picks a
+/// directory name and a branch name independently has to be able to say so: the
+/// reference takes the same optional parameter and defaults it the same way
+/// (`vibe/core/worktree.py:108-120`).
+///
 /// `vibe_home` is a parameter rather than something resolved here, because the
 /// managed root is a property of the caller's session, not of this module: the
 /// CLI reads it from `--session-root` and `VIBE_HOME`, and the app-server has
@@ -204,6 +210,7 @@ pub fn prepare_worktree(
     name: &str,
     base: &Path,
     vibe_home: &Path,
+    branch: Option<&str>,
 ) -> Result<PreparedWorktree, WorktreeError> {
     validate_worktree_name(name)?;
     let checkout_root = git_stdout(base, ["rev-parse", "--show-toplevel"], name)
@@ -218,7 +225,7 @@ pub fn prepare_worktree(
     // repository and reaching for the managed root
     // (`vibe/core/worktree.py:114-120`), so a refusal leaves no directory and
     // no branch behind.
-    let branch = name;
+    let branch = branch.unwrap_or(name);
     validate_branch_name(&checkout_root, branch)?;
     // Both rev-parse answers are read from the checkout root rather than from
     // `base`, because git reports them relative to the directory it ran in and
@@ -239,21 +246,33 @@ pub fn prepare_worktree(
     let target = managed_worktree_root(vibe_home, &repo_root, &common_git_dir)?.join(name);
 
     if target.is_dir() {
-        validate_existing_worktree(&target, name, &common_git_dir)?;
-        return build_prepared_worktree(name, target, relative_base, repo_root, false, false);
+        validate_existing_worktree(&target, branch, &common_git_dir)?;
+        return build_prepared_worktree(
+            name,
+            branch,
+            target,
+            relative_base,
+            repo_root,
+            false,
+            false,
+        );
     }
 
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent).map_err(|source| WorktreeError::io(parent, source))?;
     }
-    let branch_exists = branch_exists(&checkout_root, name, name)?;
+    let branch_exists = branch_exists(&checkout_root, branch, name)?;
     let target_text = path_text(&target)?;
     if branch_exists {
-        git_checked(&checkout_root, ["worktree", "add", target_text, name], name)?;
+        git_checked(
+            &checkout_root,
+            ["worktree", "add", target_text, branch],
+            name,
+        )?;
     } else {
         git_checked(
             &checkout_root,
-            ["worktree", "add", "-b", name, target_text],
+            ["worktree", "add", "-b", branch, target_text],
             name,
         )?;
     }
@@ -263,6 +282,7 @@ pub fn prepare_worktree(
     // anything exists to roll back.
     build_prepared_worktree(
         name,
+        branch,
         target.clone(),
         relative_base,
         repo_root,
@@ -270,7 +290,12 @@ pub fn prepare_worktree(
         !branch_exists,
     )
     .map_err(|error| {
-        match cleanup_failed_prepare(&checkout_root, &target, name, !branch_exists) {
+        match cleanup_failed_prepare(
+            &checkout_root,
+            &target,
+            name,
+            (!branch_exists).then_some(branch),
+        ) {
             Some(note) => WorktreeError::Noted {
                 name: name.to_owned(),
                 source: Box::new(error),
@@ -292,7 +317,7 @@ fn cleanup_failed_prepare(
     checkout_root: &Path,
     target: &Path,
     name: &str,
-    branch_created: bool,
+    created_branch: Option<&str>,
 ) -> Option<String> {
     let target_text = path_text(target).ok()?;
     if let Err(error) = git_checked(
@@ -304,7 +329,9 @@ fn cleanup_failed_prepare(
             "the worktree it created could not be removed: {error}"
         ));
     }
-    if branch_created && let Err(error) = git_checked(checkout_root, ["branch", "-D", name], name) {
+    if let Some(branch) = created_branch
+        && let Err(error) = git_checked(checkout_root, ["branch", "-D", branch], name)
+    {
         return Some(format!(
             "the branch it created could not be deleted: {error}"
         ));
@@ -511,6 +538,7 @@ fn primary_worktree_root(
 
 fn build_prepared_worktree(
     name: &str,
+    branch: &str,
     root: PathBuf,
     relative_base: &Path,
     repo_root: PathBuf,
@@ -521,7 +549,7 @@ fn build_prepared_worktree(
     let base_commit = git_stdout(&root, ["rev-parse", "HEAD"], name)?;
     Ok(PreparedWorktree {
         name: name.to_owned(),
-        branch: name.to_owned(),
+        branch: branch.to_owned(),
         root,
         path,
         repo_root,

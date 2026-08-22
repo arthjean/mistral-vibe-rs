@@ -79,7 +79,7 @@ impl LaunchWorkspace {
 
         let name = requested_worktree.unwrap_or_default().to_owned();
         let vibe_home = vibe_home_directory(arguments, &base_directory);
-        let worktree = worktree::prepare_worktree(&name, &base_directory, &vibe_home)?;
+        let worktree = worktree::prepare_worktree(&name, &base_directory, &vibe_home, None)?;
         resolve_additional_directories(arguments, &worktree.path)?;
         arguments.workdir = Some(worktree.path.clone());
         arguments.trust = true;

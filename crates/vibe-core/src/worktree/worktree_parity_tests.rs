@@ -116,17 +116,9 @@ const LICENSING: &str = "NOTICE";
 /// Why a gap stands, shared by every case that carries the same one: the reason
 /// is a property of the gap, not of the case that happens to reveal it. Each is
 /// stated once so a story landing removes one sentence rather than dozens.
-const NO_BRANCH_PARAMETER: &str = "the reference takes the branch as a parameter and defaults it \
-     to the worktree name; this port has no branch parameter, so a case that asks for a branch \
-     other than the name cannot be driven here at all. US-282 adds the parameter, which is what \
-     `localWorkspaceSelection` needs";
 const COMMIT_PHRASING: &str = "the commit-count reason is this port's own sentence and the \
      reference's is shorter; the two booleans beside it match digest for digest. US-286 restates \
      the phrase from the reference's own form";
-const UNASKABLE_BRANCH_GATE: &str = "the branch gate US-277 wrote refuses this branch, but the \
-     case asks for a branch other than the worktree name and this port has no parameter to carry \
-     one, so the refusal cannot be driven here. US-282 adds the parameter and the gate answers \
-     through it";
 const NO_ENUMERATION: &str = "the reference publishes `list_linked_worktrees`; this port has no \
      enumeration at all, so no case of this family can be driven here. US-280 writes it";
 
@@ -168,20 +160,9 @@ const LEDGER: &[Divergence] = &[
     // port agreed by accident, refusing before it created anything because it
     // could not resolve the common git directory from a subdirectory; it now
     // agrees by taking the same path.
-    Divergence {
-        family: "prepare",
-        case: "distinct-branch",
-        pointer: "/outcome",
-        closed_by: "US-282",
-        why: NO_BRANCH_PARAMETER,
-    },
-    Divergence {
-        family: "prepare",
-        case: "invalid-branch",
-        pointer: "/outcome",
-        closed_by: "US-282",
-        why: UNASKABLE_BRANCH_GATE,
-    },
+    // `prepare/distinct-branch` and `prepare/invalid-branch` carry no entry
+    // either: US-282 gave preparation the branch parameter both cases ask for,
+    // so the branch gate now answers through it.
     // Cleanup.
     Divergence {
         family: "cleanup",
@@ -833,16 +814,11 @@ fn observed_prepare(case: &Case, root: &Path) -> Value {
         Some(head_commit(&checkout)),
     );
 
-    let mut observed = if branch.is_some_and(|value| value != name) {
-        // The branch is a parameter this port does not have, so the case is not
-        // merely answered differently: it cannot be asked. Saying so is more
-        // honest than driving a different call and diffing the result.
-        json!({ "outcome": "unsupported" })
-    } else {
+    let mut observed = {
         let home = root.join(VIBE_HOME);
-        let mut attempt = prepare_worktree(name, &base, &home);
+        let mut attempt = prepare_worktree(name, &base, &home, branch);
         if attempt.is_ok() && case.input["twice"].as_bool().unwrap_or(false) {
-            attempt = prepare_worktree(name, &base, &home);
+            attempt = prepare_worktree(name, &base, &home, branch);
         }
         match attempt {
             Ok(prepared) => json!({
@@ -878,7 +854,7 @@ fn observed_cleanup(case: &Case, root: &Path) -> Value {
     let name = case.input["name"]
         .as_str()
         .expect("a cleanup case is named");
-    let prepared = prepare_worktree(name, &checkout, &root.join(VIBE_HOME))
+    let prepared = prepare_worktree(name, &checkout, &root.join(VIBE_HOME), None)
         .expect("a cleanup case prepares its worktree before mutating it");
     for step in case.input["mutations"]
         .as_array()

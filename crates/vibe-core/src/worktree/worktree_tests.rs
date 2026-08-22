@@ -131,8 +131,8 @@ fn branch_is_present(checkout: &Path, branch: &str) -> bool {
 fn a_head_below_the_session_start_counts_no_commits() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root, None);
-    let prepared =
-        prepare_worktree("review", &checkout, &root.join("home")).expect("the worktree prepares");
+    let prepared = prepare_worktree("review", &checkout, &root.join("home"), None)
+        .expect("the worktree prepares");
 
     fs::write(prepared.root.join("note.txt"), "note\n").expect("the note is writable");
     git(&prepared.root, &["add", "--all"]);
@@ -191,7 +191,8 @@ fn a_failed_construction_removes_the_worktree_and_the_branch_it_created() {
     let base = vanishing_base(&checkout);
     let vibe_home = root.join("home");
 
-    let error = prepare_worktree("review", &base, &vibe_home).expect_err("construction fails");
+    let error =
+        prepare_worktree("review", &base, &vibe_home, None).expect_err("construction fails");
     assert!(
         matches!(error, WorktreeError::Failed { .. }),
         "the original failure is returned unwrapped when the rollback finishes: {error:?}"
@@ -221,7 +222,7 @@ fn a_failed_construction_keeps_a_branch_it_did_not_create() {
     git(&checkout, &["branch", "review"]);
     let base = vanishing_base(&checkout);
 
-    prepare_worktree("review", &base, &root.join("home")).expect_err("construction fails");
+    prepare_worktree("review", &base, &root.join("home"), None).expect_err("construction fails");
 
     assert!(
         !git(&checkout, &["worktree", "list", "--porcelain"]).contains("review"),
@@ -241,7 +242,7 @@ fn a_failing_rollback_is_attached_to_the_original_failure() {
     let checkout = checkout(&root, None);
     let absent = root.join("never-added");
 
-    let note = cleanup_failed_prepare(&checkout, &absent, "review", true)
+    let note = cleanup_failed_prepare(&checkout, &absent, "review", Some("review"))
         .expect("removing a worktree git never recorded fails");
 
     let noted = WorktreeError::Noted {
@@ -271,7 +272,8 @@ fn a_failure_before_the_checkout_removes_nothing() {
     fs::create_dir_all(&occupied).expect("the occupying directory is writable");
     fs::write(occupied.join("note.txt"), "occupied\n").expect("the note is writable");
 
-    prepare_worktree("review", &checkout, &vibe_home).expect_err("an occupied target refuses");
+    prepare_worktree("review", &checkout, &vibe_home, None)
+        .expect_err("an occupied target refuses");
 
     assert!(
         occupied.join("note.txt").is_file(),
@@ -292,8 +294,8 @@ fn a_separate_git_directory_repository_prepares_and_removes() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root, Some(&root.join("state").join("repo.git")));
 
-    let prepared =
-        prepare_worktree("review", &checkout, &root.join("home")).expect("the worktree prepares");
+    let prepared = prepare_worktree("review", &checkout, &root.join("home"), None)
+        .expect("the worktree prepares");
     assert_eq!(prepared.repo_root, checkout);
 
     remove_worktree(&prepared, true).expect("the worktree is removable");
@@ -317,7 +319,7 @@ fn a_linked_worktree_of_a_separate_git_directory_repository_refuses() {
     );
     let vibe_home = root.join("home");
 
-    let error = prepare_worktree("review", &linked, &vibe_home)
+    let error = prepare_worktree("review", &linked, &vibe_home, None)
         .expect_err("the primary checkout is unknown");
     let WorktreeError::Failed { name, message } = &error else {
         panic!("expected a named worktree failure, got {error:?}");
@@ -335,12 +337,14 @@ fn a_symlinked_managed_root_still_reads_as_the_same_repository() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root, None);
     let vibe_home = root.join("home");
-    let first = prepare_worktree("review", &checkout, &vibe_home).expect("the worktree prepares");
+    let first =
+        prepare_worktree("review", &checkout, &vibe_home, None).expect("the worktree prepares");
     assert!(first.created);
 
     let alias = root.join("alias");
     symlink(&vibe_home, &alias);
-    let second = prepare_worktree("review", &checkout, &alias).expect("the worktree is reused");
+    let second =
+        prepare_worktree("review", &checkout, &alias, None).expect("the worktree is reused");
 
     assert!(
         !second.created,
@@ -421,7 +425,7 @@ fn an_unusable_branch_is_refused_before_anything_is_created() {
     let checkout = checkout(&root, None);
     let vibe_home = root.join("home");
 
-    let error = prepare_worktree("foo.lock", &checkout, &vibe_home)
+    let error = prepare_worktree("foo.lock", &checkout, &vibe_home, None)
         .expect_err("a name git will not make a branch of is refused");
     let WorktreeError::InvalidBranch { branch } = &error else {
         panic!("expected an invalid-branch refusal, got {error:?}");
