@@ -1,0 +1,120 @@
+{
+  "note": "Published tool names per managed-shell rollout and runtime gate, captured from the pinned reference by scripts/parity/tool_surface.py. The two flags are authored here; the names and the class serving each shell name are the reference's answer. Regenerate with scripts/parity/tool_surface.py --quadrants when the pinned reference moves.",
+  "platform": "linux",
+  "quadrants": [
+    {
+      "case": "rollout-off-gate-on",
+      "localManagedShellRuntimeEnabled": true,
+      "managedShellRollout": false,
+      "names": [
+        "ask_user_question",
+        "bash",
+        "edit",
+        "exit_plan_mode",
+        "grep",
+        "read_file",
+        "skill",
+        "task",
+        "todo",
+        "web_fetch",
+        "web_search",
+        "write_file"
+      ],
+      "shellClasses": {
+        "bash": "Bash"
+      },
+      "shellNames": [
+        "bash"
+      ]
+    },
+    {
+      "case": "rollout-off-gate-off",
+      "localManagedShellRuntimeEnabled": false,
+      "managedShellRollout": false,
+      "names": [
+        "ask_user_question",
+        "bash",
+        "edit",
+        "exit_plan_mode",
+        "grep",
+        "read_file",
+        "skill",
+        "task",
+        "todo",
+        "web_fetch",
+        "web_search",
+        "write_file"
+      ],
+      "shellClasses": {
+        "bash": "Bash"
+      },
+      "shellNames": [
+        "bash"
+      ]
+    },
+    {
+      "case": "rollout-on-gate-on",
+      "localManagedShellRuntimeEnabled": true,
+      "managedShellRollout": true,
+      "names": [
+        "ask_user_question",
+        "bash",
+        "bash_log_file",
+        "bash_output",
+        "bash_sessions",
+        "bash_stdin",
+        "edit",
+        "exit_plan_mode",
+        "grep",
+        "read_file",
+        "skill",
+        "task",
+        "todo",
+        "web_fetch",
+        "web_search",
+        "write_file"
+      ],
+      "shellClasses": {
+        "bash": "ExperimentalBash",
+        "bash_log_file": "BashLogFile",
+        "bash_output": "BashOutput",
+        "bash_sessions": "BashSessions",
+        "bash_stdin": "BashStdin"
+      },
+      "shellNames": [
+        "bash",
+        "bash_log_file",
+        "bash_output",
+        "bash_sessions",
+        "bash_stdin"
+      ]
+    },
+    {
+      "case": "rollout-on-gate-off",
+      "localManagedShellRuntimeEnabled": false,
+      "managedShellRollout": true,
+      "names": [
+        "ask_user_question",
+        "bash",
+        "edit",
+        "exit_plan_mode",
+        "grep",
+        "read_file",
+        "skill",
+        "task",
+        "todo",
+        "web_fetch",
+        "web_search",
+        "write_file"
+      ],
+      "shellClasses": {
+        "bash": "Bash"
+      },
+      "shellNames": [
+        "bash"
+      ]
+    }
+  ],
+  "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+  "schemaVersion": 1
+}

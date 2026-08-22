@@ -39,6 +39,10 @@ use vibe_core::tools::{
 use vibe_core::workspace::{ReviewManager, Workspace, WorkspaceTools};
 
 use vibe_core::platform::Platform;
+use vibe_core::process::{
+    ClientToolCapability, ClientToolIo, ClientToolPort, ClientToolRequest, ToolIoError,
+    ToolIoFuture,
+};
 use vibe_core::tools::shell::{HostShells, ShellRollout, ShellTools};
 
 use crate::client::interactive::InteractiveSessionToolFactory;
@@ -50,7 +54,7 @@ use vibe_core::parity::{REFERENCE_COMMIT, off_pin_reason, pinned_interpreter, re
 const CORPUS_RELATIVE: &str = ".parity/tool-surface-corpus.json";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 4;
+const CORPUS_SCHEMA_VERSION: u32 = 5;
 const CAPTURE_SCRIPT: &str = "scripts/parity/tool_surface.py";
 const BASELINE_RELATIVE: &str = "crates/vibe-app-server/tests/tool-surface/baseline.json";
 /// The committed conformance target, which is what CI diffs against: it has no
@@ -76,6 +80,17 @@ const GATES_RELATIVE: &str = "crates/vibe-app-server/tests/tool-surface/gates.js
 /// The gate layout this runner reads, matching `GATES_SCHEMA_VERSION` in the
 /// capture script.
 const GATES_SCHEMA_VERSION: u32 = 1;
+/// The committed surface quadrants: the names the reference publishes under
+/// each pair of the managed-shell rollout and the runtime gate. Replayed
+/// unconditionally like the gates, since a quadrant records names and class
+/// names and no prose.
+const QUADRANTS_RELATIVE: &str = "crates/vibe-app-server/tests/tool-surface/quadrants.json";
+/// The quadrant layout this runner reads, matching `QUADRANTS_SCHEMA_VERSION`
+/// in the capture script.
+const QUADRANTS_SCHEMA_VERSION: u32 = 1;
+/// The quadrant the default census measures: the rollout off and no
+/// terminal-hosting client, which is the pair `tools` was captured under.
+const DEFAULT_QUADRANT: &str = "rollout-off-gate-on";
 /// The floor the multi-argument probes commit to, so a regeneration that lost
 /// them reports a failure rather than a vacuous pass.
 const MINIMUM_MULTI_ARGUMENT_PROBES: usize = 6;
@@ -100,6 +115,10 @@ struct Corpus {
     /// reason as `managed_tools`.
     #[serde(default)]
     windows_tools: Vec<WindowsTool>,
+    /// The four rollout-by-gate combinations, defaulted for the same reason as
+    /// the two lists above.
+    #[serde(default)]
+    quadrants: Vec<Quadrant>,
     fixtures: Vec<Fixture>,
 }
 
@@ -188,6 +207,64 @@ struct Gate {
     names: Vec<String>,
 }
 
+/// The names the reference publishes under each pair of the managed-shell
+/// rollout and the runtime gate.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Quadrants {
+    schema_version: u32,
+    reference_commit: String,
+    platform: String,
+    #[expect(dead_code, reason = "the note documents the file for its readers")]
+    note: String,
+    quadrants: Vec<Quadrant>,
+}
+
+/// One combination: what the two flags were, what was published, and which of
+/// those names a shell class served.
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Quadrant {
+    case: String,
+    /// Reference `managed_shell_tools_enabled`, the configured rollout.
+    managed_shell_rollout: bool,
+    /// Reference `ToolManager(local_managed_shell_runtime_enabled=...)`, which
+    /// its runtime computes as "the client hosts no terminal". False withholds
+    /// every class declaring `local_managed_shell_only`.
+    local_managed_shell_runtime_enabled: bool,
+    names: Vec<String>,
+    shell_names: Vec<String>,
+    shell_classes: BTreeMap<String, String>,
+}
+
+impl Quadrants {
+    /// The quadrant recorded for `case`, which every caller names literally:
+    /// a missing one is a regenerated artifact that dropped a combination.
+    fn case(&self, case: &str) -> &Quadrant {
+        let found = self.quadrants.iter().find(|quadrant| quadrant.case == case);
+        assert!(
+            found.is_some(),
+            "{QUADRANTS_RELATIVE} records no `{case}` quadrant"
+        );
+        found.expect("the quadrant was just asserted present")
+    }
+}
+
+fn quadrants() -> Quadrants {
+    let raw = fs::read_to_string(repo_root().join(QUADRANTS_RELATIVE))
+        .expect("the quadrants are committed");
+    let quadrants: Quadrants = serde_json::from_str(&raw).expect("the quadrant corpus parses");
+    assert_eq!(
+        quadrants.schema_version, QUADRANTS_SCHEMA_VERSION,
+        "the quadrant layout moved; regenerate with `--quadrants`"
+    );
+    assert_eq!(
+        quadrants.reference_commit, REFERENCE_COMMIT,
+        "the quadrants were captured from another commit than this build asserts"
+    );
+    quadrants
+}
+
 /// The committed argument fixtures: payloads this repository authored and the
 /// accept-or-reject verdict the reference Pydantic gave each one.
 #[derive(Debug, Deserialize)]
@@ -229,9 +306,32 @@ struct Baseline {
     reference_commit: String,
     platform: String,
     note: String,
+    /// The name gap per surface quadrant rather than once for the capture: the
+    /// rollout and the runtime gate publish four different surfaces, and only
+    /// one of them still diverges here.
+    quadrants: BTreeMap<String, QuadrantGap>,
+    schema_divergence: BTreeMap<String, BTreeSet<String>>,
+}
+
+/// The names one quadrant is still short of, and the ones it invents.
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct QuadrantGap {
     missing_names: BTreeSet<String>,
     extra_names: BTreeSet<String>,
-    schema_divergence: BTreeMap<String, BTreeSet<String>>,
+}
+
+impl Baseline {
+    /// The recorded gap for `case`, refusing an unrecorded quadrant rather than
+    /// reading it as a clean one.
+    fn gap(&self, case: &str) -> &QuadrantGap {
+        let found = self.quadrants.get(case);
+        assert!(
+            found.is_some(),
+            "{BASELINE_RELATIVE} records no gap for `{case}`"
+        );
+        found.expect("the gap was just asserted present")
+    }
 }
 
 fn repo_root() -> PathBuf {
@@ -384,6 +484,20 @@ async fn published_registry_with(
     rollout: ShellRollout,
     host: HostShells,
 ) -> (tempfile::TempDir, ToolRegistry) {
+    published_registry_hosting(web_search, rollout, host, None).await
+}
+
+/// The same surface registered for a stated client, which is the other half of
+/// the reference's publication rule: its runtime reads
+/// `local_managed_shell_runtime_enabled` as "the connected client hosts no
+/// terminal", so a client that hosts one is what the gate-off quadrants are
+/// measured under.
+async fn published_registry_hosting(
+    web_search: bool,
+    rollout: ShellRollout,
+    host: HostShells,
+    client: Option<ClientToolIo>,
+) -> (tempfile::TempDir, ToolRegistry) {
     let directory = tempfile::tempdir().expect("tempdir");
     let workspace = Arc::new(Workspace::open(directory.path()).expect("workspace"));
     let review = Arc::new(ReviewManager::new(workspace.clone()));
@@ -420,7 +534,7 @@ async fn published_registry_with(
         .register(&registry, &guard)
         .expect("workspace tools register");
     ShellTools::with_host(directory.path().join("home"), host)
-        .register("session-1", directory.path(), &registry, None, &guard)
+        .register("session-1", directory.path(), &registry, client, &guard)
         .expect("the shell family registers");
     let (sender, _receiver) = tokio::sync::mpsc::channel(1);
     InteractiveSessionToolFactory {
@@ -433,6 +547,29 @@ async fn published_registry_with(
         .register(task_spec(), Arc::new(UnreachableHandler))
         .expect("the subagent tool registers");
     (directory, registry)
+}
+
+/// A connected client that declares a terminal and answers nothing: the
+/// quadrant census reads what a session publishes, never what it delegates.
+struct TerminalHostingClient;
+
+impl ClientToolPort for TerminalHostingClient {
+    fn request<'a>(&'a self, _request: ClientToolRequest) -> ToolIoFuture<'a> {
+        Box::pin(async {
+            Err(ToolIoError::CapabilityNotAdvertised(
+                ClientToolCapability::Terminal,
+            ))
+        })
+    }
+
+    fn supports(&self, capability: ClientToolCapability) -> bool {
+        capability == ClientToolCapability::Terminal
+    }
+}
+
+/// The client a gate-off quadrant registers against.
+fn terminal_client() -> ClientToolIo {
+    ClientToolIo::new("session-1", Arc::new(TerminalHostingClient))
 }
 
 /// Answers connector calls for the ordering case, which never places one.
@@ -709,9 +846,12 @@ async fn the_published_tool_surface_matches_the_reference_except_for_the_recorde
         baseline.reference_commit, REFERENCE_COMMIT,
         "the baseline records another reference commit"
     );
+    // The default census is one of the four quadrants, so it reads that
+    // quadrant's gap rather than a gap for the whole capture.
+    let gap = baseline.gap(DEFAULT_QUADRANT);
     // The availability matrix, stated as a count: this host and this
     // configuration publish exactly as many names as the reference does.
-    if baseline.missing_names.is_empty() && baseline.extra_names.is_empty() {
+    if gap.missing_names.is_empty() && gap.extra_names.is_empty() {
         assert_eq!(
             published_names.len(),
             reference_names.len(),
@@ -720,14 +860,15 @@ async fn the_published_tool_surface_matches_the_reference_except_for_the_recorde
     }
     assert_eq!(baseline.platform, corpus.platform, "baseline platform");
     assert_eq!(
-        (missing, extra, schema_divergence),
-        (
-            baseline.missing_names,
-            baseline.extra_names,
-            baseline.schema_divergence
-        ),
-        "the tool surface moved away from the recorded gap; regenerate {BASELINE_RELATIVE} \
-         only when the change is the intended one"
+        (&missing, &extra),
+        (&gap.missing_names, &gap.extra_names),
+        "the tool surface moved away from the gap recorded for {DEFAULT_QUADRANT}; regenerate \
+         {BASELINE_RELATIVE} only when the change is the intended one"
+    );
+    assert_eq!(
+        schema_divergence, baseline.schema_divergence,
+        "the published schemas moved away from the recorded gap; regenerate \
+         {BASELINE_RELATIVE} only when the change is the intended one"
     );
 }
 
@@ -1245,6 +1386,113 @@ async fn the_configured_filters_publish_what_the_reference_publishes() {
         divergent.is_empty(),
         "the configured filters diverge from the reference: {}",
         divergent.join("; ")
+    );
+}
+
+/// Replays the four surface quadrants, comparing the published names against
+/// the reference's per quadrant rather than once for the whole capture.
+///
+/// The two flags are independent: the rollout is configured
+/// (`managed_shell_tools_enabled`) and the gate is a property of the connected
+/// client, which reference `vibe/app_server/_runtime.py:212-214` computes as
+/// "the client hosts no terminal". Only the fourth combination diverges here,
+/// and it diverges by name, which is why the gap is recorded per quadrant.
+///
+/// This runs unconditionally: a quadrant records names and reference class
+/// names, so CI reports a conformance count with no checkout at all.
+#[tokio::test]
+async fn the_four_surface_quadrants_publish_what_the_reference_publishes() {
+    let quadrants = quadrants();
+    let baseline = baseline();
+    assert_eq!(
+        baseline.quadrants.keys().cloned().collect::<BTreeSet<_>>(),
+        quadrants
+            .quadrants
+            .iter()
+            .map(|quadrant| quadrant.case.clone())
+            .collect::<BTreeSet<_>>(),
+        "the baseline and the quadrant corpus disagree on which combinations exist"
+    );
+
+    let mut divergent = Vec::new();
+    let mut matched = 0_usize;
+    for quadrant in &quadrants.quadrants {
+        let expected = quadrant.names.iter().cloned().collect::<BTreeSet<_>>();
+        let rollout = if quadrant.managed_shell_rollout {
+            ShellRollout::Managed
+        } else {
+            ShellRollout::Legacy
+        };
+        // The gate is enabled exactly when no client hosts a terminal.
+        let client = (!quadrant.local_managed_shell_runtime_enabled).then(terminal_client);
+        let (_directory, registry) = published_registry_hosting(
+            expected.contains("web_search"),
+            rollout,
+            posix_host(),
+            client,
+        )
+        .await;
+        let published = registry
+            .list()
+            .expect("the registered surface")
+            .into_iter()
+            .map(|spec| spec.name)
+            .collect::<BTreeSet<_>>();
+        let gap = QuadrantGap {
+            missing_names: expected.difference(&published).cloned().collect(),
+            extra_names: published.difference(&expected).cloned().collect(),
+        };
+        if &gap == baseline.gap(&quadrant.case) {
+            matched = matched.saturating_add(1);
+        } else {
+            divergent.push(format!(
+                "{}: recorded {:?}, measured {gap:?}",
+                quadrant.case,
+                baseline.gap(&quadrant.case)
+            ));
+        }
+    }
+
+    println!(
+        "surface quadrants: {matched}/{} replayed against the gap recorded for each at {}",
+        quadrants.quadrants.len(),
+        &quadrants.reference_commit[..12]
+    );
+    assert!(
+        divergent.is_empty(),
+        "a quadrant moved away from its recorded gap; regenerate {BASELINE_RELATIVE} only when \
+         the change is the intended one: {}",
+        divergent.join("; ")
+    );
+
+    // What the fourth quadrant records: the gate withholds every managed
+    // variant, so the rollout publishes the one legacy shell name it would have
+    // published with the rollout off, served by the same class.
+    let withheld = quadrants.case("rollout-on-gate-off");
+    let legacy = quadrants.case(DEFAULT_QUADRANT);
+    assert_eq!(withheld.shell_names, legacy.shell_names);
+    assert_eq!(withheld.shell_classes, legacy.shell_classes);
+    assert_eq!(
+        withheld.shell_names.len(),
+        1,
+        "the withheld quadrant publishes more than one shell name"
+    );
+}
+
+/// The committed quadrants and a freshly captured corpus must not drift apart,
+/// for the same reason as the fixtures: when a checkout is present the corpus is
+/// recaptured on every run.
+#[tokio::test]
+async fn the_committed_quadrants_match_a_freshly_captured_corpus() {
+    let Some(corpus) = corpus() else {
+        return;
+    };
+    let quadrants = quadrants();
+    assert_eq!(quadrants.platform, corpus.platform, "quadrant platform");
+    assert_eq!(
+        quadrants.quadrants, corpus.quadrants,
+        "the committed quadrants disagree with the pinned reference; regenerate them with \
+         `{CAPTURE_SCRIPT} --quadrants`"
     );
 }
 

@@ -40,10 +40,11 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 DIGEST_SCHEMA_VERSION = 1
 FIXTURES_SCHEMA_VERSION = 2
 GATES_SCHEMA_VERSION = 1
+QUADRANTS_SCHEMA_VERSION = 1
 
 #: The `enabled_tools` and `disabled_tools` pairs whose published names are
 #: recorded. They span the four combinations of the two lists being written and
@@ -64,10 +65,26 @@ GATE_CASES: tuple[tuple[str, list[str], list[str]], ...] = (
     ("both-lists-match", ["read_*"], ["read_file"]),
     ("both-lists-written", ["read_*", "write_file"], ["  "]),
 )
+#: The four combinations of the managed-shell rollout and the runtime gate.
+#: The rollout is the `managed_shell_tools_enabled` configuration field and the
+#: gate is the `local_managed_shell_runtime_enabled` argument the manager reads
+#: in `_is_tool_available`, which the reference runtime resolves from the tools
+#: the client declares: a client hosting its own terminal turns it off, and the
+#: manager then withholds every class carrying `local_managed_shell_only`.
+#: Passing it explicitly is what makes the fourth combination visible at all;
+#: inheriting its `True` default captures only the three where the gate
+#: withholds nothing, which is the one quadrant where this port diverges.
+QUADRANT_CASES: tuple[tuple[str, bool, bool], ...] = (
+    ("rollout-off-gate-on", False, True),
+    ("rollout-off-gate-off", False, False),
+    ("rollout-on-gate-on", True, True),
+    ("rollout-on-gate-off", True, False),
+)
 DEFAULT_OUTPUT = Path(".parity/tool-surface-corpus.json")
 DEFAULT_DIGEST = Path("crates/vibe-app-server/tests/tool-surface/digest.json")
 DEFAULT_FIXTURES = Path("crates/vibe-app-server/tests/tool-surface/fixtures.json")
 DEFAULT_GATES = Path("crates/vibe-app-server/tests/tool-surface/gates.json")
+DEFAULT_QUADRANTS = Path("crates/vibe-app-server/tests/tool-surface/quadrants.json")
 #: Stands in for every description string, so the digest records that a
 #: description exists without carrying reference prose into the repository.
 DESCRIBED = "<described>"
@@ -87,7 +104,10 @@ class OracleError(RuntimeError):
 
 def resolve_reference(reference: Path, expected_commit: str | None) -> dict[str, str]:
     if not reference.is_dir():
-        raise OracleError(f"reference checkout is missing: {reference}")
+        raise OracleError(
+            f"no reference checkout at {reference}; set VIBE_REFERENCE to the checkout "
+            "path or pass --reference"
+        )
     result = subprocess.run(
         ["git", "rev-parse", "HEAD"],
         cwd=reference,
@@ -147,15 +167,20 @@ def capture_tools(reference: Path) -> tuple[list[dict[str, Any]], dict[str, Any]
         # now selected by the configuration the manager reads rather than by a
         # constructor argument. The two surfaces below are the same two the
         # policy object used to select.
-        def surface(rollout_config: Any) -> dict[str, Any]:
+        # `runtime_enabled` has no default here on purpose: the manager's own
+        # default is `True`, and inheriting it silently is what kept the gate
+        # out of this census. Every call below states which quadrant it asks
+        # for.
+        def surface(rollout_config: Any, *, runtime_enabled: bool) -> dict[str, Any]:
             manager = ToolManager(
                 lambda: rollout_config,
                 defer_mcp=True,
                 cwd=Path(workdir),
+                local_managed_shell_runtime_enabled=runtime_enabled,
             )
             return manager.available_tools
 
-        available = surface(config)
+        available = surface(config, runtime_enabled=True)
         tools = [
             {"name": name, "parameters": available[name].get_parameters()}
             for name in sorted(available)
@@ -174,7 +199,7 @@ def capture_tools(reference: Path) -> tuple[list[dict[str, Any]], dict[str, Any]
         # variant it selects for `bash` and the four session tools it adds are
         # only reachable with the experiment variant resolved to `managed`.
         managed_available = surface(
-            VibeConfigSchema(managed_shell_tools_enabled=True)
+            VibeConfigSchema(managed_shell_tools_enabled=True), runtime_enabled=True
         )
         managed_tools = [
             {"name": name, "parameters": managed_available[name].get_parameters()}
@@ -194,15 +219,34 @@ def capture_tools(reference: Path) -> tuple[list[dict[str, Any]], dict[str, Any]
                         VibeConfigSchema(
                             enabled_tools=list(enabled),
                             disabled_tools=list(disabled),
-                        )
+                        ),
+                        runtime_enabled=True,
                     )
                 ),
             }
             for case, enabled, disabled in GATE_CASES
         ]
+        # The census the three surfaces above could not take: the rollout and
+        # the gate are independent, and only their fourth combination collapses
+        # the shell surface. Names and serving classes only, because a quadrant
+        # answers which tools exist and which class won, not what they say.
+        quadrants = [
+            quadrant_record(
+                case,
+                rollout,
+                runtime_enabled,
+                surface(
+                    VibeConfigSchema(managed_shell_tools_enabled=rollout),
+                    runtime_enabled=runtime_enabled,
+                ),
+            )
+            for case, rollout, runtime_enabled in QUADRANT_CASES
+        ]
     conditions = {
         "managedShellRollout": False,
         "managedShellRolloutCaptured": True,
+        "localManagedShellRuntimeEnabled": True,
+        "quadrantsCaptured": len(QUADRANT_CASES),
         "enabledTools": list(config.enabled_tools),
         "disabledTools": list(config.disabled_tools),
     }
@@ -210,9 +254,37 @@ def capture_tools(reference: Path) -> tuple[list[dict[str, Any]], dict[str, Any]
         "conditions": conditions,
         "fixtures": fixtures,
         "gates": gates,
+        "quadrants": quadrants,
         "multiRejections": multi_rejections,
         "managedTools": managed_tools,
         "windowsTools": capture_windows_tools(),
+    }
+
+
+def quadrant_record(
+    case: str, rollout: bool, runtime_enabled: bool, available: dict[str, Any]
+) -> dict[str, Any]:
+    """One quadrant, labeled by the two flags that produced it.
+
+    A shell name is one whose serving class declares `shell_rollout`, which is
+    the marker the manager itself filters on, so the recorded shell surface is
+    the set the rollout and the gate can move rather than a list written here.
+    The class per name is recorded beside it because the fourth quadrant is not
+    only a shorter list: the name that survives is served by another class.
+    """
+
+    shell = {
+        name: tool_class.__name__
+        for name, tool_class in available.items()
+        if getattr(tool_class, "shell_rollout", None) is not None
+    }
+    return {
+        "case": case,
+        "managedShellRollout": rollout,
+        "localManagedShellRuntimeEnabled": runtime_enabled,
+        "names": sorted(available),
+        "shellNames": sorted(shell),
+        "shellClasses": dict(sorted(shell.items())),
     }
 
 
@@ -616,6 +688,30 @@ def build_gates(corpus: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def build_quadrants(corpus: dict[str, Any]) -> dict[str, Any]:
+    """The published surface under each rollout and runtime-gate combination.
+
+    Committable on the same terms as the gate corpus: every value is a name or
+    a class name the reference answered, and no description reaches it. It is
+    what holds this port's publication gate to the reference's, including the
+    combination where the gate collapses five shell names to one.
+    """
+
+    return {
+        "schemaVersion": QUADRANTS_SCHEMA_VERSION,
+        "referenceCommit": corpus["reference"]["commit"],
+        "platform": corpus["platform"],
+        "note": (
+            "Published tool names per managed-shell rollout and runtime gate, captured from the "
+            "pinned reference by scripts/parity/tool_surface.py. The two flags are authored "
+            "here; the names and the class serving each shell name are the reference's answer. "
+            "Regenerate with scripts/parity/tool_surface.py --quadrants when the pinned "
+            "reference moves."
+        ),
+        "quadrants": corpus["quadrants"],
+    }
+
+
 # --------------------------------------------------------------------------
 # Live endpoint probe
 # --------------------------------------------------------------------------
@@ -730,13 +826,66 @@ def parse_arguments() -> argparse.Namespace:
             f"unconditionally (default {DEFAULT_GATES})"
         ),
     )
+    parser.add_argument(
+        "--quadrants",
+        type=Path,
+        nargs="?",
+        const=DEFAULT_QUADRANTS,
+        default=None,
+        help=(
+            "also write the committed rollout and runtime-gate quadrants, which the Rust "
+            f"replay reads unconditionally (default {DEFAULT_QUADRANTS})"
+        ),
+    )
     parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help=(
+            "capture and compare against the committed artifacts instead of rewriting them; "
+            "a difference exits non-zero, which is what proves a re-run with no change in "
+            "between is byte-identical"
+        ),
+    )
     parser.add_argument(
         "--probe-endpoint",
         action="store_true",
         help="ask the live Mistral endpoint whether it accepts a reference-shaped schema",
     )
     return parser.parse_args()
+
+
+def rendered(payload: dict[str, Any]) -> str:
+    return json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+
+
+def check_committed(corpus: dict[str, Any], arguments: argparse.Namespace) -> int:
+    """Compares a fresh capture against every committed artifact, writing none.
+
+    This is the byte-identity proof: the four files below are what the Rust
+    replay reads, so a capture whose output moved without the reference moving
+    is a failure here rather than a diff someone notices later.
+    """
+
+    targets = (
+        ("digest", arguments.digest or DEFAULT_DIGEST, build_digest),
+        ("fixtures", arguments.fixtures or DEFAULT_FIXTURES, build_fixtures),
+        ("gates", arguments.gates or DEFAULT_GATES, build_gates),
+        ("quadrants", arguments.quadrants or DEFAULT_QUADRANTS, build_quadrants),
+    )
+    differing = []
+    for label, target, builder in targets:
+        if not target.is_file():
+            raise OracleError(f"no committed {label} at {target} to check against")
+        if target.read_text(encoding="utf-8") != rendered(builder(corpus)):
+            differing.append(f"{label} at {target}")
+    if differing:
+        raise OracleError("a fresh capture differs from " + ", ".join(differing))
+    print(
+        "the committed digest, fixtures, gates and quadrants match a fresh capture of "
+        f"{len(corpus['tools'])} tools and {len(corpus['quadrants'])} quadrants"
+    )
+    return 0
 
 
 def main() -> int:
@@ -756,10 +905,13 @@ def main() -> int:
             "windowsTools": extra["windowsTools"],
             "fixtures": extra["fixtures"],
             "gates": extra["gates"],
+            "quadrants": extra["quadrants"],
             "multiRejections": extra["multiRejections"],
         }
         if arguments.probe_endpoint:
             corpus["endpointProbe"] = probe_endpoint(tools)
+        if arguments.check:
+            return check_committed(corpus, arguments)
         output = arguments.output
         output.parent.mkdir(parents=True, exist_ok=True)
         # The Rust runner captures once per test and its tests run concurrently,
@@ -777,8 +929,7 @@ def main() -> int:
         if arguments.digest is not None:
             arguments.digest.parent.mkdir(parents=True, exist_ok=True)
             arguments.digest.write_text(
-                json.dumps(build_digest(corpus), indent=2, sort_keys=True, ensure_ascii=False)
-                + "\n",
+                rendered(build_digest(corpus)),
                 encoding="utf-8",
             )
         # Written on request for the same reason as the digest: the fixtures are
@@ -787,8 +938,7 @@ def main() -> int:
         if arguments.fixtures is not None:
             arguments.fixtures.parent.mkdir(parents=True, exist_ok=True)
             arguments.fixtures.write_text(
-                json.dumps(build_fixtures(corpus), indent=2, sort_keys=True, ensure_ascii=False)
-                + "\n",
+                rendered(build_fixtures(corpus)),
                 encoding="utf-8",
             )
         # Written on request for the same reason: the gate corpus is what the
@@ -797,8 +947,17 @@ def main() -> int:
         if arguments.gates is not None:
             arguments.gates.parent.mkdir(parents=True, exist_ok=True)
             arguments.gates.write_text(
-                json.dumps(build_gates(corpus), indent=2, sort_keys=True, ensure_ascii=False)
-                + "\n",
+                rendered(build_gates(corpus)),
+                encoding="utf-8",
+            )
+        # Written on request for the same reason as the gates: the quadrants
+        # are what the publication gate is held to, and the fourth one is a
+        # divergence this port has yet to close, so it is regenerated
+        # deliberately rather than by the replay that reads it.
+        if arguments.quadrants is not None:
+            arguments.quadrants.parent.mkdir(parents=True, exist_ok=True)
+            arguments.quadrants.write_text(
+                rendered(build_quadrants(corpus)),
                 encoding="utf-8",
             )
     except OracleError as error:
@@ -815,6 +974,8 @@ def main() -> int:
         print(f"wrote the argument fixtures to {arguments.fixtures}")
     if arguments.gates is not None:
         print(f"wrote {len(extra['gates'])} filter gates to {arguments.gates}")
+    if arguments.quadrants is not None:
+        print(f"wrote {len(extra['quadrants'])} surface quadrants to {arguments.quadrants}")
     if probe := corpus.get("endpointProbe"):
         print(f"endpoint probe: {json.dumps(probe, sort_keys=True)}")
     return 0
