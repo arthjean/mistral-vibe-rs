@@ -108,6 +108,12 @@ a user-invocable skill, then as a custom command file.
 `vibe [prompt]` starts interactive mode; `-p/--prompt` runs programmatically
 with `--output text|json|streaming`. Session control: `--resume [id]`,
 `-c/--continue`, `--workdir <path>`, `--add-dir <path>`, `--worktree <name>`.
+`--worktree <name>` creates the worktree under the managed root inside the vibe
+home, on a branch carrying that name, and reuses it when one is already there;
+the session trusts that directory without asking. On exit the run offers to
+discard only a worktree it created itself, so a reused one and a branch that
+existed beforehand are kept unless the answer says otherwise, a `-p` run is
+never asked, and `--setup` and `--check-upgrade` ignore the flag.
 Trust and permissions: `--trust`, `--auto-approve`/`--yolo`,
 `--enabled-tools`, `--disabled-tools`. Budgets: `--max-turns`, `--max-tokens`,
 `--max-price`. Others: `--agent <name>`, `--setup`, `--check-upgrade`,

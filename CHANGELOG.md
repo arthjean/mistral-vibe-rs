@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Narrate the worktree lifecycle the way the reference does. `--worktree` now
+  announces the name it is preparing before git runs and the path it resolved
+  once it succeeded, both on standard error, and reports a preparation failure
+  on standard output with exit code 1. Cleanup announces the removal before it
+  attempts it, says so and keeps the worktree when it cannot inspect it, and
+  says so and stops when git refuses the removal. `--worktree` also documents
+  itself: the placeholder is `NAME`, and the help covers the managed location,
+  the branch, the trust it grants, and that `--setup` and `--check-upgrade`
+  ignore it.
+
 - Answer `workspace/worktrees/list`. The method the inventory has been
   advertising since v2.24.0 is now routed and answers before any session is
   open, with one entry per linked worktree carrying its name, branch, working

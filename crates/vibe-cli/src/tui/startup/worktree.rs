@@ -51,7 +51,18 @@ pub struct LaunchWorkspace {
 }
 
 impl LaunchWorkspace {
-    pub fn prepare(arguments: &mut Arguments) -> Result<Self, StartupError> {
+    /// Resolves where the launch runs, narrating the worktree it prepares.
+    ///
+    /// The two lines are the reference's, on the stream it writes them on: the
+    /// requested name before any git command runs, so an invocation that dies
+    /// inside `worktree add` is still attributable, and the working path once
+    /// preparation returned (`vibe/cli/entrypoint.py:291-304`). The failure in
+    /// between is reported by the caller, which is where the reference reports
+    /// it too.
+    pub fn prepare(
+        arguments: &mut Arguments,
+        narration: &mut impl Write,
+    ) -> Result<Self, StartupError> {
         let requested = match &arguments.workdir {
             Some(path) => path.clone(),
             None => std::env::current_dir().map_err(|source| StartupError::Io {
@@ -80,7 +91,11 @@ impl LaunchWorkspace {
 
         let name = requested_worktree.unwrap_or_default().to_owned();
         let vibe_home = vibe_home_directory(arguments, &base_directory);
+        writeln!(narration, "Preparing worktree {name:?}...")
+            .map_err(|source| startup_io(Path::new("stderr"), source))?;
         let worktree = worktree::prepare_worktree(&name, &base_directory, &vibe_home, None)?;
+        writeln!(narration, "Using worktree: {}", worktree.path.display())
+            .map_err(|source| startup_io(Path::new("stderr"), source))?;
         resolve_additional_directories(arguments, &worktree.path)?;
         arguments.workdir = Some(worktree.path.clone());
         arguments.trust = true;
@@ -129,6 +144,9 @@ pub enum CleanupOutcome {
     NotOwned,
     Kept,
     Removed,
+    /// Git refused the removal after the question was answered, so what is left
+    /// on disk is whatever git left there.
+    Failed,
 }
 
 /// Offers cleanup on the terminal, reading `/dev/tty` when stdin is a pipe.
@@ -154,6 +172,11 @@ pub fn cleanup_worktree_terminal(
 }
 
 /// Asks whether to discard the worktree, then removes it through the core.
+///
+/// A run that reached this point already produced its result, so neither git
+/// failure ends it: an inspection that cannot read the worktree cannot ask a
+/// truthful question about it and keeps it, and a removal git refuses is
+/// reported and leaves behind whatever git left (`vibe/cli/entrypoint.py:222-268`).
 pub fn cleanup_worktree(
     worktree: PreparedWorktree,
     input: &mut impl BufRead,
@@ -162,7 +185,14 @@ pub fn cleanup_worktree(
     if !worktree.created {
         return Ok(CleanupOutcome::NotOwned);
     }
-    let state = inspect_worktree_for_cleanup(&worktree)?;
+    let state = match inspect_worktree_for_cleanup(&worktree) {
+        Ok(state) => state,
+        Err(error) => {
+            writeln!(output, "Could not inspect worktree for cleanup: {error}")
+                .map_err(|source| startup_io(&worktree.root, source))?;
+            return Ok(CleanupOutcome::Kept);
+        }
+    };
     if !state.is_clean() {
         writeln!(
             output,
@@ -205,7 +235,13 @@ pub fn cleanup_worktree(
         )?
     };
 
-    remove_worktree(&worktree, delete_branch)?;
+    writeln!(output, "Removing worktree: {}", worktree.root.display())
+        .map_err(|source| startup_io(&worktree.root, source))?;
+    if let Err(error) = remove_worktree(&worktree, delete_branch) {
+        writeln!(output, "Could not remove worktree: {error}")
+            .map_err(|source| startup_io(&worktree.root, source))?;
+        return Ok(CleanupOutcome::Failed);
+    }
     writeln!(output, "Removed worktree: {}", worktree.root.display())
         .map_err(|source| startup_io(&worktree.root, source))?;
     if !delete_branch {
@@ -313,7 +349,8 @@ mod tests {
         let root = repository();
         let mut arguments = test_arguments(root.path());
         arguments.worktree = Some("parity".to_owned());
-        let first = LaunchWorkspace::prepare(&mut arguments).expect("worktree prepared");
+        let first = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
+            .expect("worktree prepared");
         let prepared = first.worktree.expect("prepared worktree");
         assert!(prepared.created);
         assert!(prepared.path.join("README.md").is_file());
@@ -322,7 +359,7 @@ mod tests {
 
         let mut reused_arguments = test_arguments(root.path());
         reused_arguments.worktree = Some("parity".to_owned());
-        let reused = LaunchWorkspace::prepare(&mut reused_arguments)
+        let reused = LaunchWorkspace::prepare(&mut reused_arguments, &mut Vec::<u8>::new())
             .expect("existing worktree reused")
             .worktree
             .expect("reused worktree");
@@ -344,7 +381,8 @@ mod tests {
         let mut arguments = test_arguments(root.path());
         arguments.worktree = Some(String::new());
 
-        let workspace = LaunchWorkspace::prepare(&mut arguments).expect("a normal session starts");
+        let workspace = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
+            .expect("a normal session starts");
 
         assert!(workspace.worktree.is_none());
         assert_eq!(
@@ -376,7 +414,7 @@ mod tests {
         let mut invalid = test_arguments(root.path());
         invalid.worktree = Some("../escape".to_owned());
         assert!(matches!(
-            LaunchWorkspace::prepare(&mut invalid),
+            LaunchWorkspace::prepare(&mut invalid, &mut Vec::<u8>::new()),
             Err(StartupError::InvalidWorktreeName)
         ));
         assert_eq!(
@@ -388,7 +426,7 @@ mod tests {
         let mut non_repository = test_arguments(outside.path());
         non_repository.worktree = Some("feature".to_owned());
         assert!(matches!(
-            LaunchWorkspace::prepare(&mut non_repository),
+            LaunchWorkspace::prepare(&mut non_repository, &mut Vec::<u8>::new()),
             Err(StartupError::WorktreeRepositoryRequired)
         ));
     }
@@ -398,7 +436,7 @@ mod tests {
         let root = repository();
         let mut arguments = test_arguments(root.path());
         arguments.worktree = Some("conflict".to_owned());
-        let prepared = LaunchWorkspace::prepare(&mut arguments)
+        let prepared = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
             .expect("initial worktree")
             .worktree
             .expect("prepared worktree");
@@ -415,7 +453,7 @@ mod tests {
         let mut conflicting = test_arguments(root.path());
         conflicting.worktree = Some("conflict".to_owned());
         assert!(matches!(
-            LaunchWorkspace::prepare(&mut conflicting),
+            LaunchWorkspace::prepare(&mut conflicting, &mut Vec::<u8>::new()),
             Err(StartupError::Worktree { .. })
         ));
         assert_eq!(
@@ -430,7 +468,7 @@ mod tests {
         git(root.path(), &["branch", "attached"]);
         let mut arguments = test_arguments(root.path());
         arguments.worktree = Some("attached".to_owned());
-        let prepared = LaunchWorkspace::prepare(&mut arguments)
+        let prepared = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
             .expect("attached branch worktree")
             .worktree
             .expect("prepared worktree");
@@ -456,7 +494,7 @@ mod tests {
         let mut arguments = test_arguments(root.path());
         arguments.worktree = Some("relative-add-dir".to_owned());
         arguments.add_directories = vec![PathBuf::from("nested/context")];
-        let prepared = LaunchWorkspace::prepare(&mut arguments)
+        let prepared = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
             .expect("worktree prepared")
             .worktree
             .expect("prepared worktree");
@@ -477,7 +515,7 @@ mod tests {
         let root = repository();
         let mut arguments = test_arguments(root.path());
         arguments.worktree = Some("dirty".to_owned());
-        let prepared = LaunchWorkspace::prepare(&mut arguments)
+        let prepared = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
             .expect("worktree prepared")
             .worktree
             .expect("prepared worktree");
@@ -503,7 +541,7 @@ mod tests {
         let root = repository();
         let mut arguments = test_arguments(root.path());
         arguments.worktree = Some("detached".to_owned());
-        let prepared = LaunchWorkspace::prepare(&mut arguments)
+        let prepared = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
             .expect("worktree prepared")
             .worktree
             .expect("prepared worktree");
@@ -533,12 +571,154 @@ mod tests {
         git(root.path(), &["branch", "-D", "detached"]);
     }
 
+    /// Both narration lines are the reference's, in its order: the requested
+    /// name before git runs, the resolved path once it did.
+    #[test]
+    fn preparation_narrates_the_name_then_the_path() {
+        let root = repository();
+        let mut arguments = test_arguments(root.path());
+        arguments.worktree = Some("narrated".to_owned());
+        let mut narration = Vec::<u8>::new();
+        let prepared = LaunchWorkspace::prepare(&mut arguments, &mut narration)
+            .expect("worktree prepared")
+            .worktree
+            .expect("prepared worktree");
+        let narration = String::from_utf8(narration).expect("narration is UTF-8");
+        let preparing = narration
+            .find("Preparing worktree \"narrated\"...")
+            .expect("the name is narrated");
+        let using = narration
+            .find(&format!("Using worktree: {}", prepared.path.display()))
+            .expect("the path is narrated");
+        assert!(preparing < using, "narration out of order: {narration}");
+
+        cleanup_worktree(
+            prepared,
+            &mut Cursor::new(Vec::<u8>::new()),
+            &mut Vec::new(),
+        )
+        .expect("clean worktree removed");
+    }
+
+    /// A preparation that fails narrates the attempt and nothing after it, so
+    /// the failure the caller reports is not preceded by a path that never
+    /// existed.
+    #[test]
+    fn a_failed_preparation_narrates_only_the_attempt() {
+        let outside = tempfile::tempdir().expect("non-repository");
+        let mut arguments = test_arguments(outside.path());
+        arguments.worktree = Some("doomed".to_owned());
+        let mut narration = Vec::<u8>::new();
+        assert!(LaunchWorkspace::prepare(&mut arguments, &mut narration).is_err());
+        let narration = String::from_utf8(narration).expect("narration is UTF-8");
+        assert!(narration.contains("Preparing worktree \"doomed\"..."));
+        assert!(!narration.contains("Using worktree:"), "{narration}");
+    }
+
+    /// The removal is announced before it is attempted, so a git failure has a
+    /// line naming what was being removed when it happened.
+    #[test]
+    fn cleanup_names_the_worktree_before_removing_it() {
+        let root = repository();
+        let mut arguments = test_arguments(root.path());
+        arguments.worktree = Some("announced".to_owned());
+        let prepared = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
+            .expect("worktree prepared")
+            .worktree
+            .expect("prepared worktree");
+        let worktree_root = prepared.root.clone();
+        let mut output = Vec::<u8>::new();
+        let outcome = cleanup_worktree(prepared, &mut Cursor::new(Vec::<u8>::new()), &mut output)
+            .expect("clean worktree removed");
+        assert_eq!(outcome, CleanupOutcome::Removed);
+        let output = String::from_utf8(output).expect("output is UTF-8");
+        let removing = output
+            .find(&format!("Removing worktree: {}", worktree_root.display()))
+            .expect("the removal is announced");
+        let removed = output
+            .find(&format!("Removed worktree: {}", worktree_root.display()))
+            .expect("the removal is confirmed");
+        assert!(removing < removed, "cleanup out of order: {output}");
+    }
+
+    /// A worktree git can no longer describe cannot be the subject of a
+    /// truthful question, so cleanup says so and keeps whatever is left.
+    #[test]
+    fn an_uninspectable_worktree_is_named_and_kept() {
+        let root = repository();
+        let mut arguments = test_arguments(root.path());
+        arguments.worktree = Some("uninspectable".to_owned());
+        let prepared = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
+            .expect("worktree prepared")
+            .worktree
+            .expect("prepared worktree");
+        let worktree_root = prepared.root.clone();
+        fs::remove_dir_all(&worktree_root).expect("worktree directory removed underneath");
+
+        let mut output = Vec::<u8>::new();
+        let outcome = cleanup_worktree(prepared, &mut Cursor::new(Vec::<u8>::new()), &mut output)
+            .expect("an inspection failure is not fatal");
+        assert_eq!(outcome, CleanupOutcome::Kept);
+        let output = String::from_utf8(output).expect("output is UTF-8");
+        assert!(
+            output.contains("Could not inspect worktree for cleanup:"),
+            "{output}"
+        );
+        assert!(!output.contains("Removing worktree:"), "{output}");
+
+        git(root.path(), &["worktree", "prune"]);
+        git(root.path(), &["branch", "-D", "uninspectable"]);
+    }
+
+    /// A removal git refuses is reported and ends the cleanup there: no
+    /// confirmation line follows it and whatever git left on disk stays.
+    #[test]
+    fn a_removal_git_refuses_is_reported_and_stops_the_cleanup() {
+        let root = repository();
+        let mut arguments = test_arguments(root.path());
+        arguments.worktree = Some("refused".to_owned());
+        let prepared = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
+            .expect("worktree prepared")
+            .worktree
+            .expect("prepared worktree");
+        let worktree_root = prepared.root.clone();
+        // Inspection reads the worktree itself and still answers; the removal
+        // runs against the checkout, and a checkout git cannot read refuses it.
+        let elsewhere = tempfile::tempdir().expect("non-repository");
+        let refused = PreparedWorktree {
+            repo_root: elsewhere.path().to_path_buf(),
+            ..prepared
+        };
+
+        let mut output = Vec::<u8>::new();
+        let outcome = cleanup_worktree(refused, &mut Cursor::new(Vec::<u8>::new()), &mut output)
+            .expect("a refused removal is not fatal");
+        assert_eq!(outcome, CleanupOutcome::Failed);
+        let output = String::from_utf8(output).expect("output is UTF-8");
+        assert!(
+            output.contains(&format!("Removing worktree: {}", worktree_root.display())),
+            "{output}"
+        );
+        assert!(output.contains("Could not remove worktree:"), "{output}");
+        assert!(!output.contains("Removed worktree:"), "{output}");
+        assert!(
+            worktree_root.is_dir(),
+            "a worktree git refused to remove is still on disk"
+        );
+
+        git(
+            root.path(),
+            &["worktree", "remove", "--force", path_text(&worktree_root)],
+        );
+        git(root.path(), &["branch", "-D", "refused"]);
+    }
+
     #[test]
     fn clean_owned_worktree_is_removed_once() {
         let root = repository();
         let mut arguments = test_arguments(root.path());
         arguments.worktree = Some("clean".to_owned());
-        let prepared = LaunchWorkspace::prepare(&mut arguments)
+        let prepared = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
             .expect("worktree prepared")
             .worktree
             .expect("prepared worktree");

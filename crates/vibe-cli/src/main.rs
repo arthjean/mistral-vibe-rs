@@ -33,10 +33,13 @@ async fn main() -> ExitCode {
     // The span exporter is installed before any turn can open a span, and its
     // guard lives as long as the process: dropping it flushes the batch.
     let _tracing = vibe_cli::install_tracing(&arguments);
-    let invocation = match PreparedInvocation::prepare(arguments) {
+    let invocation = match PreparedInvocation::prepare(arguments, &mut std::io::stderr().lock()) {
         Ok(invocation) => invocation,
         Err(error) => {
-            eprintln!("{error}");
+            // The reference reports this one failure on stdout, where the rest
+            // of its worktree narration goes to stderr
+            // (`vibe/cli/entrypoint.py:301-304`).
+            let _ = writeln!(std::io::stdout().lock(), "Error: {error}");
             return ExitCode::FAILURE;
         }
     };
@@ -60,9 +63,6 @@ async fn main() -> ExitCode {
         }
         PreparedInvocation::Interactive(invocation) => {
             let worktree = invocation.workspace.worktree.clone();
-            if let Some(worktree) = &worktree {
-                eprintln!("Using worktree: {}", worktree.path.display());
-            }
             match vibe_cli::tui::run_interactive(invocation).await {
                 Ok(exit) => {
                     let session_started = exit.session_started;
@@ -98,9 +98,6 @@ async fn main() -> ExitCode {
             }
         }
         PreparedInvocation::Programmatic(invocation) => {
-            if let Some(worktree) = &invocation.workspace.worktree {
-                eprintln!("Using worktree: {}", worktree.path.display());
-            }
             let mut stdout = std::io::stdout().lock();
             let mut stderr = std::io::stderr().lock();
             match vibe_cli::run(invocation.arguments, &mut stdout, &mut stderr).await {

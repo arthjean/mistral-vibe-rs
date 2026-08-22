@@ -93,7 +93,13 @@ pub struct Arguments {
     pub setup: bool,
     #[arg(long, action = ArgAction::SetTrue)]
     pub check_upgrade: bool,
-    #[arg(long)]
+    #[arg(
+        long,
+        value_name = "NAME",
+        help = "Run in a git worktree kept under the vibe home, created on a branch called NAME \
+                or reused when one is already there. The session trusts that directory without \
+                asking. Ignored with --setup and --check-upgrade."
+    )]
     pub worktree: Option<String>,
     #[arg(long, hide = true)]
     pub teleport: bool,

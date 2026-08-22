@@ -40,14 +40,22 @@ pub enum PreparedInvocation {
 }
 
 impl PreparedInvocation {
-    pub fn prepare(mut arguments: Arguments) -> Result<Self, StartupError> {
+    /// Routes an invocation, narrating worktree preparation as it goes.
+    ///
+    /// The writer is the caller's stderr in production: the reference prints
+    /// both worktree lines from `main()` itself, before the route is known
+    /// (`vibe/cli/entrypoint.py:291-304`).
+    pub fn prepare(
+        mut arguments: Arguments,
+        narration: &mut impl std::io::Write,
+    ) -> Result<Self, StartupError> {
         // The reference resolves forced update discovery before it reads stdin,
         // prepares a workspace, or loads any project configuration.
         if InvocationIntent::from_arguments(&arguments).route == InvocationRoute::CheckUpgrade {
             return Ok(Self::CheckUpgrade(Box::new(arguments)));
         }
         populate_piped_prompt(&mut arguments)?;
-        let workspace = LaunchWorkspace::prepare(&mut arguments)?;
+        let workspace = LaunchWorkspace::prepare(&mut arguments, narration)?;
         let intent = InvocationIntent::from_arguments(&arguments);
         Ok(match intent.route {
             InvocationRoute::Programmatic => Self::Programmatic(ProgrammaticInvocation {
