@@ -27,10 +27,11 @@
     {
       "id": "EP-088",
       "title": "What a name and a path are allowed to be",
-      "status": "PENDING",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 4,
-      "stories_done": 0
+      "stories_done": 4,
+      "started_at": "2026-08-22"
     },
     {
       "id": "EP-089",
@@ -157,45 +158,57 @@
       "id": "US-276",
       "title": "Refuse a name the reference calls unportable",
       "epic": "EP-088",
-      "status": "PENDING",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-271"
-      ]
+      ],
+      "started_at": "2026-08-22",
+      "completed_at": "2026-08-22",
+      "reviewed_at": "2026-08-22"
     },
     {
       "id": "US-277",
       "title": "Validate the branch before creating anything",
       "epic": "EP-088",
-      "status": "PENDING",
+      "status": "DONE",
       "priority": "P1",
       "size": "S",
       "blocked_by": [
         "US-276"
-      ]
+      ],
+      "started_at": "2026-08-22",
+      "completed_at": "2026-08-22",
+      "reviewed_at": "2026-08-22"
     },
     {
       "id": "US-278",
       "title": "Guard the working directory the worktree hands back",
       "epic": "EP-088",
-      "status": "PENDING",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-271"
-      ]
+      ],
+      "started_at": "2026-08-22",
+      "completed_at": "2026-08-22",
+      "reviewed_at": "2026-08-22"
     },
     {
       "id": "US-279",
       "title": "Resolve and confine the managed root",
       "epic": "EP-088",
-      "status": "PENDING",
+      "status": "DONE",
       "priority": "P2",
       "size": "S",
       "blocked_by": [
         "US-271"
-      ]
+      ],
+      "started_at": "2026-08-22",
+      "completed_at": "2026-08-22",
+      "reviewed_at": "2026-08-22"
     },
     {
       "id": "US-280",
