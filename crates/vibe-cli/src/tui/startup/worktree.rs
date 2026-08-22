@@ -440,6 +440,45 @@ mod tests {
         git(root.path(), &["branch", "-D", "dirty"]);
     }
 
+    /// A commit made while `HEAD` is detached never moves the branch tip, so
+    /// counting against the branch would report a clean worktree and remove it
+    /// without asking. Declining has to be reachable, which means the prompt
+    /// has to happen.
+    #[test]
+    fn detached_head_commit_is_kept_when_cleanup_is_declined() {
+        let root = repository();
+        let mut arguments = test_arguments(root.path());
+        arguments.worktree = Some("detached".to_owned());
+        let prepared = LaunchWorkspace::prepare(&mut arguments)
+            .expect("worktree prepared")
+            .worktree
+            .expect("prepared worktree");
+        let worktree_root = prepared.root.clone();
+        git(&worktree_root, &["checkout", "--quiet", "--detach"]);
+        fs::write(worktree_root.join("note.txt"), "note\n").expect("note");
+        git(&worktree_root, &["add", "--all"]);
+        git(&worktree_root, &["commit", "-qm", "detached work"]);
+
+        let state = inspect_worktree_for_cleanup(&prepared).expect("inspection");
+        assert_eq!(state.new_commit_count, 1);
+        assert!(!state.is_clean());
+
+        let outcome = cleanup_worktree(prepared, &mut Cursor::new(b"n\n"), &mut Vec::new())
+            .expect("cleanup decision");
+        assert_eq!(outcome, CleanupOutcome::Kept);
+        assert!(worktree_root.is_dir());
+        assert!(git_succeeds(
+            root.path(),
+            &["show-ref", "--verify", "--quiet", "refs/heads/detached"]
+        ));
+
+        git(
+            root.path(),
+            &["worktree", "remove", "--force", path_text(&worktree_root)],
+        );
+        git(root.path(), &["branch", "-D", "detached"]);
+    }
+
     #[test]
     fn clean_owned_worktree_is_removed_once() {
         let root = repository();

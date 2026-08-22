@@ -125,9 +125,6 @@ const NO_BRANCH_PARAMETER: &str = "the reference takes the branch as a parameter
      to the worktree name; this port has no branch parameter, so a case that asks for a branch \
      other than the name cannot be driven here at all. US-282 adds the parameter, which is what \
      `localWorkspaceSelection` needs";
-const HEAD_NOT_BRANCH: &str = "the reference counts session commits against the worktree's own \
-     HEAD, so a commit made on a detached HEAD still blocks removal; this port counts against the \
-     branch tip, which a detached commit never moves. US-272 counts against HEAD";
 const COMMIT_PHRASING: &str = "the commit-count reason is this port's own sentence and the \
      reference's is shorter; the two booleans beside it match digest for digest. US-286 restates \
      the phrase from the reference's own form";
@@ -480,23 +477,9 @@ const LEDGER: &[Divergence] = &[
     Divergence {
         family: "cleanup",
         case: "detached-commit",
-        pointer: "/isClean",
-        closed_by: "US-272",
-        why: HEAD_NOT_BRANCH,
-    },
-    Divergence {
-        family: "cleanup",
-        case: "detached-commit",
-        pointer: "/newCommitCount",
-        closed_by: "US-272",
-        why: HEAD_NOT_BRANCH,
-    },
-    Divergence {
-        family: "cleanup",
-        case: "detached-commit",
-        pointer: "/reasons",
-        closed_by: "US-272",
-        why: HEAD_NOT_BRANCH,
+        pointer: "/reasons/0",
+        closed_by: "US-286",
+        why: COMMIT_PHRASING,
     },
     // The enumeration that does not exist here.
     Divergence {

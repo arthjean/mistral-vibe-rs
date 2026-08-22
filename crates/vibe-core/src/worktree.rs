@@ -25,6 +25,8 @@ use thiserror::Error;
 
 #[cfg(test)]
 mod worktree_parity_tests;
+#[cfg(test)]
+mod worktree_tests;
 
 /// The directory the managed roots live under, inside the vibe home.
 const MANAGED_DIRECTORY: &str = "worktrees";
@@ -189,6 +191,12 @@ pub fn prepare_worktree(
 }
 
 /// What removing this worktree would discard, relative to the session start.
+///
+/// The commit count is taken against the worktree's own `HEAD` rather than
+/// against its named branch, which is what the reference does and says why:
+/// a commit made while `HEAD` is detached never moves the branch tip, so
+/// counting against the branch would report zero and let a removal discard it
+/// (`vibe/core/worktree.py:263-267`).
 pub fn inspect_worktree_for_cleanup(
     worktree: &PreparedWorktree,
 ) -> Result<WorktreeCleanupState, WorktreeError> {
@@ -197,13 +205,10 @@ pub fn inspect_worktree_for_cleanup(
         ["status", "--porcelain", "--untracked-files=all"],
         &worktree.name,
     )?;
+    let range = format!("{}..HEAD", worktree.base_commit);
     let new_commit_count = git_stdout(
         &worktree.root,
-        [
-            "rev-list",
-            "--count",
-            &format!("{}..{}", worktree.base_commit, worktree.branch),
-        ],
+        ["rev-list", "--count", range.as_str()],
         &worktree.name,
     )?
     .parse::<u64>()

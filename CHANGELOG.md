@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Keep a worktree that carries a commit made on a detached `HEAD`. Session
+  commits are now counted against the worktree's own `HEAD` rather than against
+  its branch tip, so detaching `HEAD` to compare a revision and committing there
+  no longer reads as a clean worktree removed without asking: the prompt is
+  offered and declining keeps both the worktree and its branch.
+
 - Say that git is missing when git is missing. A launch that asks for
   `--worktree` on a machine without git on `PATH` now fails with a sentence
   naming git and the search path, where it used to surface the raw spawn error
