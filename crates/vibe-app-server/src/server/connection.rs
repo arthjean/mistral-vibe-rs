@@ -378,6 +378,7 @@ impl ServerConnection {
             "turn/interrupt" => self.turn_interrupt(request),
             "session/context/inject" => self.context_inject(request),
             "callback/respond" => self.callback_respond(request),
+            "workspace/worktrees/list" => self.worktrees_list(request),
             method if RESOURCE_METHODS.contains(&method) => self.resource_request(request),
             method if WORKSPACE_METHODS.contains(&method) => self.workspace_request(request),
             method if PROJECTS_METHODS.contains(&method) => self.projects_request(request),
@@ -466,6 +467,30 @@ impl ServerConnection {
         }
         self.state = ConnectionState::ShuttingDown;
         success_batch(request.id, BTreeMap::new())
+    }
+
+    /// Answers the linked worktrees of a checkout.
+    ///
+    /// Routed on its own rather than through the resource methods, which all
+    /// require a `sessionId`: the reference lists this among the methods a
+    /// client may call before it has opened anything
+    /// (`vibe/app_server/_host.py:101`).
+    fn worktrees_list(&mut self, request: ServerRequest) -> DispatchBatch {
+        let id = request.id.clone();
+        answered(id, self.dispatch_worktrees_list(request))
+    }
+
+    fn dispatch_worktrees_list(
+        &mut self,
+        request: ServerRequest,
+    ) -> Result<DispatchBatch, ProtocolFault> {
+        let params = from_params::<WorktreeListParams>(&request.params)?;
+        let worktrees = crate::worktrees::list_response(Path::new(&params.cwd))
+            .map_err(|error| ProtocolFault::internal(error.to_string()))?;
+        Ok(success_batch(
+            request.id,
+            result_map([("worktrees", Value::Array(worktrees))]),
+        ))
     }
 
     fn workspace_request(&mut self, request: ServerRequest) -> DispatchBatch {

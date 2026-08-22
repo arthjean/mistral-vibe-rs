@@ -24,3 +24,4 @@ mod tool_surface_parity_tests;
 pub mod transport;
 pub mod vocabulary;
 pub mod workspace;
+mod worktrees;

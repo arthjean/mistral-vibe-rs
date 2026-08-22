@@ -229,12 +229,14 @@
       "id": "US-281",
       "title": "Route workspace/worktrees/list",
       "epic": "EP-089",
-      "status": "PENDING",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-280"
-      ]
+      ],
+      "completed_at": "2026-08-22",
+      "reviewed_at": "2026-08-22"
     },
     {
       "id": "US-282",

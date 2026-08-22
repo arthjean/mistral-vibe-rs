@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Answer `workspace/worktrees/list`. The method the inventory has been
+  advertising since v2.24.0 is now routed and answers before any session is
+  open, with one entry per linked worktree carrying its name, branch, working
+  directory, root and repository root. A directory that is no repository, or a
+  host with no git at all, answers an empty list rather than an error.
+
 - Refuse a `--worktree` name no filesystem can carry. A name that is empty,
   a relative alias, ends in a space or a dot, is unprintable, carries one of
   `<>:"/\|?*`, or collides with a Windows device name such as `aux` or

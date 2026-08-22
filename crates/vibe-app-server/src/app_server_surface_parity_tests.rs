@@ -67,13 +67,8 @@ const PROBE_SESSION: &str = "session-parity-probe";
 /// names, and routing them is app-server parity work rather than compaction
 /// work. Any other method that stops being routed has to earn an entry here
 /// before the replay accepts it.
-const UNROUTED_METHODS: &[(&str, &str)] = &[
-    ("identity/read", "US-142: declared at the v2.24.0 re-pin"),
-    (
-        "workspace/worktrees/list",
-        "US-142: declared at the v2.24.0 re-pin",
-    ),
-];
+const UNROUTED_METHODS: &[(&str, &str)] =
+    &[("identity/read", "US-142: declared at the v2.24.0 re-pin")];
 
 /// Reference notifications this build does not emit yet.
 ///
@@ -190,6 +185,10 @@ fn probe_requests() -> Vec<(&'static str, Value)> {
             "workspace/trust/status",
             json!({"sessionId": PROBE_SESSION, "cwd": "/workspace"}),
         ),
+        // A path that is no repository answers an empty listing rather than
+        // refusing, which is what makes the worktree listing probeable without
+        // scripting a checkout.
+        ("workspace/worktrees/list", json!({"cwd": "/workspace"})),
     ]
 }
 

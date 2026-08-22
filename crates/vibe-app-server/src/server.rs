@@ -216,6 +216,7 @@ const IMPLEMENTED_METHODS: &[&str] = &[
     "turn/steer",
     "workspace/trust/decision",
     "workspace/trust/status",
+    "workspace/worktrees/list",
 ];
 
 struct DenyApproval;

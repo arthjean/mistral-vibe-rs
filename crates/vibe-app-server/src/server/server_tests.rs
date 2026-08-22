@@ -23,6 +23,7 @@ mod turn_tests;
 /// Which reference methods are still unrouted is a moving backlog, so it is
 /// tracked where it is measured, in `app_server_surface_parity_tests`.
 mod wire_tests;
+mod worktree_tests;
 
 /// Registers one tool whose runtime prerequisite never holds, which is what
 /// a session-scoped tool does when the thing it drives is not there.
