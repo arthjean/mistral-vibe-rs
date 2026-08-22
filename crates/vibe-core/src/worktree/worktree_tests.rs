@@ -677,3 +677,72 @@ fn enumeration_answers_with_the_linked_worktrees_alone() {
     assert_eq!(linked[0].path, root.join("linked"));
     assert_eq!(linked[0].repo_root, checkout);
 }
+
+/// Nothing in this port changes the process working directory, which is what
+/// makes the reference's `_leave_worktree_if_current_directory` guard
+/// (`vibe/core/worktree.py:529-536`) unnecessary here rather than missing: it
+/// exists upstream only because `os.chdir` can leave the interpreter standing
+/// inside the directory `remove_worktree` is about to delete. A session here
+/// carries its directory as a value, so removal never has one to leave.
+///
+/// The scorecard records that as an accepted divergence, and this test is what
+/// holds it: the moment any crate starts moving the process, the divergence has
+/// stopped being true and the row has to move with it.
+#[test]
+fn no_crate_changes_the_process_working_directory() {
+    // Composed rather than written whole, so this test does not match itself.
+    let call = format!("set_current{}", "_dir");
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .expect("the crate sits two levels below the repository root")
+        .join("crates");
+
+    let mut callers = Vec::new();
+    let mut scanned = 0usize;
+    let mut pending = vec![root.clone()];
+    while let Some(directory) = pending.pop() {
+        let Ok(entries) = fs::read_dir(&directory) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if path.file_name().and_then(|name| name.to_str()) != Some("target") {
+                    pending.push(path);
+                }
+                continue;
+            }
+            if path.extension().and_then(|value| value.to_str()) != Some("rs") {
+                continue;
+            }
+            let Ok(contents) = fs::read_to_string(&path) else {
+                continue;
+            };
+            scanned += 1;
+            if contents.contains(&call) {
+                callers.push(
+                    path.strip_prefix(&root)
+                        .unwrap_or(&path)
+                        .display()
+                        .to_string(),
+                );
+            }
+        }
+    }
+    callers.sort();
+
+    // Without this the walk passes by finding nothing to read, which is the one
+    // way a guard like this stops guarding without ever failing.
+    assert!(
+        scanned > 100,
+        "the walk read {scanned} files under {}, so it scanned nothing worth trusting",
+        root.display()
+    );
+    assert!(
+        callers.is_empty(),
+        "the accepted divergence on `docs/parity.md` says this port never moves the process, and \
+         these files now do: {callers:?}"
+    );
+}
