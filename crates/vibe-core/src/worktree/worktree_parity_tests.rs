@@ -127,11 +127,6 @@ const UNASKABLE_BRANCH_GATE: &str = "the branch gate US-277 wrote refuses this b
      case asks for a branch other than the worktree name and this port has no parameter to carry \
      one, so the refusal cannot be driven here. US-282 adds the parameter and the gate answers \
      through it";
-const COMMON_DIR_BASE: &str = "`git rev-parse --git-common-dir` answers relative to the directory \
-     git ran in, and from a subdirectory that answer is `../.git`; this port resolves it against \
-     the checkout root instead, so a base below the checkout root fails to canonicalize and \
-     preparation refuses where the reference prepares. US-279 owns how the common git directory \
-     is resolved before it is used";
 const NO_ENUMERATION: &str = "the reference publishes `list_linked_worktrees`; this port has no \
      enumeration at all, so no case of this family can be driven here. US-280 writes it";
 const UNGUARDED_TARGET: &str = "the reference resolves the working directory the worktree hands \
@@ -169,15 +164,14 @@ impl Divergence {
 const LEDGER: &[Divergence] = &[
     // Preparation.
     //
-    // `prepare/missing-base` carries no entry, and the reason is worth stating
-    // because it is not conformance. That case names a base inside an untracked
-    // subdirectory, which exists in the checkout and not in the new worktree, so
-    // the reference creates the worktree, fails to resolve the session directory,
-    // and rolls both the worktree and the branch back: the residue it records is
-    // empty. This port records an empty residue too, but only because the common
-    // git directory it cannot resolve from a subdirectory makes it refuse before
-    // it creates anything. US-279 removes that early refusal and the rollback gap
-    // US-273 closes becomes visible here, with an entry to write for it.
+    // `prepare/missing-base` carries no entry, and now for the right reason.
+    // That case names a base inside an untracked subdirectory, which exists in
+    // the checkout and not in the new worktree, so both sides create the
+    // worktree, fail to resolve the session directory, and roll the worktree
+    // and the branch back: the residue both record is empty. Until US-279 this
+    // port agreed by accident, refusing before it created anything because it
+    // could not resolve the common git directory from a subdirectory; it now
+    // agrees by taking the same path.
     Divergence {
         family: "prepare",
         case: "distinct-branch",
@@ -191,13 +185,6 @@ const LEDGER: &[Divergence] = &[
         pointer: "/outcome",
         closed_by: "US-282",
         why: UNASKABLE_BRANCH_GATE,
-    },
-    Divergence {
-        family: "prepare",
-        case: "subdirectory-base",
-        pointer: "/outcome",
-        closed_by: "US-279",
-        why: COMMON_DIR_BASE,
     },
     // Cleanup.
     Divergence {
@@ -533,6 +520,7 @@ fn managed_directory(root: &Path) -> PathBuf {
     let checkout = root.join(CHECKOUT);
     let common_git_dir = common_git_directory(&checkout);
     managed_worktree_root(&root.join(VIBE_HOME), &checkout, &common_git_dir)
+        .expect("a scripted managed root stays under its vibe home")
 }
 
 /// Where the repository `checkout` belongs to keeps its shared git data.
@@ -837,7 +825,8 @@ fn observed_managed_root(case: &Case) -> Value {
     // relative to the managed root, so the replay recomputes the function
     // rather than comparing a temporary path.
     let home = Path::new("/synthetic/home");
-    let resolved = managed_worktree_root(home, &repo_root, &common_git_dir);
+    let resolved = managed_worktree_root(home, &repo_root, &common_git_dir)
+        .expect("a synthetic managed root stays under its vibe home");
     let directory = resolved
         .strip_prefix(home.join("worktrees"))
         .expect("the managed root lives under the vibe home");
@@ -1278,7 +1267,8 @@ fn the_projection_agrees_with_the_capture_script() {
             home,
             Path::new("/synthetic/repo"),
             Path::new("/synthetic/repo/.git")
-        ),
+        )
+        .expect("the synthetic managed root stays under its vibe home"),
         home.join("worktrees").join("repo-48615fc593d4")
     );
 

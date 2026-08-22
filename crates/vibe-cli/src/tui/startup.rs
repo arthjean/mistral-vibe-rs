@@ -50,6 +50,11 @@ pub enum StartupError {
     InvalidWorktreeName,
     #[error("--worktree branch `{branch}` is not a valid Git branch name")]
     InvalidWorktreeBranch { branch: String },
+    #[error("managed worktree root `{target}` resolves outside `{managed_root}`")]
+    WorktreeManagedRoot {
+        target: PathBuf,
+        managed_root: PathBuf,
+    },
     #[error("--worktree requires a git repository")]
     WorktreeRepositoryRequired,
     #[error("git worktree operations require git on PATH: {0}")]
@@ -77,7 +82,10 @@ pub(crate) fn workspace_paths(arguments: &Arguments, working_directory: &Path) -
 /// Every entry point resolves them here: the interactive launch, the one-shot
 /// commands, and the log directory `/log` prints. A launch that names no
 /// session root falls back to `VIBE_HOME`, then to the user's home, then to the
-/// workspace, which is the order the reference reads them in.
+/// workspace, which is the order the reference reads them in. `VIBE_HOME` is
+/// tilde-expanded on the way through, because the reference expands it before
+/// it resolves it (`vibe/utils/paths.py`) and a home spelled `~/.vibe` in the
+/// environment otherwise names a literal directory called `~`.
 #[must_use]
 pub(crate) fn workspace_paths_for(
     session_root: Option<&Path>,
@@ -102,7 +110,11 @@ fn vibe_home_for(session_root: Option<&Path>, working_directory: &Path) -> PathB
     session_root
         .and_then(Path::parent)
         .map(Path::to_path_buf)
-        .or_else(|| std::env::var_os("VIBE_HOME").map(PathBuf::from))
+        .or_else(|| {
+            std::env::var_os("VIBE_HOME")
+                .map(PathBuf::from)
+                .map(|path| worktree::expand_user_path(&path))
+        })
         .or_else(|| {
             std::env::var_os("HOME")
                 .map(PathBuf::from)

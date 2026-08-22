@@ -23,6 +23,13 @@ impl From<WorktreeError> for StartupError {
         match error {
             WorktreeError::InvalidName => Self::InvalidWorktreeName,
             WorktreeError::InvalidBranch { branch } => Self::InvalidWorktreeBranch { branch },
+            WorktreeError::ManagedRootEscape {
+                target,
+                managed_root,
+            } => Self::WorktreeManagedRoot {
+                target,
+                managed_root,
+            },
             WorktreeError::RepositoryRequired => Self::WorktreeRepositoryRequired,
             WorktreeError::GitUnavailable(message) => Self::WorktreeGitUnavailable(message),
             WorktreeError::Failed { name, message } => Self::Worktree { name, message },
@@ -53,7 +60,15 @@ impl LaunchWorkspace {
         };
         let base_directory = canonical_directory(&expand_user_path(&requested))?;
 
-        if arguments.worktree.is_none() || arguments.setup || arguments.check_upgrade {
+        // An empty `--worktree` names no worktree at all, which is what the
+        // reference's own truthiness test on the argument decides
+        // (`vibe/cli/entrypoint.py:293`). Refusing it as an unportable name
+        // would turn a no-op flag into a fatal launch.
+        let requested_worktree = arguments
+            .worktree
+            .as_deref()
+            .filter(|name| !name.is_empty());
+        if requested_worktree.is_none() || arguments.setup || arguments.check_upgrade {
             resolve_additional_directories(arguments, &base_directory)?;
             arguments.workdir = Some(base_directory.clone());
             return Ok(Self {
@@ -62,9 +77,9 @@ impl LaunchWorkspace {
             });
         }
 
-        let name = arguments.worktree.as_deref().unwrap_or_default();
+        let name = requested_worktree.unwrap_or_default().to_owned();
         let vibe_home = vibe_home_directory(arguments, &base_directory);
-        let worktree = worktree::prepare_worktree(name, &base_directory, &vibe_home)?;
+        let worktree = worktree::prepare_worktree(&name, &base_directory, &vibe_home)?;
         resolve_additional_directories(arguments, &worktree.path)?;
         arguments.workdir = Some(worktree.path.clone());
         arguments.trust = true;
@@ -91,7 +106,7 @@ fn resolve_additional_directories(
     Ok(())
 }
 
-fn expand_user_path(path: &Path) -> PathBuf {
+pub(super) fn expand_user_path(path: &Path) -> PathBuf {
     let Some(text) = path.to_str() else {
         return path.to_path_buf();
     };
@@ -318,6 +333,39 @@ mod tests {
             &["worktree", "remove", "--force", path_text(&prepared.root)],
         );
         git(root.path(), &["branch", "-D", "parity"]);
+    }
+
+    /// An empty `--worktree` names no worktree, so the launch runs where it
+    /// stood instead of failing on an unportable name.
+    #[test]
+    fn an_empty_worktree_flag_starts_a_normal_session() {
+        let root = repository();
+        let mut arguments = test_arguments(root.path());
+        arguments.worktree = Some(String::new());
+
+        let workspace = LaunchWorkspace::prepare(&mut arguments).expect("a normal session starts");
+
+        assert!(workspace.worktree.is_none());
+        assert_eq!(
+            workspace.effective_directory,
+            root.path()
+                .canonicalize()
+                .expect("the fixture root resolves")
+        );
+        assert!(!arguments.trust, "an empty flag granted trust");
+    }
+
+    /// `VIBE_HOME` is read as a path the shell never expanded, so the tilde is
+    /// expanded here before it names a directory.
+    #[test]
+    fn a_tilde_in_a_home_path_expands() {
+        let Some(home) = std::env::var_os("HOME") else {
+            return;
+        };
+        assert_eq!(
+            expand_user_path(Path::new("~/.vibe")),
+            PathBuf::from(home).join(".vibe")
+        );
     }
 
     #[test]

@@ -13,6 +13,11 @@
   a ref of, such as `foo.lock`, `foo..bar`, `HEAD`, or `-x`, fails naming the
   branch instead of failing halfway through `git worktree add`.
 
+- Resolve the managed worktree root. `VIBE_HOME` is now tilde-expanded, the
+  managed root is resolved before the repository directory is placed under it,
+  and a repository directory that resolves outside it is refused. `--worktree`
+  with an empty value starts a normal session instead of failing on the name.
+
 - Keep a worktree that carries a commit made on a detached `HEAD`. Session
   commits are now counted against the worktree's own `HEAD` rather than against
   its branch tip, so detaching `HEAD` to compare a revision and committing there

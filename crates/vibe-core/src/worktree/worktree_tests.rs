@@ -50,6 +50,7 @@ fn symlink(target: &Path, link: &Path) {
 /// left there.
 fn managed_directory(vibe_home: &Path, checkout: &Path) -> PathBuf {
     super::managed_worktree_root(vibe_home, checkout, &checkout.join(".git"))
+        .expect("the managed root stays under the vibe home")
 }
 
 /// A case root with no symbolic links in it, so `strip_prefix` against a
@@ -457,4 +458,62 @@ fn the_branch_gate_judges_the_branch_it_is_given() {
         matches!(&error, WorktreeError::InvalidBranch { branch } if branch == "foo.lock"),
         "the refusal does not name the branch: {error:?}"
     );
+}
+
+// --------------------------------------------------------------------------
+// US-279: the managed root
+// --------------------------------------------------------------------------
+
+/// The digest is taken over the path the reference would have hashed, so the
+/// prefix Windows canonicalization adds never reaches it.
+#[test]
+fn the_verbatim_prefix_is_stripped_before_the_digest() {
+    let home = Path::new("/synthetic/home");
+    let repo_root = Path::new("/synthetic/repo");
+    let plain = super::managed_worktree_root(home, repo_root, Path::new(r"C:\dev\repo\.git"))
+        .expect("the plain spelling stays under the vibe home");
+    let verbatim =
+        super::managed_worktree_root(home, repo_root, Path::new(r"\\?\C:\dev\repo\.git"))
+            .expect("the verbatim spelling stays under the vibe home");
+
+    assert_eq!(plain, verbatim);
+    assert_eq!(
+        plain.file_name().and_then(|value| value.to_str()),
+        Some("repo-af6e23fde322"),
+        "the digest no longer matches the one the corpus records"
+    );
+}
+
+/// A repository directory that resolves out of the managed root is refused
+/// rather than written to, and the refusal names both paths.
+#[test]
+fn a_repository_directory_outside_the_managed_root_is_refused() {
+    let (_scratch, root) = case_root();
+    let vibe_home = root.join("home");
+    let checkout = root.join("repo");
+    let common_git_dir = checkout.join(".git");
+    let expected = super::managed_worktree_root(&vibe_home, &checkout, &common_git_dir)
+        .expect("the managed root resolves before it is diverted");
+    let name = expected
+        .file_name()
+        .expect("the managed root is named")
+        .to_owned();
+
+    let managed_root = vibe_home.join("worktrees");
+    fs::create_dir_all(&managed_root).expect("the managed root is writable");
+    let outside = root.join("elsewhere");
+    fs::create_dir_all(&outside).expect("the outside directory is writable");
+    symlink(&outside, &managed_root.join(&name));
+
+    let error = super::managed_worktree_root(&vibe_home, &checkout, &common_git_dir)
+        .expect_err("a diverted repository directory is refused");
+    let WorktreeError::ManagedRootEscape {
+        target,
+        managed_root: reported,
+    } = &error
+    else {
+        panic!("expected a managed-root refusal, got {error:?}");
+    };
+    assert_eq!(target, &outside);
+    assert_eq!(reported, &managed_root);
 }

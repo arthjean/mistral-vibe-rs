@@ -49,6 +49,12 @@ const RESERVED_DEVICE_NAMES: [&str; 25] = [
     "LPT8", "LPT9",
 ];
 
+/// What Windows canonicalization prefixes an absolute path with.
+const VERBATIM_PREFIX: &str = r"\\?\";
+
+/// The `\\?\UNC\` form, which names a network share rather than a drive.
+const VERBATIM_UNC_PREFIX: &str = r"\\?\UNC\";
+
 /// One character Python calls non-printable: anything in the Unicode `Other`
 /// or `Separator` categories, minus the ASCII space.
 ///
@@ -136,6 +142,12 @@ pub enum WorktreeError {
     /// branch is allowed to differ from the worktree it belongs to.
     #[error("--worktree branch `{branch}` is not a valid Git branch name")]
     InvalidBranch { branch: String },
+    /// A managed root that resolved out of the vibe home it was built under.
+    #[error("managed worktree root `{target}` resolves outside `{managed_root}`")]
+    ManagedRootEscape {
+        target: PathBuf,
+        managed_root: PathBuf,
+    },
     #[error("--worktree requires a git repository")]
     RepositoryRequired,
     #[error("git worktree operations require git on PATH: {0}")]
@@ -208,19 +220,24 @@ pub fn prepare_worktree(
     // no branch behind.
     let branch = name;
     validate_branch_name(&checkout_root, branch)?;
+    // Both rev-parse answers are read from the checkout root rather than from
+    // `base`, because git reports them relative to the directory it ran in and
+    // from a subdirectory `--git-common-dir` answers `../.git`. The reference
+    // reads them off a repository object anchored at its working directory
+    // (`vibe/core/worktree.py:340-346`), which is the same anchor.
     let git_dir = resolve_git_path(
         &checkout_root,
-        &git_stdout(base, ["rev-parse", "--git-dir"], name)?,
+        &git_stdout(&checkout_root, ["rev-parse", "--git-dir"], name)?,
     )?;
     let common_git_dir = resolve_git_path(
         &checkout_root,
-        &git_stdout(base, ["rev-parse", "--git-common-dir"], name)?,
+        &git_stdout(&checkout_root, ["rev-parse", "--git-common-dir"], name)?,
     )?;
     let repo_root = primary_worktree_root(&checkout_root, &git_dir, &common_git_dir, name)?;
     let relative_base = base.strip_prefix(&checkout_root).map_err(|_| {
         WorktreeError::failed(name, "working directory is outside the Git checkout")
     })?;
-    let target = managed_worktree_root(vibe_home, &repo_root, &common_git_dir).join(name);
+    let target = managed_worktree_root(vibe_home, &repo_root, &common_git_dir)?.join(name);
 
     if target.is_dir() {
         validate_existing_worktree(&target, name, &common_git_dir)?;
@@ -357,16 +374,80 @@ pub fn remove_worktree(
 /// The directory name is the repository's own name followed by twelve hex
 /// digits of the common git directory's digest, which is what keeps two
 /// checkouts of the same name apart under one vibe home.
-fn managed_worktree_root(vibe_home: &Path, repo_root: &Path, common_git_dir: &Path) -> PathBuf {
-    let digest = hex::encode(Sha256::digest(common_git_dir.to_string_lossy().as_bytes()));
+///
+/// Both the managed directory and the repository's own root are resolved
+/// before the second is checked against the first, so a vibe home reached
+/// through a symbolic link names the same repository as the one reached
+/// directly, and a repository directory that resolves out of the managed root
+/// is refused rather than written to. The reference draws the same two steps
+/// (`vibe/core/worktree.py:347-357`).
+fn managed_worktree_root(
+    vibe_home: &Path,
+    repo_root: &Path,
+    common_git_dir: &Path,
+) -> Result<PathBuf, WorktreeError> {
+    let digest = hex::encode(Sha256::digest(
+        strip_verbatim_prefix(&common_git_dir.to_string_lossy()).as_bytes(),
+    ));
     let repository_name = repo_root
         .file_name()
         .and_then(|value| value.to_str())
         .unwrap_or("repository");
-    vibe_home.join(MANAGED_DIRECTORY).join(format!(
+    let managed_root = resolve_lenient(&vibe_home.join(MANAGED_DIRECTORY));
+    let target = resolve_lenient(&managed_root.join(format!(
         "{repository_name}-{}",
         &digest[..REPOSITORY_DIGEST_LENGTH]
-    ))
+    )));
+    if target.starts_with(&managed_root) {
+        Ok(target)
+    } else {
+        Err(WorktreeError::ManagedRootEscape {
+            target,
+            managed_root,
+        })
+    }
+}
+
+/// The path string the digest is taken over, without what Windows
+/// canonicalization prefixes it with.
+///
+/// The reference hashes `Path.resolve()`, which never carries the verbatim
+/// prefix; `fs::canonicalize` on Windows always does, so hashing its output
+/// unchanged would name a different directory for the same repository. On
+/// every other platform this is the identity.
+fn strip_verbatim_prefix(value: &str) -> String {
+    if let Some(remainder) = value.strip_prefix(VERBATIM_UNC_PREFIX) {
+        format!(r"\\{remainder}")
+    } else if let Some(remainder) = value.strip_prefix(VERBATIM_PREFIX) {
+        remainder.to_owned()
+    } else {
+        value.to_owned()
+    }
+}
+
+/// The reference's non-strict `resolve` over a path that may not exist yet:
+/// the deepest existing ancestor is canonicalized and the remainder appended,
+/// so two spellings of one location compare equal.
+fn resolve_lenient(path: &Path) -> PathBuf {
+    if let Ok(resolved) = fs::canonicalize(path) {
+        return resolved;
+    }
+    let mut remainder = Vec::new();
+    let mut cursor = path;
+    while let Some(parent) = cursor.parent() {
+        if let Some(name) = cursor.file_name() {
+            remainder.push(name.to_owned());
+        }
+        if let Ok(resolved) = fs::canonicalize(parent) {
+            let mut resolved = resolved;
+            for part in remainder.iter().rev() {
+                resolved.push(part);
+            }
+            return resolved;
+        }
+        cursor = parent;
+    }
+    path.to_path_buf()
 }
 
 /// The working directory of the checkout every managed worktree hangs off.
