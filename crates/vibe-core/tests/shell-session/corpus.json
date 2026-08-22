@@ -1,0 +1,4025 @@
+{
+  "cases": [
+    {
+      "arguments": {
+        "command": "printf 'hello\n'"
+      },
+      "case": "foreground-exit-zero",
+      "modelText": {
+        "described": "sha256:ffd5c77110b7c6485befa179f6b35f80",
+        "length": 317
+      },
+      "outcome": "returned",
+      "scenario": "foreground",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "printf 'hello\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "printf 'hello\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash",
+      "typedResult": {
+        "background": false,
+        "command": "printf 'hello\n'",
+        "exit_code": 0,
+        "next_cursor": 7,
+        "output": "hello\n",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+        "returncode": 0,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+        "shell": "/bin/bash",
+        "status": "completed",
+        "stderr": "",
+        "stdout": "hello\n",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "command": "cat notes.txt"
+      },
+      "case": "foreground-reads-fixture",
+      "modelText": {
+        "described": "sha256:3a2f10bdc116b608ca71b6e3c3ce0b9f",
+        "length": 332
+      },
+      "outcome": "returned",
+      "scenario": "foreground",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "cat notes.txt",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+          "sessionInfo": {
+            "command": "cat notes.txt",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash",
+      "typedResult": {
+        "background": false,
+        "command": "cat notes.txt",
+        "exit_code": 0,
+        "next_cursor": 15,
+        "output": "notes fixture\n",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1.log",
+        "returncode": 0,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+        "shell": "/bin/bash",
+        "status": "completed",
+        "stderr": "",
+        "stdout": "notes fixture\n",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "command": "true"
+      },
+      "case": "foreground-no-output",
+      "modelText": {
+        "described": "sha256:89a7cb71c03b9811b47b04f78260406a",
+        "length": 294
+      },
+      "outcome": "returned",
+      "scenario": "foreground",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "true",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s2.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s2",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s2",
+          "sessionInfo": {
+            "command": "true",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s2.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s2",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash",
+      "typedResult": {
+        "background": false,
+        "command": "true",
+        "exit_code": 0,
+        "next_cursor": 0,
+        "output": "",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s2.log",
+        "returncode": 0,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s2",
+        "shell": "/bin/bash",
+        "status": "completed",
+        "stderr": "",
+        "stdout": "",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "command": "printf 'oops\n' >&2"
+      },
+      "case": "foreground-stderr-only",
+      "modelText": {
+        "described": "sha256:1f42c444abbe579d65a419c96a73e9be",
+        "length": 318
+      },
+      "outcome": "returned",
+      "scenario": "foreground",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "printf 'oops\n' >&2",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s3.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s3",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s3",
+          "sessionInfo": {
+            "command": "printf 'oops\n' >&2",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s3.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s3",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash",
+      "typedResult": {
+        "background": false,
+        "command": "printf 'oops\n' >&2",
+        "exit_code": 0,
+        "next_cursor": 6,
+        "output": "oops\n",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s3.log",
+        "returncode": 0,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s3",
+        "shell": "/bin/bash",
+        "status": "completed",
+        "stderr": "",
+        "stdout": "oops\n",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "command": "printf 'a\nb\nc\n'"
+      },
+      "case": "foreground-multiline-output",
+      "modelText": {
+        "described": "sha256:f3c0a510762db7d76165ed3baaa50d02",
+        "length": 317
+      },
+      "outcome": "returned",
+      "scenario": "foreground",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "printf 'a\nb\nc\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s4.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s4",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s4",
+          "sessionInfo": {
+            "command": "printf 'a\nb\nc\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s4.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s4",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash",
+      "typedResult": {
+        "background": false,
+        "command": "printf 'a\nb\nc\n'",
+        "exit_code": 0,
+        "next_cursor": 9,
+        "output": "a\nb\nc\n",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s4.log",
+        "returncode": 0,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s4",
+        "shell": "/bin/bash",
+        "status": "completed",
+        "stderr": "",
+        "stdout": "a\nb\nc\n",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "command": "printf 'héllo ✓\n'"
+      },
+      "case": "foreground-multibyte-output",
+      "modelText": {
+        "described": "sha256:213a85afab16e79fcae9fde635df3581",
+        "length": 324
+      },
+      "outcome": "returned",
+      "scenario": "foreground",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "printf 'héllo ✓\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s5.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s5",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s5",
+          "sessionInfo": {
+            "command": "printf 'héllo ✓\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s5.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s5",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash",
+      "typedResult": {
+        "background": false,
+        "command": "printf 'héllo ✓\n'",
+        "exit_code": 0,
+        "next_cursor": 12,
+        "output": "héllo ✓\n",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s5.log",
+        "returncode": 0,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s5",
+        "shell": "/bin/bash",
+        "status": "completed",
+        "stderr": "",
+        "stdout": "héllo ✓\n",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "command": "seq 1 4000"
+      },
+      "case": "foreground-output-exceeds-window",
+      "modelText": {
+        "described": "sha256:7e81486d81d1bcc35fda4a1c30106daf",
+        "length": 26601
+      },
+      "outcome": "returned",
+      "scenario": "foreground",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "seq 1 4000",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s6.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s6",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s6",
+          "sessionInfo": {
+            "command": "seq 1 4000",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s6.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s6",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash",
+      "typedResult": {
+        "background": false,
+        "command": "seq 1 4000",
+        "exit_code": 0,
+        "next_cursor": 16000,
+        "output": {
+          "described": "sha256:f1b6950282f002358c0e4933325cb89e",
+          "length": 13149
+        },
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s6.log",
+        "returncode": 0,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s6",
+        "shell": "/bin/bash",
+        "status": "completed",
+        "stderr": "",
+        "stdout": {
+          "described": "sha256:f1b6950282f002358c0e4933325cb89e",
+          "length": 13149
+        },
+        "truncated": true
+      }
+    },
+    {
+      "arguments": {
+        "command": "exit 3"
+      },
+      "case": "foreground-exit-non-zero",
+      "error": {
+        "message": {
+          "described": "sha256:b83949915c4cf97a50438e74c3aa277d",
+          "length": 39
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "foreground",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "exit 3",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 3,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s7.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s7",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s7",
+          "sessionInfo": {
+            "command": "exit 3",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 3,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s7.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s7",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash"
+    },
+    {
+      "arguments": {
+        "command": "cat inner.txt",
+        "cwd": "{root}/work/nested"
+      },
+      "case": "foreground-cwd-override",
+      "modelText": {
+        "described": "sha256:0ababcef5742f15e67877e3dff4f620c",
+        "length": 332
+      },
+      "outcome": "returned",
+      "scenario": "foreground",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "cat inner.txt",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work/nested",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s8.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s8",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s8",
+          "sessionInfo": {
+            "command": "cat inner.txt",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work/nested",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s8.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s8",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash",
+      "typedResult": {
+        "background": false,
+        "command": "cat inner.txt",
+        "exit_code": 0,
+        "next_cursor": 15,
+        "output": "inner fixture\n",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s8.log",
+        "returncode": 0,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s8",
+        "shell": "/bin/bash",
+        "status": "completed",
+        "stderr": "",
+        "stdout": "inner fixture\n",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "command": "true",
+        "cwd": "{root}/work/absent"
+      },
+      "case": "foreground-cwd-is-not-a-directory",
+      "error": {
+        "message": {
+          "described": "sha256:ce3c11ef2c42c3f4234e2204451347e9",
+          "length": 42
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "foreground",
+      "tool": "bash"
+    },
+    {
+      "arguments": {
+        "command": "printf '%s\n' \"$VIBE_PARITY_TOKEN\"",
+        "env": {
+          "VIBE_PARITY_TOKEN": "parity-token"
+        }
+      },
+      "case": "foreground-env-override",
+      "modelText": {
+        "described": "sha256:5b2cf14850630411fb97b0c0c4b034fe",
+        "length": 350
+      },
+      "outcome": "returned",
+      "scenario": "foreground",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "printf '%s\n' \"$VIBE_PARITY_TOKEN\"",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s9.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s9",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s9",
+          "sessionInfo": {
+            "command": "printf '%s\n' \"$VIBE_PARITY_TOKEN\"",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s9.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s9",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash",
+      "typedResult": {
+        "background": false,
+        "command": "printf '%s\n' \"$VIBE_PARITY_TOKEN\"",
+        "exit_code": 0,
+        "next_cursor": 14,
+        "output": "parity-token\n",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s9.log",
+        "returncode": 0,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s9",
+        "shell": "/bin/bash",
+        "status": "completed",
+        "stderr": "",
+        "stdout": "parity-token\n",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "command": "printf 'shell-override\n'",
+        "shell": "/bin/sh"
+      },
+      "case": "foreground-shell-override",
+      "modelText": {
+        "described": "sha256:139cc65c3400b64920301f97ae3c1d15",
+        "length": 345
+      },
+      "outcome": "returned",
+      "scenario": "foreground",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "printf 'shell-override\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s10.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s10",
+            "shell": "/bin/sh",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s10",
+          "sessionInfo": {
+            "command": "printf 'shell-override\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s10.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s10",
+            "shell": "/bin/sh",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash",
+      "typedResult": {
+        "background": false,
+        "command": "printf 'shell-override\n'",
+        "exit_code": 0,
+        "next_cursor": 16,
+        "output": "shell-override\n",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s10.log",
+        "returncode": 0,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s10",
+        "shell": "/bin/sh",
+        "status": "completed",
+        "stderr": "",
+        "stdout": "shell-override\n",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "command": "true",
+        "shell": "/bin/no-such-shell"
+      },
+      "case": "foreground-shell-override-not-executable",
+      "error": {
+        "message": {
+          "described": "sha256:15462e8e3af61bf135a8f8b02323b44d",
+          "length": 53
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "foreground",
+      "tool": "bash"
+    },
+    {
+      "arguments": {
+        "command": "   "
+      },
+      "case": "foreground-empty-command",
+      "error": {
+        "message": {
+          "described": "sha256:33c8b9ec77fce3fc28f450e67236ef3c",
+          "length": 25
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "foreground",
+      "tool": "bash"
+    },
+    {
+      "arguments": {
+        "command": "printf 'timed\n'",
+        "timeout": 5
+      },
+      "case": "foreground-legacy-timeout-field",
+      "modelText": {
+        "described": "sha256:7ab7d839582db9e8c654be2e9bd18e1b",
+        "length": 319
+      },
+      "outcome": "returned",
+      "scenario": "foreground",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "printf 'timed\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s11.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s11",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s11",
+          "sessionInfo": {
+            "command": "printf 'timed\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s11.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s11",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash",
+      "typedResult": {
+        "background": false,
+        "command": "printf 'timed\n'",
+        "exit_code": 0,
+        "next_cursor": 7,
+        "output": "timed\n",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s11.log",
+        "returncode": 0,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s11",
+        "shell": "/bin/bash",
+        "status": "completed",
+        "stderr": "",
+        "stdout": "timed\n",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "command": "printf 'clamped\n'",
+        "timeout_seconds": 900
+      },
+      "case": "foreground-timeout-clamped-to-maximum",
+      "modelText": {
+        "described": "sha256:50d93aa125eeb618215eaaea404e9e33",
+        "length": 325
+      },
+      "outcome": "returned",
+      "scenario": "foreground",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "printf 'clamped\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s12.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s12",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s12",
+          "sessionInfo": {
+            "command": "printf 'clamped\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s12.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s12",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash",
+      "typedResult": {
+        "background": false,
+        "command": "printf 'clamped\n'",
+        "exit_code": 0,
+        "next_cursor": 9,
+        "output": "clamped\n",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s12.log",
+        "returncode": 0,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s12",
+        "shell": "/bin/bash",
+        "status": "completed",
+        "stderr": "",
+        "stdout": "clamped\n",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "background": true,
+        "command": "sleep 1"
+      },
+      "case": "background-returns-immediately",
+      "modelText": {
+        "described": "sha256:a6f04855320ce1bb0d3cae9194c34add",
+        "length": 299
+      },
+      "outcome": "returned",
+      "scenario": "foreground",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 1",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s13.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s13",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s13",
+          "sessionInfo": {
+            "command": "sleep 1",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s13.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s13",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash",
+      "typedResult": {
+        "background": true,
+        "command": "sleep 1",
+        "exit_code": null,
+        "next_cursor": 0,
+        "output": "",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s13.log",
+        "returncode": 0,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s13",
+        "shell": "/bin/bash",
+        "status": "running",
+        "stderr": "",
+        "stdout": "",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "command": "sleep 5",
+        "timeout_seconds": 0.2
+      },
+      "case": "soft-timeout-backgrounds-the-session",
+      "modelText": {
+        "described": "sha256:48dab2b26abb2d88dde18e4ff33532e2",
+        "length": 299
+      },
+      "outcome": "returned",
+      "scenario": "foreground",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s14.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s14",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s14",
+          "sessionInfo": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s14.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s14",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash",
+      "typedResult": {
+        "background": true,
+        "command": "sleep 5",
+        "exit_code": null,
+        "next_cursor": 0,
+        "output": "",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s14.log",
+        "returncode": 0,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s14",
+        "shell": "/bin/bash",
+        "status": "running",
+        "stderr": "",
+        "stdout": "",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "command": "sleep 5",
+        "hard_timeout": true,
+        "timeout_seconds": 0.2
+      },
+      "case": "hard-timeout-kills-the-session",
+      "error": {
+        "message": {
+          "described": "sha256:a7477e7198b7653f220817a7ea3cf38c",
+          "length": 210
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "foreground",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": -15,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s15.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s15",
+            "shell": "/bin/bash",
+            "status": "timed_out",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s15",
+          "sessionInfo": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": -15,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s15.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s15",
+            "shell": "/bin/bash",
+            "status": "timed_out",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash"
+    },
+    {
+      "arguments": {
+        "background": true,
+        "command": "sleep 1; printf 'late\n'"
+      },
+      "case": "background-poll-source",
+      "modelText": {
+        "described": "sha256:850a377ae61ec36d6487249eca1b39e1",
+        "length": 313
+      },
+      "outcome": "returned",
+      "scenario": "polling",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 1; printf 'late\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 1; printf 'late\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash",
+      "typedResult": {
+        "background": true,
+        "command": "sleep 1; printf 'late\n'",
+        "exit_code": null,
+        "next_cursor": 0,
+        "output": "",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+        "returncode": 0,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+        "shell": "/bin/bash",
+        "status": "running",
+        "stderr": "",
+        "stdout": "",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "session_id": "{s0}"
+      },
+      "case": "poll-before-any-output",
+      "modelText": {
+        "described": "sha256:b7c76ff39b0471b26ba749858d92bace",
+        "length": 214
+      },
+      "outcome": "returned",
+      "scenario": "polling",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 1; printf 'late\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 1; printf 'late\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_output",
+      "typedResult": {
+        "exit_code": null,
+        "next_cursor": 0,
+        "output": "",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+        "status": "running",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "max_bytes": 4,
+        "session_id": "{s0}"
+      },
+      "case": "poll-before-any-output-with-max-bytes",
+      "modelText": {
+        "described": "sha256:b7c76ff39b0471b26ba749858d92bace",
+        "length": 214
+      },
+      "outcome": "returned",
+      "scenario": "polling",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 1; printf 'late\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 1; printf 'late\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_output",
+      "typedResult": {
+        "exit_code": null,
+        "next_cursor": 0,
+        "output": "",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+        "status": "running",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "session_id": "bash_unknown"
+      },
+      "case": "poll-unknown-session",
+      "error": {
+        "message": {
+          "described": "sha256:90c92c2b41aa3354729b246862bbdf7e",
+          "length": 34
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "polling",
+      "tool": "bash_output"
+    },
+    {
+      "arguments": {
+        "cursor": -1,
+        "session_id": "{s0}"
+      },
+      "case": "poll-negative-cursor",
+      "error": {
+        "message": {
+          "described": "sha256:2e846b971ff4ead1cdb23ae7ec82409e",
+          "length": 185
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "polling",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 1; printf 'late\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 1; printf 'late\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_output"
+    },
+    {
+      "arguments": {
+        "max_bytes": 0,
+        "session_id": "{s0}"
+      },
+      "case": "poll-zero-max-bytes",
+      "error": {
+        "message": {
+          "described": "sha256:c50a28354f9a61bdcb84463dc8222293",
+          "length": 169
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "polling",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 1; printf 'late\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 1; printf 'late\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_output"
+    },
+    {
+      "arguments": {
+        "session_id": "{s0}",
+        "wait_seconds": 5
+      },
+      "case": "poll-waits-for-the-session-to-exit",
+      "modelText": {
+        "described": "sha256:4b63d426f8001a231b72e60eb40b5408",
+        "length": 218
+      },
+      "outcome": "returned",
+      "scenario": "polling",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 1; printf 'late\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 1; printf 'late\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_output",
+      "typedResult": {
+        "exit_code": 0,
+        "next_cursor": 6,
+        "output": "late\n",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+        "status": "completed",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "cursor": 0,
+        "session_id": "{s0}"
+      },
+      "before": [
+        {
+          "do": "wait",
+          "seconds": 10,
+          "session": 0
+        }
+      ],
+      "case": "poll-after-completion",
+      "modelText": {
+        "described": "sha256:4b63d426f8001a231b72e60eb40b5408",
+        "length": 218
+      },
+      "outcome": "returned",
+      "scenario": "polling",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 1; printf 'late\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 1; printf 'late\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_output",
+      "typedResult": {
+        "exit_code": 0,
+        "next_cursor": 6,
+        "output": "late\n",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+        "status": "completed",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "cursor": 3,
+        "session_id": "{s0}"
+      },
+      "case": "poll-from-a-cursor",
+      "modelText": {
+        "described": "sha256:d5a7325bf3b889f9820c36b2e9703c89",
+        "length": 215
+      },
+      "outcome": "returned",
+      "scenario": "polling",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 1; printf 'late\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 1; printf 'late\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_output",
+      "typedResult": {
+        "exit_code": 0,
+        "next_cursor": 6,
+        "output": "e\n",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+        "status": "completed",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "cursor": 10000,
+        "session_id": "{s0}"
+      },
+      "case": "poll-from-a-cursor-past-the-end",
+      "modelText": {
+        "described": "sha256:d38a5110bdcf2de855bf19b38f802eda",
+        "length": 213
+      },
+      "outcome": "returned",
+      "scenario": "polling",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 1; printf 'late\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 1; printf 'late\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_output",
+      "typedResult": {
+        "exit_code": 0,
+        "next_cursor": 6,
+        "output": "",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+        "status": "completed",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "max_bytes": 2,
+        "session_id": "{s0}"
+      },
+      "case": "poll-with-max-bytes",
+      "modelText": {
+        "described": "sha256:899f1d2b124f52a97206e2a6143b5763",
+        "length": 214
+      },
+      "outcome": "returned",
+      "scenario": "polling",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 1; printf 'late\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 1; printf 'late\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_output",
+      "typedResult": {
+        "exit_code": 0,
+        "next_cursor": 2,
+        "output": "la",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+        "status": "completed",
+        "truncated": true
+      }
+    },
+    {
+      "arguments": {
+        "max_chars": 3,
+        "session_id": "{s0}"
+      },
+      "case": "poll-with-the-max-chars-alias",
+      "modelText": {
+        "described": "sha256:131b978d0c1fedc360705a9444630efc",
+        "length": 215
+      },
+      "outcome": "returned",
+      "scenario": "polling",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 1; printf 'late\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 1; printf 'late\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_output",
+      "typedResult": {
+        "exit_code": 0,
+        "next_cursor": 3,
+        "output": "lat",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+        "status": "completed",
+        "truncated": true
+      }
+    },
+    {
+      "arguments": {
+        "session_id": "{s0}",
+        "wait_seconds": 900
+      },
+      "case": "poll-wait-clamped-to-the-maximum",
+      "modelText": {
+        "described": "sha256:4b63d426f8001a231b72e60eb40b5408",
+        "length": 218
+      },
+      "outcome": "returned",
+      "scenario": "polling",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 1; printf 'late\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 1; printf 'late\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_output",
+      "typedResult": {
+        "exit_code": 0,
+        "next_cursor": 6,
+        "output": "late\n",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+        "status": "completed",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "background": true,
+        "command": "sleep 5"
+      },
+      "case": "background-input-target",
+      "modelText": {
+        "described": "sha256:b92ffb33dbc21badee13dc46afd1379f",
+        "length": 297
+      },
+      "outcome": "returned",
+      "scenario": "stdin",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash",
+      "typedResult": {
+        "background": true,
+        "command": "sleep 5",
+        "exit_code": null,
+        "next_cursor": 0,
+        "output": "",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+        "returncode": 0,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+        "shell": "/bin/bash",
+        "status": "running",
+        "stderr": "",
+        "stdout": "",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "session_id": "{s0}",
+        "text": "ping\n"
+      },
+      "case": "write-text-to-a-running-session",
+      "modelText": {
+        "described": "sha256:3078dbb38578e791390c45d15146896f",
+        "length": 82
+      },
+      "outcome": "returned",
+      "scenario": "stdin",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_stdin",
+      "typedResult": {
+        "bytes_written": 5,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+        "status": "running"
+      }
+    },
+    {
+      "arguments": {
+        "session_id": "{s0}",
+        "text": "héllo\n"
+      },
+      "case": "write-multibyte-text",
+      "modelText": {
+        "described": "sha256:d80bbd5dcc43b738e3cf572e6ca71cd3",
+        "length": 82
+      },
+      "outcome": "returned",
+      "scenario": "stdin",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_stdin",
+      "typedResult": {
+        "bytes_written": 7,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+        "status": "running"
+      }
+    },
+    {
+      "arguments": {
+        "bytes_base64": "cG9uZwo=",
+        "session_id": "{s0}"
+      },
+      "case": "write-base64-bytes",
+      "modelText": {
+        "described": "sha256:3078dbb38578e791390c45d15146896f",
+        "length": 82
+      },
+      "outcome": "returned",
+      "scenario": "stdin",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_stdin",
+      "typedResult": {
+        "bytes_written": 5,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+        "status": "running"
+      }
+    },
+    {
+      "arguments": {
+        "control": [
+          "enter"
+        ],
+        "session_id": "{s0}"
+      },
+      "case": "write-a-control-key",
+      "modelText": {
+        "described": "sha256:7991117507df575738e2a5f1e2406a9c",
+        "length": 82
+      },
+      "outcome": "returned",
+      "scenario": "stdin",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_stdin",
+      "typedResult": {
+        "bytes_written": 1,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+        "status": "running"
+      }
+    },
+    {
+      "arguments": {
+        "control": [
+          "ctrl_a",
+          "ctrl_e"
+        ],
+        "session_id": "{s0}"
+      },
+      "case": "write-two-control-keys",
+      "modelText": {
+        "described": "sha256:9db09e7a7327d1184b6c896286a2525e",
+        "length": 82
+      },
+      "outcome": "returned",
+      "scenario": "stdin",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_stdin",
+      "typedResult": {
+        "bytes_written": 2,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+        "status": "running"
+      }
+    },
+    {
+      "arguments": {
+        "session_id": "{s0}",
+        "text": ""
+      },
+      "case": "write-an-empty-text",
+      "error": {
+        "message": {
+          "described": "sha256:b1329ff5fb21ed9f774f35174844e30c",
+          "length": 31
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "stdin",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_stdin"
+    },
+    {
+      "arguments": {
+        "session_id": "{s0}"
+      },
+      "case": "write-nothing",
+      "error": {
+        "message": {
+          "described": "sha256:c20800e7bed44195349b7defa16a3394",
+          "length": 247
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "stdin",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_stdin"
+    },
+    {
+      "arguments": {
+        "control": [
+          "ctrl_c"
+        ],
+        "session_id": "{s0}",
+        "text": "x"
+      },
+      "case": "write-text-and-control-together",
+      "error": {
+        "message": {
+          "described": "sha256:9256f1afd765628c5f346acd5f0a4588",
+          "length": 244
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "stdin",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_stdin"
+    },
+    {
+      "arguments": {
+        "control": [
+          "ctrl_zzz"
+        ],
+        "session_id": "{s0}"
+      },
+      "case": "write-an-unknown-control-key",
+      "error": {
+        "message": {
+          "described": "sha256:7e7d5d0321578bf4cf77eb73e0871e14",
+          "length": 545
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "stdin",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_stdin"
+    },
+    {
+      "arguments": {
+        "bytes_base64": "not base64!",
+        "session_id": "{s0}"
+      },
+      "case": "write-invalid-base64",
+      "error": {
+        "message": {
+          "described": "sha256:188a717227504f2835c6e91e203a2731",
+          "length": 55
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "stdin",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 5",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_stdin"
+    },
+    {
+      "arguments": {
+        "session_id": "bash_unknown",
+        "text": "x"
+      },
+      "case": "write-to-an-unknown-session",
+      "error": {
+        "message": {
+          "described": "sha256:90c92c2b41aa3354729b246862bbdf7e",
+          "length": 34
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "stdin",
+      "tool": "bash_stdin"
+    },
+    {
+      "arguments": {
+        "command": "true"
+      },
+      "case": "foreground-input-target-exits",
+      "modelText": {
+        "described": "sha256:1b5dfa9ada2fd18ddf21d82c4744b119",
+        "length": 294
+      },
+      "outcome": "returned",
+      "scenario": "stdin",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "true",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+          "sessionInfo": {
+            "command": "true",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash",
+      "typedResult": {
+        "background": false,
+        "command": "true",
+        "exit_code": 0,
+        "next_cursor": 0,
+        "output": "",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1.log",
+        "returncode": 0,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+        "shell": "/bin/bash",
+        "status": "completed",
+        "stderr": "",
+        "stdout": "",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "session_id": "{s1}",
+        "text": "x"
+      },
+      "case": "write-to-a-session-that-exited",
+      "error": {
+        "message": {
+          "described": "sha256:23063525f984936be635d86fc4ebebb6",
+          "length": 82
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "stdin",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "true",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+          "sessionInfo": {
+            "command": "true",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_stdin"
+    },
+    {
+      "arguments": {},
+      "case": "list-with-no-session",
+      "modelText": {
+        "described": "sha256:2e937f48d0093b4b15b29e64f6cbde44",
+        "length": 100
+      },
+      "outcome": "returned",
+      "scenario": "sessions-empty",
+      "tool": "bash_sessions",
+      "typedResult": {
+        "action": "list",
+        "message": null,
+        "next_cursor": null,
+        "output": null,
+        "session": null,
+        "sessions": [],
+        "truncated": null
+      }
+    },
+    {
+      "arguments": {
+        "action": "list"
+      },
+      "case": "list-explicitly",
+      "modelText": {
+        "described": "sha256:2e937f48d0093b4b15b29e64f6cbde44",
+        "length": 100
+      },
+      "outcome": "returned",
+      "scenario": "sessions-empty",
+      "tool": "bash_sessions",
+      "typedResult": {
+        "action": "list",
+        "message": null,
+        "next_cursor": null,
+        "output": null,
+        "session": null,
+        "sessions": [],
+        "truncated": null
+      }
+    },
+    {
+      "arguments": {
+        "action": "inspect"
+      },
+      "case": "inspect-without-a-session-id",
+      "error": {
+        "message": {
+          "described": "sha256:ad917c3f3dba993817f4d0719b991cfa",
+          "length": 34
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "sessions-empty",
+      "tool": "bash_sessions"
+    },
+    {
+      "arguments": {
+        "action": "inspect",
+        "session_id": "bash_unknown"
+      },
+      "case": "inspect-an-unknown-session",
+      "error": {
+        "message": {
+          "described": "sha256:90c92c2b41aa3354729b246862bbdf7e",
+          "length": 34
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "sessions-empty",
+      "tool": "bash_sessions"
+    },
+    {
+      "arguments": {
+        "action": "kill"
+      },
+      "case": "kill-without-a-session-id",
+      "error": {
+        "message": {
+          "described": "sha256:6af7af6e6a7dc7a1436a6676227c7266",
+          "length": 31
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "sessions-empty",
+      "tool": "bash_sessions"
+    },
+    {
+      "arguments": {
+        "action": "kill",
+        "session_id": "bash_unknown"
+      },
+      "case": "kill-an-unknown-session",
+      "error": {
+        "message": {
+          "described": "sha256:90c92c2b41aa3354729b246862bbdf7e",
+          "length": 34
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "sessions-empty",
+      "tool": "bash_sessions"
+    },
+    {
+      "arguments": {
+        "action": "reset"
+      },
+      "case": "reset-with-no-session",
+      "modelText": {
+        "described": "sha256:f709d8d181bdfe2a9c0b1ef0951c8822",
+        "length": 123
+      },
+      "outcome": "returned",
+      "scenario": "sessions-empty",
+      "tool": "bash_sessions",
+      "typedResult": {
+        "action": "reset",
+        "message": {
+          "described": "sha256:ba4e1f068e6c4d1e9b533778dd37b56d",
+          "length": 26
+        },
+        "next_cursor": null,
+        "output": null,
+        "session": null,
+        "sessions": [],
+        "truncated": null
+      }
+    },
+    {
+      "arguments": {
+        "action": "reset",
+        "clear_logs": true
+      },
+      "case": "reset-with-clear-logs-and-no-session",
+      "modelText": {
+        "described": "sha256:f709d8d181bdfe2a9c0b1ef0951c8822",
+        "length": 123
+      },
+      "outcome": "returned",
+      "scenario": "sessions-empty",
+      "tool": "bash_sessions",
+      "typedResult": {
+        "action": "reset",
+        "message": {
+          "described": "sha256:ba4e1f068e6c4d1e9b533778dd37b56d",
+          "length": 26
+        },
+        "next_cursor": null,
+        "output": null,
+        "session": null,
+        "sessions": [],
+        "truncated": null
+      }
+    },
+    {
+      "arguments": {
+        "action": "purge"
+      },
+      "case": "unsupported-action",
+      "error": {
+        "message": {
+          "described": "sha256:0239eda4516a40e9b4c7a872e4bbf6d0",
+          "length": 199
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "sessions-empty",
+      "tool": "bash_sessions"
+    },
+    {
+      "arguments": {
+        "background": true,
+        "command": "sleep 30"
+      },
+      "case": "background-first-session",
+      "modelText": {
+        "described": "sha256:419043f901d74f0d2ab93543c3669754",
+        "length": 298
+      },
+      "outcome": "returned",
+      "scenario": "sessions-many",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash",
+      "typedResult": {
+        "background": true,
+        "command": "sleep 30",
+        "exit_code": null,
+        "next_cursor": 0,
+        "output": "",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+        "returncode": 0,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+        "shell": "/bin/bash",
+        "status": "running",
+        "stderr": "",
+        "stdout": "",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "background": true,
+        "command": "sleep 30"
+      },
+      "case": "background-second-session",
+      "modelText": {
+        "described": "sha256:ec38be16d07330fd82abaae3747eb1b3",
+        "length": 298
+      },
+      "outcome": "returned",
+      "scenario": "sessions-many",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+          "sessionInfo": {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash",
+      "typedResult": {
+        "background": true,
+        "command": "sleep 30",
+        "exit_code": null,
+        "next_cursor": 0,
+        "output": "",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1.log",
+        "returncode": 0,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+        "shell": "/bin/bash",
+        "status": "running",
+        "stderr": "",
+        "stdout": "",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "action": "list"
+      },
+      "case": "list-two-sessions",
+      "modelText": {
+        "described": "sha256:653ddb5b0175cfd0de3ff801ed4b0d51",
+        "length": 944
+      },
+      "outcome": "returned",
+      "scenario": "sessions-many",
+      "tool": "bash_sessions",
+      "typedResult": {
+        "action": "list",
+        "message": null,
+        "next_cursor": null,
+        "output": null,
+        "session": null,
+        "sessions": [
+          {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        ],
+        "truncated": null
+      }
+    },
+    {
+      "arguments": {
+        "action": "inspect",
+        "session_id": "{s0}"
+      },
+      "case": "inspect-a-running-session",
+      "modelText": {
+        "described": "sha256:7aaaeef8fedd469f0d316c26ccb6ff63",
+        "length": 514
+      },
+      "outcome": "returned",
+      "scenario": "sessions-many",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_sessions",
+      "typedResult": {
+        "action": "inspect",
+        "message": null,
+        "next_cursor": 0,
+        "output": "",
+        "session": {
+          "command": "sleep 30",
+          "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+          "cwd": "{root}/work",
+          "exit_code": null,
+          "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+          "pty_backend": "posix",
+          "reader_error": null,
+          "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "shell": "/bin/bash",
+          "status": "running",
+          "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+        },
+        "sessions": [],
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "action": "inspect",
+        "max_bytes": 4,
+        "session_id": "{s0}"
+      },
+      "case": "inspect-with-max-bytes",
+      "modelText": {
+        "described": "sha256:7aaaeef8fedd469f0d316c26ccb6ff63",
+        "length": 514
+      },
+      "outcome": "returned",
+      "scenario": "sessions-many",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_sessions",
+      "typedResult": {
+        "action": "inspect",
+        "message": null,
+        "next_cursor": 0,
+        "output": "",
+        "session": {
+          "command": "sleep 30",
+          "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+          "cwd": "{root}/work",
+          "exit_code": null,
+          "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+          "pty_backend": "posix",
+          "reader_error": null,
+          "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "shell": "/bin/bash",
+          "status": "running",
+          "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+        },
+        "sessions": [],
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "action": "inspect",
+        "max_chars": 4,
+        "session_id": "{s0}"
+      },
+      "case": "inspect-with-the-max-chars-alias",
+      "modelText": {
+        "described": "sha256:7aaaeef8fedd469f0d316c26ccb6ff63",
+        "length": 514
+      },
+      "outcome": "returned",
+      "scenario": "sessions-many",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_sessions",
+      "typedResult": {
+        "action": "inspect",
+        "message": null,
+        "next_cursor": 0,
+        "output": "",
+        "session": {
+          "command": "sleep 30",
+          "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+          "cwd": "{root}/work",
+          "exit_code": null,
+          "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+          "pty_backend": "posix",
+          "reader_error": null,
+          "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "shell": "/bin/bash",
+          "status": "running",
+          "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+        },
+        "sessions": [],
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "action": "kill",
+        "session_id": "{s0}"
+      },
+      "case": "kill-a-running-session",
+      "modelText": {
+        "described": "sha256:d12b6cba9842c18f24544852b45f84d2",
+        "length": 555
+      },
+      "outcome": "returned",
+      "scenario": "sessions-many",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": -15,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "killed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": -15,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "killed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_sessions",
+      "typedResult": {
+        "action": "kill",
+        "message": {
+          "described": "sha256:8805c47e862ae270a03ca13e29af5793",
+          "length": 44
+        },
+        "next_cursor": null,
+        "output": null,
+        "session": {
+          "command": "sleep 30",
+          "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+          "cwd": "{root}/work",
+          "exit_code": -15,
+          "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+          "pty_backend": "posix",
+          "reader_error": null,
+          "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "shell": "/bin/bash",
+          "status": "killed",
+          "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+        },
+        "sessions": [],
+        "truncated": null
+      }
+    },
+    {
+      "arguments": {
+        "action": "inspect",
+        "session_id": "{s0}"
+      },
+      "case": "inspect-a-killed-session",
+      "modelText": {
+        "described": "sha256:9d52a533c6b99137b7b35eb6e05bcaff",
+        "length": 512
+      },
+      "outcome": "returned",
+      "scenario": "sessions-many",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": -15,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "killed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": -15,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "killed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_sessions",
+      "typedResult": {
+        "action": "inspect",
+        "message": null,
+        "next_cursor": 0,
+        "output": "",
+        "session": {
+          "command": "sleep 30",
+          "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+          "cwd": "{root}/work",
+          "exit_code": -15,
+          "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+          "pty_backend": "posix",
+          "reader_error": null,
+          "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "shell": "/bin/bash",
+          "status": "killed",
+          "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+        },
+        "sessions": [],
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "action": "kill",
+        "session_id": "{s0}"
+      },
+      "case": "kill-an-already-killed-session",
+      "modelText": {
+        "described": "sha256:d12b6cba9842c18f24544852b45f84d2",
+        "length": 555
+      },
+      "outcome": "returned",
+      "scenario": "sessions-many",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": -15,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "killed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": -15,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "killed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_sessions",
+      "typedResult": {
+        "action": "kill",
+        "message": {
+          "described": "sha256:8805c47e862ae270a03ca13e29af5793",
+          "length": 44
+        },
+        "next_cursor": null,
+        "output": null,
+        "session": {
+          "command": "sleep 30",
+          "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+          "cwd": "{root}/work",
+          "exit_code": -15,
+          "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+          "pty_backend": "posix",
+          "reader_error": null,
+          "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "shell": "/bin/bash",
+          "status": "killed",
+          "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+        },
+        "sessions": [],
+        "truncated": null
+      }
+    },
+    {
+      "arguments": {
+        "action": "list"
+      },
+      "case": "list-after-a-kill",
+      "modelText": {
+        "described": "sha256:83aee1d33970aa4b91abbebc58588fb3",
+        "length": 942
+      },
+      "outcome": "returned",
+      "scenario": "sessions-many",
+      "tool": "bash_sessions",
+      "typedResult": {
+        "action": "list",
+        "message": null,
+        "next_cursor": null,
+        "output": null,
+        "session": null,
+        "sessions": [
+          {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": -15,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "killed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        ],
+        "truncated": null
+      }
+    },
+    {
+      "arguments": {
+        "action": "reset"
+      },
+      "case": "reset-the-remaining-session",
+      "modelText": {
+        "described": "sha256:e6c4f40d2599641a08d7a2e427b5a3ef",
+        "length": 542
+      },
+      "outcome": "returned",
+      "scenario": "sessions-many",
+      "tool": "bash_sessions",
+      "typedResult": {
+        "action": "reset",
+        "message": {
+          "described": "sha256:6782212648e045aec60bdd8e994c8e7a",
+          "length": 26
+        },
+        "next_cursor": null,
+        "output": null,
+        "session": null,
+        "sessions": [
+          {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": -15,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+            "shell": "/bin/bash",
+            "status": "killed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        ],
+        "truncated": null
+      }
+    },
+    {
+      "arguments": {
+        "action": "list"
+      },
+      "case": "list-after-a-reset",
+      "modelText": {
+        "described": "sha256:11bfe72a7fb884b4f077ec73997f9af0",
+        "length": 940
+      },
+      "outcome": "returned",
+      "scenario": "sessions-many",
+      "tool": "bash_sessions",
+      "typedResult": {
+        "action": "list",
+        "message": null,
+        "next_cursor": null,
+        "output": null,
+        "session": null,
+        "sessions": [
+          {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": -15,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "killed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": -15,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+            "shell": "/bin/bash",
+            "status": "killed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        ],
+        "truncated": null
+      }
+    },
+    {
+      "arguments": {
+        "action": "reset",
+        "clear_logs": true
+      },
+      "case": "reset-and-clear-the-logs",
+      "modelText": {
+        "described": "sha256:f709d8d181bdfe2a9c0b1ef0951c8822",
+        "length": 123
+      },
+      "outcome": "returned",
+      "scenario": "sessions-many",
+      "tool": "bash_sessions",
+      "typedResult": {
+        "action": "reset",
+        "message": {
+          "described": "sha256:ba4e1f068e6c4d1e9b533778dd37b56d",
+          "length": 26
+        },
+        "next_cursor": null,
+        "output": null,
+        "session": null,
+        "sessions": [],
+        "truncated": null
+      }
+    },
+    {
+      "arguments": {
+        "action": "list"
+      },
+      "case": "list-after-clearing-the-logs",
+      "modelText": {
+        "described": "sha256:2e937f48d0093b4b15b29e64f6cbde44",
+        "length": 100
+      },
+      "outcome": "returned",
+      "scenario": "sessions-many",
+      "tool": "bash_sessions",
+      "typedResult": {
+        "action": "list",
+        "message": null,
+        "next_cursor": null,
+        "output": null,
+        "session": null,
+        "sessions": [],
+        "truncated": null
+      }
+    },
+    {
+      "arguments": {
+        "command": "printf 'log line\n'"
+      },
+      "case": "foreground-log-source",
+      "modelText": {
+        "described": "sha256:8d438863149112e92033683ae193494f",
+        "length": 327
+      },
+      "outcome": "returned",
+      "scenario": "log-file",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "printf 'log line\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "printf 'log line\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash",
+      "typedResult": {
+        "background": false,
+        "command": "printf 'log line\n'",
+        "exit_code": 0,
+        "next_cursor": 10,
+        "output": "log line\n",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+        "returncode": 0,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+        "shell": "/bin/bash",
+        "status": "completed",
+        "stderr": "",
+        "stdout": "log line\n",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "action": "read",
+        "session_id": "{s0}"
+      },
+      "case": "read-a-session-log-from-the-start",
+      "modelText": {
+        "described": "sha256:fb77025fda2415f8bae644a2e4611da0",
+        "length": 169
+      },
+      "outcome": "returned",
+      "scenario": "log-file",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "printf 'log line\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "printf 'log line\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_log_file",
+      "typedResult": {
+        "action": "read",
+        "bytes_written": null,
+        "content": "log line\n",
+        "next_cursor": 10,
+        "path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "action": "read",
+        "max_bytes": 3,
+        "session_id": "{s0}"
+      },
+      "case": "read-with-max-bytes",
+      "modelText": {
+        "described": "sha256:222a869023a09cebbff049ebf97e4ce0",
+        "length": 161
+      },
+      "outcome": "returned",
+      "scenario": "log-file",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "printf 'log line\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "printf 'log line\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_log_file",
+      "typedResult": {
+        "action": "read",
+        "bytes_written": null,
+        "content": "log",
+        "next_cursor": 3,
+        "path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+        "truncated": true
+      }
+    },
+    {
+      "arguments": {
+        "action": "read",
+        "max_chars": 4,
+        "session_id": "{s0}"
+      },
+      "case": "read-with-the-max-chars-alias",
+      "modelText": {
+        "described": "sha256:736ac511359f120944da987bb5d7bad5",
+        "length": 162
+      },
+      "outcome": "returned",
+      "scenario": "log-file",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "printf 'log line\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "printf 'log line\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_log_file",
+      "typedResult": {
+        "action": "read",
+        "bytes_written": null,
+        "content": "log ",
+        "next_cursor": 4,
+        "path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+        "truncated": true
+      }
+    },
+    {
+      "arguments": {
+        "action": "read",
+        "offset": 4,
+        "session_id": "{s0}"
+      },
+      "case": "read-from-an-offset",
+      "modelText": {
+        "described": "sha256:f923edf3b4d6afe6798366ac04cba976",
+        "length": 165
+      },
+      "outcome": "returned",
+      "scenario": "log-file",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "printf 'log line\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "printf 'log line\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_log_file",
+      "typedResult": {
+        "action": "read",
+        "bytes_written": null,
+        "content": "line\n",
+        "next_cursor": 10,
+        "path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "action": "read",
+        "offset": 9999,
+        "session_id": "{s0}"
+      },
+      "case": "read-from-an-offset-past-the-end",
+      "modelText": {
+        "described": "sha256:89c0d3031a77e8bb74c2ea6c3049c6fa",
+        "length": 160
+      },
+      "outcome": "returned",
+      "scenario": "log-file",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "printf 'log line\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "printf 'log line\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_log_file",
+      "typedResult": {
+        "action": "read",
+        "bytes_written": null,
+        "content": "",
+        "next_cursor": 10,
+        "path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "action": "read",
+        "offset": -1,
+        "session_id": "{s0}"
+      },
+      "case": "read-a-negative-offset",
+      "error": {
+        "message": {
+          "described": "sha256:d0e33e0033c3785e9b1efbc5e8125f95",
+          "length": 188
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "log-file",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "printf 'log line\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "printf 'log line\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_log_file"
+    },
+    {
+      "arguments": {
+        "action": "read",
+        "relative_path": "{log0}"
+      },
+      "case": "read-by-relative-path",
+      "modelText": {
+        "described": "sha256:fb77025fda2415f8bae644a2e4611da0",
+        "length": 169
+      },
+      "outcome": "returned",
+      "scenario": "log-file",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "printf 'log line\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "printf 'log line\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_log_file",
+      "typedResult": {
+        "action": "read",
+        "bytes_written": null,
+        "content": "log line\n",
+        "next_cursor": 10,
+        "path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "action": "read",
+        "relative_path": "../../etc/hostname"
+      },
+      "case": "read-outside-the-session-directory",
+      "error": {
+        "message": {
+          "described": "sha256:f69062e32984436efc1f16621a1be5e0",
+          "length": 43
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "log-file",
+      "tool": "bash_log_file"
+    },
+    {
+      "arguments": {
+        "action": "read",
+        "relative_path": "sessions/pwsh_20200101_000000_aaaaaaaa.log"
+      },
+      "case": "read-another-family-session-log",
+      "error": {
+        "message": {
+          "described": "sha256:1483ebb3f25b6afc345dcef561c746a9",
+          "length": 43
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "log-file",
+      "tool": "bash_log_file"
+    },
+    {
+      "arguments": {
+        "action": "read"
+      },
+      "case": "read-without-a-session-or-a-path",
+      "error": {
+        "message": {
+          "described": "sha256:bdcb221869b4092eed5e9afb7f23d2d2",
+          "length": 42
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "log-file",
+      "tool": "bash_log_file"
+    },
+    {
+      "arguments": {
+        "action": "read",
+        "session_id": "bash_unknown"
+      },
+      "case": "read-an-unknown-session-log",
+      "error": {
+        "message": {
+          "described": "sha256:90c92c2b41aa3354729b246862bbdf7e",
+          "length": 34
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "log-file",
+      "tool": "bash_log_file"
+    },
+    {
+      "arguments": {
+        "action": "write",
+        "content": "annotated\n",
+        "relative_path": "notes/annotation.txt"
+      },
+      "case": "write-an-annotation",
+      "modelText": {
+        "described": "sha256:7e2d5f8570e6af8e89a25afe78563fc5",
+        "length": 134
+      },
+      "outcome": "returned",
+      "scenario": "log-file",
+      "tool": "bash_log_file",
+      "typedResult": {
+        "action": "write",
+        "bytes_written": 10,
+        "content": null,
+        "next_cursor": null,
+        "path": "{root}/vibe-home/shell-tool/notes/annotation.txt",
+        "truncated": null
+      }
+    },
+    {
+      "arguments": {
+        "action": "append",
+        "content": "appended\n",
+        "relative_path": "notes/annotation.txt"
+      },
+      "case": "append-to-an-annotation",
+      "modelText": {
+        "described": "sha256:8351109946f209c90aaed6b9933358bf",
+        "length": 134
+      },
+      "outcome": "returned",
+      "scenario": "log-file",
+      "tool": "bash_log_file",
+      "typedResult": {
+        "action": "append",
+        "bytes_written": 9,
+        "content": null,
+        "next_cursor": null,
+        "path": "{root}/vibe-home/shell-tool/notes/annotation.txt",
+        "truncated": null
+      }
+    },
+    {
+      "arguments": {
+        "action": "read",
+        "relative_path": "notes/annotation.txt"
+      },
+      "case": "read-the-annotation-back",
+      "modelText": {
+        "described": "sha256:857f59ec89b4fd2b9838a56799758b6a",
+        "length": 149
+      },
+      "outcome": "returned",
+      "scenario": "log-file",
+      "tool": "bash_log_file",
+      "typedResult": {
+        "action": "read",
+        "bytes_written": null,
+        "content": "annotated\nappended\n",
+        "next_cursor": 19,
+        "path": "{root}/vibe-home/shell-tool/notes/annotation.txt",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "action": "write",
+        "relative_path": "notes/annotation.txt"
+      },
+      "case": "write-without-content",
+      "error": {
+        "message": {
+          "described": "sha256:1f9c85270c91b5abbea321fa3ecb177a",
+          "length": 40
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "log-file",
+      "tool": "bash_log_file"
+    },
+    {
+      "arguments": {
+        "background": true,
+        "command": "sleep 30"
+      },
+      "case": "background-live-log-source",
+      "modelText": {
+        "described": "sha256:ec38be16d07330fd82abaae3747eb1b3",
+        "length": 298
+      },
+      "outcome": "returned",
+      "scenario": "log-file",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+          "sessionInfo": {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash",
+      "typedResult": {
+        "background": true,
+        "command": "sleep 30",
+        "exit_code": null,
+        "next_cursor": 0,
+        "output": "",
+        "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1.log",
+        "returncode": 0,
+        "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+        "shell": "/bin/bash",
+        "status": "running",
+        "stderr": "",
+        "stdout": "",
+        "truncated": false
+      }
+    },
+    {
+      "arguments": {
+        "action": "write",
+        "content": "x",
+        "relative_path": "{log1}"
+      },
+      "case": "write-to-a-live-session-log",
+      "error": {
+        "message": {
+          "described": "sha256:708e2f1401aebefa590fec6156d72cea",
+          "length": 110
+        },
+        "type": "ToolError"
+      },
+      "outcome": "raised",
+      "scenario": "log-file",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+          "sessionInfo": {
+            "command": "sleep 30",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": null,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
+            "shell": "/bin/bash",
+            "status": "running",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_log_file"
+    },
+    {
+      "arguments": {
+        "action": "read",
+        "session_id": "{s0}"
+      },
+      "before": [
+        {
+          "do": "delete-log",
+          "session": 0
+        }
+      ],
+      "case": "read-a-log-that-was-deleted",
+      "modelText": {
+        "described": "sha256:9255db1a89d9e6cd9b112a7b8e99b2b5",
+        "length": 159
+      },
+      "outcome": "returned",
+      "scenario": "log-file",
+      "sessions": [
+        {
+          "manifest": {
+            "command": "printf 'log line\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          },
+          "sessionId": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+          "sessionInfo": {
+            "command": "printf 'log line\n'",
+            "created_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>",
+            "cwd": "{root}/work",
+            "exit_code": 0,
+            "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+            "pty_backend": "posix",
+            "reader_error": null,
+            "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
+            "shell": "/bin/bash",
+            "status": "completed",
+            "updated_at": "<timestamp:%Y-%m-%dT%H:%M:%S[.%f]+00:00>"
+          }
+        }
+      ],
+      "tool": "bash_log_file",
+      "typedResult": {
+        "action": "read",
+        "bytes_written": null,
+        "content": "",
+        "next_cursor": 0,
+        "path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
+        "truncated": false
+      }
+    }
+  ],
+  "note": "Managed shell session corpus: what the pinned reference's five shell handlers return for each scripted case, with the manifest and the session info each case leaves behind. A captured string is committed as it stands only when it is a value these arguments supplied, a normalized path, a shape marker, or an identifier; everything else, including every error message, is committed as a {described, length} pair, so no reference prose ships while any change still fails the replay. Regenerate with scripts/parity/shell_session.py --corpus when the pinned reference moves.",
+  "platform": "linux",
+  "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+  "schemaVersion": 1
+}
