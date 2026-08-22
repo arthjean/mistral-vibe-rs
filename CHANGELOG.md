@@ -15,6 +15,12 @@
   rollback that cannot finish is reported alongside the original failure rather
   than replacing it.
 
+- Find the repository behind a separate git directory. The repository root is
+  now taken from the primary checkout's own working directory, so a repository
+  created with `--separate-git-dir` can have its worktrees removed; standing in
+  a linked worktree of such a repository is refused by name instead of producing
+  a root that no removal can run in.
+
 - Say that git is missing when git is missing. A launch that asks for
   `--worktree` on a machine without git on `PATH` now fails with a sentence
   naming git and the search path, where it used to surface the raw spawn error

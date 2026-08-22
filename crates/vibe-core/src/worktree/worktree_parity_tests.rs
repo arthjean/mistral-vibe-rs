@@ -88,6 +88,7 @@ const SETUPS: &[&str] = &[
     "detached-target",
     "foreign-target",
     "linked-worktrees",
+    "separate-git-dir",
     "target-tree",
 ];
 
@@ -103,6 +104,7 @@ const VIBE_HOME: &str = "home";
 const LINKED: &str = "linked";
 const OUTSIDE: &str = "outside";
 const TREE: &str = "tree";
+const STATE: &str = "state";
 const DEFAULT_BRANCH: &str = "main";
 const FIXED_AUTHOR: &str = "Parity Oracle";
 const FIXED_EMAIL: &str = "oracle@example.invalid";
@@ -707,7 +709,9 @@ fn text(path: &Path) -> String {
 /// See the module header for why this is `--local` rather than the environment
 /// the capture script sets.
 fn harden(checkout: &Path) {
-    let git_directory = checkout.join(".git");
+    // Asked of git rather than assumed to be `.git` beside the checkout: a
+    // repository created with `--separate-git-dir` keeps a file there.
+    let git_directory = common_git_directory(checkout);
     let hooks = git_directory.join("parity-hooks");
     fs::create_dir_all(&hooks).expect("the hook directory is writable");
     let excludes = git_directory.join("parity-excludes");
@@ -734,11 +738,19 @@ fn commit_all(checkout: &Path, message: &str) {
 }
 
 fn initialize_checkout(checkout: &Path) {
+    initialize_checkout_with(checkout, None);
+}
+
+/// `initialize_checkout`, optionally keeping the git data outside the checkout.
+fn initialize_checkout_with(checkout: &Path, separate_git_dir: Option<&Path>) {
     fs::create_dir_all(checkout).expect("the checkout directory is writable");
-    git(
-        checkout,
-        &["init", "--quiet", "--initial-branch", DEFAULT_BRANCH],
-    );
+    let mut arguments = vec!["init", "--quiet", "--initial-branch", DEFAULT_BRANCH];
+    let separate;
+    if let Some(directory) = separate_git_dir {
+        separate = text(directory);
+        arguments.extend(["--separate-git-dir", separate.as_str()]);
+    }
+    git(checkout, &arguments);
     harden(checkout);
     write_file(&checkout.join("README.md"), "fixture\n");
     write_file(&checkout.join("docs").join("guide.md"), "guide\n");
@@ -781,7 +793,21 @@ fn symlink(target: &Path, link: &Path) {
 /// ever disagreed the `managedRoot` family would say so first.
 fn managed_directory(root: &Path) -> PathBuf {
     let checkout = root.join(CHECKOUT);
-    managed_worktree_root(&root.join(VIBE_HOME), &checkout, &checkout.join(".git"))
+    let common_git_dir = common_git_directory(&checkout);
+    managed_worktree_root(&root.join(VIBE_HOME), &checkout, &common_git_dir)
+}
+
+/// Where the repository `checkout` belongs to keeps its shared git data.
+fn common_git_directory(checkout: &Path) -> PathBuf {
+    let reported = PathBuf::from(git(checkout, &["rev-parse", "--git-common-dir"]));
+    let resolved = if reported.is_absolute() {
+        reported
+    } else {
+        checkout.join(reported)
+    };
+    resolved
+        .canonicalize()
+        .expect("the common git directory resolves")
 }
 
 /// One case's own filesystem, resolved so every recorded path is relative to a
@@ -797,6 +823,26 @@ fn case_root(scratch: &Path, index: usize) -> PathBuf {
 fn build_setup(setup: &str, root: &Path) {
     let checkout = root.join(CHECKOUT);
     fs::create_dir_all(root.join(VIBE_HOME)).expect("the vibe home is writable");
+
+    if setup == "separate-git-dir" {
+        let state = root.join(STATE);
+        fs::create_dir_all(&state).expect("the state directory is writable");
+        initialize_checkout_with(&checkout, Some(&state.join("repo.git")));
+        let linked = root.join(LINKED);
+        fs::create_dir_all(&linked).expect("the linked directory is writable");
+        git(
+            &checkout,
+            &[
+                "worktree",
+                "add",
+                "--quiet",
+                "-b",
+                "alpha",
+                &text(&linked.join("alpha")),
+            ],
+        );
+        return;
+    }
 
     if setup == "target-tree" {
         let tree = root.join(TREE);
@@ -1528,12 +1574,14 @@ fn the_scripted_repositories_are_deterministic() {
     let listing = |root: &Path| -> BTreeSet<String> {
         // The managed directory is named after a digest of an absolute path,
         // so it differs between two case roots by construction. The projection
-        // replaces it the same way the corpus does.
+        // replaces it the same way the corpus does. A setup that scripts no
+        // checkout at all has no managed directory to name.
         let projection = Projection::new(
             root,
-            managed_directory(root)
-                .file_name()
-                .map(|value| value.to_string_lossy().into_owned()),
+            root.join(CHECKOUT)
+                .is_dir()
+                .then(|| managed_directory(root))
+                .and_then(|value| value.file_name().map(|v| v.to_string_lossy().into_owned())),
             None,
         );
         let mut found = BTreeSet::new();

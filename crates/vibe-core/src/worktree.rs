@@ -160,16 +160,15 @@ pub fn prepare_worktree(
             _ => WorktreeError::RepositoryRequired,
         })?;
     let checkout_root = canonical_directory(&checkout_root)?;
+    let git_dir = resolve_git_path(
+        &checkout_root,
+        &git_stdout(base, ["rev-parse", "--git-dir"], name)?,
+    )?;
     let common_git_dir = resolve_git_path(
         &checkout_root,
         &git_stdout(base, ["rev-parse", "--git-common-dir"], name)?,
     )?;
-    let repo_root = common_git_dir
-        .parent()
-        .ok_or_else(|| {
-            WorktreeError::failed(name, "git common directory has no repository parent")
-        })?
-        .to_path_buf();
+    let repo_root = primary_worktree_root(&checkout_root, &git_dir, &common_git_dir, name)?;
     let relative_base = base.strip_prefix(&checkout_root).map_err(|_| {
         WorktreeError::failed(name, "working directory is outside the Git checkout")
     })?;
@@ -328,6 +327,42 @@ fn managed_worktree_root(vibe_home: &Path, repo_root: &Path, common_git_dir: &Pa
     vibe_home.join(MANAGED_DIRECTORY).join(format!(
         "{repository_name}-{}",
         &digest[..REPOSITORY_DIGEST_LENGTH]
+    ))
+}
+
+/// The working directory of the checkout every managed worktree hangs off.
+///
+/// Cleanup runs `git -C repo_root worktree remove`, so this has to be a real
+/// checkout and not merely the directory beside the git data. A repository
+/// created with `--separate-git-dir` reports that directory as its first
+/// worktree, so the primary checkout's own working directory is the only
+/// authoritative answer when the invocation is standing in it, and there is no
+/// answer at all from a linked worktree of such a repository. The reference
+/// draws the same three cases (`vibe/core/worktree.py:516-526`).
+fn primary_worktree_root(
+    checkout_root: &Path,
+    git_dir: &Path,
+    common_git_dir: &Path,
+    name: &str,
+) -> Result<PathBuf, WorktreeError> {
+    if git_dir == common_git_dir {
+        return Ok(checkout_root.to_path_buf());
+    }
+    if common_git_dir
+        .file_name()
+        .is_some_and(|value| value == ".git")
+    {
+        return common_git_dir
+            .parent()
+            .map(Path::to_path_buf)
+            .ok_or_else(|| {
+                WorktreeError::failed(name, "git common directory has no repository parent")
+            });
+    }
+    Err(WorktreeError::failed(
+        name,
+        "the primary checkout cannot be determined from a linked worktree of a repository using \
+         a separate git directory",
     ))
 }
 

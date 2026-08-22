@@ -9,7 +9,7 @@ use std::process::Command;
 
 use super::{
     PreparedWorktree, WorktreeError, cleanup_failed_prepare, inspect_worktree_for_cleanup,
-    prepare_worktree,
+    prepare_worktree, remove_worktree,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -276,4 +276,73 @@ fn a_failure_before_the_checkout_removes_nothing() {
         "a directory this run did not create was removed by it"
     );
     assert!(!branch_is_present(&checkout, "review"));
+}
+
+// --------------------------------------------------------------------------
+// US-274: the primary checkout
+// --------------------------------------------------------------------------
+
+/// A repository keeping its git data outside the working tree can prepare a
+/// worktree and remove it again, which needs the repository root to be the
+/// primary checkout and not the directory beside the git data.
+#[test]
+fn a_separate_git_directory_repository_prepares_and_removes() {
+    let (_scratch, root) = case_root();
+    let checkout = checkout(&root, Some(&root.join("state").join("repo.git")));
+
+    let prepared =
+        prepare_worktree("review", &checkout, &root.join("home")).expect("the worktree prepares");
+    assert_eq!(prepared.repo_root, checkout);
+
+    remove_worktree(&prepared, true).expect("the worktree is removable");
+    assert!(!prepared.root.exists());
+    assert!(!branch_is_present(&checkout, "review"));
+}
+
+/// A linked worktree of such a repository has no primary checkout to name, and
+/// refusing is what keeps a later `worktree remove` from running in a directory
+/// that is not a checkout.
+#[test]
+fn a_linked_worktree_of_a_separate_git_directory_repository_refuses() {
+    let (_scratch, root) = case_root();
+    let checkout = checkout(&root, Some(&root.join("state").join("repo.git")));
+    let linked = root.join("linked").join("alpha");
+    fs::create_dir_all(linked.parent().expect("the linked directory has a parent"))
+        .expect("the linked directory is writable");
+    git(
+        &checkout,
+        &["worktree", "add", "--quiet", "-b", "alpha", text(&linked)],
+    );
+    let vibe_home = root.join("home");
+
+    let error = prepare_worktree("review", &linked, &vibe_home)
+        .expect_err("the primary checkout is unknown");
+    let WorktreeError::Failed { name, message } = &error else {
+        panic!("expected a named worktree failure, got {error:?}");
+    };
+    assert_eq!(name, "review");
+    assert!(message.contains("primary checkout"), "{message}");
+    assert!(!vibe_home.join("worktrees").exists());
+    assert!(!branch_is_present(&checkout, "review"));
+}
+
+/// Reusing a worktree reached through a symbolic link finds the same
+/// repository, because both sides of the comparison are resolved first.
+#[test]
+fn a_symlinked_managed_root_still_reads_as_the_same_repository() {
+    let (_scratch, root) = case_root();
+    let checkout = checkout(&root, None);
+    let vibe_home = root.join("home");
+    let first = prepare_worktree("review", &checkout, &vibe_home).expect("the worktree prepares");
+    assert!(first.created);
+
+    let alias = root.join("alias");
+    symlink(&vibe_home, &alias);
+    let second = prepare_worktree("review", &checkout, &alias).expect("the worktree is reused");
+
+    assert!(
+        !second.created,
+        "a symlinked path read as a different repository"
+    );
+    assert!(!second.branch_created);
 }

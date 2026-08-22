@@ -111,6 +111,7 @@ VIBE_HOME = "home"
 LINKED = "linked"
 OUTSIDE = "outside"
 TREE = "tree"
+STATE = "state"
 
 #: One instant, so a scripted repository hashes to the same commit on every run
 #: and on every machine.
@@ -290,9 +291,10 @@ def commit_all(checkout: Path, message: str) -> None:
     run_git(checkout, "commit", "--no-gpg-sign", "--quiet", "-m", message)
 
 
-def initialize_checkout(checkout: Path) -> None:
+def initialize_checkout(checkout: Path, separate_git_dir: Path | None = None) -> None:
     checkout.mkdir(parents=True, exist_ok=True)
-    run_git(checkout, "init", "--quiet", "--initial-branch", DEFAULT_BRANCH)
+    separate = () if separate_git_dir is None else ("--separate-git-dir", str(separate_git_dir))
+    run_git(checkout, "init", "--quiet", "--initial-branch", DEFAULT_BRANCH, *separate)
     write_file(checkout / "README.md", "fixture\n")
     write_file(checkout / "docs" / "guide.md", "guide\n")
     commit_all(checkout, "fixture")
@@ -327,15 +329,24 @@ SETUPS = (
     "detached-target",
     "foreign-target",
     "linked-worktrees",
+    "separate-git-dir",
     "target-tree",
 )
 
 
 def managed_directory(worktree_module: Any, checkout: Path) -> Path:
-    """The managed root for a checkout, from the reference's own naming rule."""
+    """The managed root for a checkout, from the reference's own naming rule.
 
-    common_git_dir = (checkout / ".git").resolve()
-    return worktree_module._worktree_root(checkout.resolve(), common_git_dir)
+    The common git directory is asked of git rather than assumed to be
+    `.git` beside the checkout, because a repository created with
+    `--separate-git-dir` keeps its state elsewhere and the naming rule hashes
+    that location.
+    """
+
+    common_git_dir = Path(run_git(checkout, "rev-parse", "--git-common-dir").strip())
+    if not common_git_dir.is_absolute():
+        common_git_dir = checkout / common_git_dir
+    return worktree_module._worktree_root(checkout.resolve(), common_git_dir.resolve())
 
 
 def build_setup(worktree_module: Any, setup: str, root: Path) -> None:
@@ -353,6 +364,14 @@ def build_setup(worktree_module: Any, setup: str, root: Path) -> None:
         write_file(tree / "nested" / ".git", "gitdir: /nowhere\n")
         (tree / "escape").symlink_to(root / OUTSIDE)
         (tree / "aliased").symlink_to(tree / "sub")
+        return
+
+    if setup == "separate-git-dir":
+        (root / STATE).mkdir(parents=True, exist_ok=True)
+        initialize_checkout(checkout, root / STATE / "repo.git")
+        linked = root / LINKED
+        linked.mkdir(parents=True, exist_ok=True)
+        run_git(checkout, "worktree", "add", "--quiet", "-b", "alpha", str(linked / "alpha"))
         return
 
     initialize_checkout(checkout)
@@ -605,6 +624,24 @@ PREPARE_CASES: tuple[dict[str, Any], ...] = (
     {"case": "occupied-target", "setup": "occupied-target", "name": "review", "base": CHECKOUT},
     {"case": "detached-target", "setup": "detached-target", "name": "review", "base": CHECKOUT},
     {"case": "foreign-target", "setup": "foreign-target", "name": "review", "base": CHECKOUT},
+    {
+        "case": "linked-base",
+        "setup": "linked-worktrees",
+        "name": "review",
+        "base": f"{LINKED}/alpha",
+    },
+    {
+        "case": "separate-git-dir-base",
+        "setup": "separate-git-dir",
+        "name": "review",
+        "base": CHECKOUT,
+    },
+    {
+        "case": "separate-git-dir-linked-base",
+        "setup": "separate-git-dir",
+        "name": "review",
+        "base": f"{LINKED}/alpha",
+    },
 )
 
 #: One cleanup case per row: what happens inside the prepared worktree before

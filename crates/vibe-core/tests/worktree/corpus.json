@@ -792,6 +792,85 @@
       "setup": "foreign-target"
     },
     {
+      "case": "linked-base",
+      "family": "prepare",
+      "input": {
+        "base": "linked/alpha",
+        "branch": null,
+        "name": "review",
+        "twice": false
+      },
+      "observed": {
+        "outcome": "prepared",
+        "prepared": {
+          "baseCommit": "{headCommit}",
+          "branch": "review",
+          "branchCreated": true,
+          "created": true,
+          "name": "review",
+          "path": "home/worktrees/{repoDir}/review",
+          "repoRoot": "repo",
+          "root": "home/worktrees/{repoDir}/review"
+        },
+        "residue": {
+          "branch": true,
+          "target": true
+        }
+      },
+      "setup": "linked-worktrees"
+    },
+    {
+      "case": "separate-git-dir-base",
+      "family": "prepare",
+      "input": {
+        "base": "repo",
+        "branch": null,
+        "name": "review",
+        "twice": false
+      },
+      "observed": {
+        "outcome": "prepared",
+        "prepared": {
+          "baseCommit": "{headCommit}",
+          "branch": "review",
+          "branchCreated": true,
+          "created": true,
+          "name": "review",
+          "path": "home/worktrees/{repoDir}/review",
+          "repoRoot": "repo",
+          "root": "home/worktrees/{repoDir}/review"
+        },
+        "residue": {
+          "branch": true,
+          "target": true
+        }
+      },
+      "setup": "separate-git-dir"
+    },
+    {
+      "case": "separate-git-dir-linked-base",
+      "family": "prepare",
+      "input": {
+        "base": "linked/alpha",
+        "branch": null,
+        "name": "review",
+        "twice": false
+      },
+      "observed": {
+        "errorClass": "WorktreeError",
+        "message": {
+          "described": "sha256:efc84bba89a2d317c7fafab02c80acb1",
+          "length": 92
+        },
+        "outcome": "error",
+        "residue": {
+          "branch": false,
+          "target": false
+        }
+      },
+      "setup": "separate-git-dir"
+    },
+    {
       "case": "clean",
       "family": "cleanup",
       "input": {
@@ -1178,6 +1257,7 @@
     "detached-target",
     "foreign-target",
     "linked-worktrees",
+    "separate-git-dir",
     "target-tree"
   ]
 }
