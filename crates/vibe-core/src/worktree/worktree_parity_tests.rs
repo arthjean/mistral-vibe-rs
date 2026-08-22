@@ -113,13 +113,6 @@ const FIXED_EMAIL: &str = "oracle@example.invalid";
 /// mean shipping reference prose.
 const LICENSING: &str = "NOTICE";
 
-/// Why a gap stands, shared by every case that carries the same one: the reason
-/// is a property of the gap, not of the case that happens to reveal it. Each is
-/// stated once so a story landing removes one sentence rather than dozens.
-const COMMIT_PHRASING: &str = "the commit-count reason is this port's own sentence and the \
-     reference's is shorter; the two booleans beside it match digest for digest. US-286 restates \
-     the phrase from the reference's own form";
-
 /// One tolerated gap between this port and the reference.
 #[derive(Debug, Clone, Copy)]
 struct Divergence {
@@ -161,28 +154,9 @@ const LEDGER: &[Divergence] = &[
     // `prepare/distinct-branch` and `prepare/invalid-branch` carry no entry
     // either: US-282 gave preparation the branch parameter both cases ask for,
     // so the branch gate now answers through it.
-    // Cleanup.
-    Divergence {
-        family: "cleanup",
-        case: "one-commit",
-        pointer: "/reasons/0",
-        closed_by: "US-286",
-        why: COMMIT_PHRASING,
-    },
-    Divergence {
-        family: "cleanup",
-        case: "two-commits",
-        pointer: "/reasons/0",
-        closed_by: "US-286",
-        why: COMMIT_PHRASING,
-    },
-    Divergence {
-        family: "cleanup",
-        case: "detached-commit",
-        pointer: "/reasons/0",
-        closed_by: "US-286",
-        why: COMMIT_PHRASING,
-    },
+    // Cleanup carries no entry: US-286 restated the commit-count reason from
+    // the reference's own form, so all three commit cases now digest equal
+    // beside the two booleans that always did.
     // Enumeration carries no entry: US-280 wrote `list_linked_worktrees` and
     // every case of the family now replays field for field.
 ];

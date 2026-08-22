@@ -124,6 +124,9 @@ impl WorktreeCleanupState {
         !self.has_uncommitted_changes && !self.has_untracked_files && self.new_commit_count == 0
     }
 
+    /// Why removing this worktree would lose work, in the reference's order and
+    /// its wording: the two booleans first, then the commit count with the noun
+    /// agreeing with it (`vibe/core/worktree.py:94-104`).
     #[must_use]
     pub fn reasons(&self) -> Vec<String> {
         let mut reasons = Vec::new();
@@ -140,7 +143,7 @@ impl WorktreeCleanupState {
                 "commits"
             };
             reasons.push(format!(
-                "{} {noun} added to the branch during this session",
+                "{} {noun} added during this session",
                 self.new_commit_count
             ));
         }
