@@ -7,7 +7,10 @@
 
 use std::process::Command;
 
-use super::{PreparedWorktree, WorktreeError, inspect_worktree_for_cleanup, prepare_worktree};
+use super::{
+    PreparedWorktree, WorktreeError, cleanup_failed_prepare, inspect_worktree_for_cleanup,
+    prepare_worktree,
+};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -29,6 +32,22 @@ fn git(directory: &Path, arguments: &[&str]) -> String {
 
 fn text(path: &Path) -> &str {
     path.to_str().expect("a scripted path is UTF-8")
+}
+
+#[cfg(unix)]
+fn symlink(target: &Path, link: &Path) {
+    std::os::unix::fs::symlink(target, link).expect("the fixture symlink is created");
+}
+
+#[cfg(windows)]
+fn symlink(target: &Path, link: &Path) {
+    std::os::windows::fs::symlink_dir(target, link).expect("the fixture symlink is created");
+}
+
+/// The managed root this port reaches for, so a test can assert on what a run
+/// left there.
+fn managed_directory(vibe_home: &Path, checkout: &Path) -> PathBuf {
+    super::managed_worktree_root(vibe_home, checkout, &checkout.join(".git"))
 }
 
 /// A case root with no symbolic links in it, so `strip_prefix` against a
@@ -66,6 +85,37 @@ fn checkout(root: &Path, separate_git_dir: Option<&Path>) -> PathBuf {
         &["commit", "--quiet", "--no-gpg-sign", "-m", "fixture"],
     );
     checkout
+}
+
+/// A base inside the checkout that resolves to the checkout root itself but is
+/// not spelled as it.
+///
+/// Preparation records the base relative to the checkout and reopens it inside
+/// the new worktree, so a base that is an untracked symbolic link to the
+/// checkout root exists for every git question asked before the worktree is
+/// created and is missing from the worktree afterward. That is the only way to
+/// make construction fail after `git worktree add` has already run, which is
+/// exactly the span the rollback covers.
+fn vanishing_base(checkout: &Path) -> PathBuf {
+    let base = checkout.join("here");
+    symlink(Path::new("."), &base);
+    base
+}
+
+fn branch_is_present(checkout: &Path, branch: &str) -> bool {
+    Command::new("git")
+        .arg("-C")
+        .arg(checkout)
+        .args([
+            "show-ref",
+            "--verify",
+            "--quiet",
+            &format!("refs/heads/{branch}"),
+        ])
+        .output()
+        .expect("git is on PATH")
+        .status
+        .success()
 }
 
 // --------------------------------------------------------------------------
@@ -124,4 +174,106 @@ fn an_unresolvable_head_fails_and_names_the_worktree() {
         panic!("expected a named worktree failure, got {error:?}");
     };
     assert_eq!(name, "review");
+}
+
+// --------------------------------------------------------------------------
+// US-273: a preparation that fails leaves nothing behind
+// --------------------------------------------------------------------------
+
+/// Construction failing after `git worktree add` undoes both halves of what the
+/// call created.
+#[test]
+fn a_failed_construction_removes_the_worktree_and_the_branch_it_created() {
+    let (_scratch, root) = case_root();
+    let checkout = checkout(&root, None);
+    let base = vanishing_base(&checkout);
+    let vibe_home = root.join("home");
+
+    let error = prepare_worktree("review", &base, &vibe_home).expect_err("construction fails");
+    assert!(
+        matches!(error, WorktreeError::Failed { .. }),
+        "the original failure is returned unwrapped when the rollback finishes: {error:?}"
+    );
+
+    assert!(
+        !managed_directory(&vibe_home, &checkout)
+            .join("review")
+            .exists(),
+        "the worktree the failed run created is still under the managed root"
+    );
+    assert!(
+        !git(&checkout, &["worktree", "list", "--porcelain"]).contains("review"),
+        "git still records the worktree the failed run created"
+    );
+    assert!(
+        !branch_is_present(&checkout, "review"),
+        "the branch the failed run created survived it"
+    );
+}
+
+/// A branch that existed before the run is not this run's to delete.
+#[test]
+fn a_failed_construction_keeps_a_branch_it_did_not_create() {
+    let (_scratch, root) = case_root();
+    let checkout = checkout(&root, None);
+    git(&checkout, &["branch", "review"]);
+    let base = vanishing_base(&checkout);
+
+    prepare_worktree("review", &base, &root.join("home")).expect_err("construction fails");
+
+    assert!(
+        !git(&checkout, &["worktree", "list", "--porcelain"]).contains("review"),
+        "git still records the worktree the failed run created"
+    );
+    assert!(
+        branch_is_present(&checkout, "review"),
+        "a branch that predates the run was deleted by its rollback"
+    );
+}
+
+/// A rollback that cannot finish is attached to the failure it was undoing,
+/// and the pair reaches the caller with both halves readable.
+#[test]
+fn a_failing_rollback_is_attached_to_the_original_failure() {
+    let (_scratch, root) = case_root();
+    let checkout = checkout(&root, None);
+    let absent = root.join("never-added");
+
+    let note = cleanup_failed_prepare(&checkout, &absent, "review", true)
+        .expect("removing a worktree git never recorded fails");
+
+    let noted = WorktreeError::Noted {
+        name: "review".to_owned(),
+        source: Box::new(WorktreeError::failed("review", "construction failed")),
+        note,
+    };
+    let rendered = noted.to_string();
+    assert!(
+        rendered.contains("construction failed"),
+        "the original failure was swallowed: {rendered}"
+    );
+    assert!(
+        rendered.contains("could not be removed"),
+        "the rollback failure was swallowed: {rendered}"
+    );
+}
+
+/// A failure raised before `git worktree add` ran has nothing to undo, so the
+/// rollback is never entered and the managed root stays empty.
+#[test]
+fn a_failure_before_the_checkout_removes_nothing() {
+    let (_scratch, root) = case_root();
+    let checkout = checkout(&root, None);
+    let vibe_home = root.join("home");
+    let occupied = managed_directory(&vibe_home, &checkout).join("review");
+    fs::create_dir_all(&occupied).expect("the occupying directory is writable");
+    fs::write(occupied.join("note.txt"), "occupied\n").expect("the note is writable");
+
+    prepare_worktree("review", &checkout, &vibe_home).expect_err("an occupied target refuses");
+
+    assert!(
+        occupied.join("note.txt").is_file(),
+        "a directory this run did not create was removed by it"
+    );
+    assert!(!branch_is_present(&checkout, "review"));
 }

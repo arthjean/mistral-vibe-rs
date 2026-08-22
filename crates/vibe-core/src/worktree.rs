@@ -101,6 +101,22 @@ pub enum WorktreeError {
     GitUnavailable(String),
     #[error("worktree `{name}` failed: {message}")]
     Failed { name: String, message: String },
+    /// A failure that carries a second failure it did not replace.
+    ///
+    /// The reference attaches the rollback's own failure to the original
+    /// exception with `add_note` rather than raising it
+    /// (`vibe/core/worktree.py:210-220`), so the caller still learns why
+    /// preparation failed and additionally learns that the cleanup after it
+    /// did not finish. The class of the original is what the note is attached
+    /// to, which is why the parity replay's `error_class` reads through this
+    /// variant.
+    #[error("worktree `{name}` failed: {source}; {note}")]
+    Noted {
+        name: String,
+        #[source]
+        source: Box<WorktreeError>,
+        note: String,
+    },
     #[error("worktree I/O failed at `{path}`: {source}")]
     Io {
         path: PathBuf,
@@ -187,7 +203,59 @@ pub fn prepare_worktree(
             name,
         )?;
     }
-    build_prepared_worktree(name, target, relative_base, repo_root, true, !branch_exists)
+    // Past this point the checkout on disk is this call's doing, so a failure
+    // that follows has to undo it. The reference wraps exactly this span
+    // (`vibe/core/worktree.py:140-153`) and everything above it fails before
+    // anything exists to roll back.
+    build_prepared_worktree(
+        name,
+        target.clone(),
+        relative_base,
+        repo_root,
+        true,
+        !branch_exists,
+    )
+    .map_err(|error| {
+        match cleanup_failed_prepare(&checkout_root, &target, name, !branch_exists) {
+            Some(note) => WorktreeError::Noted {
+                name: name.to_owned(),
+                source: Box::new(error),
+                note,
+            },
+            None => error,
+        }
+    })
+}
+
+/// Undoes a worktree this call created, after preparation failed on it.
+///
+/// Returns the note to attach to the original failure when the rollback itself
+/// failed, and [`None`] when it finished. The original error is never replaced:
+/// the reference states that rule by calling `add_note` rather than raising
+/// (`vibe/core/worktree.py:210-220`), and the caller who has to act on the
+/// failure needs the first one, not the second.
+fn cleanup_failed_prepare(
+    checkout_root: &Path,
+    target: &Path,
+    name: &str,
+    branch_created: bool,
+) -> Option<String> {
+    let target_text = path_text(target).ok()?;
+    if let Err(error) = git_checked(
+        checkout_root,
+        ["worktree", "remove", "--force", target_text],
+        name,
+    ) {
+        return Some(format!(
+            "the worktree it created could not be removed: {error}"
+        ));
+    }
+    if branch_created && let Err(error) = git_checked(checkout_root, ["branch", "-D", name], name) {
+        return Some(format!(
+            "the branch it created could not be deleted: {error}"
+        ));
+    }
+    None
 }
 
 /// What removing this worktree would discard, relative to the session start.

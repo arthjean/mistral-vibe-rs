@@ -8,6 +8,13 @@
   no longer reads as a clean worktree removed without asking: the prompt is
   offered and declining keeps both the worktree and its branch.
 
+- Undo a worktree whose preparation failed. When the checkout was created and
+  preparation then failed, the worktree is removed and a branch this run created
+  is deleted with it, instead of leaving a half-built checkout under
+  `$VIBE_HOME/worktrees`. A branch that existed beforehand survives, and a
+  rollback that cannot finish is reported alongside the original failure rather
+  than replacing it.
+
 - Say that git is missing when git is missing. A launch that asks for
   `--worktree` on a machine without git on `PATH` now fails with a sentence
   naming git and the search path, where it used to surface the raw spawn error

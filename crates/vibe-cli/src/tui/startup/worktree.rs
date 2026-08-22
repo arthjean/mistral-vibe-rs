@@ -26,6 +26,10 @@ impl From<WorktreeError> for StartupError {
             WorktreeError::GitUnavailable(message) => Self::WorktreeGitUnavailable(message),
             WorktreeError::Failed { name, message } => Self::Worktree { name, message },
             WorktreeError::Io { path, source } => Self::Io { path, source },
+            WorktreeError::Noted { name, source, note } => Self::Worktree {
+                name,
+                message: format!("{source}; {note}"),
+            },
         }
     }
 }

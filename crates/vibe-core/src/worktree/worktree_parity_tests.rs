@@ -989,6 +989,9 @@ fn error_class(error: &super::WorktreeError) -> &'static str {
     match error {
         super::WorktreeError::RepositoryRequired => "WorktreeNotFoundError",
         super::WorktreeError::GitUnavailable(_) => "GitUnavailableError",
+        // A note the reference attaches with `add_note` leaves the class of the
+        // failure it is attached to untouched, so the class is read through it.
+        super::WorktreeError::Noted { source, .. } => error_class(source),
         _ => "WorktreeError",
     }
 }
