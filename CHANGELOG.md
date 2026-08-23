@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Withhold the managed shell session tools from a client that hosts its own
+  terminal. An editor declaring the `terminal` capability is now offered one
+  shell name per family instead of five: the managed command variant and the
+  four session tools (`*_output`, `*_stdin`, `*_sessions`, `*_log_file`) are not
+  published, and the family name is left to the variant that never claimed a
+  managed session. The gate reads the capability the delegated command already
+  reads, so a client hosting no terminal, and a session with no client attached
+  at all, keep the surface they had. It applies on every platform rather than on
+  Windows alone.
+
 - Persist managed shell sessions in the format the reference persists them in,
   so a session left behind by either implementation is readable by the other.
   A manifest now carries the eleven fields the reference declares, in

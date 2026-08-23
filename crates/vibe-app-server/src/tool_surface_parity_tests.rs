@@ -1389,14 +1389,36 @@ async fn the_configured_filters_publish_what_the_reference_publishes() {
     );
 }
 
+/// The `selection_priority` a reference shell class declares, which is what
+/// this port publishes on the spec serving the same name.
+///
+/// Reference `BaseTool.selection_priority` defaults to 0 and
+/// `ExperimentalBash` is the one shell class that raises it, to 10; the four
+/// session classes and the legacy command class keep the default. A class the
+/// quadrants name and this table does not answers `None`, which the replay
+/// reports as a divergence rather than passing silently.
+fn reference_class_priority(class: &str) -> Option<i32> {
+    match class {
+        "ExperimentalBash" | "ExperimentalGitBash" | "ExperimentalWindowsShell" => Some(10),
+        "Bash" | "GitBash" | "WindowsShell" | "BashOutput" | "BashStdin" | "BashSessions"
+        | "BashLogFile" => Some(0),
+        _ => None,
+    }
+}
+
 /// Replays the four surface quadrants, comparing the published names against
 /// the reference's per quadrant rather than once for the whole capture.
 ///
 /// The two flags are independent: the rollout is configured
 /// (`managed_shell_tools_enabled`) and the gate is a property of the connected
 /// client, which reference `vibe/app_server/_runtime.py:212-214` computes as
-/// "the client hosts no terminal". Only the fourth combination diverges here,
-/// and it diverges by name, which is why the gap is recorded per quadrant.
+/// "the client hosts no terminal". The gap is still recorded per quadrant,
+/// because the four surfaces are four different answers and a regression in
+/// one of them must not be absorbed by the other three.
+///
+/// Each quadrant is checked twice: the names it publishes, and the variant
+/// serving each shell name, which is the half the name census cannot see when
+/// two variants publish one name.
 ///
 /// This runs unconditionally: a quadrant records names and reference class
 /// names, so CI reports a conformance count with no checkout at all.
@@ -1432,9 +1454,36 @@ async fn the_four_surface_quadrants_publish_what_the_reference_publishes() {
             client,
         )
         .await;
-        let published = registry
-            .list()
-            .expect("the registered surface")
+        let specs = registry.list().expect("the registered surface");
+        // Which class serves a shell name is what the arbitration decides, and
+        // the priority the surface carries is where that decision lands: the
+        // reference ranks the variants publishing one name by
+        // `selection_priority`, so a name served by the wrong variant fails
+        // here even when the name itself matches.
+        for (name, class) in &quadrant.shell_classes {
+            let served = specs.iter().find(|spec| &spec.name == name);
+            let Some(served) = served else {
+                divergent.push(format!(
+                    "{}: {name} is served by {class} upstream and is not published here",
+                    quadrant.case
+                ));
+                continue;
+            };
+            let Some(expected) = reference_class_priority(class) else {
+                divergent.push(format!(
+                    "{}: {QUADRANTS_RELATIVE} names {class}, which no variant here is bound to",
+                    quadrant.case
+                ));
+                continue;
+            };
+            if served.selection_priority != expected {
+                divergent.push(format!(
+                    "{}: {name} must be served by {class} at priority {expected}, measured {}",
+                    quadrant.case, served.selection_priority
+                ));
+            }
+        }
+        let published = specs
             .into_iter()
             .map(|spec| spec.name)
             .collect::<BTreeSet<_>>();
@@ -1460,8 +1509,8 @@ async fn the_four_surface_quadrants_publish_what_the_reference_publishes() {
     );
     assert!(
         divergent.is_empty(),
-        "a quadrant moved away from its recorded gap; regenerate {BASELINE_RELATIVE} only when \
-         the change is the intended one: {}",
+        "a quadrant moved away from its recorded gap or from the variant serving a shell name; \
+         regenerate {BASELINE_RELATIVE} only when the change is the intended one: {}",
         divergent.join("; ")
     );
 

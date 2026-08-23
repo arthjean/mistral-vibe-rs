@@ -116,6 +116,20 @@ impl Harness {
             .input_schema
     }
 
+    /// The priority the published `tool` carries, which is what names the
+    /// variant serving it: the reference ranks the classes publishing one name
+    /// by `selection_priority`, so the number the surface carries says which
+    /// class won.
+    fn priority(&self, tool: &str) -> i32 {
+        self.registry
+            .list()
+            .expect("list")
+            .into_iter()
+            .find(|spec| spec.name == tool)
+            .expect("the tool is published")
+            .selection_priority
+    }
+
     fn names(&self) -> Vec<String> {
         self.registry
             .list()
@@ -316,6 +330,114 @@ fn the_managed_variant_outranks_the_legacy_one_whatever_the_registration_order()
             "the managed schema must win the name"
         );
     }
+}
+
+/// Reference `_is_tool_available` refuses every class declaring
+/// `local_managed_shell_only` once the runtime gate is off, and the runtime
+/// computes that gate as "the client publishes no `terminal` tool". The five
+/// POSIX managed classes declare it, so a terminal-hosting client is left with
+/// the one legacy name.
+#[tokio::test]
+async fn a_terminal_hosting_client_is_offered_one_shell_name_under_the_managed_rollout() {
+    let harness = terminal_client_harness_on(
+        posix_host(),
+        ShellRollout::Managed,
+        Some(TerminalClient::hosting(true)),
+    )
+    .await;
+
+    assert_eq!(harness.names(), ["bash"]);
+    assert_eq!(
+        harness.priority("bash"),
+        LEGACY_SELECTION_PRIORITY,
+        "withholding the managed variant must leave the legacy one behind, not the name alone"
+    );
+    let properties = harness.schema("bash")["properties"]
+        .as_object()
+        .expect("properties")
+        .keys()
+        .cloned()
+        .collect::<Vec<_>>();
+    assert_eq!(properties, ["command", "timeout"]);
+}
+
+/// The other side of the gate: a client that hosts no terminal, and no client
+/// at all, both leave the managed rollout publishing its five names, because
+/// nothing hosts a terminal for the session in either case.
+#[tokio::test]
+async fn the_managed_rollout_is_untouched_when_no_client_hosts_a_terminal() {
+    for client in [None, Some(TerminalClient::hosting(false))] {
+        let harness =
+            terminal_client_harness_on(posix_host(), ShellRollout::Managed, client.clone()).await;
+        assert_eq!(
+            harness.names(),
+            [
+                "bash",
+                "bash_output",
+                "bash_stdin",
+                "bash_sessions",
+                "bash_log_file"
+            ],
+            "a client hosting nothing withholds nothing"
+        );
+        assert_eq!(harness.priority("bash"), MANAGED_SELECTION_PRIORITY);
+    }
+}
+
+/// The two upper quadrants: with the rollout off there is no managed variant to
+/// withhold, so the gate is not what decides the surface there.
+#[tokio::test]
+async fn the_gate_changes_nothing_while_the_managed_rollout_is_off() {
+    for hosts_terminal in [true, false] {
+        let harness = terminal_client_harness_on(
+            posix_host(),
+            ShellRollout::Legacy,
+            Some(TerminalClient::hosting(hosts_terminal)),
+        )
+        .await;
+        assert_eq!(harness.names(), ["bash"], "hosting: {hosts_terminal}");
+        assert_eq!(harness.priority("bash"), LEGACY_SELECTION_PRIORITY);
+    }
+}
+
+/// Reference `GitBash` and `WindowsShell` carry the managed rollout without
+/// `local_managed_shell_only`, which their `Experimental` subclasses inherit,
+/// so the gate takes the managed variant on Windows and leaves the family name
+/// published by the class that never declared the flag.
+#[tokio::test]
+async fn a_windows_family_keeps_the_name_the_gate_does_not_reach() {
+    for (host, name) in [
+        (windows_host(Some(r"C:\git\bin\bash.exe"), None), "git_bash"),
+        (windows_host(None, Some(r"C:\pwsh\pwsh.exe")), "powershell"),
+    ] {
+        let harness = terminal_client_harness_on(
+            host,
+            ShellRollout::Managed,
+            Some(TerminalClient::hosting(true)),
+        )
+        .await;
+        assert_eq!(harness.names(), [name], "the collapse is not Windows-only");
+        assert_eq!(harness.priority(name), LEGACY_SELECTION_PRIORITY);
+    }
+}
+
+/// The name disappears rather than being served by a class the host cannot
+/// run: a Windows host under the managed rollout publishes no POSIX `bash`, so
+/// withholding its managed families leaves nothing behind.
+#[tokio::test]
+async fn a_withheld_name_with_no_available_variant_is_not_published() {
+    let harness = terminal_client_harness_on(
+        windows_host(None, None),
+        ShellRollout::Managed,
+        Some(TerminalClient::hosting(true)),
+    )
+    .await;
+
+    assert!(
+        harness.names().is_empty(),
+        "published {:?}",
+        harness.names()
+    );
 }
 
 struct UnreachableHandler;
@@ -1897,6 +2019,17 @@ impl crate::process::ClientToolPort for TerminalClient {
 }
 
 async fn terminal_client_harness(client: Arc<TerminalClient>) -> Harness {
+    terminal_client_harness_on(posix_host(), ShellRollout::Legacy, Some(client)).await
+}
+
+/// The same registration against a stated host and rollout, with or without a
+/// client: the runtime gate is a property of the client, so the surface it
+/// decides can only be measured with the client in place.
+async fn terminal_client_harness_on(
+    host: HostShells,
+    rollout: ShellRollout,
+    client: Option<Arc<TerminalClient>>,
+) -> Harness {
     let directory = tempdir().expect("tempdir");
     let policy = PermissionStore::default();
     policy
@@ -1909,25 +2042,22 @@ async fn terminal_client_harness(client: Arc<TerminalClient>) -> Harness {
         .expect("trust");
     let (approval, requests) = ScriptedApproval::new(ApprovalDecision::ApproveOnce);
     let registry = ToolRegistry::default();
-    let tools = ShellTools::with_host(directory.path().join("home"), posix_host());
+    let family = published_family(&host, rollout).map_or(ShellFamily::Bash, |(family, _)| family);
+    let tools = ShellTools::with_host(directory.path().join("home"), host);
     tools
         .register(
             "session-1",
             directory.path(),
             &registry,
-            Some(ClientToolIo::new("session-1", client)),
-            &guard_for(
-                policy.clone(),
-                approval as Arc<dyn ApprovalAgent>,
-                ShellRollout::Legacy,
-            ),
+            client.map(|client| ClientToolIo::new("session-1", client)),
+            &guard_for(policy.clone(), approval as Arc<dyn ApprovalAgent>, rollout),
         )
         .expect("the shell family registers");
     Harness {
         directory,
         registry,
         tools,
-        family: ShellFamily::Bash,
+        family,
         requests,
         policy,
     }

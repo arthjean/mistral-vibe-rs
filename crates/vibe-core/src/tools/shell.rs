@@ -139,6 +139,19 @@ impl ShellTools {
     /// the managed rollout is on, the managed variant registers too and wins
     /// the family name by selection priority, and the four session tools join
     /// it. A host with no family to publish registers nothing.
+    ///
+    /// A client that hosts its own terminal is offered neither the managed
+    /// variant nor the four session tools: reference `BaseTool` declares
+    /// `local_managed_shell_only`, `ToolManager._is_tool_available` refuses
+    /// every class carrying it once
+    /// `local_managed_shell_runtime_enabled` is false, and the reference
+    /// runtime computes that flag as "the connected client publishes no
+    /// `terminal` tool". `ExperimentalBash` and its four session siblings
+    /// declare the flag, and the two Windows families inherit it through
+    /// `ExperimentalGitBash` and `ExperimentalWindowsShell`, while the
+    /// `GitBash` and `WindowsShell` command classes do not, which is why the
+    /// family name survives the withholding on every platform and only the
+    /// managed variant behind it disappears.
     pub fn register(
         &self,
         session_id: &str,
@@ -160,9 +173,17 @@ impl ShellTools {
         // that arrives after startup, which is what the experiments layer
         // writes, reaches the next registration.
         let rollout = ShellRollout::from_config(config);
-        let Some((family, managed)) = published_family(&host, rollout) else {
+        let Some((family, rolled_out)) = published_family(&host, rollout) else {
             return Ok(Vec::new());
         };
+        // The gate reads the same capability `delegated_command` reads, so what
+        // the client hosts is asked once rather than answered by a second
+        // source of truth. No client at all withholds nothing: nothing hosts a
+        // terminal for this session.
+        let managed = rolled_out
+            && !client_io
+                .as_ref()
+                .is_some_and(ClientToolIo::supports_terminal);
         let Some(shell_config) = family_config(family, &host) else {
             return Ok(Vec::new());
         };

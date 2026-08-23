@@ -1610,6 +1610,39 @@ mod tests {
         }
     }
 
+    /// The second half of the same rank: reference `_select_available_variant`
+    /// keeps a candidate only when `(priority, discovery_index)` is strictly
+    /// greater than the one it holds, and the discovery index grows, so two
+    /// variants of equal priority leave the name to the one discovered last.
+    #[tokio::test]
+    async fn variants_of_equal_priority_leave_the_name_to_the_last_discovered() {
+        let registry = ToolRegistry::default();
+        assert_eq!(
+            registry
+                .register(spec(10), handler("first"))
+                .expect("first"),
+            RegistrationOutcome::Inserted
+        );
+        assert_eq!(
+            registry
+                .register(spec(10), handler("second"))
+                .expect("second"),
+            RegistrationOutcome::Replaced,
+            "the tie is broken by discovery order, not by the first claim"
+        );
+        let result = registry
+            .invoke(
+                "read",
+                ToolInvocation {
+                    call_id: "call-1".to_owned(),
+                    arguments: json!({"path": "README.md"}),
+                },
+            )
+            .await
+            .expect("invoke");
+        assert_eq!(result.typed_result["content"], "second");
+    }
+
     /// Reference `is_available` is asked again on every `available_tools`
     /// access, so a prerequisite that comes and goes moves the tool in and out
     /// of the published surface without a re-registration.
