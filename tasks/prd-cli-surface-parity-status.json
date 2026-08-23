@@ -18,10 +18,11 @@
     {
       "id": "EP-099",
       "title": "The `vibe mcp` command shape",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 3,
-      "stories_done": 0
+      "stories_done": 3,
+      "started_at": "2026-08-23"
     },
     {
       "id": "EP-100",
@@ -102,41 +103,41 @@
       "id": "US-311",
       "title": "Route `vibe mcp` through a real sub-command parser",
       "epic": "EP-099",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-23",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
     },
     {
       "id": "US-312",
       "title": "Report argument failures the way the reference reports them",
       "epic": "EP-099",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-311"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-23",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
     },
     {
       "id": "US-313",
       "title": "Bring `vibe mcp remove` to its reference contract",
       "epic": "EP-099",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-311"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-23",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
     },
     {
       "id": "US-314",
