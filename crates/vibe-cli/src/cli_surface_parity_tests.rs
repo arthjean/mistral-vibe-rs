@@ -17,6 +17,7 @@ use std::process::Command as Process;
 use clap::{Arg, ArgAction, Command, CommandFactory};
 use serde::Deserialize;
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use vibe_core::parity::{REFERENCE_COMMIT, off_pin_reason, pinned_interpreter, reference_root};
 
 use crate::{Arguments, OutputMode, mcp_command};
@@ -35,36 +36,6 @@ const SCHEMA_VERSION: u32 = 1;
 const CASE_FLOOR: usize = 120;
 const ACTION_FLOOR: usize = 34;
 const PARSER_FLOOR: usize = 3;
-
-/// The case ids the replay records without driving, and why.
-///
-/// `vibe mcp remove <name>` is the one shape this port answers by going through
-/// the configuration store, and the store resolves its root from the ambient
-/// environment (`crates/vibe-cli/src/tui/startup.rs:114-130`). Driving it here
-/// would read, and on a hit rewrite, the developer's own `~/.vibe/config.toml`.
-/// Setting the variable for the duration is not open to a test either, because
-/// `std::env::set_var` is unsafe and this workspace forbids `unsafe_code`. So
-/// the reference's answer is recorded and this port's is left to US-313, which
-/// gives the command an injectable store.
-///
-/// The list is audited against the shape it claims to describe by
-/// `every_case_that_reaches_the_configuration_store_is_named`, so a new
-/// `remove` vector in the corpus fails the suite rather than silently running
-/// against a real home.
-const UNDRIVEN: &[&str] = &[
-    "mcp-remove-help",
-    "mcp-remove-absent",
-    "mcp-remove-stdio-server",
-];
-
-const UNDRIVEN_REASON: &str = "this port's removal path resolves the session home from the \
-     ambient environment, so replaying it would read and could rewrite the developer's own user \
-     configuration";
-
-/// Whether driving this case would reach the configuration store.
-fn reaches_the_configuration_store(case: &Case) -> bool {
-    case.parser == "mcp" && matches!(case.argv.as_slice(), [command, _] if command == "remove")
-}
 
 // --------------------------------------------------------------------------
 // The corpus
@@ -398,6 +369,24 @@ fn takes_no_value(argument: &Arg) -> bool {
         .is_some_and(|range| range.max_values() == 0)
 }
 
+/// The value name the reference's help prints for this action.
+///
+/// argparse derives it when the action declares no metavar: the choice set
+/// where there are choices, the uppercased destination otherwise, and nothing
+/// at all for an action that takes no value.
+fn reference_value_name(action: &ActionRecord) -> Value {
+    if !action.metavar.is_null() {
+        return action.metavar.clone();
+    }
+    if reference_value_count(action) == json!([0, 0]) {
+        return Value::Null;
+    }
+    match &action.choices {
+        Some(choices) => json!(format!("{{{}}}", choices.join(","))),
+        None => json!(action.dest.to_uppercase()),
+    }
+}
+
 fn port_value_name(argument: &Arg) -> Value {
     if takes_no_value(argument) {
         return Value::Null;
@@ -413,10 +402,29 @@ fn port_value_name(argument: &Arg) -> Value {
 /// Compares every recorded action against the argument this port resolves for
 /// it, and reports the arguments this port adds that the reference declares
 /// nowhere.
+fn port_parser(parser: &str) -> Option<Command> {
+    // clap resolves an argument's value count, its default and the implicit
+    // help flag while building, so an unbuilt command answers about half the
+    // questions the corpus asks with `None`.
+    match parser {
+        "root" => {
+            let mut command = Arguments::command();
+            command.build();
+            Some(command)
+        }
+        "mcp" => Some(mcp_command::declaration()),
+        "mcp-add" => mcp_command::declaration().find_subcommand("add").cloned(),
+        "mcp-remove" => mcp_command::declaration()
+            .find_subcommand("remove")
+            .cloned(),
+        _ => None,
+    }
+}
+
 fn compare_declarations(record: &ParserRecord, differences: &mut Vec<Difference>) {
-    if record.parser != "root" {
-        // This port declares no `vibe mcp` parser at all, so every action it
-        // records is missing rather than different.
+    let Some(command) = port_parser(&record.parser) else {
+        // A parser this port does not declare reports every action the
+        // reference records as missing rather than as different.
         for action in &record.actions {
             differences.push(Difference::new(
                 &record.parser,
@@ -427,15 +435,30 @@ fn compare_declarations(record: &ParserRecord, differences: &mut Vec<Difference>
             ));
         }
         return;
-    }
-    // clap resolves an argument's value count, its default and the implicit
-    // help flag while building, so an unbuilt command answers about half the
-    // questions the corpus asks with `None`.
-    let mut command = Arguments::command();
-    command.build();
+    };
     let mut matched: BTreeSet<String> = BTreeSet::new();
     for action in &record.actions {
         let case = action.dest.as_str();
+        // The two surfaces model a sub-command differently: argparse declares
+        // one positional whose choices are the sub-command names, clap
+        // declares the sub-commands themselves. Compare the names.
+        if action.class == "_SubParsersAction" {
+            let reference: Vec<String> = action.choices.clone().unwrap_or_default();
+            let port: Vec<String> = command
+                .get_subcommands()
+                .map(|sub| sub.get_name().to_owned())
+                .collect();
+            if reference != port {
+                differences.push(Difference::new(
+                    &record.parser,
+                    case,
+                    "/subcommands".to_owned(),
+                    json!(reference),
+                    json!(port),
+                ));
+            }
+            continue;
+        }
         let Some(argument) = find_argument(&command, action) else {
             differences.push(Difference::new(
                 &record.parser,
@@ -491,12 +514,13 @@ fn compare_declarations(record: &ParserRecord, differences: &mut Vec<Difference>
                 json!(port_choices(argument)),
             ));
         }
-        if action.metavar != port_value_name(argument) {
+        let reference_name = reference_value_name(action);
+        if reference_name != port_value_name(argument) {
             differences.push(Difference::new(
                 &record.parser,
                 case,
                 "/valueName".to_owned(),
-                action.metavar.clone(),
+                reference_name,
                 port_value_name(argument),
             ));
         }
@@ -534,6 +558,10 @@ struct Outcome {
     exit: i32,
     streams: Streams,
     namespace: Option<BTreeMap<String, Value>>,
+    /// The last line each stream carried, which is what the corpus records
+    /// either as cleartext or as a digest.
+    stdout_last_line: Option<String>,
+    stderr_last_line: Option<String>,
 }
 
 /// The 19 dest names the reference's namespace carries, read off this port's
@@ -618,6 +646,8 @@ fn drive_root(argv: &[String]) -> Outcome {
                     stderr: false,
                 },
                 namespace: Some(port_namespace(&arguments)),
+                stdout_last_line: None,
+                stderr_last_line: None,
             }
         }
         Err(error) => Outcome {
@@ -627,29 +657,139 @@ fn drive_root(argv: &[String]) -> Outcome {
                 stderr: error.use_stderr(),
             },
             namespace: None,
+            stdout_last_line: None,
+            stderr_last_line: None,
         },
     }
 }
 
+/// A credential store that answers every deletion, so a replayed `remove`
+/// never reaches the developer's own keyring.
+struct AbsentKeyring;
+
+impl vibe_core::auth::KeyringBackend for AbsentKeyring {
+    fn get(
+        &self,
+        _service: &str,
+        _account: &str,
+    ) -> Result<Option<String>, vibe_core::auth::KeyringFailure> {
+        Ok(None)
+    }
+
+    fn set(
+        &self,
+        _service: &str,
+        _account: &str,
+        _secret: &str,
+    ) -> Result<(), vibe_core::auth::KeyringFailure> {
+        Ok(())
+    }
+
+    fn delete(
+        &self,
+        _service: &str,
+        _account: &str,
+    ) -> Result<(), vibe_core::auth::KeyringFailure> {
+        Ok(())
+    }
+}
+
+fn last_line(stream: &[u8]) -> Option<String> {
+    let text = String::from_utf8_lossy(stream);
+    text.lines().next_back().map(ToOwned::to_owned)
+}
+
+/// Drives one `vibe mcp` vector against a home of its own.
+///
+/// `vibe mcp remove` goes through the configuration store, so the replay hands
+/// the command an empty temporary home rather than letting it resolve the
+/// ambient one: reading, and on a hit rewriting, the developer's own
+/// `~/.vibe/config.toml` is not something a test may do.
 fn drive_mcp(argv: &[String]) -> Outcome {
-    let mut output = Vec::new();
-    match mcp_command::run(argv, &mut output) {
-        Ok(()) => Outcome {
-            exit: 0,
-            streams: Streams {
-                stdout: !output.is_empty(),
-                stderr: false,
-            },
-            namespace: None,
+    let (exit, stdout, stderr) = run_mcp(argv);
+    Outcome {
+        exit: i32::from(exit),
+        streams: Streams {
+            stdout: !stdout.is_empty(),
+            stderr: !stderr.is_empty(),
         },
-        Err(_) => Outcome {
-            exit: 1,
-            streams: Streams {
-                stdout: !output.is_empty(),
-                stderr: true,
-            },
-            namespace: None,
-        },
+        namespace: None,
+        stdout_last_line: last_line(&stdout),
+        stderr_last_line: last_line(&stderr),
+    }
+}
+
+/// Runs one `vibe mcp` vector over a temporary home and answers its exit code
+/// and both streams.
+fn run_mcp(argv: &[String]) -> (u8, Vec<u8>, Vec<u8>) {
+    let home = tempfile::tempdir().expect("a temporary home for the replay");
+    let vibe_home = home.path().join("vibe-home");
+    let workspace = home.path().join("workspace");
+    std::fs::create_dir_all(&vibe_home).expect("the temporary home");
+    std::fs::create_dir_all(&workspace).expect("the temporary workspace");
+    let environment =
+        mcp_command::McpEnvironment::for_home(&vibe_home, &workspace, Box::new(AbsentKeyring));
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    let exit = mcp_command::run(argv, &environment, &mut stdout, &mut stderr);
+    (exit, stdout, stderr)
+}
+
+/// Whether the line this port printed is the one the corpus recorded.
+///
+/// The capture keeps a line cleartext when every word of it is argparse's own
+/// and describes it otherwise, so a recorded line is either compared in full,
+/// compared on the prefix argparse contributed, or compared by digest when the
+/// whole sentence belongs to the reference.
+fn stream_line_matches(recorded: &StreamLine, found: Option<&str>) -> bool {
+    let found = found.unwrap_or_default();
+    match (&recorded.cleartext, &recorded.described) {
+        (Some(cleartext), None) => found == cleartext,
+        (Some(prefix), Some(_)) => found.starts_with(prefix.as_str()),
+        (None, Some(described)) => {
+            hex::encode(Sha256::digest(found.as_bytes())) == described.sha256
+        }
+        (None, None) => found.is_empty(),
+    }
+}
+
+/// Reports the stream lines this port disagrees with, without ever committing
+/// the reference sentence a described line stands for.
+fn compare_stream_lines(case: &Case, outcome: &Outcome, differences: &mut Vec<Difference>) {
+    for (pointer, recorded, found) in [
+        (
+            "/stdoutLastLine",
+            case.stdout_last_line.as_ref(),
+            outcome.stdout_last_line.as_deref(),
+        ),
+        (
+            "/stderrLastLine",
+            case.stderr_last_line.as_ref(),
+            outcome.stderr_last_line.as_deref(),
+        ),
+    ] {
+        let Some(recorded) = recorded else {
+            continue;
+        };
+        if stream_line_matches(recorded, found) {
+            continue;
+        }
+        let expected = match (&recorded.cleartext, &recorded.described) {
+            (Some(cleartext), None) => json!(cleartext),
+            (cleartext, Some(described)) => json!({
+                "cleartext": cleartext,
+                "described": described.marker,
+                "chars": described.chars,
+            }),
+            (None, None) => Value::Null,
+        };
+        differences.push(Difference::new(
+            &case.parser,
+            &case.case,
+            pointer.to_owned(),
+            expected,
+            json!(found),
+        ));
     }
 }
 
@@ -675,6 +815,12 @@ fn compare_case(case: &Case, differences: &mut Vec<Difference>) {
             json!({"stdout": case.streams.stdout, "stderr": case.streams.stderr}),
             json!({"stdout": outcome.streams.stdout, "stderr": outcome.streams.stderr}),
         ));
+    }
+    // The reference's own sentences are the root parser's help text, which
+    // US-318 owns; the `vibe mcp` streams are this epic's, so only they are
+    // compared line by line.
+    if case.parser != "root" {
+        compare_stream_lines(case, &outcome, differences);
     }
     // A namespace is only comparable where both sides parsed; where one of them
     // refused the vector the exit code above already carries the difference.
@@ -704,15 +850,11 @@ fn compare_case(case: &Case, differences: &mut Vec<Difference>) {
 // --------------------------------------------------------------------------
 
 fn replay(corpus: &Corpus) -> Vec<Difference> {
-    let undriven: BTreeSet<&str> = UNDRIVEN.iter().copied().collect();
     let mut differences = Vec::new();
     for record in &corpus.parsers {
         compare_declarations(record, &mut differences);
     }
     for case in &corpus.cases {
-        if undriven.contains(case.case.as_str()) {
-            continue;
-        }
         compare_case(case, &mut differences);
     }
     differences
@@ -1022,6 +1164,49 @@ fn every_help_render_is_decomposed_line_by_line() {
     }
 }
 
+/// Every `vibe mcp` help render prints a description block exactly where the
+/// reference prints one.
+///
+/// The description is the one help element the two surfaces can be compared on
+/// directly: NOTICE forbids reproducing the reference's prose, so every other
+/// line diverges on length, but whether a parser describes itself at all is
+/// structure. argparse gives `ArgumentParser` a `description` and `add_parser`
+/// only a `help`, so the root parser prints a description and neither
+/// sub-command does; the corpus records that as `hasDescription`.
+#[test]
+fn only_the_parser_the_reference_describes_prints_a_description() {
+    /// The blocks argparse opens after the usage line, which is what a line
+    /// under it is when it is not a description.
+    const HEADINGS: &[&str] = &["positional arguments:", "options:"];
+    let corpus = corpus();
+    for (parser, argv) in [
+        ("mcp", &[][..]),
+        ("mcp-add", &["add", "-h"][..]),
+        ("mcp-remove", &["remove", "-h"][..]),
+    ] {
+        let record = corpus
+            .parsers
+            .iter()
+            .find(|record| record.parser == parser)
+            .unwrap_or_else(|| panic!("the {parser} parser is recorded"));
+        let argv: Vec<String> = argv.iter().map(|token| (*token).to_owned()).collect();
+        let (exit, stdout, stderr) = run_mcp(&argv);
+        assert_eq!(exit, 0, "{parser} answered {exit} for its help");
+        assert!(stderr.is_empty(), "{parser} wrote its help to stderr");
+        let rendered = String::from_utf8(stdout).expect("the help render is UTF-8");
+        let lines: Vec<&str> = rendered.lines().collect();
+        let described = lines
+            .iter()
+            .skip_while(|line| !line.is_empty())
+            .nth(1)
+            .is_some_and(|line| !HEADINGS.contains(line));
+        assert_eq!(
+            described, record.has_description,
+            "the {parser} render describes itself where the reference does not, or the reverse:\n{rendered}"
+        );
+    }
+}
+
 #[test]
 fn every_ledger_entry_names_what_closes_it() {
     let rows: BTreeSet<&str> = SCORECARD
@@ -1065,28 +1250,6 @@ fn every_ledger_entry_names_what_closes_it() {
             entry.case
         );
     }
-    assert!(
-        UNDRIVEN_REASON.len() > 20,
-        "the undriven cases explain nothing"
-    );
-}
-
-/// Every argv shape that would reach a real configuration store is named, and
-/// nothing else is skipped.
-#[test]
-fn every_case_that_reaches_the_configuration_store_is_named() {
-    let corpus = corpus();
-    let reaching: BTreeSet<&str> = corpus
-        .cases
-        .iter()
-        .filter(|case| reaches_the_configuration_store(case))
-        .map(|case| case.case.as_str())
-        .collect();
-    let named: BTreeSet<&str> = UNDRIVEN.iter().copied().collect();
-    assert_eq!(
-        reaching, named,
-        "the corpus carries a `vibe mcp remove` vector the replay would drive against a real home"
-    );
 }
 
 #[test]
@@ -1140,15 +1303,13 @@ fn replaying_the_corpus_finds_no_difference_the_ledger_does_not_name() {
         .cases
         .iter()
         .filter(|case| !diverging.contains(case.case.as_str()))
-        .count()
-        - UNDRIVEN.len();
+        .count();
     println!(
         "cli surface: {matched} of {} argv cases match this port, {actions} actions across \
-         {} parsers replayed from {}, {exercised} ledger entries exercised, {} cases undriven",
+         {} parsers replayed from {}, {exercised} ledger entries exercised",
         corpus.cases.len(),
         corpus.parsers.len(),
         &REFERENCE_COMMIT[..12],
-        UNDRIVEN.len()
     );
 }
 
@@ -1193,7 +1354,6 @@ fn the_committed_corpus_still_matches_a_fresh_capture() {
 // --------------------------------------------------------------------------
 
 const LEDGER: &[Divergence] = &[
-    // The value names the two help renders print for the same option.
     Divergence {
         parser: "root",
         case: "initial_prompt",
@@ -1290,7 +1450,6 @@ const LEDGER: &[Divergence] = &[
         row: "7",
         why: "the reference prints the three accepted values in place of a value name, and this port prints a value name derived from the field",
     },
-    // The nine flags this port adds for its own runtime, all hidden.
     Divergence {
         parser: "root",
         case: "tool_filters",
@@ -1363,32 +1522,6 @@ const LEDGER: &[Divergence] = &[
         row: "7",
         why: "--fake-response exists only in this port, is hidden from the help, and is kept because the runtime it drives has no counterpart upstream",
     },
-    // The three `vibe mcp` parsers this port does not declare at all.
-    Divergence {
-        parser: "mcp",
-        case: "mcp",
-        pointer: "/actions",
-        closed_by: "US-311",
-        row: "7",
-        why: "this port intercepts `vibe mcp` before parsing and matches the argument slice by hand, so it declares no parser and none of the reference's actions",
-    },
-    Divergence {
-        parser: "mcp-add",
-        case: "mcp-add",
-        pointer: "/actions",
-        closed_by: "US-314",
-        row: "7",
-        why: "this port declares no `add` sub-parser, so the positional and the twelve options the reference publishes have no counterpart here",
-    },
-    Divergence {
-        parser: "mcp-remove",
-        case: "mcp-remove",
-        pointer: "/actions",
-        closed_by: "US-313",
-        row: "7",
-        why: "this port matches the `remove` argument slice by hand, so the reference's positional and its help action have no declared counterpart",
-    },
-    // argparse infers long-flag prefixes and this port does not.
     Divergence {
         parser: "root",
         case: "prefix--version",
@@ -1693,7 +1826,6 @@ const LEDGER: &[Divergence] = &[
         row: "7",
         why: "the reference builds its parser with argparse's prefix inference on and this port declares no `infer_long_args`, so the abbreviation it resolves is an unknown flag here",
     },
-    // Values argparse accepts at the parse boundary and clap refuses.
     Divergence {
         parser: "root",
         case: "output-repeated",
@@ -1774,71 +1906,6 @@ const LEDGER: &[Divergence] = &[
         row: "7",
         why: "argparse hands a leading-hyphen numeric to `type=float` as the option's value, and clap reads it as an unknown short flag",
     },
-    // The `vibe mcp` argv shapes, none of which this port answers yet.
-    Divergence {
-        parser: "mcp",
-        case: "mcp-bare",
-        pointer: "/exit",
-        closed_by: "US-311",
-        row: "7",
-        why: "the reference prints the `vibe mcp` help and exits 0 where this port answers every unrecognized shape with a one-line usage string on stderr",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-bare",
-        pointer: "/streams",
-        closed_by: "US-311",
-        row: "7",
-        why: "the reference prints the `vibe mcp` help and exits 0 where this port answers every unrecognized shape with a one-line usage string on stderr",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-help-short",
-        pointer: "/exit",
-        closed_by: "US-311",
-        row: "7",
-        why: "the reference answers `-h` from its own parser and exits 0, and this port declares no parser to answer it",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-help-short",
-        pointer: "/streams",
-        closed_by: "US-311",
-        row: "7",
-        why: "the reference answers `-h` from its own parser and exits 0, and this port declares no parser to answer it",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-help-long",
-        pointer: "/exit",
-        closed_by: "US-311",
-        row: "7",
-        why: "the reference answers `--help` from its own parser and exits 0, and this port declares no parser to answer it",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-help-long",
-        pointer: "/streams",
-        closed_by: "US-311",
-        row: "7",
-        why: "the reference answers `--help` from its own parser and exits 0, and this port declares no parser to answer it",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-add-help",
-        pointer: "/exit",
-        closed_by: "US-314",
-        row: "7",
-        why: "the reference renders the `add` sub-parser's own help and exits 0, and this port declares no `add` sub-parser",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-add-help",
-        pointer: "/streams",
-        closed_by: "US-314",
-        row: "7",
-        why: "the reference renders the `add` sub-parser's own help and exits 0, and this port declares no `add` sub-parser",
-    },
     Divergence {
         parser: "mcp",
         case: "mcp-add-http-oauth-no-login",
@@ -1902,54 +1969,6 @@ const LEDGER: &[Divergence] = &[
         closed_by: "US-316",
         row: "7",
         why: "the reference recognizes the identical entry as already configured and exits 0, and this port refuses every `add` shape",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-unknown-subcommand",
-        pointer: "/exit",
-        closed_by: "US-312",
-        row: "7",
-        why: "the reference reports an argparse choice failure and exits 2, and this port exits 1 with a bare usage string",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-remove-without-name",
-        pointer: "/exit",
-        closed_by: "US-312",
-        row: "7",
-        why: "the reference reports the missing required NAME and exits 2, and this port exits 1 with a bare usage string",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-remove-two-names",
-        pointer: "/exit",
-        closed_by: "US-312",
-        row: "7",
-        why: "the reference reports the extra argument and exits 2, and this port exits 1 with a bare usage string",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-add-without-name",
-        pointer: "/exit",
-        closed_by: "US-312",
-        row: "7",
-        why: "the reference reports the missing required NAME and exits 2, and this port exits 1 with a bare usage string",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-add-invalid-transport",
-        pointer: "/exit",
-        closed_by: "US-312",
-        row: "7",
-        why: "the reference reports the rejected `--transport` choice and exits 2, and this port exits 1 with a bare usage string",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-add-url-without-value",
-        pointer: "/exit",
-        closed_by: "US-312",
-        row: "7",
-        why: "the reference reports that `--url` expected one argument and exits 2, and this port exits 1 with a bare usage string",
     },
     Divergence {
         parser: "mcp",
@@ -1974,5 +1993,77 @@ const LEDGER: &[Divergence] = &[
         closed_by: "US-316",
         row: "7",
         why: "the reference refuses a second name for a URL it already carries and exits 2, and this port refuses every `add` shape with exit 1",
+    },
+    Divergence {
+        parser: "mcp",
+        case: "mcp-add-help",
+        pointer: "/stdoutLastLine",
+        closed_by: "ACCEPTED",
+        row: "7",
+        why: "the last line of the `add` help carries an option description, and NOTICE forbids reproducing the reference's prose, so this port writes its own while the render's shape matches",
+    },
+    Divergence {
+        parser: "mcp",
+        case: "mcp-add-stdio-with-remote-flag",
+        pointer: "/stderrLastLine",
+        closed_by: "US-315",
+        row: "7",
+        why: "the reference refuses the stdio transport carrying a remote-only flag through its usage funnel, and this port prints its `add` refusal instead",
+    },
+    Divergence {
+        parser: "mcp",
+        case: "mcp-add-remote-without-url",
+        pointer: "/stderrLastLine",
+        closed_by: "US-315",
+        row: "7",
+        why: "the reference refuses a remote transport with no `--url` through its usage funnel, and this port prints its `add` refusal instead",
+    },
+    Divergence {
+        parser: "mcp",
+        case: "mcp-add-duplicate-url",
+        pointer: "/stderrLastLine",
+        closed_by: "US-316",
+        row: "7",
+        why: "the reference refuses a second name for a URL it already carries through its usage funnel, and this port prints its `add` refusal instead",
+    },
+    Divergence {
+        parser: "mcp",
+        case: "mcp-add-http-oauth-no-login",
+        pointer: "/stdoutLastLine",
+        closed_by: "US-316",
+        row: "7",
+        why: "the reference reports the persisted remote server on stdout, and this port refuses every `add` shape so it writes nothing there",
+    },
+    Divergence {
+        parser: "mcp",
+        case: "mcp-add-streamable-http-static-auth",
+        pointer: "/stdoutLastLine",
+        closed_by: "US-316",
+        row: "7",
+        why: "the reference reports the persisted remote server on stdout, and this port refuses every `add` shape so it writes nothing there",
+    },
+    Divergence {
+        parser: "mcp",
+        case: "mcp-add-stdio-command",
+        pointer: "/stdoutLastLine",
+        closed_by: "US-316",
+        row: "7",
+        why: "the reference reports the persisted stdio server on stdout, and this port refuses every `add` shape so it writes nothing there",
+    },
+    Divergence {
+        parser: "mcp",
+        case: "mcp-add-stdio-again",
+        pointer: "/stdoutLastLine",
+        closed_by: "US-316",
+        row: "7",
+        why: "the reference reports the entry as already configured on stdout, and this port refuses every `add` shape so it writes nothing there",
+    },
+    Divergence {
+        parser: "mcp",
+        case: "mcp-remove-stdio-server",
+        pointer: "/stdoutLastLine",
+        closed_by: "US-316",
+        row: "7",
+        why: "the capture removes the server an earlier `add` case stored, and this port refuses every `add` shape, so the removal finds nothing to drop",
     },
 ];

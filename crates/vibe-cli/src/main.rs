@@ -18,13 +18,14 @@ async fn main() -> ExitCode {
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
     if vibe_cli::mcp_command::intercepts(&arguments) {
         let mut stdout = std::io::stdout().lock();
-        return match vibe_cli::mcp_command::run(&arguments[1..], &mut stdout) {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(error) => {
-                eprintln!("{error}");
-                ExitCode::FAILURE
-            }
-        };
+        let mut stderr = std::io::stderr().lock();
+        let environment = vibe_cli::mcp_command::McpEnvironment::from_process();
+        return ExitCode::from(vibe_cli::mcp_command::run(
+            &arguments[1..],
+            &environment,
+            &mut stdout,
+            &mut stderr,
+        ));
     }
     let arguments = Arguments::parse();
     // The log file opens before anything else can fail, so a startup that dies

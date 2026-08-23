@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Give `vibe mcp` the sub-command surface the reference publishes. `vibe mcp`,
+  `vibe mcp add -h` and `vibe mcp remove -h` now render help on stdout and exit
+  0; every argument failure prints the usage line and a
+  `{prog}: error: {message}` line on stderr and exits 2, naming the sub-command
+  it came from, or the root command where the reference raises it. `vibe mcp
+  add` still refuses, and now refuses only after parsing its full flag surface.
+
+- Delete an MCP server's OAuth credentials before dropping its configuration
+  entry, so removing a server no longer leaves a live token in the OS keyring.
+  A credential deletion that fails leaves the entry in place and reports the
+  failure; a host with no credential store at all removes the entry as before.
+  `vibe mcp remove` also writes only the user configuration, never a project
+  one, and its two outcome messages now carry their terminating period.
+
 - Fail a managed shell session when no terminal starts, instead of running it on
   pipes and reporting no backend. A host where every terminal backend refuses
   now answers an error naming each one that was tried and why it failed, so a
