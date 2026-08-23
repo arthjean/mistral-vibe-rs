@@ -17,21 +17,38 @@
 //! harness the reference builds for this command (`mcp_command.py:383-390`):
 //! `vibe mcp remove` never edits a project configuration.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+use std::future::Future;
 use std::io::Write;
 use std::path::PathBuf;
+use std::pin::Pin;
+use std::sync::{Arc, OnceLock};
+use std::time::{Duration, Instant};
 
 use clap::error::{ContextKind, ContextValue, ErrorKind};
-use clap::{Arg, ArgAction, Command};
+use clap::{Arg, ArgAction, ArgMatches, Command};
 use toml::Table;
-use vibe_core::auth::{KeyringBackend, NativeKeyringBackend, delete_mcp_oauth_credential};
-use vibe_core::config::{ConfigPaths, ConfigSource, LayeredConfig};
+use url::Url;
+use vibe_app_server::resources::{McpAuthBackend, production_mcp_adapters};
+use vibe_core::auth::{
+    KeyringBackend, NativeKeyringBackend, delete_mcp_oauth_credential, open_system_browser,
+};
+use vibe_core::config::mcp::normalize_mcp_server_url;
+use vibe_core::config::{ConfigError, ConfigPaths, ConfigSource, LayeredConfig};
+use vibe_core::mcp::{
+    DEFAULT_MCP_API_KEY_FORMAT, DEFAULT_MCP_API_KEY_HEADER, DEFAULT_MCP_STARTUP_TIMEOUT_MS,
+    DEFAULT_MCP_TOOL_TIMEOUT_MS, McpAuthConfig, McpOAuthConfig, McpServerConfig, McpStaticAuth,
+    McpTransportConfig,
+};
 
 /// The program name every usage line and every error line carries.
 const PROG: &str = "vibe mcp";
 
 /// The exit code an argument failure carries, which is argparse's own.
 const USAGE_EXIT: u8 = 2;
+
+/// The transport an invocation that names none asks for.
+const DEFAULT_TRANSPORT: &str = "streamable-http";
 
 /// argparse's help column: two past the widest invocation, capped.
 const MAX_HELP_POSITION: usize = 24;
@@ -82,7 +99,7 @@ fn add_declaration() -> Command {
                 .long("transport")
                 .value_name("{http,streamable-http,stdio}")
                 .value_parser(["http", "streamable-http", "stdio"])
-                .default_value("streamable-http")
+                .default_value(DEFAULT_TRANSPORT)
                 .help("Wire protocol the server speaks."),
         )
         .arg(
@@ -171,6 +188,103 @@ fn remove_declaration() -> Command {
 }
 
 // --------------------------------------------------------------------------
+// The OAuth login a remote add performs
+// --------------------------------------------------------------------------
+
+/// The session identity the login is filed under.
+///
+/// The backend keys a pending login by session and resource, so `begin` and
+/// `finish` have to name the same session; a command that runs one login and
+/// exits needs only the one name.
+const LOGIN_SESSION: &str = "vibe-mcp-add";
+
+/// How long a poll waits past the backend's own login timeout before giving up
+/// on it answering at all.
+const LOGIN_POLL_LIMIT: Duration = Duration::from_secs(310);
+
+/// How often the poll asks whether the authorization server came back.
+const LOGIN_POLL_INTERVAL: Duration = Duration::from_millis(250);
+
+pub(crate) type LoginFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, String>> + 'a>>;
+
+/// The browser login a remote `add` runs, injected for the same reason the
+/// credential store is: a replay that drove the real one would open a browser
+/// and reach a live authorization server.
+pub(crate) trait McpOAuthLogin {
+    /// Starts a login and answers with the URL that authorizes it.
+    fn begin<'a>(&'a self, config: &'a McpServerConfig) -> LoginFuture<'a, String>;
+
+    /// Waits for the login [`Self::begin`] started to finish.
+    fn finish<'a>(&'a self, config: &'a McpServerConfig) -> LoginFuture<'a, ()>;
+
+    /// Hands `url` to the host's browser. A host with no launcher is reported
+    /// and not fatal: the URL was printed first, so the login can still be
+    /// completed by hand.
+    fn open(&self, url: &str) -> Result<(), String>;
+}
+
+/// The login the installed binary runs, over the app server's OAuth backend.
+#[derive(Default)]
+struct ProcessOAuthLogin {
+    /// One backend for both halves of a login: it holds the pending exchange
+    /// in memory, so a second instance would not recognize what the first
+    /// started.
+    backend: OnceLock<Arc<dyn McpAuthBackend>>,
+}
+
+impl ProcessOAuthLogin {
+    fn backend(&self) -> Result<Arc<dyn McpAuthBackend>, String> {
+        if let Some(backend) = self.backend.get() {
+            return Ok(backend.clone());
+        }
+        let (_, auth) = production_mcp_adapters(None).map_err(|error| error.to_string())?;
+        Ok(self.backend.get_or_init(|| auth).clone())
+    }
+}
+
+impl McpOAuthLogin for ProcessOAuthLogin {
+    fn begin<'a>(&'a self, config: &'a McpServerConfig) -> LoginFuture<'a, String> {
+        Box::pin(async move {
+            let backend = self.backend()?;
+            backend
+                .login(LOGIN_SESSION, config)
+                .await
+                .map_err(|error| error.to_string())
+        })
+    }
+
+    fn finish<'a>(&'a self, config: &'a McpServerConfig) -> LoginFuture<'a, ()> {
+        Box::pin(async move {
+            let backend = self.backend()?;
+            // The backend answers a pending login without blocking, so the
+            // wait is this loop rather than a call that parks. It also carries
+            // its own timeout, and the limit here only bounds a backend that
+            // stops answering at all.
+            let deadline = Instant::now() + LOGIN_POLL_LIMIT;
+            loop {
+                match backend.complete(LOGIN_SESSION, config).await {
+                    Ok(true) => return Ok(()),
+                    Ok(false) => {}
+                    Err(error) => return Err(error.to_string()),
+                }
+                if Instant::now() >= deadline {
+                    return Err("the authorization server did not answer".to_owned());
+                }
+                tokio::time::sleep(LOGIN_POLL_INTERVAL).await;
+            }
+        })
+    }
+
+    fn open(&self, url: &str) -> Result<(), String> {
+        if open_system_browser(url) {
+            Ok(())
+        } else {
+            Err("this host has no browser launcher".to_owned())
+        }
+    }
+}
+
+// --------------------------------------------------------------------------
 // The environment a run resolves against
 // --------------------------------------------------------------------------
 
@@ -183,6 +297,7 @@ pub struct McpEnvironment {
     vibe_home: PathBuf,
     working_directory: PathBuf,
     keyring: Box<dyn KeyringBackend>,
+    login: Box<dyn McpOAuthLogin>,
 }
 
 impl McpEnvironment {
@@ -196,6 +311,7 @@ impl McpEnvironment {
             vibe_home,
             working_directory,
             keyring: Box::new(NativeKeyringBackend::new()),
+            login: Box::new(ProcessOAuthLogin::default()),
         }
     }
 
@@ -211,11 +327,13 @@ impl McpEnvironment {
         vibe_home: impl Into<PathBuf>,
         working_directory: impl Into<PathBuf>,
         keyring: Box<dyn KeyringBackend>,
+        login: Box<dyn McpOAuthLogin>,
     ) -> Self {
         Self {
             vibe_home: vibe_home.into(),
             working_directory: working_directory.into(),
             keyring,
+            login,
         }
     }
 
@@ -242,7 +360,7 @@ impl McpEnvironment {
 /// the parser does not declare is a choice failure against `mcp_command`, and
 /// anything the sub-command could not place is reported by the root parser.
 #[must_use]
-pub fn run(
+pub async fn run(
     arguments: &[String],
     environment: &McpEnvironment,
     stdout: &mut dyn Write,
@@ -256,7 +374,7 @@ pub fn run(
             let Some(sub) = root.find_subcommand(first.as_str()).cloned() else {
                 return USAGE_EXIT;
             };
-            dispatch(&root, sub, first, rest, environment, stdout, stderr)
+            dispatch(&root, sub, first, rest, environment, stdout, stderr).await
         }
         Some((first, _)) if first.starts_with('-') => {
             fail(&root, PROG, &unrecognized(first), stderr)
@@ -273,7 +391,7 @@ pub fn run(
     }
 }
 
-fn dispatch(
+async fn dispatch(
     root: &Command,
     sub: Command,
     name: &str,
@@ -308,15 +426,342 @@ fn dispatch(
                 Err(message) => fail(&sub, &prog, &message, stderr),
             }
         }
-        // `add` is EP-100's: the surface is declared so the parser answers the
-        // same shapes, and the operation itself still refuses.
-        _ => {
+        // A post-parse failure is reported by the root parser, not by the one
+        // that was running: the reference funnels every one of them back
+        // through `parser.error` on the parser it built first.
+        _ => match add(&matches, environment, stdout, stderr).await {
+            Ok(code) => code,
+            Err(message) => fail(root, PROG, &message, stderr),
+        },
+    }
+}
+
+/// One `add` invocation, reduced to the entry it asks for and whether it also
+/// asks for a login.
+struct AddCommand {
+    config: McpServerConfig,
+    login: bool,
+}
+
+/// Stores the requested server, then logs in when the entry asks for OAuth and
+/// the invocation did not decline it.
+///
+/// Reference `_add_mcp_server`. The entry is on disk before the browser opens,
+/// which is what makes a login failure recoverable: the server is configured,
+/// and `/mcp login` can finish the exchange later.
+async fn add(
+    matches: &ArgMatches,
+    environment: &McpEnvironment,
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+) -> Result<u8, String> {
+    let command = parse_add(matches)?;
+    let addition = environment
+        .store()
+        .persist_mcp_server(&command.config)
+        .map_err(mcp_failure)?;
+    let message = if addition.created {
+        format!("Added MCP server `{}`.", addition.server.alias)
+    } else {
+        format!(
+            "MCP server `{}` is already configured.",
+            addition.server.alias
+        )
+    };
+    if !matches!(addition.server.auth, McpAuthConfig::Oauth(_)) {
+        return Ok(write_line(stdout, &message));
+    }
+    if !command.login {
+        return Ok(write_line(
+            stdout,
+            &format!(
+                "{message}\nRun `/mcp login {}` to authenticate.",
+                addition.server.alias
+            ),
+        ));
+    }
+    // With a login to run, the reference reports the entry as soon as it is
+    // written rather than at the end, so the narration reaches the terminal
+    // before the wait does.
+    let _ = writeln!(stdout, "{message}");
+    match authenticate(&addition.server, environment, stdout, stderr).await {
+        Ok(()) => Ok(write_line(stdout, "OAuth login succeeded.")),
+        Err(error) => {
             let _ = writeln!(
                 stderr,
-                "vibe mcp add is not implemented by this runtime; add a server with `/mcp add <url>` in the session"
+                "{PROG} add: the OAuth login did not finish: {error}"
             );
-            1
+            let _ = writeln!(
+                stderr,
+                "Run `/mcp login {}` to authenticate.",
+                addition.server.alias
+            );
+            Ok(1)
         }
+    }
+}
+
+/// Narrates the authorization URL and waits for the exchange behind it.
+///
+/// A host with no browser launcher is reported and not fatal: the URL was
+/// printed first, so the login can still be completed by hand.
+async fn authenticate(
+    config: &McpServerConfig,
+    environment: &McpEnvironment,
+    stdout: &mut dyn Write,
+    stderr: &mut dyn Write,
+) -> Result<(), String> {
+    let url = environment.login.begin(config).await?;
+    let _ = writeln!(stdout, "Authorize the server at this URL:\n\n  {url}");
+    if let Err(reason) = environment.login.open(&url) {
+        let _ = writeln!(stderr, "The browser did not open: {reason}");
+    }
+    environment.login.finish(config).await
+}
+
+/// Reads the argument vector as the entry it describes.
+///
+/// Reference `_parse_add_args`: the transport picks the branch, and each branch
+/// refuses the other's flags before it reads its own.
+fn parse_add(matches: &ArgMatches) -> Result<AddCommand, String> {
+    let alias = vibe_core::config::mcp::normalize_mcp_server_name(
+        matches.get_one::<String>("name").map_or("", String::as_str),
+    );
+    let transport = matches
+        .get_one::<String>("transport")
+        .map_or(DEFAULT_TRANSPORT, String::as_str);
+    if transport == "stdio" {
+        return Ok(AddCommand {
+            config: stdio_add(matches, alias)?,
+            login: false,
+        });
+    }
+    remote_add(matches, alias, transport)
+}
+
+fn stdio_add(matches: &ArgMatches, alias: String) -> Result<McpServerConfig, String> {
+    let remote_only = named(&[
+        ("--url", text(matches, "url").is_some()),
+        ("--header", !texts(matches, "header").is_empty()),
+        ("--api-key-env", text(matches, "api_key_env").is_some()),
+        (
+            "--api-key-header",
+            text(matches, "api_key_header").is_some(),
+        ),
+        (
+            "--api-key-format",
+            text(matches, "api_key_format").is_some(),
+        ),
+        ("--no-login", matches.get_flag("no_login")),
+    ]);
+    if !remote_only.is_empty() {
+        return Err(format!("--transport stdio does not accept {remote_only}."));
+    }
+    let Some(command) = text(matches, "command") else {
+        return Err("--transport stdio needs --command.".to_owned());
+    };
+    Ok(server(
+        alias,
+        // The launch directory is left for a reader to resolve, as the
+        // reference stores no `cwd` for an entry the command line built.
+        McpTransportConfig::Stdio {
+            command: command.to_owned(),
+            arguments: texts(matches, "arg")
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            environment: pairs(&texts(matches, "env"), "--env", Case::Sensitive)?,
+            working_directory: None,
+        },
+        McpAuthConfig::default(),
+        matches,
+    ))
+}
+
+fn remote_add(matches: &ArgMatches, alias: String, transport: &str) -> Result<AddCommand, String> {
+    let stdio_only = named(&[
+        ("--command", text(matches, "command").is_some()),
+        ("--arg", !texts(matches, "arg").is_empty()),
+        ("--env", !texts(matches, "env").is_empty()),
+    ]);
+    if !stdio_only.is_empty() {
+        return Err(format!("only --transport stdio accepts {stdio_only}."));
+    }
+    let Some(requested) = text(matches, "url") else {
+        return Err("--url is what an http or streamable-http server is reached at.".to_owned());
+    };
+    let headers = pairs(&texts(matches, "header"), "--header", Case::Insensitive)?;
+    let api_key_env = text(matches, "api_key_env");
+    let api_key_header = text(matches, "api_key_header");
+    let api_key_format = text(matches, "api_key_format");
+    // Naming any part of a static scheme selects it, which is what makes the
+    // OAuth default the answer to an invocation that names none of them.
+    let statics = !headers.is_empty()
+        || api_key_env.is_some()
+        || api_key_header.is_some()
+        || api_key_format.is_some();
+    let no_login = matches.get_flag("no_login");
+    if statics && no_login {
+        return Err(
+            "--no-login asks for OAuth, which the static authentication options replace."
+                .to_owned(),
+        );
+    }
+    let auth = if statics {
+        McpAuthConfig::Static(static_auth(
+            &headers,
+            api_key_env,
+            api_key_header,
+            api_key_format,
+        )?)
+    } else {
+        McpAuthConfig::Oauth(McpOAuthConfig::default())
+    };
+    let url = Url::parse(&normalize_mcp_server_url(requested).map_err(mcp_failure)?)
+        .map_err(|_| "--url is not an address a server can be reached at.".to_owned())?;
+    let transport = if transport == "http" {
+        McpTransportConfig::Http { url, headers }
+    } else {
+        McpTransportConfig::StreamableHttp { url, headers }
+    };
+    let login = matches!(auth, McpAuthConfig::Oauth(_)) && !no_login;
+    Ok(AddCommand {
+        config: server(alias, transport, auth, matches),
+        login,
+    })
+}
+
+/// Reference `_build_static_auth`: the two carrier options describe a key the
+/// environment holds, so neither means anything without the variable that
+/// holds it, and the carrier a `--header` already spells is a conflict rather
+/// than an override.
+fn static_auth(
+    headers: &BTreeMap<String, String>,
+    api_key_env: Option<&str>,
+    api_key_header: Option<&str>,
+    api_key_format: Option<&str>,
+) -> Result<McpStaticAuth, String> {
+    if api_key_header.is_some() && api_key_env.is_none() {
+        return Err("--api-key-header needs --api-key-env.".to_owned());
+    }
+    if api_key_format.is_some() && api_key_env.is_none() {
+        return Err("--api-key-format needs --api-key-env.".to_owned());
+    }
+    let carrier = api_key_header.unwrap_or(DEFAULT_MCP_API_KEY_HEADER);
+    if api_key_env.is_some()
+        && headers
+            .keys()
+            .any(|name| name.eq_ignore_ascii_case(carrier))
+    {
+        return Err(format!(
+            "--header already defines the API key header `{carrier}`."
+        ));
+    }
+    Ok(McpStaticAuth {
+        api_key_env: api_key_env.unwrap_or_default().to_owned(),
+        api_key_header: carrier.to_owned(),
+        api_key_format: api_key_format
+            .unwrap_or(DEFAULT_MCP_API_KEY_FORMAT)
+            .to_owned(),
+    })
+}
+
+/// Whether a repeated collection reads two names as one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Case {
+    Sensitive,
+    Insensitive,
+}
+
+/// One repeated `NAME=VALUE` option, in the grammar the reference parses:
+/// the first `=` separates, both halves are trimmed, and a name the collection
+/// already carries is refused rather than overwritten.
+fn pairs(values: &[&str], flag: &str, case: Case) -> Result<BTreeMap<String, String>, String> {
+    let mut parsed = BTreeMap::new();
+    let mut seen = BTreeSet::new();
+    for value in values {
+        let Some((name, value)) = value.split_once('=') else {
+            return Err(format!("{flag} values are spelled NAME=VALUE."));
+        };
+        let name = name.trim();
+        let key = match case {
+            Case::Sensitive => name.to_owned(),
+            Case::Insensitive => name.to_lowercase(),
+        };
+        if !seen.insert(key) {
+            return Err(format!("{flag} names `{name}` twice."));
+        }
+        parsed.insert(name.to_owned(), value.trim().to_owned());
+    }
+    Ok(parsed)
+}
+
+fn server(
+    alias: String,
+    transport: McpTransportConfig,
+    auth: McpAuthConfig,
+    matches: &ArgMatches,
+) -> McpServerConfig {
+    McpServerConfig {
+        alias,
+        transport,
+        enabled: true,
+        disabled_tools: BTreeSet::new(),
+        startup_timeout_ms: milliseconds(
+            matches,
+            "startup_timeout_sec",
+            DEFAULT_MCP_STARTUP_TIMEOUT_MS,
+        ),
+        tool_timeout_ms: milliseconds(matches, "tool_timeout_sec", DEFAULT_MCP_TOOL_TIMEOUT_MS),
+        auth,
+        prompt: None,
+        sampling_enabled: true,
+    }
+}
+
+/// A declared timeout in the milliseconds an entry stores.
+///
+/// A value the conversion cannot carry saturates to zero or beyond the range,
+/// and the configuration decoder refuses both: the bound belongs there, where
+/// every reader of an entry meets the same one.
+fn milliseconds(matches: &ArgMatches, id: &str, default_ms: u64) -> u64 {
+    matches
+        .get_one::<f64>(id)
+        .map_or(default_ms, |seconds| (seconds * 1_000.0) as u64)
+}
+
+/// The flags of `flags` that were given, in the order they are declared.
+fn named(flags: &[(&str, bool)]) -> String {
+    flags
+        .iter()
+        .filter(|(_, given)| *given)
+        .map(|(flag, _)| *flag)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// One optional string option, absent when it was not given and when it was
+/// given empty: every check the reference makes reads an empty value as unset.
+fn text<'a>(matches: &'a ArgMatches, id: &str) -> Option<&'a str> {
+    matches
+        .get_one::<String>(id)
+        .map(String::as_str)
+        .filter(|value| !value.is_empty())
+}
+
+fn texts<'a>(matches: &'a ArgMatches, id: &str) -> Vec<&'a str> {
+    matches
+        .get_many::<String>(id)
+        .map(|values| values.map(String::as_str).collect())
+        .unwrap_or_default()
+}
+
+/// A configuration failure as the one line an error grammar prints, without
+/// the prefix the store's own display adds for a caller that keeps the type.
+fn mcp_failure(error: ConfigError) -> String {
+    match error {
+        ConfigError::InvalidMcp(message) => message,
+        other => other.to_string(),
     }
 }
 

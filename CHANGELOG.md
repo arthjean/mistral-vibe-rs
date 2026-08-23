@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Add an MCP server from the command line. `vibe mcp add` now writes the entry
+  the flags describe into the user configuration: a stdio server from
+  `--command`, `--arg` and `--env`, or a remote one from `--url` with either
+  static authentication (`--api-key-env`, `--api-key-header`,
+  `--api-key-format`, `--header`) or OAuth. Re-running the same add is a no-op
+  that says so, a name already taken or a URL another entry already addresses
+  is refused, and every refusal exits 2 through the usage funnel without
+  touching the configuration. A remote server left on OAuth runs the browser
+  login and reports where to authenticate, or prints the authorization URL and
+  waits; `--no-login` stores the entry and names the `/mcp login` command to run
+  later.
+
 - Give `vibe mcp` the sub-command surface the reference publishes. `vibe mcp`,
   `vibe mcp add -h` and `vibe mcp remove -h` now render help on stdout and exit
   0; every argument failure prints the usage line and a

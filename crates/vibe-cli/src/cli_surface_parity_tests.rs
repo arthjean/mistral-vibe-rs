@@ -699,40 +699,100 @@ fn last_line(stream: &[u8]) -> Option<String> {
     text.lines().next_back().map(ToOwned::to_owned)
 }
 
-/// Drives one `vibe mcp` vector against a home of its own.
+/// A login the replay never lets run.
 ///
-/// `vibe mcp remove` goes through the configuration store, so the replay hands
-/// the command an empty temporary home rather than letting it resolve the
-/// ambient one: reading, and on a hit rewriting, the developer's own
-/// `~/.vibe/config.toml` is not something a test may do.
-fn drive_mcp(argv: &[String]) -> Outcome {
-    let (exit, stdout, stderr) = run_mcp(argv);
-    Outcome {
-        exit: i32::from(exit),
-        streams: Streams {
-            stdout: !stdout.is_empty(),
-            stderr: !stderr.is_empty(),
-        },
-        namespace: None,
-        stdout_last_line: last_line(&stdout),
-        stderr_last_line: last_line(&stderr),
+/// Every recorded `add` vector either declines the login or fails before one
+/// could start; the one that would open a browser is in the corpus's
+/// `unavailable` block, so reaching this is a defect in the replay.
+struct RefusingLogin;
+
+impl mcp_command::McpOAuthLogin for RefusingLogin {
+    fn begin<'a>(
+        &'a self,
+        _config: &'a vibe_core::mcp::McpServerConfig,
+    ) -> mcp_command::LoginFuture<'a, String> {
+        Box::pin(async { Err("the replay must never start an OAuth login".to_owned()) })
+    }
+
+    fn finish<'a>(
+        &'a self,
+        _config: &'a vibe_core::mcp::McpServerConfig,
+    ) -> mcp_command::LoginFuture<'a, ()> {
+        Box::pin(async { Err("the replay must never wait on an OAuth login".to_owned()) })
+    }
+
+    fn open(&self, _url: &str) -> Result<(), String> {
+        Err("the replay must never open a browser".to_owned())
     }
 }
 
-/// Runs one `vibe mcp` vector over a temporary home and answers its exit code
-/// and both streams.
-fn run_mcp(argv: &[String]) -> (u8, Vec<u8>, Vec<u8>) {
-    let home = tempfile::tempdir().expect("a temporary home for the replay");
-    let vibe_home = home.path().join("vibe-home");
-    let workspace = home.path().join("workspace");
-    std::fs::create_dir_all(&vibe_home).expect("the temporary home");
-    std::fs::create_dir_all(&workspace).expect("the temporary workspace");
-    let environment =
-        mcp_command::McpEnvironment::for_home(&vibe_home, &workspace, Box::new(AbsentKeyring));
-    let mut stdout = Vec::new();
-    let mut stderr = Vec::new();
-    let exit = mcp_command::run(argv, &environment, &mut stdout, &mut stderr);
-    (exit, stdout, stderr)
+/// The home the `vibe mcp` vectors run against.
+///
+/// The command goes through the configuration store, so the replay hands it a
+/// temporary home rather than letting it resolve the ambient one: reading, and
+/// on a hit rewriting, the developer's own `~/.vibe/config.toml` is not
+/// something a test may do. One home serves every vector of a replay because
+/// the capture sequenced them that way: the vectors that store a server run
+/// before the ones that read it back, and a home per case would leave those
+/// with nothing to find.
+struct McpSession {
+    _root: tempfile::TempDir,
+    vibe_home: std::path::PathBuf,
+    workspace: std::path::PathBuf,
+}
+
+impl McpSession {
+    fn open() -> Self {
+        let root = tempfile::tempdir().expect("a temporary home for the replay");
+        let vibe_home = root.path().join("vibe-home");
+        let workspace = root.path().join("workspace");
+        std::fs::create_dir_all(&vibe_home).expect("the temporary home");
+        std::fs::create_dir_all(&workspace).expect("the temporary workspace");
+        Self {
+            _root: root,
+            vibe_home,
+            workspace,
+        }
+    }
+
+    /// Runs one `vibe mcp` vector and answers its exit code and both streams.
+    fn run(&self, argv: &[String]) -> (u8, Vec<u8>, Vec<u8>) {
+        let environment = mcp_command::McpEnvironment::for_home(
+            &self.vibe_home,
+            &self.workspace,
+            Box::new(AbsentKeyring),
+            Box::new(RefusingLogin),
+        );
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        // The command is async because its OAuth login is; the replay drives
+        // it on a runtime of its own rather than becoming async itself.
+        let exit = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("a runtime for the replay")
+            .block_on(mcp_command::run(
+                argv,
+                &environment,
+                &mut stdout,
+                &mut stderr,
+            ));
+        (exit, stdout, stderr)
+    }
+
+    fn drive(&self, argv: &[String]) -> Outcome {
+        let (exit, stdout, stderr) = self.run(argv);
+        Outcome {
+            exit: i32::from(exit),
+            streams: Streams {
+                stdout: !stdout.is_empty(),
+                stderr: !stderr.is_empty(),
+            },
+            namespace: None,
+            stdout_last_line: last_line(&stdout),
+            stderr_last_line: last_line(&stderr),
+        }
+    }
 }
 
 /// Whether the line this port printed is the one the corpus recorded.
@@ -793,10 +853,10 @@ fn compare_stream_lines(case: &Case, outcome: &Outcome, differences: &mut Vec<Di
     }
 }
 
-fn compare_case(case: &Case, differences: &mut Vec<Difference>) {
+fn compare_case(case: &Case, session: &McpSession, differences: &mut Vec<Difference>) {
     let outcome = match case.parser.as_str() {
         "root" => drive_root(&case.argv),
-        _ => drive_mcp(&case.argv),
+        _ => session.drive(&case.argv),
     };
     if case.exit != outcome.exit {
         differences.push(Difference::new(
@@ -854,8 +914,12 @@ fn replay(corpus: &Corpus) -> Vec<Difference> {
     for record in &corpus.parsers {
         compare_declarations(record, &mut differences);
     }
+    // One home per replay rather than one per process: the tests that call
+    // this may run concurrently, and a shared home would let them sequence
+    // each other's servers.
+    let session = McpSession::open();
     for case in &corpus.cases {
-        compare_case(case, &mut differences);
+        compare_case(case, &session, &mut differences);
     }
     differences
 }
@@ -1179,6 +1243,7 @@ fn only_the_parser_the_reference_describes_prints_a_description() {
     /// under it is when it is not a description.
     const HEADINGS: &[&str] = &["positional arguments:", "options:"];
     let corpus = corpus();
+    let session = McpSession::open();
     for (parser, argv) in [
         ("mcp", &[][..]),
         ("mcp-add", &["add", "-h"][..]),
@@ -1190,7 +1255,7 @@ fn only_the_parser_the_reference_describes_prints_a_description() {
             .find(|record| record.parser == parser)
             .unwrap_or_else(|| panic!("the {parser} parser is recorded"));
         let argv: Vec<String> = argv.iter().map(|token| (*token).to_owned()).collect();
-        let (exit, stdout, stderr) = run_mcp(&argv);
+        let (exit, stdout, stderr) = session.run(&argv);
         assert_eq!(exit, 0, "{parser} answered {exit} for its help");
         assert!(stderr.is_empty(), "{parser} wrote its help to stderr");
         let rendered = String::from_utf8(stdout).expect("the help render is UTF-8");
@@ -1908,162 +1973,10 @@ const LEDGER: &[Divergence] = &[
     },
     Divergence {
         parser: "mcp",
-        case: "mcp-add-http-oauth-no-login",
-        pointer: "/exit",
-        closed_by: "US-316",
-        row: "7",
-        why: "the reference persists the remote server and reports the outcome on stdout, and this port refuses every `add` shape",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-add-http-oauth-no-login",
-        pointer: "/streams",
-        closed_by: "US-316",
-        row: "7",
-        why: "the reference persists the remote server and reports the outcome on stdout, and this port refuses every `add` shape",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-add-streamable-http-static-auth",
-        pointer: "/exit",
-        closed_by: "US-316",
-        row: "7",
-        why: "the reference persists the remote server with its static authentication and reports the outcome on stdout, and this port refuses every `add` shape",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-add-streamable-http-static-auth",
-        pointer: "/streams",
-        closed_by: "US-316",
-        row: "7",
-        why: "the reference persists the remote server with its static authentication and reports the outcome on stdout, and this port refuses every `add` shape",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-add-stdio-command",
-        pointer: "/exit",
-        closed_by: "US-316",
-        row: "7",
-        why: "the reference persists the stdio server and reports the outcome on stdout, and this port refuses every `add` shape",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-add-stdio-command",
-        pointer: "/streams",
-        closed_by: "US-316",
-        row: "7",
-        why: "the reference persists the stdio server and reports the outcome on stdout, and this port refuses every `add` shape",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-add-stdio-again",
-        pointer: "/exit",
-        closed_by: "US-316",
-        row: "7",
-        why: "the reference recognizes the identical entry as already configured and exits 0, and this port refuses every `add` shape",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-add-stdio-again",
-        pointer: "/streams",
-        closed_by: "US-316",
-        row: "7",
-        why: "the reference recognizes the identical entry as already configured and exits 0, and this port refuses every `add` shape",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-add-stdio-with-remote-flag",
-        pointer: "/exit",
-        closed_by: "US-315",
-        row: "7",
-        why: "the reference refuses the stdio transport carrying a remote-only flag and exits 2, and this port refuses every `add` shape with exit 1",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-add-remote-without-url",
-        pointer: "/exit",
-        closed_by: "US-315",
-        row: "7",
-        why: "the reference refuses a remote transport with no `--url` and exits 2, and this port refuses every `add` shape with exit 1",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-add-duplicate-url",
-        pointer: "/exit",
-        closed_by: "US-316",
-        row: "7",
-        why: "the reference refuses a second name for a URL it already carries and exits 2, and this port refuses every `add` shape with exit 1",
-    },
-    Divergence {
-        parser: "mcp",
         case: "mcp-add-help",
         pointer: "/stdoutLastLine",
         closed_by: "ACCEPTED",
         row: "7",
         why: "the last line of the `add` help carries an option description, and NOTICE forbids reproducing the reference's prose, so this port writes its own while the render's shape matches",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-add-stdio-with-remote-flag",
-        pointer: "/stderrLastLine",
-        closed_by: "US-315",
-        row: "7",
-        why: "the reference refuses the stdio transport carrying a remote-only flag through its usage funnel, and this port prints its `add` refusal instead",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-add-remote-without-url",
-        pointer: "/stderrLastLine",
-        closed_by: "US-315",
-        row: "7",
-        why: "the reference refuses a remote transport with no `--url` through its usage funnel, and this port prints its `add` refusal instead",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-add-duplicate-url",
-        pointer: "/stderrLastLine",
-        closed_by: "US-316",
-        row: "7",
-        why: "the reference refuses a second name for a URL it already carries through its usage funnel, and this port prints its `add` refusal instead",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-add-http-oauth-no-login",
-        pointer: "/stdoutLastLine",
-        closed_by: "US-316",
-        row: "7",
-        why: "the reference reports the persisted remote server on stdout, and this port refuses every `add` shape so it writes nothing there",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-add-streamable-http-static-auth",
-        pointer: "/stdoutLastLine",
-        closed_by: "US-316",
-        row: "7",
-        why: "the reference reports the persisted remote server on stdout, and this port refuses every `add` shape so it writes nothing there",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-add-stdio-command",
-        pointer: "/stdoutLastLine",
-        closed_by: "US-316",
-        row: "7",
-        why: "the reference reports the persisted stdio server on stdout, and this port refuses every `add` shape so it writes nothing there",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-add-stdio-again",
-        pointer: "/stdoutLastLine",
-        closed_by: "US-316",
-        row: "7",
-        why: "the reference reports the entry as already configured on stdout, and this port refuses every `add` shape so it writes nothing there",
-    },
-    Divergence {
-        parser: "mcp",
-        case: "mcp-remove-stdio-server",
-        pointer: "/stdoutLastLine",
-        closed_by: "US-316",
-        row: "7",
-        why: "the capture removes the server an earlier `add` case stored, and this port refuses every `add` shape, so the removal finds nothing to drop",
     },
 ];
