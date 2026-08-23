@@ -45,11 +45,11 @@
     {
       "id": "EP-096",
       "title": "Execution semantics and PTY backends",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 5,
-      "stories_done": 0,
-      "started_at": null
+      "stories_done": 5,
+      "started_at": "2026-08-23"
     },
     {
       "id": "EP-097",
@@ -233,71 +233,71 @@
       "id": "US-301",
       "title": "Bound the managed inline window with the reference's field",
       "epic": "EP-096",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [
         "US-290"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-23",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
     },
     {
       "id": "US-302",
       "title": "Require a completed status before reporting success",
       "epic": "EP-096",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [
         "US-290"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-23",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
     },
     {
       "id": "US-303",
       "title": "Answer an empty chunk for a log file that is not there",
       "epic": "EP-096",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "S",
       "blocked_by": [
         "US-290"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-23",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
     },
     {
       "id": "US-304",
       "title": "Name and order the Windows PTY backends the way the reference does",
       "epic": "EP-096",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "M",
       "blocked_by": [
         "US-296"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-23",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
     },
     {
       "id": "US-305",
       "title": "Fail the session when no PTY backend starts",
       "epic": "EP-096",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "S",
       "blocked_by": [
         "US-304"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-23",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
     },
     {
       "id": "US-306",
