@@ -27,11 +27,11 @@
     {
       "id": "EP-094",
       "title": "Persisted state both implementations can read",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 3,
-      "stories_done": 0,
-      "started_at": null
+      "stories_done": 3,
+      "started_at": "2026-08-23"
     },
     {
       "id": "EP-095",
@@ -162,44 +162,44 @@
       "id": "US-296",
       "title": "Write the manifest with the reference's eleven fields",
       "epic": "EP-094",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-290"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-23",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
     },
     {
       "id": "US-297",
       "title": "Mint session identifiers in the reference's format",
       "epic": "EP-094",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [
         "US-290"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-23",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
     },
     {
       "id": "US-298",
       "title": "Read orphans written by either implementation",
       "epic": "EP-094",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "S",
       "blocked_by": [
         "US-296",
         "US-297"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-23",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
     },
     {
       "id": "US-299",
