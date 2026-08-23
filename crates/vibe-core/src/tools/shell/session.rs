@@ -38,8 +38,8 @@ use super::decode::read_file_window;
 use super::document::Document;
 use super::host::{ShellFamily, windows_shell_arguments};
 use super::{
-    PUMP_INTERVAL, SESSIONS_DIRECTORY, byte_limit, command_argument, exit_status,
-    is_family_session_id, process_error, process_spec, string_argument, timeout_argument,
+    PUMP_INTERVAL, SESSIONS_DIRECTORY, command_argument, exit_status, is_family_session_id,
+    process_error, process_spec, string_argument, timeout_argument,
 };
 
 /// One Vibe session's shell state: the terminals it opened and the managed
@@ -286,7 +286,6 @@ pub(super) async fn run_managed_command(
     working_directory: &Path,
     arguments: &Value,
     settings: &ShellCommandConfig,
-    output: &ToolOutputSink,
 ) -> Result<ToolExecutionOutput, ToolError> {
     let command = command_argument(arguments)?;
     let requested_directory = string_argument(arguments, "cwd")
@@ -311,9 +310,17 @@ pub(super) async fn run_managed_command(
         settings.max_output_bytes,
     )
     .await?;
-    // One window and one handle for every exit of this call: the inline budget
-    // is read once so the four answers below cannot drift apart.
-    let limit = byte_limit(arguments, output, settings.max_inline_bytes);
+    // One window and one handle for every exit of this call, so the four
+    // answers below cannot drift apart.
+    //
+    // Reference `ExperimentalBash.run` bounds every one of its reads with
+    // `self.config.max_output_bytes`, where the three polling tools bound theirs
+    // with `max_inline_bytes`. The two defaults differ, 16 000 against 30 000,
+    // so a command that prints 20 000 bytes truncates here and does not through
+    // a poll. Nothing narrows it further: this call publishes no `max_bytes`
+    // argument, and the turn's streaming budget bounds what a tool emits, which
+    // a managed command never does.
+    let limit = settings.max_output_bytes;
     let handle = SessionHandle::Live(session.clone());
     let background = arguments["background"].as_bool().unwrap_or(false);
     if background {

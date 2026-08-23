@@ -57,8 +57,8 @@ use document::Document;
 pub use host::{HostShells, ShellRollout};
 use host::{ShellFamily, family_config, published_family};
 use policy::{
-    CommandWiring, byte_limit, command_argument, guarded_command, log_file_requirements,
-    string_argument, timeout_argument,
+    CommandWiring, command_argument, guarded_command, log_file_requirements, string_argument,
+    timeout_argument,
 };
 use session::{SessionShell, SessionStatus, guarded_session, run_managed_command, session_handler};
 use session_tools::{
@@ -464,15 +464,8 @@ fn command_handler(
                     return Ok(delegated);
                 }
                 if managed {
-                    run_managed_command(
-                        &shell,
-                        &config,
-                        &working_directory,
-                        &arguments,
-                        &settings,
-                        &output,
-                    )
-                    .await
+                    run_managed_command(&shell, &config, &working_directory, &arguments, &settings)
+                        .await
                 } else {
                     run_legacy_command(
                         &shell,

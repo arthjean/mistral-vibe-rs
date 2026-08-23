@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Bound a managed shell command with its own `max_output_bytes` ceiling rather
+  than the polling tools' `max_inline_bytes`, so a command and a poll of the
+  same log truncate where the reference truncates them. A chatty session also
+  keeps the output it used to lose: the drain behind a terminal no longer
+  discards a chunk when its queue is full, and stops only at the configured
+  byte ceiling.
+
 - Report a managed shell command as a success only when its session both
   reached `completed` and exited zero. A session killed on its way out carries
   whatever code the kill produced, which is zero often enough that the code

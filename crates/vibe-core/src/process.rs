@@ -19,7 +19,6 @@ use crate::child::{ChildExit, ChildGroup, Rung, TerminationError};
 use crate::pty::{PTY_BACKEND, PtySpec, PtyTerminal, PtyWriter};
 use crate::workspace::{GitInspector, GitInspectorFuture, GitState, WorkspaceError};
 
-const DEFAULT_QUEUE_CAPACITY: usize = 128;
 const DEFAULT_MAX_OUTPUT_BYTES: usize = 1_048_576;
 pub(super) const DEFAULT_CLEANUP_GRACE: Duration = Duration::from_secs(2);
 /// How long one delegated request may stay unanswered before the tool reports
@@ -74,7 +73,11 @@ pub struct ProcessSpec {
     pub arguments: Vec<String>,
     pub working_directory: PathBuf,
     pub environment: BTreeMap<String, String>,
-    pub queue_capacity: usize,
+    /// The ceiling on what one process may capture.
+    ///
+    /// This is the only bound on a drain: the queue behind it is unbounded, so
+    /// the readers stop at this many bytes and say so rather than letting a
+    /// chatty child lose a chunk to a queue that happened to be full.
     pub max_output_bytes: usize,
     /// Whether the child should run under a terminal.
     ///
@@ -92,7 +95,6 @@ impl ProcessSpec {
             arguments: Vec::new(),
             working_directory: working_directory.into(),
             environment: BTreeMap::new(),
-            queue_capacity: DEFAULT_QUEUE_CAPACITY,
             max_output_bytes: DEFAULT_MAX_OUTPUT_BYTES,
             terminal: false,
         }
@@ -123,7 +125,7 @@ struct ManagedProcess {
     id: String,
     child: Mutex<TerminalChild>,
     stdin: Mutex<Option<TerminalInput>>,
-    chunks: Mutex<mpsc::Receiver<ProcessChunk>>,
+    chunks: Mutex<mpsc::UnboundedReceiver<ProcessChunk>>,
     readers: Mutex<Vec<JoinHandle<()>>>,
     state: Mutex<TerminalState>,
     output_dropped: Arc<AtomicBool>,
@@ -206,7 +208,7 @@ impl TerminalManager {
         if spec.program.as_os_str().is_empty() {
             return Err(ProcessError::InvalidProgram);
         }
-        let (sender, receiver) = mpsc::channel(spec.queue_capacity.max(1));
+        let (sender, receiver) = mpsc::unbounded_channel();
         let cursor = Arc::new(AtomicU64::new(0));
         let output_bytes = Arc::new(AtomicUsize::new(0));
         let output_dropped = Arc::new(AtomicBool::new(false));
@@ -600,7 +602,7 @@ impl GitInspector for TerminalManager {
 /// that wait is instant, where aborting a blocking task would not be.
 fn spawn_terminal_reader(
     mut reader: Box<dyn std::io::Read + Send>,
-    sender: mpsc::Sender<ProcessChunk>,
+    sender: mpsc::UnboundedSender<ProcessChunk>,
     cursor: Arc<AtomicU64>,
     output_bytes: Arc<AtomicUsize>,
     output_dropped: Arc<AtomicBool>,
@@ -629,7 +631,7 @@ fn spawn_terminal_reader(
             }
             let chunk_cursor = cursor.fetch_add(1, Ordering::Relaxed);
             if sender
-                .try_send(ProcessChunk {
+                .send(ProcessChunk {
                     cursor: chunk_cursor,
                     stream: ProcessStream::Stdout,
                     bytes: buffer[..accepted].to_vec(),
@@ -649,7 +651,7 @@ fn spawn_terminal_reader(
 async fn read_stream<R>(
     mut reader: R,
     stream: ProcessStream,
-    sender: mpsc::Sender<ProcessChunk>,
+    sender: mpsc::UnboundedSender<ProcessChunk>,
     cursor: Arc<AtomicU64>,
     output_bytes: Arc<AtomicUsize>,
     output_dropped: Arc<AtomicBool>,
@@ -674,7 +676,7 @@ async fn read_stream<R>(
         }
         let chunk_cursor = cursor.fetch_add(1, Ordering::Relaxed);
         if sender
-            .try_send(ProcessChunk {
+            .send(ProcessChunk {
                 cursor: chunk_cursor,
                 stream,
                 bytes: buffer[..accepted].to_vec(),

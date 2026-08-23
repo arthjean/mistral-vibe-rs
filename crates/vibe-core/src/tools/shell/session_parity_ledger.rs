@@ -10,8 +10,6 @@
 // field, `/sessions/0/manifest/shell` is one field, and `/typedResult` alone
 // would be thirteen.
 
-/// The story that bounds a managed window the way the reference bounds it.
-const US_301: &str = "US-301";
 /// The story that records what is left in the divergence tables.
 const US_306: &str = "US-306";
 
@@ -26,14 +24,9 @@ const WHY_LINE_ENDINGS: &str = "this port's managed terminal writes CRLF into th
 const WHY_MAX_CHARS: &str = "the reference validates `max_bytes` through an alias that also \
     accepts `max_chars` and this port reads only `max_bytes`, so the alias does not bound the \
     window here";
-const WHY_MANAGED_WINDOW: &str = "this port bounds a managed command window with the inline \
-    budget where the reference bounds it with the output budget (FR-11)";
 const WHY_SIGNAL_EXIT: &str = "the reference reports a signalled process the way Python's \
     `Popen.returncode` reports it, as the negated signal number, and this port reports -1 for \
     every death by signal";
-const WHY_TRUNCATED_READER: &str = "this port names the dropped tail in `reader_error` when a \
-    window is truncated and the reference leaves the field null, so the two records disagree on a \
-    field neither truncates";
 const WHY_SHELL: &str = "the reference resolves its shell from the environment and accepts a \
     `shell` configuration key, which is how the capture pinned /bin/bash; this port has no such \
     key and starts /bin/sh, so the difference is recorded rather than closed";
@@ -96,15 +89,10 @@ const LEDGER: &[Divergence] = &[
     gap("bash", "foreground-multibyte-output", "/typedResult/output", US_306, WHY_LINE_ENDINGS),
     gap("bash", "foreground-multibyte-output", "/typedResult/shell", US_306, WHY_SHELL),
     gap("bash", "foreground-output-exceeds-window", "/modelText", US_306, WHY_RENDERED),
-    gap("bash", "foreground-output-exceeds-window", "/sessions/0/manifest/reader_error", US_306, WHY_TRUNCATED_READER),
     gap("bash", "foreground-output-exceeds-window", "/sessions/0/manifest/shell", US_306, WHY_SHELL),
     gap("bash", "foreground-output-exceeds-window", "/sessions/0/sessionInfo/shell", US_306, WHY_SHELL),
-    gap("bash", "foreground-output-exceeds-window", "/sessions/0/sessionInfo/reader_error", US_306, WHY_TRUNCATED_READER),
-    gap("bash", "foreground-output-exceeds-window", "/typedResult/next_cursor", US_301, WHY_MANAGED_WINDOW),
-    gap("bash", "foreground-output-exceeds-window", "/typedResult/output", US_301, WHY_MANAGED_WINDOW),
+    gap("bash", "foreground-output-exceeds-window", "/typedResult/output", US_306, WHY_LINE_ENDINGS),
     gap("bash", "foreground-output-exceeds-window", "/typedResult/shell", US_306, WHY_SHELL),
-    gap("bash", "foreground-output-exceeds-window", "/typedResult/stdout", US_301, WHY_MANAGED_WINDOW),
-    gap("bash", "foreground-output-exceeds-window", "/typedResult/truncated", US_301, WHY_MANAGED_WINDOW),
     gap("bash", "foreground-exit-non-zero", "/sessions/0/manifest/shell", US_306, WHY_SHELL),
     gap("bash", "foreground-exit-non-zero", "/sessions/0/sessionInfo/shell", US_306, WHY_SHELL),
     gap("bash", "foreground-cwd-override", "/modelText", US_306, WHY_RENDERED),

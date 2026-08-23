@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use tempfile::{TempDir, tempdir};
 
-use super::session::new_session_id;
+use super::session::{SessionLimits, new_session_id};
 use super::specs::CONTROL_KEYS;
 use super::*;
 use crate::auth::UtcTimestamp;
@@ -184,6 +184,18 @@ async fn harness_on(
     rollout: ShellRollout,
     decision: ApprovalDecision,
 ) -> Harness {
+    harness_configured(host, rollout, decision, "").await
+}
+
+/// A harness whose tools resolve `settings`, a TOML fragment merged into the
+/// guard's resolver before registration. The resolver is shared with every
+/// clone the handlers keep, so a `[bash]` key set here is the one a call reads.
+async fn harness_configured(
+    host: HostShells,
+    rollout: ShellRollout,
+    decision: ApprovalDecision,
+    settings: &str,
+) -> Harness {
     let directory = tempdir().expect("tempdir");
     let policy = PermissionStore::default();
     policy
@@ -198,14 +210,14 @@ async fn harness_on(
     let registry = ToolRegistry::default();
     let family = published_family(&host, rollout).map_or(ShellFamily::Bash, |(family, _)| family);
     let tools = ShellTools::with_host(directory.path().join("home"), host);
+    let guard = guard_for(policy.clone(), approval as Arc<dyn ApprovalAgent>, rollout);
+    if !settings.is_empty() {
+        guard
+            .config
+            .update(settings.parse::<toml::Table>().expect("settings parse"));
+    }
     tools
-        .register(
-            "session-1",
-            directory.path(),
-            &registry,
-            None,
-            &guard_for(policy.clone(), approval as Arc<dyn ApprovalAgent>, rollout),
-        )
+        .register("session-1", directory.path(), &registry, None, &guard)
         .expect("the shell family registers");
     Harness {
         directory,
@@ -3047,6 +3059,82 @@ async fn a_multibyte_boundary_is_adjusted_in_both_directions() {
 // --------------------------------------------------------------------------
 // Execution semantics
 // --------------------------------------------------------------------------
+
+/// The window a managed command reads is the command's own ceiling, and a poll
+/// of the same log keeps the wider one. Reference `ExperimentalBash.run` reads
+/// `max_output_bytes` where the three polling tools read `max_inline_bytes`, so
+/// the same 20 000 bytes truncate on one side of the pair and not on the other.
+#[tokio::test]
+async fn the_managed_window_is_the_command_ceiling_and_a_poll_keeps_its_own() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let command_window = shell_settings().max_output_bytes;
+    let poll_window = SessionLimits::resolve(&ToolConfigResolver::new(), "bash").max_inline_bytes;
+    assert!(
+        command_window < 20_000 && 20_000 < poll_window,
+        "the two defaults must straddle the case: {command_window} and {poll_window}"
+    );
+
+    // Roughly 22 900 bytes once the terminal turns every newline into a pair.
+    let run = harness
+        .call("bash", json!({"command": "seq 1 4000"}))
+        .await
+        .expect("the command runs");
+    assert_eq!(run.typed_result["truncated"], json!(true), "{run:?}");
+    assert_eq!(
+        run.typed_result["next_cursor"],
+        json!(command_window),
+        "{run:?}"
+    );
+    assert_eq!(
+        run.typed_result["output"].as_str().map(str::len),
+        Some(command_window),
+        "the command window is the ceiling the whole call is read at"
+    );
+
+    let session = run.typed_result["session_id"]
+        .as_str()
+        .expect("a session id")
+        .to_owned();
+    let polled = harness
+        .call("bash_output", json!({"session_id": session, "cursor": 0}))
+        .await
+        .expect("the poll answers");
+    assert_eq!(polled.typed_result["truncated"], json!(false), "{polled:?}");
+    let read = polled.typed_result["output"]
+        .as_str()
+        .map(str::len)
+        .expect("output");
+    assert!(
+        read > command_window && read <= poll_window,
+        "a poll reads past the command's ceiling and stops at its own: {read}"
+    );
+}
+
+/// The ceiling is the operator's to move: a `bash` section naming a small
+/// `max_output_bytes` is what bounds the managed command, which is the field
+/// reference `ExperimentalBash.run` reads rather than the polling one.
+#[tokio::test]
+async fn a_configured_output_ceiling_bounds_the_managed_window() {
+    let harness = harness_configured(
+        posix_host(),
+        ShellRollout::Managed,
+        ApprovalDecision::ApproveOnce,
+        "[bash]\nmax_output_bytes = 64\n",
+    )
+    .await;
+    let run = harness
+        .call("bash", json!({"command": "seq 1 400"}))
+        .await
+        .expect("the command runs");
+    assert_eq!(run.typed_result["truncated"], json!(true), "{run:?}");
+    assert_eq!(run.typed_result["next_cursor"], json!(64), "{run:?}");
+    assert_eq!(
+        run.typed_result["output"].as_str().map(str::len),
+        Some(64),
+        "{run:?}"
+    );
+}
+
 /// A session that never reached `completed` is a failure whatever code it
 /// carries. The trap makes the kill exit zero, which is the case the code alone
 /// would report as a success: reference `_result_from_session` asks for both
