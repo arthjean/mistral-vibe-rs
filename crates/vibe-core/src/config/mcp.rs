@@ -762,6 +762,124 @@ pub(super) fn preflight_mcp_add(
     Ok(())
 }
 
+/// What adding a server to the configuration did.
+///
+/// Reference `PersistedMCPServerResult`: an entry equivalent to the requested
+/// one is not written a second time, and the caller still learns which server
+/// the configuration now carries under that name.
+#[derive(Debug, Clone, PartialEq)]
+pub struct McpAddition {
+    /// The entry the configuration carries under the requested name.
+    pub server: McpServerConfig,
+    /// False when an equivalent entry was already there, which is not a
+    /// failure: re-running the same add says so and writes nothing.
+    pub created: bool,
+}
+
+/// What [`decide_mcp_add`] concluded about a requested entry.
+pub(super) enum McpAddDecision {
+    /// Nothing stands in the way, and this is the entry to write.
+    Append(McpServerConfig),
+    /// An equivalent entry is already configured, so nothing is written.
+    AlreadyConfigured(McpServerConfig),
+}
+
+/// Which of the reference's outcomes adding `config` to `entries` has.
+///
+/// Reference `persist_remote_mcp_server` and `persist_stdio_mcp_server`: a name
+/// match carrying the same options is a no-op, a name match carrying the same
+/// URL under different options names the options, any other name match is a
+/// name collision, and a URL another entry already addresses is refused. This
+/// is the `vibe mcp add` path; [`preflight_mcp_add`] is the session one, which
+/// has no equivalence outcome because it never re-adds a server it holds.
+pub(super) fn decide_mcp_add(
+    entries: &[Value],
+    config: &McpServerConfig,
+    working_directory: &Path,
+) -> Result<McpAddDecision, ConfigError> {
+    // The requested entry is compared in the shape it would be read back in,
+    // because the reference compares validated models rather than raw argv:
+    // a field left at its default there is the same entry as one that spells
+    // the default out.
+    let requested = decode_mcp_server(&mcp_server_table(config)?, working_directory)?;
+    let requested_key =
+        mcp_transport_url(&requested.transport).map(|url| mcp_server_url_key(url.as_str()));
+    for entry in entries {
+        let table = entry
+            .as_table()
+            .ok_or_else(|| invalid("each mcp_servers entry must be a table"))?;
+        let named = table
+            .get("name")
+            .and_then(Value::as_str)
+            .map(normalize_mcp_server_name);
+        if named.as_deref() != Some(requested.alias.as_str()) {
+            continue;
+        }
+        let existing = decode_mcp_server(table, working_directory)?;
+        match (
+            mcp_transport_url(&existing.transport).cloned(),
+            mcp_transport_url(&requested.transport),
+        ) {
+            (Some(existing_url), Some(requested_url))
+                if mcp_server_url_key(existing_url.as_str())
+                    == mcp_server_url_key(requested_url.as_str()) =>
+            {
+                // Two spellings of one endpoint are one server, so the URL is
+                // aligned before everything else is compared.
+                let mut aligned = existing.clone();
+                point_at(&mut aligned.transport, requested_url.clone());
+                if aligned == requested {
+                    return Ok(McpAddDecision::AlreadyConfigured(existing));
+                }
+                return Err(invalid(format!(
+                    "MCP server `{}` is already configured with different options",
+                    requested.alias
+                )));
+            }
+            (None, None) if existing == requested => {
+                return Ok(McpAddDecision::AlreadyConfigured(existing));
+            }
+            _ => {}
+        }
+        return Err(invalid(format!(
+            "MCP server name `{}` is already configured",
+            requested.alias
+        )));
+    }
+    let Some(requested_key) = requested_key else {
+        return Ok(McpAddDecision::Append(requested));
+    };
+    for entry in entries {
+        let Some(table) = entry.as_table() else {
+            continue;
+        };
+        let Some(existing_url) = table.get("url").and_then(Value::as_str) else {
+            continue;
+        };
+        if mcp_server_url_key(existing_url) == requested_key {
+            return Err(invalid(format!(
+                "MCP server URL is already configured as `{}`",
+                table
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .map_or_else(|| FALLBACK_ALIAS.to_owned(), normalize_mcp_server_name)
+            )));
+        }
+    }
+    Ok(McpAddDecision::Append(requested))
+}
+
+/// Points a remote transport at `replacement`, which is what lets two spellings
+/// of one endpoint be compared on everything but the URL.
+fn point_at(transport: &mut McpTransportConfig, replacement: Url) {
+    match transport {
+        McpTransportConfig::Http { url, .. } | McpTransportConfig::StreamableHttp { url, .. } => {
+            *url = replacement;
+        }
+        McpTransportConfig::Stdio { .. } => {}
+    }
+}
+
 /// What removing a server by name did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct McpRemoval {

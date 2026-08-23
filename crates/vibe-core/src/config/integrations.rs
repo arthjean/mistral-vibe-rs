@@ -258,6 +258,58 @@ impl super::LayeredConfig {
         }])
     }
 
+    /// Adds `config` to the file writes land in, or reports that an equivalent
+    /// entry is already there.
+    ///
+    /// Reference `persist_remote_mcp_server` and `persist_stdio_mcp_server`,
+    /// which the `vibe mcp add` command reaches: unlike [`Self::persist_mcp_add`]
+    /// it treats a re-add of the same server as a no-op instead of a collision,
+    /// so running the same command twice is idempotent rather than fatal.
+    pub fn persist_mcp_server(
+        &self,
+        config: &McpServerConfig,
+    ) -> Result<mcp::McpAddition, ConfigError> {
+        let snapshot = self.load()?;
+        let collection = IntegrationCollection::McpServers;
+        let entries = config_array(&snapshot.effective, collection)?;
+        let requested = match mcp::decide_mcp_add(&entries, config, &self.paths.working_directory)?
+        {
+            mcp::McpAddDecision::AlreadyConfigured(server) => {
+                return Ok(mcp::McpAddition {
+                    server,
+                    created: false,
+                });
+            }
+            mcp::McpAddDecision::Append(requested) => requested,
+        };
+        let target = snapshot.selected_target;
+        // Rejects a target whose `mcp_servers` is not a list before the upsert
+        // decides to append to it.
+        config_array_for_target(&snapshot, target, collection)?;
+        let mutation = patch::resolve_upsert(
+            snapshot
+                .target_values
+                .get(&target)
+                .and_then(|values| values.get(collection.key())),
+            &JsonPointer::from_segments([collection.key()]),
+            "name",
+            // The caller's own shape is what lands on disk: the decoded form
+            // exists to answer the equivalence question, and writing it would
+            // pin fields the reference leaves for a reader to resolve, such as
+            // a stdio entry's working directory.
+            mcp_server_table(config)?,
+        );
+        self.batch_write(&[ConfigWrite {
+            target,
+            expected_fingerprint: snapshot.fingerprints.get(&target).cloned().flatten(),
+            mutations: vec![mutation],
+        }])?;
+        Ok(mcp::McpAddition {
+            server: requested,
+            created: true,
+        })
+    }
+
     /// Drops the entry named `name` from the file writes land in.
     ///
     /// A name no entry carries is reported as not removed rather than raised:
