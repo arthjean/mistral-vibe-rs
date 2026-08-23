@@ -108,15 +108,31 @@ fn utf16_endianness(bytes: &[u8]) -> Option<bool> {
 /// bytes are coming: either because the file is longer than the window, or
 /// because the session is still writing to it. Without that, a poll of a live
 /// log emits a replacement character the next poll cannot take back.
+///
+/// A log that is not there answers an empty window at the cursor the caller
+/// asked for, the way reference `_read_file_chunk` answers one for a path whose
+/// `exists()` is false. A session whose log was removed under it therefore stays
+/// pollable and keeps reporting its status, where a refusal would take the whole
+/// session down with the file. Absence is the only failure that answers: a path
+/// that exists and cannot be opened still raises.
 pub(super) fn read_file_window(
     path: &Path,
     cursor: u64,
     limit: usize,
     running: bool,
 ) -> Result<(String, u64, bool), ToolError> {
-    let mut file = std::fs::File::open(path).map_err(|error| {
-        ToolError::Execution(format!("`{}` cannot be read: {error}", path.display()))
-    })?;
+    let mut file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok((String::new(), cursor, false));
+        }
+        Err(error) => {
+            return Err(ToolError::Execution(format!(
+                "`{}` cannot be read: {error}",
+                path.display()
+            )));
+        }
+    };
     let size = file
         .metadata()
         .map(|metadata| metadata.len())

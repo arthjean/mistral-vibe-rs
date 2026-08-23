@@ -3047,6 +3047,78 @@ async fn a_multibyte_boundary_is_adjusted_in_both_directions() {
 // --------------------------------------------------------------------------
 // Execution semantics
 // --------------------------------------------------------------------------
+/// A log that is not there answers an empty window at the cursor that was
+/// asked for, rather than failing the call.
+#[tokio::test]
+async fn a_log_that_is_not_there_answers_an_empty_window() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let read = harness
+        .call(
+            "bash_log_file",
+            json!({"action": "read", "relative_path": "never-written.log", "offset": 7}),
+        )
+        .await
+        .expect("a missing log is not an error");
+    assert_eq!(read.typed_result["content"], json!(""), "{read:?}");
+    assert_eq!(read.typed_result["next_cursor"], json!(7), "{read:?}");
+    assert_eq!(read.typed_result["truncated"], json!(false), "{read:?}");
+}
+
+/// The empty answer is scoped to absence: a path that is there and cannot be
+/// opened still raises, which is what keeps a permission failure from reading
+/// as an empty log.
+#[test]
+fn a_log_that_exists_and_cannot_be_opened_still_raises() {
+    let directory = tempdir().expect("tempdir");
+    let path = directory.path().join("unreadable.log");
+    std::fs::write(&path, b"content").expect("the log is written");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000))
+            .expect("the log is closed");
+        // A test running as root opens it anyway, and the case would prove the
+        // opposite of what it states.
+        if std::fs::File::open(&path).is_ok() {
+            return;
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        return;
+    }
+    let failure = super::decode::read_file_window(&path, 0, 16, false)
+        .expect_err("an unreadable log is still an error");
+    assert!(
+        failure.to_string().contains("cannot be read"),
+        "{failure:?}"
+    );
+}
+
+/// A session whose log was removed under it stays pollable and keeps reporting
+/// its status, where a refusal would take the session down with the file.
+#[tokio::test]
+async fn a_poll_answers_after_the_session_log_was_deleted() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let session = background_session(&harness, "sleep 30").await;
+    let log_path = harness
+        .shell()
+        .sessions_directory()
+        .join(format!("{session}.log"));
+    std::fs::remove_file(&log_path).expect("the log is removed");
+
+    let polled = harness
+        .call("bash_output", json!({"session_id": session}))
+        .await
+        .expect("the poll answers");
+    assert_eq!(polled.typed_result["output"], json!(""), "{polled:?}");
+    assert_eq!(
+        polled.typed_result["status"],
+        json!(SessionStatus::Running.as_str()),
+        "{polled:?}"
+    );
+}
+
 /// An orphan's manifest is a file on disk that another process wrote, and the
 /// sessions directory is shared with the reference implementation, so the
 /// `output_path` it carries is input rather than a fact. A manifest naming a

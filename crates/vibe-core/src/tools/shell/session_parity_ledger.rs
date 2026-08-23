@@ -12,8 +12,6 @@
 
 /// The story that bounds a managed window the way the reference bounds it.
 const US_301: &str = "US-301";
-/// The story that answers an empty chunk for a log file that is not there.
-const US_303: &str = "US-303";
 /// The story that records what is left in the divergence tables.
 const US_306: &str = "US-306";
 
@@ -36,8 +34,6 @@ const WHY_SIGNAL_EXIT: &str = "the reference reports a signalled process the way
 const WHY_TRUNCATED_READER: &str = "this port names the dropped tail in `reader_error` when a \
     window is truncated and the reference leaves the field null, so the two records disagree on a \
     field neither truncates";
-const WHY_MISSING_LOG: &str = "the reference answers an empty chunk for a log file that is not \
-    there and this port refuses (FR-13)";
 const WHY_SHELL: &str = "the reference resolves its shell from the environment and accepts a \
     `shell` configuration key, which is how the capture pinned /bin/bash; this port has no such \
     key and starts /bin/sh, so the difference is recorded rather than closed";
@@ -289,6 +285,8 @@ const LEDGER: &[Divergence] = &[
     gap("bash_log_file", "read-from-an-offset", "/typedResult/content", US_306, WHY_LINE_ENDINGS),
     gap("bash_log_file", "read-from-an-offset-past-the-end", "/sessions/0/manifest/shell", US_306, WHY_SHELL),
     gap("bash_log_file", "read-from-an-offset-past-the-end", "/sessions/0/sessionInfo/shell", US_306, WHY_SHELL),
+    gap("bash_log_file", "read-a-log-that-was-deleted", "/sessions/0/manifest/shell", US_306, WHY_SHELL),
+    gap("bash_log_file", "read-a-log-that-was-deleted", "/sessions/0/sessionInfo/shell", US_306, WHY_SHELL),
     gap("bash_log_file", "read-a-negative-offset", "/sessions/0/manifest/shell", US_306, WHY_SHELL),
     gap("bash_log_file", "read-a-negative-offset", "/sessions/0/sessionInfo/shell", US_306, WHY_SHELL),
     gap("bash_log_file", "read-by-relative-path", "/modelText", US_306, WHY_RENDERED),
@@ -303,5 +301,4 @@ const LEDGER: &[Divergence] = &[
     gap("bash", "background-live-log-source", "/typedResult/shell", US_306, WHY_SHELL),
     gap("bash_log_file", "write-to-a-live-session-log", "/sessions/0/manifest/shell", US_306, WHY_SHELL),
     gap("bash_log_file", "write-to-a-live-session-log", "/sessions/0/sessionInfo/shell", US_306, WHY_SHELL),
-    gap("bash_log_file", "read-a-log-that-was-deleted", "/outcome", US_303, WHY_MISSING_LOG),
 ];

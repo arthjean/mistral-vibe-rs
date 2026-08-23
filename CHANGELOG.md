@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Answer an empty window when a shell session log is not there, so a session
+  whose log was deleted under it stays pollable and keeps reporting its status.
+  A log that exists and cannot be read is still an error.
+
 - Withhold the managed shell session tools from a client that hosts its own
   terminal. An editor declaring the `terminal` capability is now offered one
   shell name per family instead of five: the managed command variant and the
