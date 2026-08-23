@@ -27,10 +27,12 @@
     {
       "id": "EP-100",
       "title": "`vibe mcp add`",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 4,
-      "stories_done": 0
+      "stories_done": 4,
+      "started_at": "2026-08-23",
+      "completed_at": "2026-08-23"
     },
     {
       "id": "EP-101",
@@ -143,57 +145,57 @@
       "id": "US-314",
       "title": "Declare the add flag surface",
       "epic": "EP-100",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-311"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-23",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
     },
     {
       "id": "US-315",
       "title": "Validate the add arguments",
       "epic": "EP-100",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-314"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-23",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
     },
     {
       "id": "US-316",
       "title": "Persist the server with the reference's outcomes",
       "epic": "EP-100",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "L",
       "blocked_by": [
         "US-315"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-23",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
     },
     {
       "id": "US-317",
       "title": "Run the OAuth login the add path performs",
       "epic": "EP-100",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P1",
       "size": "L",
       "blocked_by": [
         "US-316"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-23",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
     },
     {
       "id": "US-318",
