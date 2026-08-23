@@ -15,6 +15,7 @@
 
 pub mod env_file;
 pub mod keyring;
+pub mod mcp_credentials;
 pub mod persistence;
 pub mod provider;
 pub mod sign_in;
@@ -40,6 +41,9 @@ pub use env_file::{remove_env_file_key, write_env_file_key};
 pub use keyring::{
     KEYRING_SERVICE, KeyringBackend, KeyringFailure, KeyringStore, LEGACY_KEYRING_SERVICES,
     NativeKeyringBackend, PRIOR_BUILD_KEYRING_SERVICE,
+};
+pub use mcp_credentials::{
+    MCP_OAUTH_KEYRING_SERVICE, delete_mcp_oauth_credential, mcp_oauth_account,
 };
 pub use persistence::{
     ApiKeyAddedEvent, PersistOutcome, PersistReport, RemoveError, persist_api_key, remove_api_key,
