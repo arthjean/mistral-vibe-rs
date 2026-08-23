@@ -3043,3 +3043,70 @@ async fn a_multibyte_boundary_is_adjusted_in_both_directions() {
     assert_eq!(tail, "版", "{trailing:?}");
     assert!(!tail.contains('\u{fffd}'), "{trailing:?}");
 }
+
+// --------------------------------------------------------------------------
+// Execution semantics
+// --------------------------------------------------------------------------
+/// An orphan's manifest is a file on disk that another process wrote, and the
+/// sessions directory is shared with the reference implementation, so the
+/// `output_path` it carries is input rather than a fact. A manifest naming a
+/// path outside the sessions directory is refused before any read or write,
+/// which is the containment `<family>_log_file` is held to whichever route
+/// resolved the path.
+#[tokio::test]
+async fn an_orphan_manifest_cannot_point_the_log_tool_outside_the_sessions_directory() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let secret = harness.root().join("secret");
+    std::fs::write(&secret, "not for the model").expect("secret");
+
+    let session = new_session_id(ShellFamily::Bash);
+    std::fs::create_dir_all(harness.shell().sessions_directory()).expect("sessions directory");
+    std::fs::write(
+        harness
+            .shell()
+            .sessions_directory()
+            .join(format!("{session}.json")),
+        serde_json::to_vec(&json!({
+            "session_id": session,
+            "command": "true",
+            "cwd": harness.root().to_string_lossy(),
+            "shell": "/bin/sh",
+            "pty_backend": "posix",
+            "status": "completed",
+            "exit_code": 0,
+            "output_path": secret.to_string_lossy(),
+            "created_at": "2026-08-23T00:00:00Z",
+            "updated_at": "2026-08-23T00:00:00Z",
+            "reader_error": null,
+        }))
+        .expect("the manifest serializes"),
+    )
+    .expect("the previous process left a manifest");
+
+    let restarted = reopened(&harness).await;
+    let refused = invoke(
+        &restarted,
+        "bash_log_file",
+        json!({"action": "read", "session_id": session}),
+    )
+    .await
+    .expect_err("a manifest cannot widen the accepted path set");
+    assert!(refused.to_string().contains("session"), "{refused}");
+    assert_eq!(
+        std::fs::read_to_string(&secret).expect("the secret is still there"),
+        "not for the model"
+    );
+
+    let written = invoke(
+        &restarted,
+        "bash_log_file",
+        json!({"action": "write", "session_id": session, "content": "overwritten"}),
+    )
+    .await
+    .expect_err("a manifest cannot aim a write outside the sessions directory");
+    assert!(written.to_string().contains("session"), "{written}");
+    assert_eq!(
+        std::fs::read_to_string(&secret).expect("the secret survives the write"),
+        "not for the model"
+    );
+}

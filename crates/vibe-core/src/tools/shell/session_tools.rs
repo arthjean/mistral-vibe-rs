@@ -363,7 +363,7 @@ pub(super) async fn run_log_file(
     limits: SessionLimits,
 ) -> Result<ToolExecutionOutput, ToolError> {
     let action = string_argument(&arguments, "action").unwrap_or_default();
-    let path = resolve_log_path(&shell, &arguments)?;
+    let path = log_path_of(&shell, &arguments).await?;
     match action {
         "read" => {
             let offset = arguments["offset"].as_u64().unwrap_or(0);
@@ -456,7 +456,50 @@ fn log_file_document(action: &str, path: &Path, result: LogFileResult) -> Docume
         .field("bytes_written", json!(result.bytes_written))
 }
 
-/// The file a `<family>_log_file` call addresses.
+/// The log this call touches.
+///
+/// Reference `_resolve_log_path` reads the session's own `output_path` through
+/// `info`, so a `session_id` naming no live session and no orphan is refused
+/// there rather than turned into a path that merely happens not to exist. The
+/// distinction is what keeps an unknown session an error while a session whose
+/// log was removed still answers.
+///
+/// What the session answers with is still held to the sessions directory. An
+/// orphan's `output_path` is read out of a manifest another process wrote into
+/// a directory this port shares with the reference implementation, so it is
+/// input rather than a fact, and a manifest is not allowed to aim a read or a
+/// write anywhere [`resolve_log_path`] would have refused.
+async fn log_path_of(shell: &SessionShell, arguments: &Value) -> Result<PathBuf, ToolError> {
+    let Some(session_id) = string_argument(arguments, "session_id") else {
+        return resolve_log_path(shell, arguments);
+    };
+    // A session id names a file inside the session directory, so it is held to
+    // the same rule as a relative path: one component, this family's.
+    if !is_family_session_id(shell.family, session_id) {
+        return Err(ToolError::Execution(format!(
+            "the log path must name a {} session file",
+            shell.family.name()
+        )));
+    }
+    let path = session_handle(shell, session_id).await?.log_path();
+    if path.parent() != Some(shell.sessions_directory().as_path())
+        || !path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .and_then(|name| name.strip_suffix(".log"))
+            .is_some_and(|name| is_family_session_id(shell.family, name))
+    {
+        return Err(ToolError::Execution(format!(
+            "session `{session_id}` records a log outside the {} session directory",
+            shell.family.name()
+        )));
+    }
+    Ok(path)
+}
+
+/// The file a `<family>_log_file` call addresses, derived without reaching the
+/// session table, which is what the permission context is computed from before
+/// the handler runs.
 ///
 /// A session id resolves to that session's own log. A relative path is joined
 /// to the shell-tool directory and refused before any filesystem access when it
