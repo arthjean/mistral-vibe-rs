@@ -735,10 +735,10 @@ impl Scenario {
     /// that raised still started a session, and the corpus records the state it
     /// left behind.
     async fn discover(&mut self) -> Vec<usize> {
-        let mut candidates: Vec<(u128, String)> = Vec::new();
+        let mut candidates: Vec<(String, String)> = Vec::new();
         for identifier in self.shell.managed.lock().await.keys() {
             if !self.sessions.contains(identifier) {
-                candidates.push((0, identifier.clone()));
+                candidates.push((String::new(), identifier.clone()));
             }
         }
         if let Ok(entries) = fs::read_dir(self.sessions_directory()) {
@@ -751,7 +751,7 @@ impl Scenario {
                     && !self.sessions.contains(&stem.to_owned())
                     && !candidates.iter().any(|(_, known)| known == stem)
                 {
-                    candidates.push((0, stem.to_owned()));
+                    candidates.push((String::new(), stem.to_owned()));
                 }
             }
         }
@@ -769,7 +769,9 @@ impl Scenario {
 
     /// When a session was created, read from whichever record holds it, so the
     /// discovery order is the creation order rather than the directory order.
-    async fn created_at(&self, identifier: &str) -> u128 {
+    /// The record carries an ISO-8601 instant, which orders lexically the way
+    /// it orders chronologically.
+    async fn created_at(&self, identifier: &str) -> String {
         let record = match self.managed(identifier).await {
             Some(session) => session.info(),
             None => {
@@ -779,16 +781,11 @@ impl Scenario {
                     .unwrap_or(Value::Null)
             }
         };
-        ["createdAtMs", "created_at_ms"]
-            .iter()
-            .find_map(|key| record.get(*key))
-            .and_then(|value| {
-                value
-                    .as_u64()
-                    .map(u128::from)
-                    .or_else(|| value.as_str().and_then(|text| text.parse().ok()))
-            })
+        record
+            .get("created_at")
+            .and_then(Value::as_str)
             .unwrap_or_default()
+            .to_owned()
     }
 
     /// Terminates every session this scenario still holds and answers the ones
@@ -802,7 +799,7 @@ impl Scenario {
                 let _ = kill_managed_session(&self.shell, &session, SessionStatus::Killed).await;
             }
             if session.is_running() {
-                survivors.push(session.info()["sessionId"].to_string());
+                survivors.push(session.info()["session_id"].to_string());
             }
         }
         survivors

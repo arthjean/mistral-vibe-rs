@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Persist managed shell sessions in the format the reference persists them in,
+  so a session left behind by either implementation is readable by the other.
+  A manifest now carries the eleven fields the reference declares, in
+  snake_case, with `created_at` and `updated_at` written as ISO-8601 instants in
+  UTC rather than epoch milliseconds, and with `exit_code` and `reader_error`
+  present and null rather than omitted. Session identifiers are minted as the
+  family prefix, a UTC `%Y%m%d_%H%M%S` stamp and eight hexadecimal characters,
+  which is also what the orphan scan filters on: the identifier inside a
+  manifest, not the name of the file carrying it. A manifest in the previous
+  format, one that is not JSON, and one without an identifier are each skipped
+  without stopping the scan, and a manifest the scan cannot rewrite reports why
+  in `reader_error` while the orphans beside it still load.
+
 - Publish the shell results a model can actually read. All fifteen shell tools
   now answer with the field names and field sets the reference declares, in
   snake_case, and the text the model reads is that document rendered one
@@ -10,7 +23,7 @@
   still cut, but the `[output truncated at N bytes]` marker and the `truncated`
   field are gone from the legacy result and its text. A managed session that
   outran its reader buffer no longer publishes `backpressureDropped`; the
-  condition is reported as `readerError` on the session record instead. A
+  condition is reported as `reader_error` on the session record instead. A
   sessions or log-file action the reference does not declare is now refused at
   the argument boundary rather than answered.
 

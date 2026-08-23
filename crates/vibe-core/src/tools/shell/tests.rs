@@ -5,12 +5,15 @@
 //! happen there, so a test that called a handler directly would prove less than
 //! it appears to.
 
+use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use tempfile::{TempDir, tempdir};
 
+use super::session::new_session_id;
 use super::specs::CONTROL_KEYS;
 use super::*;
+use crate::auth::UtcTimestamp;
 use crate::matching::NameFilter;
 use crate::platform::Platform;
 use crate::policy::{ApprovalAgent, PermissionStore};
@@ -895,7 +898,7 @@ async fn a_session_started_by_one_call_is_listed_inspected_and_killed_by_another
         .expect("list");
     assert_eq!(listed.typed_result["action"], json!("list"));
     assert_eq!(
-        listed.typed_result["sessions"][0]["sessionId"],
+        listed.typed_result["sessions"][0]["session_id"],
         json!(session)
     );
 
@@ -1124,7 +1127,7 @@ async fn a_dropped_output_chunk_is_reported_to_the_model() {
         .await
         .expect("the session is inspected");
     assert_eq!(
-        inspected.typed_result["session"]["readerError"],
+        inspected.typed_result["session"]["reader_error"],
         json!(super::session::DROPPED_OUTPUT),
         "{inspected:?}"
     );
@@ -2035,11 +2038,11 @@ async fn a_managed_session_reports_its_terminal_backend() {
         .as_array()
         .expect("sessions")
         .iter()
-        .find(|entry| entry["sessionId"] == session.as_str())
+        .find(|entry| entry["session_id"] == session.as_str())
         .cloned()
         .expect("the session is listed");
-    assert_eq!(entry["ptyBackend"], json!("posix"), "{entry}");
-    assert_eq!(entry["readerError"], Value::Null, "{entry}");
+    assert_eq!(entry["pty_backend"], json!("posix"), "{entry}");
+    assert_eq!(entry["reader_error"], Value::Null, "{entry}");
 }
 
 /// A control key reaches the foreground program, which is the whole point of a
@@ -2253,7 +2256,7 @@ async fn a_started_session_writes_its_manifest() {
         &std::fs::read(&manifest_path).expect("the manifest is written next to the log"),
     )
     .expect("the manifest is JSON");
-    assert_eq!(manifest["sessionId"], session.as_str());
+    assert_eq!(manifest["session_id"], session.as_str());
     assert_eq!(manifest["command"], "sleep 5");
     assert_eq!(manifest["cwd"], harness.root().to_string_lossy().as_ref());
     assert!(
@@ -2261,15 +2264,8 @@ async fn a_started_session_writes_its_manifest() {
         "{manifest}"
     );
     assert_eq!(manifest["status"], "running");
-    assert!(
-        manifest["createdAtMs"]
-            .as_str()
-            .and_then(|stamp| stamp.parse::<u128>().ok())
-            .is_some_and(|stamp| stamp > 0),
-        "{manifest}"
-    );
     assert_eq!(
-        manifest["outputPath"],
+        manifest["output_path"],
         harness
             .shell()
             .sessions_directory()
@@ -2277,6 +2273,67 @@ async fn a_started_session_writes_its_manifest() {
             .to_string_lossy()
             .as_ref()
     );
+
+    // Reference `SessionInfo` declares eleven fields and `_save_manifest`
+    // dumps all of them, so a session that has not exited carries `exit_code`
+    // and `reader_error` present and null rather than omitted, and the
+    // `backpressureDropped` key this port used to invent is gone.
+    let fields = manifest.as_object().expect("the manifest is an object");
+    assert_eq!(
+        fields.keys().map(String::as_str).collect::<Vec<_>>(),
+        vec![
+            "command",
+            "created_at",
+            "cwd",
+            "exit_code",
+            "output_path",
+            "pty_backend",
+            "reader_error",
+            "session_id",
+            "shell",
+            "status",
+            "updated_at",
+        ],
+        "{manifest}"
+    );
+    assert_eq!(manifest["exit_code"], Value::Null, "{manifest}");
+    assert_eq!(manifest["reader_error"], Value::Null, "{manifest}");
+    for key in ["created_at", "updated_at"] {
+        let stamp = manifest[key].as_str().expect("an ISO-8601 stamp");
+        assert!(
+            UtcTimestamp::parse_iso8601(stamp).is_some() && stamp.ends_with("+00:00"),
+            "{key} is {stamp}, not an ISO-8601 instant with an explicit UTC offset"
+        );
+    }
+}
+
+/// The manifest is rendered the way reference `_save_manifest` renders it:
+/// `json.dumps(metadata, indent=2, sort_keys=True)`, which is keys in
+/// alphabetical order, two spaces of indentation, `": "` between a key and its
+/// value, and no trailing newline.
+#[tokio::test]
+async fn the_manifest_is_written_in_the_reference_key_order_and_indentation() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let session = background_session(&harness, "sleep 5").await;
+    let manifest_path = harness
+        .shell()
+        .sessions_directory()
+        .join(format!("{session}.json"));
+    let raw = std::fs::read_to_string(&manifest_path).expect("the manifest is written");
+    let parsed: Value = serde_json::from_str(&raw).expect("the manifest is JSON");
+    let expected = format!(
+        "{{\n  \"command\": \"sleep 5\",\n  \"created_at\": {},\n  \"cwd\": {},\n  \
+         \"exit_code\": null,\n  \"output_path\": {},\n  \"pty_backend\": {},\n  \
+         \"reader_error\": null,\n  \"session_id\": \"{session}\",\n  \"shell\": {},\n  \
+         \"status\": \"running\",\n  \"updated_at\": {}\n}}",
+        parsed["created_at"],
+        parsed["cwd"],
+        parsed["output_path"],
+        parsed["pty_backend"],
+        parsed["shell"],
+        parsed["updated_at"],
+    );
+    assert_eq!(raw, expected);
 }
 
 /// A session left running by a previous process is listed as orphaned, and its
@@ -2302,7 +2359,7 @@ async fn a_session_left_by_a_previous_process_is_listed_as_orphaned() {
         .as_array()
         .expect("sessions")
         .iter()
-        .find(|entry| entry["sessionId"] == session.as_str())
+        .find(|entry| entry["session_id"] == session.as_str())
         .cloned()
         .expect("the orphan is listed");
     assert_eq!(entry["status"], "orphaned", "{entry}");
@@ -2371,7 +2428,7 @@ async fn a_settled_orphan_keeps_the_status_its_manifest_recorded() {
         serde_json::from_slice(&std::fs::read(&manifest_path).expect("the manifest is written"))
             .expect("the manifest is JSON");
     manifest["status"] = Value::String("completed".to_owned());
-    manifest["exitCode"] = Value::from(0);
+    manifest["exit_code"] = Value::from(0);
     std::fs::write(
         &manifest_path,
         serde_json::to_vec_pretty(&manifest).expect("the manifest re-encodes"),
@@ -2413,11 +2470,11 @@ async fn a_settled_orphan_keeps_the_status_its_manifest_recorded() {
         .as_array()
         .expect("sessions")
         .iter()
-        .find(|entry| entry["sessionId"] == session.as_str())
+        .find(|entry| entry["session_id"] == session.as_str())
         .cloned()
         .expect("the settled orphan is listed");
     assert_eq!(entry["status"], "completed", "{entry}");
-    assert_eq!(entry["exitCode"], 0, "{entry}");
+    assert_eq!(entry["exit_code"], 0, "{entry}");
 }
 
 /// A manifest that cannot be read is skipped, and the sessions beside it still
@@ -2430,9 +2487,19 @@ async fn a_corrupt_manifest_is_skipped_without_dropping_the_others() {
     std::fs::write(directory.join("bash_0_ff.json"), b"{ not json").expect("a corrupt manifest");
     std::fs::write(
         directory.join("powershell_0_ff.json"),
-        b"{\"sessionId\": \"powershell_0_ff\", \"status\": \"running\"}",
+        b"{\"session_id\": \"powershell_20260101_000000_ff\", \"status\": \"running\"}",
     )
     .expect("another family's manifest");
+    // Reference `_load_orphaned_manifests` selects on `session_id` being a
+    // `str`, so a manifest that lost the key and one that carries the wrong
+    // type are both skipped rather than read.
+    std::fs::write(
+        directory.join("bash_1_ff.json"),
+        b"{\"status\": \"running\"}",
+    )
+    .expect("a manifest without an identifier");
+    std::fs::write(directory.join("bash_2_ff.json"), b"{\"session_id\": 7}")
+        .expect("a manifest whose identifier is not a string");
 
     let restarted = reopened(&harness).await;
     let listed = invoke(&restarted, "bash_sessions", json!({"action": "list"}))
@@ -2442,7 +2509,7 @@ async fn a_corrupt_manifest_is_skipped_without_dropping_the_others() {
         .as_array()
         .expect("sessions")
         .iter()
-        .map(|entry| entry["sessionId"].as_str().unwrap_or_default().to_owned())
+        .map(|entry| entry["session_id"].as_str().unwrap_or_default().to_owned())
         .collect::<Vec<_>>();
     assert!(ids.contains(&session), "{ids:?}");
     assert!(!ids.iter().any(|id| id == "bash_0_ff"), "{ids:?}");
@@ -2450,6 +2517,335 @@ async fn a_corrupt_manifest_is_skipped_without_dropping_the_others() {
         !ids.iter().any(|id| id.starts_with("powershell_")),
         "another family's session leaked into this one: {ids:?}"
     );
+}
+
+/// Whether `candidate` is `<prefix>_<%Y%m%d_%H%M%S>_<eight lowercase hex>`,
+/// which is the shape reference `_new_session_id` builds.
+fn is_reference_session_id(candidate: &str, prefix: &str) -> bool {
+    let Some(rest) = candidate.strip_prefix(&format!("{prefix}_")) else {
+        return false;
+    };
+    let parts = rest.split('_').collect::<Vec<_>>();
+    let [date, time, suffix] = parts.as_slice() else {
+        return false;
+    };
+    date.len() == 8
+        && date.bytes().all(|byte| byte.is_ascii_digit())
+        && time.len() == 6
+        && time.bytes().all(|byte| byte.is_ascii_digit())
+        && suffix.len() == 8
+        && suffix
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+/// A session identifier is the family prefix, a UTC `%Y%m%d_%H%M%S` stamp and
+/// eight hexadecimal characters, on the identifier a tool call actually hands
+/// back and on all three families.
+#[tokio::test]
+async fn session_identifiers_carry_the_reference_prefix_stamp_and_entropy() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let published = background_session(&harness, "sleep 30").await;
+    assert!(
+        is_reference_session_id(&published, "bash"),
+        "the identifier a tool call published is not the reference's shape: {published}"
+    );
+
+    // Reference `session_prefix` is `bash` on `ExperimentalBash`,
+    // `GIT_BASH_SESSION_PREFIX` on `GitBash` and `WINDOWS_SESSION_PREFIX` on
+    // `WindowsShell`.
+    for (family, prefix) in [
+        (ShellFamily::Bash, "bash"),
+        (ShellFamily::GitBash, "git_bash"),
+        (ShellFamily::PowerShell, "powershell"),
+    ] {
+        assert_eq!(family.name(), prefix);
+        let minted = new_session_id(family);
+        assert!(
+            is_reference_session_id(&minted, prefix),
+            "{prefix} minted {minted}"
+        );
+        assert!(is_family_session_id(family, &minted), "{minted}");
+    }
+
+    // Reference `_new_session_id` separates two identifiers with
+    // `uuid4().hex[:8]`, not with the stamp, so a second is not enough time for
+    // a collision and no counter appears in the format.
+    let minted = (0..64)
+        .map(|_| new_session_id(ShellFamily::Bash))
+        .collect::<BTreeSet<_>>();
+    assert_eq!(minted.len(), 64, "an identifier repeated: {minted:?}");
+}
+
+/// The orphan scan filters on the prefix of the identifier a manifest carries,
+/// not on the name of the file that carries it, and a manifest in the format
+/// this port used before is ignored rather than crashing the scan.
+#[tokio::test]
+async fn the_orphan_filter_reads_the_identifier_rather_than_the_file_name() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let live = background_session(&harness, "sleep 30").await;
+    let directory = harness.shell().sessions_directory();
+    // A file whose name says `bash` and whose identifier says another family:
+    // the reference tests the identifier, so this is not this family's.
+    std::fs::write(
+        directory.join("bash_named_but_not_ours.json"),
+        b"{\"session_id\": \"powershell_20260101_000000_0a1b2c3d\", \"status\": \"running\"}",
+    )
+    .expect("a misleading file name");
+    // The mirror image: a file name that says nothing and an identifier that
+    // says this family.
+    let adopted = "bash_20260101_000000_deadbeef";
+    std::fs::write(
+        directory.join("left-behind.json"),
+        format!("{{\"session_id\": \"{adopted}\", \"status\": \"running\"}}"),
+    )
+    .expect("an unhelpfully named manifest");
+    // What this port wrote before US-296: a camelCase key and an
+    // epoch-milliseconds identifier, which carries no `session_id` at all.
+    std::fs::write(
+        directory.join("bash_1767225600000.json"),
+        b"{\"sessionId\": \"bash_1767225600000\", \"status\": \"running\"}",
+    )
+    .expect("a manifest in the previous format");
+
+    let restarted = reopened(&harness).await;
+    let listed = invoke(&restarted, "bash_sessions", json!({"action": "list"}))
+        .await
+        .expect("the sessions list answers");
+    let ids = listed.typed_result["sessions"]
+        .as_array()
+        .expect("sessions")
+        .iter()
+        .map(|entry| entry["session_id"].as_str().unwrap_or_default().to_owned())
+        .collect::<Vec<_>>();
+    assert!(ids.contains(&live), "{ids:?}");
+    assert!(ids.iter().any(|id| id == adopted), "{ids:?}");
+    assert!(
+        !ids.iter().any(|id| id.starts_with("powershell_")),
+        "the file name selected another family's session: {ids:?}"
+    );
+    assert!(
+        !ids.iter().any(|id| id == "bash_1767225600000"),
+        "a manifest in the previous format was read: {ids:?}"
+    );
+}
+
+/// The eleven fields reference `SessionInfo` declares, in the order the
+/// reference declares them.
+const REFERENCE_SESSION_FIELDS: [&str; 11] = [
+    "session_id",
+    "command",
+    "cwd",
+    "shell",
+    "pty_backend",
+    "status",
+    "exit_code",
+    "output_path",
+    "created_at",
+    "updated_at",
+    "reader_error",
+];
+
+/// A manifest the reference implementation wrote is reclaimed by this port's
+/// scan, with every field it carries readable afterward.
+///
+/// The manifest here is hand-written to reference `SessionInfo`, which is what
+/// makes this an interoperability proof rather than a round trip of this port's
+/// own writer: nothing in the file came from the code under test.
+#[tokio::test]
+async fn a_reference_written_manifest_is_reclaimed_with_every_field_readable() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let directory = harness.shell().sessions_directory();
+    std::fs::create_dir_all(&directory).expect("the sessions directory exists");
+    let session = "bash_20260101_000000_0a1b2c3d";
+    let log_path = directory.join(format!("{session}.log"));
+    std::fs::write(&log_path, b"compiling\n").expect("the other implementation left a log");
+    let written = json!({
+        "session_id": session,
+        "command": "cargo build",
+        "cwd": harness.root().to_string_lossy(),
+        "shell": "/bin/bash",
+        "pty_backend": "posix",
+        "status": "running",
+        "exit_code": Value::Null,
+        "output_path": log_path.to_string_lossy(),
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:01+00:00",
+        "reader_error": Value::Null,
+    });
+    std::fs::write(
+        directory.join(format!("{session}.json")),
+        serde_json::to_vec_pretty(&written).expect("the manifest encodes"),
+    )
+    .expect("the other implementation left a manifest");
+
+    let restarted = reopened(&harness).await;
+    let inspected = invoke(
+        &restarted,
+        "bash_sessions",
+        json!({"action": "inspect", "session_id": session}),
+    )
+    .await
+    .expect("the reference's session is inspectable");
+    let record = inspected.typed_result["session"].clone();
+
+    for field in REFERENCE_SESSION_FIELDS {
+        assert!(
+            record.get(field).is_some(),
+            "{field} was not readable off a reference-written manifest: {record}"
+        );
+    }
+    assert_eq!(record["status"], "orphaned", "{record}");
+    // Reference `_load_orphaned_manifests` rewrites `status` and `updated_at`
+    // and touches nothing else, so every other field is the one the file
+    // carried.
+    for field in REFERENCE_SESSION_FIELDS {
+        if field == "status" || field == "updated_at" {
+            continue;
+        }
+        assert_eq!(record[field], written[field], "{field} was rewritten");
+    }
+    let updated_at = record["updated_at"].as_str().expect("updated_at");
+    assert_ne!(updated_at, "2026-01-01T00:00:01+00:00", "{record}");
+    assert!(
+        UtcTimestamp::parse_iso8601(updated_at).is_some(),
+        "the rewritten stamp is not ISO-8601: {updated_at}"
+    );
+
+    let read = invoke(
+        &restarted,
+        "bash_output",
+        json!({"session_id": session, "wait_seconds": 0}),
+    )
+    .await
+    .expect("the reference's log is readable");
+    assert!(
+        read.typed_result["output"]
+            .as_str()
+            .expect("output")
+            .contains("compiling"),
+        "{read:?}"
+    );
+}
+
+/// A manifest this port wrote is reclaimed by a loader built to the reference's
+/// shape, with every field it declares present and typed.
+///
+/// The loader below is reference `_load_orphaned_manifests` restated: glob the
+/// JSON in the sessions directory, require a `session_id` that is a string and
+/// carries the family prefix, and promote a manifest that still says `running`.
+/// It reads none of this port's code, so what it accepts is what the other
+/// implementation would accept.
+#[tokio::test]
+async fn a_manifest_this_port_wrote_is_reclaimed_by_a_reference_shaped_loader() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let session = background_session(&harness, "sleep 30").await;
+    let directory = harness.shell().sessions_directory();
+
+    let mut reclaimed = BTreeMap::new();
+    for entry in std::fs::read_dir(&directory)
+        .expect("the sessions directory is readable")
+        .flatten()
+    {
+        let path = entry.path();
+        if path.extension().and_then(|extension| extension.to_str()) != Some("json") {
+            continue;
+        }
+        let Ok(bytes) = std::fs::read(&path) else {
+            continue;
+        };
+        let Ok(mut metadata) = serde_json::from_slice::<Value>(&bytes) else {
+            continue;
+        };
+        let Some(id) = metadata.get("session_id").and_then(Value::as_str) else {
+            continue;
+        };
+        if !id.starts_with("bash_") {
+            continue;
+        }
+        let id = id.to_owned();
+        if metadata.get("status").and_then(Value::as_str) == Some("running") {
+            metadata["status"] = Value::String("orphaned".to_owned());
+        }
+        reclaimed.insert(id, metadata);
+    }
+
+    let record = reclaimed
+        .get(&session)
+        .expect("the reference's conditions select the manifest this port wrote");
+    assert_eq!(record["status"], "orphaned", "{record}");
+    assert_eq!(
+        record.as_object().expect("an object").len(),
+        REFERENCE_SESSION_FIELDS.len(),
+        "the manifest carries a field the reference does not declare: {record}"
+    );
+    for field in REFERENCE_SESSION_FIELDS {
+        assert!(record.get(field).is_some(), "{field} is missing: {record}");
+    }
+    assert_eq!(record["session_id"], session.as_str());
+    assert_eq!(record["command"], "sleep 30");
+    assert!(record["exit_code"].is_null(), "{record}");
+    assert!(record["reader_error"].is_null(), "{record}");
+    for stamp in ["created_at", "updated_at"] {
+        let value = record[stamp].as_str().expect(stamp);
+        assert!(
+            UtcTimestamp::parse_iso8601(value).is_some_and(|_| value.ends_with("+00:00")),
+            "{stamp} is not a UTC ISO-8601 instant: {value}"
+        );
+    }
+}
+
+/// A manifest the scan cannot rewrite reports why on the record it answers
+/// with, and the orphans beside it still load.
+///
+/// Reference `_load_orphaned_manifests` swallows the write error and keeps the
+/// record, so the scan never fails on one unwritable file. This port keeps that
+/// record too and carries the reason in `reader_error`, which is the field the
+/// reference declares for a manifest whose reader had something to say.
+#[cfg(unix)]
+#[tokio::test]
+async fn an_unwritable_manifest_reports_its_failure_and_the_others_still_load() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let blocked = background_session(&harness, "sleep 30").await;
+    let readable = background_session(&harness, "sleep 31").await;
+    let directory = harness.shell().sessions_directory();
+    let blocked_path = directory.join(format!("{blocked}.json"));
+    let readable_only = std::fs::Permissions::from_mode(0o400);
+    std::fs::set_permissions(&blocked_path, readable_only).expect("the manifest is made read-only");
+
+    let restarted = reopened(&harness).await;
+    let listed = invoke(&restarted, "bash_sessions", json!({"action": "list"}))
+        .await
+        .expect("the sessions list answers");
+    let sessions = listed.typed_result["sessions"]
+        .as_array()
+        .cloned()
+        .expect("sessions");
+    let find = |id: &str| {
+        sessions
+            .iter()
+            .find(|entry| entry["session_id"] == id)
+            .cloned()
+            .unwrap_or(Value::Null)
+    };
+
+    let blocked_record = find(&blocked);
+    assert_eq!(blocked_record["status"], "orphaned", "{blocked_record}");
+    assert!(
+        blocked_record["reader_error"].is_string(),
+        "the failed rewrite was not reported: {blocked_record}"
+    );
+    let readable_record = find(&readable);
+    assert_eq!(readable_record["status"], "orphaned", "{readable_record}");
+    assert!(
+        readable_record["reader_error"].is_null(),
+        "one unwritable manifest reported on another: {readable_record}"
+    );
+
+    std::fs::set_permissions(&blocked_path, std::fs::Permissions::from_mode(0o600))
+        .expect("the manifest is writable again");
 }
 
 /// A reset clears the logs and the manifests together only when it is asked to;

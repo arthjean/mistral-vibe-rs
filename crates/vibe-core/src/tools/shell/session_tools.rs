@@ -197,14 +197,14 @@ pub(super) async fn run_sessions(
             // not shadow, so a client that restarted still sees what it left.
             infos.extend(shell.orphans().into_iter().filter(|manifest| {
                 manifest
-                    .get("sessionId")
+                    .get("session_id")
                     .and_then(Value::as_str)
                     .is_none_or(|id| !sessions.contains_key(id))
             }));
             infos.sort_by(|left, right| {
                 created_at(left)
-                    .cmp(&created_at(right))
-                    .then_with(|| session_id_of(left).cmp(&session_id_of(right)))
+                    .cmp(created_at(right))
+                    .then_with(|| session_id_of(left).cmp(session_id_of(right)))
             });
             Ok(SessionsResult {
                 sessions: infos.iter().map(session_document).collect(),
@@ -285,7 +285,7 @@ pub(super) async fn run_sessions(
                     let _ = std::fs::remove_file(&session.manifest_path);
                 }
                 for manifest in shell.orphans() {
-                    if let Some(id) = manifest.get("sessionId").and_then(Value::as_str) {
+                    if let Some(id) = manifest.get("session_id").and_then(Value::as_str) {
                         let directory = shell.sessions_directory();
                         let _ = std::fs::remove_file(directory.join(format!("{id}.log")));
                         let _ = std::fs::remove_file(directory.join(format!("{id}.json")));
@@ -344,19 +344,16 @@ fn required_session_id<'a>(arguments: &'a Value, action: &str) -> Result<&'a str
 }
 
 /// When a listed session was created, which is the order the reference lists
-/// them in. A manifest that lost the field sorts first rather than failing.
-fn created_at(info: &Value) -> u128 {
-    info.get("createdAtMs")
-        .and_then(Value::as_str)
-        .and_then(|stamp| stamp.parse().ok())
-        .unwrap_or_default()
+/// them in. Reference `list_sessions` sorts on `SessionInfo.created_at`, the
+/// ISO-8601 string itself, and a fixed-width UTC instant orders lexically the
+/// way it orders chronologically. A manifest that lost the field sorts first
+/// rather than failing.
+fn created_at(info: &Value) -> &str {
+    info.get("created_at").and_then(Value::as_str).unwrap_or("")
 }
 
-fn session_id_of(info: &Value) -> String {
-    info.get("sessionId")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_owned()
+fn session_id_of(info: &Value) -> &str {
+    info.get("session_id").and_then(Value::as_str).unwrap_or("")
 }
 
 pub(super) async fn run_log_file(

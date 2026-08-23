@@ -17,11 +17,12 @@ use std::collections::BTreeMap;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex as StdMutex};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 use tokio::sync::Mutex;
 
+use crate::auth::UtcTimestamp;
 use crate::policy::{ApprovalAgent, PermissionContext, PermissionStore, PolicyGuardedTool};
 use crate::process::{ProcessChunk, TerminalManager, TerminalState};
 use crate::shell::ShellConfig;
@@ -85,7 +86,7 @@ impl SessionShell {
                 continue;
             };
             let Some(id) = metadata
-                .get("sessionId")
+                .get("session_id")
                 .and_then(Value::as_str)
                 .filter(|id| is_family_session_id(self.family, id))
                 .map(str::to_owned)
@@ -96,9 +97,13 @@ impl SessionShell {
                 == Some(SessionStatus::Running.as_str())
             {
                 metadata["status"] = Value::String(SessionStatus::Orphaned.as_str().to_owned());
-                metadata["updatedAtMs"] = Value::String(now_ms().to_string());
-                if let Ok(rendered) = serde_json::to_vec_pretty(&metadata) {
-                    let _ = std::fs::write(&path, rendered);
+                metadata["updated_at"] = Value::String(now_iso());
+                if let Err(error) = write_manifest(&path, &metadata) {
+                    // Reference `_load_orphaned_manifests` swallows the write
+                    // and keeps the record it read, so one unwritable manifest
+                    // never hides the orphans beside it. The reason is carried
+                    // on the record the scan answers with rather than lost.
+                    metadata["reader_error"] = Value::String(error);
                 }
             }
             orphaned.insert(id, metadata);
@@ -168,7 +173,7 @@ pub(super) struct SessionState {
     status: SessionStatus,
     exit_code: Option<i32>,
     backpressure_dropped: bool,
-    updated_at_ms: u128,
+    updated_at: String,
 }
 
 pub(super) struct ManagedSession {
@@ -179,7 +184,9 @@ pub(super) struct ManagedSession {
     shell: String,
     pub(super) log_path: PathBuf,
     pub(super) manifest_path: PathBuf,
-    created_at_ms: u128,
+    /// Reference `SessionInfo.created_at`, which `_session_info_locked` renders
+    /// through `_now_iso` rather than publishing the epoch seconds it holds.
+    created_at: String,
     /// Reference `SessionInfo.pty_backend`, absent when the host provided no
     /// terminal and the session fell back to pipes.
     pty_backend: Option<&'static str>,
@@ -198,12 +205,15 @@ impl ManagedSession {
             })
     }
 
+    /// Reference `SessionInfo`: eleven snake_case fields, the two stamps
+    /// rendered as ISO-8601 instants in UTC, and the two optional ones present
+    /// and null rather than omitted.
     pub(super) fn info(&self) -> Value {
         let (status, exit_code, dropped) = self.snapshot();
-        let updated_at_ms = self
-            .state
-            .lock()
-            .map_or(self.created_at_ms, |state| state.updated_at_ms);
+        let updated_at = self.state.lock().map_or_else(
+            |_| self.created_at.clone(),
+            |state| state.updated_at.clone(),
+        );
         // The reference declares no field for a reader that fell behind: its
         // own reader reports every failure through `reader_error`, so output
         // this session had to drop is named there rather than through a field
@@ -213,17 +223,17 @@ impl ManagedSession {
             .clone()
             .or_else(|| dropped.then(|| DROPPED_OUTPUT.to_owned()));
         json!({
-            "sessionId": self.id,
+            "session_id": self.id,
             "command": self.command,
             "cwd": self.working_directory,
             "shell": self.shell,
-            "ptyBackend": self.pty_backend,
+            "pty_backend": self.pty_backend,
             "status": status.as_str(),
-            "exitCode": exit_code,
-            "outputPath": self.log_path.to_string_lossy(),
-            "createdAtMs": self.created_at_ms.to_string(),
-            "updatedAtMs": updated_at_ms.to_string(),
-            "readerError": reader_error,
+            "exit_code": exit_code,
+            "output_path": self.log_path.to_string_lossy(),
+            "created_at": self.created_at,
+            "updated_at": updated_at,
+            "reader_error": reader_error,
         })
     }
 
@@ -235,7 +245,7 @@ impl ManagedSession {
         if let Ok(mut state) = self.state.lock() {
             state.status = status;
             state.exit_code = exit_code;
-            state.updated_at_ms = now_ms();
+            state.updated_at = now_iso();
         }
         self.save_manifest();
     }
@@ -246,19 +256,28 @@ impl ManagedSession {
     /// change, so a client that dies between two of them still leaves a
     /// manifest describing the session as it last was.
     pub(super) fn save_manifest(&self) {
-        let Ok(rendered) = serde_json::to_vec_pretty(&self.info()) else {
-            return;
-        };
-        let _ = std::fs::write(&self.manifest_path, rendered);
+        let _ = write_manifest(&self.manifest_path, &self.info());
     }
 }
 
-/// The wall-clock milliseconds a session records its transitions at.
-pub(super) fn now_ms() -> u128 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|since| since.as_millis())
-        .unwrap_or_default()
+/// Writes one manifest the way reference `_save_manifest` writes it:
+/// `json.dumps(metadata, indent=2, sort_keys=True)`, no trailing newline.
+///
+/// This workspace builds `serde_json` without `preserve_order`, so a map is
+/// sorted by key and the pretty writer indents by two spaces with `": "`
+/// between a key and its value, which is what Python emits for those two
+/// arguments. The one difference is escaping: Python's default `ensure_ascii`
+/// writes a non-ASCII character as `\uXXXX` where this writes it as UTF-8, and
+/// both parse back to the same string.
+fn write_manifest(path: &Path, metadata: &Value) -> Result<(), String> {
+    let rendered = serde_json::to_vec_pretty(metadata).map_err(|error| error.to_string())?;
+    std::fs::write(path, rendered).map_err(|error| error.to_string())
+}
+
+/// Reference `_now_iso`: the current instant in UTC, rendered the way Python's
+/// `datetime.isoformat` renders it.
+pub(super) fn now_iso() -> String {
+    UtcTimestamp::now().to_iso8601()
 }
 
 pub(super) async fn run_managed_command(
@@ -388,7 +407,7 @@ pub(super) async fn start_managed_session(
         .backend(&terminal_id)
         .await
         .unwrap_or_default();
-    let created_at_ms = now_ms();
+    let created_at = now_iso();
     let session = Arc::new(ManagedSession {
         id,
         terminal_id,
@@ -397,14 +416,14 @@ pub(super) async fn start_managed_session(
         shell: config.executable.to_string_lossy().into_owned(),
         log_path,
         manifest_path,
-        created_at_ms,
+        created_at: created_at.clone(),
         pty_backend: backend.pty,
         reader_error: backend.degraded,
         state: StdMutex::new(SessionState {
             status: SessionStatus::Running,
             exit_code: None,
             backpressure_dropped: false,
-            updated_at_ms: created_at_ms,
+            updated_at: created_at,
         }),
     });
     session.save_manifest();
@@ -487,23 +506,41 @@ pub(super) fn append_chunks(session: &ManagedSession, chunks: &[ProcessChunk], d
 /// families share one session directory, so the prefix is what keeps one
 /// family's tools from reading, feeding or killing another's session.
 pub(super) fn new_session_id(family: ShellFamily) -> String {
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|since| since.as_millis())
-        .unwrap_or_default();
+    let now = UtcTimestamp::now();
     let mut suffix = [0_u8; 4];
-    // A collision would let one session read another's log, so the id carries
-    // real entropy rather than a counter.
+    // Reference `_new_session_id` takes its eight hexadecimal characters from
+    // `uuid4().hex[:8]`, so the stamp is not what separates two sessions minted
+    // inside the same second: a collision would let one read another's log, and
+    // the suffix carries real entropy rather than a counter.
     if getrandom::fill(&mut suffix).is_err() {
-        suffix = (stamp as u32).to_le_bytes();
+        suffix = (now.micros_since_epoch() as u32).to_le_bytes();
     }
     format!(
-        "{}_{stamp}_{}",
+        "{}_{}_{}",
         family.name(),
+        compact_stamp(now),
         suffix
             .iter()
             .map(|byte| format!("{byte:02x}"))
             .collect::<String>()
+    )
+}
+
+/// Reference `_new_session_id` stamps `datetime.now(tz=UTC).strftime`
+/// `"%Y%m%d_%H%M%S"`. That is the ISO instant the manifest already carries with
+/// its separators removed, so the two spellings are derived from one value and
+/// cannot name different seconds.
+fn compact_stamp(instant: UtcTimestamp) -> String {
+    let iso = instant.to_iso8601();
+    let slice = |range: std::ops::Range<usize>| iso.get(range).unwrap_or_default();
+    format!(
+        "{}{}{}_{}{}{}",
+        slice(0..4),
+        slice(5..7),
+        slice(8..10),
+        slice(11..13),
+        slice(14..16),
+        slice(17..19)
     )
 }
 
@@ -603,7 +640,7 @@ impl SessionHandle {
             Self::Live(session) => session.log_path.clone(),
             Self::Orphaned(manifest) => PathBuf::from(
                 manifest
-                    .get("outputPath")
+                    .get("output_path")
                     .and_then(Value::as_str)
                     .unwrap_or_default(),
             ),
@@ -670,17 +707,17 @@ pub(super) async fn managed_session(
 pub(super) fn session_document(info: &Value) -> Document {
     let field = |key: &str| info.get(key).cloned().unwrap_or(Value::Null);
     Document::new()
-        .field("sessionId", field("sessionId"))
+        .field("session_id", field("session_id"))
         .field("command", field("command"))
         .field("cwd", field("cwd"))
         .field("shell", field("shell"))
-        .field("ptyBackend", field("ptyBackend"))
+        .field("pty_backend", field("pty_backend"))
         .field("status", field("status"))
-        .field("exitCode", field("exitCode"))
-        .field("outputPath", field("outputPath"))
-        .field("createdAtMs", field("createdAtMs"))
-        .field("updatedAtMs", field("updatedAtMs"))
-        .field("readerError", field("readerError"))
+        .field("exit_code", field("exit_code"))
+        .field("output_path", field("output_path"))
+        .field("created_at", field("created_at"))
+        .field("updated_at", field("updated_at"))
+        .field("reader_error", field("reader_error"))
 }
 
 /// One read of a session's log, and the session it was read from.
@@ -736,10 +773,10 @@ pub(super) fn managed_command_document(
     limit: usize,
 ) -> Result<(Document, Value), ToolError> {
     let window = SessionWindow::read(handle, 0, limit)?;
-    let exit_code = window.field("exitCode");
+    let exit_code = window.field("exit_code");
     let document = Document::new()
         .field("command", window.command())
-        .field("session_id", window.field("sessionId"))
+        .field("session_id", window.field("session_id"))
         .field("status", window.field("status"))
         .field("exit_code", exit_code.clone())
         .field("shell", window.field("shell"))
@@ -766,9 +803,9 @@ pub(super) fn session_poll_document(
 ) -> Result<(Document, Value), ToolError> {
     let window = SessionWindow::read(handle, cursor, limit)?;
     let document = Document::new()
-        .field("session_id", window.field("sessionId"))
+        .field("session_id", window.field("session_id"))
         .field("status", window.field("status"))
-        .field("exit_code", window.field("exitCode"))
+        .field("exit_code", window.field("exit_code"))
         .field("output", window.output.clone())
         .field("next_cursor", window.next_cursor)
         .field("truncated", window.truncated)
