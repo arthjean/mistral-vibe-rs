@@ -12,6 +12,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::{Mutex, watch};
 use url::Url;
+use vibe_core::auth::{MCP_OAUTH_KEYRING_SERVICE as KEYRING_SERVICE, mcp_oauth_account};
 use vibe_core::integrations::redact;
 use vibe_core::mcp::{
     DefaultMcpPeerFactory, McpError, McpFuture, McpOAuthConfig, McpPeer, McpPeerFactory,
@@ -21,7 +22,6 @@ use vibe_core::mcp::{
 use super::{McpAuthBackend, ResourceError, ResourceFuture};
 use crate::host::now_seconds;
 
-const KEYRING_SERVICE: &str = "mistral-vibe-rs";
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(300);
 const MAX_CALLBACK_BYTES: usize = 8 * 1024;
 const MAX_OAUTH_RESPONSE_BYTES: usize = 1024 * 1024;
@@ -792,10 +792,16 @@ fn resource_identity(url: &Url) -> Result<String, ResourceError> {
     Ok(url.as_str().to_owned())
 }
 
+/// The account this resource's credential is stored under.
+///
+/// The naming lives in `vibe_core::auth::mcp_credentials` because `vibe mcp
+/// remove` deletes the same entry from outside any session.
 fn keyring_account(resource: &Url) -> Result<String, ResourceError> {
-    let identity = resource_identity(resource)?;
-    let fingerprint = URL_SAFE_NO_PAD.encode(Sha256::digest(identity.as_bytes()));
-    Ok(format!("mcp-oauth:{fingerprint}"))
+    mcp_oauth_account(resource).ok_or_else(|| {
+        ResourceError::InvalidParams(
+            "MCP OAuth resource URL must not contain a fragment".to_owned(),
+        )
+    })
 }
 
 async fn load_credential(resource: &Url) -> Result<Option<StoredCredential>, ResourceError> {
