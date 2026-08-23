@@ -24,9 +24,31 @@ use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
 
 use crate::child::{ChildExit, GROUP_POLL_INTERVAL, Rung, TerminationError};
 
-/// The name a session reports for the terminal behind it, reference
-/// `ManagedTerminal.pty_backend`.
-pub(crate) const PTY_BACKEND: &str = if cfg!(windows) { "conpty" } else { "posix" };
+#[cfg(test)]
+mod pty_tests;
+
+/// The terminals a managed session tries, in the order it tries them, and under
+/// the names a session reports through `pty_backend`.
+///
+/// The spellings are the reference's own: `_posix.py` names the single POSIX
+/// terminal, and `_windows.py` names ConPTY and WinPTY with that casing and in
+/// that order, so a client branching on the value branches the same way here.
+/// `portable-pty` publishes no WinPTY implementation, so the Windows ladder is
+/// one rung long rather than two; `docs/parity.md` carries that as an accepted
+/// divergence and [`crate::pty::pty_tests`] fails if a rung is added without
+/// restating the row.
+/// Both ladders are named here rather than inside the selection below, so a
+/// suite running on either family still asserts the other's spellings: a
+/// `cfg!` arm the host does not take is compiled but never read, and a
+/// lowercase `conpty` would have travelled unmeasured off a POSIX runner.
+pub(crate) const POSIX_BACKENDS: &[&str] = &["posix"];
+pub(crate) const WINDOWS_BACKENDS: &[&str] = &["ConPTY"];
+
+pub(crate) const PTY_BACKENDS: &[&str] = if cfg!(windows) {
+    WINDOWS_BACKENDS
+} else {
+    POSIX_BACKENDS
+};
 
 /// The visible size the reference pins through `COLUMNS` and `LINES` when it
 /// builds a managed session's environment.
@@ -110,8 +132,36 @@ impl PtyWriter {
     }
 }
 
-/// Opens a terminal and starts `spec` under it.
-pub(crate) fn spawn(spec: PtySpec<'_>) -> Result<(PtyTerminal, PtyStreams), String> {
+/// A started terminal: the rung that took it, the child, and its two halves.
+pub(crate) type StartedTerminal = (&'static str, PtyTerminal, PtyStreams);
+
+/// One rung's refusal: the backend's name and why it did not open.
+pub(crate) type PtyFailure = (&'static str, String);
+
+/// Opens a terminal and starts `spec` under it, reporting which backend took it.
+///
+/// Reference `_windows.py` walks its backends in order and keeps each one's
+/// failure, raising only once the ladder is exhausted; that shape is reproduced
+/// here so a host with no working terminal fails with every attempt named
+/// instead of quietly running somewhere else.
+pub(crate) fn spawn(spec: PtySpec<'_>) -> Result<StartedTerminal, Vec<PtyFailure>> {
+    let mut failures = Vec::new();
+    for backend in PTY_BACKENDS {
+        match open(&spec) {
+            Ok((terminal, streams)) => return Ok((*backend, terminal, streams)),
+            Err(reason) => failures.push((*backend, reason)),
+        }
+    }
+    Err(failures)
+}
+
+/// Opens one rung of the ladder.
+///
+/// `portable-pty` reaches the host's terminal through a single system, which is
+/// why no rung is named here: the ladder above holds the one name this crate can
+/// open, and this becomes a switch the day a second rung has a constructor to
+/// call.
+fn open(spec: &PtySpec<'_>) -> Result<(PtyTerminal, PtyStreams), String> {
     let size = PtySize {
         rows: dimension(spec.environment, "LINES", DEFAULT_ROWS),
         cols: dimension(spec.environment, "COLUMNS", DEFAULT_COLUMNS),

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fail a managed shell session when no terminal starts, instead of running it on
+  pipes and reporting no backend. A host where every terminal backend refuses
+  now answers an error naming each one that was tried and why it failed, so a
+  session never claims a capability it does not have. The legacy shell variant
+  is untouched: it runs on pipes because it never asked for a terminal.
+
 - Bound a managed shell command with its own `max_output_bytes` ceiling rather
   than the polling tools' `max_inline_bytes`, so a command and a poll of the
   same log truncate where the reference truncates them. A chatty session also

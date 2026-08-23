@@ -424,11 +424,13 @@ pub(super) async fn start_managed_session(
         ))
         .await
         .map_err(process_error)?;
+    // The terminal started, so it has a name; reading it is not allowed to turn
+    // a live managed session into one reporting no backend at all.
     let backend = shell
         .terminals
         .backend(&terminal_id)
         .await
-        .unwrap_or_default();
+        .map_err(process_error)?;
     let created_at = now_iso();
     let session = Arc::new(ManagedSession {
         id,
@@ -439,8 +441,8 @@ pub(super) async fn start_managed_session(
         log_path,
         manifest_path,
         created_at: created_at.clone(),
-        pty_backend: backend.pty,
-        reader_error: backend.degraded,
+        pty_backend: backend,
+        reader_error: None,
         state: StdMutex::new(SessionState {
             status: SessionStatus::Running,
             exit_code: None,

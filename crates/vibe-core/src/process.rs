@@ -16,7 +16,7 @@ use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio::task::JoinHandle;
 
 use crate::child::{ChildExit, ChildGroup, Rung, TerminationError};
-use crate::pty::{PTY_BACKEND, PtySpec, PtyTerminal, PtyWriter};
+use crate::pty::{PtySpec, PtyTerminal, PtyWriter};
 use crate::workspace::{GitInspector, GitInspectorFuture, GitState, WorkspaceError};
 
 const DEFAULT_MAX_OUTPUT_BYTES: usize = 1_048_576;
@@ -79,11 +79,11 @@ pub struct ProcessSpec {
     /// the readers stop at this many bytes and say so rather than letting a
     /// chatty child lose a chunk to a queue that happened to be full.
     pub max_output_bytes: usize,
-    /// Whether the child should run under a terminal.
+    /// Whether the child must run under a terminal.
     ///
-    /// A request rather than a requirement: a host that provides no terminal
-    /// falls back to the pipe backend, which is what keeps a session startable
-    /// on a platform the reference would refuse to open one on.
+    /// A requirement rather than a request: a host that opens no terminal fails
+    /// the spawn, since a session reporting a backend it never got would claim
+    /// a capability it does not have.
     pub terminal: bool,
 }
 
@@ -99,17 +99,6 @@ impl ProcessSpec {
             terminal: false,
         }
     }
-}
-
-/// Which backend a terminal ended up on, and why it is not the requested one.
-///
-/// The reference carries `pty_backend` on every session it reports, and a
-/// session that could not get a terminal is a session with reduced capability
-/// rather than a session that failed to start, so the reason travels with it.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct TerminalBackend {
-    pub pty: Option<&'static str>,
-    pub degraded: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -129,7 +118,8 @@ struct ManagedProcess {
     readers: Mutex<Vec<JoinHandle<()>>>,
     state: Mutex<TerminalState>,
     output_dropped: Arc<AtomicBool>,
-    backend: TerminalBackend,
+    /// The terminal this process runs on, absent on the pipe backend.
+    backend: Option<&'static str>,
 }
 
 /// The child behind one terminal, whichever backend owns it.
@@ -212,38 +202,42 @@ impl TerminalManager {
         let cursor = Arc::new(AtomicU64::new(0));
         let output_bytes = Arc::new(AtomicUsize::new(0));
         let output_dropped = Arc::new(AtomicBool::new(false));
-        let mut backend = TerminalBackend::default();
+        let mut backend = None;
+        // A caller that asked for a terminal gets one or gets an error. Falling
+        // through to pipes here would publish a session claiming a capability it
+        // does not have, which is the shape reference `_windows.py` refuses when
+        // it raises once its backend ladder is exhausted.
         let started = if spec.terminal {
-            match crate::pty::spawn(PtySpec {
+            let (name, child, streams) = crate::pty::spawn(PtySpec {
                 program: &spec.program,
                 arguments: &spec.arguments,
                 working_directory: &spec.working_directory,
                 environment: &spec.environment,
-            }) {
-                Ok((child, streams)) => {
-                    backend.pty = Some(PTY_BACKEND);
-                    // A terminal merges the two streams into one, so a chunk
-                    // read off it is reported the way the child wrote it: in
-                    // order, on the stream a terminal has.
-                    let reader = spawn_terminal_reader(
-                        streams.reader,
-                        sender.clone(),
-                        cursor.clone(),
-                        output_bytes.clone(),
-                        output_dropped.clone(),
-                        spec.max_output_bytes,
-                    );
-                    Some((
-                        TerminalChild::Terminal(Box::new(child)),
-                        Some(TerminalInput::Terminal(streams.writer)),
-                        vec![reader],
-                    ))
-                }
-                Err(reason) => {
-                    backend.degraded = Some(reason);
-                    None
-                }
-            }
+            })
+            .map_err(|failures| ProcessError::Terminal {
+                program: spec.program.clone(),
+                failures: failures
+                    .into_iter()
+                    .map(|(backend, reason)| format!("{backend}: {reason}"))
+                    .collect(),
+            })?;
+            backend = Some(name);
+            // A terminal merges the two streams into one, so a chunk read off it
+            // is reported the way the child wrote it: in order, on the stream a
+            // terminal has.
+            let reader = spawn_terminal_reader(
+                streams.reader,
+                sender.clone(),
+                cursor.clone(),
+                output_bytes.clone(),
+                output_dropped.clone(),
+                spec.max_output_bytes,
+            );
+            Some((
+                TerminalChild::Terminal(Box::new(child)),
+                Some(TerminalInput::Terminal(streams.writer)),
+                vec![reader],
+            ))
         } else {
             None
         };
@@ -308,11 +302,11 @@ impl TerminalManager {
         Ok(terminal_id)
     }
 
-    /// Which backend `terminal_id` runs on, and why it is not the requested one.
-    pub async fn backend(&self, terminal_id: &str) -> Result<TerminalBackend, ProcessError> {
+    /// Which terminal `terminal_id` runs on, absent when it runs on pipes.
+    pub async fn backend(&self, terminal_id: &str) -> Result<Option<&'static str>, ProcessError> {
         self.process(terminal_id)
             .await
-            .map(|process| process.backend.clone())
+            .map(|process| process.backend)
     }
 
     pub async fn write(&self, terminal_id: &str, bytes: &[u8]) -> Result<(), ProcessError> {
@@ -697,6 +691,11 @@ pub enum ProcessError {
         program: PathBuf,
         #[source]
         source: std::io::Error,
+    },
+    #[error("no terminal could start `{program}`: {}", failures.join("; "))]
+    Terminal {
+        program: PathBuf,
+        failures: Vec<String>,
     },
     #[error("spawned process has no {0} pipe")]
     MissingPipe(&'static str),

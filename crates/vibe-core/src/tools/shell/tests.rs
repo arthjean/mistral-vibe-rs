@@ -2289,7 +2289,7 @@ async fn closing_a_session_terminal_twice_is_a_no_op() {
     spec.terminal = true;
     let terminal = manager.run(spec).await.expect("the terminal starts");
     assert_eq!(
-        manager.backend(&terminal).await.expect("backend").pty,
+        manager.backend(&terminal).await.expect("backend"),
         Some("posix")
     );
     manager
@@ -2304,24 +2304,31 @@ async fn closing_a_session_terminal_twice_is_a_no_op() {
     manager.release(&terminal).await.expect("release");
 }
 
-/// A host that cannot open a terminal falls back to the pipe backend rather
-/// than failing the session, which is what keeps a headless container usable.
+/// A host where no terminal backend starts fails the session instead of
+/// running it on pipes, so a reduced capability is never published as a working
+/// one, and the failure names every backend it tried.
 ///
-/// The two halves are proven at the seam: the terminal backend names why it
-/// could not start a child, and a request for one that cannot be honored still
-/// reaches the pipe backend, whose own error is the one that surfaces.
+/// The legacy path is unaffected: it never asked for a terminal, so it still
+/// executes on pipes and reports no backend rather than a failed one.
 #[tokio::test]
-async fn a_terminal_that_cannot_start_falls_back_to_pipes() {
+async fn a_session_whose_terminal_cannot_start_fails_instead_of_running_on_pipes() {
     let environment = BTreeMap::new();
-    let reason = crate::pty::spawn(crate::pty::PtySpec {
+    let failures = crate::pty::spawn(crate::pty::PtySpec {
         program: Path::new("vibe-no-such-program"),
         arguments: &[],
         working_directory: &std::env::temp_dir(),
         environment: &environment,
     })
     .err()
-    .expect("an unstartable program yields a reason");
-    assert!(reason.contains("terminal"), "{reason}");
+    .expect("an unstartable program exhausts the ladder");
+    assert_eq!(
+        failures
+            .iter()
+            .map(|(backend, _)| *backend)
+            .collect::<Vec<_>>(),
+        crate::pty::PTY_BACKENDS.to_vec(),
+        "every rung of the ladder reports its own failure: {failures:?}"
+    );
 
     let manager = TerminalManager::default();
     let mut spec = ProcessSpec::new("vibe-no-such-program", std::env::temp_dir());
@@ -2329,19 +2336,24 @@ async fn a_terminal_that_cannot_start_falls_back_to_pipes() {
     let failure = manager
         .run(spec)
         .await
-        .expect_err("neither backend can start the program");
+        .expect_err("no backend can start the program");
     assert!(
-        matches!(failure, ProcessError::Spawn { .. }),
-        "the pipe fallback never ran: {failure}"
+        matches!(failure, ProcessError::Terminal { .. }),
+        "the pipe fallback ran instead of failing: {failure}"
     );
+    let reported = failure.to_string();
+    for backend in crate::pty::PTY_BACKENDS {
+        assert!(
+            reported.contains(backend),
+            "`{backend}` is not named in the payload: {reported}"
+        );
+    }
 
     // A terminal nobody asked for is reported as absent rather than as failed.
     let mut piped = ProcessSpec::new("/bin/sh", std::env::temp_dir());
     piped.arguments = vec!["-c".to_owned(), "echo piped".to_owned()];
     let terminal = manager.run(piped).await.expect("the pipe backend starts");
-    let backend = manager.backend(&terminal).await.expect("backend");
-    assert_eq!(backend.pty, None);
-    assert_eq!(backend.degraded, None);
+    assert_eq!(manager.backend(&terminal).await.expect("backend"), None);
     let _ = manager.wait(&terminal).await;
     let _ = manager.release(&terminal).await;
 }
@@ -3291,6 +3303,33 @@ async fn a_poll_answers_after_the_session_log_was_deleted() {
         json!(SessionStatus::Running.as_str()),
         "{polled:?}"
     );
+}
+
+/// The manifest and the session record carry one spelling of the backend, so a
+/// client reading either branches the same way.
+#[tokio::test]
+async fn the_manifest_carries_the_backend_the_session_reports() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let session = background_session(&harness, "sleep 5").await;
+    let inspected = harness
+        .call(
+            "bash_sessions",
+            json!({"action": "inspect", "session_id": session}),
+        )
+        .await
+        .expect("the session is inspected");
+    let reported = inspected.typed_result["session"]["pty_backend"].clone();
+    assert_eq!(reported, json!("posix"), "{inspected:?}");
+
+    let manifest_path = harness
+        .shell()
+        .sessions_directory()
+        .join(format!("{session}.json"));
+    let manifest: Value = serde_json::from_str(
+        &std::fs::read_to_string(&manifest_path).expect("the manifest is readable"),
+    )
+    .expect("the manifest parses");
+    assert_eq!(manifest["pty_backend"], reported, "{manifest}");
 }
 
 /// An orphan's manifest is a file on disk that another process wrote, and the
