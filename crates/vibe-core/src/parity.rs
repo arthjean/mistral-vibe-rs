@@ -114,3 +114,5 @@ pub fn pinned_interpreter(root: &Path) -> Option<PathBuf> {
 mod ledger_tests;
 #[cfg(test)]
 mod parity_tests;
+#[cfg(test)]
+mod scorecard_tests;
