@@ -303,6 +303,34 @@ impl super::LayeredConfig {
         })
     }
 
+    /// The URL of the persisted OAuth server named `name`, in the file writes
+    /// land in.
+    ///
+    /// Reference `find_persisted_oauth_mcp_server`: a name no entry carries, an
+    /// entry that does not decode, and an entry whose authentication is not
+    /// OAuth all answer `None`, because none of them left a credential behind.
+    /// The lookup reads the same target [`Self::persist_mcp_remove`] writes, so
+    /// a project entry of the same name is never consulted.
+    #[must_use]
+    pub fn persisted_oauth_mcp_server(&self, name: &str, working_directory: &Path) -> Option<Url> {
+        let name = mcp::normalize_mcp_server_name(name);
+        if name.is_empty() {
+            return None;
+        }
+        let snapshot = self.load().ok()?;
+        let collection = IntegrationCollection::McpServers;
+        let entries =
+            config_array_for_target(&snapshot, snapshot.selected_target, collection).ok()?;
+        let entry = entries.iter().find_map(|entry| {
+            let entry = entry.as_table()?;
+            (collection.identity_key(entry)? == name).then_some(entry)
+        })?;
+        let server = mcp::decode_mcp_server(entry, working_directory).ok()?;
+        matches!(server.auth, McpAuthConfig::Oauth(_))
+            .then(|| mcp::mcp_transport_url(&server.transport).cloned())
+            .flatten()
+    }
+
     pub fn persist_mcp_state(
         &self,
         alias: &str,

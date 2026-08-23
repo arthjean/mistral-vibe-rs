@@ -11,7 +11,7 @@ use url::Url;
 
 use crate::atomic_file::AtomicWriteError;
 use crate::mcp::{
-    DEFAULT_MCP_STARTUP_TIMEOUT_MS, DEFAULT_MCP_TOOL_TIMEOUT_MS, McpServerConfig,
+    DEFAULT_MCP_STARTUP_TIMEOUT_MS, DEFAULT_MCP_TOOL_TIMEOUT_MS, McpAuthConfig, McpServerConfig,
     McpTransportConfig,
 };
 use crate::redaction::{is_sensitive_key, redact_table, redact_value};
