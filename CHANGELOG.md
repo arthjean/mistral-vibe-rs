@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Report a managed shell command as a success only when its session both
+  reached `completed` and exited zero. A session killed on its way out carries
+  whatever code the kill produced, which is zero often enough that the code
+  alone read as a success; the error now names the status it settled at.
+
 - Answer an empty window when a shell session log is not there, so a session
   whose log was deleted under it stays pollable and keeps reporting its status.
   A log that exists and cannot be read is still an error.

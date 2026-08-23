@@ -345,13 +345,28 @@ pub(super) async fn run_managed_command(
         )));
     }
     let (document, display) = managed_command_document(&handle, false, limit)?;
-    let status = document
+    let code = document
         .get("returncode")
         .and_then(Value::as_i64)
         .unwrap_or(0);
-    if status != 0 {
+    // Reference `_result_from_session` succeeds only when both halves agree:
+    // the session reached `completed` and its return code is zero. A session
+    // that was killed on its way out carries whatever code the kill produced,
+    // which is zero often enough that the code alone would report it as a
+    // success.
+    let settled = document
+        .get("status")
+        .and_then(Value::as_str)
+        .is_some_and(|status| status == SessionStatus::Completed.as_str());
+    if !settled || code != 0 {
+        let reported = document
+            .get("status")
+            .and_then(Value::as_str)
+            .unwrap_or(SessionStatus::Running.as_str())
+            .to_owned();
         return Err(ToolError::Execution(format!(
-            "the command failed with exit status {status}: `{command}`\nsession_id: {}\noutput:\n{}",
+            "the command failed with exit status {code}: `{command}`\nsession_id: {}\nstatus: \
+             {reported}\noutput:\n{}",
             session.id,
             document.model_text()
         )));

@@ -3047,6 +3047,92 @@ async fn a_multibyte_boundary_is_adjusted_in_both_directions() {
 // --------------------------------------------------------------------------
 // Execution semantics
 // --------------------------------------------------------------------------
+/// A session that never reached `completed` is a failure whatever code it
+/// carries. The trap makes the kill exit zero, which is the case the code alone
+/// would report as a success: reference `_result_from_session` asks for both
+/// halves, so the status is what refuses it here.
+#[tokio::test]
+async fn a_session_that_did_not_complete_fails_even_on_a_zero_exit_code() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let running = tokio::spawn({
+        let registry = harness.registry.clone();
+        async move {
+            registry
+                .invoke(
+                    "bash",
+                    ToolInvocation {
+                        call_id: "bash-1".to_owned(),
+                        arguments: json!({"command": "trap 'exit 0' TERM; sleep 30"}),
+                    },
+                )
+                .await
+        }
+    });
+
+    let session = loop {
+        let listed = harness
+            .call("bash_sessions", json!({"action": "list"}))
+            .await
+            .expect("the sessions list answers");
+        if let Some(entry) = listed.typed_result["sessions"]
+            .as_array()
+            .and_then(|sessions| sessions.first())
+            .and_then(|entry| entry["session_id"].as_str())
+        {
+            break entry.to_owned();
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    };
+    // The trap has to be installed before the signal, otherwise the shell's
+    // default disposition answers it and the exit code is not zero.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    harness
+        .call(
+            "bash_sessions",
+            json!({"action": "kill", "session_id": session}),
+        )
+        .await
+        .expect("the session is killed");
+
+    let failure = running
+        .await
+        .expect("the call joins")
+        .expect_err("a session that did not complete is not a success");
+    let reported = failure.to_string();
+    assert!(reported.contains("exit status 0"), "{reported}");
+    assert!(
+        reported.contains(&format!("status: {}", SessionStatus::Killed.as_str())),
+        "{reported}"
+    );
+}
+
+/// A soft timeout is a poll-style return rather than a finished command, so the
+/// success condition is never applied to it: the session is still running and
+/// the model is handed its id instead of an error.
+#[tokio::test]
+async fn a_soft_timeout_backgrounds_the_session_instead_of_failing_it() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    // `timeout_seconds` is the soft form: an integer `timeout` would make the
+    // deadline a hard one and kill the session at it.
+    let backgrounded = harness
+        .call(
+            "bash",
+            json!({"command": "sleep 30", "timeout_seconds": 1.0}),
+        )
+        .await
+        .expect("a soft timeout is not a failure");
+    assert_eq!(
+        backgrounded.typed_result["status"],
+        json!(SessionStatus::Running.as_str()),
+        "{backgrounded:?}"
+    );
+    assert_eq!(
+        backgrounded.typed_result["background"],
+        json!(true),
+        "{backgrounded:?}"
+    );
+}
+
 /// A log that is not there answers an empty window at the cursor that was
 /// asked for, rather than failing the call.
 #[tokio::test]
