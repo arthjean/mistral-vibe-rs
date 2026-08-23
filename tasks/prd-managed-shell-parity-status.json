@@ -3,7 +3,7 @@
     "file": "tasks/prd-managed-shell-parity.md",
     "title": "Managed Shell at Full Parity",
     "created_at": "2026-08-22",
-    "status": "IN_PROGRESS"
+    "status": "DONE"
   },
   "epics": [
     {
@@ -54,11 +54,11 @@
     {
       "id": "EP-097",
       "title": "Restate row 6 from its oracle",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 2,
-      "stories_done": 0,
-      "started_at": null
+      "stories_done": 2,
+      "started_at": "2026-08-23"
     }
   ],
   "stories": [
@@ -303,7 +303,7 @@
       "id": "US-306",
       "title": "Record the shell divergences in the tables that hold them",
       "epic": "EP-097",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
@@ -322,23 +322,23 @@
         "US-304",
         "US-305"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-23",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
     },
     {
       "id": "US-307",
       "title": "Remeasure and restate row 6",
       "epic": "EP-097",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-306"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-23",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
     }
   ]
 }
