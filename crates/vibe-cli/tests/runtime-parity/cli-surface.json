@@ -1,0 +1,6510 @@
+{
+  "capture": {
+    "columns": 80,
+    "configurationModulesImportedByBuild": [],
+    "filesOpenedByBuild": 0,
+    "realUserConfigurationUntouched": true,
+    "sessionHomeCreatedByBuild": false,
+    "sessionHomeCreatedByEntrypointImport": false,
+    "sessionHomeCreatedByMcpImport": true
+  },
+  "cases": [
+    {
+      "argv": [
+        "--version"
+      ],
+      "case": "alone--version",
+      "exit": 0,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": {
+        "cleartext": null,
+        "described": {
+          "chars": 11,
+          "marker": "<described>",
+          "sha256": "0af9964494c5990b20c800034e446f146029d13a3b6f97b2d43013b334d39ac4"
+        }
+      },
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
+      "argv": [
+        "--prompt",
+        "headless request"
+      ],
+      "case": "alone--prompt",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": "headless request",
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-turns",
+        "3"
+      ],
+      "case": "alone--max-turns",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": 3,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-price",
+        "1.5"
+      ],
+      "case": "alone--max-price",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": 1.5,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-tokens",
+        "2048"
+      ],
+      "case": "alone--max-tokens",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": 2048,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--enabled-tools",
+        "bash"
+      ],
+      "case": "alone--enabled-tools",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": [
+          "bash"
+        ],
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--disabled-tools",
+        "web_search"
+      ],
+      "case": "alone--disabled-tools",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": [
+          "web_search"
+        ],
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--output",
+        "json"
+      ],
+      "case": "alone--output",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "json",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--agent",
+        "reviewer"
+      ],
+      "case": "alone--agent",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": "reviewer",
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--auto-approve"
+      ],
+      "case": "alone--auto-approve",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": true,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--setup"
+      ],
+      "case": "alone--setup",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": true,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--check-upgrade"
+      ],
+      "case": "alone--check-upgrade",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": true,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--workdir",
+        "sub/dir"
+      ],
+      "case": "alone--workdir",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": "sub/dir",
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--worktree",
+        "review"
+      ],
+      "case": "alone--worktree",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": "review"
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--add-dir",
+        "extra"
+      ],
+      "case": "alone--add-dir",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [
+          "extra"
+        ],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--trust"
+      ],
+      "case": "alone--trust",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": true,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--teleport"
+      ],
+      "case": "alone--teleport",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": true,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--continue"
+      ],
+      "case": "alone--continue",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": true,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--resume",
+        "session-123"
+      ],
+      "case": "alone--resume",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": "session-123",
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--prompt"
+      ],
+      "case": "no-value--prompt",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": "",
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-turns"
+      ],
+      "case": "no-value--max-turns",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: argument --max-turns: expected one argument",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-price"
+      ],
+      "case": "no-value--max-price",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: argument --max-price: expected one argument",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-tokens"
+      ],
+      "case": "no-value--max-tokens",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: argument --max-tokens: expected one argument",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--enabled-tools"
+      ],
+      "case": "no-value--enabled-tools",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: argument --enabled-tools: expected one argument",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--disabled-tools"
+      ],
+      "case": "no-value--disabled-tools",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: argument --disabled-tools: expected one argument",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--output"
+      ],
+      "case": "no-value--output",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: argument --output: expected one argument",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--agent"
+      ],
+      "case": "no-value--agent",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: argument --agent: expected one argument",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--workdir"
+      ],
+      "case": "no-value--workdir",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: argument --workdir: expected one argument",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--worktree"
+      ],
+      "case": "no-value--worktree",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: argument --worktree: expected one argument",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--add-dir"
+      ],
+      "case": "no-value--add-dir",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: argument --add-dir: expected one argument",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--resume"
+      ],
+      "case": "no-value--resume",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": true,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--prompt=headless request"
+      ],
+      "case": "equals--prompt",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": "headless request",
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-turns=3"
+      ],
+      "case": "equals--max-turns",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": 3,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-price=1.5"
+      ],
+      "case": "equals--max-price",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": 1.5,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-tokens=2048"
+      ],
+      "case": "equals--max-tokens",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": 2048,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--enabled-tools=bash"
+      ],
+      "case": "equals--enabled-tools",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": [
+          "bash"
+        ],
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--disabled-tools=web_search"
+      ],
+      "case": "equals--disabled-tools",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": [
+          "web_search"
+        ],
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--output=json"
+      ],
+      "case": "equals--output",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "json",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--agent=reviewer"
+      ],
+      "case": "equals--agent",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": "reviewer",
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--workdir=sub/dir"
+      ],
+      "case": "equals--workdir",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": "sub/dir",
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--worktree=review"
+      ],
+      "case": "equals--worktree",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": "review"
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--add-dir=extra"
+      ],
+      "case": "equals--add-dir",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [
+          "extra"
+        ],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--resume=session-123"
+      ],
+      "case": "equals--resume",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": "session-123",
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--v"
+      ],
+      "case": "prefix--version",
+      "exit": 0,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": {
+        "cleartext": null,
+        "described": {
+          "chars": 11,
+          "marker": "<described>",
+          "sha256": "0af9964494c5990b20c800034e446f146029d13a3b6f97b2d43013b334d39ac4"
+        }
+      },
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
+      "argv": [
+        "--p",
+        "headless request"
+      ],
+      "case": "prefix--prompt",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": "headless request",
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-tu",
+        "3"
+      ],
+      "case": "prefix--max-turns",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": 3,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-p",
+        "1.5"
+      ],
+      "case": "prefix--max-price",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": 1.5,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-to",
+        "2048"
+      ],
+      "case": "prefix--max-tokens",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": 2048,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--e",
+        "bash"
+      ],
+      "case": "prefix--enabled-tools",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": [
+          "bash"
+        ],
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--d",
+        "web_search"
+      ],
+      "case": "prefix--disabled-tools",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": [
+          "web_search"
+        ],
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--o",
+        "json"
+      ],
+      "case": "prefix--output",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "json",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--ag",
+        "reviewer"
+      ],
+      "case": "prefix--agent",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": "reviewer",
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--au"
+      ],
+      "case": "prefix--auto-approve",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": true,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--s"
+      ],
+      "case": "prefix--setup",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": true,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--ch"
+      ],
+      "case": "prefix--check-upgrade",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": true,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--workd",
+        "sub/dir"
+      ],
+      "case": "prefix--workdir",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": "sub/dir",
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--workt",
+        "review"
+      ],
+      "case": "prefix--worktree",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": "review"
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--ad",
+        "extra"
+      ],
+      "case": "prefix--add-dir",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [
+          "extra"
+        ],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--tr"
+      ],
+      "case": "prefix--trust",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": true,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--te"
+      ],
+      "case": "prefix--teleport",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": true,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--co"
+      ],
+      "case": "prefix--continue",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": true,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--r",
+        "session-123"
+      ],
+      "case": "prefix--resume",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": "session-123",
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--output",
+        "text"
+      ],
+      "case": "output-text",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--output",
+        "streaming"
+      ],
+      "case": "output-streaming",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "streaming",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--output",
+        "bogus"
+      ],
+      "case": "output-invalid",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: argument --output: invalid choice: 'bogus' (choose from text, json, streaming)",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--output",
+        "json",
+        "--output",
+        "text"
+      ],
+      "case": "output-repeated",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "-c",
+        "--resume"
+      ],
+      "case": "continue-with-resume",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: argument --resume: not allowed with argument -c/--continue",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "-c",
+        "--resume",
+        "session-123"
+      ],
+      "case": "continue-with-resume-value",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: argument --resume: not allowed with argument -c/--continue",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--enabled-tools",
+        "bash",
+        "--enabled-tools",
+        "read_file"
+      ],
+      "case": "repeated-enabled-tools",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": [
+          "bash",
+          "read_file"
+        ],
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--disabled-tools",
+        "bash",
+        "--disabled-tools",
+        "web_search"
+      ],
+      "case": "repeated-disabled-tools",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": [
+          "bash",
+          "web_search"
+        ],
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--add-dir",
+        "extra",
+        "--add-dir",
+        "more"
+      ],
+      "case": "repeated-add-dir",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [
+          "extra",
+          "more"
+        ],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--bogus"
+      ],
+      "case": "unknown-long-flag",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: unrecognized arguments: --bogus",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "-x"
+      ],
+      "case": "unknown-short-flag",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: unrecognized arguments: -x",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--a"
+      ],
+      "case": "ambiguous-prefix-a",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: ambiguous option: --a could match --agent, --auto-approve, --add-dir",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--m",
+        "3"
+      ],
+      "case": "ambiguous-prefix-m",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: ambiguous option: --m could match --max-turns, --max-price, --max-tokens",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--t"
+      ],
+      "case": "ambiguous-prefix-t",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: ambiguous option: --t could match --trust, --teleport",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-turns",
+        "-5"
+      ],
+      "case": "negative-max-turns",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": -5,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-tokens",
+        "-1"
+      ],
+      "case": "negative-max-tokens",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": -1,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-price",
+        "-2.5"
+      ],
+      "case": "negative-max-price",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": -2.5,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-turns",
+        "x"
+      ],
+      "case": "non-numeric-max-turns",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: argument --max-turns: invalid int value: 'x'",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-tokens",
+        "1e3"
+      ],
+      "case": "non-numeric-max-tokens",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: argument --max-tokens: invalid int value: '1e3'",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-price",
+        "cheap"
+      ],
+      "case": "non-numeric-max-price",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: argument --max-price: invalid float value: 'cheap'",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-turns",
+        ""
+      ],
+      "case": "empty-max-turns",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: argument --max-turns: invalid int value: ''",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-turns",
+        "0"
+      ],
+      "case": "zero-max-turns",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": 0,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-price",
+        "2"
+      ],
+      "case": "integral-max-price",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": 2.0,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "-p",
+        ""
+      ],
+      "case": "prompt-empty-string",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": "",
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "-p",
+        "   "
+      ],
+      "case": "prompt-whitespace-only",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": "   ",
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "-p",
+        "headless request"
+      ],
+      "case": "prompt-short-with-value",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": "headless request",
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "-c"
+      ],
+      "case": "continue-short",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": true,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "-h"
+      ],
+      "case": "help-short",
+      "exit": 0,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": {
+        "cleartext": null,
+        "described": {
+          "chars": 75,
+          "marker": "<described>",
+          "sha256": "58efa8efd4ebb0873f7c1ce3dfbd9f04b93b78e5d3c291da5ee884798705b54a"
+        }
+      },
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
+      "argv": [
+        "--help"
+      ],
+      "case": "help-long",
+      "exit": 0,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": {
+        "cleartext": null,
+        "described": {
+          "chars": 75,
+          "marker": "<described>",
+          "sha256": "58efa8efd4ebb0873f7c1ce3dfbd9f04b93b78e5d3c291da5ee884798705b54a"
+        }
+      },
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
+      "argv": [
+        "-v"
+      ],
+      "case": "version-short",
+      "exit": 0,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": {
+        "cleartext": null,
+        "described": {
+          "chars": 11,
+          "marker": "<described>",
+          "sha256": "0af9964494c5990b20c800034e446f146029d13a3b6f97b2d43013b334d39ac4"
+        }
+      },
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
+      "argv": [],
+      "case": "bare",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "review this repository"
+      ],
+      "case": "positional-prompt",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": "review this repository",
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "first",
+        "second"
+      ],
+      "case": "two-positionals",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: unrecognized arguments: second",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--"
+      ],
+      "case": "separator-alone",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--",
+        "--not-a-flag"
+      ],
+      "case": "separator-then-flag-shaped-prompt",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": "--not-a-flag",
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--agent",
+        "--trust"
+      ],
+      "case": "flag-shaped-option-value",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: argument --agent: expected one argument",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--agent",
+        "reviewer",
+        "--agent",
+        "auditor"
+      ],
+      "case": "repeated-agent",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": "auditor",
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--yolo"
+      ],
+      "case": "yolo-alias",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": true,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--resume",
+        ""
+      ],
+      "case": "resume-empty-value",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": "",
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--enabled-tools",
+        "web_*"
+      ],
+      "case": "enabled-tools-glob",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": [
+          "web_*"
+        ],
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--workdir",
+        "."
+      ],
+      "case": "workdir-dot",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": ".",
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--add-dir",
+        "sub/dir"
+      ],
+      "case": "add-dir-nested",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [
+          "sub/dir"
+        ],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "review this repository",
+        "--agent",
+        "reviewer",
+        "--trust"
+      ],
+      "case": "combined-prompt-with-agent-and-trust",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": "reviewer",
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": "review this repository",
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": true,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "-p",
+        "headless request",
+        "--output",
+        "json",
+        "--max-turns",
+        "2"
+      ],
+      "case": "combined-programmatic-json",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": 2,
+        "output": "json",
+        "prompt": "headless request",
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--enabled-tools",
+        "bash",
+        "--enabled-tools",
+        "read_file",
+        "--disabled-tools",
+        "web_search"
+      ],
+      "case": "combined-tool-filters",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": [
+          "web_search"
+        ],
+        "enabled_tools": [
+          "bash",
+          "read_file"
+        ],
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--workdir",
+        "sub/dir",
+        "--add-dir",
+        "extra",
+        "--add-dir",
+        "more"
+      ],
+      "case": "combined-directories",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [
+          "extra",
+          "more"
+        ],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": "sub/dir",
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--worktree",
+        "review",
+        "--trust",
+        "--auto-approve"
+      ],
+      "case": "combined-worktree-auto-approve",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": true,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": true,
+        "workdir": null,
+        "worktree": "review"
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "-c",
+        "--output",
+        "streaming"
+      ],
+      "case": "combined-continue-streaming",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": true,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "streaming",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--resume",
+        "session-123",
+        "--max-price",
+        "0.5"
+      ],
+      "case": "combined-resume-with-budget",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": 0.5,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": "session-123",
+        "setup": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--setup",
+        "--check-upgrade"
+      ],
+      "case": "combined-setup-and-check-upgrade",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": true,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "initial_prompt": null,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": true,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [],
+      "case": "mcp-bare",
+      "exit": 0,
+      "namespace": {
+        "mcp_command": null
+      },
+      "parser": "mcp",
+      "stderrLastLine": null,
+      "stdoutLastLine": {
+        "cleartext": null,
+        "described": {
+          "chars": 47,
+          "marker": "<described>",
+          "sha256": "a293f4823bc6523fc9f8cbc7ce85f275c15058b3e7e0f37cd131ec660a5d78ce"
+        }
+      },
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
+      "argv": [
+        "-h"
+      ],
+      "case": "mcp-help-short",
+      "exit": 0,
+      "namespace": null,
+      "parser": "mcp",
+      "stderrLastLine": null,
+      "stdoutLastLine": {
+        "cleartext": null,
+        "described": {
+          "chars": 47,
+          "marker": "<described>",
+          "sha256": "a293f4823bc6523fc9f8cbc7ce85f275c15058b3e7e0f37cd131ec660a5d78ce"
+        }
+      },
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
+      "argv": [
+        "--help"
+      ],
+      "case": "mcp-help-long",
+      "exit": 0,
+      "namespace": null,
+      "parser": "mcp",
+      "stderrLastLine": null,
+      "stdoutLastLine": {
+        "cleartext": null,
+        "described": {
+          "chars": 47,
+          "marker": "<described>",
+          "sha256": "a293f4823bc6523fc9f8cbc7ce85f275c15058b3e7e0f37cd131ec660a5d78ce"
+        }
+      },
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
+      "argv": [
+        "add",
+        "-h"
+      ],
+      "case": "mcp-add-help",
+      "exit": 0,
+      "namespace": null,
+      "parser": "mcp",
+      "stderrLastLine": null,
+      "stdoutLastLine": {
+        "cleartext": null,
+        "described": {
+          "chars": 58,
+          "marker": "<described>",
+          "sha256": "61eea766befefad3eba0c51b2d11f44800823d612d4c069f40a30ad5fca35457"
+        }
+      },
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
+      "argv": [
+        "remove",
+        "-h"
+      ],
+      "case": "mcp-remove-help",
+      "exit": 0,
+      "namespace": null,
+      "parser": "mcp",
+      "stderrLastLine": null,
+      "stdoutLastLine": {
+        "cleartext": null,
+        "described": {
+          "chars": 45,
+          "marker": "<described>",
+          "sha256": "940816cbdf2fe9f5d6aa96db0df48fef267a22abad391060b3ff4d05df0669aa"
+        }
+      },
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
+      "argv": [
+        "list"
+      ],
+      "case": "mcp-unknown-subcommand",
+      "exit": 2,
+      "namespace": null,
+      "parser": "mcp",
+      "stderrLastLine": {
+        "cleartext": "vibe mcp: error: argument mcp_command: invalid choice: 'list' (choose from add, remove)",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "remove"
+      ],
+      "case": "mcp-remove-without-name",
+      "exit": 2,
+      "namespace": null,
+      "parser": "mcp",
+      "stderrLastLine": {
+        "cleartext": "vibe mcp remove: error: the following arguments are required: NAME",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "remove",
+        "first",
+        "second"
+      ],
+      "case": "mcp-remove-two-names",
+      "exit": 2,
+      "namespace": null,
+      "parser": "mcp",
+      "stderrLastLine": {
+        "cleartext": "vibe mcp: error: unrecognized arguments: second",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "add"
+      ],
+      "case": "mcp-add-without-name",
+      "exit": 2,
+      "namespace": null,
+      "parser": "mcp",
+      "stderrLastLine": {
+        "cleartext": "vibe mcp add: error: the following arguments are required: NAME",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "add",
+        "docs",
+        "--transport",
+        "bogus"
+      ],
+      "case": "mcp-add-invalid-transport",
+      "exit": 2,
+      "namespace": null,
+      "parser": "mcp",
+      "stderrLastLine": {
+        "cleartext": "vibe mcp add: error: argument --transport: invalid choice: 'bogus' (choose from http, streamable-http, stdio)",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "add",
+        "docs",
+        "--url"
+      ],
+      "case": "mcp-add-url-without-value",
+      "exit": 2,
+      "namespace": null,
+      "parser": "mcp",
+      "stderrLastLine": {
+        "cleartext": "vibe mcp add: error: argument --url: expected one argument",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "add",
+        "docs",
+        "--transport",
+        "stdio",
+        "--url",
+        "u"
+      ],
+      "case": "mcp-add-stdio-with-remote-flag",
+      "exit": 2,
+      "namespace": {
+        "api_key_env": null,
+        "api_key_format": null,
+        "api_key_header": null,
+        "arg": [],
+        "command": null,
+        "env": [],
+        "header": [],
+        "mcp_command": "add",
+        "name": "docs",
+        "no_login": false,
+        "startup_timeout_sec": null,
+        "tool_timeout_sec": null,
+        "transport": "stdio",
+        "url": "u"
+      },
+      "parser": "mcp",
+      "stderrLastLine": {
+        "cleartext": "vibe mcp: error: ",
+        "described": {
+          "chars": 44,
+          "marker": "<described>",
+          "sha256": "fbd3b647364cf4dd577345c1c0e6209e8770b95a4dbc6acea1ced05c2c2553ec"
+        }
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "add",
+        "docs"
+      ],
+      "case": "mcp-add-remote-without-url",
+      "exit": 2,
+      "namespace": {
+        "api_key_env": null,
+        "api_key_format": null,
+        "api_key_header": null,
+        "arg": [],
+        "command": null,
+        "env": [],
+        "header": [],
+        "mcp_command": "add",
+        "name": "docs",
+        "no_login": false,
+        "startup_timeout_sec": null,
+        "tool_timeout_sec": null,
+        "transport": "streamable-http",
+        "url": null
+      },
+      "parser": "mcp",
+      "stderrLastLine": {
+        "cleartext": "vibe mcp: error: ",
+        "described": {
+          "chars": 58,
+          "marker": "<described>",
+          "sha256": "1825580ccd0f70f4fb1bf8260c2cc7c08d1dd510b40a7044846bca8ec9a1e477"
+        }
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "add",
+        "docs",
+        "--transport",
+        "http",
+        "--url",
+        "https://example.invalid/docs",
+        "--no-login"
+      ],
+      "case": "mcp-add-http-oauth-no-login",
+      "exit": 0,
+      "namespace": {
+        "api_key_env": null,
+        "api_key_format": null,
+        "api_key_header": null,
+        "arg": [],
+        "command": null,
+        "env": [],
+        "header": [],
+        "mcp_command": "add",
+        "name": "docs",
+        "no_login": true,
+        "startup_timeout_sec": null,
+        "tool_timeout_sec": null,
+        "transport": "http",
+        "url": "https://example.invalid/docs"
+      },
+      "parser": "mcp",
+      "stderrLastLine": null,
+      "stdoutLastLine": {
+        "cleartext": null,
+        "described": {
+          "chars": 38,
+          "marker": "<described>",
+          "sha256": "118d6ded5b54239c57b58b6cb68c3f64316dac528764644fa064782f5b67a892"
+        }
+      },
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
+      "argv": [
+        "add",
+        "notes",
+        "--transport",
+        "streamable-http",
+        "--url",
+        "https://example.invalid/notes",
+        "--api-key-env",
+        "PARITY_TOKEN_VARIABLE"
+      ],
+      "case": "mcp-add-streamable-http-static-auth",
+      "exit": 0,
+      "namespace": {
+        "api_key_env": "PARITY_TOKEN_VARIABLE",
+        "api_key_format": null,
+        "api_key_header": null,
+        "arg": [],
+        "command": null,
+        "env": [],
+        "header": [],
+        "mcp_command": "add",
+        "name": "notes",
+        "no_login": false,
+        "startup_timeout_sec": null,
+        "tool_timeout_sec": null,
+        "transport": "streamable-http",
+        "url": "https://example.invalid/notes"
+      },
+      "parser": "mcp",
+      "stderrLastLine": null,
+      "stdoutLastLine": {
+        "cleartext": null,
+        "described": {
+          "chars": 25,
+          "marker": "<described>",
+          "sha256": "86486ba759981e0c39c297636c292fcd5ca0d67ae56650e9bf8dc1828c1078ca"
+        }
+      },
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
+      "argv": [
+        "add",
+        "local",
+        "--transport",
+        "stdio",
+        "--command",
+        "/bin/true",
+        "--arg",
+        "serve"
+      ],
+      "case": "mcp-add-stdio-command",
+      "exit": 0,
+      "namespace": {
+        "api_key_env": null,
+        "api_key_format": null,
+        "api_key_header": null,
+        "arg": [
+          "serve"
+        ],
+        "command": "/bin/true",
+        "env": [],
+        "header": [],
+        "mcp_command": "add",
+        "name": "local",
+        "no_login": false,
+        "startup_timeout_sec": null,
+        "tool_timeout_sec": null,
+        "transport": "stdio",
+        "url": null
+      },
+      "parser": "mcp",
+      "stderrLastLine": null,
+      "stdoutLastLine": {
+        "cleartext": null,
+        "described": {
+          "chars": 25,
+          "marker": "<described>",
+          "sha256": "5a70544d53ca95236537c91251499bbf25de7e8fc67a755e26687ca060d2d8a0"
+        }
+      },
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
+      "argv": [
+        "add",
+        "local",
+        "--transport",
+        "stdio",
+        "--command",
+        "/bin/true",
+        "--arg",
+        "serve"
+      ],
+      "case": "mcp-add-stdio-again",
+      "exit": 0,
+      "namespace": {
+        "api_key_env": null,
+        "api_key_format": null,
+        "api_key_header": null,
+        "arg": [
+          "serve"
+        ],
+        "command": "/bin/true",
+        "env": [],
+        "header": [],
+        "mcp_command": "add",
+        "name": "local",
+        "no_login": false,
+        "startup_timeout_sec": null,
+        "tool_timeout_sec": null,
+        "transport": "stdio",
+        "url": null
+      },
+      "parser": "mcp",
+      "stderrLastLine": null,
+      "stdoutLastLine": {
+        "cleartext": null,
+        "described": {
+          "chars": 41,
+          "marker": "<described>",
+          "sha256": "02158495296b3a378a864112099cbb42780554b0b1bd609b4d921a25bda5c72d"
+        }
+      },
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
+      "argv": [
+        "add",
+        "extra",
+        "--transport",
+        "streamable-http",
+        "--url",
+        "https://example.invalid/docs",
+        "--no-login"
+      ],
+      "case": "mcp-add-duplicate-url",
+      "exit": 2,
+      "namespace": {
+        "api_key_env": null,
+        "api_key_format": null,
+        "api_key_header": null,
+        "arg": [],
+        "command": null,
+        "env": [],
+        "header": [],
+        "mcp_command": "add",
+        "name": "extra",
+        "no_login": true,
+        "startup_timeout_sec": null,
+        "tool_timeout_sec": null,
+        "transport": "streamable-http",
+        "url": "https://example.invalid/docs"
+      },
+      "parser": "mcp",
+      "stderrLastLine": {
+        "cleartext": "vibe mcp: error: ",
+        "described": {
+          "chars": 47,
+          "marker": "<described>",
+          "sha256": "cbbeeebd59224e9f5480eb44d067b23f68c8b28e279ffbc75d09cc60cbbc4f58"
+        }
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "remove",
+        "absent-server"
+      ],
+      "case": "mcp-remove-absent",
+      "exit": 0,
+      "namespace": {
+        "mcp_command": "remove",
+        "name": "absent-server"
+      },
+      "parser": "mcp",
+      "stderrLastLine": null,
+      "stdoutLastLine": {
+        "cleartext": null,
+        "described": {
+          "chars": 64,
+          "marker": "<described>",
+          "sha256": "7aea03d4f07cf87389f40fd10d2f082b52bbffcf0d1973d824f68f4602fe8598"
+        }
+      },
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
+      "argv": [
+        "remove",
+        "local"
+      ],
+      "case": "mcp-remove-stdio-server",
+      "exit": 0,
+      "namespace": {
+        "mcp_command": "remove",
+        "name": "local"
+      },
+      "parser": "mcp",
+      "stderrLastLine": null,
+      "stdoutLastLine": {
+        "cleartext": null,
+        "described": {
+          "chars": 27,
+          "marker": "<described>",
+          "sha256": "245802b7877114a2983de9ea51e3517bc564d8e58eea527f57c3ca988c6fc112"
+        }
+      },
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    }
+  ],
+  "interpreter": {
+    "major": 3,
+    "minor": 12
+  },
+  "parsers": [
+    {
+      "actionGroups": [
+        {
+          "dests": [
+            "initial_prompt"
+          ],
+          "title": "positional arguments"
+        },
+        {
+          "dests": [
+            "help",
+            "version",
+            "prompt",
+            "max_turns",
+            "max_price",
+            "max_tokens",
+            "enabled_tools",
+            "disabled_tools",
+            "output",
+            "agent",
+            "auto_approve",
+            "setup",
+            "check_upgrade",
+            "workdir",
+            "worktree",
+            "add_dir",
+            "trust",
+            "teleport",
+            "continue_session",
+            "resume"
+          ],
+          "title": "options"
+        }
+      ],
+      "actions": [
+        {
+          "choices": null,
+          "class": "_HelpAction",
+          "const": null,
+          "default": "==SUPPRESS==",
+          "dest": "help",
+          "help": {
+            "chars": 31,
+            "marker": "<described>",
+            "sha256": "608017daf42d9326e0d264a2a8e0075b1854b6b26ac5f5d3b9a464f5d646a637"
+          },
+          "helpSuppressed": false,
+          "invocation": "-h, --help",
+          "metavar": null,
+          "nargs": 0,
+          "optionStrings": [
+            "-h",
+            "--help"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_VersionAction",
+          "const": null,
+          "default": "==SUPPRESS==",
+          "dest": "version",
+          "help": {
+            "chars": 38,
+            "marker": "<described>",
+            "sha256": "d534d67f663beb61375890dc41d70a7687715ea240779cc0e7b5fd9931456032"
+          },
+          "helpSuppressed": false,
+          "invocation": "-v, --version",
+          "metavar": null,
+          "nargs": 0,
+          "optionStrings": [
+            "-v",
+            "--version"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_StoreAction",
+          "const": null,
+          "default": null,
+          "dest": "initial_prompt",
+          "help": {
+            "chars": 53,
+            "marker": "<described>",
+            "sha256": "f0b01173fba7ed36a6e9203df9a7c029c07532813d9d941e27dca241ed7c5571"
+          },
+          "helpSuppressed": false,
+          "invocation": "PROMPT",
+          "metavar": "PROMPT",
+          "nargs": "?",
+          "optionStrings": [],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_StoreAction",
+          "const": "",
+          "default": null,
+          "dest": "prompt",
+          "help": {
+            "chars": 192,
+            "marker": "<described>",
+            "sha256": "01c851f0f510962669ff75220517a0169dc12ea6895c20a886e35b222cbd467f"
+          },
+          "helpSuppressed": false,
+          "invocation": "-p [TEXT], --prompt [TEXT]",
+          "metavar": "TEXT",
+          "nargs": "?",
+          "optionStrings": [
+            "-p",
+            "--prompt"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_StoreAction",
+          "const": null,
+          "default": null,
+          "dest": "max_turns",
+          "help": {
+            "chars": 78,
+            "marker": "<described>",
+            "sha256": "929e13b36da4610f9948df3922dd37c49d994feb4b21c7487818c23fa09aacf3"
+          },
+          "helpSuppressed": false,
+          "invocation": "--max-turns N",
+          "metavar": "N",
+          "nargs": null,
+          "optionStrings": [
+            "--max-turns"
+          ],
+          "required": false,
+          "type": "int"
+        },
+        {
+          "choices": null,
+          "class": "_StoreAction",
+          "const": null,
+          "default": null,
+          "dest": "max_price",
+          "help": {
+            "chars": 124,
+            "marker": "<described>",
+            "sha256": "073796dca167f61efc0418f6ef09c9d129dd7163cec6e60fc9e4690a3fb6a253"
+          },
+          "helpSuppressed": false,
+          "invocation": "--max-price DOLLARS",
+          "metavar": "DOLLARS",
+          "nargs": null,
+          "optionStrings": [
+            "--max-price"
+          ],
+          "required": false,
+          "type": "float"
+        },
+        {
+          "choices": null,
+          "class": "_StoreAction",
+          "const": null,
+          "default": null,
+          "dest": "max_tokens",
+          "help": {
+            "chars": 161,
+            "marker": "<described>",
+            "sha256": "4cc4a12a8538f7d4a74d81dce6a441a3d16b09ba482b29e7eb29184d3a25c800"
+          },
+          "helpSuppressed": false,
+          "invocation": "--max-tokens N",
+          "metavar": "N",
+          "nargs": null,
+          "optionStrings": [
+            "--max-tokens"
+          ],
+          "required": false,
+          "type": "int"
+        },
+        {
+          "choices": null,
+          "class": "_AppendAction",
+          "const": null,
+          "default": null,
+          "dest": "enabled_tools",
+          "help": {
+            "chars": 193,
+            "marker": "<described>",
+            "sha256": "7610422887e179efd934befb503202132066b8976232e1574edf57539f1fc51e"
+          },
+          "helpSuppressed": false,
+          "invocation": "--enabled-tools TOOL",
+          "metavar": "TOOL",
+          "nargs": null,
+          "optionStrings": [
+            "--enabled-tools"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_AppendAction",
+          "const": null,
+          "default": null,
+          "dest": "disabled_tools",
+          "help": {
+            "chars": 168,
+            "marker": "<described>",
+            "sha256": "e4e620fa4ed205639597fc67c53857c3c037db57f85c4c86015e41b1af595a41"
+          },
+          "helpSuppressed": false,
+          "invocation": "--disabled-tools TOOL",
+          "metavar": "TOOL",
+          "nargs": null,
+          "optionStrings": [
+            "--disabled-tools"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": [
+            "text",
+            "json",
+            "streaming"
+          ],
+          "class": "_StoreAction",
+          "const": null,
+          "default": "text",
+          "dest": "output",
+          "help": {
+            "chars": 162,
+            "marker": "<described>",
+            "sha256": "690c9cdadf3d5dcd8e20f9af7b4df3b5e1ba1a065f064bf9d565ea5d80facb20"
+          },
+          "helpSuppressed": false,
+          "invocation": "--output {text,json,streaming}",
+          "metavar": null,
+          "nargs": null,
+          "optionStrings": [
+            "--output"
+          ],
+          "required": false,
+          "type": "str"
+        },
+        {
+          "choices": null,
+          "class": "_StoreAction",
+          "const": null,
+          "default": null,
+          "dest": "agent",
+          "help": {
+            "chars": 211,
+            "marker": "<described>",
+            "sha256": "ff0be3679d1685070dd5d31bb776fed058def6f4a7317b7a7945878d5e4c7f92"
+          },
+          "helpSuppressed": false,
+          "invocation": "--agent NAME",
+          "metavar": "NAME",
+          "nargs": null,
+          "optionStrings": [
+            "--agent"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_StoreTrueAction",
+          "const": true,
+          "default": false,
+          "dest": "auto_approve",
+          "help": {
+            "chars": 65,
+            "marker": "<described>",
+            "sha256": "161f89b05ff5279a7d57512022620e6b842e1e0584428ccd7debeb0d233e587e"
+          },
+          "helpSuppressed": false,
+          "invocation": "--auto-approve, --yolo",
+          "metavar": null,
+          "nargs": 0,
+          "optionStrings": [
+            "--auto-approve",
+            "--yolo"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_StoreTrueAction",
+          "const": true,
+          "default": false,
+          "dest": "setup",
+          "help": {
+            "chars": 22,
+            "marker": "<described>",
+            "sha256": "3bce0ba59d5540c5e440d441ef96298112c72829a7b1dd5db0783e0398825023"
+          },
+          "helpSuppressed": false,
+          "invocation": "--setup",
+          "metavar": null,
+          "nargs": 0,
+          "optionStrings": [
+            "--setup"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_StoreTrueAction",
+          "const": true,
+          "default": false,
+          "dest": "check_upgrade",
+          "help": {
+            "chars": 59,
+            "marker": "<described>",
+            "sha256": "365cf459e992b0d6f227fb78c13be12662d91e2f5600578313419fa5c0987a85"
+          },
+          "helpSuppressed": false,
+          "invocation": "--check-upgrade",
+          "metavar": null,
+          "nargs": 0,
+          "optionStrings": [
+            "--check-upgrade"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_StoreAction",
+          "const": null,
+          "default": null,
+          "dest": "workdir",
+          "help": {
+            "chars": 39,
+            "marker": "<described>",
+            "sha256": "03b33d3809af81e089bde74bdd01935b0bb79436cd9ef1e7a3b4c7a32015a30b"
+          },
+          "helpSuppressed": false,
+          "invocation": "--workdir DIR",
+          "metavar": "DIR",
+          "nargs": null,
+          "optionStrings": [
+            "--workdir"
+          ],
+          "required": false,
+          "type": "Path"
+        },
+        {
+          "choices": null,
+          "class": "_StoreAction",
+          "const": null,
+          "default": null,
+          "dest": "worktree",
+          "help": {
+            "chars": 179,
+            "marker": "<described>",
+            "sha256": "f599812fb07b025c50778342e82e0d2bdbb8852bce9c9d1b472965f1e5cb99c1"
+          },
+          "helpSuppressed": false,
+          "invocation": "--worktree NAME",
+          "metavar": "NAME",
+          "nargs": null,
+          "optionStrings": [
+            "--worktree"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_AppendAction",
+          "const": null,
+          "default": [],
+          "dest": "add_dir",
+          "help": {
+            "chars": 154,
+            "marker": "<described>",
+            "sha256": "3a1b2915ce16e70e7f66e50dd873003894cad529354974bd4db432884c4fa87f"
+          },
+          "helpSuppressed": false,
+          "invocation": "--add-dir DIR",
+          "metavar": "DIR",
+          "nargs": null,
+          "optionStrings": [
+            "--add-dir"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_StoreTrueAction",
+          "const": true,
+          "default": false,
+          "dest": "trust",
+          "help": {
+            "chars": 158,
+            "marker": "<described>",
+            "sha256": "c2144489e838ed4147ef10ff847248399299a24f845d6430ce1b8e395ccd2c5d"
+          },
+          "helpSuppressed": false,
+          "invocation": "--trust",
+          "metavar": null,
+          "nargs": 0,
+          "optionStrings": [
+            "--trust"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_StoreTrueAction",
+          "const": true,
+          "default": false,
+          "dest": "teleport",
+          "help": null,
+          "helpSuppressed": true,
+          "invocation": "--teleport",
+          "metavar": null,
+          "nargs": 0,
+          "optionStrings": [
+            "--teleport"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_StoreTrueAction",
+          "const": true,
+          "default": false,
+          "dest": "continue_session",
+          "help": {
+            "chars": 43,
+            "marker": "<described>",
+            "sha256": "67fa6e2e9fdec879ce565d7d64c7fd220e3ce891f7393b3317206df651136e90"
+          },
+          "helpSuppressed": false,
+          "invocation": "-c, --continue",
+          "metavar": null,
+          "nargs": 0,
+          "optionStrings": [
+            "-c",
+            "--continue"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_StoreAction",
+          "const": true,
+          "default": null,
+          "dest": "resume",
+          "help": {
+            "chars": 66,
+            "marker": "<described>",
+            "sha256": "aba5be7a8991ecf5782870b1ad656757c7347e61293b06a61702404663b89da2"
+          },
+          "helpSuppressed": false,
+          "invocation": "--resume [SESSION_ID]",
+          "metavar": "SESSION_ID",
+          "nargs": "?",
+          "optionStrings": [
+            "--resume"
+          ],
+          "required": false,
+          "type": null
+        }
+      ],
+      "allowAbbrev": true,
+      "formatter": "RawDescriptionHelpFormatter",
+      "hasDescription": true,
+      "hasEpilog": true,
+      "help": {
+        "columns": 80,
+        "lineCount": 80,
+        "lines": [
+          {
+            "chars": 71,
+            "cleartext": "usage: vibe [-h] [-v] [-p [TEXT]] [--max-turns N] [--max-price DOLLARS]",
+            "described": null,
+            "indent": 0,
+            "kind": "usage"
+          },
+          {
+            "chars": 75,
+            "cleartext": "            [--max-tokens N] [--enabled-tools TOOL] [--disabled-tools TOOL]",
+            "described": null,
+            "indent": 12,
+            "kind": "usage"
+          },
+          {
+            "chars": 76,
+            "cleartext": "            [--output {text,json,streaming}] [--agent NAME] [--auto-approve]",
+            "described": null,
+            "indent": 12,
+            "kind": "usage"
+          },
+          {
+            "chars": 73,
+            "cleartext": "            [--setup] [--check-upgrade] [--workdir DIR] [--worktree NAME]",
+            "described": null,
+            "indent": 12,
+            "kind": "usage"
+          },
+          {
+            "chars": 66,
+            "cleartext": "            [--add-dir DIR] [--trust] [-c | --resume [SESSION_ID]]",
+            "described": null,
+            "indent": 12,
+            "kind": "usage"
+          },
+          {
+            "chars": 20,
+            "cleartext": "            [PROMPT]",
+            "described": null,
+            "indent": 12,
+            "kind": "usage"
+          },
+          {
+            "chars": 0,
+            "cleartext": null,
+            "described": null,
+            "indent": 0,
+            "kind": "blank"
+          },
+          {
+            "chars": 36,
+            "cleartext": null,
+            "described": {
+              "chars": 36,
+              "marker": "<described>",
+              "sha256": "f85b721f26b273b8591651945495d8f51226be8c2e14da9e88e4ec2c1acfe90b"
+            },
+            "indent": 0,
+            "kind": "description"
+          },
+          {
+            "chars": 0,
+            "cleartext": null,
+            "described": null,
+            "indent": 0,
+            "kind": "blank"
+          },
+          {
+            "chars": 21,
+            "cleartext": "positional arguments:",
+            "described": null,
+            "indent": 0,
+            "kind": "heading"
+          },
+          {
+            "chars": 77,
+            "cleartext": "PROMPT",
+            "described": {
+              "chars": 53,
+              "marker": "<described>",
+              "sha256": "f0b01173fba7ed36a6e9203df9a7c029c07532813d9d941e27dca241ed7c5571"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 0,
+            "cleartext": null,
+            "described": null,
+            "indent": 0,
+            "kind": "blank"
+          },
+          {
+            "chars": 8,
+            "cleartext": "options:",
+            "described": null,
+            "indent": 0,
+            "kind": "heading"
+          },
+          {
+            "chars": 55,
+            "cleartext": "-h, --help",
+            "described": {
+              "chars": 31,
+              "marker": "<described>",
+              "sha256": "608017daf42d9326e0d264a2a8e0075b1854b6b26ac5f5d3b9a464f5d646a637"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 62,
+            "cleartext": "-v, --version",
+            "described": {
+              "chars": 38,
+              "marker": "<described>",
+              "sha256": "d534d67f663beb61375890dc41d70a7687715ea240779cc0e7b5fd9931456032"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 28,
+            "cleartext": "-p [TEXT], --prompt [TEXT]",
+            "described": null,
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 69,
+            "cleartext": null,
+            "described": {
+              "chars": 45,
+              "marker": "<described>",
+              "sha256": "7bf04a553ee493b7c9166bda52361df2e59f11332868b0dfedf2f3e3aa5c70be"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 78,
+            "cleartext": null,
+            "described": {
+              "chars": 54,
+              "marker": "<described>",
+              "sha256": "fbbb02c49fd9a294b0a2bd6cd145b480b1a23c67d1429f7eb529c723ca1830bb"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 73,
+            "cleartext": null,
+            "described": {
+              "chars": 49,
+              "marker": "<described>",
+              "sha256": "3d0e219747abee68a795d30bcb2515c19cc26c1082f8175c7d7b1f3860b3b11b"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 66,
+            "cleartext": null,
+            "described": {
+              "chars": 42,
+              "marker": "<described>",
+              "sha256": "635dd22b3df7fef3808aba1f4b842919c2fd19a8206366713cd3064fd8038da7"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 74,
+            "cleartext": "--max-turns N",
+            "described": {
+              "chars": 50,
+              "marker": "<described>",
+              "sha256": "864780042c830bf8593d6f7bb0a417857ee0dec3b19f38e9a6af1f2d765e8b82"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 51,
+            "cleartext": null,
+            "described": {
+              "chars": 27,
+              "marker": "<described>",
+              "sha256": "8f2a85f01f2a8bca5f23b301bfd97e50d953fc4aec83d7d0a5b6352f1cffbe78"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 77,
+            "cleartext": "--max-price DOLLARS",
+            "described": {
+              "chars": 53,
+              "marker": "<described>",
+              "sha256": "fa7abd0d592a37c1bc0c457935a4d6b7db6650c097d97d91c7b0cd5e86c4aed3"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 74,
+            "cleartext": null,
+            "described": {
+              "chars": 50,
+              "marker": "<described>",
+              "sha256": "849dd93994a6aeb9398128950002512d810867cf38982820c09f7996f73c358a"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 43,
+            "cleartext": null,
+            "described": {
+              "chars": 19,
+              "marker": "<described>",
+              "sha256": "d96feaaf141a08500cafac72e769c89735e98c3df1e84d7892dd1dbf12116b61"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 75,
+            "cleartext": "--max-tokens N",
+            "described": {
+              "chars": 51,
+              "marker": "<described>",
+              "sha256": "ff284c91c7293d0125850c26b180cd20e92bbb0dba00f840002ac20d64aa0d67"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 76,
+            "cleartext": null,
+            "described": {
+              "chars": 52,
+              "marker": "<described>",
+              "sha256": "1be7bd6a56a8f891511f99b92ff1ad2b47dccc75dd4c6334e4ff7065954c66e6"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 73,
+            "cleartext": null,
+            "described": {
+              "chars": 49,
+              "marker": "<described>",
+              "sha256": "3160fccedb7295601aa988a5514683ec18aa1db79554441e2f0252604ec51d1c"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 30,
+            "cleartext": null,
+            "described": {
+              "chars": 6,
+              "marker": "<described>",
+              "sha256": "7f04c4f5769d05226be556ec9eb31ea66c0ed316b5bc6367c18e96cff5a42cb3"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 78,
+            "cleartext": "--enabled-tools TOOL",
+            "described": {
+              "chars": 54,
+              "marker": "<described>",
+              "sha256": "9a2273c95252ec7f1e8d3e60ff14f4e9a1c9e7d26b7132a27625ab73c5103144"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 75,
+            "cleartext": null,
+            "described": {
+              "chars": 51,
+              "marker": "<described>",
+              "sha256": "b2e38f02391d5dd05ad64ea1dfa0a7b5d78a2b5fd80c71b5fc036adc01543d0b"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 77,
+            "cleartext": null,
+            "described": {
+              "chars": 53,
+              "marker": "<described>",
+              "sha256": "c4037303f6d16266161388a577598e8505bb1d1dbaefa067b81cc5e6a6cd3f8f"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 56,
+            "cleartext": null,
+            "described": {
+              "chars": 32,
+              "marker": "<described>",
+              "sha256": "37b49a1575cbc34cb3867bb56fed009fe4d4b89c4b5aae3f0cd4741e7362f3d9"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 23,
+            "cleartext": "--disabled-tools TOOL",
+            "described": null,
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 68,
+            "cleartext": null,
+            "described": {
+              "chars": 44,
+              "marker": "<described>",
+              "sha256": "304ea89205fc4498946f1ffd2072c212f3a344576d390babb82781cfb69de79c"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 76,
+            "cleartext": null,
+            "described": {
+              "chars": 52,
+              "marker": "<described>",
+              "sha256": "01ddcd8407e90c9df97f2fb54b7941a7146e714fc9580ad589746b1efe942e05"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 78,
+            "cleartext": null,
+            "described": {
+              "chars": 54,
+              "marker": "<described>",
+              "sha256": "24a14088b10e9a2f4d1be6ea004f5822f6d9748843506dab349d0927b12cab41"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 39,
+            "cleartext": null,
+            "described": {
+              "chars": 15,
+              "marker": "<described>",
+              "sha256": "80c76d1fa633a854aa83623a6fb73df834d801ac6013f6347002c8853d1c1e77"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 32,
+            "cleartext": "--output {text,json,streaming}",
+            "described": null,
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 76,
+            "cleartext": null,
+            "described": {
+              "chars": 52,
+              "marker": "<described>",
+              "sha256": "c409e3be1af6cbbeee7187749748726e53351208792154816c9f3bd649e68b16"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 76,
+            "cleartext": null,
+            "described": {
+              "chars": 52,
+              "marker": "<described>",
+              "sha256": "2d2584b28ccd238c577deb23512d936a605528e620cf78630217ab74ea6d2399"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 71,
+            "cleartext": null,
+            "described": {
+              "chars": 47,
+              "marker": "<described>",
+              "sha256": "01d7ae0cd63b4b8ae9f6bb493ddf9ca4278d108a485725df1612ca7173ccd702"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 32,
+            "cleartext": null,
+            "described": {
+              "chars": 8,
+              "marker": "<described>",
+              "sha256": "c17c02e81c901ffef860531b9c1417125aea60e42f73cf51087903f3fb7054e7"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 75,
+            "cleartext": "--agent NAME",
+            "described": {
+              "chars": 51,
+              "marker": "<described>",
+              "sha256": "c076d03a1b67b1ead9b7d816dd2bc3bc415c3b47f08e12dac241293f2582bf11"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 52,
+            "cleartext": null,
+            "described": {
+              "chars": 28,
+              "marker": "<described>",
+              "sha256": "e5f2547b7f3dd09b4781d90141f96a240b49962a49043be55e42688b10fd3887"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 66,
+            "cleartext": null,
+            "described": {
+              "chars": 42,
+              "marker": "<described>",
+              "sha256": "5dd58a27f1152dacebbf8078b23043d994ed071d23f1301e0182fe3d7c3bc469"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 78,
+            "cleartext": null,
+            "described": {
+              "chars": 54,
+              "marker": "<described>",
+              "sha256": "15d1308310387b46fa3f2a9c08bf1181ed5debd3303818c51a12d1e9db228ac2"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 56,
+            "cleartext": null,
+            "described": {
+              "chars": 32,
+              "marker": "<described>",
+              "sha256": "b73a8d6c8c2362aed818f423c5e51485b736a349f44d903e61dd2defc1c1c4c2"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 24,
+            "cleartext": "--auto-approve, --yolo",
+            "described": null,
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 73,
+            "cleartext": null,
+            "described": {
+              "chars": 49,
+              "marker": "<described>",
+              "sha256": "f878a0c4f7de52aa30e569067b9c9bbb086028c1c374bbd3eeba8bdbe0bdc46c"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 39,
+            "cleartext": null,
+            "described": {
+              "chars": 15,
+              "marker": "<described>",
+              "sha256": "371cbae72a7ce8064d9ddcb95140e2f6bcc595dc54ee8ea6a64fbf7648129f52"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 46,
+            "cleartext": "--setup",
+            "described": {
+              "chars": 22,
+              "marker": "<described>",
+              "sha256": "3bce0ba59d5540c5e440d441ef96298112c72829a7b1dd5db0783e0398825023"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 78,
+            "cleartext": "--check-upgrade",
+            "described": {
+              "chars": 54,
+              "marker": "<described>",
+              "sha256": "ef0faf5d8a2e8d081675d1c9b9edff9d567e8941180dbb4a526534353a54d845"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 28,
+            "cleartext": null,
+            "described": {
+              "chars": 4,
+              "marker": "<described>",
+              "sha256": "e596899f114b5162402325dfb31fdaa792fabed718628336cc7a35a24f38eaa9"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 63,
+            "cleartext": "--workdir DIR",
+            "described": {
+              "chars": 39,
+              "marker": "<described>",
+              "sha256": "03b33d3809af81e089bde74bdd01935b0bb79436cd9ef1e7a3b4c7a32015a30b"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 62,
+            "cleartext": "--worktree NAME",
+            "described": {
+              "chars": 38,
+              "marker": "<described>",
+              "sha256": "070ccd3f019b0805c1a1563810d27c65d02f984c6cc8f4d032855d5ff7523277"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 75,
+            "cleartext": null,
+            "described": {
+              "chars": 51,
+              "marker": "<described>",
+              "sha256": "b20330911c0775a47a762031c0d4bb99e2faacbd1118c721993f4bb7c42669a3"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 78,
+            "cleartext": null,
+            "described": {
+              "chars": 54,
+              "marker": "<described>",
+              "sha256": "0eabf083dcce75afd7cb3633d4e2faa28d322ef81ded8af7b904559b750779cb"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 57,
+            "cleartext": null,
+            "described": {
+              "chars": 33,
+              "marker": "<described>",
+              "sha256": "d9588bc481015f27ed5c8af03d3e09958ff04b32fcc3487d080ad71193dea20f"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 72,
+            "cleartext": "--add-dir DIR",
+            "described": {
+              "chars": 48,
+              "marker": "<described>",
+              "sha256": "c1fdb2b0faa4aed25fb06b64a5a8a95b4aa0e5f3a98df11a3494b54d5744c84d"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 73,
+            "cleartext": null,
+            "described": {
+              "chars": 49,
+              "marker": "<described>",
+              "sha256": "ea11aff72a1aa8a79ffa801569dfaae07691bd862215b2fd2253568693160e31"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 72,
+            "cleartext": null,
+            "described": {
+              "chars": 48,
+              "marker": "<described>",
+              "sha256": "17c0d6aec82d4607038d4bc6e64ec62e06466ec81059f96c357a6a4a19b83db3"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 30,
+            "cleartext": null,
+            "described": {
+              "chars": 6,
+              "marker": "<described>",
+              "sha256": "ad5f0c777a2b470f986a17d7a59cb792ff641fcf3bbc29d86b4853b39a5594cc"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 76,
+            "cleartext": "--trust",
+            "described": {
+              "chars": 52,
+              "marker": "<described>",
+              "sha256": "7fc690d7826a621418d6cad3c40005f6d3171a5a191f970b3c8baa9b62ff2af7"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 74,
+            "cleartext": null,
+            "described": {
+              "chars": 50,
+              "marker": "<described>",
+              "sha256": "caab55f387113bcbb605a15c9e33f61914786e8f8999fb70ab090d6e65e86644"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 78,
+            "cleartext": null,
+            "described": {
+              "chars": 54,
+              "marker": "<described>",
+              "sha256": "47271a22a729002cf6818c39a0161fb33a4a33396a9afa0a42e8a0d707a438b6"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 67,
+            "cleartext": "-c, --continue",
+            "described": {
+              "chars": 43,
+              "marker": "<described>",
+              "sha256": "67fa6e2e9fdec879ce565d7d64c7fd220e3ce891f7393b3317206df651136e90"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 23,
+            "cleartext": "--resume [SESSION_ID]",
+            "described": null,
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 70,
+            "cleartext": null,
+            "described": {
+              "chars": 46,
+              "marker": "<described>",
+              "sha256": "6d840918bb00c44bf2beffc6c380ff90677da3b0a9579ee468c7decd90347c5d"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 43,
+            "cleartext": null,
+            "described": {
+              "chars": 19,
+              "marker": "<described>",
+              "sha256": "a4504a899a7134860a427ef9685fdd93e8bf15b35c714a2f59f512a95bc81c04"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 0,
+            "cleartext": null,
+            "described": null,
+            "indent": 0,
+            "kind": "blank"
+          },
+          {
+            "chars": 9,
+            "cleartext": "Commands:",
+            "described": null,
+            "indent": 0,
+            "kind": "epilogHeading"
+          },
+          {
+            "chars": 67,
+            "cleartext": "mcp",
+            "described": {
+              "chars": 50,
+              "marker": "<described>",
+              "sha256": "9cc50fbe608aed5deeaf4463abc743a966db22f5cf7a8b506630bcff2e62a20c"
+            },
+            "indent": 2,
+            "kind": "epilogEntry"
+          },
+          {
+            "chars": 0,
+            "cleartext": null,
+            "described": null,
+            "indent": 0,
+            "kind": "blank"
+          },
+          {
+            "chars": 22,
+            "cleartext": "Environment variables:",
+            "described": null,
+            "indent": 0,
+            "kind": "epilogHeading"
+          },
+          {
+            "chars": 69,
+            "cleartext": "VIBE_HOME",
+            "described": {
+              "chars": 51,
+              "marker": "<described>",
+              "sha256": "6f74a4178a813528ea888adba4ebc7ac65618901d12477ec340506bae939a322"
+            },
+            "indent": 2,
+            "kind": "epilogEntry"
+          },
+          {
+            "chars": 81,
+            "cleartext": "LOG_LEVEL",
+            "described": {
+              "chars": 63,
+              "marker": "<described>",
+              "sha256": "54520cb274c3ba2af7a3a3d25e04d01717ca531abcf76e205fec32d600056123"
+            },
+            "indent": 2,
+            "kind": "epilogEntry"
+          },
+          {
+            "chars": 63,
+            "cleartext": null,
+            "described": {
+              "chars": 45,
+              "marker": "<described>",
+              "sha256": "50f31182fb92ba6b9d37064aca7da9b94d59dd00b42d376866ec377eb0f52685"
+            },
+            "indent": 18,
+            "kind": "epilogContinuation"
+          },
+          {
+            "chars": 75,
+            "cleartext": "LOG_MAX_BYTES",
+            "described": {
+              "chars": 57,
+              "marker": "<described>",
+              "sha256": "2eb155707299787c415a9e8a4543040b181b432e8f0add3357fc6fe0467183b6"
+            },
+            "indent": 2,
+            "kind": "epilogEntry"
+          },
+          {
+            "chars": 75,
+            "cleartext": "VIBE_*",
+            "described": {
+              "chars": 57,
+              "marker": "<described>",
+              "sha256": "b4ef025bd3bdb020a8e8894f1fbdc59a58b1595cd6480cad0d49f5ec026fcda8"
+            },
+            "indent": 2,
+            "kind": "epilogEntry"
+          }
+        ],
+        "sha256": "88806b6374ce8064fa16dea50a7336d923590d3d254d4791a4204ff8f2a8d539"
+      },
+      "mutuallyExclusiveGroups": [
+        {
+          "dests": [
+            "continue_session",
+            "resume"
+          ],
+          "required": false
+        }
+      ],
+      "parser": "root",
+      "prog": "vibe"
+    },
+    {
+      "actionGroups": [
+        {
+          "dests": [
+            "mcp_command"
+          ],
+          "title": "positional arguments"
+        },
+        {
+          "dests": [
+            "help"
+          ],
+          "title": "options"
+        }
+      ],
+      "actions": [
+        {
+          "choices": null,
+          "class": "_HelpAction",
+          "const": null,
+          "default": "==SUPPRESS==",
+          "dest": "help",
+          "help": {
+            "chars": 31,
+            "marker": "<described>",
+            "sha256": "608017daf42d9326e0d264a2a8e0075b1854b6b26ac5f5d3b9a464f5d646a637"
+          },
+          "helpSuppressed": false,
+          "invocation": "-h, --help",
+          "metavar": null,
+          "nargs": 0,
+          "optionStrings": [
+            "-h",
+            "--help"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": [
+            "add",
+            "remove"
+          ],
+          "class": "_SubParsersAction",
+          "const": null,
+          "default": null,
+          "dest": "mcp_command",
+          "help": null,
+          "helpSuppressed": false,
+          "invocation": "{add,remove}",
+          "metavar": null,
+          "nargs": "A...",
+          "optionStrings": [],
+          "required": false,
+          "type": null
+        }
+      ],
+      "allowAbbrev": true,
+      "formatter": "HelpFormatter",
+      "hasDescription": true,
+      "hasEpilog": false,
+      "help": {
+        "columns": 80,
+        "lineCount": 11,
+        "lines": [
+          {
+            "chars": 37,
+            "cleartext": "usage: vibe mcp [-h] {add,remove} ...",
+            "described": null,
+            "indent": 0,
+            "kind": "usage"
+          },
+          {
+            "chars": 0,
+            "cleartext": null,
+            "described": null,
+            "indent": 0,
+            "kind": "blank"
+          },
+          {
+            "chars": 32,
+            "cleartext": null,
+            "described": {
+              "chars": 32,
+              "marker": "<described>",
+              "sha256": "d3db129d3502b283a8a782452aec00159b7c4497c061c07628edcaceade7f63b"
+            },
+            "indent": 0,
+            "kind": "description"
+          },
+          {
+            "chars": 0,
+            "cleartext": null,
+            "described": null,
+            "indent": 0,
+            "kind": "blank"
+          },
+          {
+            "chars": 21,
+            "cleartext": "positional arguments:",
+            "described": null,
+            "indent": 0,
+            "kind": "heading"
+          },
+          {
+            "chars": 14,
+            "cleartext": "{add,remove}",
+            "described": null,
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 60,
+            "cleartext": "add",
+            "described": {
+              "chars": 44,
+              "marker": "<described>",
+              "sha256": "db40b23649616837b04dd105f59c6dda832196282369970543d41fa1324be70e"
+            },
+            "indent": 4,
+            "kind": "invocation"
+          },
+          {
+            "chars": 65,
+            "cleartext": "remove",
+            "described": {
+              "chars": 49,
+              "marker": "<described>",
+              "sha256": "7640f19833d3404bc5310b877114cd9ff5cd61a24514ebdebe7756a338d0285d"
+            },
+            "indent": 4,
+            "kind": "invocation"
+          },
+          {
+            "chars": 0,
+            "cleartext": null,
+            "described": null,
+            "indent": 0,
+            "kind": "blank"
+          },
+          {
+            "chars": 8,
+            "cleartext": "options:",
+            "described": null,
+            "indent": 0,
+            "kind": "heading"
+          },
+          {
+            "chars": 47,
+            "cleartext": "-h, --help",
+            "described": {
+              "chars": 31,
+              "marker": "<described>",
+              "sha256": "608017daf42d9326e0d264a2a8e0075b1854b6b26ac5f5d3b9a464f5d646a637"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          }
+        ],
+        "sha256": "325b6fb31945bc6cb98ee7c88aedd49978597290df49fdb7a5201ad1f0b987e7"
+      },
+      "mutuallyExclusiveGroups": [],
+      "parser": "mcp",
+      "prog": "vibe mcp"
+    },
+    {
+      "actionGroups": [
+        {
+          "dests": [
+            "name"
+          ],
+          "title": "positional arguments"
+        },
+        {
+          "dests": [
+            "help",
+            "transport",
+            "url",
+            "command",
+            "arg",
+            "env",
+            "header",
+            "api_key_env",
+            "api_key_header",
+            "api_key_format",
+            "no_login",
+            "startup_timeout_sec",
+            "tool_timeout_sec"
+          ],
+          "title": "options"
+        }
+      ],
+      "actions": [
+        {
+          "choices": null,
+          "class": "_HelpAction",
+          "const": null,
+          "default": "==SUPPRESS==",
+          "dest": "help",
+          "help": {
+            "chars": 31,
+            "marker": "<described>",
+            "sha256": "608017daf42d9326e0d264a2a8e0075b1854b6b26ac5f5d3b9a464f5d646a637"
+          },
+          "helpSuppressed": false,
+          "invocation": "-h, --help",
+          "metavar": null,
+          "nargs": 0,
+          "optionStrings": [
+            "-h",
+            "--help"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_StoreAction",
+          "const": null,
+          "default": null,
+          "dest": "name",
+          "help": {
+            "chars": 16,
+            "marker": "<described>",
+            "sha256": "05ed8522fde80ddb546f839fc8f74be4e022ec47f39e5191b112821fb474b441"
+          },
+          "helpSuppressed": false,
+          "invocation": "NAME",
+          "metavar": "NAME",
+          "nargs": null,
+          "optionStrings": [],
+          "required": true,
+          "type": null
+        },
+        {
+          "choices": [
+            "http",
+            "streamable-http",
+            "stdio"
+          ],
+          "class": "_StoreAction",
+          "const": null,
+          "default": "streamable-http",
+          "dest": "transport",
+          "help": {
+            "chars": 37,
+            "marker": "<described>",
+            "sha256": "d371f6021218cd9064f3af6cb131cfd5bcd52534a02a5c8ec00069e3876dab74"
+          },
+          "helpSuppressed": false,
+          "invocation": "--transport {http,streamable-http,stdio}",
+          "metavar": null,
+          "nargs": null,
+          "optionStrings": [
+            "--transport"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_StoreAction",
+          "const": null,
+          "default": null,
+          "dest": "url",
+          "help": {
+            "chars": 60,
+            "marker": "<described>",
+            "sha256": "4b15633436b5f0fa280a2487ef71405c35e354541739e259493b6085d9e7b83f"
+          },
+          "helpSuppressed": false,
+          "invocation": "--url URL",
+          "metavar": null,
+          "nargs": null,
+          "optionStrings": [
+            "--url"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_StoreAction",
+          "const": null,
+          "default": null,
+          "dest": "command",
+          "help": {
+            "chars": 58,
+            "marker": "<described>",
+            "sha256": "e35ab6f03e71b852633fa07a3d82527525007824cfc576a71209b96a60a755e5"
+          },
+          "helpSuppressed": false,
+          "invocation": "--command COMMAND",
+          "metavar": null,
+          "nargs": null,
+          "optionStrings": [
+            "--command"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_AppendAction",
+          "const": null,
+          "default": [],
+          "dest": "arg",
+          "help": {
+            "chars": 64,
+            "marker": "<described>",
+            "sha256": "925eaad890f1e8d714d611aa56ecc0a967d06cb99a53b79fe617791c00b61237"
+          },
+          "helpSuppressed": false,
+          "invocation": "--arg VALUE",
+          "metavar": "VALUE",
+          "nargs": null,
+          "optionStrings": [
+            "--arg"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_AppendAction",
+          "const": null,
+          "default": [],
+          "dest": "env",
+          "help": {
+            "chars": 76,
+            "marker": "<described>",
+            "sha256": "d6355eb17a16764bb2858815e1448f66adf13a0e583bd3290f293b1a44432d6c"
+          },
+          "helpSuppressed": false,
+          "invocation": "--env NAME=VALUE",
+          "metavar": "NAME=VALUE",
+          "nargs": null,
+          "optionStrings": [
+            "--env"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_AppendAction",
+          "const": null,
+          "default": [],
+          "dest": "header",
+          "help": {
+            "chars": 140,
+            "marker": "<described>",
+            "sha256": "ba6a77c9c756610c04570727f5dcf7f0c52a29bb99229cbb4e7115611a6cac4a"
+          },
+          "helpSuppressed": false,
+          "invocation": "--header NAME=VALUE",
+          "metavar": "NAME=VALUE",
+          "nargs": null,
+          "optionStrings": [
+            "--header"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_StoreAction",
+          "const": null,
+          "default": null,
+          "dest": "api_key_env",
+          "help": {
+            "chars": 44,
+            "marker": "<described>",
+            "sha256": "af7ea5881d45309d101d1dd8a52af9a66430952e2ee0bb0ccb91aafb6539a6df"
+          },
+          "helpSuppressed": false,
+          "invocation": "--api-key-env VAR, --bearer-token-env-var VAR",
+          "metavar": "VAR",
+          "nargs": null,
+          "optionStrings": [
+            "--api-key-env",
+            "--bearer-token-env-var"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_StoreAction",
+          "const": null,
+          "default": null,
+          "dest": "api_key_header",
+          "help": {
+            "chars": 53,
+            "marker": "<described>",
+            "sha256": "4df4288ff8d576c79bc1e49374f2f85a197e7b8b84d77a182868a2940d17e54d"
+          },
+          "helpSuppressed": false,
+          "invocation": "--api-key-header HEADER",
+          "metavar": "HEADER",
+          "nargs": null,
+          "optionStrings": [
+            "--api-key-header"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_StoreAction",
+          "const": null,
+          "default": null,
+          "dest": "api_key_format",
+          "help": {
+            "chars": 65,
+            "marker": "<described>",
+            "sha256": "934b92886ee1a78d4eb9988df562ae92c57062b447a456be8b75ac46117ed5e8"
+          },
+          "helpSuppressed": false,
+          "invocation": "--api-key-format FORMAT",
+          "metavar": "FORMAT",
+          "nargs": null,
+          "optionStrings": [
+            "--api-key-format"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_StoreTrueAction",
+          "const": true,
+          "default": false,
+          "dest": "no_login",
+          "help": {
+            "chars": 55,
+            "marker": "<described>",
+            "sha256": "445d00c242bd2cb4e9a92697f0b0d8fbf9407eaaf11d505ae909c105d66800ad"
+          },
+          "helpSuppressed": false,
+          "invocation": "--no-login",
+          "metavar": null,
+          "nargs": 0,
+          "optionStrings": [
+            "--no-login"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_StoreAction",
+          "const": null,
+          "default": null,
+          "dest": "startup_timeout_sec",
+          "help": {
+            "chars": 34,
+            "marker": "<described>",
+            "sha256": "28369c5b06d93ebfc6f8e0a295518d803c297861ff6cfdb901cf939d732ed055"
+          },
+          "helpSuppressed": false,
+          "invocation": "--startup-timeout-sec SECONDS",
+          "metavar": "SECONDS",
+          "nargs": null,
+          "optionStrings": [
+            "--startup-timeout-sec"
+          ],
+          "required": false,
+          "type": "float"
+        },
+        {
+          "choices": null,
+          "class": "_StoreAction",
+          "const": null,
+          "default": null,
+          "dest": "tool_timeout_sec",
+          "help": {
+            "chars": 34,
+            "marker": "<described>",
+            "sha256": "29064de54bd7dca2208c989fa0d6c1d061791ce51a26b85f5248754205551d35"
+          },
+          "helpSuppressed": false,
+          "invocation": "--tool-timeout-sec SECONDS",
+          "metavar": "SECONDS",
+          "nargs": null,
+          "optionStrings": [
+            "--tool-timeout-sec"
+          ],
+          "required": false,
+          "type": "float"
+        }
+      ],
+      "allowAbbrev": true,
+      "formatter": "HelpFormatter",
+      "hasDescription": false,
+      "hasEpilog": false,
+      "help": {
+        "columns": 80,
+        "lineCount": 40,
+        "lines": [
+          {
+            "chars": 67,
+            "cleartext": "usage: vibe mcp add [-h] [--transport {http,streamable-http,stdio}]",
+            "described": null,
+            "indent": 0,
+            "kind": "usage"
+          },
+          {
+            "chars": 65,
+            "cleartext": "                    [--url URL] [--command COMMAND] [--arg VALUE]",
+            "described": null,
+            "indent": 20,
+            "kind": "usage"
+          },
+          {
+            "chars": 60,
+            "cleartext": "                    [--env NAME=VALUE] [--header NAME=VALUE]",
+            "described": null,
+            "indent": 20,
+            "kind": "usage"
+          },
+          {
+            "chars": 65,
+            "cleartext": "                    [--api-key-env VAR] [--api-key-header HEADER]",
+            "described": null,
+            "indent": 20,
+            "kind": "usage"
+          },
+          {
+            "chars": 58,
+            "cleartext": "                    [--api-key-format FORMAT] [--no-login]",
+            "described": null,
+            "indent": 20,
+            "kind": "usage"
+          },
+          {
+            "chars": 51,
+            "cleartext": "                    [--startup-timeout-sec SECONDS]",
+            "described": null,
+            "indent": 20,
+            "kind": "usage"
+          },
+          {
+            "chars": 48,
+            "cleartext": "                    [--tool-timeout-sec SECONDS]",
+            "described": null,
+            "indent": 20,
+            "kind": "usage"
+          },
+          {
+            "chars": 24,
+            "cleartext": "                    NAME",
+            "described": null,
+            "indent": 20,
+            "kind": "usage"
+          },
+          {
+            "chars": 0,
+            "cleartext": null,
+            "described": null,
+            "indent": 0,
+            "kind": "blank"
+          },
+          {
+            "chars": 21,
+            "cleartext": "positional arguments:",
+            "described": null,
+            "indent": 0,
+            "kind": "heading"
+          },
+          {
+            "chars": 40,
+            "cleartext": "NAME",
+            "described": {
+              "chars": 16,
+              "marker": "<described>",
+              "sha256": "05ed8522fde80ddb546f839fc8f74be4e022ec47f39e5191b112821fb474b441"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 0,
+            "cleartext": null,
+            "described": null,
+            "indent": 0,
+            "kind": "blank"
+          },
+          {
+            "chars": 8,
+            "cleartext": "options:",
+            "described": null,
+            "indent": 0,
+            "kind": "heading"
+          },
+          {
+            "chars": 55,
+            "cleartext": "-h, --help",
+            "described": {
+              "chars": 31,
+              "marker": "<described>",
+              "sha256": "608017daf42d9326e0d264a2a8e0075b1854b6b26ac5f5d3b9a464f5d646a637"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 42,
+            "cleartext": "--transport {http,streamable-http,stdio}",
+            "described": null,
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 61,
+            "cleartext": null,
+            "described": {
+              "chars": 37,
+              "marker": "<described>",
+              "sha256": "d371f6021218cd9064f3af6cb131cfd5bcd52534a02a5c8ec00069e3876dab74"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 71,
+            "cleartext": "--url URL",
+            "described": {
+              "chars": 47,
+              "marker": "<described>",
+              "sha256": "2608e82c51f1a6279e8960c535cabcafb5e1712180f31783d5df23935c1e9564"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 36,
+            "cleartext": null,
+            "described": {
+              "chars": 12,
+              "marker": "<described>",
+              "sha256": "97ce3559f288820f0a9a40403dcbcb0df023d2eba516002c0a8c2d395d890b5b"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 70,
+            "cleartext": "--command COMMAND",
+            "described": {
+              "chars": 46,
+              "marker": "<described>",
+              "sha256": "6dfe40d76de1221081f59da70762afc7871491d9f9581415c82fdb5124b1eb28"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 35,
+            "cleartext": null,
+            "described": {
+              "chars": 11,
+              "marker": "<described>",
+              "sha256": "1a0e5d32bd1c88ff2f0ef2f33e776cad008e090401b7737cb088726af5bce965"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 72,
+            "cleartext": "--arg VALUE",
+            "described": {
+              "chars": 48,
+              "marker": "<described>",
+              "sha256": "e442193bc1befdcd9046fe4e7c37bcbab0435d552b167d905b2d87ebc67f03ce"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 39,
+            "cleartext": null,
+            "described": {
+              "chars": 15,
+              "marker": "<described>",
+              "sha256": "80c76d1fa633a854aa83623a6fb73df834d801ac6013f6347002c8853d1c1e77"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 74,
+            "cleartext": "--env NAME=VALUE",
+            "described": {
+              "chars": 50,
+              "marker": "<described>",
+              "sha256": "81ae8d26df4d7d1d69f491e0e1e314616752c7b734e6b08c4d6964f3c13cc5de"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 49,
+            "cleartext": null,
+            "described": {
+              "chars": 25,
+              "marker": "<described>",
+              "sha256": "25e32830ade8784e47245478760d1c0cd9b14a0f31d71f2c30210d1af131a21b"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 76,
+            "cleartext": "--header NAME=VALUE",
+            "described": {
+              "chars": 52,
+              "marker": "<described>",
+              "sha256": "44cf1b859e4587e0694b8629041ff538323b4fec3c985dbb1e14c17783f8deb2"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 74,
+            "cleartext": null,
+            "described": {
+              "chars": 50,
+              "marker": "<described>",
+              "sha256": "8e399323f00bcede0f7d772940edf52985c73847f72bdc482cb62e79491dcb2c"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 60,
+            "cleartext": null,
+            "described": {
+              "chars": 36,
+              "marker": "<described>",
+              "sha256": "3e73f5682e000c8c3e568da5df32326ff53f3344b2371b2e44fef3458b8f38fc"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 47,
+            "cleartext": "--api-key-env VAR, --bearer-token-env-var VAR",
+            "described": null,
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 68,
+            "cleartext": null,
+            "described": {
+              "chars": 44,
+              "marker": "<described>",
+              "sha256": "af7ea5881d45309d101d1dd8a52af9a66430952e2ee0bb0ccb91aafb6539a6df"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 25,
+            "cleartext": "--api-key-header HEADER",
+            "described": null,
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 77,
+            "cleartext": null,
+            "described": {
+              "chars": 53,
+              "marker": "<described>",
+              "sha256": "4df4288ff8d576c79bc1e49374f2f85a197e7b8b84d77a182868a2940d17e54d"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 25,
+            "cleartext": "--api-key-format FORMAT",
+            "described": null,
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 72,
+            "cleartext": null,
+            "described": {
+              "chars": 48,
+              "marker": "<described>",
+              "sha256": "ceaa3b3282ab745235c88ae397b1b6149729ed91e7b2320f1b943bcadd4e80f6"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 40,
+            "cleartext": null,
+            "described": {
+              "chars": 16,
+              "marker": "<described>",
+              "sha256": "a2c9ab7e7a353c4b0c200e8c89dff69bef7199496c25831796fd7ef4a8321557"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 72,
+            "cleartext": "--no-login",
+            "described": {
+              "chars": 48,
+              "marker": "<described>",
+              "sha256": "e0acb25662889ee7117f5796ce70621af6f4e68a4626df880cf2b9d88f973080"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 30,
+            "cleartext": null,
+            "described": {
+              "chars": 6,
+              "marker": "<described>",
+              "sha256": "db8f65879035497a173a146883e04a3373435353a11203f16cd8f6ef6eec0547"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 31,
+            "cleartext": "--startup-timeout-sec SECONDS",
+            "described": null,
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 58,
+            "cleartext": null,
+            "described": {
+              "chars": 34,
+              "marker": "<described>",
+              "sha256": "28369c5b06d93ebfc6f8e0a295518d803c297861ff6cfdb901cf939d732ed055"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 28,
+            "cleartext": "--tool-timeout-sec SECONDS",
+            "described": null,
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 58,
+            "cleartext": null,
+            "described": {
+              "chars": 34,
+              "marker": "<described>",
+              "sha256": "29064de54bd7dca2208c989fa0d6c1d061791ce51a26b85f5248754205551d35"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          }
+        ],
+        "sha256": "c46d72df10a030ace7a95c6ed2e0087086eef5bfb3d3d97b64219484bc1bc6cc"
+      },
+      "mutuallyExclusiveGroups": [],
+      "parser": "mcp-add",
+      "prog": "vibe mcp add"
+    },
+    {
+      "actionGroups": [
+        {
+          "dests": [
+            "name"
+          ],
+          "title": "positional arguments"
+        },
+        {
+          "dests": [
+            "help"
+          ],
+          "title": "options"
+        }
+      ],
+      "actions": [
+        {
+          "choices": null,
+          "class": "_HelpAction",
+          "const": null,
+          "default": "==SUPPRESS==",
+          "dest": "help",
+          "help": {
+            "chars": 31,
+            "marker": "<described>",
+            "sha256": "608017daf42d9326e0d264a2a8e0075b1854b6b26ac5f5d3b9a464f5d646a637"
+          },
+          "helpSuppressed": false,
+          "invocation": "-h, --help",
+          "metavar": null,
+          "nargs": 0,
+          "optionStrings": [
+            "-h",
+            "--help"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_StoreAction",
+          "const": null,
+          "default": null,
+          "dest": "name",
+          "help": {
+            "chars": 16,
+            "marker": "<described>",
+            "sha256": "05ed8522fde80ddb546f839fc8f74be4e022ec47f39e5191b112821fb474b441"
+          },
+          "helpSuppressed": false,
+          "invocation": "NAME",
+          "metavar": "NAME",
+          "nargs": null,
+          "optionStrings": [],
+          "required": true,
+          "type": null
+        }
+      ],
+      "allowAbbrev": true,
+      "formatter": "HelpFormatter",
+      "hasDescription": false,
+      "hasEpilog": false,
+      "help": {
+        "columns": 80,
+        "lineCount": 7,
+        "lines": [
+          {
+            "chars": 32,
+            "cleartext": "usage: vibe mcp remove [-h] NAME",
+            "described": null,
+            "indent": 0,
+            "kind": "usage"
+          },
+          {
+            "chars": 0,
+            "cleartext": null,
+            "described": null,
+            "indent": 0,
+            "kind": "blank"
+          },
+          {
+            "chars": 21,
+            "cleartext": "positional arguments:",
+            "described": null,
+            "indent": 0,
+            "kind": "heading"
+          },
+          {
+            "chars": 30,
+            "cleartext": "NAME",
+            "described": {
+              "chars": 16,
+              "marker": "<described>",
+              "sha256": "05ed8522fde80ddb546f839fc8f74be4e022ec47f39e5191b112821fb474b441"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 0,
+            "cleartext": null,
+            "described": null,
+            "indent": 0,
+            "kind": "blank"
+          },
+          {
+            "chars": 8,
+            "cleartext": "options:",
+            "described": null,
+            "indent": 0,
+            "kind": "heading"
+          },
+          {
+            "chars": 45,
+            "cleartext": "-h, --help",
+            "described": {
+              "chars": 31,
+              "marker": "<described>",
+              "sha256": "608017daf42d9326e0d264a2a8e0075b1854b6b26ac5f5d3b9a464f5d646a637"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          }
+        ],
+        "sha256": "5361a841af31b243a848bdebed0e2ef6fec50bbefd7ae3b2ee42356a7230b6e7"
+      },
+      "mutuallyExclusiveGroups": [],
+      "parser": "mcp-remove",
+      "prog": "vibe mcp remove"
+    }
+  ],
+  "reference": {
+    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+    "sourceFiles": [
+      "vibe/cli/entrypoint.py",
+      "vibe/cli/mcp_command.py"
+    ],
+    "version": "2.24.0"
+  },
+  "schemaVersion": 1,
+  "unavailable": [
+    {
+      "argv": "mcp remove docs",
+      "id": "mcp-remove-oauth-server",
+      "reason": "removing a persisted OAuth server deletes its keyring credentials before the config entry (vibe/core/tools/mcp/management.py:36-49), and this capture drives no keyring"
+    },
+    {
+      "argv": "mcp add docs --transport http --url https://example.invalid/mcp",
+      "id": "mcp-add-http-oauth-with-login",
+      "reason": "an OAuth add without --no-login starts a browser login against a live authorization server (vibe/cli/mcp_command.py:211-249)"
+    },
+    {
+      "argv": "vibe --check-upgrade",
+      "id": "check-upgrade-against-the-index",
+      "reason": "the flag parses here, but the upgrade check it selects queries the package index, so only its parse is recorded"
+    }
+  ]
+}

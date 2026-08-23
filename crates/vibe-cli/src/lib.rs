@@ -1339,3 +1339,6 @@ mod tests {
         ));
     }
 }
+
+#[cfg(test)]
+mod cli_surface_parity_tests;
