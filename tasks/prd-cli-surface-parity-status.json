@@ -1,0 +1,332 @@
+{
+  "prd": {
+    "file": "tasks/prd-cli-surface-parity.md",
+    "title": "CLI Surface at Full Parity",
+    "created_at": "2026-08-23",
+    "status": "IN_PROGRESS"
+  },
+  "epics": [
+    {
+      "id": "EP-098",
+      "title": "The CLI surface oracle",
+      "status": "DONE",
+      "priority": "P0",
+      "stories_total": 3,
+      "stories_done": 3,
+      "started_at": "2026-08-23"
+    },
+    {
+      "id": "EP-099",
+      "title": "The `vibe mcp` command shape",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 3,
+      "stories_done": 0
+    },
+    {
+      "id": "EP-100",
+      "title": "`vibe mcp add`",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 4,
+      "stories_done": 0
+    },
+    {
+      "id": "EP-101",
+      "title": "The top-level surface",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 4,
+      "stories_done": 0
+    },
+    {
+      "id": "EP-102",
+      "title": "Parse semantics",
+      "status": "TODO",
+      "priority": "P1",
+      "stories_total": 3,
+      "stories_done": 0
+    },
+    {
+      "id": "EP-103",
+      "title": "Restate row 7 from its oracle",
+      "status": "TODO",
+      "priority": "P0",
+      "stories_total": 2,
+      "stories_done": 0
+    }
+  ],
+  "stories": [
+    {
+      "id": "US-308",
+      "title": "Capture the reference argument grammar",
+      "epic": "EP-098",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [],
+      "started_at": "2026-08-23",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
+    },
+    {
+      "id": "US-309",
+      "title": "Capture the argv outcome matrix",
+      "epic": "EP-098",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-308"
+      ],
+      "started_at": "2026-08-23",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
+    },
+    {
+      "id": "US-310",
+      "title": "Replay the CLI surface corpus with a ledger and a floor",
+      "epic": "EP-098",
+      "status": "DONE",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-308",
+        "US-309"
+      ],
+      "started_at": "2026-08-23",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
+    },
+    {
+      "id": "US-311",
+      "title": "Route `vibe mcp` through a real sub-command parser",
+      "epic": "EP-099",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-312",
+      "title": "Report argument failures the way the reference reports them",
+      "epic": "EP-099",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-311"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-313",
+      "title": "Bring `vibe mcp remove` to its reference contract",
+      "epic": "EP-099",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-311"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-314",
+      "title": "Declare the add flag surface",
+      "epic": "EP-100",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-311"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-315",
+      "title": "Validate the add arguments",
+      "epic": "EP-100",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-314"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-316",
+      "title": "Persist the server with the reference's outcomes",
+      "epic": "EP-100",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-315"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-317",
+      "title": "Run the OAuth login the add path performs",
+      "epic": "EP-100",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "L",
+      "blocked_by": [
+        "US-316"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-318",
+      "title": "Render the top-level help with the reference's structure",
+      "epic": "EP-101",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-310"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-319",
+      "title": "Report the working-directory failures the reference reports",
+      "epic": "EP-101",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-320",
+      "title": "Exit and report the way the reference exits",
+      "epic": "EP-101",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "L",
+      "blocked_by": [
+        "US-310"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-321",
+      "title": "Carry the programmatic session options the reference sets",
+      "epic": "EP-101",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "S",
+      "blocked_by": [],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-322",
+      "title": "Accept unambiguous flag prefixes and refuse ambiguous ones",
+      "epic": "EP-102",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "M",
+      "blocked_by": [
+        "US-310"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-323",
+      "title": "Accept the argument values argparse accepts",
+      "epic": "EP-102",
+      "status": "TODO",
+      "priority": "P1",
+      "size": "S",
+      "blocked_by": [
+        "US-310"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-324",
+      "title": "Read piped stdin the way the reference reads it",
+      "epic": "EP-102",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-325",
+      "title": "Record the CLI surface divergences in the tables that hold them",
+      "epic": "EP-103",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "S",
+      "blocked_by": [
+        "US-310"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    },
+    {
+      "id": "US-326",
+      "title": "Remeasure and restate row 7",
+      "epic": "EP-103",
+      "status": "TODO",
+      "priority": "P0",
+      "size": "M",
+      "blocked_by": [
+        "US-311",
+        "US-312",
+        "US-313",
+        "US-314",
+        "US-315",
+        "US-316",
+        "US-317",
+        "US-318",
+        "US-319",
+        "US-320",
+        "US-321",
+        "US-322",
+        "US-323",
+        "US-324",
+        "US-325"
+      ],
+      "started_at": null,
+      "completed_at": null,
+      "reviewed_at": null
+    }
+  ]
+}
