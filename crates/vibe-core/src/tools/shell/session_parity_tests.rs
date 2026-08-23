@@ -57,9 +57,21 @@ const SCORECARD_RELATIVE: &str = "docs/parity.md";
 /// The scorecard row this ledger lowers, named as its cell spells it.
 const SHELL_ROW: &str = "Managed shell and terminals";
 
-/// A gap the licensing boundary keeps open, and one this port decided.
+/// A gap the licensing boundary keeps open, and one a divergence table of the
+/// scorecard holds. Every entry names one of the two: nothing in this ledger is
+/// tolerated without a row a reader can look up.
 const LICENSING: &str = "NOTICE";
 const RECORDED: &str = "docs/parity.md";
+/// The two divergence sections [`RECORDS`] resolves its rows against.
+const OPEN_SECTION: &str = "## Open divergences";
+const ACCEPTED_SECTION: &str = "## Accepted divergences";
+/// The token a divergence row carries when this ledger is what holds it, so a
+/// row the ledger stopped reaching can be told from every other row of the two
+/// tables.
+const LEDGER_FILE: &str = "session_parity_ledger.rs";
+/// The test a divergence row names as the one that fails when its difference
+/// stops reproducing.
+const STALENESS_TEST: &str = "a_ledger_entry_whose_divergence_is_fixed_fails_the_suite";
 
 const ROOT_PLACEHOLDER: &str = "{root}";
 const HOME_PLACEHOLDER: &str = "{home}";
@@ -121,8 +133,8 @@ struct Divergence {
     case: &'static str,
     /// Matched by prefix against the reported JSON pointer.
     pointer: &'static str,
-    /// The story that closes this gap, [`LICENSING`] when none can, or
-    /// [`RECORDED`] when this port answers differently on purpose.
+    /// [`LICENSING`] when the boundary keeps this gap open, or [`RECORDED`]
+    /// when a divergence table of the scorecard holds it.
     closed_by: &'static str,
     /// The row of `docs/parity.md` this gap belongs to, spelled as that row's
     /// cell spells it.
@@ -146,7 +158,81 @@ impl Divergence {
     }
 }
 
+/// Which divergence table of the scorecard holds a reason.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Table {
+    /// `## Open divergences`, for a difference this port intends to close.
+    Open,
+    /// `## Accepted divergences`, for a difference that is a decision.
+    Accepted,
+}
+
+impl Table {
+    fn section(self) -> &'static str {
+        match self {
+            Self::Open => OPEN_SECTION,
+            Self::Accepted => ACCEPTED_SECTION,
+        }
+    }
+}
+
+/// One reason the ledger states, and the divergence row that holds it.
+#[derive(Debug, Clone, Copy)]
+struct Recorded {
+    /// The reason constant every entry this row answers for carries.
+    why: &'static str,
+    /// The row's first cell, spelled as `docs/parity.md` spells it.
+    row: &'static str,
+    table: Table,
+}
+
 include!("session_parity_ledger.rs");
+
+/// The row that holds one entry. An entry the licensing boundary keeps open is
+/// held by the licensing row whatever field it lands on, because a rendered
+/// document that repeats a reference-authored sentence diverges for that
+/// sentence's reason rather than for the rendering's.
+fn recorded(entry: &Divergence) -> Option<&'static Recorded> {
+    let why = if entry.closed_by == LICENSING {
+        WHY_MESSAGE
+    } else {
+        entry.why
+    };
+    RECORDS.iter().find(|record| record.why == why)
+}
+
+/// The first cell of every row of one section of the scorecard.
+fn section_rows(document: &str, section: &str) -> Vec<String> {
+    let mut rows = Vec::new();
+    let mut inside = false;
+    for line in document.lines() {
+        if line.starts_with("## ") {
+            inside = line.trim() == section;
+            continue;
+        }
+        if !inside || !line.starts_with('|') {
+            continue;
+        }
+        let mut cells = line.trim_matches('|').split(" | ").map(str::trim);
+        let Some(first) = cells.next() else {
+            continue;
+        };
+        if first == "Part" || first.starts_with("---") {
+            continue;
+        }
+        rows.push(line.to_owned());
+    }
+    rows
+}
+
+/// The first cell of a table line.
+fn first_cell(line: &str) -> &str {
+    line.trim_matches('|')
+        .split(" | ")
+        .next()
+        .unwrap_or("")
+        .trim()
+}
 
 // --------------------------------------------------------------------------
 // The corpus
@@ -1010,9 +1096,13 @@ async fn shell_sessions_match_the_reference_except_for_the_recorded_gap() {
                 .find(|entry| entry.covers(tool, case, &difference.pointer))
             {
                 Some(entry) => {
+                    let record = recorded(entry).expect(
+                        "every ledger reason names a divergence row, which \
+                         every_recorded_reason_has_exactly_one_divergence_row holds",
+                    );
                     tolerated.insert((
                         format!("{}/{} at {}", entry.tool, entry.case, entry.pointer),
-                        entry.closed_by.to_owned(),
+                        record.row.to_owned(),
                     ));
                 }
                 None => unlisted.push(format!(
@@ -1031,12 +1121,24 @@ async fn shell_sessions_match_the_reference_except_for_the_recorded_gap() {
         tools.len(),
         tolerated.len()
     );
-    let mut per_story: BTreeMap<&str, usize> = BTreeMap::new();
-    for (_, closed_by) in &tolerated {
-        *per_story.entry(closed_by.as_str()).or_default() += 1;
+    let mut per_row: BTreeMap<&str, usize> = BTreeMap::new();
+    for (_, row) in &tolerated {
+        *per_row.entry(row.as_str()).or_default() += 1;
     }
-    for (closed_by, count) in &per_story {
-        println!("  {count} tolerated until {closed_by}");
+    println!(
+        "  {} recorded divergences hold them, {} open and {} accepted",
+        per_row.len(),
+        RECORDS
+            .iter()
+            .filter(|record| record.table == Table::Open && per_row.contains_key(record.row))
+            .count(),
+        RECORDS
+            .iter()
+            .filter(|record| record.table == Table::Accepted && per_row.contains_key(record.row))
+            .count(),
+    );
+    for (row, count) in &per_row {
+        println!("  {count} recorded as {row:?}");
     }
 
     assert!(
@@ -1139,6 +1241,139 @@ fn every_ledger_entry_names_what_closes_it() {
             entry.row
         );
     }
+}
+
+/// The binding US-306 asks for, resolved in both directions: a reason naming a
+/// row `docs/parity.md` does not carry fails, and a divergence row this ledger
+/// holds that no reason reaches fails too. Without the second half a row could
+/// outlive the entries that justified it, which is the state the tables exist
+/// to prevent.
+#[test]
+fn every_recorded_reason_has_exactly_one_divergence_row() {
+    let scorecard = fs::read_to_string(repo_root().join(SCORECARD_RELATIVE))
+        .expect("the scorecard is committed");
+
+    let mut seen: BTreeSet<&str> = BTreeSet::new();
+    for record in RECORDS {
+        assert!(
+            seen.insert(record.row),
+            "{:?} is recorded twice, so a difference would have two rows",
+            record.row
+        );
+        assert!(
+            !record.why.is_empty(),
+            "{:?} holds a reason nobody stated",
+            record.row
+        );
+    }
+    assert_eq!(
+        RECORDS
+            .iter()
+            .map(|record| record.why)
+            .collect::<BTreeSet<_>>()
+            .len(),
+        RECORDS.len(),
+        "two records claim the same reason, so a difference would have two rows"
+    );
+
+    // Forward: every reason a live entry states resolves to one row, in the
+    // table that row is written in, and that row names the test that fails when
+    // the difference stops reproducing.
+    let mut reached: BTreeSet<&str> = BTreeSet::new();
+    for entry in LEDGER {
+        let record = recorded(entry).unwrap_or_else(|| {
+            panic!(
+                "{}/{} states a reason no row of `{SCORECARD_RELATIVE}` holds: {}",
+                entry.tool, entry.case, entry.why
+            )
+        });
+        reached.insert(record.row);
+    }
+    for record in RECORDS {
+        assert!(
+            reached.contains(record.row),
+            "{:?} is written in `{SCORECARD_RELATIVE}` and no ledger entry reaches it any more, \
+             so the row outlived its difference",
+            record.row
+        );
+        let section = record.table.section();
+        let line = section_rows(&scorecard, section)
+            .into_iter()
+            .find(|line| first_cell(line) == record.row)
+            .unwrap_or_else(|| {
+                panic!(
+                    "`{SCORECARD_RELATIVE}` carries no {section:?} row named {:?}",
+                    record.row
+                )
+            });
+        assert!(
+            line.contains(LEDGER_FILE),
+            "{:?} does not name `{LEDGER_FILE}`, so a reader cannot reach the entries it holds",
+            record.row
+        );
+        assert!(
+            line.contains(STALENESS_TEST),
+            "{:?} does not name `{STALENESS_TEST}`, which is the test that fails when its \
+             difference stops reproducing",
+            record.row
+        );
+    }
+
+    // Reverse: a row of either table that says this ledger holds it has to be
+    // one of the records above.
+    for section in [OPEN_SECTION, ACCEPTED_SECTION] {
+        for line in section_rows(&scorecard, section) {
+            if !line.contains(LEDGER_FILE) {
+                continue;
+            }
+            let part = first_cell(&line);
+            assert!(
+                RECORDS.iter().any(|record| record.row == part),
+                "the {section:?} row {part:?} says `{LEDGER_FILE}` holds it, and no reason in \
+                 that ledger names it"
+            );
+        }
+    }
+
+    println!(
+        "shell divergence rows: {} recorded, {} open and {} accepted, every one reached",
+        RECORDS.len(),
+        RECORDS.iter().filter(|r| r.table == Table::Open).count(),
+        RECORDS
+            .iter()
+            .filter(|r| r.table == Table::Accepted)
+            .count(),
+    );
+}
+
+/// What the rendered row claims: the digest of a model document diverges only
+/// where the typed document under it does. A case whose only entry is
+/// `/modelText` would falsify it, and the row would have to be rewritten as an
+/// independent difference rather than a consequence of the rows above it.
+#[test]
+fn no_rendered_document_diverges_on_its_own() {
+    let mut per_case: BTreeMap<(&str, &str), Vec<&str>> = BTreeMap::new();
+    for entry in LEDGER {
+        per_case
+            .entry((entry.tool, entry.case))
+            .or_default()
+            .push(entry.pointer);
+    }
+    let alone = per_case
+        .iter()
+        .filter(|(_, pointers)| {
+            pointers
+                .iter()
+                .all(|pointer| pointer.starts_with("/modelText"))
+        })
+        .map(|((tool, case), _)| format!("{tool}/{case}"))
+        .collect::<Vec<_>>();
+    assert!(
+        alone.is_empty(),
+        "these cases diverge on the rendered document and on nothing else, so it is not the \
+         consequence its divergence row says it is:\n  {}",
+        alone.join("\n  ")
+    );
 }
 
 #[test]
