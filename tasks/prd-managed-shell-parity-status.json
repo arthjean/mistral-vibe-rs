@@ -36,11 +36,11 @@
     {
       "id": "EP-095",
       "title": "The gate that decides what gets published",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "stories_total": 2,
-      "stories_done": 0,
-      "started_at": null
+      "stories_done": 2,
+      "started_at": "2026-08-23"
     },
     {
       "id": "EP-096",
@@ -205,29 +205,29 @@
       "id": "US-299",
       "title": "Withhold the managed variants when the client hosts a terminal",
       "epic": "EP-095",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-291"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-23",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
     },
     {
       "id": "US-300",
       "title": "Select the surviving variant by the reference's priority rule",
       "epic": "EP-095",
-      "status": "TODO",
+      "status": "DONE",
       "priority": "P0",
       "size": "M",
       "blocked_by": [
         "US-299"
       ],
-      "started_at": null,
-      "completed_at": null,
-      "reviewed_at": null
+      "started_at": "2026-08-23",
+      "completed_at": "2026-08-23",
+      "reviewed_at": "2026-08-23"
     },
     {
       "id": "US-301",
