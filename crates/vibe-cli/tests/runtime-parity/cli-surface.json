@@ -4116,6 +4116,108 @@
     },
     {
       "argv": [
+        "add",
+        "reports",
+        "--transport",
+        "streamable-http",
+        "--url",
+        "https://example.invalid/reports",
+        "--bearer-token-env-var",
+        "PARITY_REPORTS_TOKEN",
+        "--api-key-header",
+        "X-Parity-Key",
+        "--api-key-format",
+        "Token {token}",
+        "--header",
+        "X-Parity-Trace=on",
+        "--startup-timeout-sec",
+        "12.5"
+      ],
+      "case": "mcp-add-remote-static-carrier",
+      "exit": 0,
+      "namespace": {
+        "api_key_env": "PARITY_REPORTS_TOKEN",
+        "api_key_format": "Token {token}",
+        "api_key_header": "X-Parity-Key",
+        "arg": [],
+        "command": null,
+        "env": [],
+        "header": [
+          "X-Parity-Trace=on"
+        ],
+        "mcp_command": "add",
+        "name": "reports",
+        "no_login": false,
+        "startup_timeout_sec": 12.5,
+        "tool_timeout_sec": null,
+        "transport": "streamable-http",
+        "url": "https://example.invalid/reports"
+      },
+      "parser": "mcp",
+      "stderrLastLine": null,
+      "stdoutLastLine": {
+        "cleartext": null,
+        "described": {
+          "chars": 27,
+          "marker": "<described>",
+          "sha256": "61243f34112cfaff7e4cb885a220e734c906a18ae31a627a53eb7882d638c6d7"
+        }
+      },
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
+      "argv": [
+        "add",
+        "tools",
+        "--transport",
+        "stdio",
+        "--command",
+        "/bin/true",
+        "--env",
+        "PARITY_MODE=on",
+        "--tool-timeout-sec",
+        "7.5"
+      ],
+      "case": "mcp-add-stdio-environment",
+      "exit": 0,
+      "namespace": {
+        "api_key_env": null,
+        "api_key_format": null,
+        "api_key_header": null,
+        "arg": [],
+        "command": "/bin/true",
+        "env": [
+          "PARITY_MODE=on"
+        ],
+        "header": [],
+        "mcp_command": "add",
+        "name": "tools",
+        "no_login": false,
+        "startup_timeout_sec": null,
+        "tool_timeout_sec": 7.5,
+        "transport": "stdio",
+        "url": null
+      },
+      "parser": "mcp",
+      "stderrLastLine": null,
+      "stdoutLastLine": {
+        "cleartext": null,
+        "described": {
+          "chars": 25,
+          "marker": "<described>",
+          "sha256": "762c294691879b433a514ef1065279731480501b4107b0076e95d34ff9a82895"
+        }
+      },
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
+      "argv": [
         "remove",
         "absent-server"
       ],
