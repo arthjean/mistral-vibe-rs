@@ -46,6 +46,26 @@ pub enum StartupError {
         #[source]
         source: std::io::Error,
     },
+    /// `--workdir` naming something that is not a directory, reported with the
+    /// path once it was expanded and made absolute, which is the form the
+    /// reference prints (`vibe/cli/entrypoint.py:279-289`).
+    #[error("--workdir does not exist or is not a directory: {0}")]
+    WorkdirNotADirectory(PathBuf),
+    /// `--add-dir` naming something that is not a directory, reported with the
+    /// argument exactly as it was typed rather than as it resolved, which is
+    /// the half of the pair the reference spells the other way
+    /// (`vibe/cli/entrypoint.py:317-325`).
+    #[error("--add-dir path does not exist or is not a directory: {0}")]
+    AddDirNotADirectory(String),
+    /// The directory the shell still points at was deleted underneath it. The
+    /// second line is the way out, and names the flag that provides it
+    /// (`vibe/cli/entrypoint.py:306-315`).
+    #[error(
+        "Current working directory no longer exists.\nThe directory this session was started \
+         from has been deleted. Move to a directory that still exists and run vibe again, or \
+         name one with --workdir."
+    )]
+    WorkingDirectoryGone,
     #[error(
         "--worktree NAME must be one portable path segment: no separator, no drive letter, \
              no character a Windows path forbids, and no reserved device name"

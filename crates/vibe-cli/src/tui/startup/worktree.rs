@@ -8,7 +8,7 @@
 
 use std::fs;
 use std::io::{BufRead, Write};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use vibe_core::worktree::{
     self, PreparedWorktree, WorktreeError, inspect_worktree_for_cleanup, remove_worktree,
@@ -63,14 +63,26 @@ impl LaunchWorkspace {
         arguments: &mut Arguments,
         narration: &mut impl Write,
     ) -> Result<Self, StartupError> {
+        // Reading the working directory is this port's counterpart to the
+        // reference's `Path.cwd()` guard: it never chdirs, so the one place a
+        // deleted directory shows up is where the launch asks for it, and
+        // `--workdir` pre-empts the question exactly as it does upstream
+        // (`vibe/cli/entrypoint.py:279-315`).
         let requested = match &arguments.workdir {
             Some(path) => path.clone(),
-            None => std::env::current_dir().map_err(|source| StartupError::Io {
-                path: PathBuf::from("."),
-                source,
-            })?,
+            None => std::env::current_dir().map_err(|_| StartupError::WorkingDirectoryGone)?,
         };
-        let base_directory = canonical_directory(&expand_user_path(&requested))?;
+        let expanded = expand_user_path(&requested);
+        let base_directory = match canonical_directory(&expanded) {
+            Some(directory) => directory,
+            None if arguments.workdir.is_some() => {
+                // The reference reports the resolved path here, and resolving
+                // is what `Path.resolve()` does whether or not the path is
+                // there, so a missing one is still printed absolute.
+                return Err(StartupError::WorkdirNotADirectory(absolute_path(&expanded)));
+            }
+            None => return Err(StartupError::WorkingDirectoryGone),
+        };
 
         // An empty `--worktree` names no worktree at all, which is what the
         // reference's own truthiness test on the argument decides
@@ -111,15 +123,43 @@ fn resolve_additional_directories(
     effective_directory: &Path,
 ) -> Result<(), StartupError> {
     for directory in &mut arguments.add_directories {
+        // The reference reports the argument as it was typed, so the raw
+        // spelling is taken before anything expands or joins it.
+        let typed = directory.display().to_string();
         let expanded = expand_user_path(directory);
         let candidate = if expanded.is_absolute() {
             expanded
         } else {
             effective_directory.join(expanded)
         };
-        *directory = canonical_directory(&candidate)?;
+        *directory =
+            canonical_directory(&candidate).ok_or(StartupError::AddDirNotADirectory(typed))?;
     }
     Ok(())
+}
+
+/// `path` made absolute without touching the filesystem.
+///
+/// `fs::canonicalize` is the wrong tool for a path that is being reported
+/// precisely because it is not there: it fails on a missing path, while the
+/// reference's `Path.resolve()` returns one. The lexical walk below is what is
+/// left once the filesystem cannot be asked.
+fn absolute_path(path: &Path) -> PathBuf {
+    let mut resolved = if path.is_absolute() {
+        PathBuf::new()
+    } else {
+        std::env::current_dir().unwrap_or_default()
+    };
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                resolved.pop();
+            }
+            other => resolved.push(other),
+        }
+    }
+    resolved
 }
 
 pub(super) fn expand_user_path(path: &Path) -> PathBuf {
@@ -287,19 +327,14 @@ fn confirm(
     Ok(accepted.contains(&answer.trim().to_ascii_lowercase().as_str()))
 }
 
-fn canonical_directory(path: &Path) -> Result<PathBuf, StartupError> {
-    let canonical = fs::canonicalize(path).map_err(|source| startup_io(path, source))?;
-    if canonical.is_dir() {
-        Ok(canonical)
-    } else {
-        Err(StartupError::Io {
-            path: path.to_path_buf(),
-            source: std::io::Error::new(
-                std::io::ErrorKind::NotADirectory,
-                "path is not a directory",
-            ),
-        })
-    }
+/// The directory `path` names, or `None` when there is none there.
+///
+/// The operating system's own error is dropped rather than carried: every
+/// caller reports the flag it came from and the path the user gave, which is
+/// what the reference prints and all a reader needs to fix the invocation.
+fn canonical_directory(path: &Path) -> Option<PathBuf> {
+    let canonical = fs::canonicalize(path).ok()?;
+    canonical.is_dir().then_some(canonical)
 }
 
 #[cfg(test)]
