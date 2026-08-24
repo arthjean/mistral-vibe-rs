@@ -47,52 +47,113 @@ pub const ADAPTER_NAME: &str = "vibe-cli";
 #[command(
     name = "vibe",
     version,
+    disable_help_flag = true,
     disable_version_flag = true,
-    about = "Run the Mistral Vibe interactive CLI"
+    about = "Run the Mistral Vibe interactive CLI",
+    after_help = EPILOG
 )]
 pub struct Arguments {
-    pub initial_prompt: Option<String>,
-    #[arg(short = 'v', long = "version", action = ArgAction::Version)]
+    // The declaration order below is the reference's own
+    // (`vibe/cli/entrypoint.py:41-179`), because both parsers render their
+    // options in the order they were declared: `-h` is first upstream only
+    // because argparse adds it before anything else, which is why this port
+    // declares it rather than letting clap append its own at the end.
+    #[arg(
+        short = 'h',
+        long = "help",
+        action = ArgAction::Help,
+        help = "Print this help text and exit"
+    )]
+    pub help: Option<bool>,
+    #[arg(
+        short = 'v',
+        long = "version",
+        action = ArgAction::Version,
+        help = "Print the installed version and exit"
+    )]
     pub version: Option<bool>,
-    #[arg(short = 'p', long, num_args = 0..=1, default_missing_value = "")]
+    #[arg(
+        value_name = "PROMPT",
+        help = "Opening prompt, submitted as soon as the interactive session is ready"
+    )]
+    pub initial_prompt: Option<String>,
+    #[arg(
+        short = 'p',
+        long,
+        num_args = 0..=1,
+        default_missing_value = "",
+        value_name = "TEXT",
+        help = "Run one programmatic turn on TEXT and exit. Given without a value, the prompt \
+                is read from standard input."
+    )]
     pub prompt: Option<String>,
-    #[arg(long, value_enum, default_value_t = OutputMode::Text)]
+    #[arg(
+        long,
+        value_name = "N",
+        help = "Stop the session after N assistant turns"
+    )]
+    pub max_turns: Option<u32>,
+    #[arg(
+        long,
+        value_name = "DOLLARS",
+        help = "Stop the session once its accumulated cost reaches DOLLARS"
+    )]
+    pub max_price: Option<f64>,
+    #[arg(
+        long,
+        value_name = "N",
+        help = "Stop the session once it has spent N tokens"
+    )]
+    pub max_tokens: Option<u64>,
+    #[arg(
+        long = "enabled-tools",
+        action = ArgAction::Append,
+        value_name = "TOOL",
+        help = "Restrict the session to TOOL. Repeat the flag to allow several."
+    )]
+    pub enabled_tools: Vec<String>,
+    #[arg(
+        long = "disabled-tools",
+        action = ArgAction::Append,
+        value_name = "TOOL",
+        help = "Withhold TOOL from the session. Repeat the flag to withhold several."
+    )]
+    pub disabled_tools: Vec<String>,
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = OutputMode::Text,
+        value_name = "{text,json,streaming}",
+        help = "Shape of the programmatic output: text prints the final answer, json prints \
+                one object once the turn ends, streaming prints one object per event."
+    )]
     pub output: OutputMode,
     #[arg(
         long,
-        conflicts_with = "continue_session",
-        num_args = 0..=1,
-        default_missing_value = ""
+        value_name = "NAME",
+        help = "Start the session under the agent called NAME"
     )]
-    pub resume: Option<String>,
-    #[arg(short = 'c', long = "continue", conflicts_with = "resume")]
-    pub continue_session: bool,
-    #[arg(long)]
-    pub workdir: Option<PathBuf>,
-    #[arg(long = "add-dir")]
-    pub add_directories: Vec<PathBuf>,
-    #[arg(long)]
-    pub trust: bool,
-    #[arg(long)]
     pub agent: Option<String>,
-    #[arg(long = "enabled-tools", action = ArgAction::Append)]
-    pub enabled_tools: Vec<String>,
-    #[arg(long = "disabled-tools", action = ArgAction::Append)]
-    pub disabled_tools: Vec<String>,
-    #[arg(long = "allowed-tool", hide = true)]
-    pub tool_filters: Vec<String>,
-    #[arg(long)]
-    pub max_turns: Option<u32>,
-    #[arg(long)]
-    pub max_tokens: Option<u64>,
-    #[arg(long)]
-    pub max_price: Option<f64>,
-    #[arg(long, visible_alias = "yolo")]
+    #[arg(
+        long,
+        visible_alias = "yolo",
+        help = "Approve every tool call without asking"
+    )]
     pub auto_approve: bool,
-    #[arg(long)]
+    #[arg(long, help = "Run the interactive setup and exit")]
     pub setup: bool,
-    #[arg(long, action = ArgAction::SetTrue)]
+    #[arg(
+        long,
+        action = ArgAction::SetTrue,
+        help = "Report whether a newer release is available and exit"
+    )]
     pub check_upgrade: bool,
+    #[arg(
+        long,
+        value_name = "DIR",
+        help = "Change to DIR before the session starts"
+    )]
+    pub workdir: Option<PathBuf>,
     #[arg(
         long,
         value_name = "NAME",
@@ -101,8 +162,38 @@ pub struct Arguments {
                 asking. Ignored with --setup and --check-upgrade."
     )]
     pub worktree: Option<String>,
+    #[arg(
+        long = "add-dir",
+        value_name = "DIR",
+        help = "Give the session access to DIR alongside the working directory. Repeat the flag \
+                to add several."
+    )]
+    pub add_directories: Vec<PathBuf>,
+    #[arg(long, help = "Trust the workspace without asking")]
+    pub trust: bool,
     #[arg(long, hide = true)]
     pub teleport: bool,
+    #[arg(
+        short = 'c',
+        long = "continue",
+        conflicts_with = "resume",
+        help = "Continue the most recent session of this workspace"
+    )]
+    pub continue_session: bool,
+    #[arg(
+        long,
+        conflicts_with = "continue_session",
+        num_args = 0..=1,
+        default_missing_value = "",
+        value_name = "SESSION_ID",
+        help = "Resume the session called SESSION_ID. Given without a value, an interactive \
+                launch opens the session picker."
+    )]
+    pub resume: Option<String>,
+    // Below this line are the arguments this port declares and the reference
+    // does not. Every one of them is hidden, and the ledger names them.
+    #[arg(long = "allowed-tool", hide = true)]
+    pub tool_filters: Vec<String>,
     #[arg(long, default_value = "mistral", hide = true)]
     pub provider_style: String,
     #[arg(long, default_value = "mistral-medium-3.5", hide = true)]
@@ -124,6 +215,19 @@ pub struct Arguments {
     #[arg(long, hide = true)]
     pub fake_response: Option<String>,
 }
+
+/// The block the help closes with, carrying the reference's two headings and
+/// the same names in the same order (`vibe/cli/entrypoint.py:26-40`). The
+/// sentences are this repository's own.
+const EPILOG: &str = "\
+Commands:
+  mcp   Manage the MCP servers a session can reach.
+
+Environment variables:
+  VIBE_HOME       Directory holding the configuration, the sessions and the logs.
+  LOG_LEVEL       Verbosity of the log file, from CRITICAL down to DEBUG.
+  LOG_MAX_BYTES   Size at which the log file is rotated.
+  VIBE_*          Any other VIBE_ variable overrides the setting of the same name.";
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum)]
 pub enum OutputMode {
@@ -664,6 +768,7 @@ pub enum CliError {
 #[cfg(test)]
 pub(crate) fn arguments_for_test() -> Arguments {
     Arguments {
+        help: None,
         initial_prompt: None,
         version: None,
         prompt: None,
@@ -1025,6 +1130,7 @@ mod tests {
 
     fn arguments(mode: OutputMode) -> Arguments {
         Arguments {
+            help: None,
             initial_prompt: None,
             version: None,
             prompt: Some("hello".to_owned()),

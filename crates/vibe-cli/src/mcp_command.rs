@@ -85,9 +85,24 @@ pub(crate) fn declaration() -> Command {
     command
 }
 
+/// The help flag argparse adds before anything else.
+///
+/// clap appends its own at the end of the list, and a help render lists its
+/// arguments in declaration order, so a sub-command that wants `-h` first has
+/// to declare it itself.
+fn help_argument() -> Arg {
+    Arg::new("help")
+        .short('h')
+        .long("help")
+        .action(ArgAction::Help)
+        .help("Print this help text and exit.")
+}
+
 fn add_declaration() -> Command {
     Command::new("add")
         .about("Store an MCP server in the user configuration.")
+        .disable_help_flag(true)
+        .arg(help_argument())
         .arg(
             Arg::new("name")
                 .value_name("NAME")
@@ -179,6 +194,8 @@ fn add_declaration() -> Command {
 fn remove_declaration() -> Command {
     Command::new("remove")
         .about("Drop an MCP server from the user configuration.")
+        .disable_help_flag(true)
+        .arg(help_argument())
         .arg(
             Arg::new("name")
                 .value_name("NAME")
