@@ -370,6 +370,7 @@ pub(in crate::tui) fn interactive_test_runtime_with_trust(
             thinking: false,
             reasoning_effort: None,
             auto_approve: true,
+            headless: false,
             resume: None,
             continue_session: false,
         })

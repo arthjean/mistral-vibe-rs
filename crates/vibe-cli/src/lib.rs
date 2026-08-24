@@ -370,6 +370,7 @@ where
         arguments.model.clone(),
         None,
         None,
+        bootstrap::Launch::Programmatic,
     );
     let mut service = HeadlessService::new_shared_with_server(Arc::new(driver), server)?;
     let session_id = service.start_session(&options)?;
@@ -1347,6 +1348,78 @@ mod tests {
             assert!(stdout.contains(expected), "{stdout}");
             assert!(stderr.is_empty());
         }
+    }
+
+    /// The programmatic entry point declares its session headless and
+    /// withholds the two tools a question would have to reach a human through.
+    ///
+    /// Both are read off the reservation the server hands the driver, so what
+    /// is asserted is what the session actually opened with rather than what
+    /// the options struct was filled with. The reference sets the same pair on
+    /// this branch and neither on the interactive one
+    /// (`vibe/cli/cli.py:151-192` against `:209-272`).
+    #[tokio::test]
+    async fn a_programmatic_run_opens_a_headless_session_without_the_interactive_tools() {
+        struct IntentRecordingDriver {
+            inner: EchoTurnDriver,
+            seen: Arc<std::sync::Mutex<Option<vibe_app_server::server::SessionIntent>>>,
+        }
+
+        impl TurnDriver for IntentRecordingDriver {
+            fn run<'a>(&'a self, reservation: &'a TurnReservation) -> DriverFuture<'a> {
+                if let Ok(mut seen) = self.seen.lock() {
+                    *seen = Some(reservation.intent.clone());
+                }
+                self.inner.run(reservation)
+            }
+        }
+
+        // The allowlist names one of the two withheld tools, which is the case
+        // the denylist has to stay final for.
+        let mut arguments = arguments(OutputMode::Text);
+        arguments.enabled_tools = vec!["ask_user_question".to_owned(), "read_file".to_owned()];
+        arguments.disabled_tools = vec!["shell".to_owned(), "exit_plan_mode".to_owned()];
+        let seen = Arc::new(std::sync::Mutex::new(None));
+        let driver = IntentRecordingDriver {
+            inner: EchoTurnDriver::new("world"),
+            seen: Arc::clone(&seen),
+        };
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
+        execute(arguments, driver, &mut stdout, &mut stderr)
+            .await
+            .expect("programmatic run");
+
+        let intent = seen
+            .lock()
+            .expect("recorded intent")
+            .clone()
+            .expect("the turn was reserved");
+        assert!(intent.headless, "the programmatic session is headless");
+        assert!(
+            intent.disabled_tools.contains(&"shell".to_owned()),
+            "the user's own list survives: {:?}",
+            intent.disabled_tools
+        );
+        for withheld in ["ask_user_question", "exit_plan_mode"] {
+            assert_eq!(
+                intent
+                    .disabled_tools
+                    .iter()
+                    .filter(|name| *name == withheld)
+                    .count(),
+                1,
+                "{withheld} is withheld exactly once: {:?}",
+                intent.disabled_tools
+            );
+        }
+        assert!(
+            intent
+                .enabled_tools
+                .contains(&"ask_user_question".to_owned()),
+            "the allowlist is left as the user wrote it: {:?}",
+            intent.enabled_tools
+        );
     }
 
     #[tokio::test]

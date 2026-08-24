@@ -126,6 +126,23 @@ pub(crate) fn cloud_service(credential: String) -> Result<ProjectsService, CliEr
     ProjectsService::production(config).map_err(|error| CliError::Teleport(error.to_string()))
 }
 
+/// Which of the two launches is building the options.
+///
+/// The reference builds them in two places rather than one, and the
+/// programmatic branch is the only one that declares the session headless and
+/// withholds the two tools a human would have to answer
+/// (`vibe/cli/cli.py:151-192` against `:209-272`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Launch {
+    Interactive,
+    Programmatic,
+}
+
+/// The tools a run with nobody behind it withholds, whatever the user asked
+/// for: both of them exist to put a question to a human
+/// (`vibe/cli/cli.py:174-178`).
+const HEADLESS_WITHHELD_TOOLS: [&str; 2] = ["ask_user_question", "exit_plan_mode"];
+
 /// Session options for one run. `thinking` is derived from `reasoning_effort`
 /// rather than passed alongside it, so the two can never disagree.
 pub(crate) fn session_options(
@@ -134,7 +151,9 @@ pub(crate) fn session_options(
     model: String,
     mode: Option<String>,
     reasoning_effort: Option<String>,
+    launch: Launch,
 ) -> SessionOptions {
+    let headless = launch == Launch::Programmatic;
     SessionOptions {
         working_directory: working_directory.to_string_lossy().into_owned(),
         session_id: arguments.resume.clone(),
@@ -147,7 +166,7 @@ pub(crate) fn session_options(
         agent: arguments.agent.clone(),
         tool_filters: arguments.tool_filters.clone(),
         enabled_tools: arguments.enabled_tools.clone(),
-        disabled_tools: arguments.disabled_tools.clone(),
+        disabled_tools: disabled_tools(&arguments.disabled_tools, headless),
         mcp_servers: Vec::new(),
         model: Some(model),
         max_turns: arguments.max_turns,
@@ -159,7 +178,28 @@ pub(crate) fn session_options(
         thinking: reasoning_effort.is_some(),
         reasoning_effort,
         auto_approve: arguments.auto_approve,
+        headless,
         resume: arguments.resume.clone(),
         continue_session: arguments.continue_session,
     }
 }
+
+/// What the user asked to withhold, plus the two names a headless run adds.
+///
+/// The reference appends them unconditionally; this port skips a name the user
+/// already wrote, because the two lists meet in one `disabled_tools` and a
+/// repeated entry would only be matched twice.
+fn disabled_tools(requested: &[String], headless: bool) -> Vec<String> {
+    let mut names = requested.to_vec();
+    if headless {
+        for withheld in HEADLESS_WITHHELD_TOOLS {
+            if !names.iter().any(|name| name == withheld) {
+                names.push(withheld.to_owned());
+            }
+        }
+    }
+    names
+}
+
+#[cfg(test)]
+mod bootstrap_tests;

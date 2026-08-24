@@ -234,6 +234,7 @@ fn default_session_options() -> crate::client::SessionOptions {
         thinking: false,
         reasoning_effort: None,
         auto_approve: false,
+        headless: false,
         resume: None,
         continue_session: false,
     }

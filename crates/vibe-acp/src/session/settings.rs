@@ -205,6 +205,10 @@ pub(crate) fn session_options(
         thinking: settings.thinking.enabled(),
         reasoning_effort: settings.thinking.effort_str().map(ToOwned::to_owned),
         auto_approve: false,
+        // The editor drives this binary, and the reference declares that
+        // launch headless the same way it declares the programmatic one
+        // (`vibe/acp/entrypoint.py:101`).
+        headless: true,
         resume,
         continue_session: false,
     }

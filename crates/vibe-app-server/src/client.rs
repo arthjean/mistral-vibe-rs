@@ -174,6 +174,13 @@ pub struct SessionOptions {
     pub reasoning_effort: Option<String>,
     #[serde(default)]
     pub auto_approve: bool,
+    /// Whether the session runs with nobody to answer a callback.
+    ///
+    /// The reference sets it on the programmatic and ACP launches and leaves
+    /// it at its default everywhere else (`vibe/cli/cli.py:183`,
+    /// `vibe/acp/entrypoint.py:101`, `vibe/app_server/protocol.py:230`).
+    #[serde(default)]
+    pub headless: bool,
     #[serde(default)]
     pub resume: Option<String>,
     #[serde(default, rename = "continue")]

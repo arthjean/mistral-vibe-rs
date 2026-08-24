@@ -36,6 +36,7 @@ use vibe_core::tools::ToolInvocation;
 use super::live::{ProviderSessionCompactor, SessionToolExecutor};
 
 mod driver_tests;
+mod headless_tests;
 mod interactive_tests;
 mod interrupt_tests;
 mod plan_tests;
@@ -64,6 +65,7 @@ fn options() -> SessionOptions {
         thinking: false,
         reasoning_effort: None,
         auto_approve: true,
+        headless: false,
         resume: None,
         continue_session: false,
     }

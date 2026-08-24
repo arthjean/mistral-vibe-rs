@@ -366,6 +366,7 @@ impl ServerConnection {
             thinking: params.thinking,
             reasoning_effort: params.reasoning_effort.clone(),
             auto_approve: params.auto_approve,
+            headless: params.headless,
             requested_auto_approve: params.auto_approve,
             approval: AgentApproval::Prompt,
             system_prompt_id: None,

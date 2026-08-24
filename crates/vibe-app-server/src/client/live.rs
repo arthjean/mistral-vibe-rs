@@ -604,6 +604,15 @@ impl LiveTurnDriver {
         let mut messages = vec![ModelMessage::System {
             content: self.system_prompt.clone(),
         }];
+        // A launch that told the session nobody is behind it carries the
+        // directive the composed prompt carries for the same flag, so a
+        // headless run reads the same instruction either way
+        // (`vibe/core/system_prompt.py:358-368`).
+        if reservation.intent.headless {
+            messages.push(ModelMessage::System {
+                content: vibe_core::prompt::HEADLESS_SECTION.to_owned(),
+            });
+        }
         if reservation.intent.mode.as_deref() == Some("plan") {
             let plan_path = self
                 .plan_directory()

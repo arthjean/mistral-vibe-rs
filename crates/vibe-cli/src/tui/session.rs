@@ -61,6 +61,7 @@ pub(super) fn start_runtime(
         preferences.model.clone(),
         Some(preferences.mode.clone()),
         preferences.reasoning_effort.clone(),
+        bootstrap::Launch::Interactive,
     ))?;
     let session_init_duration_ms =
         u64::try_from(session_start.elapsed().as_millis()).unwrap_or(u64::MAX);

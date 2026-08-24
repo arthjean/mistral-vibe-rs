@@ -84,9 +84,9 @@ pub(crate) struct SessionStartParams {
     pub(crate) resume: Option<String>,
     #[serde(default, rename = "continue")]
     pub(crate) continue_session: bool,
-    /// Accepted for wire compatibility. The server behaves the same either
-    /// way, so nothing reads it yet.
-    #[expect(dead_code, reason = "accepted for wire compatibility, not read yet")]
+    /// Whether the client has nobody to answer a callback, which the session
+    /// carries onto its intent and the turn driver reads when it composes the
+    /// system preamble (`vibe/app_server/_runtime.py:207`).
     #[serde(default)]
     pub(crate) headless: bool,
     #[serde(default = "default_history_limit")]
@@ -117,6 +117,9 @@ pub struct SessionIntent {
     pub thinking: bool,
     pub reasoning_effort: Option<String>,
     pub auto_approve: bool,
+    /// Set by a launch with no human behind it, and read when the turn's
+    /// system preamble is composed.
+    pub headless: bool,
     #[serde(skip)]
     pub requested_auto_approve: bool,
     #[serde(skip)]
