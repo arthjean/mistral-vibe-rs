@@ -3,8 +3,6 @@
 use std::io::Write;
 use std::process::ExitCode;
 
-use clap::Parser;
-use vibe_cli::Arguments;
 use vibe_cli::tui::startup::PreparedInvocation;
 
 #[tokio::main]
@@ -25,7 +23,20 @@ async fn main() -> ExitCode {
                 .await,
         );
     }
-    let arguments = Arguments::parse();
+    // The refusal is rendered here rather than by clap's own exit path: the
+    // reference reports a bad argv as a usage block and one `vibe: error:`
+    // line, and only a parse that returns the error can be re-shaped.
+    let arguments = match vibe_cli::argv::parse_arguments(std::env::args_os()) {
+        Ok(arguments) => arguments,
+        Err(failure) => {
+            if failure.use_stderr {
+                let _ = write!(std::io::stderr().lock(), "{}", failure.rendered);
+            } else {
+                let _ = write!(std::io::stdout().lock(), "{}", failure.rendered);
+            }
+            return ExitCode::from(failure.exit);
+        }
+    };
     // The log file opens before anything else can fail, so a startup that dies
     // before the app server attaches still leaves a line behind.
     vibe_cli::install_file_logging(&arguments);

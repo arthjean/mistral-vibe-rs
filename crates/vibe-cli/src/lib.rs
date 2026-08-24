@@ -9,6 +9,7 @@
     )
 )]
 
+pub mod argv;
 mod bootstrap;
 pub mod distribution;
 pub mod mcp_command;
@@ -243,6 +244,10 @@ pub async fn run(
     stdout: &mut impl Write,
     stderr: &mut impl Write,
 ) -> Result<(), CliError> {
+    // The reference refuses an unusable programmatic argv before it builds
+    // anything, so the refusal reads the same whether or not a credential is
+    // in reach (`vibe/cli/cli.py:147-150`).
+    validate_arguments(&arguments)?;
     if let Some(response) = &arguments.fake_response {
         execute(
             arguments.clone(),
@@ -350,7 +355,6 @@ async fn execute_with_server<D>(
 where
     D: TurnDriver,
 {
-    validate_arguments(&arguments)?;
     let prompt = arguments
         .prompt
         .clone()
@@ -736,7 +740,10 @@ fn write_json_line(writer: &mut impl Write, value: &impl Serialize) -> Result<()
 
 #[derive(Debug, Error)]
 pub enum CliError {
-    #[error("invalid arguments: {0}")]
+    /// The reference prefixes every post-parse refusal with `Error: ` and
+    /// exits 1, which is the exit code a wrapper reads to tell a usage error
+    /// from a run that started and failed (`vibe/cli/cli.py:147-150`).
+    #[error("Error: {0}")]
     InvalidArguments(String),
     #[error("cannot resolve current directory: {0}")]
     CurrentDirectory(std::io::Error),
@@ -1093,7 +1100,7 @@ impl CliError {
     #[must_use]
     pub fn exit_code(&self) -> u8 {
         match self {
-            Self::InvalidArguments(_) => 2,
+            Self::InvalidArguments(_) => 1,
             Self::Driver(vibe_app_server::client::DriverError::MissingCredentialEnvironment(_)) => {
                 4
             }
