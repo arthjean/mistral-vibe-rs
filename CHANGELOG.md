@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- Render `vibe --help` with the reference's structure. Every option now shows
+  the value name upstream gives it (`PROMPT`, `TEXT`, `N`, `DOLLARS`, `TOOL`,
+  `NAME`, `DIR`, `SESSION_ID`), carries a description, and appears in the
+  reference's declaration order; `--teleport` and the flags this port adds are
+  hidden; `--output` lists its three accepted values; and the four shipped
+  completion files were regenerated to match.
+
+- Report the working-directory failures a launch can hit. A `--workdir` that is
+  not a directory names the resolved path, an `--add-dir` that is not one names
+  the argument as it was typed and stops at the first bad value, and a working
+  directory deleted underneath the shell is explained in two lines, the second
+  offering `--workdir`. All three exit 1, and none of them falls back on an
+  operating system error number.
+
+- Exit the way the reference exits. A parse failure prints the usage line and a
+  single `vibe: error: {message}` line on stderr and exits 2, a post-parse
+  refusal such as a missing programmatic prompt prints `Error: ` and exits 1,
+  and `--help` and `--version` exit 0 on stdout.
+
+- Open a programmatic session headless. `vibe -p` now tells the session that no
+  human is available and withholds `ask_user_question` and `exit_plan_mode`,
+  appending them to whatever `--disabled-tools` already named rather than
+  replacing it. An interactive launch is unchanged.
+
 - Add an MCP server from the command line. `vibe mcp add` now writes the entry
   the flags describe into the user configuration: a stdio server from
   `--command`, `--arg` and `--env`, or a remote one from `--url` with either
