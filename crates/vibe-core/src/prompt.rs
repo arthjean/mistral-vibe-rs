@@ -16,6 +16,17 @@ use crate::images::{ImageFormat, MAX_IMAGE_BYTES, MAX_IMAGES_PER_MESSAGE};
 const MAX_TEXT_RESOURCE_BYTES: u64 = 2 * 1024 * 1024;
 const AGENTS_FILE: &str = "AGENTS.md";
 
+/// The directive a run with no human behind it carries.
+///
+/// The reference composes it into the one system prompt the loop sends
+/// (`vibe/core/system_prompt.py:327-330`, reached from
+/// `vibe/core/agent_loop/_loop.py:708`), so the session that set
+/// `headless` on its options is the session that reads it. This port composes
+/// it here and also sends it as its own system message from the turn driver,
+/// which is why the text is named rather than spelled twice.
+pub const HEADLESS_SECTION: &str = "# Headless Mode\n\nNo human is available for interactive \
+     callbacks. Resolve ordinary ambiguity autonomously and complete the task in one pass.";
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillSummary {
@@ -70,12 +81,7 @@ impl PromptComposition {
         let mut notices = Vec::new();
         push_section(&mut sections, &mut names, "base", self.base.trim());
         if self.headless {
-            push_section(
-                &mut sections,
-                &mut names,
-                "headless",
-                "# Headless Mode\n\nNo human is available for interactive callbacks. Resolve ordinary ambiguity autonomously and complete the task in one pass.",
-            );
+            push_section(&mut sections, &mut names, "headless", HEADLESS_SECTION);
         }
         if let Some(policy) = self.commit_policy.as_deref() {
             push_section(&mut sections, &mut names, "commit_policy", policy.trim());
@@ -684,6 +690,10 @@ mod tests {
                 "additional_directories",
                 "instructions",
             ]
+        );
+        assert!(
+            composed.text.contains(HEADLESS_SECTION),
+            "the composed prompt carries the directive a headless turn also sends"
         );
         assert!(
             composed.text.find("## User").expect("user section")
