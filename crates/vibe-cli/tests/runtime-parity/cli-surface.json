@@ -4267,6 +4267,78 @@
         "stderr": false,
         "stdout": true
       }
+    },
+    {
+      "argv": [
+        "--workdir",
+        "missing",
+        "-p",
+        "hi"
+      ],
+      "case": "startup-workdir-missing",
+      "exit": 1,
+      "namespace": null,
+      "parser": "startup",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
+      "argv": [
+        "--add-dir",
+        "missing",
+        "-p",
+        "hi"
+      ],
+      "case": "startup-add-dir-missing",
+      "exit": 1,
+      "namespace": null,
+      "parser": "startup",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
+      "argv": [
+        "--add-dir",
+        "present",
+        "--add-dir",
+        "missing",
+        "-p",
+        "hi"
+      ],
+      "case": "startup-add-dir-second-missing",
+      "exit": 1,
+      "namespace": null,
+      "parser": "startup",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
+      "argv": [
+        "-p",
+        "hi"
+      ],
+      "case": "startup-working-directory-deleted",
+      "exit": 1,
+      "namespace": null,
+      "parser": "startup",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
     }
   ],
   "interpreter": {

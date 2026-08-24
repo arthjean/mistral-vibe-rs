@@ -547,6 +547,159 @@ fn compare_declarations(record: &ParserRecord, differences: &mut Vec<Difference>
             json!(port_option_strings(argument)),
         ));
     }
+    compare_help(record, &command, differences);
+}
+
+/// The bare name an epilog entry opens with, read the way the capture reads
+/// one: letters, digits, `_`, `*` and `-`, closed by two spaces or by the end
+/// of the line, so no sentence can pass for a name.
+fn epilog_name(stripped: &str) -> Option<&str> {
+    let mut end = 0;
+    for (index, character) in stripped.char_indices() {
+        let allowed = if index == 0 {
+            character.is_ascii_alphabetic() || character == '_'
+        } else {
+            character.is_ascii_alphanumeric()
+                || character == '_'
+                || character == '*'
+                || character == '-'
+        };
+        if !allowed {
+            break;
+        }
+        end = index + character.len_utf8();
+    }
+    let rest = stripped.get(end..)?;
+    (end > 0 && (rest.is_empty() || rest.starts_with("  "))).then(|| &stripped[..end])
+}
+
+/// The headings and the entry names this port's epilog carries, in order.
+fn port_epilog(command: &Command) -> (Vec<String>, Vec<String>) {
+    let mut headings = Vec::new();
+    let mut entries = Vec::new();
+    let Some(epilog) = command.get_after_help() else {
+        return (headings, entries);
+    };
+    let rendered = epilog.to_string();
+    for line in rendered.lines() {
+        let stripped = line.trim();
+        if stripped.is_empty() {
+            continue;
+        }
+        if !line.starts_with(' ') && stripped.ends_with(':') {
+            headings.push(line.to_owned());
+        } else if let Some(name) = epilog_name(stripped) {
+            entries.push(name.to_owned());
+        }
+    }
+    (headings, entries)
+}
+
+/// Compares the help this port renders against the one the corpus records,
+/// by structure rather than by text.
+///
+/// The two renders cannot be diffed: argparse and clap wrap their usage
+/// blocks differently and title their sections differently, and the NOTICE
+/// boundary forbids reproducing the reference's own sentences, so every
+/// description here is written for this repository. What a reader compares the
+/// two helps by is what is reproduced: which arguments are listed, in which
+/// order, and which names the epilog blocks carry. The prose itself is
+/// reported once as a difference the ledger accepts.
+fn compare_help(record: &ParserRecord, command: &Command, differences: &mut Vec<Difference>) {
+    let reference_order: Vec<String> = record
+        .actions
+        .iter()
+        .filter(|action| !action.help_suppressed && action.class != "_SubParsersAction")
+        .filter_map(|action| find_argument(command, action))
+        .map(|argument| argument.get_id().to_string())
+        .collect();
+    let port_order: Vec<String> = command
+        .get_arguments()
+        .filter(|argument| !argument.is_hide_set())
+        .map(|argument| argument.get_id().to_string())
+        .collect();
+    if reference_order != port_order {
+        differences.push(Difference::new(
+            &record.parser,
+            "help",
+            "/help/order".to_owned(),
+            json!(reference_order),
+            json!(port_order),
+        ));
+    }
+    let reference_headings: Vec<&str> = record
+        .help
+        .lines
+        .iter()
+        .filter(|line| line.kind == "epilogHeading")
+        .filter_map(|line| line.cleartext.as_deref())
+        .collect();
+    let reference_entries: Vec<&str> = record
+        .help
+        .lines
+        .iter()
+        .filter(|line| line.kind == "epilogEntry")
+        .filter_map(|line| line.cleartext.as_deref())
+        .collect();
+    let (port_headings, port_entries) = port_epilog(command);
+    if reference_headings != port_headings {
+        differences.push(Difference::new(
+            &record.parser,
+            "help",
+            "/help/epilogHeadings".to_owned(),
+            json!(reference_headings),
+            json!(port_headings),
+        ));
+    }
+    if reference_entries != port_entries {
+        differences.push(Difference::new(
+            &record.parser,
+            "help",
+            "/help/epilogEntries".to_owned(),
+            json!(reference_entries),
+            json!(port_entries),
+        ));
+    }
+    // The prose is reported once, for the parser whose help this port
+    // publishes as its own front door. A sub-command's help reaches the ledger
+    // through the `--help` case the corpus drives it with.
+    let rendered = command.clone().render_help().to_string();
+    let digest = hex::encode(Sha256::digest(rendered.as_bytes()));
+    if record.parser == "root" && digest != record.help.sha256 {
+        differences.push(Difference::new(
+            &record.parser,
+            "help",
+            "/help/prose".to_owned(),
+            json!(record.help.sha256),
+            json!(digest),
+        ));
+    }
+}
+
+/// Every option the help lists says what it is for.
+///
+/// The reference describes all of them, so an option rendered with an empty
+/// body is a hole in this port's help rather than a difference of prose.
+#[test]
+fn every_listed_option_carries_a_description() {
+    let mut command = Arguments::command();
+    command.build();
+    let undescribed: Vec<String> = command
+        .get_arguments()
+        .filter(|argument| !argument.is_hide_set())
+        .filter(|argument| {
+            argument
+                .get_help()
+                .map(|help| help.to_string().trim().is_empty())
+                .unwrap_or(true)
+        })
+        .map(|argument| argument.get_id().to_string())
+        .collect();
+    assert!(
+        undescribed.is_empty(),
+        "these arguments render an empty help body: {}",
+        undescribed.join(", ")
+    );
 }
 
 // --------------------------------------------------------------------------
@@ -632,34 +785,41 @@ fn normalized_reference_value(dest: &str, value: &Value) -> Value {
     }
 }
 
+/// One root vector, driven through the reading the binary itself does, so the
+/// line the replay compares is the line the user is shown
+/// (`crates/vibe-cli/src/main.rs:28`).
 fn drive_root(argv: &[String]) -> Outcome {
-    let command = Arguments::command();
-    let full = std::iter::once("vibe".to_owned()).chain(argv.iter().cloned());
-    match command.try_get_matches_from(full) {
-        Ok(matches) => {
-            let arguments = <Arguments as clap::FromArgMatches>::from_arg_matches(&matches)
-                .expect("a parse this port accepted builds its arguments");
-            Outcome {
-                exit: 0,
-                streams: Streams {
-                    stdout: false,
-                    stderr: false,
-                },
-                namespace: Some(port_namespace(&arguments)),
-                stdout_last_line: None,
-                stderr_last_line: None,
-            }
-        }
-        Err(error) => Outcome {
-            exit: error.exit_code(),
+    let full: Vec<String> = std::iter::once("vibe".to_owned())
+        .chain(argv.iter().cloned())
+        .collect();
+    match crate::argv::parse_arguments(full) {
+        Ok(arguments) => Outcome {
+            exit: 0,
             streams: Streams {
-                stdout: !error.use_stderr(),
-                stderr: error.use_stderr(),
+                stdout: false,
+                stderr: false,
             },
-            namespace: None,
+            namespace: Some(port_namespace(&arguments)),
             stdout_last_line: None,
             stderr_last_line: None,
         },
+        Err(failure) => {
+            let line = failure
+                .rendered
+                .lines()
+                .rfind(|line| !line.trim().is_empty())
+                .map(str::to_owned);
+            Outcome {
+                exit: i32::from(failure.exit),
+                streams: Streams {
+                    stdout: !failure.use_stderr,
+                    stderr: failure.use_stderr,
+                },
+                namespace: None,
+                stdout_last_line: line.clone().filter(|_| !failure.use_stderr),
+                stderr_last_line: line.filter(|_| failure.use_stderr),
+            }
+        }
     }
 }
 
@@ -815,7 +975,12 @@ fn stream_line_matches(recorded: &StreamLine, found: Option<&str>) -> bool {
 
 /// Reports the stream lines this port disagrees with, without ever committing
 /// the reference sentence a described line stands for.
-fn compare_stream_lines(case: &Case, outcome: &Outcome, differences: &mut Vec<Difference>) {
+fn compare_stream_lines(
+    case: &Case,
+    outcome: &Outcome,
+    stdlib_sentences_only: bool,
+    differences: &mut Vec<Difference>,
+) {
     for (pointer, recorded, found) in [
         (
             "/stdoutLastLine",
@@ -831,6 +996,12 @@ fn compare_stream_lines(case: &Case, outcome: &Outcome, differences: &mut Vec<Di
         let Some(recorded) = recorded else {
             continue;
         };
+        // A line the capture digested is a sentence the reference wrote, and
+        // NOTICE keeps it out of this repository, so where only the standard
+        // library's own templates are comparable the rest is left alone.
+        if stdlib_sentences_only && recorded.described.is_some() {
+            continue;
+        }
         if stream_line_matches(recorded, found) {
             continue;
         }
@@ -855,6 +1026,12 @@ fn compare_stream_lines(case: &Case, outcome: &Outcome, differences: &mut Vec<Di
 
 fn compare_case(case: &Case, session: &McpSession, differences: &mut Vec<Difference>) {
     let outcome = match case.parser.as_str() {
+        // A startup failure is decided after the parse, from the directory the
+        // process sits in, and what it proves is which stream carried the
+        // report. Neither survives an in-process drive, so these cases are
+        // replayed against the binary by
+        // `tests/startup_directory_failures.rs`.
+        "startup" => return,
         "root" => drive_root(&case.argv),
         _ => session.drive(&case.argv),
     };
@@ -876,12 +1053,11 @@ fn compare_case(case: &Case, session: &McpSession, differences: &mut Vec<Differe
             json!({"stdout": outcome.streams.stdout, "stderr": outcome.streams.stderr}),
         ));
     }
-    // The reference's own sentences are the root parser's help text, which
-    // US-318 owns; the `vibe mcp` streams are this epic's, so only they are
-    // compared line by line.
-    if case.parser != "root" {
-        compare_stream_lines(case, &outcome, differences);
-    }
+    // The root parser reports through two kinds of sentence: the reference's
+    // own, which US-318 owns and the corpus only ever digested, and CPython's
+    // `argparse` templates, which the corpus commits in cleartext because this
+    // port reproduces them. Only the second kind is comparable here.
+    compare_stream_lines(case, &outcome, case.parser == "root", differences);
     // A namespace is only comparable where both sides parsed; where one of them
     // refused the vector the exit code above already carries the difference.
     let (Some(reference), Some(port)) = (case.namespace.as_ref(), outcome.namespace.as_ref())
@@ -974,14 +1150,32 @@ fn the_committed_corpus_carries_the_surface_the_replay_needs() {
     );
 
     let mut seen = BTreeSet::new();
+    let mut startup = 0_usize;
     for case in &corpus.cases {
         assert!(
             seen.insert(case.case.clone()),
             "two cases share the id {}",
             case.case
         );
-        assert!(matches!(case.parser.as_str(), "root" | "mcp"));
+        assert!(matches!(case.parser.as_str(), "root" | "mcp" | "startup"));
+        if case.parser == "startup" {
+            startup += 1;
+            // A startup vector is recorded for its exit code and its stream
+            // alone: the report itself is a reference sentence, and the path
+            // one of them prints is the capture's own temporary directory.
+            assert_eq!(case.exit, 1, "the startup case {} did not fail", case.case);
+            assert!(
+                case.stdout_last_line.is_none() && case.stderr_last_line.is_none(),
+                "the startup case {} carries a captured line",
+                case.case
+            );
+        }
     }
+    assert_eq!(
+        startup, 4,
+        "the corpus no longer carries the four startup failures \
+         `tests/startup_directory_failures.rs` replays"
+    );
     for entry in &corpus.unavailable {
         assert!(!entry.id.is_empty(), "an unavailable entry carries no id");
         assert!(
@@ -1421,102 +1615,6 @@ fn the_committed_corpus_still_matches_a_fresh_capture() {
 const LEDGER: &[Divergence] = &[
     Divergence {
         parser: "root",
-        case: "initial_prompt",
-        pointer: "/valueName",
-        closed_by: "US-318",
-        row: "7",
-        why: "the reference names this value PROMPT and this port derives it from the field name, so the two help renders disagree on what the option takes",
-    },
-    Divergence {
-        parser: "root",
-        case: "prompt",
-        pointer: "/valueName",
-        closed_by: "US-318",
-        row: "7",
-        why: "the reference names this value TEXT and this port derives it from the field name, so the two help renders disagree on what the option takes",
-    },
-    Divergence {
-        parser: "root",
-        case: "max_turns",
-        pointer: "/valueName",
-        closed_by: "US-318",
-        row: "7",
-        why: "the reference names this value N and this port derives it from the field name, so the two help renders disagree on what the option takes",
-    },
-    Divergence {
-        parser: "root",
-        case: "max_price",
-        pointer: "/valueName",
-        closed_by: "US-318",
-        row: "7",
-        why: "the reference names this value DOLLARS and this port derives it from the field name, so the two help renders disagree on what the option takes",
-    },
-    Divergence {
-        parser: "root",
-        case: "max_tokens",
-        pointer: "/valueName",
-        closed_by: "US-318",
-        row: "7",
-        why: "the reference names this value N and this port derives it from the field name, so the two help renders disagree on what the option takes",
-    },
-    Divergence {
-        parser: "root",
-        case: "enabled_tools",
-        pointer: "/valueName",
-        closed_by: "US-318",
-        row: "7",
-        why: "the reference names this value TOOL and this port derives it from the field name, so the two help renders disagree on what the option takes",
-    },
-    Divergence {
-        parser: "root",
-        case: "disabled_tools",
-        pointer: "/valueName",
-        closed_by: "US-318",
-        row: "7",
-        why: "the reference names this value TOOL and this port derives it from the field name, so the two help renders disagree on what the option takes",
-    },
-    Divergence {
-        parser: "root",
-        case: "agent",
-        pointer: "/valueName",
-        closed_by: "US-318",
-        row: "7",
-        why: "the reference names this value NAME and this port derives it from the field name, so the two help renders disagree on what the option takes",
-    },
-    Divergence {
-        parser: "root",
-        case: "workdir",
-        pointer: "/valueName",
-        closed_by: "US-318",
-        row: "7",
-        why: "the reference names this value DIR and this port derives it from the field name, so the two help renders disagree on what the option takes",
-    },
-    Divergence {
-        parser: "root",
-        case: "add_dir",
-        pointer: "/valueName",
-        closed_by: "US-318",
-        row: "7",
-        why: "the reference names this value DIR and this port derives it from the field name, so the two help renders disagree on what the option takes",
-    },
-    Divergence {
-        parser: "root",
-        case: "resume",
-        pointer: "/valueName",
-        closed_by: "US-318",
-        row: "7",
-        why: "the reference names this value SESSION_ID and this port derives it from the field name, so the two help renders disagree on what the option takes",
-    },
-    Divergence {
-        parser: "root",
-        case: "output",
-        pointer: "/valueName",
-        closed_by: "US-318",
-        row: "7",
-        why: "the reference prints the three accepted values in place of a value name, and this port prints a value name derived from the field",
-    },
-    Divergence {
-        parser: "root",
         case: "tool_filters",
         pointer: "/extraArgument",
         closed_by: "ACCEPTED",
@@ -1637,6 +1735,30 @@ const LEDGER: &[Divergence] = &[
     },
     Divergence {
         parser: "root",
+        case: "ambiguous-prefix-a",
+        pointer: "/stderrLastLine",
+        closed_by: "US-322",
+        row: "7",
+        why: "an abbreviation matching several flags is refused by both parsers, but only the reference has prefix inference on, so it names the flags the prefix could have meant where this port only reports a flag it does not know",
+    },
+    Divergence {
+        parser: "root",
+        case: "ambiguous-prefix-m",
+        pointer: "/stderrLastLine",
+        closed_by: "US-322",
+        row: "7",
+        why: "an abbreviation matching several flags is refused by both parsers, but only the reference has prefix inference on, so it names the flags the prefix could have meant where this port only reports a flag it does not know",
+    },
+    Divergence {
+        parser: "root",
+        case: "ambiguous-prefix-t",
+        pointer: "/stderrLastLine",
+        closed_by: "US-322",
+        row: "7",
+        why: "an abbreviation matching several flags is refused by both parsers, but only the reference has prefix inference on, so it names the flags the prefix could have meant where this port only reports a flag it does not know",
+    },
+    Divergence {
+        parser: "root",
         case: "prefix--max-price",
         pointer: "/exit",
         closed_by: "US-322",
@@ -1970,6 +2092,14 @@ const LEDGER: &[Divergence] = &[
         closed_by: "US-323",
         row: "7",
         why: "argparse hands a leading-hyphen numeric to `type=float` as the option's value, and clap reads it as an unknown short flag",
+    },
+    Divergence {
+        parser: "root",
+        case: "help",
+        pointer: "/help/prose",
+        closed_by: "ACCEPTED",
+        row: "7",
+        why: "NOTICE forbids reproducing the reference's own sentences, so every option description and every epilog sentence here is written for this repository: the two renders carry the same arguments in the same order and the same epilog names, and never the same text",
     },
     Divergence {
         parser: "mcp",

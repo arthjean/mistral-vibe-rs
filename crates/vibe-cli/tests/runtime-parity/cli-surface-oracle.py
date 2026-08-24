@@ -872,6 +872,21 @@ UNAVAILABLE: list[dict[str, str]] = [
 ]
 
 
+#: The startup failures the reference reports after the parse and before the app
+#: server is reached (`vibe/cli/entrypoint.py:279-325`). Every vector is driven
+#: from a fixture directory with a relative argument, so the argv a case commits
+#: names no machine path, and every one of them is expected to exit 1.
+STARTUP_VECTORS: tuple[tuple[str, list[str]], ...] = (
+    ("startup-workdir-missing", ["--workdir", "missing", "-p", "hi"]),
+    ("startup-add-dir-missing", ["--add-dir", "missing", "-p", "hi"]),
+    (
+        "startup-add-dir-second-missing",
+        ["--add-dir", "present", "--add-dir", "missing", "-p", "hi"],
+    ),
+    ("startup-working-directory-deleted", ["-p", "hi"]),
+)
+
+
 def _describe_stream_line(
     line: str | None, progs: tuple[str, ...]
 ) -> dict[str, Any] | None:
@@ -956,6 +971,65 @@ def drive_mcp(case: str, argv: list[str]) -> dict[str, Any]:
     return {"case": case, "parser": "mcp", "argv": list(argv), **record}
 
 
+def drive_startup(case: str, argv: list[str]) -> dict[str, Any]:
+    """One startup failure, driven through the ``main`` the reference installs.
+
+    The record keeps the exit code and which stream carried the report, and
+    drops the two last-line fields on purpose: the ``--workdir`` report prints
+    the path once it was resolved, which is a temporary directory here, so a
+    digest of that line would differ between two captures of the same behavior.
+    The sentences are the reference's own and could not be committed either way.
+    """
+
+    from vibe.cli import entrypoint
+
+    saved = sys.argv
+    sys.argv = ["vibe", *argv]
+    try:
+        record = _drive(entrypoint.main, ROOT_PROGS)
+    finally:
+        sys.argv = saved
+    record["stdoutLastLine"] = None
+    record["stderrLastLine"] = None
+    if record["exit"] != 1:
+        raise OracleError(
+            f"the {case} vector exited {record['exit']} rather than failing the startup"
+        )
+    return {"case": case, "parser": "startup", "argv": list(argv), **record}
+
+
+def drive_startup_matrix(root: Path) -> list[dict[str, Any]]:
+    """The startup matrix, each vector driven from the directory it needs.
+
+    Three of them fail on a name that is not there, so they run from a fixture
+    holding one directory that is. The fourth fails because the directory the
+    process sits in was removed underneath it, which no argument can express, so
+    it is driven from a directory this function deletes first. The working
+    directory is restored either way: everything captured after this reads it.
+    """
+
+    fixture = root / "startup"
+    (fixture / "present").mkdir(parents=True)
+    deleted = root / "startup-deleted"
+    deleted.mkdir()
+    origin = Path.cwd()
+    cases: list[dict[str, Any]] = []
+    try:
+        os.chdir(fixture)
+        cases += [
+            drive_startup(case, argv)
+            for case, argv in STARTUP_VECTORS
+            if case != "startup-working-directory-deleted"
+        ]
+        os.chdir(deleted)
+        shutil.rmtree(deleted)
+        cases.append(drive_startup(*STARTUP_VECTORS[-1]))
+    finally:
+        os.chdir(origin)
+    return cases
+
+
+
 # --------------------------------------------------------------------------
 # Capture
 # --------------------------------------------------------------------------
@@ -984,6 +1058,7 @@ def build_corpus(reference: dict[str, Any], session_home: Path) -> dict[str, Any
     cases += [drive_mcp(case, argv) for case, argv in MCP_VECTORS]
     if _fingerprint(real_config) != before:
         raise OracleError(f"the matrix changed the real user configuration at {real_config}")
+    cases += drive_startup_matrix(session_home.parent)
 
     actions = sum(len(record["actions"]) for record in parser_records)
     if len(parser_records) < PARSER_FLOOR:
