@@ -1,6 +1,6 @@
 //! US-090 and US-091: the configuration as `ConfigView` publishes it.
 //!
-//! The census the app-server replay reads declares 18 fields, so the assertions
+//! The view publishes 19 fields, so the assertions
 //! here are about which keys exist and what they carry, not about how a client
 //! renders them.
 
@@ -59,9 +59,18 @@ fn the_view_carries_every_field_the_wire_declares() {
             "validationWarnings",
             "vibeCodeEnabled",
             "voiceModeEnabled",
+            "worktreeLimit",
         ],
-        "the view is exactly the 18 fields the census declares"
+        "the view is exactly the 19 fields this port publishes"
     );
+}
+
+#[test]
+fn the_worktree_limit_reads_the_configured_value_or_the_default() {
+    let (_temporary, defaulted) = loaded("");
+    assert_eq!(defaulted.config_view()["worktreeLimit"], 15);
+    let (_temporary, configured) = loaded("worktree_limit = 3\n");
+    assert_eq!(configured.config_view()["worktreeLimit"], 3);
 }
 
 #[test]

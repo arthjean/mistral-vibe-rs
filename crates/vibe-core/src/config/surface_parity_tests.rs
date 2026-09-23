@@ -98,10 +98,6 @@ const UNDECLARED_FIELDS: &[(&str, &str)] = &[
          declares no such key",
     ),
     (
-        "worktree_limit",
-        "v2.25.1 worktree limit (vibe_schema.py:575), unported; the registry declares no such key",
-    ),
-    (
         "experimental_enable_tab_status",
         "v2.25.1 tab status toggle (vibe_schema.py:594), unported; the registry declares no such \
          key",

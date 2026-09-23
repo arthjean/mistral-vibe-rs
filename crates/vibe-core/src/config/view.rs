@@ -38,7 +38,7 @@ const SPEECH_API_BASE: &str = "https://api.mistral.ai";
 const THINKING_LEVELS: [&str; 5] = ["off", "low", "medium", "high", "max"];
 
 impl ConfigSnapshot {
-    /// The 18-field `ConfigView` the app-server publishes.
+    /// The 19-field `ConfigView` the app-server publishes.
     #[must_use]
     pub fn config_view(&self) -> JsonValue {
         json!({
@@ -51,6 +51,7 @@ impl ConfigSnapshot {
             "voiceModeEnabled": self.bool_field("voice_mode_enabled", false),
             "narratorEnabled": self.bool_field("narrator_enabled", false),
             "showThinkingNodes": self.bool_field("show_thinking_nodes", true),
+            "worktreeLimit": self.worktree_limit(),
             "enableUpdateChecks": self.bool_field("enable_update_checks", true),
             "enableNotifications": self.bool_field("enable_notifications", false),
             "vibeCodeEnabled": self.bool_field("vibe_code_enabled", false),
@@ -73,6 +74,18 @@ impl ConfigSnapshot {
             },
             "validationWarnings": self.validation_warnings,
         })
+    }
+
+    /// How many inactive managed worktrees are kept before the oldest are
+    /// pruned. A value outside the field's `0..=100` reads as the default.
+    #[must_use]
+    pub fn worktree_limit(&self) -> usize {
+        self.effective
+            .get("worktree_limit")
+            .and_then(Value::as_integer)
+            .filter(|limit| (0..=100).contains(limit))
+            .and_then(|limit| usize::try_from(limit).ok())
+            .unwrap_or(15)
     }
 
     /// The provider entry the active model is served from, when the two names

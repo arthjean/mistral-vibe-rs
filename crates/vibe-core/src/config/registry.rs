@@ -909,6 +909,11 @@ pub static FIELDS: &[FieldSpec] = &[
         "Show reasoning regions in the transcript.",
         "",
     ),
+    FieldSpec::declared("worktree_limit", FieldKind::Int, REPLACE).published(
+        FieldDefault::Int(15),
+        "How many inactive managed worktrees are kept before the oldest are pruned.",
+        r#"{"minimum": 0, "maximum": 100}"#,
+    ),
     FieldSpec::declared("bypass_tool_permissions", FieldKind::Bool, REPLACE)
         .popular()
         .published(

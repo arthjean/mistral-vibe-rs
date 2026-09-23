@@ -454,7 +454,7 @@ const DIVERGENT_HANDSHAKE: &[(&str, &str)] = &[
 const DIVERGENT_RESPONSES: &[(&str, &str)] = &[
     (
         "config/read",
-        "US-142 and v2.25.7: /config lacks activeModelPinned, defaultModelAlias and showGreeting (v2.24.0) and logLevel, showSubagentStatusList, worktreeLimit and experimentalEnableTabStatus (vibe/app_server/config.py:59-82), and still carries vibeCodeEnabled, which v2.25.7 removed from ConfigView; every /config model lacks displayName (vibe/app_server/config.py:18); /baseConfig is no longer declared by ConfigReadResponse (vibe/app_server/protocol.py:970)",
+        "US-142 and v2.25.7: /config lacks activeModelPinned, defaultModelAlias and showGreeting (v2.24.0) and logLevel, showSubagentStatusList and experimentalEnableTabStatus (vibe/app_server/config.py:59-82), and still carries vibeCodeEnabled, which v2.25.7 removed from ConfigView; every /config model lacks displayName (vibe/app_server/config.py:18); /baseConfig is no longer declared by ConfigReadResponse (vibe/app_server/protocol.py:970)",
     ),
     (
         "runtime/read",
