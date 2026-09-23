@@ -99,6 +99,17 @@ pub struct PermissionRequirement {
     pub invocation_pattern: String,
     pub session_pattern: String,
     pub label: String,
+    /// Whether a stored approval covers this requirement only by being its
+    /// exact text rather than by matching it as a glob.
+    ///
+    /// Reference `RequiredPermission.literal` (`vibe/permissions.py`), read by
+    /// `PermissionStore.covers` (`vibe/core/tools/permissions.py:39-42`): a
+    /// scope recorded because nothing wider was honest must stay out of reach
+    /// of the wider grants, and its own text may carry glob characters. The
+    /// reference excludes it from serialization but still validates it, so it
+    /// never reaches the wire and a payload that carries it still reads.
+    #[serde(default, skip_serializing)]
+    pub literal: bool,
 }
 
 impl PermissionRequirement {
@@ -115,15 +126,19 @@ impl PermissionRequirement {
             invocation_pattern: segment.to_owned(),
             session_pattern: session_pattern.clone(),
             label: session_pattern,
+            literal: false,
         }
     }
 
     /// A command segment whose grant may not widen past itself.
     ///
     /// Reference `_build_required_permissions` takes this branch for a
-    /// sensitive segment and for a `find` carrying an execution predicate: both
-    /// carry the segment as its own session pattern, so approving `sudo apt
-    /// update` never approves `sudo rm`.
+    /// sensitive segment, `_resolve_guardrail_permission` for a guardrailed one
+    /// such as a `find` carrying an execution predicate, and `resolve_permission`
+    /// for a command only its whole text can scope. All three carry the text as
+    /// its own session pattern and mark it literal, so approving `sudo apt
+    /// update` never approves `sudo rm` and a stored `git log *` is never read
+    /// as a glob.
     #[must_use]
     pub fn exact_command(segment: &str) -> Self {
         Self {
@@ -131,6 +146,7 @@ impl PermissionRequirement {
             invocation_pattern: segment.to_owned(),
             session_pattern: segment.to_owned(),
             label: segment.to_owned(),
+            literal: true,
         }
     }
 
@@ -145,6 +161,7 @@ impl PermissionRequirement {
             invocation_pattern: glob.to_owned(),
             session_pattern: glob.to_owned(),
             label: format!("outside workdir ({glob})"),
+            literal: false,
         }
     }
 
@@ -161,6 +178,7 @@ impl PermissionRequirement {
             invocation_pattern: resolved.to_owned(),
             session_pattern: glob_escape(resolved),
             label: format!("accessing sensitive files ({tool})"),
+            literal: false,
         }
     }
 
@@ -174,6 +192,7 @@ impl PermissionRequirement {
             invocation_pattern: scope.to_owned(),
             session_pattern: scope.to_owned(),
             label: format!("fetching from {scope}"),
+            literal: false,
         }
     }
 
@@ -273,12 +292,22 @@ impl PermissionRule {
     ///
     /// Reference `PermissionStore.covers`: the tool and the scope have to be
     /// the rule's own, and the requirement's invocation pattern has to match the
-    /// rule's session pattern under [`wildcard_match`].
+    /// rule's session pattern under [`wildcard_match`], or equal it when the
+    /// requirement is literal.
+    ///
+    /// Only an approval is held to the literal reading. The reference stores
+    /// approvals alone, each under a scope; a rule with no scope is this port's
+    /// agent-profile rule, whose `*` refusal has to keep answering for every
+    /// call, literal or not.
     #[must_use]
     pub fn covers(&self, tool: &str, requirement: &PermissionRequirement) -> bool {
         (self.tool == tool || self.tool == "*")
             && self.scope.is_none_or(|scope| scope == requirement.scope)
-            && wildcard_match(&requirement.invocation_pattern, &self.pattern)
+            && if requirement.literal && self.scope.is_some() {
+                self.pattern == requirement.invocation_pattern
+            } else {
+                wildcard_match(&requirement.invocation_pattern, &self.pattern)
+            }
     }
 
     /// How much of a requirement this rule pins down, used to prefer the more

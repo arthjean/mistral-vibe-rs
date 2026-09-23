@@ -53,17 +53,7 @@ struct Divergence {
 
 /// Every difference the replay admits, measured at the pin in
 /// `crate::parity::REFERENCE_COMMIT`.
-const DIVERGENCES: &[Divergence] = &[Divergence {
-    pointer: "/requirement/fields/4",
-    port: "undeclared",
-    reason: "v2.25.5 adds `literal` to `RequiredPermission`, excluded from \
-                 serialization and read by `PermissionStore.covers` to compare a \
-                 grant as text instead of as a glob \
-                 (`vibe/permissions.py:27`, `vibe/core/tools/permissions.py:38-47` \
-                 at 4a96003186b1). The wire shape is \
-                 unchanged, but `PermissionRequirement` declares no such field, \
-                 refuses it on input, and `PermissionRule::covers` always globs.",
-}];
+const DIVERGENCES: &[Divergence] = &[];
 
 /// Whether the port's `answer` at `pointer` is the reference `expected` one or
 /// the divergence [`DIVERGENCES`] records there, failing on anything else and

@@ -270,9 +270,12 @@ fn override_requirements(arguments: &Value, root: &Path) -> Vec<PermissionRequir
     if let Some(shell) = string_argument(arguments, "shell") {
         // Reference `_build_context_permissions` carries the override verbatim
         // as both patterns, so approving one interpreter never approves another.
-        requirements.push(PermissionRequirement::exact_command(&format!(
-            "shell override: {shell}"
-        )));
+        // It is the one exact pattern the reference leaves unmarked, so a
+        // stored grant still reads it as a glob.
+        requirements.push(PermissionRequirement {
+            literal: false,
+            ..PermissionRequirement::exact_command(&format!("shell override: {shell}"))
+        });
     }
     if let Some(names) = environment_names(arguments) {
         // The environment override is the one context permission the reference
@@ -283,6 +286,7 @@ fn override_requirements(arguments: &Value, root: &Path) -> Vec<PermissionRequir
             invocation_pattern: format!("env override: {names}"),
             session_pattern: "env override *".to_owned(),
             label: format!("env override: {names}"),
+            literal: false,
         });
     }
     requirements

@@ -221,6 +221,65 @@ async fn a_stored_rule_covers_a_matching_later_invocation() {
     assert_eq!(other_tool.mode, PermissionMode::Ask);
 }
 
+/// A literal requirement is covered only by an approval of its exact text.
+///
+/// Reference `PermissionStore.covers` compares a literal requirement's
+/// invocation pattern with the stored session pattern instead of matching it:
+/// `git log *` approved as written must not read as a glob that covers
+/// `git log --ext-diff`. A profile rule, which carries no scope, still answers
+/// for every call it names.
+#[tokio::test]
+async fn a_literal_requirement_is_covered_only_by_its_exact_text() {
+    let store = PermissionStore::default();
+    store
+        .add_rule(
+            PermissionRequirement::exact_command("git log *").approved_rule("bash", "session"),
+        )
+        .await;
+    let resolve = |command: &'static str| {
+        let store = store.clone();
+        async move {
+            store
+                .resolve(
+                    "bash",
+                    &PermissionContext::asking(vec![PermissionRequirement::exact_command(command)]),
+                )
+                .await
+                .expect("resolution")
+                .mode
+        }
+    };
+    assert_eq!(resolve("git log *").await, PermissionMode::Always);
+    assert_eq!(resolve("git log --ext-diff").await, PermissionMode::Ask);
+
+    // The same stored pattern read as a glob covers the wider command, which is
+    // what the literal flag withholds.
+    let wide = store
+        .resolve(
+            "bash",
+            &PermissionContext::asking(vec![PermissionRequirement {
+                literal: false,
+                ..PermissionRequirement::exact_command("git log --ext-diff")
+            }]),
+        )
+        .await
+        .expect("resolution");
+    assert_eq!(wide.mode, PermissionMode::Always);
+
+    // The flag never reaches the wire, and a payload carrying it still reads.
+    let encoded = serde_json::to_value(PermissionRequirement::exact_command("ls")).expect("encode");
+    assert!(encoded.get("literal").is_none(), "{encoded}");
+    let decoded: PermissionRequirement = serde_json::from_value(json!({
+        "scope": "command_pattern",
+        "invocationPattern": "ls",
+        "sessionPattern": "ls",
+        "label": "ls",
+        "literal": true,
+    }))
+    .expect("decode");
+    assert!(decoded.literal);
+}
+
 /// A rule answers for its own scope only, so an approval for a host never
 /// covers a command that happens to spell the same text.
 #[tokio::test]
