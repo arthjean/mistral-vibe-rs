@@ -682,11 +682,15 @@ impl ResourceService {
     }
 
     /// The session's tool surface as `ToolSummary` declares it: a name and
-    /// nothing else.
+    /// whether the tool is custom.
     ///
     /// The full specification a tool carries is not part of this contract. A
     /// client that needs a schema reads it from the tool call it is answering,
-    /// which is where the reference publishes it too.
+    /// which is where the reference publishes it too. Reference
+    /// `ToolManager.custom_tool_names` marks a tool whose implementation was
+    /// loaded from a `tool_paths` directory; this port loads none (see the
+    /// accepted divergence on `tool_paths`), so every tool it publishes is a
+    /// builtin, MCP or connector one and answers `false`.
     fn tool_list(&self, session_id: &str) -> Result<Value, ResourceError> {
         let registry = self.tool_registries.get(session_id).ok_or_else(|| {
             ResourceError::NotFound(format!("session `{session_id}` was not found"))
@@ -697,7 +701,7 @@ impl ResourceService {
         Ok(Value::Array(
             tools
                 .into_iter()
-                .map(|spec| json!({"name": spec.name}))
+                .map(|spec| json!({"name": spec.name, "isCustom": false}))
                 .collect(),
         ))
     }
