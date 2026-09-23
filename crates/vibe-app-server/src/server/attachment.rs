@@ -545,6 +545,17 @@ impl AppServer {
         // The scratchpad opens with the session and is the one directory the
         // file tools reach without consulting a list, which is the capability
         // reference `init_scratchpad` gives the agent-loop runtime.
+        // Reference `Workspace.for_session`: the working directory is always
+        // inside the write boundary, trusted or not, and every `--add-dir`
+        // root joins it. Trust only decides which configuration is read.
+        let listed_roots = intent
+            .add_directories
+            .iter()
+            .map(std::path::PathBuf::from)
+            .collect::<Vec<_>>();
+        policy
+            .try_authorize_workspace(Path::new(working_directory), &listed_roots)
+            .map_err(|error| ServerError::Resource(error.to_string()))?;
         let guard =
             ToolGuard::new(policy.clone(), approval).with_scratchpad(init_scratchpad(session_id));
         // The registry carries the composition so a family published later than

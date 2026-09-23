@@ -135,7 +135,9 @@ impl AcpClientPort for BlockingPermissionClient {
     }
 }
 
-/// Invokes a workspace tool that requires approval before answering.
+/// Invokes a workspace tool that requires approval before answering: a read of
+/// `approval.txt` one level above the session directory, outside the roots the
+/// session authorizes.
 pub(super) struct ApprovalInvokingDriver {
     pub(super) inner: EchoTurnDriver,
 }
@@ -149,7 +151,7 @@ impl TurnDriver for ApprovalInvokingDriver {
                     "read_file",
                     ToolInvocation {
                         call_id: "read-for-approval".to_owned(),
-                        arguments: json!({"file_path": "approval.txt"}),
+                        arguments: json!({"file_path": "../approval.txt"}),
                     },
                 )
                 .await

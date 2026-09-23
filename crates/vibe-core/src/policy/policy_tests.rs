@@ -621,10 +621,12 @@ fn a_path_below_a_missing_directory_resolves_without_admitting_a_traversal() {
     ));
 }
 
-/// A list match may only tighten what the path itself resolves to. A root the
-/// operator refused stays refused, so an allowlist entry cannot reopen it.
+/// An allowlist entry grants its subject before the boundary is consulted, as
+/// reference `resolve_file_tool_permission` checks `resolve_path_permission`
+/// first (`vibe/core/tools/utils.py:171-193`), so the trust recorded for the
+/// directory holding it plays no part.
 #[tokio::test]
-async fn a_listed_subject_never_reopens_an_untrusted_root() {
+async fn an_allowlisted_subject_is_granted_whatever_its_root_trust() {
     let directory = tempdir().expect("tempdir");
     let store = PermissionStore::default();
     store
@@ -642,8 +644,6 @@ async fn a_listed_subject_never_reopens_an_untrusted_root() {
         let path = directory.path().join(name);
         std::fs::write(&path, "content").expect("write");
         let mut context = resolve_file_tool_permission(&path, "read_file", &settings, None);
-        // Even a context the lists already granted carries its path, so the
-        // refused root is still seen.
         context.paths = vec![path];
         let resolution = store
             .resolve("read_file", &context)
@@ -651,8 +651,8 @@ async fn a_listed_subject_never_reopens_an_untrusted_root() {
             .expect("resolution");
         assert_eq!(
             resolution.mode,
-            PermissionMode::Never,
-            "`{name}` sits in an untrusted root: {}",
+            PermissionMode::Always,
+            "`{name}` is allowlisted: {}",
             resolution.rationale
         );
     }
@@ -752,8 +752,11 @@ impl ApprovalAgent for GatedApproval {
     }
 }
 
+/// Trust never decides where a tool reaches, as in reference `Workspace.allows`
+/// (`vibe/core/workspace.py`): a directory the operator declined is asked about
+/// while it sits outside the session, and reached once the session opens there.
 #[tokio::test]
-async fn closest_untrusted_root_overrides_trusted_ancestor() {
+async fn a_declined_root_is_asked_about_until_the_session_authorizes_it() {
     let directory = tempdir().expect("tempdir");
     let nested = directory.path().join("nested");
     std::fs::create_dir(&nested).expect("nested");
@@ -770,14 +773,68 @@ async fn closest_untrusted_root_overrides_trusted_ancestor() {
         .set_trust(&nested, TrustDecision::Untrusted, TrustRootKind::Workspace)
         .await
         .expect("deny nested");
-    let resolution = store
+    let context = PermissionContext::deferred().over_paths(vec![nested.join("missing.txt")]);
+
+    let outside = store.resolve("read_file", &context).await.expect("resolve");
+    assert_eq!(outside.mode, PermissionMode::Ask, "{}", outside.rationale);
+    assert_eq!(
+        outside.required_permissions[0].scope,
+        PermissionScope::OutsideDirectory
+    );
+
+    store
+        .try_authorize_workspace(&nested, &[])
+        .expect("the session opens in the declined directory");
+    let inside = store.resolve("read_file", &context).await.expect("resolve");
+    assert_ne!(inside.mode, PermissionMode::Never, "{}", inside.rationale);
+    assert!(
+        inside
+            .required_permissions
+            .iter()
+            .all(|requirement| requirement.scope != PermissionScope::OutsideDirectory),
+        "the session's own directory is inside the boundary: {:?}",
+        inside.required_permissions
+    );
+}
+
+/// A directory added to the session joins its boundary, resolved against the
+/// working directory as reference `Workspace.for_session` joins `add_dirs`
+/// (`vibe/core/workspace.py`), and a sibling nobody listed stays outside.
+#[tokio::test]
+async fn an_added_directory_joins_the_boundary_and_its_sibling_does_not() {
+    let parent = tempdir().expect("tempdir");
+    let [cwd, added, sibling] = ["cwd", "added", "sibling"].map(|name| {
+        let path = parent.path().join(name);
+        std::fs::create_dir(&path).expect("directory");
+        path
+    });
+    let store = PermissionStore::default();
+    store
+        .try_authorize_workspace(&cwd, &[std::path::PathBuf::from("../added")])
+        .expect("authorize");
+
+    let canonical = std::fs::canonicalize(&added).expect("canonical");
+    assert!(store.workspace_roots().contains(&canonical));
+    let reached = store
         .resolve(
             "read_file",
-            &PermissionContext::deferred().over_paths(vec![nested.join("missing.txt")]),
+            &PermissionContext::deferred().over_paths(vec![added.join("notes.txt")]),
         )
         .await
         .expect("resolve");
-    assert_eq!(resolution.mode, PermissionMode::Never);
+    assert!(
+        reached.required_permissions.is_empty(),
+        "{:?}",
+        reached.required_permissions
+    );
+    let asked = store
+        .resolve(
+            "read_file",
+            &PermissionContext::deferred().over_paths(vec![sibling.join("notes.txt")]),
+        )
+        .await
+        .expect("resolve");
+    assert_eq!(asked.mode, PermissionMode::Ask, "{}", asked.rationale);
 }
 
 /// An agent profile installs its refusal and its narrower grant through the

@@ -503,6 +503,11 @@ impl ToolHandler for PolicyGuardedTool {
 struct TrustRoot {
     canonical_path: PathBuf,
     decision: TrustDecision,
+    #[expect(
+        dead_code,
+        reason = "names the root in the store's `Debug` output; since trust stopped gating \
+                  where a tool reaches, no decision reads it"
+    )]
     kind: TrustRootKind,
 }
 
@@ -530,12 +535,34 @@ struct PolicyState {
     revision: u64,
     rules: Vec<PermissionRule>,
     roots: BTreeMap<PathBuf, TrustRoot>,
+    /// The session's write boundary: its working directory and every listed
+    /// root, canonical. Reference `Workspace.authorized_roots`
+    /// (`vibe/core/workspace.py`), which authorizes the working directory
+    /// whether or not it is trusted.
+    authorized: Vec<PathBuf>,
 }
 
 impl PolicyState {
     fn insert_root(&mut self, root: TrustRoot) {
         self.roots.insert(root.canonical_path.clone(), root);
         self.revision = self.revision.saturating_add(1);
+    }
+
+    /// Whether a canonical path sits inside the session's write boundary.
+    ///
+    /// Reference `is_path_within_workdir` asks `Workspace.allows`, which is
+    /// the authorized roots alone: trust decides which configuration a session
+    /// reads, never where its tools reach. A root a caller trusted without
+    /// authorizing it still counts, which is how a store no session opened
+    /// positions paths; one declined or revoked stops counting and its paths
+    /// are asked about like any other outside the boundary, never refused.
+    fn reaches(&self, canonical: &Path) -> bool {
+        self.authorized
+            .iter()
+            .any(|root| canonical.starts_with(root))
+            || self
+                .closest_root(canonical)
+                .is_some_and(|root| root.decision != TrustDecision::Untrusted)
     }
 
     /// The most specific trust root covering `canonical`, if any.
@@ -565,6 +592,10 @@ pub struct PermissionStore {
     /// reports it. A failed write never fails the call the operator approved,
     /// so the failure has to be readable somewhere.
     diagnostics: Arc<StdRwLock<Vec<String>>>,
+    /// The authorized roots again, for a reader that cannot wait on the policy
+    /// lock: the shell analysis positions a command's operands synchronously.
+    /// Written only alongside [`PolicyState::authorized`].
+    workspace_roots: Arc<StdRwLock<Vec<PathBuf>>>,
 }
 
 impl std::fmt::Debug for PermissionStore {
@@ -591,6 +622,7 @@ impl Default for PermissionStore {
             tool_config: ToolConfigResolver::new(),
             persist_allowlist: None,
             diagnostics: Arc::default(),
+            workspace_roots: Arc::default(),
         }
         .with_tool_config(ToolConfigResolver::new())
     }
@@ -705,6 +737,48 @@ impl PermissionStore {
             .map_err(|_| PolicyError::Busy)?
             .insert_root(root);
         Ok(())
+    }
+
+    /// Authorizes the session's working directory and its listed roots.
+    ///
+    /// Reference `Workspace.for_session(cwd, project_roots)`: the working
+    /// directory is resolved and always authorized, whatever the operator
+    /// decided about trusting it, and each `--add-dir` root joins it. A
+    /// relative listed root is read against the working directory.
+    ///
+    /// # Errors
+    ///
+    /// [`PolicyError::Busy`] while another writer holds the store, and a
+    /// resolution error for a root that cannot be positioned.
+    pub fn try_authorize_workspace(
+        &self,
+        working_directory: &Path,
+        listed_roots: &[PathBuf],
+    ) -> Result<(), PolicyError> {
+        let mut authorized = vec![canonicalize_for_policy(working_directory)?];
+        for root in listed_roots {
+            let root = canonicalize_for_policy(&working_directory.join(root))?;
+            if !authorized.contains(&root) {
+                authorized.push(root);
+            }
+        }
+        let mut state = self.state.try_write().map_err(|_| PolicyError::Busy)?;
+        state.authorized.clone_from(&authorized);
+        state.revision = state.revision.saturating_add(1);
+        if let Ok(mut mirror) = self.workspace_roots.write() {
+            *mirror = authorized;
+        }
+        Ok(())
+    }
+
+    /// The roots [`Self::try_authorize_workspace`] authorized, canonical, the
+    /// working directory first; empty for a store no session opened.
+    #[must_use]
+    pub fn workspace_roots(&self) -> Vec<PathBuf> {
+        self.workspace_roots
+            .read()
+            .map(|roots| roots.clone())
+            .unwrap_or_default()
     }
 
     pub fn try_trust_decision(
@@ -975,8 +1049,6 @@ fn resolve_locked(
     if settings.permission == PermissionMode::Never {
         return Ok(refusal(format!("`{tool}` is configured to never run")));
     }
-    // A path the operator refused closes the call before the tool's own answer
-    // is read, so neither an allowlist match nor a stored approval reopens it.
     // A path that resolves nowhere is positioned outside every root rather than
     // inside one, which is where reference `is_path_within_workdir` puts what it
     // cannot resolve; the guard then fails toward asking rather than refusing.
@@ -985,19 +1057,6 @@ fn resolve_locked(
         .iter()
         .map(|path| (path, canonicalize_for_policy(path).ok()))
         .collect::<Vec<_>>();
-    for (_, canonical) in &positioned {
-        if let Some(root) = canonical
-            .as_ref()
-            .and_then(|canonical| state.closest_root(canonical))
-            && root.decision == TrustDecision::Untrusted
-        {
-            return Ok(refusal(format!(
-                "closest {:?} root `{}` is untrusted",
-                root.kind,
-                root.canonical_path.display()
-            )));
-        }
-    }
     if context.permission == Some(PermissionMode::Never) {
         return Ok(refusal(
             context
@@ -1027,7 +1086,7 @@ fn resolve_locked(
     for (path, canonical) in &positioned {
         if canonical
             .as_ref()
-            .is_some_and(|canonical| state.closest_root(canonical).is_some())
+            .is_some_and(|canonical| state.reaches(canonical))
         {
             continue;
         }

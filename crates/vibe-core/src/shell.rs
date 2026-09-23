@@ -93,6 +93,21 @@ impl ShellPolicyContext {
         self.scratchpad = scratchpad;
         self
     }
+
+    /// The same context whose operands may also reach `roots`.
+    ///
+    /// Reference `_collect_outside_dirs` positions an operand against
+    /// `Workspace.authorized_roots`, which holds every `--add-dir` root beside
+    /// the working directory.
+    #[must_use]
+    pub fn with_roots(mut self, roots: impl IntoIterator<Item = PolicyPath>) -> Self {
+        for root in roots {
+            if !self.roots.contains(&root) {
+                self.roots.push(root);
+            }
+        }
+        self
+    }
 }
 
 /// The four lists a shell tool resolves from its configuration.

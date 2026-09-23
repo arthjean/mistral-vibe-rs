@@ -624,12 +624,12 @@ async fn a_managed_override_stops_an_allowlisted_command_from_running_outright()
     }
 }
 
-/// A `cwd` override is a directory the call reaches, so it is positioned
-/// against the trust roots rather than only named in the prompt: a root the
-/// operator revoked refuses the call outright instead of offering it for
-/// approval, which is the guarantee `revoke_trust` carries everywhere else.
+/// A `cwd` override is a directory the call reaches, positioned against the
+/// session's authorized roots. Trust never gates that reach, as in reference
+/// `Workspace.allows` (`vibe/core/workspace.py`): a root the operator revoked
+/// is asked about like any other directory outside the boundary, not refused.
 #[tokio::test]
-async fn a_working_directory_under_a_revoked_root_is_refused_rather_than_asked() {
+async fn a_working_directory_under_a_revoked_root_is_asked_like_any_outside_one() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     let outside = tempdir().expect("outside");
     harness
@@ -638,19 +638,18 @@ async fn a_working_directory_under_a_revoked_root_is_refused_rather_than_asked()
         .await
         .expect("the operator revokes the directory");
 
-    let refused = harness
+    harness
         .call(
             "bash",
             json!({"command": "pwd", "cwd": outside.path().to_string_lossy()}),
         )
         .await
-        .expect_err("an untrusted root is not something an approval reopens");
+        .expect("an approved call runs in the revoked directory");
 
-    assert!(refused.to_string().contains("untrusted"), "{refused}");
-    assert_eq!(
-        harness.approval_count(),
-        0,
-        "the operator is never asked to reopen a root they revoked: {}",
+    assert_eq!(harness.approval_count(), 1, "{}", harness.approvals());
+    assert!(
+        harness.approvals().contains("outside workdir"),
+        "the approval must name the boundary: {}",
         harness.approvals()
     );
 }
@@ -1924,6 +1923,7 @@ fn a_git_bash_path_is_translated_onto_the_windows_workspace_root() {
         ShellFlavor::GitBash,
         Platform::Windows,
         Path::new(r"C:\work"),
+        &[],
         None,
         "more /c/work/notes.txt",
         &ShellCommandLists::from_config(&shell_settings()),
@@ -1945,6 +1945,7 @@ fn a_git_bash_path_is_translated_onto_the_windows_workspace_root() {
         ShellFlavor::PowerShell,
         Platform::Windows,
         Path::new(r"C:\work"),
+        &[],
         None,
         "more /c/work/notes.txt",
         &ShellCommandLists::from_config(&shell_settings()),
@@ -1962,6 +1963,7 @@ fn a_git_bash_path_is_translated_onto_the_windows_workspace_root() {
         ShellFlavor::GitBash,
         Platform::Windows,
         Path::new(r"C:\work"),
+        &[],
         None,
         "cat /d/secrets/notes.txt",
         &ShellCommandLists::from_config(&shell_settings()),

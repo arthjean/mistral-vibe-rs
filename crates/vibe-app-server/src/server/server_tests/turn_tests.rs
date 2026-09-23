@@ -54,8 +54,11 @@ async fn a_configuration_change_between_turns_reaches_the_published_tools() {
     assert!(refused.to_string().contains("2-byte budget"), "{refused}");
 }
 
+/// The session directory is always inside the boundary a tool reaches, as
+/// reference `Workspace.for_session` authorizes it (`vibe/core/workspace.py`):
+/// no trust decision, granted or declined, changes what a read there does.
 #[tokio::test]
-async fn workspace_trust_controls_the_session_tool_registry() {
+async fn workspace_trust_never_gates_a_read_in_the_session_directory() {
     let workspace = tempfile::tempdir().expect("workspace");
     std::fs::write(workspace.path().join("visible.txt"), "safe\n").expect("fixture");
     let server = AppServer::default();
@@ -76,47 +79,26 @@ async fn workspace_trust_controls_the_session_tool_registry() {
         call_id: "read-1".to_owned(),
         arguments: json!({"file_path": "visible.txt"}),
     };
-    assert!(
-        server
+    for (id, decision) in [(None, "none"), (Some(3), "trust_cwd"), (Some(4), "decline")] {
+        if let Some(id) = id {
+            let answered = connection.dispatch(&request(
+                id,
+                "workspace/trust/decision",
+                json!({
+                    "sessionId": "session-1",
+                    "cwd": workspace.path(),
+                    "decision": decision
+                }),
+            ));
+            assert_eq!(answered.outbound.len(), 2, "{decision}");
+        }
+        let content = server
             .invoke_tool("session-1", "read_file", invocation())
             .await
-            .is_err()
-    );
-
-    let trusted = connection.dispatch(&request(
-        3,
-        "workspace/trust/decision",
-        json!({
-            "sessionId": "session-1",
-            "cwd": workspace.path(),
-            "decision": "trust_cwd"
-        }),
-    ));
-    assert_eq!(trusted.outbound.len(), 2);
-    assert_eq!(
-        server
-            .invoke_tool("session-1", "read_file", invocation())
-            .await
-            .expect("trusted read")
-            .typed_result["content"],
-        "        1\u{2192}safe"
-    );
-
-    connection.dispatch(&request(
-        4,
-        "workspace/trust/decision",
-        json!({
-            "sessionId": "session-1",
-            "cwd": workspace.path(),
-            "decision": "decline"
-        }),
-    ));
-    assert!(
-        server
-            .invoke_tool("session-1", "read_file", invocation())
-            .await
-            .is_err()
-    );
+            .map(|output| output.typed_result["content"].clone())
+            .map_err(|error| error.to_string());
+        assert_eq!(content, Ok(json!("        1\u{2192}safe")), "{decision}");
+    }
 }
 
 #[tokio::test]

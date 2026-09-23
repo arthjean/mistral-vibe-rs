@@ -220,8 +220,10 @@ fn approval_choices_and_invalid_client_outcomes_fail_closed() {
 
 #[tokio::test]
 async fn canonical_approval_callback_routes_through_the_acp_client() {
-    let directory = tempfile::tempdir().expect("workspace");
-    std::fs::write(directory.path().join("approval.txt"), "approved\n").expect("workspace file");
+    let parent = tempfile::tempdir().expect("parent");
+    std::fs::write(parent.path().join("approval.txt"), "approved\n").expect("outside file");
+    let directory = parent.path().join("workspace");
+    std::fs::create_dir(&directory).expect("workspace");
     let client = Arc::new(PermissionClient {
         params: Mutex::new(None),
     });
@@ -231,7 +233,7 @@ async fn canonical_approval_callback_routes_through_the_acp_client() {
     .expect("agent starts")
     .with_client_port(client.clone(), Duration::from_secs(1));
     agent.initialize().expect("initialize");
-    let session = start_session(&agent, &directory.path().to_string_lossy());
+    let session = start_session(&agent, &directory.to_string_lossy());
     prompt(&agent, &session.session_id, "read the file")
         .await
         .expect("approved prompt");
@@ -295,8 +297,10 @@ async fn unsupported_user_input_is_denied_without_reaching_the_acp_client() {
 
 #[tokio::test]
 async fn disconnect_cancels_a_pending_canonical_approval() {
-    let directory = tempfile::tempdir().expect("workspace");
-    std::fs::write(directory.path().join("approval.txt"), "approval\n").expect("workspace file");
+    let parent = tempfile::tempdir().expect("parent");
+    std::fs::write(parent.path().join("approval.txt"), "approval\n").expect("outside file");
+    let directory = parent.path().join("workspace");
+    std::fs::create_dir(&directory).expect("workspace");
     let client = Arc::new(BlockingPermissionClient {
         started: tokio::sync::Notify::new(),
     });
@@ -308,7 +312,7 @@ async fn disconnect_cancels_a_pending_canonical_approval() {
         .with_client_port(client.clone(), Duration::from_secs(30)),
     );
     agent.initialize().expect("initialize");
-    let session = start_session(&agent, &directory.path().to_string_lossy());
+    let session = start_session(&agent, &directory.to_string_lossy());
     let prompt_agent = agent.clone();
     let session_id = session.session_id;
     let prompt = tokio::spawn(async move {

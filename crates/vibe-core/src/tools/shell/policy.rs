@@ -58,9 +58,20 @@ struct ShellCallPolicy {
     /// too, so the Windows families answer for them whichever variant is
     /// selected.
     overrides: bool,
+    /// The store whose authorized roots the command's operands and its `cwd`
+    /// override are positioned against, read per call.
+    policy: PermissionStore,
 }
 
 impl ShellCallPolicy {
+    /// Where a `cwd` override may point without leaving the workspace: the
+    /// directory the call runs in and every root the session authorized.
+    fn roots(&self) -> Vec<PathBuf> {
+        let mut roots = vec![self.root.clone()];
+        roots.extend(self.policy.workspace_roots());
+        roots
+    }
+
     /// What the command runs under, with the overrides the command text cannot
     /// see already folded in.
     ///
@@ -75,11 +86,12 @@ impl ShellCallPolicy {
             self.flavor,
             self.platform,
             &self.root,
+            &self.policy.workspace_roots(),
             self.scratchpad.clone(),
             &command,
             &ShellCommandLists::from_config(&settings),
         );
-        if self.overrides && !override_requirements(arguments, &self.root).is_empty() {
+        if self.overrides && !override_requirements(arguments, &self.roots()).is_empty() {
             analysis.mode = analysis.mode.min(PermissionMode::Ask);
             analysis.rationale.push(
                 "the call overrides the working directory, the shell or the environment".to_owned(),
@@ -105,7 +117,7 @@ impl ShellCallPolicy {
             )?));
         }
         if self.overrides {
-            requirements.extend(override_requirements(arguments, &self.root));
+            requirements.extend(override_requirements(arguments, &self.roots()));
         }
         let mut context = PermissionContext::asking(requirements);
         // A `cwd` override is a directory the call reaches, so it travels on
@@ -204,6 +216,7 @@ pub(super) fn guarded_command(wiring: CommandWiring) -> Arc<dyn ToolHandler> {
         config: tool_config,
         tool: family.name().to_owned(),
         overrides: managed || family != ShellFamily::Bash,
+        policy: policy.clone(),
     });
     let resolver = call_policy.clone();
     let guarded = Arc::new(PolicyGuardedTool::new(
@@ -224,6 +237,7 @@ pub(super) fn analyze(
     flavor: ShellFlavor,
     platform: Platform,
     working_directory: &Path,
+    listed_roots: &[PathBuf],
     scratchpad: Option<PathBuf>,
     command: &str,
     lists: &ShellCommandLists,
@@ -239,10 +253,17 @@ pub(super) fn analyze(
             requirements: Vec::new(),
         };
     };
+    // A listed root the policy cannot parse is left out, which positions its
+    // operands outside and asks about them rather than granting them.
+    let listed = listed_roots
+        .iter()
+        .filter_map(|root| parse_policy_path(platform, &root.to_string_lossy()).ok());
     analyze_shell(
         flavor,
         command,
-        &ShellPolicyContext::new(platform, root).with_scratchpad(scratchpad),
+        &ShellPolicyContext::new(platform, root)
+            .with_scratchpad(scratchpad)
+            .with_roots(listed),
         lists,
     )
 }
@@ -256,10 +277,12 @@ pub(super) fn analyze(
 /// None of the three is visible to an analysis of the command string, so an
 /// allowlisted command would otherwise run somewhere else, under another
 /// interpreter, with an environment the operator never saw.
-fn override_requirements(arguments: &Value, root: &Path) -> Vec<PermissionRequirement> {
+fn override_requirements(arguments: &Value, roots: &[PathBuf]) -> Vec<PermissionRequirement> {
     let mut requirements = Vec::new();
     if let Some(directory) = string_argument(arguments, "cwd")
-        && !is_inside(root, Path::new(directory))
+        && !roots
+            .iter()
+            .any(|root| is_inside(root, Path::new(directory)))
     {
         // Reference `_collect_outside_dirs` names the directory itself, joined
         // with `*`, rather than the file-shaped parent a file tool names.
