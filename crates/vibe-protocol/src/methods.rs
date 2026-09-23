@@ -11,7 +11,7 @@
 /// Lifecycle methods (`initialize`, `initialized`, `shutdown`, `exit`) are
 /// deliberately absent: they are handled before method dispatch and are not
 /// part of the negotiated surface.
-pub const SERVER_METHODS: [&str; 91] = [
+pub const SERVER_METHODS: [&str; 94] = [
     "account/read",
     "agents/install",
     "agents/list",
@@ -99,10 +99,13 @@ pub const SERVER_METHODS: [&str; 91] = [
     "vibeCode/teleport/cancel",
     "vibeCode/teleport/push/respond",
     "vibeCode/teleport/start",
+    "workspace/git/worktrees/limit/update",
+    "workspace/git/worktrees/list",
+    "workspace/git/worktrees/prune",
+    "workspace/git/worktrees/remove",
     "workspace/prompt/prepare",
     "workspace/trust/decision",
     "workspace/trust/status",
-    "workspace/worktrees/list",
 ];
 
 /// Methods this port routes that the reference does not declare, sorted and

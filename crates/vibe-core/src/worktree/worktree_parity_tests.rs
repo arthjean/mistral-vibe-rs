@@ -48,8 +48,11 @@ use sha2::{Digest, Sha256};
 use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 
 use super::{
-    inspect_worktree_for_cleanup, list_linked_worktrees, managed_worktree_root, prepare_worktree,
-    target_cwd, validate_branch_name, validate_worktree_name,
+    ManagedRoot, ManagedWorktree, PreparedWorktree, SNAPSHOT_REF_PREFIX, WorktreeRecord,
+    WorktreeRepository, auto_worktree_name, inspect_worktree_for_cleanup,
+    is_portable_worktree_name, list_linked_worktrees, managed_worktree_root, prepare_worktree,
+    target_cwd, validate_branch_name, validate_worktree_name, worktree_name_from_text,
+    worktree_name_with_suffix,
 };
 
 const CORPUS_RELATIVE: &str = "crates/vibe-core/tests/worktree/corpus.json";
@@ -59,9 +62,9 @@ const CAPTURE_SCRIPT: &str = "scripts/parity/worktree.py";
 /// capture script.
 const CORPUS_SCHEMA_VERSION: u32 = 1;
 
-/// The case floor EP-086 commits to, so a regeneration that captured almost
-/// nothing fails instead of reporting a clean but empty run.
-const MINIMUM_CASES: usize = 60;
+/// The case floor, so a regeneration that captured almost nothing fails
+/// instead of reporting a clean but empty run.
+const MINIMUM_CASES: usize = 130;
 /// The per-family floor, so a corpus cannot reach the total above by driving
 /// one family sixty times.
 const MINIMUM_CASES_PER_FAMILY: usize = 4;
@@ -69,12 +72,28 @@ const MINIMUM_CASES_PER_FAMILY: usize = 4;
 /// Every family the corpus names, so a family the replay has no builder for is
 /// a named failure rather than a smaller green run.
 const FAMILIES: &[&str] = &[
+    "autoName",
     "cleanup",
     "list",
     "managedRoot",
     "name",
+    "position",
     "prepare",
+    "prepareAuto",
+    "prune",
+    "release",
+    "restore",
+    "slug",
+    "suffix",
     "targetCwd",
+];
+
+/// The claim times a lifecycle case stamps in order of preparation, mirrored
+/// from `CLAIMED_AT` in the capture script.
+const CLAIMED_AT: &[&str] = &[
+    "2001-02-03T04:05:06+00:00",
+    "2001-02-03T04:05:07+00:00",
+    "2001-02-03T04:05:08+00:00",
 ];
 
 /// Every scripted repository the capture builds, mirroring `SETUPS` in the
@@ -147,92 +166,7 @@ impl Divergence {
 ///
 /// A pointer is matched by prefix, so `/prepared` covers every field under it.
 /// Keep the list ordered by family then by case.
-const LEDGER: &[Divergence] = &[
-    // Enumeration.
-    Divergence {
-        family: "list",
-        case: "not-a-repository",
-        pointer: "/errorClass",
-        closed_by: RECORDED,
-        why: "v2.24.2 (5e6aa0f6) moved the repository check into the git layer: \
-              `WorktreeRepository.open` goes through `GitRepo.open`, which raises \
-              `GitRepositoryNotFoundError` (vibe/core/git/repo.py:143-152, a `GitError` subclass \
-              at vibe/core/git/errors.py:10) where v2.24.0 raised `WorktreeNotFoundError`. The \
-              message digest is unchanged. This port still refuses with \
-              `WorktreeError::RepositoryRequired` (crates/vibe-core/src/worktree.rs:389-397), the \
-              variant its error enum models on the v2.24.0 class",
-    },
-    // Preparation.
-    Divergence {
-        family: "prepare",
-        case: "invalid-branch",
-        pointer: "/errorClass",
-        closed_by: RECORDED,
-        why: "v2.24.2 (5e6aa0f6) moved branch validation to `GitRepo.validate_branch`, which \
-              raises the base `GitError` (vibe/core/git/repo.py:388-392) rather than the \
-              worktree-level `WorktreeError` v2.24.0 raised, and rewords the sentence. This port \
-              still refuses with `WorktreeError::InvalidBranch` \
-              (crates/vibe-core/src/worktree.rs:984), a worktree-level variant with no git-level \
-              counterpart in its error enum",
-    },
-    Divergence {
-        family: "prepare",
-        case: "outside-repository",
-        pointer: "/errorClass",
-        closed_by: RECORDED,
-        why: "v2.24.2 (5e6aa0f6) moved the repository check into the git layer: \
-              `WorktreeRepository.open` goes through `GitRepo.open`, which raises \
-              `GitRepositoryNotFoundError` (vibe/core/git/repo.py:143-152, a `GitError` subclass \
-              at vibe/core/git/errors.py:10) where v2.24.0 raised `WorktreeNotFoundError`. The \
-              message digest is unchanged. This port still refuses with \
-              `WorktreeError::RepositoryRequired` (crates/vibe-core/src/worktree.rs:389-397), the \
-              variant its error enum models on the v2.24.0 class",
-    },
-    Divergence {
-        family: "prepare",
-        case: "separate-git-dir-linked-base",
-        pointer: "/errorClass",
-        closed_by: RECORDED,
-        why: "v2.24.2 (5e6aa0f6) moved primary-checkout resolution to \
-              `GitRepo._primary_worktree_root`, which raises the base `GitError` \
-              (vibe/core/git/repo.py:367-377) rather than the worktree-level `WorktreeError`; the \
-              message digest is unchanged. This port still refuses with the generic \
-              `WorktreeError::Failed` (crates/vibe-core/src/worktree.rs:758-762), which cannot \
-              tell a git-level refusal from a worktree-level one",
-    },
-    //
-    // `prepare/missing-base` carries no entry, and now for the right reason.
-    // That case names a base inside an untracked subdirectory, which exists in
-    // the checkout and not in the new worktree, so both sides create the
-    // worktree, fail to resolve the session directory, and roll the worktree
-    // and the branch back: the residue both record is empty. Until US-279 this
-    // port agreed by accident, refusing before it created anything because it
-    // could not resolve the common git directory from a subdirectory; it now
-    // agrees by taking the same path.
-    // `prepare/distinct-branch` and `prepare/invalid-branch` carry no entry
-    // either: US-282 gave preparation the branch parameter both cases ask for,
-    // so the branch gate now answers through it.
-    // Cleanup carries no entry: US-286 restated the commit-count reason from
-    // the reference's own form, so all three commit cases now digest equal
-    // beside the two booleans that always did.
-    // The rest of enumeration carries no entry: US-280 wrote
-    // `list_linked_worktrees` and every other case of the family replays field
-    // for field.
-    //
-    // Working directory resolution.
-    Divergence {
-        family: "targetCwd",
-        case: "aliased-component",
-        pointer: "/outcome",
-        closed_by: RECORDED,
-        why: "v2.24.4 (dcb1c7d4) added a guard to `_target_cwd` that refuses a base reached \
-              through a symbolic link below the worktree root, even one landing inside it \
-              (vibe/core/git/worktree/repository.py:1297-1307), so `aliased`, a link to the \
-              sibling `sub`, is now a `WorktreeError`. This port's `target_cwd` \
-              (crates/vibe-core/src/worktree.rs:798-844) checks existence, directory, \
-              containment and a foreign `.git` only, and resolves `aliased` to `tree/sub`",
-    },
-];
+const LEDGER: &[Divergence] = &[];
 
 // --------------------------------------------------------------------------
 // The corpus
@@ -724,25 +658,10 @@ impl Projection {
     }
 }
 
-/// The exception class the reference would have raised for this refusal.
-///
-/// At v2.24.0 the reference published three: `WorktreeError` and two
-/// subclasses for the cases a caller discriminates. This port publishes one
-/// enum with the same two distinguished variants, so the mapping is the whole of
-/// the comparison and the sentence never enters it. v2.24.2 rebased that
-/// hierarchy on a git-level `GitError` (vibe/core/git/errors.py), with
-/// `WorktreeError` now one of its subclasses; the mapping still names the
-/// classes this port's enum was modeled on, and each case the new hierarchy
-/// moved is a [`LEDGER`] entry rather than a rename here.
+/// The exception class the reference would have raised for this refusal,
+/// which the port's error enum names itself.
 fn error_class(error: &super::WorktreeError) -> &'static str {
-    match error {
-        super::WorktreeError::RepositoryRequired => "WorktreeNotFoundError",
-        super::WorktreeError::GitUnavailable(_) => "GitUnavailableError",
-        // A note the reference attaches with `add_note` leaves the class of the
-        // failure it is attached to untouched, so the class is read through it.
-        super::WorktreeError::Noted { source, .. } => error_class(source),
-        _ => "WorktreeError",
-    }
+    error.reference_class()
 }
 
 fn error_record(error: &super::WorktreeError) -> Value {
@@ -757,6 +676,9 @@ fn observed_document(case: &Case, scratch: &Path, index: usize) -> Value {
     match case.family.as_str() {
         "name" => observed_name(case, scratch),
         "managedRoot" => observed_managed_root(case),
+        "slug" => observed_slug(case),
+        "suffix" => observed_suffix(case),
+        "autoName" => observed_auto_name(case),
         family => {
             let root = case_root(scratch, index);
             let setup = case
@@ -769,6 +691,11 @@ fn observed_document(case: &Case, scratch: &Path, index: usize) -> Value {
                 "cleanup" => observed_cleanup(case, &root),
                 "list" => observed_list(case, &root),
                 "targetCwd" => observed_target_cwd(case, &root),
+                "prepareAuto" => observed_prepare_auto(case, &root),
+                "release" => observed_release(case, &root),
+                "prune" => observed_prune(case, &root),
+                "restore" => observed_restore(case, &root),
+                "position" => observed_position(case, &root),
                 // Unreachable: `assert_corpus_floor` already refused any family
                 // outside `FAMILIES`, and every one of them is answered above.
                 other => json!({ "outcome": format!("no builder for {other}") }),
@@ -947,6 +874,359 @@ fn observed_target_cwd(case: &Case, root: &Path) -> Value {
         Ok(resolved) => json!({ "outcome": "resolved", "path": projection.path(&resolved) }),
         Err(error) => error_record(&error),
     }
+}
+
+fn observed_slug(case: &Case) -> Value {
+    let text = case.input["text"]
+        .as_str()
+        .expect("a slug case names a text");
+    let name = worktree_name_from_text(text);
+    json!({ "portable": is_portable_worktree_name(&name), "name": name })
+}
+
+fn observed_suffix(case: &Case) -> Value {
+    let name = case.input["name"]
+        .as_str()
+        .expect("a suffix case names a name");
+    let suffix = case.input["suffix"]
+        .as_u64()
+        .and_then(|suffix| usize::try_from(suffix).ok())
+        .expect("a suffix case names a suffix");
+    json!({ "name": worktree_name_with_suffix(name, suffix) })
+}
+
+fn observed_auto_name(case: &Case) -> Value {
+    let prompt = case.input["prompt"].as_str();
+    let suggested = case.input["suggested"].as_str();
+    let name = auto_worktree_name(prompt, suggested);
+    let source = [("suggested", suggested), ("prompt", prompt)]
+        .into_iter()
+        .find(|(_, text)| text.is_some_and(|text| worktree_name_from_text(text) == name))
+        .map_or("random", |(label, _)| label);
+    let mut observed = json!({
+        "source": source,
+        "portable": is_portable_worktree_name(&name),
+    });
+    if source != "random"
+        && let Some(fields) = observed.as_object_mut()
+    {
+        fields.insert("name".to_owned(), json!(name));
+    }
+    observed
+}
+
+fn managed_root(root: &Path) -> ManagedRoot {
+    ManagedRoot::for_vibe_home(&root.join(VIBE_HOME))
+}
+
+fn claim_of(root: &Path, path: &Path) -> ManagedWorktree {
+    ManagedWorktree::at(&managed_root(root), path).expect("a lifecycle case prepared a worktree")
+}
+
+fn repository(root: &Path) -> WorktreeRepository {
+    WorktreeRepository::open(&root.join(CHECKOUT), &managed_root(root))
+        .expect("a lifecycle case opens its checkout")
+}
+
+/// Holds and lets go of a prepared worktree, as a session that ran and ended.
+fn settle(root: &Path, prepared: &PreparedWorktree) {
+    let managed = claim_of(root, &prepared.path);
+    managed
+        .hold("finished", prepared.pending_hold.as_ref())
+        .expect("the worktree is held");
+    managed
+        .release_holder("finished")
+        .expect("the holder is released");
+}
+
+fn stamp_claim(root: &Path, path: &Path, claimed_at: &str) {
+    let managed = claim_of(root, path);
+    let record = managed.claim().read().expect("the claim has a record");
+    let mut value = serde_json::to_value(&record).expect("the record serializes");
+    value["claimed_at"] = json!(claimed_at);
+    let stamped: WorktreeRecord = serde_json::from_value(value).expect("the stamp parses");
+    managed
+        .claim()
+        .write(&stamped)
+        .expect("the stamp is written");
+}
+
+fn prepared_json(prepared: &PreparedWorktree, projection: &Projection) -> Value {
+    json!({
+        "name": prepared.name,
+        "branch": prepared.branch,
+        "root": projection.path(&prepared.root),
+        "path": projection.path(&prepared.path),
+        "repoRoot": projection.path(&prepared.repo_root),
+        "baseCommit": projection.commit_value(&prepared.base_commit),
+        "created": prepared.created,
+        "branchCreated": prepared.branch_created,
+    })
+}
+
+fn lifecycle_projection(root: &Path) -> Projection {
+    Projection::new(
+        root,
+        managed_directory(root)
+            .file_name()
+            .map(|value| value.to_string_lossy().into_owned()),
+        Some(head_commit(&root.join(CHECKOUT))),
+    )
+}
+
+fn apply_before(root: &Path, step: &str) {
+    let (verb, argument) = step.split_once(' ').expect("a step names its argument");
+    match verb {
+        "branch" => {
+            git(&root.join(CHECKOUT), &["branch", argument]);
+        }
+        "occupy" => write_file(
+            &managed_directory(root).join(argument).join("note.txt"),
+            "x\n",
+        ),
+        "prepare-auto" | "retain" => {
+            let prepared = repository(root)
+                .prepare_auto(Some(argument), None)
+                .expect("the earlier worktree is prepared");
+            settle(root, &prepared);
+            if verb == "retain" {
+                ManagedWorktree::prune(&managed_root(root), 0).expect("the sweep runs");
+            }
+        }
+        other => unreachable!("unknown step {other}"),
+    }
+}
+
+fn observed_prepare_auto(case: &Case, root: &Path) -> Value {
+    let projection = lifecycle_projection(root);
+    for step in case.input["before"].as_array().into_iter().flatten() {
+        apply_before(root, step.as_str().expect("a step is a string"));
+    }
+    match repository(root).prepare_auto(
+        case.input["prompt"].as_str(),
+        case.input["suggested"].as_str(),
+    ) {
+        Ok(prepared) => {
+            let managed = claim_of(root, &prepared.path);
+            let record = managed.claim().read().map(|record| {
+                json!({
+                    "version": record.version,
+                    "name": record.name,
+                    "branch": record.branch,
+                    "repoRoot": projection.path(&record.repo_root),
+                    "baseCommit": record
+                        .base_commit
+                        .as_deref()
+                        .map(|commit| projection.commit_value(commit)),
+                    "branchCreated": record.branch_created,
+                })
+            });
+            json!({
+                "outcome": "prepared",
+                "prepared": prepared_json(&prepared, &projection),
+                "pendingHold": prepared.pending_hold.is_some(),
+                "record": record,
+                "starting": managed.claim().is_starting(),
+                "holders": managed.holders().len(),
+            })
+        }
+        Err(error) => error_record(&error),
+    }
+}
+
+fn apply_lifecycle_step(root: &Path, prepared: &PreparedWorktree, step: &str) {
+    let (verb, argument) = step.split_once(' ').unwrap_or((step, ""));
+    match verb {
+        "hold" => claim_of(root, &prepared.path)
+            .hold(argument, prepared.pending_hold.as_ref())
+            .expect("the worktree is held"),
+        "settle" => settle(root, prepared),
+        "dirty" => write_file(&prepared.root.join("note.txt"), "note\n"),
+        "commit" => {
+            apply_mutation(&prepared.root, "modify");
+            apply_mutation(&prepared.root, "commit");
+        }
+        "forget" => claim_of(root, &prepared.path).forget(),
+        "delete-directory" => {
+            fs::remove_dir_all(&prepared.root).expect("the worktree directory is removed");
+        }
+        "prune" => {
+            ManagedWorktree::prune(&managed_root(root), 0).expect("the sweep runs");
+        }
+        other => unreachable!("unknown step {other}"),
+    }
+}
+
+fn ref_exists(checkout: &Path, reference: &str) -> bool {
+    git_succeeds(checkout, &["show-ref", "--verify", "--quiet", reference])
+}
+
+fn steps(case: &Case) -> Vec<&str> {
+    case.input["steps"]
+        .as_array()
+        .expect("a lifecycle case lists its steps")
+        .iter()
+        .map(|step| step.as_str().expect("a step is a string"))
+        .collect()
+}
+
+fn observed_release(case: &Case, root: &Path) -> Value {
+    let checkout = root.join(CHECKOUT);
+    let projection = lifecycle_projection(root);
+    let prepared = repository(root)
+        .prepare("review", None)
+        .expect("a release case prepares its worktree");
+    for step in steps(case) {
+        apply_lifecycle_step(root, &prepared, step);
+    }
+    let managed = claim_of(root, &prepared.path);
+    let mut observed = match managed.release(case.input["session"].as_str()) {
+        Ok(release) => json!({
+            "outcome": release.outcome.as_str(),
+            "root": release.root.as_deref().map(|root| projection.path(root)),
+            "branch": release.branch,
+            "branchDeleted": release.branch_deleted,
+            "reasons": release.reasons.iter().map(|reason| describe(reason)).collect::<Vec<_>>(),
+            "snapshotRef": release.snapshot_ref,
+        }),
+        Err(error) => error_record(&error),
+    };
+    let residue = json!({
+        "directory": prepared.root.exists(),
+        "branch": branch_exists(&checkout, "review"),
+        "record": managed.claim().read().is_some(),
+        "recovery": managed.claim().has_recovery(),
+        "snapshot": ref_exists(&checkout, &format!("{SNAPSHOT_REF_PREFIX}/review")),
+    });
+    if let Some(fields) = observed.as_object_mut() {
+        fields.insert("residue".to_owned(), residue);
+    }
+    observed
+}
+
+fn observed_prune(case: &Case, root: &Path) -> Value {
+    let checkout = root.join(CHECKOUT);
+    let names = case.input["names"]
+        .as_array()
+        .expect("a prune case names its worktrees")
+        .iter()
+        .map(|name| name.as_str().expect("a name is a string"))
+        .collect::<Vec<_>>();
+    let steps = steps(case);
+    let unsettled = steps
+        .iter()
+        .filter_map(|step| step.strip_prefix("unsettled "))
+        .collect::<BTreeSet<_>>();
+    let mut prepared_by_name = BTreeMap::new();
+    for (index, name) in names.iter().enumerate() {
+        let prepared = repository(root)
+            .prepare(name, None)
+            .expect("a prune case prepares its worktrees");
+        stamp_claim(root, &prepared.path, CLAIMED_AT[index]);
+        if !unsettled.contains(name) {
+            settle(root, &prepared);
+        }
+        prepared_by_name.insert((*name).to_owned(), prepared);
+    }
+    for step in &steps {
+        let (verb, name) = step.split_once(' ').expect("a prune step names a worktree");
+        if verb == "unsettled" {
+            continue;
+        }
+        apply_lifecycle_step(root, &prepared_by_name[name], &format!("{verb} held"));
+    }
+    let limit = case.input["limit"]
+        .as_u64()
+        .and_then(|limit| usize::try_from(limit).ok())
+        .expect("a prune case names its limit");
+    let removed = ManagedWorktree::prune(&managed_root(root), limit).expect("the sweep runs");
+    let names_where = |keep: &dyn Fn(&str, &PreparedWorktree) -> bool| {
+        prepared_by_name
+            .iter()
+            .filter(|(name, prepared)| keep(name, prepared))
+            .map(|(name, _)| name.clone())
+            .collect::<Vec<_>>()
+    };
+    json!({
+        "removed": removed,
+        "remaining": names_where(&|_, prepared| prepared.root.exists()),
+        "retained": names_where(&|_, prepared| {
+            ManagedWorktree::at(&managed_root(root), &prepared.path)
+                .is_some_and(|managed| managed.claim().has_recovery())
+        }),
+        "snapshots": names_where(&|name, _| {
+            ref_exists(&checkout, &format!("{SNAPSHOT_REF_PREFIX}/{name}"))
+        }),
+        "branches": names_where(&|name, _| branch_exists(&checkout, name)),
+    })
+}
+
+fn observed_restore(case: &Case, root: &Path) -> Value {
+    let checkout = root.join(CHECKOUT);
+    let projection = lifecycle_projection(root);
+    let prepared = repository(root)
+        .prepare("review", None)
+        .expect("a restore case prepares its worktree");
+    for step in steps(case) {
+        apply_lifecycle_step(root, &prepared, step);
+    }
+    let managed = claim_of(root, &prepared.path);
+    let requested = match case.input["relative"].as_str() {
+        Some(".") => prepared.root.clone(),
+        Some(relative) => prepared.root.join(relative),
+        None => unreachable!("a restore case names where it restores"),
+    };
+    let mapping = managed
+        .retained_repository_mapping(&prepared.root)
+        .map(|mapping| {
+            json!({
+                "root": projection.path(&mapping.root),
+                "cwd": projection.path(&mapping.cwd),
+            })
+        });
+    let mut observed = json!({ "mapping": mapping });
+    let outcome = match managed.restore(&requested) {
+        Ok(true) => json!({ "outcome": "restored" }),
+        Ok(false) => json!({ "outcome": "unchanged" }),
+        Err(error) => error_record(&error),
+    };
+    let readme = fs::read_to_string(prepared.root.join("README.md")).ok();
+    let residue = json!({
+        "directory": prepared.root.is_dir(),
+        "branch": branch_exists(&checkout, "review"),
+        "record": managed.claim().read().is_some(),
+        "recovery": managed.claim().has_recovery(),
+        "note": prepared.root.join("note.txt").is_file(),
+        "readme": readme.map(|text| if text.ends_with("edit\n") { "edited" } else { "original" }),
+        "starting": managed.claim().is_starting(),
+    });
+    if let (Some(fields), Some(outcome)) = (observed.as_object_mut(), outcome.as_object()) {
+        fields.extend(outcome.clone());
+        fields.insert("residue".to_owned(), residue);
+    }
+    observed
+}
+
+fn observed_position(case: &Case, root: &Path) -> Value {
+    let projection = Projection::new(root, None, None);
+    let directory = match case.input["base"].as_str() {
+        Some(".") => root.to_path_buf(),
+        Some(relative) => root.join(relative),
+        None => unreachable!("a position case names its base"),
+    };
+    fs::create_dir_all(&directory).expect("the position directory exists");
+    let opened = WorktreeRepository::open(&directory, &managed_root(root)).and_then(|repository| {
+        Ok(json!({
+            "outcome": "opened",
+            "root": projection.path(&repository.root()?),
+            "counterpart": repository
+                .repository_counterpart()
+                .map(|counterpart| projection.path(&counterpart)),
+            "mappedCwd": projection.path(&repository.repository_mapped_cwd()?),
+            "branch": repository.branch(),
+        }))
+    });
+    opened.unwrap_or_else(|error| error_record(&error))
 }
 
 // --------------------------------------------------------------------------
@@ -1235,7 +1515,11 @@ fn keeps_literal(text: &str, authored: &BTreeSet<String>) -> bool {
     if authored.contains(text) {
         return true;
     }
-    if text.is_empty() || text.chars().count() > 128 {
+    // An empty string has no room for prose, and the slug rule answers one.
+    if text.is_empty() {
+        return true;
+    }
+    if text.chars().count() > 128 {
         return false;
     }
     text.split('/').all(|segment| {
@@ -1289,7 +1573,7 @@ fn the_projection_agrees_with_the_capture_script() {
         "worktree path does not exist after checkout",
         &authored
     ));
-    assert!(!keeps_literal("", &authored));
+    assert!(keeps_literal("", &authored));
 }
 
 /// The scripted repositories rebuild the same way twice, so a case cannot pass

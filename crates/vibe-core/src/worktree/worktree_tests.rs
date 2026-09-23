@@ -9,10 +9,10 @@
 
 use std::process::Command;
 
+use super::git::{GIT_USAGE_ERROR_STATUS, GitRepo, parse_worktree_records};
 use super::{
-    GIT_USAGE_ERROR_STATUS, PreparedWorktree, WorktreeError, branch_exists, cleanup_failed_prepare,
-    inspect_worktree_for_cleanup, list_linked_worktrees, parse_worktree_records, prepare_worktree,
-    remove_worktree, worktree_records,
+    ManagedRoot, PreparedWorktree, WorktreeError, WorktreeRepository, inspect_worktree_for_cleanup,
+    list_linked_worktrees, prepare_worktree, remove_worktree,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -170,6 +170,7 @@ fn an_unresolvable_head_fails_and_names_the_worktree() {
         base_commit: "0".repeat(40),
         created: true,
         branch_created: true,
+        pending_hold: None,
     };
 
     let error = inspect_worktree_for_cleanup(&worktree).expect_err("an unborn HEAD refuses");
@@ -243,7 +244,11 @@ fn a_failing_rollback_is_attached_to_the_original_failure() {
     let checkout = checkout(&root, None);
     let absent = root.join("never-added");
 
-    let note = cleanup_failed_prepare(&checkout, &absent, "review", Some("review"))
+    let repository =
+        WorktreeRepository::open(&checkout, &ManagedRoot::for_vibe_home(&root.join("home")))
+            .expect("the checkout opens");
+    let note = repository
+        .clean_up_failed_prepare(&absent, "review", true)
         .expect("removing a worktree git never recorded fails");
 
     let noted = WorktreeError::Noted {
@@ -257,7 +262,7 @@ fn a_failing_rollback_is_attached_to_the_original_failure() {
         "the original failure was swallowed: {rendered}"
     );
     assert!(
-        rendered.contains("could not be removed"),
+        rendered.contains("failed to clean up"),
         "the rollback failure was swallowed: {rendered}"
     );
 }
@@ -322,10 +327,10 @@ fn a_linked_worktree_of_a_separate_git_directory_repository_refuses() {
 
     let error = prepare_worktree("review", &linked, &vibe_home, None)
         .expect_err("the primary checkout is unknown");
-    let WorktreeError::Failed { name, message } = &error else {
-        panic!("expected a named worktree failure, got {error:?}");
+    let WorktreeError::Git { message } = &error else {
+        panic!("expected a git-level refusal, got {error:?}");
     };
-    assert_eq!(name, "review");
+    assert_eq!(error.reference_class(), "GitError");
     assert!(message.contains("primary checkout"), "{message}");
     assert!(!vibe_home.join("worktrees").exists());
     assert!(!branch_is_present(&checkout, "review"));
@@ -366,8 +371,9 @@ fn the_branch_probe_tells_present_from_absent() {
     let checkout = checkout(&root, None);
     git(&checkout, &["branch", "review"]);
 
-    assert!(branch_exists(&checkout, "review", "review").expect("the probe answers"));
-    assert!(!branch_exists(&checkout, "missing", "missing").expect("the probe answers"));
+    let repo = GitRepo::open(&checkout).expect("the checkout opens");
+    assert!(repo.branch_exists("review").expect("the probe answers"));
+    assert!(!repo.branch_exists("missing").expect("the probe answers"));
 }
 
 /// Any other status is a repository git could not read, and reporting it as
@@ -378,18 +384,19 @@ fn a_failing_branch_probe_is_an_error_naming_the_branch() {
     let outside = root.join("outside");
     fs::create_dir_all(&outside).expect("the outside directory is writable");
 
-    let error = branch_exists(&outside, "review", "review")
+    let error = GitRepo::at(&outside)
+        .expect("git is trusted")
+        .branch_exists("review")
         .expect_err("a non-repository refuses the probe");
-    let WorktreeError::Failed { name, message } = &error else {
-        panic!("expected a named worktree failure, got {error:?}");
+    let WorktreeError::Git { message } = &error else {
+        panic!("expected a git-level refusal, got {error:?}");
     };
-    assert_eq!(name, "review");
     assert!(
         message.contains("review"),
         "the branch is not named: {message}"
     );
     assert!(
-        message.len() > "failed to inspect worktree branch `review`: ".len(),
+        message.len() > "failed to inspect branch `review`: ".len(),
         "git's own refusal is not carried: {message}"
     );
 }
@@ -477,12 +484,13 @@ fn a_base_outside_the_checkout_names_both_paths() {
     let outside = root.join("outside");
     fs::create_dir_all(&outside).expect("the outside directory is writable");
 
-    let error = super::relative_base(&checkout, &outside, "review")
+    let error = GitRepo::open(&checkout)
+        .expect("the checkout opens")
+        .relative_base(&outside)
         .expect_err("a base outside the checkout is refused");
-    let WorktreeError::Failed { name, message } = &error else {
-        panic!("expected a named worktree failure, got {error:?}");
+    let WorktreeError::Git { message } = &error else {
+        panic!("expected a git-level refusal, got {error:?}");
     };
-    assert_eq!(name, "review");
     assert!(
         message.contains(text(&outside)) && message.contains(text(&checkout)),
         "both paths are not named: {message}"
@@ -501,7 +509,10 @@ fn a_base_reached_through_a_link_is_placed_where_it_resolves() {
     symlink(&real, &alias);
 
     assert_eq!(
-        super::relative_base(&checkout, &alias, "review").expect("the alias resolves"),
+        GitRepo::open(&checkout)
+            .expect("the checkout opens")
+            .relative_base(&alias)
+            .expect("the alias resolves"),
         PathBuf::from("docs")
     );
 }
@@ -648,7 +659,9 @@ fn git_answers_the_usage_status_the_null_terminated_attempt_falls_back_on() {
 #[test]
 fn a_listing_git_refuses_for_another_reason_is_a_typed_failure() {
     let (_scratch, root) = case_root();
-    let error = worktree_records(&root.join("absent"))
+    let error = GitRepo::at(&root.join("absent"))
+        .expect("git is trusted")
+        .records()
         .expect_err("git cannot list a directory that is not there");
     assert!(
         matches!(error, WorktreeError::ListFailed { .. }),
@@ -680,7 +693,7 @@ fn enumeration_answers_with_the_linked_worktrees_alone() {
 
 /// Nothing in this port changes the process working directory, which is what
 /// makes the reference's `_leave_worktree_if_current_directory` guard
-/// (`vibe/core/worktree.py:529-536`) unnecessary here rather than missing: it
+/// (`vibe/core/git/worktree/repository.py:158-172`) unnecessary here rather than missing: it
 /// exists upstream only because `os.chdir` can leave the interpreter standing
 /// inside the directory `remove_worktree` is about to delete. A session here
 /// carries its directory as a value, so removal never has one to leave.

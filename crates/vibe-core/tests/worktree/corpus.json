@@ -1247,6 +1247,1200 @@
         "outcome": "error"
       },
       "setup": "target-tree"
+    },
+    {
+      "case": "sentence",
+      "family": "slug",
+      "input": {
+        "text": "Fix the login redirect bug"
+      },
+      "observed": {
+        "name": "fix-the-login-redirect-bug",
+        "portable": true
+      }
+    },
+    {
+      "case": "trailing-stop-words",
+      "family": "slug",
+      "input": {
+        "text": "Update the docs for the"
+      },
+      "observed": {
+        "name": "update-the-docs",
+        "portable": true
+      }
+    },
+    {
+      "case": "only-stop-words",
+      "family": "slug",
+      "input": {
+        "text": "the and of"
+      },
+      "observed": {
+        "name": "the",
+        "portable": true
+      }
+    },
+    {
+      "case": "accented",
+      "family": "slug",
+      "input": {
+        "text": "Crème brûlée recipe"
+      },
+      "observed": {
+        "name": "cre-me-bru-le-e-recipe",
+        "portable": true
+      }
+    },
+    {
+      "case": "ligature",
+      "family": "slug",
+      "input": {
+        "text": "ﬁle ﬂow"
+      },
+      "observed": {
+        "name": "file-flow",
+        "portable": true
+      }
+    },
+    {
+      "case": "full-width",
+      "family": "slug",
+      "input": {
+        "text": "ＡＢＣ ｄｅｆ"
+      },
+      "observed": {
+        "name": "abc-def",
+        "portable": true
+      }
+    },
+    {
+      "case": "emoji",
+      "family": "slug",
+      "input": {
+        "text": "Grow 🌱 garden"
+      },
+      "observed": {
+        "name": "grow-garden",
+        "portable": true
+      }
+    },
+    {
+      "case": "seven-words",
+      "family": "slug",
+      "input": {
+        "text": "one two three four five six seven"
+      },
+      "observed": {
+        "name": "one-two-three-four-five-six",
+        "portable": true
+      }
+    },
+    {
+      "case": "long-words",
+      "family": "slug",
+      "input": {
+        "text": "internationalization localization accessibility"
+      },
+      "observed": {
+        "name": "internationalization-localization",
+        "portable": true
+      }
+    },
+    {
+      "case": "boundary-hyphen",
+      "family": "slug",
+      "input": {
+        "text": "abcdefghij abcdefghij abcdefghij abcdefghi xyz"
+      },
+      "observed": {
+        "name": "abcdefghij-abcdefghij-abcdefghij",
+        "portable": true
+      }
+    },
+    {
+      "case": "single-long-word",
+      "family": "slug",
+      "input": {
+        "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "observed": {
+        "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "portable": true
+      }
+    },
+    {
+      "case": "punctuation-only",
+      "family": "slug",
+      "input": {
+        "text": "!!! ???"
+      },
+      "observed": {
+        "name": "",
+        "portable": false
+      }
+    },
+    {
+      "case": "empty",
+      "family": "slug",
+      "input": {
+        "text": ""
+      },
+      "observed": {
+        "name": "",
+        "portable": false
+      }
+    },
+    {
+      "case": "device-name",
+      "family": "slug",
+      "input": {
+        "text": "NUL"
+      },
+      "observed": {
+        "name": "nul",
+        "portable": false
+      }
+    },
+    {
+      "case": "digits",
+      "family": "slug",
+      "input": {
+        "text": "Issue 1234 follow up"
+      },
+      "observed": {
+        "name": "issue-1234-follow-up",
+        "portable": true
+      }
+    },
+    {
+      "case": "mixed-separators",
+      "family": "slug",
+      "input": {
+        "text": "snake_case/kebab-case.dotted"
+      },
+      "observed": {
+        "name": "snake-case-kebab-case-dotted",
+        "portable": true
+      }
+    },
+    {
+      "case": "short",
+      "family": "suffix",
+      "input": {
+        "name": "review",
+        "suffix": 2
+      },
+      "observed": {
+        "name": "review-2"
+      }
+    },
+    {
+      "case": "two-digit",
+      "family": "suffix",
+      "input": {
+        "name": "review",
+        "suffix": 12
+      },
+      "observed": {
+        "name": "review-12"
+      }
+    },
+    {
+      "case": "at-limit",
+      "family": "suffix",
+      "input": {
+        "name": "abcdefghij-abcdefghij-abcdefghij-abcdefgh",
+        "suffix": 3
+      },
+      "observed": {
+        "name": "abcdefghij-abcdefghij-abcdefghij-3"
+      }
+    },
+    {
+      "case": "stop-word-exposed",
+      "family": "suffix",
+      "input": {
+        "name": "fix-the-login-redirect-for-the-admin-panel",
+        "suffix": 2
+      },
+      "observed": {
+        "name": "fix-the-login-redirect-for-the-admin-2"
+      }
+    },
+    {
+      "case": "single-long-word",
+      "family": "suffix",
+      "input": {
+        "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "suffix": 5
+      },
+      "observed": {
+        "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-5"
+      }
+    },
+    {
+      "case": "prompt-only",
+      "family": "autoName",
+      "input": {
+        "prompt": "Fix the login redirect",
+        "suggested": null
+      },
+      "observed": {
+        "name": "fix-the-login-redirect",
+        "portable": true,
+        "source": "prompt"
+      }
+    },
+    {
+      "case": "suggestion-wins",
+      "family": "autoName",
+      "input": {
+        "prompt": "Fix the login redirect",
+        "suggested": "Login redirect fix"
+      },
+      "observed": {
+        "name": "login-redirect-fix",
+        "portable": true,
+        "source": "suggested"
+      }
+    },
+    {
+      "case": "unusable-suggestion",
+      "family": "autoName",
+      "input": {
+        "prompt": "Fix the login redirect",
+        "suggested": "!!!"
+      },
+      "observed": {
+        "name": "fix-the-login-redirect",
+        "portable": true,
+        "source": "prompt"
+      }
+    },
+    {
+      "case": "device-suggestion",
+      "family": "autoName",
+      "input": {
+        "prompt": "Fix the login redirect",
+        "suggested": "nul"
+      },
+      "observed": {
+        "name": "fix-the-login-redirect",
+        "portable": true,
+        "source": "prompt"
+      }
+    },
+    {
+      "case": "suggestion-only",
+      "family": "autoName",
+      "input": {
+        "prompt": null,
+        "suggested": "Tidy imports"
+      },
+      "observed": {
+        "name": "tidy-imports",
+        "portable": true,
+        "source": "suggested"
+      }
+    },
+    {
+      "case": "unusable-both",
+      "family": "autoName",
+      "input": {
+        "prompt": "???",
+        "suggested": "the"
+      },
+      "observed": {
+        "name": "the",
+        "portable": true,
+        "source": "suggested"
+      }
+    },
+    {
+      "case": "neither",
+      "family": "autoName",
+      "input": {
+        "prompt": null,
+        "suggested": null
+      },
+      "observed": {
+        "portable": true,
+        "source": "random"
+      }
+    },
+    {
+      "case": "from-prompt",
+      "family": "prepareAuto",
+      "input": {
+        "before": [],
+        "prompt": "Fix the login redirect",
+        "suggested": null
+      },
+      "observed": {
+        "holders": 0,
+        "outcome": "prepared",
+        "pendingHold": false,
+        "prepared": {
+          "baseCommit": "{headCommit}",
+          "branch": "vibe/fix-the-login-redirect",
+          "branchCreated": true,
+          "created": true,
+          "name": "fix-the-login-redirect",
+          "path": "home/worktrees/{repoDir}/fix-the-login-redirect",
+          "repoRoot": "repo",
+          "root": "home/worktrees/{repoDir}/fix-the-login-redirect"
+        },
+        "record": {
+          "baseCommit": "{headCommit}",
+          "branch": "vibe/fix-the-login-redirect",
+          "branchCreated": true,
+          "name": "fix-the-login-redirect",
+          "repoRoot": "repo",
+          "version": 1
+        },
+        "starting": true
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "from-suggestion",
+      "family": "prepareAuto",
+      "input": {
+        "before": [],
+        "prompt": "anything",
+        "suggested": "Login redirect fix"
+      },
+      "observed": {
+        "holders": 0,
+        "outcome": "prepared",
+        "pendingHold": false,
+        "prepared": {
+          "baseCommit": "{headCommit}",
+          "branch": "vibe/login-redirect-fix",
+          "branchCreated": true,
+          "created": true,
+          "name": "login-redirect-fix",
+          "path": "home/worktrees/{repoDir}/login-redirect-fix",
+          "repoRoot": "repo",
+          "root": "home/worktrees/{repoDir}/login-redirect-fix"
+        },
+        "record": {
+          "baseCommit": "{headCommit}",
+          "branch": "vibe/login-redirect-fix",
+          "branchCreated": true,
+          "name": "login-redirect-fix",
+          "repoRoot": "repo",
+          "version": 1
+        },
+        "starting": true
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "branch-taken",
+      "family": "prepareAuto",
+      "input": {
+        "before": [
+          "branch vibe/review"
+        ],
+        "prompt": "review",
+        "suggested": null
+      },
+      "observed": {
+        "holders": 0,
+        "outcome": "prepared",
+        "pendingHold": false,
+        "prepared": {
+          "baseCommit": "{headCommit}",
+          "branch": "vibe/review-2",
+          "branchCreated": true,
+          "created": true,
+          "name": "review-2",
+          "path": "home/worktrees/{repoDir}/review-2",
+          "repoRoot": "repo",
+          "root": "home/worktrees/{repoDir}/review-2"
+        },
+        "record": {
+          "baseCommit": "{headCommit}",
+          "branch": "vibe/review-2",
+          "branchCreated": true,
+          "name": "review-2",
+          "repoRoot": "repo",
+          "version": 1
+        },
+        "starting": true
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "directory-taken",
+      "family": "prepareAuto",
+      "input": {
+        "before": [
+          "occupy review"
+        ],
+        "prompt": "review",
+        "suggested": null
+      },
+      "observed": {
+        "holders": 0,
+        "outcome": "prepared",
+        "pendingHold": false,
+        "prepared": {
+          "baseCommit": "{headCommit}",
+          "branch": "vibe/review-2",
+          "branchCreated": true,
+          "created": true,
+          "name": "review-2",
+          "path": "home/worktrees/{repoDir}/review-2",
+          "repoRoot": "repo",
+          "root": "home/worktrees/{repoDir}/review-2"
+        },
+        "record": {
+          "baseCommit": "{headCommit}",
+          "branch": "vibe/review-2",
+          "branchCreated": true,
+          "name": "review-2",
+          "repoRoot": "repo",
+          "version": 1
+        },
+        "starting": true
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "never-reused",
+      "family": "prepareAuto",
+      "input": {
+        "before": [
+          "prepare-auto review"
+        ],
+        "prompt": "review",
+        "suggested": null
+      },
+      "observed": {
+        "holders": 0,
+        "outcome": "prepared",
+        "pendingHold": false,
+        "prepared": {
+          "baseCommit": "{headCommit}",
+          "branch": "vibe/review-2",
+          "branchCreated": true,
+          "created": true,
+          "name": "review-2",
+          "path": "home/worktrees/{repoDir}/review-2",
+          "repoRoot": "repo",
+          "root": "home/worktrees/{repoDir}/review-2"
+        },
+        "record": {
+          "baseCommit": "{headCommit}",
+          "branch": "vibe/review-2",
+          "branchCreated": true,
+          "name": "review-2",
+          "repoRoot": "repo",
+          "version": 1
+        },
+        "starting": true
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "retained-name",
+      "family": "prepareAuto",
+      "input": {
+        "before": [
+          "retain review"
+        ],
+        "prompt": "review",
+        "suggested": null
+      },
+      "observed": {
+        "holders": 0,
+        "outcome": "prepared",
+        "pendingHold": false,
+        "prepared": {
+          "baseCommit": "{headCommit}",
+          "branch": "vibe/review-2",
+          "branchCreated": true,
+          "created": true,
+          "name": "review-2",
+          "path": "home/worktrees/{repoDir}/review-2",
+          "repoRoot": "repo",
+          "root": "home/worktrees/{repoDir}/review-2"
+        },
+        "record": {
+          "baseCommit": "{headCommit}",
+          "branch": "vibe/review-2",
+          "branchCreated": true,
+          "name": "review-2",
+          "repoRoot": "repo",
+          "version": 1
+        },
+        "starting": true
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "clean",
+      "family": "release",
+      "input": {
+        "session": "s1",
+        "steps": [
+          "hold s1"
+        ]
+      },
+      "observed": {
+        "branch": "review",
+        "branchDeleted": true,
+        "outcome": "removed",
+        "reasons": [],
+        "residue": {
+          "branch": false,
+          "directory": false,
+          "record": false,
+          "recovery": false,
+          "snapshot": false
+        },
+        "root": "home/worktrees/{repoDir}/review",
+        "snapshotRef": null
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "dirty",
+      "family": "release",
+      "input": {
+        "session": "s1",
+        "steps": [
+          "hold s1",
+          "dirty"
+        ]
+      },
+      "observed": {
+        "branch": "review",
+        "branchDeleted": true,
+        "outcome": "removed",
+        "reasons": [],
+        "residue": {
+          "branch": false,
+          "directory": false,
+          "record": false,
+          "recovery": false,
+          "snapshot": true
+        },
+        "root": "home/worktrees/{repoDir}/review",
+        "snapshotRef": "refs/vibe/reaped/review"
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "committed",
+      "family": "release",
+      "input": {
+        "session": "s1",
+        "steps": [
+          "hold s1",
+          "commit"
+        ]
+      },
+      "observed": {
+        "branch": "review",
+        "branchDeleted": true,
+        "outcome": "removed",
+        "reasons": [],
+        "residue": {
+          "branch": false,
+          "directory": false,
+          "record": false,
+          "recovery": false,
+          "snapshot": true
+        },
+        "root": "home/worktrees/{repoDir}/review",
+        "snapshotRef": "refs/vibe/reaped/review"
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "held-by-another",
+      "family": "release",
+      "input": {
+        "session": "s1",
+        "steps": [
+          "hold s1",
+          "hold s2"
+        ]
+      },
+      "observed": {
+        "branch": "review",
+        "branchDeleted": false,
+        "outcome": "kept_in_use",
+        "reasons": [],
+        "residue": {
+          "branch": true,
+          "directory": true,
+          "record": true,
+          "recovery": false,
+          "snapshot": false
+        },
+        "root": null,
+        "snapshotRef": null
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "still-starting",
+      "family": "release",
+      "input": {
+        "session": null,
+        "steps": []
+      },
+      "observed": {
+        "branch": "review",
+        "branchDeleted": false,
+        "outcome": "kept_in_use",
+        "reasons": [],
+        "residue": {
+          "branch": true,
+          "directory": true,
+          "record": true,
+          "recovery": false,
+          "snapshot": false
+        },
+        "root": null,
+        "snapshotRef": null
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "never-held",
+      "family": "release",
+      "input": {
+        "session": null,
+        "steps": [
+          "settle"
+        ]
+      },
+      "observed": {
+        "branch": "review",
+        "branchDeleted": true,
+        "outcome": "removed",
+        "reasons": [],
+        "residue": {
+          "branch": false,
+          "directory": false,
+          "record": false,
+          "recovery": false,
+          "snapshot": false
+        },
+        "root": "home/worktrees/{repoDir}/review",
+        "snapshotRef": null
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "record-forgotten",
+      "family": "release",
+      "input": {
+        "session": null,
+        "steps": [
+          "settle",
+          "forget"
+        ]
+      },
+      "observed": {
+        "branch": null,
+        "branchDeleted": false,
+        "outcome": "kept_unmanaged",
+        "reasons": [],
+        "residue": {
+          "branch": true,
+          "directory": true,
+          "record": false,
+          "recovery": false,
+          "snapshot": false
+        },
+        "root": null,
+        "snapshotRef": null
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "directory-gone",
+      "family": "release",
+      "input": {
+        "session": null,
+        "steps": [
+          "settle",
+          "delete-directory"
+        ]
+      },
+      "observed": {
+        "branch": null,
+        "branchDeleted": false,
+        "outcome": "not_found",
+        "reasons": [],
+        "residue": {
+          "branch": true,
+          "directory": false,
+          "record": false,
+          "recovery": false,
+          "snapshot": false
+        },
+        "root": null,
+        "snapshotRef": null
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "attached-branch",
+      "family": "release",
+      "input": {
+        "session": "s1",
+        "steps": [
+          "hold s1"
+        ]
+      },
+      "observed": {
+        "branch": "review",
+        "branchDeleted": false,
+        "outcome": "removed",
+        "reasons": [],
+        "residue": {
+          "branch": true,
+          "directory": false,
+          "record": false,
+          "recovery": false,
+          "snapshot": false
+        },
+        "root": "home/worktrees/{repoDir}/review",
+        "snapshotRef": null
+      },
+      "setup": "attached-branch"
+    },
+    {
+      "case": "retained",
+      "family": "release",
+      "input": {
+        "session": null,
+        "steps": [
+          "settle",
+          "dirty",
+          "prune"
+        ]
+      },
+      "observed": {
+        "branch": "review",
+        "branchDeleted": false,
+        "outcome": "removed",
+        "reasons": [],
+        "residue": {
+          "branch": false,
+          "directory": false,
+          "record": false,
+          "recovery": false,
+          "snapshot": false
+        },
+        "root": null,
+        "snapshotRef": null
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "retained-with-session",
+      "family": "release",
+      "input": {
+        "session": "s1",
+        "steps": [
+          "settle",
+          "prune"
+        ]
+      },
+      "observed": {
+        "branch": null,
+        "branchDeleted": false,
+        "outcome": "kept_unmanaged",
+        "reasons": [],
+        "residue": {
+          "branch": false,
+          "directory": false,
+          "record": false,
+          "recovery": true,
+          "snapshot": true
+        },
+        "root": null,
+        "snapshotRef": null
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "under-limit",
+      "family": "prune",
+      "input": {
+        "limit": 3,
+        "names": [
+          "b",
+          "a",
+          "c"
+        ],
+        "steps": []
+      },
+      "observed": {
+        "branches": [
+          "a",
+          "b",
+          "c"
+        ],
+        "remaining": [
+          "a",
+          "b",
+          "c"
+        ],
+        "removed": 0,
+        "retained": [],
+        "snapshots": []
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "oldest-first",
+      "family": "prune",
+      "input": {
+        "limit": 1,
+        "names": [
+          "b",
+          "a",
+          "c"
+        ],
+        "steps": []
+      },
+      "observed": {
+        "branches": [
+          "c"
+        ],
+        "remaining": [
+          "c"
+        ],
+        "removed": 2,
+        "retained": [
+          "a",
+          "b"
+        ],
+        "snapshots": [
+          "a",
+          "b"
+        ]
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "held-skipped",
+      "family": "prune",
+      "input": {
+        "limit": 1,
+        "names": [
+          "b",
+          "a",
+          "c"
+        ],
+        "steps": [
+          "hold b"
+        ]
+      },
+      "observed": {
+        "branches": [
+          "b"
+        ],
+        "remaining": [
+          "b"
+        ],
+        "removed": 2,
+        "retained": [
+          "a",
+          "c"
+        ],
+        "snapshots": [
+          "a",
+          "c"
+        ]
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "starting-skipped",
+      "family": "prune",
+      "input": {
+        "limit": 0,
+        "names": [
+          "b",
+          "a"
+        ],
+        "steps": [
+          "unsettled a"
+        ]
+      },
+      "observed": {
+        "branches": [
+          "a"
+        ],
+        "remaining": [
+          "a"
+        ],
+        "removed": 1,
+        "retained": [
+          "b"
+        ],
+        "snapshots": [
+          "b"
+        ]
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "dirty-saved",
+      "family": "prune",
+      "input": {
+        "limit": 0,
+        "names": [
+          "b",
+          "a"
+        ],
+        "steps": [
+          "dirty b"
+        ]
+      },
+      "observed": {
+        "branches": [],
+        "remaining": [],
+        "removed": 2,
+        "retained": [
+          "a",
+          "b"
+        ],
+        "snapshots": [
+          "a",
+          "b"
+        ]
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "directory-gone",
+      "family": "prune",
+      "input": {
+        "limit": 1,
+        "names": [
+          "b",
+          "a"
+        ],
+        "steps": [
+          "delete-directory b"
+        ]
+      },
+      "observed": {
+        "branches": [
+          "a",
+          "b"
+        ],
+        "remaining": [
+          "a"
+        ],
+        "removed": 0,
+        "retained": [],
+        "snapshots": []
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "retained",
+      "family": "restore",
+      "input": {
+        "relative": ".",
+        "steps": [
+          "settle",
+          "dirty",
+          "prune"
+        ]
+      },
+      "observed": {
+        "mapping": {
+          "cwd": "repo",
+          "root": "repo"
+        },
+        "outcome": "restored",
+        "residue": {
+          "branch": true,
+          "directory": true,
+          "note": true,
+          "readme": "original",
+          "record": true,
+          "recovery": false,
+          "starting": true
+        }
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "retained-committed",
+      "family": "restore",
+      "input": {
+        "relative": ".",
+        "steps": [
+          "settle",
+          "commit",
+          "prune"
+        ]
+      },
+      "observed": {
+        "mapping": {
+          "cwd": "repo",
+          "root": "repo"
+        },
+        "outcome": "restored",
+        "residue": {
+          "branch": true,
+          "directory": true,
+          "note": false,
+          "readme": "edited",
+          "record": true,
+          "recovery": false,
+          "starting": true
+        }
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "not-retained",
+      "family": "restore",
+      "input": {
+        "relative": ".",
+        "steps": [
+          "settle"
+        ]
+      },
+      "observed": {
+        "mapping": null,
+        "outcome": "unchanged",
+        "residue": {
+          "branch": true,
+          "directory": true,
+          "note": false,
+          "readme": "original",
+          "record": true,
+          "recovery": false,
+          "starting": false
+        }
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "outside",
+      "family": "restore",
+      "input": {
+        "relative": "..",
+        "steps": [
+          "settle",
+          "prune"
+        ]
+      },
+      "observed": {
+        "errorClass": "WorktreeError",
+        "mapping": {
+          "cwd": "repo",
+          "root": "repo"
+        },
+        "message": {
+          "described": "sha256:e531bd3eb38bf0fe8b44b9d3c97ed642",
+          "length": 96
+        },
+        "outcome": "error",
+        "residue": {
+          "branch": false,
+          "directory": false,
+          "note": false,
+          "readme": null,
+          "record": false,
+          "recovery": true,
+          "starting": false
+        }
+      },
+      "setup": "plain"
+    },
+    {
+      "case": "checkout",
+      "family": "position",
+      "input": {
+        "base": "repo"
+      },
+      "observed": {
+        "branch": "main",
+        "counterpart": "repo",
+        "mappedCwd": "repo",
+        "outcome": "opened",
+        "root": "repo"
+      },
+      "setup": "linked-worktrees"
+    },
+    {
+      "case": "linked",
+      "family": "position",
+      "input": {
+        "base": "linked/alpha"
+      },
+      "observed": {
+        "branch": "alpha",
+        "counterpart": "repo",
+        "mappedCwd": "repo",
+        "outcome": "opened",
+        "root": "repo"
+      },
+      "setup": "linked-worktrees"
+    },
+    {
+      "case": "linked-only-directory",
+      "family": "position",
+      "input": {
+        "base": "linked/alpha/only-here"
+      },
+      "observed": {
+        "branch": "alpha",
+        "counterpart": null,
+        "mappedCwd": "repo/only-here",
+        "outcome": "opened",
+        "root": "repo"
+      },
+      "setup": "linked-worktrees"
+    },
+    {
+      "case": "detached",
+      "family": "position",
+      "input": {
+        "base": "linked/gamma"
+      },
+      "observed": {
+        "branch": null,
+        "counterpart": "repo",
+        "mappedCwd": "repo",
+        "outcome": "opened",
+        "root": "repo"
+      },
+      "setup": "linked-worktrees"
+    },
+    {
+      "case": "not-a-repository",
+      "family": "position",
+      "input": {
+        "base": "."
+      },
+      "observed": {
+        "errorClass": "GitRepositoryNotFoundError",
+        "message": {
+          "described": "sha256:5b250b4a30e89b18ff2e1e9cdade1cd8",
+          "length": 36
+        },
+        "outcome": "error"
+      },
+      "setup": "target-tree"
     }
   ],
   "note": "Worktree corpus: what the pinned reference's own worktree functions answer over repositories this capture scripts under a hermetic git environment. Paths are relative to the case root, the managed directory's hashed segment is {repoDir} and the scripted head commit is {headCommit}, so the corpus is machine-independent. A reference sentence is committed as a {described, length} marker carrying a SHA-256 digest, so no reference prose ships while any change still fails the replay. Regenerate with scripts/parity/worktree.py --corpus when the pinned reference moves.",

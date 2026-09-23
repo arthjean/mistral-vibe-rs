@@ -27,6 +27,10 @@ pub enum UtilityPrompt {
     /// The marker an older build wrote in front of an injected summary. It is
     /// read as a filter and never sent to a model.
     CompactSummaryPrefix,
+    /// The system message the worktree naming model runs under
+    /// (`vibe/core/prompts/worktree_name.md` upstream; this text is this
+    /// repository's own).
+    WorktreeName,
 }
 
 impl UtilityPrompt {
@@ -37,6 +41,7 @@ impl UtilityPrompt {
             Self::Compact => "compact",
             Self::CompactSystem => "compact_system",
             Self::CompactSummaryPrefix => "compact_summary_prefix",
+            Self::WorktreeName => "worktree_name",
         }
     }
 
@@ -50,6 +55,7 @@ impl UtilityPrompt {
             Self::CompactSummaryPrefix => {
                 include_str!("assets/compact_summary_prefix.md").trim_ascii()
             }
+            Self::WorktreeName => include_str!("assets/worktree_name.md").trim_ascii(),
         }
     }
 }

@@ -99,7 +99,10 @@ pub(crate) fn resource_server(
         .with_connector_auth(connector);
     Ok(AppServer::with_resource_backend(Arc::new(resource_backend))
         .using_workspace_service(workspace)
-        .using_web_search_access(Some(web_search_access(arguments, credential))))
+        .using_web_search_access(Some(web_search_access(arguments, credential)))
+        .using_utility_provider(vibe_core::worktree::naming_model::utility_provider(
+            crate::tui::startup::utility_model(arguments),
+        )))
 }
 
 /// The credential and endpoint `web_search` reaches the conversations API with.

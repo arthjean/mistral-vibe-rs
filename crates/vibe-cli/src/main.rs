@@ -77,8 +77,9 @@ async fn main() -> ExitCode {
             }
         }
         PreparedInvocation::Interactive(invocation) => {
-            let worktree = invocation.workspace.worktree.clone();
-            match vibe_cli::tui::run_interactive(invocation).await {
+            let workspace = invocation.workspace.clone();
+            let worktree = workspace.worktree.clone();
+            let outcome = match vibe_cli::tui::run_interactive(invocation).await {
                 Ok(exit) => {
                     let initialization_error = exit.initialization_error;
                     if let Some(summary) = &exit.summary {
@@ -115,18 +116,26 @@ async fn main() -> ExitCode {
                     eprintln!("{error}");
                     ExitCode::from(error.exit_code())
                 }
-            }
+            };
+            // Dropped on every path, cleanup offered or not: a holder left
+            // behind reads as a live session to every later release.
+            workspace.release_holder();
+            outcome
         }
         PreparedInvocation::Programmatic(invocation) => {
             let mut stdout = std::io::stdout().lock();
             let mut stderr = std::io::stderr().lock();
-            match vibe_cli::run(invocation.arguments, &mut stdout, &mut stderr).await {
+            let workspace = invocation.workspace;
+            let outcome = match vibe_cli::run(invocation.arguments, &mut stdout, &mut stderr).await
+            {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(error) => {
                     let _ = writeln!(stderr, "{error}");
                     ExitCode::from(error.exit_code())
                 }
-            }
+            };
+            workspace.release_holder();
+            outcome
         }
     }
 }

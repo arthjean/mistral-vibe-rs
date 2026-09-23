@@ -208,17 +208,16 @@ impl WorkspaceService {
         Ok(hydrated_result(&hydrated, None))
     }
 
-    /// Refuses a local workspace selection on a method that reopens a recorded
-    /// session.
+    /// Refuses a `worktree` on a method that reopens a recorded session.
     ///
     /// A saved session was recorded against a directory, and resolving a
-    /// selection here would mint a worktree and reopen it somewhere else. The
+    /// request here would mint a worktree and reopen it somewhere else. The
     /// reference refuses both methods for the same reason
-    /// (`vibe/app_server/server.py:1238-1247`).
-    fn refuse_local_workspace_selection(
+    /// (`vibe/app_server/_worktree_session.py:176-189`).
+    fn refuse_worktree_request(
         params: &BTreeMap<String, Value>,
     ) -> Result<(), WorkspaceServiceError> {
-        match params.get("localWorkspaceSelection") {
+        match params.get("worktree") {
             None | Some(Value::Null) => Ok(()),
             Some(_) => Err(WorkspaceServiceError::InvalidParams(
                 crate::worktrees::REOPEN_REFUSAL.to_owned(),
@@ -230,7 +229,7 @@ impl WorkspaceService {
         &self,
         params: &BTreeMap<String, Value>,
     ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
-        Self::refuse_local_workspace_selection(params)?;
+        Self::refuse_worktree_request(params)?;
         let hydrated = self
             .store
             .resume(
@@ -252,7 +251,7 @@ impl WorkspaceService {
         &self,
         params: &BTreeMap<String, Value>,
     ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
-        Self::refuse_local_workspace_selection(params)?;
+        Self::refuse_worktree_request(params)?;
         let cwd = match optional_string(params, "cwd")? {
             Some(cwd) => cwd.to_owned(),
             None => self.paths.working_directory.to_string_lossy().into_owned(),

@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -46,11 +46,12 @@ use crate::resources::{
 use crate::workspace::{
     RuntimeAttachment, WORKSPACE_METHODS, WorkspaceService, WorkspaceServiceError,
 };
-use crate::worktrees::{self, LocalWorkspaceSelection};
+use crate::worktrees::{self, WorktreeInput, WorktreeResolution};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use thiserror::Error;
 use vibe_core::config::DotenvValues;
+use vibe_core::engine::CompletionProvider;
 use vibe_core::events::{
     CallbackDetail, CallbackKind as EngineCallbackKind, CallbackOutput, EffectDetail,
     EffectResultDisplay, LifecycleState, ModelMessage, NoticeDetail, ProjectionSnapshot,
@@ -63,6 +64,7 @@ use vibe_core::integrations::redact;
 use vibe_core::matching::NameFilter;
 use vibe_core::mcp::McpServerConfig;
 use vibe_core::middleware::CompactionSettings;
+use vibe_core::observability;
 use vibe_core::observability::{FileLog, LogLevel, LogSettings};
 pub use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionRequirement,
@@ -78,7 +80,8 @@ pub use vibe_core::tools::{
     ToolOutputSink, ToolPresentationKind, ToolRegistry, ToolSource, ToolSpec,
 };
 use vibe_core::workspace::{ReviewManager, Workspace, WorkspaceTools};
-use vibe_core::worktree::PreparedWorktree;
+use vibe_core::worktree::lifecycle::SessionWorktrees;
+use vibe_core::worktree::{ManagedWorktree, PreparedWorktree, naming_model};
 use vibe_protocol::{
     CallbackKind, ClientCapabilities, Envelope, ErrorResponse, InitializeParams,
     InitializeResponse, InvalidParamsData, InvalidParamsIssue, JsonRpcVersion, Notification,
@@ -217,7 +220,6 @@ const IMPLEMENTED_METHODS: &[&str] = &[
     "turn/steer",
     "workspace/trust/decision",
     "workspace/trust/status",
-    "workspace/worktrees/list",
 ];
 
 struct DenyApproval;
@@ -415,6 +417,10 @@ pub struct AppServer {
     /// installs it here, and a server built without one keeps the event on
     /// `diagnostics/logs/read` alone.
     client_telemetry: Arc<dyn ClientTelemetry>,
+    /// The model an `auto` worktree request asks for a name. Without one, the
+    /// name comes from the prompt alone, as it does upstream when no key
+    /// resolves (`vibe/core/llm/utility_completion.py:22-76`).
+    utility_provider: Option<Arc<dyn CompletionProvider>>,
     next_session: Arc<AtomicU64>,
     next_turn: Arc<AtomicU64>,
     next_callback: Arc<AtomicU64>,
@@ -455,6 +461,7 @@ impl Default for AppServer {
             shell_tools: Arc::new(ShellTools::new(home)),
             client_tools: Arc::new(ClientToolBridge::default()),
             client_telemetry: Arc::new(NoClientTelemetry),
+            utility_provider: None,
             next_session: Arc::new(AtomicU64::new(1)),
             next_turn: Arc::new(AtomicU64::new(1)),
             next_callback: Arc::new(AtomicU64::new(1)),
@@ -528,6 +535,14 @@ impl AppServer {
     #[must_use]
     pub fn using_client_telemetry(mut self, telemetry: Arc<dyn ClientTelemetry>) -> Self {
         self.client_telemetry = telemetry;
+        self
+    }
+
+    /// Installs the model utility completions run on, which names the
+    /// worktrees `auto` requests raise.
+    #[must_use]
+    pub fn using_utility_provider(mut self, provider: Option<Arc<dyn CompletionProvider>>) -> Self {
+        self.utility_provider = provider;
         self
     }
 

@@ -109,6 +109,7 @@ fn a_refused_startup_carries_the_exit_code_the_cleanup_gate_reads() {
         base_commit: "0".repeat(40),
         created: true,
         branch_created: true,
+        pending_hold: None,
     };
 
     for (exit_code, offered) in [

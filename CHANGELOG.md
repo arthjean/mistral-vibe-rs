@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Accept a bare `--worktree`: Vibe creates a fresh worktree named after the
+  prompt on the command line, or a random slug without one, on a
+  `vibe/<name>` branch. A launch registers as a holder of its worktree, and
+  cleanup keeps one another session still uses.
+
+- Add the `workspace/git/worktrees/list`, `limit/update`, `prune` and
+  `remove` app-server methods and the `worktree_limit` setting, and retire
+  `workspace/worktrees/list`. `session/start` takes its worktree as
+  `worktree`, including the `auto` kind, instead of
+  `localWorkspaceSelection`; a session holds the managed worktree it runs in,
+  closing one that never ran a turn takes back the worktree it created, and
+  reopening a session restores a retained worktree first.
+
 - Show a file tool's path relative to the session directory, as the reference
   does, and mark a scratchpad file as such. A `read_file` header no longer
   repeats the default line limit.

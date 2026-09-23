@@ -107,10 +107,15 @@ a user-invocable skill, then as a custom command file.
 
 `vibe [prompt]` starts interactive mode; `-p/--prompt` runs programmatically
 with `--output text|json|streaming`. Session control: `--resume [id]`,
-`-c/--continue`, `--workdir <path>`, `--add-dir <path>`, `--worktree <name>`.
+`-c/--continue`, `--workdir <path>`, `--add-dir <path>`, `--worktree [name]`.
 `--worktree <name>` creates the worktree under the managed root inside the vibe
-home, on a branch carrying that name, and reuses it when one is already there;
-the session trusts that directory without asking. On exit the run offers to
+home, on a branch carrying that name, and reuses it when one is already there.
+A bare `--worktree` always creates a fresh one, named from the prompt given on
+the command line (or a random slug without one) on a `vibe/<name>` branch;
+since the flag takes an optional value, put the prompt before it or pass it
+with `-p`. Either way the session trusts that directory without asking, and
+`worktree_limit` (default 15) caps how many inactive managed worktrees
+Desktop keeps before pruning the oldest. On exit the run offers to
 discard only a worktree it created itself, so a reused one and a branch that
 existed beforehand are kept unless the answer says otherwise, a `-p` run is
 never asked, and `--setup` and `--check-upgrade` ignore the flag.

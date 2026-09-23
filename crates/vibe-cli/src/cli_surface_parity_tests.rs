@@ -772,7 +772,15 @@ fn port_namespace(arguments: &Arguments) -> BTreeMap<String, Value> {
                     .map(|path| path.display().to_string())
             ),
         ),
-        ("worktree".to_owned(), json!(arguments.worktree)),
+        (
+            "worktree".to_owned(),
+            // A bare flag stores the reference's `const=True`.
+            match &arguments.worktree {
+                None => Value::Null,
+                Some(None) => Value::Bool(true),
+                Some(Some(name)) => json!(name),
+            },
+        ),
     ])
 }
 
@@ -2137,14 +2145,6 @@ const LEDGER: &[Divergence] = &[
         why: "--smart-approve arrived in v2.25.1 (vibe/_experimental_harness.py:48-59, vibe/cli/entrypoint.py:139 and 210-217) and turns on the Unified Harness while selecting the smart-approve agent unless --agent names one; Arguments (crates/vibe-cli/src/lib.rs) declares no such flag and no crate here defines a smart-approve agent",
     },
     Divergence {
-        parser: "root",
-        case: "worktree",
-        pointer: "/valueCount",
-        closed_by: "RECORDED",
-        row: "7",
-        why: "v2.24.1 made the worktree name optional (vibe/cli/entrypoint.py:158-169, nargs `?` with const True): a bare --worktree names the worktree after the prompt or a random slug; this port still declares --worktree as an Option<String> taking exactly one NAME (crates/vibe-cli/src/lib.rs:158-165)",
-    },
-    Divergence {
         parser: "mcp-add",
         case: "allow_insecure_http",
         pointer: "/present",
@@ -2247,22 +2247,6 @@ const LEDGER: &[Divergence] = &[
         closed_by: "RECORDED",
         row: "7",
         why: "the reference resolves `--sm` to --smart-approve by argparse's prefix inference and exits 0, and this port, which has neither the flag nor `infer_long_args` (US-322), refuses it with exit 2 on stderr: --smart-approve arrived in v2.25.1 (vibe/_experimental_harness.py:48-59, vibe/cli/entrypoint.py:139 and 210-217) and turns on the Unified Harness while selecting the smart-approve agent unless --agent names one; Arguments (crates/vibe-cli/src/lib.rs) declares no such flag and no crate here defines a smart-approve agent",
-    },
-    Divergence {
-        parser: "root",
-        case: "no-value--worktree",
-        pointer: "/exit",
-        closed_by: "RECORDED",
-        row: "7",
-        why: "since v2.24.1 the reference accepts a bare --worktree and stores its const True (vibe/cli/entrypoint.py:158-169), exiting 0 with no output, and this port, whose --worktree takes exactly one NAME (crates/vibe-cli/src/lib.rs:158-165), refuses it with exit 2 on stderr",
-    },
-    Divergence {
-        parser: "root",
-        case: "no-value--worktree",
-        pointer: "/streams",
-        closed_by: "RECORDED",
-        row: "7",
-        why: "since v2.24.1 the reference accepts a bare --worktree and stores its const True (vibe/cli/entrypoint.py:158-169), exiting 0 with no output, and this port, whose --worktree takes exactly one NAME (crates/vibe-cli/src/lib.rs:158-165), refuses it with exit 2 on stderr",
     },
     Divergence {
         parser: "mcp",

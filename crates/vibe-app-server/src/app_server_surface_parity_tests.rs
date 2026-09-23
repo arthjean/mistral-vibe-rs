@@ -267,22 +267,6 @@ const UNDECLARED_METHODS: &[(&str, &str)] = &[
         "v2.25.7 declares it at vibe/app_server/protocol.py:233 and routes it at vibe/app_server/_host.py:471; SERVER_METHODS does not declare it and nothing here routes it",
     ),
     (
-        "workspace/git/worktrees/limit/update",
-        "v2.25.7 declares it at vibe/app_server/protocol.py:234 and routes it at vibe/app_server/_host.py:452; SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
-        "workspace/git/worktrees/list",
-        "v2.25.7 declares it at vibe/app_server/protocol.py:235 and routes it at vibe/app_server/_host.py:445; SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
-        "workspace/git/worktrees/prune",
-        "v2.25.7 declares it at vibe/app_server/protocol.py:236 and routes it at vibe/app_server/_host.py:464; SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
-        "workspace/git/worktrees/remove",
-        "v2.25.7 declares it at vibe/app_server/protocol.py:237 and routes it at vibe/app_server/_host.py:478; SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
         "workspace/trust/untrustedConfig",
         "v2.25.7 declares it at vibe/app_server/protocol.py:240 and routes it at vibe/app_server/_host.py:438; SERVER_METHODS does not declare it and nothing here routes it",
     ),
@@ -291,7 +275,7 @@ const UNDECLARED_METHODS: &[(&str, &str)] = &[
 /// Methods `SERVER_METHODS` declares and routes that the reference retired,
 /// each with what the reference did instead.
 ///
-/// All seven were in the v2.24.0 inventory and are absent from the v2.25.7 one
+/// All six were in the v2.24.0 inventory and are absent from the v2.25.7 one
 /// (`vibe/app_server/protocol.py:105-242` at 4a96003). A method this build stops
 /// declaring while listed here fails the replay as a stale entry.
 const RETIRED_METHODS: &[(&str, &str)] = &[
@@ -318,10 +302,6 @@ const RETIRED_METHODS: &[(&str, &str)] = &[
     (
         "session/compact/start",
         "v2.25.7 retired it from the inventory (v2.24.0 protocol.py:134); the reference compacts through session/compact with the same SessionCompactParams (vibe/app_server/_handler.py:530); this port still declares and routes session/compact/start",
-    ),
-    (
-        "workspace/worktrees/list",
-        "v2.25.7 retired it from the inventory (v2.24.0 protocol.py:173) and lists worktrees through workspace/git/worktrees/list with the same WorkspaceWorktreeListParams (vibe/app_server/_host.py:445); this port still declares and routes workspace/worktrees/list",
     ),
 ];
 
@@ -539,11 +519,15 @@ fn probe_requests() -> Vec<(&'static str, Value)> {
             json!({"sessionId": PROBE_SESSION, "cwd": "/workspace"}),
         ),
         // A path that is no repository answers an empty listing rather than
-        // refusing, which is what makes the worktree listing probeable without
-        // scripting a checkout. The reference retired this name at v2.25.7 for
-        // `workspace/git/worktrees/list` over the same models, so the answer is
-        // validated against the successor's (see `corpus_method`).
-        ("workspace/worktrees/list", json!({"cwd": "/workspace"})),
+        // refusing, and one outside the managed root is kept as unmanaged,
+        // which is what makes both probeable without scripting a checkout. The
+        // limit and the sweep are not probed: both act on the ambient vibe
+        // home, which a probe must leave alone.
+        ("workspace/git/worktrees/list", json!({"cwd": "/workspace"})),
+        (
+            "workspace/git/worktrees/remove",
+            json!({"cwd": "/workspace"}),
+        ),
     ]
 }
 
@@ -556,18 +540,6 @@ const UNREACHABLE_PROBES: &[(&str, &str)] = &[(
     "connectors/auth/read",
     "no connector is configured in a bare probe session, so there is no name to authorize",
 )];
-
-/// The corpus method whose response model a probed method is validated against.
-///
-/// A method the reference retired for a successor over the same models is
-/// measured against that successor, which keeps its answer measured by the
-/// census rather than by nothing. Every other method is its own.
-fn corpus_method(method: &str) -> &str {
-    match method {
-        "workspace/worktrees/list" => "workspace/git/worktrees/list",
-        other => other,
-    }
-}
 
 // --------------------------------------------------------------------------
 // Corpus
@@ -1485,7 +1457,7 @@ fn every_probed_response_validates_against_the_census() {
         };
         probed.push(method);
         let model = responses
-            .get(corpus_method(method))
+            .get(method)
             .unwrap_or_else(|| unreachable!("{method} is not a corpus method"));
         let mut issues = Vec::new();
         census.validate("", model, &result, &mut issues);

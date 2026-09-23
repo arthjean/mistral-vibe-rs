@@ -28,7 +28,7 @@ fn preparation_narrates_on_standard_error_in_the_reference_order() {
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
 
     let preparing = stderr
-        .find("Preparing worktree \"probe\"...")
+        .find("Preparing worktree 'probe'...")
         .unwrap_or_else(|| panic!("the requested name is not narrated, stderr: {stderr}"));
     let using = stderr
         .find("Using worktree: ")
@@ -70,9 +70,10 @@ fn a_preparation_failure_is_reported_on_standard_output_and_exits_one() {
     );
 }
 
-/// The flag documents itself the way the reference's does: one placeholder
-/// called `NAME`, and help covering where the worktree lives, the branch it
-/// checks out, the trust it grants, and the two flags that ignore it.
+/// The flag documents itself the way the reference's does: one optional
+/// placeholder called `NAME`, and help covering where the worktree lives, the
+/// branch it checks out with and without a name, the trust it grants, and the
+/// two flags that ignore it.
 #[test]
 fn the_worktree_flag_names_its_placeholder_and_documents_its_effects() {
     let output = Command::new(env!("CARGO_BIN_EXE_vibe"))
@@ -82,12 +83,13 @@ fn the_worktree_flag_names_its_placeholder_and_documents_its_effects() {
     let help = String::from_utf8_lossy(&output.stdout).into_owned();
 
     assert!(
-        help.contains("--worktree <NAME>"),
+        help.contains("--worktree [<NAME>]"),
         "the placeholder must be NAME, help: {help}"
     );
     for expected in [
         "kept under the vibe home",
         "branch called NAME",
+        "vibe/<name> branch",
         "trusts that directory without asking",
         "Ignored with --setup and --check-upgrade",
     ] {

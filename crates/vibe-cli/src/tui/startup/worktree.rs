@@ -1,17 +1,19 @@
 //! The `Arguments`-facing half of the worktree contract.
 //!
-//! Preparation, inspection and removal live in `vibe_core::worktree`, one layer
-//! below, so the app-server can reach them too. What is left here is what only
-//! a terminal launch knows: which directory the invocation meant, where the
-//! vibe home is, how `--add-dir` resolves once the effective directory moved,
-//! and whether a human at a terminal agreed to discard their work.
+//! Preparation, ownership, inspection and removal live in `vibe_core::worktree`,
+//! one layer below, so the app-server reaches them too. What is left here is
+//! what only a terminal launch knows: which directory the invocation meant,
+//! where the vibe home is, how `--add-dir` resolves once the effective
+//! directory moved, which prompt names an unnamed worktree, and whether a
+//! human at a terminal agreed to discard their work.
 
 use std::fs;
 use std::io::{BufRead, Write};
 use std::path::{Component, Path, PathBuf};
 
 use vibe_core::worktree::{
-    self, PreparedWorktree, WorktreeError, inspect_worktree_for_cleanup, remove_worktree,
+    ManagedRoot, ManagedWorktree, PreparedWorktree, WorktreeError, WorktreeRepository,
+    inspect_worktree_for_cleanup, naming_model, python_repr, remove_worktree,
 };
 
 use crate::Arguments;
@@ -35,10 +37,38 @@ impl From<WorktreeError> for StartupError {
             WorktreeError::Failed { name, message } => Self::Worktree { name, message },
             WorktreeError::ListFailed { message } => Self::WorktreeListFailed(message),
             WorktreeError::Io { path, source } => Self::Io { path, source },
-            WorktreeError::Noted { name, source, note } => Self::Worktree {
-                name,
-                message: format!("{source}; {note}"),
-            },
+            error @ (WorktreeError::Git { .. }
+            | WorktreeError::Record { .. }
+            | WorktreeError::Noted { .. }) => Self::WorktreeRefused(error.to_string()),
+        }
+    }
+}
+
+/// The holder a CLI process registers in the worktree it runs in, one per
+/// process. An app server sweeping the same repository reads these markers to
+/// tell a live worktree from an abandoned one (`vibe/cli/entrypoint.py:289-293`).
+#[must_use]
+pub fn cli_worktree_holder() -> String {
+    format!("cli-{}", std::process::id())
+}
+
+/// What `--worktree` asked for, read the way the reference reads the flag:
+/// absent or empty asks for nothing, bare asks Vibe to name one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum WorktreeFlag {
+    Named(String),
+    Auto,
+}
+
+impl WorktreeFlag {
+    fn from_arguments(arguments: &Arguments) -> Option<Self> {
+        match &arguments.worktree {
+            None => None,
+            Some(None) => Some(Self::Auto),
+            // An empty value is falsy upstream, so it names no worktree at all
+            // rather than an unportable one (`vibe/cli/entrypoint.py:434`).
+            Some(Some(name)) if name.is_empty() => None,
+            Some(Some(name)) => Some(Self::Named(name.clone())),
         }
     }
 }
@@ -54,11 +84,15 @@ impl LaunchWorkspace {
     /// Resolves where the launch runs, narrating the worktree it prepares.
     ///
     /// The two lines are the reference's, on the stream it writes them on: the
-    /// requested name before any git command runs, so an invocation that dies
-    /// inside `worktree add` is still attributable, and the working path once
-    /// preparation returned (`vibe/cli/entrypoint.py:291-304`). The failure in
-    /// between is reported by the caller, which is where the reference reports
-    /// it too.
+    /// requested name, or none for a bare flag, before any git command runs, so
+    /// an invocation that dies inside `worktree add` is still attributable, and
+    /// the working path once preparation returned. The launch then registers
+    /// as a holder of the worktree, turning the attachment hold a reused one
+    /// came back with into its own (`vibe/cli/entrypoint.py:221-246`).
+    ///
+    /// An unnamed worktree is named after the prompt the command line carried,
+    /// `-p` first: a prompt piped on stdin is read after this runs, as it is
+    /// upstream, so it never names one.
     pub fn prepare(
         arguments: &mut Arguments,
         narration: &mut impl Write,
@@ -66,8 +100,7 @@ impl LaunchWorkspace {
         // Reading the working directory is this port's counterpart to the
         // reference's `Path.cwd()` guard: it never chdirs, so the one place a
         // deleted directory shows up is where the launch asks for it, and
-        // `--workdir` pre-empts the question exactly as it does upstream
-        // (`vibe/cli/entrypoint.py:279-315`).
+        // `--workdir` pre-empts the question exactly as it does upstream.
         let requested = match &arguments.workdir {
             Some(path) => path.clone(),
             None => std::env::current_dir().map_err(|_| StartupError::WorkingDirectoryGone)?,
@@ -84,30 +117,37 @@ impl LaunchWorkspace {
             None => return Err(StartupError::WorkingDirectoryGone),
         };
 
-        // An empty `--worktree` names no worktree at all, which is what the
-        // reference's own truthiness test on the argument decides
-        // (`vibe/cli/entrypoint.py:293`). Refusing it as an unportable name
-        // would turn a no-op flag into a fatal launch.
-        let requested_worktree = arguments
-            .worktree
-            .as_deref()
-            .filter(|name| !name.is_empty());
-        if requested_worktree.is_none() || arguments.setup || arguments.check_upgrade {
+        let flag = WorktreeFlag::from_arguments(arguments);
+        let Some(flag) = flag.filter(|_| !arguments.setup && !arguments.check_upgrade) else {
             resolve_additional_directories(arguments, &base_directory)?;
             arguments.workdir = Some(base_directory.clone());
             return Ok(Self {
                 effective_directory: base_directory,
                 worktree: None,
             });
-        }
+        };
 
-        let name = requested_worktree.unwrap_or_default().to_owned();
-        let vibe_home = vibe_home_directory(arguments, &base_directory);
-        writeln!(narration, "Preparing worktree {name:?}...")
+        let managed = ManagedRoot::for_vibe_home(&vibe_home_directory(arguments, &base_directory));
+        let requested_name = match &flag {
+            WorktreeFlag::Named(name) => format!(" {}", python_repr(name)),
+            WorktreeFlag::Auto => String::new(),
+        };
+        writeln!(narration, "Preparing worktree{requested_name}...")
             .map_err(|source| startup_io(Path::new("stderr"), source))?;
-        let worktree = worktree::prepare_worktree(&name, &base_directory, &vibe_home, None)?;
+        let repository = WorktreeRepository::open(&base_directory, &managed)?;
+        let worktree = match &flag {
+            WorktreeFlag::Named(name) => repository.prepare(name, None)?,
+            WorktreeFlag::Auto => {
+                let prompt = naming_prompt(arguments);
+                let suggested = suggest_worktree_name(arguments, prompt.as_deref());
+                repository.prepare_auto(prompt.as_deref(), suggested.as_deref())?
+            }
+        };
         writeln!(narration, "Using worktree: {}", worktree.path.display())
             .map_err(|source| startup_io(Path::new("stderr"), source))?;
+        if let Some(held) = ManagedWorktree::at(&managed, &worktree.root) {
+            held.hold(&cli_worktree_holder(), worktree.pending_hold.as_ref())?;
+        }
         resolve_additional_directories(arguments, &worktree.path)?;
         arguments.workdir = Some(worktree.path.clone());
         arguments.trust = true;
@@ -116,6 +156,55 @@ impl LaunchWorkspace {
             worktree: Some(worktree),
         })
     }
+
+    /// Drops this process's holder, for every worktree the launch held and not
+    /// only the ones cleanup was offered for: a marker left behind reads as a
+    /// live session to every later release (`vibe/cli/entrypoint.py:488-497`).
+    pub fn release_holder(&self) {
+        if let Some(worktree) = &self.worktree
+            && let Some(managed) = ManagedRoot::containing(&worktree.root)
+            && let Some(held) = ManagedWorktree::at(&managed, &worktree.root)
+        {
+            let _ = held.release_holder(&cli_worktree_holder());
+        }
+    }
+}
+
+/// The prompt an unnamed worktree is named after: `-p` when it carries text,
+/// else the positional prompt (`vibe/cli/entrypoint.py:232-236`).
+fn naming_prompt(arguments: &Arguments) -> Option<String> {
+    arguments
+        .prompt
+        .clone()
+        .filter(|prompt| !prompt.is_empty())
+        .or_else(|| arguments.initial_prompt.clone())
+        .filter(|prompt| !prompt.is_empty())
+}
+
+/// The naming model's suggestion, or [`None`] whenever there is none to be had
+/// in time. The key the utility model needs resolves from the environment or
+/// the global dotenv file, as every credential of this launch does.
+fn suggest_worktree_name(arguments: &Arguments, prompt: Option<&str>) -> Option<String> {
+    prompt.filter(|prompt| !prompt.is_empty())?;
+    let provider = naming_model::utility_provider(utility_model(arguments))?;
+    naming_model::suggest_worktree_name_blocking(prompt, Some(provider.as_ref()))
+}
+
+/// The model utility completions of this launch run on.
+#[must_use]
+pub(crate) fn utility_model(arguments: &Arguments) -> naming_model::UtilityModel {
+    let dotenv = crate::bootstrap::dotenv_values(arguments);
+    naming_model::UtilityModel::select(
+        naming_model::UtilityModel {
+            style: arguments.provider_style.clone(),
+            endpoint: arguments.api_base.clone(),
+            model: arguments.model.clone(),
+            credential: dotenv
+                .variable(&arguments.credential_environment)
+                .unwrap_or_default(),
+        },
+        dotenv.variable("MISTRAL_API_KEY"),
+    )
 }
 
 fn resolve_additional_directories(
@@ -194,7 +283,7 @@ pub enum CleanupOutcome {
 /// Reference `_run_cli_with_worktree_cleanup`: only a worktree this run created,
 /// only without `--prompt`, and only when the run ended with exit code 0 or
 /// none. A startup that failed keeps the worktree, because a reused one and its
-/// branch must survive a bad configuration (`vibe/cli/entrypoint.py:334-356`).
+/// branch must survive a bad configuration (`vibe/cli/entrypoint.py:465-487`).
 #[must_use]
 pub fn cleanup_is_offered(
     worktree: Option<&PreparedWorktree>,
@@ -210,7 +299,7 @@ pub fn cleanup_is_offered(
 ///
 /// The reference asks through `input()`, which reads stdin and nothing else, so
 /// a piped stdin at end of file declines rather than reopening the controlling
-/// terminal behind the pipe (`vibe/cli/entrypoint.py:181-219`).
+/// terminal behind the pipe (`vibe/cli/entrypoint.py:249-286`).
 pub fn cleanup_worktree_terminal(
     worktree: PreparedWorktree,
 ) -> Result<CleanupOutcome, StartupError> {
@@ -226,7 +315,10 @@ pub fn cleanup_worktree_terminal(
 /// A run that reached this point already produced its result, so neither git
 /// failure ends it: an inspection that cannot read the worktree cannot ask a
 /// truthful question about it and keeps it, and a removal git refuses is
-/// reported and leaves behind whatever git left (`vibe/cli/entrypoint.py:222-268`).
+/// reported and leaves behind whatever git left. This process's holder stays up
+/// throughout, and the holders are read again after the questions, because a
+/// session elsewhere can join the worktree while the operator sits at them
+/// (`vibe/cli/entrypoint.py:296-349`).
 pub fn cleanup_worktree(
     worktree: PreparedWorktree,
     input: &mut impl BufRead,
@@ -246,8 +338,8 @@ pub fn cleanup_worktree(
     if !state.is_clean() {
         writeln!(
             output,
-            "Worktree {:?} has {}.",
-            worktree.name,
+            "Worktree {} has {}.",
+            python_repr(&worktree.name),
             state.reasons().join(", ")
         )
         .map_err(|source| startup_io(&worktree.root, source))?;
@@ -273,17 +365,40 @@ pub fn cleanup_worktree(
     } else {
         writeln!(
             output,
-            "Branch {:?} existed before this session and was attached, not created by Vibe.",
-            worktree.branch
+            "Branch {} existed before this session and was attached, not created by Vibe.",
+            python_repr(&worktree.branch)
         )
         .map_err(|source| startup_io(&worktree.root, source))?;
         confirm(
             input,
             output,
-            &format!("Also delete branch {:?}? [y/N] ", worktree.branch),
+            &format!(
+                "Also delete branch {}? [y/N] ",
+                python_repr(&worktree.branch)
+            ),
             &["y", "yes", "delete"],
         )?
     };
+
+    let managed = ManagedRoot::containing(&worktree.root)
+        .and_then(|managed| ManagedWorktree::at(&managed, &worktree.root));
+    let holder = cli_worktree_holder();
+    let others = managed.as_ref().map_or(0, |managed| {
+        managed
+            .holders()
+            .iter()
+            .filter(|held| **held != holder)
+            .count()
+    });
+    if others > 0 {
+        writeln!(
+            output,
+            "Keeping worktree {}: in use by {others} other session(s)",
+            worktree.root.display()
+        )
+        .map_err(|source| startup_io(&worktree.root, source))?;
+        return Ok(CleanupOutcome::Kept);
+    }
 
     writeln!(output, "Removing worktree: {}", worktree.root.display())
         .map_err(|source| startup_io(&worktree.root, source))?;
@@ -291,6 +406,9 @@ pub fn cleanup_worktree(
         writeln!(output, "Could not remove worktree: {error}")
             .map_err(|source| startup_io(&worktree.root, source))?;
         return Ok(CleanupOutcome::Failed);
+    }
+    if let Some(managed) = &managed {
+        managed.forget();
     }
     writeln!(output, "Removed worktree: {}", worktree.root.display())
         .map_err(|source| startup_io(&worktree.root, source))?;
@@ -313,10 +431,10 @@ fn confirm(
         .map_err(|source| startup_io(Path::new("stderr"), source))?;
     let mut answer = String::new();
     // The reference catches `EOFError` and `KeyboardInterrupt` around `input()`,
-    // writes a bare newline so the cursor leaves the prompt line, and declines
-    // (`vibe/cli/entrypoint.py:196-201`). End of file reads zero bytes here and
-    // takes the same branch; an interrupt at the question is a signal the
-    // process dies on before this returns, which keeps the worktree as well.
+    // writes a bare newline so the cursor leaves the prompt line, and declines.
+    // End of file reads zero bytes here and takes the same branch; an interrupt
+    // at the question is a signal the process dies on before this returns,
+    // which keeps the worktree as well.
     let read = input
         .read_line(&mut answer)
         .map_err(|source| startup_io(Path::new("stdin"), source))?;
@@ -402,7 +520,7 @@ mod tests {
     fn worktree_is_prepared_at_the_reference_location_and_reused() {
         let root = repository();
         let mut arguments = test_arguments(root.path());
-        arguments.worktree = Some("parity".to_owned());
+        arguments.worktree = Some(Some("parity".to_owned()));
         let first = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
             .expect("worktree prepared");
         let prepared = first.worktree.expect("prepared worktree");
@@ -412,7 +530,7 @@ mod tests {
         assert!(arguments.trust);
 
         let mut reused_arguments = test_arguments(root.path());
-        reused_arguments.worktree = Some("parity".to_owned());
+        reused_arguments.worktree = Some(Some("parity".to_owned()));
         let reused = LaunchWorkspace::prepare(&mut reused_arguments, &mut Vec::<u8>::new())
             .expect("existing worktree reused")
             .worktree
@@ -433,7 +551,7 @@ mod tests {
     fn an_empty_worktree_flag_starts_a_normal_session() {
         let root = repository();
         let mut arguments = test_arguments(root.path());
-        arguments.worktree = Some(String::new());
+        arguments.worktree = Some(Some(String::new()));
 
         let workspace = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
             .expect("a normal session starts");
@@ -466,7 +584,7 @@ mod tests {
         let root = repository();
         let original_head = git_stdout(root.path(), &["rev-parse", "HEAD"]);
         let mut invalid = test_arguments(root.path());
-        invalid.worktree = Some("../escape".to_owned());
+        invalid.worktree = Some(Some("../escape".to_owned()));
         assert!(matches!(
             LaunchWorkspace::prepare(&mut invalid, &mut Vec::<u8>::new()),
             Err(StartupError::InvalidWorktreeName)
@@ -478,7 +596,7 @@ mod tests {
 
         let outside = tempfile::tempdir().expect("non-repository");
         let mut non_repository = test_arguments(outside.path());
-        non_repository.worktree = Some("feature".to_owned());
+        non_repository.worktree = Some(Some("feature".to_owned()));
         assert!(matches!(
             LaunchWorkspace::prepare(&mut non_repository, &mut Vec::<u8>::new()),
             Err(StartupError::WorktreeRepositoryRequired)
@@ -489,7 +607,7 @@ mod tests {
     fn conflicting_worktree_path_is_preserved() {
         let root = repository();
         let mut arguments = test_arguments(root.path());
-        arguments.worktree = Some("conflict".to_owned());
+        arguments.worktree = Some(Some("conflict".to_owned()));
         let prepared = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
             .expect("initial worktree")
             .worktree
@@ -505,7 +623,7 @@ mod tests {
         fs::write(target.join("owner.txt"), "preserve me\n").expect("conflicting content");
 
         let mut conflicting = test_arguments(root.path());
-        conflicting.worktree = Some("conflict".to_owned());
+        conflicting.worktree = Some(Some("conflict".to_owned()));
         assert!(matches!(
             LaunchWorkspace::prepare(&mut conflicting, &mut Vec::<u8>::new()),
             Err(StartupError::Worktree { .. })
@@ -521,7 +639,7 @@ mod tests {
         let root = repository();
         git(root.path(), &["branch", "attached"]);
         let mut arguments = test_arguments(root.path());
-        arguments.worktree = Some("attached".to_owned());
+        arguments.worktree = Some(Some("attached".to_owned()));
         let prepared = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
             .expect("attached branch worktree")
             .worktree
@@ -546,7 +664,7 @@ mod tests {
         git(root.path(), &["add", "nested/context/file.txt"]);
         git(root.path(), &["commit", "-qm", "nested fixture"]);
         let mut arguments = test_arguments(root.path());
-        arguments.worktree = Some("relative-add-dir".to_owned());
+        arguments.worktree = Some(Some("relative-add-dir".to_owned()));
         arguments.add_directories = vec![PathBuf::from("nested/context")];
         let prepared = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
             .expect("worktree prepared")
@@ -568,7 +686,7 @@ mod tests {
     fn dirty_owned_worktree_is_kept_when_cleanup_is_declined() {
         let root = repository();
         let mut arguments = test_arguments(root.path());
-        arguments.worktree = Some("dirty".to_owned());
+        arguments.worktree = Some(Some("dirty".to_owned()));
         let prepared = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
             .expect("worktree prepared")
             .worktree
@@ -594,7 +712,7 @@ mod tests {
     fn detached_head_commit_is_kept_when_cleanup_is_declined() {
         let root = repository();
         let mut arguments = test_arguments(root.path());
-        arguments.worktree = Some("detached".to_owned());
+        arguments.worktree = Some(Some("detached".to_owned()));
         let prepared = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
             .expect("worktree prepared")
             .worktree
@@ -631,7 +749,7 @@ mod tests {
     fn preparation_narrates_the_name_then_the_path() {
         let root = repository();
         let mut arguments = test_arguments(root.path());
-        arguments.worktree = Some("narrated".to_owned());
+        arguments.worktree = Some(Some("narrated".to_owned()));
         let mut narration = Vec::<u8>::new();
         let prepared = LaunchWorkspace::prepare(&mut arguments, &mut narration)
             .expect("worktree prepared")
@@ -639,7 +757,7 @@ mod tests {
             .expect("prepared worktree");
         let narration = String::from_utf8(narration).expect("narration is UTF-8");
         let preparing = narration
-            .find("Preparing worktree \"narrated\"...")
+            .find("Preparing worktree 'narrated'...")
             .expect("the name is narrated");
         let using = narration
             .find(&format!("Using worktree: {}", prepared.path.display()))
@@ -661,11 +779,11 @@ mod tests {
     fn a_failed_preparation_narrates_only_the_attempt() {
         let outside = tempfile::tempdir().expect("non-repository");
         let mut arguments = test_arguments(outside.path());
-        arguments.worktree = Some("doomed".to_owned());
+        arguments.worktree = Some(Some("doomed".to_owned()));
         let mut narration = Vec::<u8>::new();
         assert!(LaunchWorkspace::prepare(&mut arguments, &mut narration).is_err());
         let narration = String::from_utf8(narration).expect("narration is UTF-8");
-        assert!(narration.contains("Preparing worktree \"doomed\"..."));
+        assert!(narration.contains("Preparing worktree 'doomed'..."));
         assert!(!narration.contains("Using worktree:"), "{narration}");
     }
 
@@ -675,7 +793,7 @@ mod tests {
     fn cleanup_names_the_worktree_before_removing_it() {
         let root = repository();
         let mut arguments = test_arguments(root.path());
-        arguments.worktree = Some("announced".to_owned());
+        arguments.worktree = Some(Some("announced".to_owned()));
         let prepared = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
             .expect("worktree prepared")
             .worktree
@@ -701,7 +819,7 @@ mod tests {
     fn an_uninspectable_worktree_is_named_and_kept() {
         let root = repository();
         let mut arguments = test_arguments(root.path());
-        arguments.worktree = Some("uninspectable".to_owned());
+        arguments.worktree = Some(Some("uninspectable".to_owned()));
         let prepared = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
             .expect("worktree prepared")
             .worktree
@@ -730,7 +848,7 @@ mod tests {
     fn a_removal_git_refuses_is_reported_and_stops_the_cleanup() {
         let root = repository();
         let mut arguments = test_arguments(root.path());
-        arguments.worktree = Some("refused".to_owned());
+        arguments.worktree = Some(Some("refused".to_owned()));
         let prepared = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
             .expect("worktree prepared")
             .worktree
@@ -773,7 +891,7 @@ mod tests {
     fn end_of_input_declines_and_keeps_the_worktree() {
         let root = repository();
         let mut arguments = test_arguments(root.path());
-        arguments.worktree = Some("eof".to_owned());
+        arguments.worktree = Some(Some("eof".to_owned()));
         let prepared = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
             .expect("worktree prepared")
             .worktree
@@ -812,6 +930,7 @@ mod tests {
             branch: "owned".to_owned(),
             created: true,
             branch_created: true,
+            pending_hold: None,
         };
         let reused = PreparedWorktree {
             created: false,
@@ -834,7 +953,7 @@ mod tests {
     fn clean_owned_worktree_is_removed_once() {
         let root = repository();
         let mut arguments = test_arguments(root.path());
-        arguments.worktree = Some("clean".to_owned());
+        arguments.worktree = Some(Some("clean".to_owned()));
         let prepared = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
             .expect("worktree prepared")
             .worktree
@@ -848,5 +967,100 @@ mod tests {
         .expect("clean worktree removed");
         assert_eq!(outcome, CleanupOutcome::Removed);
         assert!(!path.exists());
+    }
+
+    /// A bare flag names the worktree itself: with no prompt to name it after,
+    /// a random slug on a `vibe/` branch, narrated without a name.
+    #[test]
+    fn a_bare_flag_prepares_an_unnamed_worktree_on_a_vibe_branch() {
+        let root = repository();
+        let mut arguments = test_arguments(root.path());
+        arguments.worktree = Some(None);
+        let mut narration = Vec::<u8>::new();
+        let prepared = LaunchWorkspace::prepare(&mut arguments, &mut narration)
+            .expect("worktree prepared")
+            .worktree
+            .expect("prepared worktree");
+        let narration = String::from_utf8(narration).expect("narration is UTF-8");
+
+        assert!(
+            narration.starts_with("Preparing worktree...\n"),
+            "{narration}"
+        );
+        assert!(prepared.created && prepared.branch_created);
+        assert_eq!(prepared.branch, format!("vibe/{}", prepared.name));
+        assert!(vibe_core::worktree::is_portable_worktree_name(
+            &prepared.name
+        ));
+
+        git(
+            root.path(),
+            &["worktree", "remove", "--force", path_text(&prepared.root)],
+        );
+        git(root.path(), &["branch", "-D", &prepared.branch]);
+    }
+
+    /// The launch stands in its worktree as `cli-<pid>` until it lets go, which
+    /// is what keeps an app server sweeping the repository off it.
+    #[test]
+    fn the_launch_holds_its_worktree_until_released() {
+        let root = repository();
+        let mut arguments = test_arguments(root.path());
+        arguments.worktree = Some(Some("held".to_owned()));
+        let workspace = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
+            .expect("worktree prepared");
+        let prepared = workspace.worktree.clone().expect("prepared worktree");
+        let managed = ManagedRoot::containing(&prepared.root)
+            .and_then(|managed| ManagedWorktree::at(&managed, &prepared.root))
+            .expect("the worktree is managed");
+
+        assert!(managed.holders().contains(&cli_worktree_holder()));
+        workspace.release_holder();
+        assert!(managed.holders().is_empty());
+
+        git(
+            root.path(),
+            &["worktree", "remove", "--force", path_text(&prepared.root)],
+        );
+        git(root.path(), &["branch", "-D", "held"]);
+    }
+
+    /// A session elsewhere standing in the worktree keeps it: removing it would
+    /// leave that session in a deleted directory.
+    #[test]
+    fn cleanup_keeps_a_worktree_another_session_holds() {
+        let root = repository();
+        let mut arguments = test_arguments(root.path());
+        arguments.worktree = Some(Some("shared".to_owned()));
+        let workspace = LaunchWorkspace::prepare(&mut arguments, &mut Vec::<u8>::new())
+            .expect("worktree prepared");
+        let prepared = workspace.worktree.clone().expect("prepared worktree");
+        let managed = ManagedRoot::containing(&prepared.root)
+            .and_then(|managed| ManagedWorktree::at(&managed, &prepared.root))
+            .expect("the worktree is managed");
+        managed.hold("other-session", None).expect("second holder");
+        let worktree_root = prepared.root.clone();
+
+        let mut output = Vec::<u8>::new();
+        let outcome = cleanup_worktree(prepared, &mut Cursor::new(Vec::<u8>::new()), &mut output)
+            .expect("a held worktree is kept");
+        assert_eq!(outcome, CleanupOutcome::Kept);
+        let output = String::from_utf8(output).expect("output is UTF-8");
+        assert_eq!(
+            output,
+            format!(
+                "Keeping worktree {}: in use by 1 other session(s)\n",
+                worktree_root.display()
+            )
+        );
+        assert!(worktree_root.is_dir());
+
+        managed.release_holder("other-session").expect("released");
+        workspace.release_holder();
+        git(
+            root.path(),
+            &["worktree", "remove", "--force", path_text(&worktree_root)],
+        );
+        git(root.path(), &["branch", "-D", "shared"]);
     }
 }

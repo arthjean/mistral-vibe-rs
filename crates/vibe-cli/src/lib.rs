@@ -153,14 +153,21 @@ pub struct Arguments {
         help = "Change to DIR before the session starts"
     )]
     pub workdir: Option<PathBuf>,
+    /// Absent, bare, or naming the worktree. A bare `--worktree` is `Some(None)`
+    /// and leaves the name to Vibe, which is argparse's `nargs="?"` with a
+    /// `const` of `True` (`vibe/cli/entrypoint.py:158-169`); a value is read as
+    /// the reference reads it, so an empty one asks for no worktree at all.
     #[arg(
         long,
         value_name = "NAME",
-        help = "Run in a git worktree kept under the vibe home, created on a branch called NAME \
-                or reused when one is already there. The session trusts that directory without \
-                asking. Ignored with --setup and --check-upgrade."
+        num_args = 0..=1,
+        help = "Run in a git worktree kept under the vibe home. With NAME, create the worktree \
+                and a branch called NAME, or reuse the one already there. Without NAME, create \
+                a new one named after the prompt (or a random slug) on a vibe/<name> branch. \
+                The session trusts that directory without asking. Ignored with --setup and \
+                --check-upgrade."
     )]
-    pub worktree: Option<String>,
+    pub worktree: Option<Option<String>>,
     #[arg(
         long = "add-dir",
         value_name = "DIR",

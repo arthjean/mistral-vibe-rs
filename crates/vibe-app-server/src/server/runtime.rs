@@ -58,6 +58,9 @@ pub(crate) struct SessionRuntime {
     pub(crate) tools: ToolRegistry,
     pub(crate) persisted: Option<HydratedSession>,
     pub(crate) review: Option<Arc<ReviewManager>>,
+    /// The worktree this session's start created, which closing the session
+    /// takes back when no turn ever ran in it.
+    pub(crate) created_worktree: Option<PreparedWorktree>,
 }
 
 impl SessionRuntime {
@@ -103,6 +106,7 @@ impl SessionRuntime {
             tools,
             persisted: None,
             review,
+            created_worktree: None,
         }
     }
 }

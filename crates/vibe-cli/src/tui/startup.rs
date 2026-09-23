@@ -29,6 +29,7 @@ pub use update::{
     scheduled_update_gateway, update_cache_store, update_checks_enabled,
 };
 pub use vibe_core::worktree::PreparedWorktree;
+pub(crate) use worktree::utility_model;
 pub use worktree::{
     CleanupOutcome, LaunchWorkspace, cleanup_is_offered, cleanup_worktree,
     cleanup_worktree_terminal,
@@ -84,6 +85,10 @@ pub enum StartupError {
     Worktree { name: String, message: String },
     #[error("failed to list git worktrees: {0}")]
     WorktreeListFailed(String),
+    /// A refusal of the git layer or of the claim store, printed as the core
+    /// words it.
+    #[error("{0}")]
+    WorktreeRefused(String),
     #[error("terminal startup interaction failed: {0}")]
     Terminal(String),
     #[error("stdin prompt could not be read: {0}")]

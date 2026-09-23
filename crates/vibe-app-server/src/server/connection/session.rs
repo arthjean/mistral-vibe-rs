@@ -77,63 +77,76 @@ impl ServerConnection {
     /// session runs under, and the registration that makes it addressable.
     fn start_session(&mut self, request: ServerRequest) -> Result<DispatchBatch, ProtocolFault> {
         let mut params = from_params::<SessionStartParams>(&request.params)?;
-        let prepared = self.resolve_local_workspace(&mut params)?;
-        match self.start_resolved_session(request, &params) {
+        let mut resolution = self.resolve_worktree(&mut params)?;
+        match self.start_resolved_session(request, &params, &mut resolution) {
             Ok(batch) => Ok(batch),
             Err(error) => {
-                self.discard_local_workspace(prepared.as_ref());
+                self.undo_worktree(&resolution);
                 Err(error)
             }
         }
     }
 
-    /// Resolves a `localWorkspaceSelection` into the directory the session runs
-    /// in, and answers the worktree it created to get there.
+    /// The worktree lifecycle over the managed root this server's vibe home
+    /// holds.
+    pub(crate) fn session_worktrees(&self) -> SessionWorktrees {
+        SessionWorktrees::new(self.server.workspace.managed_worktrees())
+    }
+
+    /// Resolves a start's `worktree` into the directory the session runs in,
+    /// and answers what a failed start has to undo.
     ///
-    /// The selection is cleared once it resolves, so nothing downstream reads a
-    /// directory decision that was already made. Resolution is synchronous,
-    /// which is what the reference goes out of its way to keep it
-    /// (`vibe/app_server/server.py:889-903`): an await point here would let a
-    /// pipelined follow-up overtake the session attachment, and a cancellation
-    /// landing mid-creation would strand the worktree the worker still makes.
-    pub(crate) fn resolve_local_workspace(
+    /// The request is cleared once it resolves, so nothing downstream reads a
+    /// directory decision that was already made. Resolution is synchronous: an
+    /// await point here would let a pipelined follow-up overtake the session
+    /// attachment, and a cancellation landing mid-creation would strand the
+    /// worktree git still makes. An `auto` request asks the naming model first,
+    /// bounded to two seconds, which is the one wait the reference also takes
+    /// before it resolves (`vibe/core/session/worktrees.py:119-151`).
+    pub(crate) fn resolve_worktree(
         &self,
         params: &mut SessionStartParams,
-    ) -> Result<Option<PreparedWorktree>, ProtocolFault> {
-        let Some(selection) = params.local_workspace_selection.clone() else {
-            return Ok(None);
+    ) -> Result<WorktreeResolution, ProtocolFault> {
+        let Some(input) = params.worktree.take() else {
+            return Ok(WorktreeResolution::default());
         };
         // `session/start` also carries the two reopening intents this port
         // spells as flags, and both hand the session the directory their
-        // recorded session was written against. Resolving a selection on the way
-        // to one would mint a worktree the session never opens and nothing takes
-        // back, which is what the reference refuses on its own two reopening
-        // methods (`vibe/app_server/server.py:1238-1247`).
+        // recorded session was written against, which a worktree request would
+        // move out from under it (`vibe/app_server/_worktree_session.py:176-189`).
         if params.resume.is_some() || params.continue_session {
             return Err(ProtocolFault::invalid_params(worktrees::REOPEN_REFUSAL));
         }
-        let resolved = worktrees::resolve(
-            &selection,
+        let provider = self.server.utility_provider.clone();
+        let resolution = worktrees::resolve(
+            Some(&input),
             params.working_directory.as_deref(),
-            self.server.workspace.vibe_home(),
+            &self.session_worktrees(),
+            |prompt| naming_model::suggest_worktree_name_blocking(prompt, provider.as_deref()),
         )
         .map_err(|error| ProtocolFault::invalid_params(error.to_string()))?;
-        params.add_directories = vec![resolved.cwd.clone()];
-        params.working_directory = Some(resolved.cwd);
-        params.local_workspace_selection = None;
-        Ok(resolved.created)
+        if let Some(cwd) = &resolution.cwd {
+            params.add_directories = worktrees::moved_roots(
+                cwd,
+                params.working_directory.as_deref(),
+                &params.add_directories,
+            );
+            params.working_directory = Some(cwd.clone());
+        }
+        Ok(resolution)
     }
 
-    /// Takes back a worktree this start created, once the start has failed.
+    /// Takes back what a failed start did, and only that: the attachment hold,
+    /// and a worktree this start created with the branch it created.
     ///
     /// A removal that fails is published on `diagnostics/list` rather than
     /// replacing the error the client is owed, which is the one that failed the
-    /// start (`vibe/app_server/server.py:923-936`).
-    fn discard_local_workspace(&self, prepared: Option<&PreparedWorktree>) {
-        let Some(prepared) = prepared else {
-            return;
-        };
-        let Some(note) = worktrees::discard(prepared) else {
+    /// start (`vibe/core/session/worktrees.py:153-181`).
+    fn undo_worktree(&self, resolution: &WorktreeResolution) {
+        let Some(note) = self.session_worktrees().cleanup(
+            resolution.prepared.as_ref(),
+            resolution.pending_hold.as_ref(),
+        ) else {
             return;
         };
         if let Ok(mut resources) = self.server.resources.lock() {
@@ -145,8 +158,23 @@ impl ServerConnection {
         &mut self,
         request: ServerRequest,
         params: &SessionStartParams,
+        resolution: &mut WorktreeResolution,
     ) -> Result<DispatchBatch, ProtocolFault> {
         let opening = self.open_session(params)?;
+        let lifecycle = self.session_worktrees();
+        // A reopened session runs where its transcript was written, so a
+        // retained worktree it stood in is put back before anything reads the
+        // directory (`vibe/app_server/_legacy_session_runtime.py:636-646`).
+        if opening.persisted.is_some() {
+            lifecycle
+                .restore(Path::new(&opening.working_directory))
+                .map_err(|error| ProtocolFault::invalid_params(error.to_string()))?;
+        }
+        if resolution.cwd.is_none() {
+            resolution.pending_hold =
+                lifecycle.hold_for_attachment(Path::new(&opening.working_directory));
+        }
+        let held_directory = PathBuf::from(&opening.working_directory);
         let mcp_configs = self.server.workspace.mcp_servers_for_session(
             Path::new(&opening.working_directory),
             params.trusted,
@@ -236,6 +264,7 @@ impl ServerConnection {
         session.agent_summary = Some(crate::workspace::agent_summary(&agent_profile));
         session.context_window = self.server.workspace.context_window();
         session.compaction = self.server.workspace.compaction_settings();
+        session.created_worktree = resolution.created().cloned();
         sessions.insert(session);
         self.server.open_session_resources(
             &mut sessions,
@@ -254,6 +283,15 @@ impl ServerConnection {
             .map(public_session_state)
             .unwrap_or(Value::Null);
         drop(sessions);
+        // The session stands in its directory from here on, so the attachment
+        // hold becomes its own and a sweep reads the worktree as occupied.
+        let pending_hold = resolution.pending_hold.take();
+        if let Err(error) = lifecycle.hold(&held_directory, &session_id, pending_hold.as_ref()) {
+            observability::log(
+                LogLevel::Warning,
+                &format!("Failed to hold the worktree of session {session_id}: {error}"),
+            );
+        }
         let mut batch = success_batch(request.id, result_map([("state", state)]));
         batch.outbound.extend(self.attachment_frames(&session_id));
         if !mcp_configs.is_empty() {
@@ -469,6 +507,27 @@ impl ServerConnection {
         answered(id, self.close_session(request))
     }
 
+    /// Lets go of the worktree a closing session stood in, removing it when
+    /// this session created it and never used it. Best effort: the close has
+    /// already happened, and a worktree kept here is one retention reclaims
+    /// later.
+    fn release_worktree(&self, cwd: &Path, session_id: &str, roll_back: bool) {
+        let lifecycle = self.session_worktrees();
+        if !roll_back {
+            lifecycle.release(cwd, session_id);
+            return;
+        }
+        let Some(held) = ManagedWorktree::at(lifecycle.managed(), cwd) else {
+            return;
+        };
+        if let Err(error) = held.release(Some(session_id)) {
+            observability::log(
+                LogLevel::Warning,
+                &format!("Failed to roll back the worktree of an unstarted session: {error}"),
+            );
+        }
+    }
+
     fn close_session(&mut self, request: ServerRequest) -> Result<DispatchBatch, ProtocolFault> {
         let params = from_params::<SessionParams>(&request.params)?;
         if let Some(batch) = self.attachment_error(request.id.clone(), &params.session_id) {
@@ -506,7 +565,15 @@ impl ServerConnection {
         }
         let session_id = canonical_session_id;
         let resource_generation = session.resource_generation;
+        let working_directory = PathBuf::from(&session.working_directory);
+        // A worktree this session created and never ran a turn in is taken
+        // back, so a start the client abandoned leaves nothing behind; any
+        // other worktree only loses this session as a holder
+        // (`vibe/app_server/_legacy_session_backend.py:923-941`).
+        let unstarted_worktree =
+            session.created_worktree.is_some() && session.latest_turn.is_none();
         drop(sessions);
+        self.release_worktree(&working_directory, &session_id, unstarted_worktree);
         if let Ok(mut resources) = self.server.resources.lock() {
             resources.close_session(&session_id);
         }

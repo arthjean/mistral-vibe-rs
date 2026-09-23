@@ -1,4 +1,4 @@
-//! The local-workspace half of the session contract, driven through the
+//! The worktree half of the app-server contract, driven through the
 //! connection a client speaks to.
 //!
 //! Every case here scripts a real checkout, so the worktrees the listing
@@ -11,7 +11,8 @@ use std::process::Command;
 
 use crate::workspace::WorkspacePaths;
 use crate::worktrees;
-use vibe_core::worktree::{PreparedWorktree, WorktreeError};
+use vibe_core::worktree::lifecycle::SessionWorktrees;
+use vibe_core::worktree::{ManagedRoot, ManagedWorktree, PreparedWorktree, WorktreeError};
 
 /// The home a scripted case reads and writes under, so no test reaches the
 /// operator's own worktrees or their `~/.vibe`.
@@ -135,8 +136,39 @@ fn refusal(
     }
 }
 
+fn managed(root: &Path) -> ManagedRoot {
+    ManagedRoot::for_vibe_home(&root.join("vibe-home"))
+}
+
+/// A managed worktree prepared and then let go, as one whose session ended.
+fn abandoned_worktree(root: &Path, checkout: &Path, name: &str, branch: &str) -> PreparedWorktree {
+    let prepared = vibe_core::worktree::WorktreeRepository::open(checkout, &managed(root))
+        .and_then(|repository| repository.prepare(name, Some(branch)))
+        .expect("the worktree is prepared");
+    let held = ManagedWorktree::at(&managed(root), &prepared.path).expect("managed");
+    held.hold("finished", prepared.pending_hold.as_ref())
+        .expect("held");
+    held.release_holder("finished").expect("released");
+    prepared
+}
+
+fn started_cwd(answer: &Value) -> PathBuf {
+    PathBuf::from(
+        answer["state"]["session"]["cwd"]
+            .as_str()
+            .expect("the session names its directory"),
+    )
+}
+
+fn connected(root: &Path) -> ServerConnection {
+    let server = AppServer::with_workspace_service(service(root));
+    let mut connection = server.connect(TransportKind::InProcess);
+    initialize(&mut connection);
+    connection
+}
+
 // --------------------------------------------------------------------------
-// US-281: workspace/worktrees/list
+// workspace/git/worktrees/list
 // --------------------------------------------------------------------------
 
 #[test]
@@ -144,25 +176,58 @@ fn the_listing_answers_one_entry_per_linked_worktree() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
     let linked = linked_worktree(&checkout, &root, "review", "topic");
-    let server = AppServer::with_workspace_service(service(&root));
-    let mut connection = server.connect(TransportKind::InProcess);
-    initialize(&mut connection);
+    let mut connection = connected(&root);
 
     let answer = answer(
         &mut connection,
         2,
-        "workspace/worktrees/list",
+        "workspace/git/worktrees/list",
         json!({"cwd": text(&checkout)}),
     );
     assert_eq!(
-        answer["worktrees"],
-        json!([{
-            "name": "review",
-            "branch": "topic",
-            "cwd": text(&linked),
-            "root": text(&linked),
-            "repoRoot": text(&checkout),
-        }]),
+        answer,
+        json!({
+            "worktrees": [{
+                "name": "review",
+                "branch": "topic",
+                "cwd": text(&linked),
+                "root": text(&linked),
+                "repoRoot": text(&checkout),
+                "branchChanges": null,
+            }],
+            "repositoryBranch": null,
+            "repositoryCwd": text(&checkout),
+            "repositoryMappedCwd": text(&checkout),
+            "repositoryRoot": text(&checkout),
+        }),
+    );
+}
+
+/// The details cost a merge base per branch, so they are paid only when a
+/// caller asks: the lines each branch changed and the main checkout's branch.
+#[test]
+fn the_listing_reports_details_only_when_asked() {
+    let (_scratch, root) = case_root();
+    let checkout = checkout(&root);
+    let linked = linked_worktree(&checkout, &root, "review", "topic");
+    fs::write(linked.join("notes.txt"), "one\ntwo\n").expect("the worktree is writable");
+    git(&linked, &["add", "notes.txt"]);
+    git(
+        &linked,
+        &["commit", "--quiet", "--no-gpg-sign", "-m", "notes"],
+    );
+    let mut connection = connected(&root);
+
+    let answer = answer(
+        &mut connection,
+        2,
+        "workspace/git/worktrees/list",
+        json!({"cwd": text(&checkout), "includeDetails": true}),
+    );
+    assert_eq!(answer["repositoryBranch"], json!("main"));
+    assert_eq!(
+        answer["worktrees"][0]["branchChanges"],
+        json!({"additions": 2, "deletions": 0}),
     );
 }
 
@@ -173,14 +238,12 @@ fn the_listing_answers_one_entry_per_linked_worktree() {
 fn the_listing_answers_before_any_session_exists() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
-    let server = AppServer::with_workspace_service(service(&root));
-    let mut connection = server.connect(TransportKind::InProcess);
-    initialize(&mut connection);
+    let mut connection = connected(&root);
 
     let answer = answer(
         &mut connection,
         2,
-        "workspace/worktrees/list",
+        "workspace/git/worktrees/list",
         json!({"cwd": text(&checkout)}),
     );
     assert_eq!(answer["worktrees"], json!([]));
@@ -189,17 +252,24 @@ fn the_listing_answers_before_any_session_exists() {
 #[test]
 fn a_path_outside_a_repository_lists_nothing_rather_than_refusing() {
     let (_scratch, root) = case_root();
-    let server = AppServer::with_workspace_service(service(&root));
-    let mut connection = server.connect(TransportKind::InProcess);
-    initialize(&mut connection);
+    let mut connection = connected(&root);
 
     let answer = answer(
         &mut connection,
         2,
-        "workspace/worktrees/list",
+        "workspace/git/worktrees/list",
         json!({"cwd": text(&root)}),
     );
-    assert_eq!(answer["worktrees"], json!([]));
+    assert_eq!(
+        answer,
+        json!({
+            "worktrees": [],
+            "repositoryBranch": null,
+            "repositoryCwd": null,
+            "repositoryMappedCwd": null,
+            "repositoryRoot": null,
+        }),
+    );
 }
 
 /// A host without git is the second reason the listing answers empty, and it
@@ -207,42 +277,48 @@ fn a_path_outside_a_repository_lists_nothing_rather_than_refusing() {
 /// the spawn failure is asserted on the arm that swallows it instead.
 #[test]
 fn a_host_without_git_lists_nothing_rather_than_refusing() {
-    let unavailable = Err(WorktreeError::GitUnavailable(
+    let unavailable: Result<Option<()>, _> = Err(WorktreeError::GitUnavailable(
         "git is not on PATH".to_owned(),
     ));
     assert_eq!(
         worktrees::swallow_missing_checkout(unavailable).expect("git being absent is not an error"),
-        Vec::new(),
+        None,
     );
-    let refused = Err(WorktreeError::ListFailed {
+    let refused: Result<Option<()>, _> = Err(WorktreeError::ListFailed {
         message: "git refused".to_owned(),
     });
     assert!(worktrees::swallow_missing_checkout(refused).is_err());
 }
 
 #[test]
-fn the_listing_is_advertised_in_the_handshake() {
+fn the_worktree_methods_are_advertised_and_the_retired_listing_is_not() {
     let server = AppServer::default();
     let mut connection = server.connect(TransportKind::InProcess);
     let response = initialize_with(&mut connection, json!({}));
     let methods = response["capabilities"]["methods"]
         .as_array()
         .expect("the handshake advertises its methods");
-    assert!(methods.contains(&json!("workspace/worktrees/list")));
+    for method in [
+        "workspace/git/worktrees/limit/update",
+        "workspace/git/worktrees/list",
+        "workspace/git/worktrees/prune",
+        "workspace/git/worktrees/remove",
+    ] {
+        assert!(methods.contains(&json!(method)), "{method}");
+    }
+    assert!(!methods.contains(&json!("workspace/worktrees/list")));
 }
 
 // --------------------------------------------------------------------------
-// US-282: localWorkspaceSelection on session/start
+// worktree on session/start
 // --------------------------------------------------------------------------
 
 #[test]
-fn an_existing_selection_opens_the_session_in_the_linked_worktree() {
+fn an_existing_request_opens_the_session_in_the_linked_worktree() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
     let linked = linked_worktree(&checkout, &root, "review", "topic");
-    let server = AppServer::with_workspace_service(service(&root));
-    let mut connection = server.connect(TransportKind::InProcess);
-    initialize(&mut connection);
+    let mut connection = connected(&root);
 
     let answer = answer(
         &mut connection,
@@ -251,7 +327,7 @@ fn an_existing_selection_opens_the_session_in_the_linked_worktree() {
         json!({
             "sessionId": "session-1",
             "cwd": text(&checkout),
-            "localWorkspaceSelection": {"kind": "existing", "cwd": text(&linked)},
+            "worktree": {"kind": "existing", "cwd": text(&linked)},
         }),
     );
     assert_eq!(answer["state"]["session"]["cwd"], json!(text(&linked)));
@@ -261,15 +337,41 @@ fn an_existing_selection_opens_the_session_in_the_linked_worktree() {
     );
 }
 
+/// Moving into a worktree replaces the checkout root, not the other
+/// directories the client authorized.
 #[test]
-fn an_existing_selection_outside_the_checkout_is_refused_by_its_path() {
+fn a_moved_session_keeps_the_extra_roots_it_was_given() {
+    let (_scratch, root) = case_root();
+    let checkout = checkout(&root);
+    let linked = linked_worktree(&checkout, &root, "review", "topic");
+    let extra = root.join("attachments");
+    fs::create_dir_all(&extra).expect("the extra root is writable");
+    let mut connection = connected(&root);
+
+    let answer = answer(
+        &mut connection,
+        2,
+        "session/start",
+        json!({
+            "sessionId": "session-1",
+            "cwd": text(&checkout),
+            "workspaceRoots": [text(&checkout), text(&extra)],
+            "worktree": {"kind": "existing", "cwd": text(&linked)},
+        }),
+    );
+    assert_eq!(
+        answer["state"]["session"]["workspaceRoots"],
+        json!([text(&linked), text(&extra)]),
+    );
+}
+
+#[test]
+fn an_existing_request_outside_the_checkout_is_refused_by_its_path() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
     let stranger = root.join("stranger");
     fs::create_dir_all(&stranger).expect("the stranger is writable");
-    let server = AppServer::with_workspace_service(service(&root));
-    let mut connection = server.connect(TransportKind::InProcess);
-    initialize(&mut connection);
+    let mut connection = connected(&root);
 
     let error = refusal(
         &mut connection,
@@ -278,7 +380,7 @@ fn an_existing_selection_outside_the_checkout_is_refused_by_its_path() {
         json!({
             "sessionId": "session-1",
             "cwd": text(&checkout),
-            "localWorkspaceSelection": {"kind": "existing", "cwd": text(&stranger)},
+            "worktree": {"kind": "existing", "cwd": text(&stranger)},
         }),
     );
     assert_eq!(error.code, ProtocolErrorCode::InvalidParams);
@@ -290,13 +392,31 @@ fn an_existing_selection_outside_the_checkout_is_refused_by_its_path() {
 }
 
 #[test]
-fn a_create_selection_mints_the_named_worktree_on_the_named_branch() {
+fn an_empty_request_field_is_refused() {
+    let (_scratch, root) = case_root();
+    let checkout = checkout(&root);
+    let mut connection = connected(&root);
+
+    let error = refusal(
+        &mut connection,
+        2,
+        "session/start",
+        json!({
+            "sessionId": "session-1",
+            "cwd": text(&checkout),
+            "worktree": {"kind": "create", "name": "", "branch": "topic"},
+        }),
+    );
+    assert_eq!(error.code, ProtocolErrorCode::InvalidParams);
+    assert_eq!(worktree_count(&checkout), 1);
+}
+
+#[test]
+fn a_create_request_mints_the_named_worktree_on_the_named_branch() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
     let home = root.join("vibe-home");
-    let server = AppServer::with_workspace_service(service(&root));
-    let mut connection = server.connect(TransportKind::InProcess);
-    initialize(&mut connection);
+    let mut connection = connected(&root);
 
     let answer = answer(
         &mut connection,
@@ -305,14 +425,10 @@ fn a_create_selection_mints_the_named_worktree_on_the_named_branch() {
         json!({
             "sessionId": "session-1",
             "cwd": text(&checkout),
-            "localWorkspaceSelection": {"kind": "create", "name": "review", "branch": "topic"},
+            "worktree": {"kind": "create", "name": "review", "branch": "topic"},
         }),
     );
-    let minted = PathBuf::from(
-        answer["state"]["session"]["cwd"]
-            .as_str()
-            .expect("the session names its directory"),
-    );
+    let minted = started_cwd(&answer);
     assert_eq!(
         minted.file_name().and_then(|name| name.to_str()),
         Some("review")
@@ -328,13 +444,66 @@ fn a_create_selection_mints_the_named_worktree_on_the_named_branch() {
     );
 }
 
+/// An `auto` request with no model to ask names the worktree after its prompt,
+/// on a `vibe/` branch.
 #[test]
-fn a_create_selection_git_refuses_creates_nothing() {
+fn an_auto_request_names_the_worktree_after_its_prompt() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
-    let server = AppServer::with_workspace_service(service(&root));
-    let mut connection = server.connect(TransportKind::InProcess);
-    initialize(&mut connection);
+    let mut connection = connected(&root);
+
+    let answer = answer(
+        &mut connection,
+        2,
+        "session/start",
+        json!({
+            "sessionId": "session-1",
+            "cwd": text(&checkout),
+            "worktree": {"kind": "auto", "prompt": "Fix the login redirect"},
+        }),
+    );
+    let minted = started_cwd(&answer);
+    let name = minted
+        .file_name()
+        .and_then(|name| name.to_str())
+        .expect("the worktree has a name")
+        .to_owned();
+    assert!(name.starts_with("fix-the-login-redirect"), "{name}");
+    assert_eq!(
+        git(&minted, &["rev-parse", "--abbrev-ref", "HEAD"]),
+        format!("vibe/{name}")
+    );
+}
+
+#[test]
+fn a_session_started_in_a_managed_worktree_holds_it() {
+    let (_scratch, root) = case_root();
+    let checkout = checkout(&root);
+    let mut connection = connected(&root);
+
+    let answer = answer(
+        &mut connection,
+        2,
+        "session/start",
+        json!({
+            "sessionId": "session-1",
+            "cwd": text(&checkout),
+            "worktree": {"kind": "create", "name": "review", "branch": "topic"},
+        }),
+    );
+    let minted = started_cwd(&answer);
+    let held = ManagedWorktree::at(&managed(&root), &minted).expect("the worktree is managed");
+    assert_eq!(
+        held.holders().into_iter().collect::<Vec<_>>(),
+        vec!["session-1".to_owned()]
+    );
+}
+
+#[test]
+fn a_create_request_git_refuses_creates_nothing() {
+    let (_scratch, root) = case_root();
+    let checkout = checkout(&root);
+    let mut connection = connected(&root);
 
     let error = refusal(
         &mut connection,
@@ -343,7 +512,7 @@ fn a_create_selection_git_refuses_creates_nothing() {
         json!({
             "sessionId": "session-1",
             "cwd": text(&checkout),
-            "localWorkspaceSelection": {"kind": "create", "name": "review", "branch": "..bad"},
+            "worktree": {"kind": "create", "name": "review", "branch": "..bad"},
         }),
     );
     assert_eq!(error.code, ProtocolErrorCode::InvalidParams);
@@ -357,7 +526,7 @@ fn a_create_selection_git_refuses_creates_nothing() {
         json!({
             "sessionId": "session-1",
             "cwd": text(&checkout),
-            "localWorkspaceSelection": {"kind": "create", "name": "nested/name", "branch": "topic"},
+            "worktree": {"kind": "create", "name": "nested/name", "branch": "topic"},
         }),
     );
     assert_eq!(unportable.code, ProtocolErrorCode::InvalidParams);
@@ -368,9 +537,7 @@ fn a_create_selection_git_refuses_creates_nothing() {
 fn a_base_that_is_not_a_directory_is_refused_by_its_path() {
     let (_scratch, root) = case_root();
     let absent = root.join("absent");
-    let server = AppServer::with_workspace_service(service(&root));
-    let mut connection = server.connect(TransportKind::InProcess);
-    initialize(&mut connection);
+    let mut connection = connected(&root);
 
     let error = refusal(
         &mut connection,
@@ -379,7 +546,7 @@ fn a_base_that_is_not_a_directory_is_refused_by_its_path() {
         json!({
             "sessionId": "session-1",
             "cwd": text(&absent),
-            "localWorkspaceSelection": {"kind": "create", "name": "review", "branch": "topic"},
+            "worktree": {"kind": "create", "name": "review", "branch": "topic"},
         }),
     );
     assert_eq!(error.code, ProtocolErrorCode::InvalidParams);
@@ -390,15 +557,13 @@ fn a_base_that_is_not_a_directory_is_refused_by_its_path() {
     );
 }
 
-/// A session start with no selection resolves nothing, which is what keeps
+/// A session start with no request resolves nothing, which is what keeps
 /// every other case in this suite reading the directory it asked for.
 #[test]
-fn a_start_without_a_selection_keeps_the_directory_it_was_given() {
+fn a_start_without_a_request_keeps_the_directory_it_was_given() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
-    let server = AppServer::with_workspace_service(service(&root));
-    let mut connection = server.connect(TransportKind::InProcess);
-    initialize(&mut connection);
+    let mut connection = connected(&root);
 
     let answer = answer(
         &mut connection,
@@ -410,7 +575,7 @@ fn a_start_without_a_selection_keeps_the_directory_it_was_given() {
 }
 
 #[test]
-fn a_resolved_selection_is_cleared_from_the_options() {
+fn a_resolved_request_is_cleared_from_the_options() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
     let linked = linked_worktree(&checkout, &root, "review", "topic");
@@ -420,15 +585,18 @@ fn a_resolved_selection_is_cleared_from_the_options() {
     let mut params: SessionStartParams = serde_json::from_value(json!({
         "sessionId": "session-1",
         "cwd": text(&checkout),
-        "localWorkspaceSelection": {"kind": "existing", "cwd": text(&linked)},
+        "worktree": {"kind": "existing", "cwd": text(&linked)},
     }))
     .expect("the parameters deserialize");
-    let Ok(prepared) = connection.resolve_local_workspace(&mut params) else {
-        unreachable!("the selection resolves")
+    let Ok(resolution) = connection.resolve_worktree(&mut params) else {
+        unreachable!("the request resolves")
     };
 
-    assert!(prepared.is_none(), "an existing worktree was not created");
-    assert!(params.local_workspace_selection.is_none());
+    assert!(
+        resolution.created().is_none(),
+        "an existing worktree was not created"
+    );
+    assert!(params.worktree.is_none());
     assert_eq!(params.working_directory.as_deref(), Some(text(&linked)));
     assert_eq!(params.add_directories, vec![text(&linked).to_owned()]);
 }
@@ -438,29 +606,27 @@ fn a_resolved_selection_is_cleared_from_the_options() {
 /// same base, which is what the resolution asserts rather than naming a
 /// directory the test process does not control.
 #[test]
-fn an_absent_cwd_resolves_the_selection_against_the_process_directory() {
+fn an_absent_cwd_resolves_the_request_against_the_process_directory() {
     let (_scratch, root) = case_root();
-    let home = root.join("vibe-home");
-    let selection = serde_json::from_value(json!({
+    let lifecycle = SessionWorktrees::new(managed(&root));
+    let input = serde_json::from_value(json!({
         "kind": "existing",
         "cwd": "worktree-no-checkout-links",
     }))
-    .expect("the selection deserializes");
+    .expect("the request deserializes");
 
-    let absent =
-        worktrees::resolve(&selection, None, &home).expect_err("no checkout links that directory");
-    let dot = worktrees::resolve(&selection, Some("."), &home)
+    let absent = worktrees::resolve(Some(&input), None, &lifecycle, |_| None)
+        .expect_err("no checkout links that directory");
+    let dot = worktrees::resolve(Some(&input), Some("."), &lifecycle, |_| None)
         .expect_err("no checkout links that directory");
     assert_eq!(absent.to_string(), dot.to_string());
 }
 
 #[test]
-fn a_selection_is_refused_on_resume_and_on_continue() {
+fn a_request_is_refused_on_resume_and_on_continue() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
-    let server = AppServer::with_workspace_service(service(&root));
-    let mut connection = server.connect(TransportKind::InProcess);
-    initialize(&mut connection);
+    let mut connection = connected(&root);
 
     for (id, method) in [(2, "session/resume"), (3, "session/continue")] {
         let error = refusal(
@@ -470,33 +636,31 @@ fn a_selection_is_refused_on_resume_and_on_continue() {
             json!({
                 "sessionId": "saved",
                 "cwd": text(&checkout),
-                "localWorkspaceSelection": {"kind": "create", "name": "review", "branch": "topic"},
+                "worktree": {"kind": "create", "name": "review", "branch": "topic"},
             }),
         );
         assert_eq!(error.code, ProtocolErrorCode::InvalidParams, "{method}");
         assert!(
-            error.message.contains("localWorkspaceSelection"),
-            "{method} names the field it refused: {}",
+            error.message.contains("worktree"),
+            "{method} names what it refused: {}",
             error.message
         );
     }
 }
 
 // --------------------------------------------------------------------------
-// US-283: what a failed start takes back
+// What a failed start and a close take back
 // --------------------------------------------------------------------------
 
 /// A start that fails after the worktree exists leaves neither the worktree nor
 /// the branch it minted. `historyLimit` is the refusal used because it is
-/// resolved after the selection and before anything else, so the failure lands
+/// resolved after the request and before anything else, so the failure lands
 /// exactly in the span the cleanup covers.
 #[test]
 fn a_failed_start_takes_back_the_worktree_and_the_branch_it_created() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
-    let server = AppServer::with_workspace_service(service(&root));
-    let mut connection = server.connect(TransportKind::InProcess);
-    initialize(&mut connection);
+    let mut connection = connected(&root);
 
     let error = refusal(
         &mut connection,
@@ -506,7 +670,7 @@ fn a_failed_start_takes_back_the_worktree_and_the_branch_it_created() {
             "sessionId": "session-1",
             "cwd": text(&checkout),
             "historyLimit": 0,
-            "localWorkspaceSelection": {"kind": "create", "name": "review", "branch": "topic"},
+            "worktree": {"kind": "create", "name": "review", "branch": "topic"},
         }),
     );
     assert_eq!(error.code, ProtocolErrorCode::InvalidParams);
@@ -520,9 +684,7 @@ fn a_failed_start_leaves_a_branch_it_did_not_create() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
     git(&checkout, &["branch", "topic"]);
-    let server = AppServer::with_workspace_service(service(&root));
-    let mut connection = server.connect(TransportKind::InProcess);
-    initialize(&mut connection);
+    let mut connection = connected(&root);
 
     refusal(
         &mut connection,
@@ -532,7 +694,7 @@ fn a_failed_start_leaves_a_branch_it_did_not_create() {
             "sessionId": "session-1",
             "cwd": text(&checkout),
             "historyLimit": 0,
-            "localWorkspaceSelection": {"kind": "create", "name": "review", "branch": "topic"},
+            "worktree": {"kind": "create", "name": "review", "branch": "topic"},
         }),
     );
     assert_eq!(worktree_count(&checkout), 1);
@@ -544,9 +706,7 @@ fn a_failed_start_leaves_a_worktree_it_only_selected() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
     let linked = linked_worktree(&checkout, &root, "review", "topic");
-    let server = AppServer::with_workspace_service(service(&root));
-    let mut connection = server.connect(TransportKind::InProcess);
-    initialize(&mut connection);
+    let mut connection = connected(&root);
 
     refusal(
         &mut connection,
@@ -556,7 +716,7 @@ fn a_failed_start_leaves_a_worktree_it_only_selected() {
             "sessionId": "session-1",
             "cwd": text(&checkout),
             "historyLimit": 0,
-            "localWorkspaceSelection": {"kind": "existing", "cwd": text(&linked)},
+            "worktree": {"kind": "existing", "cwd": text(&linked)},
         }),
     );
     assert!(
@@ -571,6 +731,7 @@ fn a_failed_start_leaves_a_worktree_it_only_selected() {
 #[test]
 fn a_removal_that_fails_is_reported_rather_than_raised() {
     let (_scratch, root) = case_root();
+    let lifecycle = SessionWorktrees::new(managed(&root));
     let orphan = PreparedWorktree {
         name: "review".to_owned(),
         branch: "topic".to_owned(),
@@ -580,8 +741,11 @@ fn a_removal_that_fails_is_reported_rather_than_raised() {
         base_commit: "0".repeat(40),
         created: true,
         branch_created: true,
+        pending_hold: None,
     };
-    let note = worktrees::discard(&orphan).expect("the removal failed");
+    let note = lifecycle
+        .cleanup(Some(&orphan), None)
+        .expect("the removal failed");
     assert!(
         note.contains("review"),
         "the note names the worktree: {note}"
@@ -592,21 +756,18 @@ fn a_removal_that_fails_is_reported_rather_than_raised() {
         ..orphan
     };
     assert!(
-        worktrees::discard(&selected).is_none(),
+        lifecycle.cleanup(Some(&selected), None).is_none(),
         "a worktree this start did not create is never removed"
     );
 }
 
-/// Closing a session removes nothing: worktree cleanup on exit is the terminal
-/// client's contract, and an app-server that took one back here would discard
-/// work its client never asked it to.
+/// A session that created its worktree and closes before any turn ran takes
+/// the worktree and its branch back, so an abandoned start leaves nothing.
 #[test]
-fn closing_a_session_leaves_the_worktree_it_ran_in() {
+fn closing_an_unstarted_session_takes_back_the_worktree_it_created() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
-    let server = AppServer::with_workspace_service(service(&root));
-    let mut connection = server.connect(TransportKind::InProcess);
-    initialize(&mut connection);
+    let mut connection = connected(&root);
 
     let started = answer(
         &mut connection,
@@ -615,14 +776,10 @@ fn closing_a_session_leaves_the_worktree_it_ran_in() {
         json!({
             "sessionId": "session-1",
             "cwd": text(&checkout),
-            "localWorkspaceSelection": {"kind": "create", "name": "review", "branch": "topic"},
+            "worktree": {"kind": "create", "name": "review", "branch": "topic"},
         }),
     );
-    let minted = PathBuf::from(
-        started["state"]["session"]["cwd"]
-            .as_str()
-            .expect("the session names its directory"),
-    );
+    let minted = started_cwd(&started);
     assert!(minted.is_dir());
 
     answer(
@@ -631,17 +788,44 @@ fn closing_a_session_leaves_the_worktree_it_ran_in() {
         "session/close",
         json!({"sessionId": "session-1"}),
     );
-    assert!(minted.is_dir(), "the worktree outlives the session");
-    assert!(branch_is_present(&checkout, "topic"));
+    assert!(!minted.exists(), "the unused worktree is taken back");
+    assert!(!branch_is_present(&checkout, "topic"));
+}
+
+/// Closing a session in a worktree it did not create only drops its holder.
+#[test]
+fn closing_a_session_releases_a_worktree_it_did_not_create() {
+    let (_scratch, root) = case_root();
+    let checkout = checkout(&root);
+    let prepared = abandoned_worktree(&root, &checkout, "review", "topic");
+    let mut connection = connected(&root);
+
+    answer(
+        &mut connection,
+        2,
+        "session/start",
+        json!({"sessionId": "session-1", "cwd": text(&prepared.path)}),
+    );
+    let held = ManagedWorktree::at(&managed(&root), &prepared.path).expect("managed");
+    assert!(held.holders().contains("session-1"));
+
+    answer(
+        &mut connection,
+        3,
+        "session/close",
+        json!({"sessionId": "session-1"}),
+    );
+    assert!(prepared.path.is_dir(), "the worktree outlives the session");
+    assert!(held.holders().is_empty());
 }
 
 /// `session/start` also carries the two reopening intents, and each one hands
 /// the session the directory its recorded session was written against. A
-/// selection resolved on the way to one would mint a worktree the session never
+/// request resolved on the way to one would mint a worktree the session never
 /// opens and no failure path takes back, so the refusal covers the flags as
 /// well as the two methods above.
 #[test]
-fn a_selection_is_refused_on_a_start_that_reopens_a_recorded_session() {
+fn a_request_is_refused_on_a_start_that_reopens_a_recorded_session() {
     let (_scratch, root) = case_root();
     let checkout = checkout(&root);
     let elsewhere = root.join("elsewhere");
@@ -649,9 +833,7 @@ fn a_selection_is_refused_on_a_start_that_reopens_a_recorded_session() {
     vibe_core::storage::SessionStore::new(root.join("vibe-home/sessions"))
         .create("saved", &elsewhere.to_string_lossy(), None, 10)
         .expect("the recorded session is written");
-    let server = AppServer::with_workspace_service(service(&root));
-    let mut connection = server.connect(TransportKind::InProcess);
-    initialize(&mut connection);
+    let mut connection = connected(&root);
 
     for (id, reopening) in [
         (2, json!({"resume": "saved"})),
@@ -660,7 +842,7 @@ fn a_selection_is_refused_on_a_start_that_reopens_a_recorded_session() {
         let mut params = json!({
             "sessionId": "saved",
             "cwd": text(&checkout),
-            "localWorkspaceSelection": {"kind": "create", "name": "review", "branch": "topic"},
+            "worktree": {"kind": "create", "name": "review", "branch": "topic"},
         });
         for (key, value) in reopening.as_object().expect("the reopening flag") {
             params[key] = value.clone();
@@ -668,11 +850,100 @@ fn a_selection_is_refused_on_a_start_that_reopens_a_recorded_session() {
         let error = refusal(&mut connection, id, "session/start", params);
         assert_eq!(error.code, ProtocolErrorCode::InvalidParams, "{reopening}");
         assert!(
-            error.message.contains("localWorkspaceSelection"),
-            "{reopening} names the field it refused: {}",
+            error.message.contains("worktree"),
+            "{reopening} names what it refused: {}",
             error.message
         );
         assert_eq!(worktree_count(&checkout), 1, "{reopening} minted nothing");
         assert!(!branch_is_present(&checkout, "topic"), "{reopening}");
     }
+}
+
+// --------------------------------------------------------------------------
+// workspace/git/worktrees/{limit/update,prune,remove}
+// --------------------------------------------------------------------------
+
+#[test]
+fn the_limit_update_writes_the_configuration_and_answers_the_new_limit() {
+    let (_scratch, root) = case_root();
+    let mut connection = connected(&root);
+
+    let answer = answer(
+        &mut connection,
+        2,
+        "workspace/git/worktrees/limit/update",
+        json!({"limit": 7}),
+    );
+    assert_eq!(answer, json!({"limit": 7, "failures": []}));
+    let written = fs::read_to_string(root.join("vibe-home/config.toml"))
+        .expect("the configuration was written");
+    assert!(written.contains("worktree_limit = 7"), "{written}");
+
+    let error = refusal(
+        &mut connection,
+        3,
+        "workspace/git/worktrees/limit/update",
+        json!({"limit": 101}),
+    );
+    assert_eq!(error.code, ProtocolErrorCode::InvalidParams);
+}
+
+#[test]
+fn the_prune_removes_inactive_worktrees_beyond_the_limit() {
+    let (_scratch, root) = case_root();
+    let checkout = checkout(&root);
+    let old = abandoned_worktree(&root, &checkout, "old", "old");
+    let mut connection = connected(&root);
+    answer(
+        &mut connection,
+        2,
+        "workspace/git/worktrees/limit/update",
+        json!({"limit": 0}),
+    );
+
+    let answer = answer(
+        &mut connection,
+        3,
+        "workspace/git/worktrees/prune",
+        json!({}),
+    );
+    assert_eq!(answer, json!({"removed": 1}));
+    assert!(!old.path.exists());
+}
+
+#[test]
+fn the_remove_answers_every_outcome_as_a_result() {
+    let (_scratch, root) = case_root();
+    let checkout = checkout(&root);
+    let mut connection = connected(&root);
+
+    let unmanaged = answer(
+        &mut connection,
+        2,
+        "workspace/git/worktrees/remove",
+        json!({"cwd": text(&checkout)}),
+    );
+    assert_eq!(
+        unmanaged,
+        json!({
+            "outcome": "kept_unmanaged",
+            "root": null,
+            "branch": null,
+            "branchDeleted": false,
+            "reasons": [],
+        }),
+    );
+
+    let prepared = abandoned_worktree(&root, &checkout, "review", "topic");
+    let removed = answer(
+        &mut connection,
+        3,
+        "workspace/git/worktrees/remove",
+        json!({"cwd": text(&prepared.path)}),
+    );
+    assert_eq!(removed["outcome"], json!("removed"));
+    assert_eq!(removed["root"], json!(text(&prepared.root)));
+    assert_eq!(removed["branch"], json!("topic"));
+    assert_eq!(removed["branchDeleted"], json!(true));
+    assert!(!prepared.path.exists());
 }

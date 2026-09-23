@@ -27,16 +27,6 @@ pub(crate) struct SessionOpening {
     pub(crate) intent: SessionIntent,
 }
 
-/// What `workspace/worktrees/list` is asked about.
-///
-/// `cwd` is required and non-empty, as the reference declares it
-/// (`vibe/app_server/protocol.py:894-897`).
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub(crate) struct WorktreeListParams {
-    pub(crate) cwd: String,
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub(crate) struct SessionStartParams {
@@ -49,7 +39,7 @@ pub(crate) struct SessionStartParams {
     /// The worktree this session runs in, resolved into the two fields above
     /// before anything is registered.
     #[serde(default)]
-    pub(crate) local_workspace_selection: Option<LocalWorkspaceSelection>,
+    pub(crate) worktree: Option<WorktreeInput>,
     #[serde(default, rename = "trustWorkspace", alias = "trusted")]
     pub(crate) trusted: bool,
     #[serde(default)]

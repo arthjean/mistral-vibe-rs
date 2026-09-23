@@ -19,6 +19,7 @@ use std::sync::{Arc, Mutex};
 mod agents;
 mod config;
 mod sessions;
+mod worktrees;
 
 use crate::builtin_agents;
 use crate::host::now_millis;
@@ -96,6 +97,10 @@ pub const WORKSPACE_METHODS: &[&str] = &[
     "session/rewind/read",
     "session/title/update",
     "skills/list",
+    "workspace/git/worktrees/limit/update",
+    "workspace/git/worktrees/list",
+    "workspace/git/worktrees/prune",
+    "workspace/git/worktrees/remove",
     "workspace/prompt/prepare",
 ];
 
@@ -716,6 +721,10 @@ impl WorkspaceService {
             "session/agent/update" => self.agent_update(params),
             "skills/list" => self.skills_list(),
             "workspace/prompt/prepare" => self.prompt_prepare(params),
+            "workspace/git/worktrees/list" => self.worktrees_list(params),
+            "workspace/git/worktrees/limit/update" => self.worktrees_limit_update(params),
+            "workspace/git/worktrees/prune" => self.worktrees_prune(params),
+            "workspace/git/worktrees/remove" => self.worktrees_remove(params),
             _ => Err(WorkspaceServiceError::MethodNotFound(method.to_owned())),
         }
     }

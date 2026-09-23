@@ -14,7 +14,7 @@ which split the former `vibe/core/worktree.py` into that package and
 repository the way `_enter_worktree` does (`vibe/cli/entrypoint.py:221-246`),
 through `WorktreeRepository.open`, and catches `GitError` as that caller does.
 
-Six entry points are driven, each over its own family of cases:
+These entry points are driven, each over its own family of cases:
 
 ``name``
     ``_is_portable_worktree_name`` and ``GitRepo.validate_branch`` over a list
@@ -36,6 +36,23 @@ Six entry points are driven, each over its own family of cases:
 ``targetCwd``
     ``_target_cwd`` over a synthetic directory tree exercising each of its
     guards.
+``slug``, ``suffix`` and ``autoName``
+    ``worktree_name_from_text``, ``worktree_name_with_suffix`` and
+    ``_auto_worktree_name`` over texts this capture authors; a random name is
+    recorded only as random and portable.
+``prepareAuto``
+    ``WorktreeRepository.prepare_auto`` after a taken branch, a taken
+    directory, an earlier automatic worktree and a retained one, recording the
+    claim it wrote.
+``release``, ``prune`` and ``restore``
+    ``ManagedWorktree.release``, ``ManagedWorktree.prune`` and
+    ``ManagedWorktree.restore`` over worktrees held, settled, dirtied,
+    forgotten, deleted and retained, recording the outcome and what is left on
+    disk, in git and in the claim store. Claim times are stamped so the sweep
+    sorts by a time the capture chose.
+``position``
+    ``repository_counterpart``, ``repository_mapped_cwd`` and the branch of the
+    checkout a repository is opened at.
 
 Every scripted repository is built under a temporary directory this capture
 owns, with ``GIT_CONFIG_GLOBAL``, ``GIT_CONFIG_SYSTEM``, the author identity,
@@ -938,6 +955,527 @@ def capture_target_cwd(worktree_module: Any, temporary: Path) -> list[dict[str, 
     return records
 
 
+#: Texts the slug rule is driven over: stop words at the end, the word and
+#: length limits, compatibility characters NFKD folds, and texts that reduce to
+#: nothing or to a reserved device name.
+SLUG_TEXTS: tuple[tuple[str, str], ...] = (
+    ("sentence", "Fix the login redirect bug"),
+    ("trailing-stop-words", "Update the docs for the"),
+    ("only-stop-words", "the and of"),
+    ("accented", "Crème brûlée recipe"),
+    ("ligature", "ﬁle ﬂow"),
+    ("full-width", "ＡＢＣ ｄｅｆ"),
+    ("emoji", "Grow 🌱 garden"),
+    ("seven-words", "one two three four five six seven"),
+    ("long-words", "internationalization localization accessibility"),
+    ("boundary-hyphen", "abcdefghij abcdefghij abcdefghij abcdefghi xyz"),
+    ("single-long-word", "a" * 45),
+    ("punctuation-only", "!!! ???"),
+    ("empty", ""),
+    ("device-name", "NUL"),
+    ("digits", "Issue 1234 follow up"),
+    ("mixed-separators", "snake_case/kebab-case.dotted"),
+)
+
+#: Names and suffixes the suffix rule is driven over.
+SUFFIX_CASES: tuple[tuple[str, str, int], ...] = (
+    ("short", "review", 2),
+    ("two-digit", "review", 12),
+    ("at-limit", "abcdefghij-abcdefghij-abcdefghij-abcdefgh", 3),
+    ("stop-word-exposed", "fix-the-login-redirect-for-the-admin-panel", 2),
+    ("single-long-word", "a" * 40, 5),
+)
+
+#: Prompt and suggestion pairs the auto-naming walk is driven over.
+AUTO_NAME_CASES: tuple[tuple[str, str | None, str | None], ...] = (
+    ("prompt-only", "Fix the login redirect", None),
+    ("suggestion-wins", "Fix the login redirect", "Login redirect fix"),
+    ("unusable-suggestion", "Fix the login redirect", "!!!"),
+    ("device-suggestion", "Fix the login redirect", "nul"),
+    ("suggestion-only", None, "Tidy imports"),
+    ("unusable-both", "???", "the"),
+    ("neither", None, None),
+)
+
+
+def capture_slugs(worktree_module: Any) -> list[dict[str, Any]]:
+    from vibe.core.git.worktree import naming
+
+    records: list[dict[str, Any]] = []
+    for case, text in SLUG_TEXTS:
+        name = naming.worktree_name_from_text(text)
+        records.append(
+            {
+                "family": "slug",
+                "case": case,
+                "input": {"text": text},
+                "observed": {
+                    "name": name,
+                    "portable": worktree_module._is_portable_worktree_name(name),
+                },
+            }
+        )
+    for case, name, suffix in SUFFIX_CASES:
+        records.append(
+            {
+                "family": "suffix",
+                "case": case,
+                "input": {"name": name, "suffix": suffix},
+                "observed": {"name": naming.worktree_name_with_suffix(name, suffix)},
+            }
+        )
+    return records
+
+
+def capture_auto_names(worktree_module: Any) -> list[dict[str, Any]]:
+    """Where an automatic name comes from, and the name when it is not random.
+
+    A random slug differs on every call, so the record keeps only that it was
+    random and portable; the replay checks the same two facts.
+    """
+
+    from vibe.core.git.worktree import naming
+
+    records: list[dict[str, Any]] = []
+    for case, prompt, suggested in AUTO_NAME_CASES:
+        name = worktree_module._auto_worktree_name(prompt, suggested)
+        source = "random"
+        for label, text in (("suggested", suggested), ("prompt", prompt)):
+            if text is not None and naming.worktree_name_from_text(text) == name:
+                source = label
+                break
+        observed: dict[str, Any] = {
+            "source": source,
+            "portable": worktree_module._is_portable_worktree_name(name),
+        }
+        if source != "random":
+            observed["name"] = name
+        records.append(
+            {
+                "family": "autoName",
+                "case": case,
+                "input": {"prompt": prompt, "suggested": suggested},
+                "observed": observed,
+            }
+        )
+    return records
+
+
+#: The claim time each lifecycle case stamps, in order of preparation, so the
+#: retention sweep sorts by a time this capture chose rather than by the clock.
+CLAIMED_AT = (
+    "2001-02-03T04:05:06+00:00",
+    "2001-02-03T04:05:07+00:00",
+    "2001-02-03T04:05:08+00:00",
+)
+
+
+def claim_of(worktree_module: Any, path: Path) -> Any:
+    managed = worktree_module.ManagedWorktree.at(path)
+    if managed is None:
+        raise OracleError(f"{path} is not a managed worktree")
+    return managed
+
+
+def stamp_claim(worktree_module: Any, path: Path, claimed_at: str) -> None:
+    from datetime import datetime
+
+    claim = claim_of(worktree_module, path).claim
+    record = claim.read()
+    claim.write(record.model_copy(update={"claimed_at": datetime.fromisoformat(claimed_at)}))
+
+
+def settle(worktree_module: Any, prepared: Any, holder: str = "finished") -> None:
+    """Holds and lets go of a prepared worktree, as a session that ran and ended."""
+
+    managed = claim_of(worktree_module, prepared.path)
+    managed.hold(holder, prepared.pending_hold)
+    managed.release_holder(holder)
+
+
+def claim_record(worktree_module: Any, prepared: Any, projection: Projection) -> dict[str, Any]:
+    managed = claim_of(worktree_module, prepared.path)
+    record = managed.claim.read()
+    return {
+        "record": None
+        if record is None
+        else {
+            "version": record.version,
+            "name": record.name,
+            "branch": record.branch,
+            "repoRoot": projection.path(record.repo_root),
+            "baseCommit": None
+            if record.base_commit is None
+            else projection.commit_value(record.base_commit),
+            "branchCreated": record.branch_created,
+        },
+        "starting": managed.claim.is_starting(),
+        "holders": len(managed.holders()),
+    }
+
+
+#: One automatic preparation per row: what the case does to the repository
+#: first, and the prompt and suggestion it prepares with.
+PREPARE_AUTO_CASES: tuple[dict[str, Any], ...] = (
+    {"case": "from-prompt", "prompt": "Fix the login redirect", "suggested": None},
+    {"case": "from-suggestion", "prompt": "anything", "suggested": "Login redirect fix"},
+    {"case": "branch-taken", "prompt": "review", "before": ("branch vibe/review",)},
+    {"case": "directory-taken", "prompt": "review", "before": ("occupy review",)},
+    {"case": "never-reused", "prompt": "review", "before": ("prepare-auto review",)},
+    {"case": "retained-name", "prompt": "review", "before": ("retain review",)},
+)
+
+
+def apply_before(worktree_module: Any, root: Path, step: str) -> None:
+    checkout = root / CHECKOUT
+    verb, _, argument = step.partition(" ")
+    if verb == "branch":
+        run_git(checkout, "branch", argument)
+    elif verb == "occupy":
+        write_file(managed_directory(worktree_module, checkout) / argument / "note.txt", "x\n")
+    elif verb == "prepare-auto":
+        with worktree_module.WorktreeRepository.open(checkout) as repository:
+            prepared = repository.prepare_auto(prompt=argument)
+        settle(worktree_module, prepared)
+    elif verb == "retain":
+        with worktree_module.WorktreeRepository.open(checkout) as repository:
+            prepared = repository.prepare_auto(prompt=argument)
+        settle(worktree_module, prepared)
+        worktree_module.ManagedWorktree.prune(0)
+    else:
+        raise OracleError(f"unknown step {step!r}")
+
+
+def capture_prepare_auto(worktree_module: Any, temporary: Path) -> list[dict[str, Any]]:
+    from vibe.core.git.errors import GitError
+
+    records: list[dict[str, Any]] = []
+    for specification in PREPARE_AUTO_CASES:
+        with case_root(worktree_module, "plain", temporary) as root:
+            checkout = root / CHECKOUT
+            projection = Projection(
+                root,
+                managed_directory(worktree_module, checkout).name,
+                head_commit(checkout),
+            )
+            for step in specification.get("before", ()):
+                apply_before(worktree_module, root, step)
+            observed: dict[str, Any]
+            try:
+                with worktree_module.WorktreeRepository.open(checkout) as repository:
+                    prepared = repository.prepare_auto(
+                        prompt=specification["prompt"],
+                        suggested_name=specification.get("suggested"),
+                    )
+                observed = {
+                    "outcome": "prepared",
+                    "prepared": prepared_record(prepared, projection),
+                    "pendingHold": prepared.pending_hold is not None,
+                    **claim_record(worktree_module, prepared, projection),
+                }
+            except GitError as error:
+                observed = error_record(error, projection)
+            records.append(
+                {
+                    "family": "prepareAuto",
+                    "case": specification["case"],
+                    "setup": "plain",
+                    "input": {
+                        "prompt": specification["prompt"],
+                        "suggested": specification.get("suggested"),
+                        "before": list(specification.get("before", ())),
+                    },
+                    "observed": observed,
+                }
+            )
+    return records
+
+
+#: One release per row: the steps that lead up to it, then who releases.
+RELEASE_CASES: tuple[dict[str, Any], ...] = (
+    {"case": "clean", "steps": ("hold s1",), "session": "s1"},
+    {"case": "dirty", "steps": ("hold s1", "dirty"), "session": "s1"},
+    {"case": "committed", "steps": ("hold s1", "commit"), "session": "s1"},
+    {"case": "held-by-another", "steps": ("hold s1", "hold s2"), "session": "s1"},
+    {"case": "still-starting", "steps": (), "session": None},
+    {"case": "never-held", "steps": ("settle",), "session": None},
+    {"case": "record-forgotten", "steps": ("settle", "forget"), "session": None},
+    {"case": "directory-gone", "steps": ("settle", "delete-directory"), "session": None},
+    {"case": "attached-branch", "steps": ("hold s1",), "session": "s1", "attached": True},
+    {"case": "retained", "steps": ("settle", "dirty", "prune"), "session": None},
+    {"case": "retained-with-session", "steps": ("settle", "prune"), "session": "s1"},
+)
+
+
+def apply_lifecycle_step(worktree_module: Any, prepared: Any, step: str) -> None:
+    verb, _, argument = step.partition(" ")
+    if verb == "hold":
+        claim_of(worktree_module, prepared.path).hold(argument, prepared.pending_hold)
+    elif verb == "settle":
+        settle(worktree_module, prepared)
+    elif verb == "dirty":
+        write_file(prepared.root / "note.txt", "note\n")
+    elif verb == "commit":
+        apply_mutation(prepared.root, "modify")
+        apply_mutation(prepared.root, "commit")
+    elif verb == "forget":
+        claim_of(worktree_module, prepared.path).forget()
+    elif verb == "delete-directory":
+        shutil.rmtree(prepared.root)
+    elif verb == "prune":
+        worktree_module.ManagedWorktree.prune(0)
+    else:
+        raise OracleError(f"unknown step {step!r}")
+
+
+def ref_exists(checkout: Path, ref: str) -> bool:
+    result = subprocess.run(
+        ["git", "-C", str(checkout), "show-ref", "--verify", "--quiet", ref],
+        capture_output=True,
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def capture_release(worktree_module: Any, temporary: Path) -> list[dict[str, Any]]:
+    from vibe.core.git.errors import GitError
+
+    records: list[dict[str, Any]] = []
+    for specification in RELEASE_CASES:
+        setup = "attached-branch" if specification.get("attached") else "plain"
+        with case_root(worktree_module, setup, temporary) as root:
+            checkout = root / CHECKOUT
+            projection = Projection(
+                root,
+                managed_directory(worktree_module, checkout).name,
+                head_commit(checkout),
+            )
+            with worktree_module.WorktreeRepository.open(checkout) as repository:
+                prepared = repository.prepare("review")
+            for step in specification["steps"]:
+                apply_lifecycle_step(worktree_module, prepared, step)
+            managed = worktree_module.ManagedWorktree.at(prepared.path)
+            snapshot_ref = f"{worktree_module.SNAPSHOT_REF_PREFIX}/review"
+            observed: dict[str, Any]
+            try:
+                release = managed.release(specification["session"])
+                observed = {
+                    "outcome": release.outcome.value,
+                    "root": None if release.root is None else projection.path(release.root),
+                    "branch": release.branch,
+                    "branchDeleted": release.branch_deleted,
+                    "reasons": [describe(reason) for reason in release.reasons],
+                    "snapshotRef": release.snapshot_ref,
+                }
+            except GitError as error:
+                observed = error_record(error, projection)
+            observed["residue"] = {
+                "directory": prepared.root.exists(),
+                "branch": branch_exists(checkout, "review"),
+                "record": managed.claim.read() is not None,
+                "recovery": managed.claim.has_recovery(),
+                "snapshot": ref_exists(checkout, snapshot_ref),
+            }
+            records.append(
+                {
+                    "family": "release",
+                    "case": specification["case"],
+                    "setup": setup,
+                    "input": {
+                        "steps": list(specification["steps"]),
+                        "session": specification["session"],
+                    },
+                    "observed": observed,
+                }
+            )
+    return records
+
+
+#: One sweep per row: the worktrees prepared in claim order, the steps applied
+#: to each by name, and the limit the sweep runs under.
+PRUNE_CASES: tuple[dict[str, Any], ...] = (
+    {"case": "under-limit", "names": ("b", "a", "c"), "limit": 3, "steps": ()},
+    {"case": "oldest-first", "names": ("b", "a", "c"), "limit": 1, "steps": ()},
+    {"case": "held-skipped", "names": ("b", "a", "c"), "limit": 1, "steps": ("hold b",)},
+    {"case": "starting-skipped", "names": ("b", "a"), "limit": 0, "steps": ("unsettled a",)},
+    {"case": "dirty-saved", "names": ("b", "a"), "limit": 0, "steps": ("dirty b",)},
+    {"case": "directory-gone", "names": ("b", "a"), "limit": 1, "steps": ("delete-directory b",)},
+)
+
+
+def capture_prune(worktree_module: Any, temporary: Path) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    for specification in PRUNE_CASES:
+        with case_root(worktree_module, "plain", temporary) as root:
+            checkout = root / CHECKOUT
+            prepared_by_name: dict[str, Any] = {}
+            unsettled = {
+                step.split(" ", 1)[1]
+                for step in specification["steps"]
+                if step.startswith("unsettled ")
+            }
+            for index, name in enumerate(specification["names"]):
+                with worktree_module.WorktreeRepository.open(checkout) as repository:
+                    prepared = repository.prepare(name)
+                stamp_claim(worktree_module, prepared.path, CLAIMED_AT[index])
+                if name not in unsettled:
+                    settle(worktree_module, prepared)
+                prepared_by_name[name] = prepared
+            for step in specification["steps"]:
+                verb, _, name = step.partition(" ")
+                if verb == "unsettled":
+                    continue
+                apply_lifecycle_step(worktree_module, prepared_by_name[name], f"{verb} held")
+            removed = worktree_module.ManagedWorktree.prune(specification["limit"])
+            observed = {
+                "removed": removed,
+                "remaining": sorted(
+                    name for name, prepared in prepared_by_name.items() if prepared.root.exists()
+                ),
+                "retained": sorted(
+                    name
+                    for name, prepared in prepared_by_name.items()
+                    if worktree_module.ManagedWorktree.at(prepared.path) is not None
+                    and worktree_module.ManagedWorktree.at(prepared.path).claim.has_recovery()
+                ),
+                "snapshots": sorted(
+                    name
+                    for name in prepared_by_name
+                    if ref_exists(checkout, f"{worktree_module.SNAPSHOT_REF_PREFIX}/{name}")
+                ),
+                "branches": sorted(
+                    name for name in prepared_by_name if branch_exists(checkout, name)
+                ),
+            }
+            records.append(
+                {
+                    "family": "prune",
+                    "case": specification["case"],
+                    "setup": "plain",
+                    "input": {
+                        "names": list(specification["names"]),
+                        "limit": specification["limit"],
+                        "steps": list(specification["steps"]),
+                    },
+                    "observed": observed,
+                }
+            )
+    return records
+
+
+#: One restore per row: what happened to the worktree first, and where inside
+#: it (or outside it) the restore is asked for.
+RESTORE_CASES: tuple[tuple[str, tuple[str, ...], str], ...] = (
+    ("retained", ("settle", "dirty", "prune"), "."),
+    ("retained-committed", ("settle", "commit", "prune"), "."),
+    ("not-retained", ("settle",), "."),
+    ("outside", ("settle", "prune"), ".."),
+)
+
+
+def capture_restore(worktree_module: Any, temporary: Path) -> list[dict[str, Any]]:
+    from vibe.core.git.errors import GitError
+
+    records: list[dict[str, Any]] = []
+    for case, steps, relative in RESTORE_CASES:
+        with case_root(worktree_module, "plain", temporary) as root:
+            checkout = root / CHECKOUT
+            projection = Projection(
+                root,
+                managed_directory(worktree_module, checkout).name,
+                head_commit(checkout),
+            )
+            with worktree_module.WorktreeRepository.open(checkout) as repository:
+                prepared = repository.prepare("review")
+            for step in steps:
+                apply_lifecycle_step(worktree_module, prepared, step)
+            managed = worktree_module.ManagedWorktree.at(prepared.path)
+            requested = prepared.root if relative == "." else prepared.root / relative
+            mapping = managed.retained_repository_mapping(prepared.root)
+            observed: dict[str, Any] = {
+                "mapping": None
+                if mapping is None
+                else {
+                    "root": projection.path(mapping.root),
+                    "cwd": projection.path(mapping.cwd),
+                }
+            }
+            try:
+                observed["outcome"] = "restored" if managed.restore(requested) else "unchanged"
+            except GitError as error:
+                observed.update(error_record(error, projection))
+            readme = prepared.root / "README.md"
+            observed["residue"] = {
+                "directory": prepared.root.is_dir(),
+                "branch": branch_exists(checkout, "review"),
+                "record": managed.claim.read() is not None,
+                "recovery": managed.claim.has_recovery(),
+                "note": (prepared.root / "note.txt").is_file(),
+                "readme": None
+                if not readme.is_file()
+                else ("edited" if readme.read_text(encoding="utf-8").endswith("edit\n") else "original"),
+                "starting": managed.claim.is_starting(),
+            }
+            records.append(
+                {
+                    "family": "restore",
+                    "case": case,
+                    "setup": "plain",
+                    "input": {"steps": list(steps), "relative": relative},
+                    "observed": observed,
+                }
+            )
+    return records
+
+
+#: One position per row: the setup, and the directory the repository is opened
+#: at, relative to the case root.
+POSITION_CASES: tuple[tuple[str, str, str], ...] = (
+    ("checkout", "linked-worktrees", CHECKOUT),
+    ("linked", "linked-worktrees", f"{LINKED}/alpha"),
+    ("linked-only-directory", "linked-worktrees", f"{LINKED}/alpha/only-here"),
+    ("detached", "linked-worktrees", f"{LINKED}/gamma"),
+    ("not-a-repository", "target-tree", "."),
+)
+
+
+def capture_positions(worktree_module: Any, temporary: Path) -> list[dict[str, Any]]:
+    from vibe.core.git.errors import GitError
+
+    records: list[dict[str, Any]] = []
+    for case, setup, base in POSITION_CASES:
+        with case_root(worktree_module, setup, temporary) as root:
+            projection = Projection(root, None, None)
+            directory = root if base == "." else root / base
+            directory.mkdir(parents=True, exist_ok=True)
+            observed: dict[str, Any]
+            try:
+                with worktree_module.WorktreeRepository.open(directory) as repository:
+                    counterpart = repository.repository_counterpart
+                    observed = {
+                        "outcome": "opened",
+                        "root": projection.path(repository.root),
+                        "counterpart": None
+                        if counterpart is None
+                        else projection.path(counterpart),
+                        "mappedCwd": projection.path(repository.repository_mapped_cwd),
+                    }
+                with worktree_module.GitRepo.open(directory) as git_repository:
+                    observed["branch"] = git_repository.branch()
+            except GitError as error:
+                observed = error_record(error, projection)
+            records.append(
+                {
+                    "family": "position",
+                    "case": case,
+                    "setup": setup,
+                    "input": {"base": base},
+                    "observed": observed,
+                }
+            )
+    return records
+
+
 def capture(pinned: Path) -> list[dict[str, Any]]:
     # The module rather than the package: the package re-exports only public
     # names, and the capture also drives `_worktree_root`, `_target_cwd` and
@@ -961,6 +1499,13 @@ def capture(pinned: Path) -> list[dict[str, Any]]:
             *capture_cleanup(worktree_module, temporary),
             *capture_list(worktree_module, temporary),
             *capture_target_cwd(worktree_module, temporary),
+            *capture_slugs(worktree_module),
+            *capture_auto_names(worktree_module),
+            *capture_prepare_auto(worktree_module, temporary),
+            *capture_release(worktree_module, temporary),
+            *capture_prune(worktree_module, temporary),
+            *capture_restore(worktree_module, temporary),
+            *capture_positions(worktree_module, temporary),
         ]
 
 

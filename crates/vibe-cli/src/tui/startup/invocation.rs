@@ -57,8 +57,13 @@ impl PreparedInvocation {
             LaunchWorkspace::prepare(&mut arguments, narration)?;
             return Ok(Self::CheckUpgrade(Box::new(arguments)));
         }
-        populate_piped_prompt(&mut arguments)?;
+        // The worktree is entered before stdin is read, so a piped prompt
+        // never names an unnamed one (`vibe/cli/entrypoint.py:432-436`).
         let workspace = LaunchWorkspace::prepare(&mut arguments, narration)?;
+        if let Err(error) = populate_piped_prompt(&mut arguments) {
+            workspace.release_holder();
+            return Err(error);
+        }
         let intent = InvocationIntent::from_arguments(&arguments);
         Ok(match intent.route {
             InvocationRoute::Programmatic => Self::Programmatic(ProgrammaticInvocation {
@@ -230,7 +235,7 @@ mod tests {
             arguments.prompt = trace.arguments.prompt;
             arguments.resume = trace.arguments.resume;
             arguments.continue_session = trace.arguments.continue_session;
-            arguments.worktree = trace.arguments.worktree;
+            arguments.worktree = trace.arguments.worktree.map(Some);
             arguments.teleport = trace.arguments.teleport;
             let intent = InvocationIntent::from_arguments(&arguments);
             assert_eq!(intent.route, trace.expected.route, "route in {}", trace.id);
