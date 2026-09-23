@@ -529,33 +529,6 @@ pub fn proxy_overlay(settings: &Value) -> Overlay {
     )
 }
 
-#[must_use]
-pub fn status_overlay(result: &Value) -> Overlay {
-    let stats = result.get("stats").unwrap_or(result);
-    let fields = [
-        ("steps", "Steps"),
-        ("session_prompt_tokens", "Session prompt tokens"),
-        ("session_completion_tokens", "Session completion tokens"),
-        ("session_total_llm_tokens", "Session total LLM tokens"),
-        ("last_turn_total_tokens", "Last turn tokens"),
-        ("session_cost", "Cost"),
-    ];
-    Overlay::new(
-        OverlayKind::Status,
-        "Agent statistics",
-        fields
-            .into_iter()
-            .map(|(key, label)| {
-                let value = stats
-                    .get(key)
-                    .or_else(|| stats.get(to_camel_case(key).as_str()))
-                    .map_or_else(|| "0".to_owned(), compact_value);
-                OverlayItem::new(key, label, value, true)
-            })
-            .collect(),
-    )
-}
-
 fn fixed_choice_overlay(
     kind: OverlayKind,
     title: &str,

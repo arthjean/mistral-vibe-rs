@@ -32,24 +32,6 @@ pub enum ErrorClass {
 }
 
 impl ErrorClass {
-    #[must_use]
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Cancellation => "cancellation",
-            Self::ContextExhaustion => "context_too_long",
-            Self::Refusal => "refusal",
-            Self::ResponseTooLong => "response_too_long",
-            Self::Auth => "auth",
-            Self::RateLimit => "rate_limit",
-            Self::Transport => "transport",
-            Self::Model => "model",
-            Self::Server => "server",
-            Self::Shell => "shell",
-            Self::Tool => "tool",
-            Self::Unknown => "unknown",
-        }
-    }
-
     /// Reference `_BENIGN_TURN_ERROR_CODES` plus cancellation: expected
     /// outcomes that carry guidance rather than a defect report.
     #[must_use]

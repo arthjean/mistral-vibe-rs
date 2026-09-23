@@ -42,8 +42,6 @@ use vibe_core::telemetry::{
 use vibe_core::tracing::{TracingGuard, TracingSetup, setup_tracing};
 use vibe_core::{engine::EventObserver, events::EventEnvelope};
 
-pub const ADAPTER_NAME: &str = "vibe-cli";
-
 #[derive(Debug, Clone, Parser)]
 #[command(
     name = "vibe",

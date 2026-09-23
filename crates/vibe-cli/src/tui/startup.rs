@@ -22,15 +22,13 @@ pub use invocation::{
 pub(super) use mounted::{MountedStartup, complete_mounted_startup};
 pub(super) use preflight::{ReadyStartup, preflight};
 pub use session::{ResumeResolution, resolve_bare_resume};
-pub use trust::{
-    TrustResolution, dangerous_directory_warning, resolve_location_safety, resolve_workspace_trust,
-};
+pub use trust::{resolve_location_safety, resolve_workspace_trust};
 pub use update::resolve_startup_update_prompt;
 pub use update::{
     production_update_gateway, refresh_update_cache, release_repository, run_check_upgrade,
     scheduled_update_gateway, update_cache_store, update_checks_enabled,
 };
-pub use vibe_core::worktree::{PreparedWorktree, WorktreeCleanupState};
+pub use vibe_core::worktree::PreparedWorktree;
 pub use worktree::{
     CleanupOutcome, LaunchWorkspace, cleanup_is_offered, cleanup_worktree,
     cleanup_worktree_terminal,

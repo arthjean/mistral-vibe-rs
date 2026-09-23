@@ -72,7 +72,6 @@ pub enum ClipboardError {
 
 pub trait SystemClipboardPort {
     fn copy_text(&self, text: &str) -> Result<(), ClipboardError>;
-    fn paste_text(&self) -> Result<String, ClipboardError>;
     fn paste_image(&self) -> Result<Option<Vec<u8>>, ClipboardError>;
     fn supports_images(&self) -> bool;
 }
@@ -91,18 +90,6 @@ impl SystemClipboardPort for SystemClipboard {
             }
         }
         write_osc52(text)
-    }
-
-    fn paste_text(&self) -> Result<String, ClipboardError> {
-        for (program, arguments) in paste_commands() {
-            if let Ok(output) = Command::new(program).args(*arguments).output()
-                && output.status.success()
-            {
-                return String::from_utf8(output.stdout)
-                    .map_err(|error| ClipboardError::Operation(error.to_string()));
-            }
-        }
-        Err(ClipboardError::Unavailable)
     }
 
     fn paste_image(&self) -> Result<Option<Vec<u8>>, ClipboardError> {
@@ -227,28 +214,6 @@ fn copy_commands() -> &'static [(&'static str, &'static [&'static str])] {
             ("wl-copy", &[]),
             ("xclip", &["-selection", "clipboard"]),
             ("xsel", &["--clipboard", "--input"]),
-        ]
-    }
-}
-
-fn paste_commands() -> &'static [(&'static str, &'static [&'static str])] {
-    #[cfg(target_os = "macos")]
-    {
-        &[("pbpaste", &[])]
-    }
-    #[cfg(target_os = "windows")]
-    {
-        &[(
-            "powershell.exe",
-            &["-NoProfile", "-Command", "Get-Clipboard"],
-        )]
-    }
-    #[cfg(all(unix, not(target_os = "macos")))]
-    {
-        &[
-            ("wl-paste", &["--no-newline"]),
-            ("xclip", &["-selection", "clipboard", "-o"]),
-            ("xsel", &["--clipboard", "--output"]),
         ]
     }
 }
@@ -539,10 +504,6 @@ mod tests {
     impl SystemClipboardPort for ClipboardFixture {
         fn copy_text(&self, _text: &str) -> Result<(), ClipboardError> {
             Ok(())
-        }
-
-        fn paste_text(&self) -> Result<String, ClipboardError> {
-            Ok(String::new())
         }
 
         fn paste_image(&self) -> Result<Option<Vec<u8>>, ClipboardError> {

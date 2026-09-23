@@ -131,7 +131,6 @@ pub enum ControlFocus {
     Prompt,
     Callback,
     Plan,
-    SessionPicker,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -514,42 +513,6 @@ impl ControlState {
             self.focus = ControlFocus::Prompt;
         }
     }
-
-    #[must_use]
-    pub fn session_command(&self, command: SessionCommand) -> ControlDispatch {
-        command.dispatch(&self.session_id)
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SessionCommand {
-    Clear,
-    Compact,
-    Fork,
-    Resume,
-    Continue,
-    Rename,
-    Close,
-    History,
-}
-
-impl SessionCommand {
-    fn dispatch(self, session_id: &str) -> ControlDispatch {
-        let (method, params) = match self {
-            Self::Clear => ("session/history/clear", json!({"sessionId": session_id})),
-            Self::Compact => ("session/compact/start", json!({"sessionId": session_id})),
-            Self::Fork => ("session/fork", json!({"sessionId": session_id})),
-            Self::Resume => ("session/resume", json!({"sessionId": session_id})),
-            Self::Continue => ("session/continue", json!({})),
-            Self::Rename => (
-                "session/title/update",
-                json!({"sessionId": session_id, "title": ""}),
-            ),
-            Self::Close => ("session/close", json!({"sessionId": session_id})),
-            Self::History => ("session/list", json!({"offset": 0, "limit": 50})),
-        };
-        ControlDispatch { method, params }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -793,19 +756,6 @@ mod tests {
             CallbackInputOutcome::Submit(CallbackChoice::Approve {
                 scope: ApprovalScope::Once,
             })
-        );
-    }
-
-    #[test]
-    fn session_controls_are_canonical_server_requests() {
-        let state = ControlState::new("session");
-        assert_eq!(
-            state.session_command(SessionCommand::Compact).method,
-            "session/compact/start"
-        );
-        assert_eq!(
-            state.session_command(SessionCommand::Fork).params["sessionId"],
-            "session"
         );
     }
 

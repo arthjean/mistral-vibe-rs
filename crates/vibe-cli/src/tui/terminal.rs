@@ -50,13 +50,6 @@ impl CrosstermOps<Stdout> {
     }
 }
 
-impl<W> CrosstermOps<W> {
-    #[must_use]
-    pub fn new(writer: W) -> Self {
-        Self { writer }
-    }
-}
-
 impl<W> TerminalOps for CrosstermOps<W>
 where
     W: Write,
@@ -192,78 +185,6 @@ pub struct TerminalRestoreError {
     pub failures: Vec<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ShutdownReason {
-    NormalExit,
-    Panic,
-    Cancellation,
-    Sigint,
-    TerminalLoss,
-    NestedError,
-    AdapterFailure,
-    Timeout,
-    TestCancellation,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TerminalCandidate {
-    pub name: &'static str,
-    pub immutable_snapshots: bool,
-    pub input_events: bool,
-    pub resize: bool,
-    pub unicode: bool,
-    pub mouse: bool,
-    pub clipboard: &'static str,
-    pub linux: bool,
-    pub macos: bool,
-    pub windows: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TerminalStackDecision {
-    pub selected: TerminalCandidate,
-    pub alternative: TerminalCandidate,
-    pub rationale: &'static str,
-    pub native_test_needs: &'static [&'static str],
-}
-
-#[must_use]
-pub fn terminal_stack_decision() -> TerminalStackDecision {
-    TerminalStackDecision {
-        selected: TerminalCandidate {
-            name: "ratatui-0.29.0+crossterm-0.28.1",
-            immutable_snapshots: true,
-            input_events: true,
-            resize: true,
-            unicode: true,
-            mouse: true,
-            clipboard: "injected port; terminal support is capability-dependent",
-            linux: true,
-            macos: true,
-            windows: true,
-        },
-        alternative: TerminalCandidate {
-            name: "direct-crossterm-0.28.1",
-            immutable_snapshots: false,
-            input_events: true,
-            resize: true,
-            unicode: true,
-            mouse: true,
-            clipboard: "injected port; terminal support is capability-dependent",
-            linux: true,
-            macos: true,
-            windows: true,
-        },
-        rationale: "Ratatui supplies a deterministic TestBackend and layout buffer while retaining crossterm's cross-platform event and restoration primitives.",
-        native_test_needs: &[
-            "SIGINT and terminal-loss restoration",
-            "Windows legacy console input and bracketed-paste fallback",
-            "macOS and Linux clipboard integration",
-            "terminal image protocol detection",
-        ],
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::sync::{Arc, Mutex};
@@ -319,37 +240,24 @@ mod tests {
     }
 
     #[test]
-    fn every_shutdown_path_restores_in_reverse_order() {
-        for reason in [
-            ShutdownReason::NormalExit,
-            ShutdownReason::Panic,
-            ShutdownReason::Cancellation,
-            ShutdownReason::Sigint,
-            ShutdownReason::TerminalLoss,
-            ShutdownReason::NestedError,
-            ShutdownReason::AdapterFailure,
-            ShutdownReason::Timeout,
-            ShutdownReason::TestCancellation,
-        ] {
-            let (ops, transcript) = ops(None, None);
-            {
-                let _guard = TerminalGuard::enter(ops).expect("terminal enters");
-                let _ = reason;
-            }
-            let transcript = transcript.lock().expect("terminal transcript");
-            assert_eq!(transcript.len(), 12);
-            assert_eq!(
-                &transcript[6..],
-                &[
-                    (false, TerminalStep::CursorHidden),
-                    (false, TerminalStep::FocusReporting),
-                    (false, TerminalStep::BracketedPaste),
-                    (false, TerminalStep::MouseCapture),
-                    (false, TerminalStep::AlternateScreen),
-                    (false, TerminalStep::RawMode),
-                ]
-            );
+    fn dropping_the_guard_restores_in_reverse_order() {
+        let (ops, transcript) = ops(None, None);
+        {
+            let _guard = TerminalGuard::enter(ops).expect("terminal enters");
         }
+        let transcript = transcript.lock().expect("terminal transcript");
+        assert_eq!(transcript.len(), 12);
+        assert_eq!(
+            &transcript[6..],
+            &[
+                (false, TerminalStep::CursorHidden),
+                (false, TerminalStep::FocusReporting),
+                (false, TerminalStep::BracketedPaste),
+                (false, TerminalStep::MouseCapture),
+                (false, TerminalStep::AlternateScreen),
+                (false, TerminalStep::RawMode),
+            ]
+        );
     }
 
     #[test]
@@ -408,14 +316,5 @@ mod tests {
         });
         assert!(result.is_err());
         assert_eq!(transcript.lock().expect("terminal transcript").len(), 12);
-    }
-
-    #[test]
-    fn selected_stack_is_testable_and_cross_platform() {
-        let decision = terminal_stack_decision();
-        assert!(decision.selected.immutable_snapshots);
-        assert!(decision.selected.linux && decision.selected.macos && decision.selected.windows);
-        assert!(!decision.alternative.immutable_snapshots);
-        assert!(!decision.native_test_needs.is_empty());
     }
 }

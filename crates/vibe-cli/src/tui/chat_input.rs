@@ -32,10 +32,7 @@ mod observation;
 #[path = "chat_input/protocol.rs"]
 mod protocol;
 
-pub use observation::{
-    CompletionItemObservation, CompletionObservation, HistoryObservation, RenderObservation,
-    StateObservation,
-};
+pub use observation::StateObservation;
 pub use protocol::{
     EditorSnapshot, InputEffect, InputEvent, InputMode, KeyName, Modifier, Safety, Severity,
 };
@@ -129,11 +126,6 @@ impl ChatInputState {
             self.agent_name.clear();
             self.agent_name.push_str(name);
         }
-    }
-
-    #[must_use]
-    pub fn agent_name(&self) -> &str {
-        &self.agent_name
     }
 
     #[must_use]

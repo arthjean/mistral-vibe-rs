@@ -50,16 +50,6 @@ fn paste_above_the_old_rust_boundary_is_accepted_atomically() {
 }
 
 #[test]
-fn secret_submission_never_enters_prompt_history() {
-    let mut editor = PromptEditor::default();
-    editor.set_text("secret-api-key");
-    assert_eq!(editor.take_unrecorded().as_deref(), Some("secret-api-key"));
-    editor.set_text("ordinary prompt");
-    assert_eq!(editor.submit().as_deref(), Some("ordinary prompt"));
-    assert_eq!(editor.history, vec!["ordinary prompt"]);
-}
-
-#[test]
 fn syntax_counts_follow_edits_history_and_submission() {
     let mut editor = PromptEditor::default();
     editor.set_text("alpha/@~\"'");

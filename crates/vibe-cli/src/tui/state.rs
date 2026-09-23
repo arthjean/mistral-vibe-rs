@@ -3,7 +3,6 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::sync::{mpsc, watch};
 
 use super::attention::AttentionNotifier;
 use super::controls::CallbackPresentation;
@@ -196,10 +195,6 @@ pub enum ServerEvent {
     EntryUpdated {
         event_id: u64,
         entry: TranscriptEntry,
-    },
-    Waiting {
-        event_id: u64,
-        waiting: bool,
     },
     Diagnostic {
         event_id: u64,
@@ -399,14 +394,6 @@ impl TuiState {
                 self.entries[index] = entry;
                 Ok(ApplyResult::Applied)
             }
-            ServerEvent::Waiting { event_id, waiting } => match self.check_sequence(event_id) {
-                ApplyResult::Applied => {
-                    self.watermark = event_id;
-                    self.waiting = waiting;
-                    Ok(ApplyResult::Applied)
-                }
-                other => Ok(other),
-            },
             ServerEvent::Diagnostic { event_id, message } => match self.check_sequence(event_id) {
                 ApplyResult::Applied => {
                     self.watermark = event_id;
@@ -634,19 +621,6 @@ impl TuiState {
         }
     }
 
-    pub fn settle_local(&mut self, entry_id: &str, status: EntryStatus) -> Result<(), StateError> {
-        let Some(index) = self.entry_indexes.get(entry_id).copied() else {
-            return Err(StateError::UnknownEntry(entry_id.to_owned()));
-        };
-        let entry = &mut self.entries[index];
-        if entry.status.is_terminal() {
-            return Ok(());
-        }
-        entry.revision = entry.revision.saturating_add(1);
-        entry.status = status;
-        Ok(())
-    }
-
     pub fn update_local(
         &mut self,
         entry_id: &str,
@@ -711,47 +685,6 @@ pub enum StateError {
     StaleRevision(String),
     #[error("entry `{0}` update does not grow monotonically")]
     NonMonotonicStream(String),
-}
-
-pub struct EventMailbox {
-    pub sender: mpsc::Sender<ServerEvent>,
-    pub receiver: mpsc::Receiver<ServerEvent>,
-    pub resize_sender: watch::Sender<(u16, u16)>,
-    pub resize_receiver: watch::Receiver<(u16, u16)>,
-}
-
-impl EventMailbox {
-    #[must_use]
-    pub fn bounded(capacity: usize, initial_size: (u16, u16)) -> Self {
-        let (sender, receiver) = mpsc::channel(capacity.max(1));
-        let (resize_sender, resize_receiver) = watch::channel(initial_size);
-        Self {
-            sender,
-            receiver,
-            resize_sender,
-            resize_receiver,
-        }
-    }
-
-    pub fn try_send(&self, event: ServerEvent) -> Result<(), MailboxError> {
-        self.sender.try_send(event).map_err(|error| match error {
-            mpsc::error::TrySendError::Full(_) => MailboxError::Full,
-            mpsc::error::TrySendError::Closed(_) => MailboxError::Closed,
-        })
-    }
-
-    pub fn resize(&self, width: u16, height: u16) {
-        self.resize_sender
-            .send_replace((width.max(1), height.max(1)));
-    }
-}
-
-#[derive(Debug, Error, Clone, Copy, PartialEq, Eq)]
-pub enum MailboxError {
-    #[error("TUI event queue is full")]
-    Full,
-    #[error("TUI event queue is closed")]
-    Closed,
 }
 
 #[cfg(test)]
@@ -1022,24 +955,6 @@ mod tests {
     }
 
     #[test]
-    fn local_callback_notice_settles_without_advancing_server_watermark() {
-        let mut state = TuiState::new("session");
-        let id = state.append_local(entry(
-            "",
-            1,
-            "Awaiting a Unicode answer: café?",
-            EntryStatus::Streaming,
-        ));
-        state
-            .settle_local(&id, EntryStatus::Completed)
-            .expect("local callback settles");
-
-        assert_eq!(state.entries[0].status, EntryStatus::Completed);
-        assert_eq!(state.entries[0].revision, 2);
-        assert_eq!(state.watermark, 0);
-    }
-
-    #[test]
     fn paging_preserves_order_and_requests_older_history_at_the_top() {
         let mut state = TuiState::new("session");
         state
@@ -1114,21 +1029,5 @@ mod tests {
         let activity = state.activity.clone().expect("the next turn reports work");
         assert_eq!(activity.elapsed_seconds, 0);
         assert_eq!(activity.status, diagnostics::DEFAULT_ACTIVITY_STATUS);
-    }
-
-    #[test]
-    fn bounded_mailbox_rejects_overflow_and_coalesces_resize_storms() {
-        let mailbox = EventMailbox::bounded(1, (80, 24));
-        mailbox
-            .try_send(ServerEvent::Ready)
-            .expect("first event fits");
-        assert_eq!(
-            mailbox.try_send(ServerEvent::Ready),
-            Err(MailboxError::Full)
-        );
-        for size in 1..=1_000 {
-            mailbox.resize(size, size);
-        }
-        assert_eq!(*mailbox.resize_receiver.borrow(), (1_000, 1_000));
     }
 }

@@ -20,7 +20,6 @@ pub enum OverlayKind {
     Mcp,
     McpDetail,
     McpAuth,
-    Connectors,
     Voice,
     VoiceModel,
     Debug,
@@ -334,15 +333,6 @@ impl Overlay {
             .filter(|item| !item.disabled && self.matches_query(item))
     }
 
-    pub fn selected_item_mut(&mut self) -> Option<&mut OverlayItem> {
-        let selected = self.selected?;
-        let matches = self
-            .items
-            .get(selected)
-            .is_some_and(|item| !item.disabled && self.matches_query(item));
-        matches.then(|| &mut self.items[selected])
-    }
-
     #[must_use]
     pub fn visible_items(&self) -> Vec<(bool, &OverlayItem)> {
         self.visible_indexes()
@@ -465,12 +455,6 @@ impl PromptQueue {
         }
         self.clamp_scroll();
         cancelled
-    }
-
-    pub fn clear(&mut self) {
-        self.items.clear();
-        self.paused = false;
-        self.scroll_offset = 0;
     }
 
     pub fn pause(&mut self) {

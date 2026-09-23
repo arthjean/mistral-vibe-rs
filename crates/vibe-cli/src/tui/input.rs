@@ -396,10 +396,6 @@ impl PromptEditor {
         }
     }
 
-    pub fn move_word_left(&mut self) {
-        self.move_word_left_bounded(0);
-    }
-
     pub fn move_word_left_bounded(&mut self, floor: usize) {
         let graphemes = self.text.graphemes(true).collect::<Vec<_>>();
         let mut target = self.cursor.min(graphemes.len());
@@ -560,26 +556,6 @@ impl PromptEditor {
             }
         }
         Some(submitted)
-    }
-
-    pub fn take_unrecorded(&mut self) -> Option<String> {
-        let submitted = std::mem::take(&mut self.text);
-        if !submitted.is_empty() {
-            self.grapheme_len = 0;
-            self.syntax = SyntaxCounts::default();
-            self.mark_text_changed();
-        }
-        self.cursor = 0;
-        self.selection = None;
-        self.selection_anchor = None;
-        self.reset_history_navigation();
-        (!submitted.trim().is_empty()).then_some(submitted)
-    }
-
-    /// Whether Up/Down are currently walking history rather than the draft.
-    #[must_use]
-    pub fn history_navigating(&self) -> bool {
-        self.history_index.is_some()
     }
 
     #[must_use]
@@ -851,11 +827,6 @@ pub(crate) fn grapheme_cell_width(grapheme: &str, column: usize) -> usize {
     } else {
         UnicodeWidthStr::width(grapheme).max(1)
     }
-}
-
-pub trait ClipboardPort {
-    fn read_text(&mut self) -> Result<String, String>;
-    fn write_text(&mut self, value: &str) -> Result<(), String>;
 }
 
 pub trait ExternalEditorPort {

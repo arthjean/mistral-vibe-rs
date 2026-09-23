@@ -106,7 +106,7 @@ const fn policy(kind: OverlayKind) -> OverlayPolicy {
             escape: Escape::CancelRemoteProject,
             ..LIST
         },
-        OverlayKind::Mcp | OverlayKind::Connectors => OverlayPolicy {
+        OverlayKind::Mcp => OverlayPolicy {
             chords: Chords::Mcp { detail: false },
             ..LIST
         },

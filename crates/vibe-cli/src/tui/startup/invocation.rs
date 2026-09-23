@@ -74,15 +74,6 @@ impl PreparedInvocation {
             }
         })
     }
-
-    #[must_use]
-    pub const fn route(&self) -> InvocationRoute {
-        match self {
-            Self::Interactive(_) => InvocationRoute::Interactive,
-            Self::Programmatic(_) => InvocationRoute::Programmatic,
-            Self::CheckUpgrade(_) => InvocationRoute::CheckUpgrade,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

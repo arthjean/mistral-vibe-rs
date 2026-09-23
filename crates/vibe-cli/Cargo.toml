@@ -17,7 +17,6 @@ clap.workspace = true
 cpal.workspace = true
 crossterm.workspace = true
 futures-util.workspace = true
-hex.workspace = true
 notify.workspace = true
 ratatui.workspace = true
 reqwest.workspace = true
@@ -25,7 +24,6 @@ secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 shlex.workspace = true
-sha2.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-tungstenite.workspace = true
@@ -37,6 +35,8 @@ vibe-app-server = { path = "../vibe-app-server" }
 vibe-core = { path = "../vibe-core" }
 
 [dev-dependencies]
+hex.workspace = true
+sha2.workspace = true
 tempfile.workspace = true
 
 [target.'cfg(unix)'.dev-dependencies]

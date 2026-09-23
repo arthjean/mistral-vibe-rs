@@ -147,7 +147,7 @@ pub(super) fn draw_overlay(
     let help = match overlay.kind {
         OverlayKind::Config => "↑↓/jk Navigate  Enter Edit  Ctrl+R Reset  Esc Close",
         OverlayKind::Sessions => "↑↓/jk Navigate  Enter Resume  Delete Remove  Esc Close",
-        OverlayKind::Mcp | OverlayKind::Connectors => {
+        OverlayKind::Mcp => {
             "↑↓/jk Navigate  Enter Show tools  d Disable  e Enable  Ctrl+R Refresh  Esc Close"
         }
         OverlayKind::McpDetail => "↑↓/jk Navigate  d Disable  e Enable  Backspace Back  Esc Close",

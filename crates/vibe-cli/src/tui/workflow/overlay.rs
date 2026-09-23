@@ -159,7 +159,7 @@ pub(super) async fn select_overlay_item(
         OverlayKind::Sessions => {
             resume_selected_session(runtime, state, controls, &item.id);
         }
-        OverlayKind::Mcp | OverlayKind::Connectors => {
+        OverlayKind::Mcp => {
             let OverlayAction::Integration(target) = item.action else {
                 state.push_diagnostic("Integration selection is malformed");
                 return None;
