@@ -2,25 +2,31 @@ name: Mistral Vibe RS
 description: Install and run the signed native Mistral Vibe RS artifact
 author: Arthur Jean
 
+# The inputs the reference action declares, under the same names, requirements
+# and defaults (`action.yml` in the reference checkout), followed by the ones
+# this port adds. A workflow written for the reference runs unchanged.
 inputs:
   prompt:
-    description: Prompt passed to the agent
+    description: The prompt to pass to the agent
     required: true
-  mistral_api_key:
+    default: |
+      You are a helpful assistant
+  MISTRAL_API_KEY:
     description: Mistral API credential
     required: true
+  install_python:
+    description: |
+      Whether or not to install Python
+    required: true
+    default: "true"
+  python_version:
+    description: |
+      Version of Python to install
+    required: false
   approvals:
     description: Approval policy, either ask or always
     required: false
     default: ask
-  install_python:
-    description: Install Python for tools that need it
-    required: false
-    default: "false"
-  python_version:
-    description: Optional Python version
-    required: false
-    default: "3.12"
   version:
     description: Mistral Vibe RS release version
     required: false
@@ -31,14 +37,17 @@ inputs:
 
 outputs:
   result:
-    description: Programmatic JSON result
+    description: What the agent printed
     value: ${{ steps.run.outputs.result }}
 
 runs:
   using: composite
   steps:
-    - name: Set up optional Python
-      if: inputs.install_python == 'true'
+    # The reference guards its default-version step with a string compared to a
+    # boolean, which never holds, so the one Python it ever installs is the
+    # requested one, and only when both inputs are non-empty.
+    - name: Install Requested Python Version
+      if: inputs.install_python && inputs.python_version
       uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
       with:
         python-version: ${{ inputs.python_version }}
@@ -61,11 +70,11 @@ runs:
       id: run
       shell: bash
       env:
-        MISTRAL_API_KEY: ${{ inputs.mistral_api_key }}
+        MISTRAL_API_KEY: ${{ inputs.MISTRAL_API_KEY }}
         PROMPT_INPUT: ${{ inputs.prompt }}
         APPROVALS_INPUT: ${{ inputs.approvals }}
       run: |
-        arguments=(--prompt "${PROMPT_INPUT}" --output json)
+        arguments=(-p "${PROMPT_INPUT}")
         case "${APPROVALS_INPUT}" in
           ask) ;;
           always) arguments+=(--auto-approve) ;;
@@ -75,6 +84,7 @@ runs:
           arguments+=(--fake-response "${VIBE_ACTION_TEST_RESPONSE}")
         fi
         result="$(vibe "${arguments[@]}")"
+        printf '%s\n' "${result}"
         delimiter="vibe-result-${RANDOM}-${RANDOM}"
         {
           echo "result<<${delimiter}"
