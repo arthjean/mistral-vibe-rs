@@ -23,6 +23,7 @@ pub mod experiments;
 #[cfg(test)]
 mod experiments_parity_tests;
 pub mod extensions;
+pub mod http_trust;
 pub mod identity;
 pub mod images;
 pub mod integrations;
