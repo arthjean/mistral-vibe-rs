@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+- Add the slash commands the reference gained since 2.24.0: `/branch` copies
+  the session to a new resumable one, `/log-level` sets the session and
+  `config.toml` log levels from a picker (`log_level` is now a configuration
+  key), `/skills` lists the loaded skills when
+  `experimental_enable_registry_skills` is set, and `/plugins`,
+  `/reload-plugins` and `/todo` answer as a session without the Unified
+  backend does. `/teleport` and `/remote-project` are always offered.
+
+- Route a submitted line as the reference does: `/help`, `/status` and the
+  other side-channel commands run while a turn is streaming or the queue is
+  paused, a slash command, a shell command or a teleport is refused with the
+  line put back, a prompt queues and resumes a paused queue, and nothing but a
+  side-channel command is accepted while a shell command runs.
+
+- Match the reference's command handlers: `/clear` continues under a new
+  session id and says how to resume the previous one, `/status` prices cached
+  tokens, `/whoami` reads the account identity, `/mcp add` accepts
+  `--allow-insecure-http` and `/mcp login` completes in the background, a
+  retryable turn failure offers `/retry`, and `/config`, `/model`, `/thinking`,
+  `/theme` and `/proxy-setup` open their panel and ignore arguments. A panel
+  field is now edited in the composer: Enter saves it, Esc cancels.
+
+- Rank slash and path completions with the reference's current fuzzy scorer,
+  replace the whole command word when a completion is accepted mid-word, and
+  re-run completion when the caret moves, keeping the highlighted row when the
+  list is unchanged.
+
 - Accept `vibe update` as the reference does: a first argument of `update` runs
   the same forced release check as `--check-upgrade`. Both now validate
   `--workdir` and `--add-dir` and load the configuration before asking the
