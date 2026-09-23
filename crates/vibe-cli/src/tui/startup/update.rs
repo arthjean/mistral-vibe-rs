@@ -5,6 +5,7 @@ use std::io::Write;
 use std::path::Path;
 
 use vibe_app_server::workspace::WorkspaceService;
+use vibe_core::observability::{self, LogLevel};
 use vibe_core::updates::{
     GitHubUpdateGateway, UpdateCacheStore, UpdateGateway, UpdateGatewayCause, dismiss_update,
     get_update_if_available, pending_update_from_cache, run_upgrade_commands,
@@ -54,14 +55,30 @@ pub fn update_cache_store(arguments: &Arguments, working_directory: &Path) -> Up
 
 /// Reference `_run_check_upgrade`: report the result and exit without a session.
 ///
+/// The launch reaches this with `--workdir` and `--add-dir` already validated,
+/// and it loads the configuration before it asks anything, as `run_cli` calls
+/// `load_config_orchestrator_or_exit` first: a configuration no session could
+/// start from fails the check too, and the configured theme paints the prompt.
+///
 /// Returns `true` when the reference exits non-zero.
 pub async fn run_check_upgrade(
     arguments: &Arguments,
     current_version: &str,
     output: &mut impl Write,
 ) -> Result<bool, StartupError> {
-    let working_directory =
-        std::env::current_dir().map_err(|error| super::startup_io(Path::new("."), error))?;
+    let working_directory = match &arguments.workdir {
+        Some(directory) => directory.clone(),
+        None => {
+            std::env::current_dir().map_err(|error| super::startup_io(Path::new("."), error))?
+        }
+    };
+    let theme = match configured_theme(arguments, &working_directory) {
+        Ok(theme) => theme,
+        Err(message) => {
+            report(output, &message)?;
+            return Ok(true);
+        }
+    };
     let store = update_cache_store(arguments, &working_directory);
     let Some(gateway) = production_update_gateway() else {
         // Unreachable while the manifest declares a GitHub repository, which
@@ -94,6 +111,7 @@ pub async fn run_check_upgrade(
                 current_version,
                 &latest_version,
                 UpdatePromptMode::CheckUpgrade,
+                theme.as_deref(),
                 output,
             )
             .await?;
@@ -113,38 +131,73 @@ pub async fn run_check_upgrade(
     }
 }
 
+/// Reference `load_config_orchestrator_or_exit` as `--check-upgrade` runs it:
+/// the workspace the launch would open, its configuration brought forward and
+/// composed, and the theme it names. The project half counts only where the
+/// workspace is already trusted, because nothing on this route may ask.
+///
+/// The error is the sentence the launch prints before it exits 1.
+fn configured_theme(
+    arguments: &Arguments,
+    working_directory: &Path,
+) -> Result<Option<String>, String> {
+    let host = super::startup_host(arguments, working_directory);
+    let trusted = arguments.trust
+        || host
+            .inspect_workspace_trust()
+            .is_ok_and(|inspection| inspection.trusted);
+    let document = host
+        .into_workspace(trusted)
+        .map_err(|error| error.to_string())?
+        .config_document()
+        .map_err(|error| error.to_string())?;
+    Ok(document
+        .get("config")
+        .and_then(|config| config.get("theme"))
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_owned))
+}
+
 /// Reference `_maybe_run_startup_update_prompt`: a cached, dismissible offer that
 /// never contacts the network and never starts a session on quit.
+///
+/// `store` is the one the whole launch shares, as the reference hands one
+/// repository from `run_cli` to the app.
 ///
 /// Returns the process exit code the prompt decided, or `None` when startup
 /// continues into a session.
 pub async fn resolve_startup_update_prompt(
-    arguments: &Arguments,
-    working_directory: &Path,
     workspace: &WorkspaceService,
+    store: &UpdateCacheStore,
     current_version: &str,
     output: &mut impl Write,
 ) -> Result<Option<u8>, StartupError> {
     if !update_checks_enabled(workspace) {
         return Ok(None);
     }
-    let store = update_cache_store(arguments, working_directory);
     let cache = store.load();
     let Some(latest_version) = pending_update_from_cache(cache.as_ref(), current_version) else {
         return Ok(None);
     };
+    let theme = workspace.config_document().ok().and_then(|document| {
+        document
+            .get("config")?
+            .get("theme")?
+            .as_str()
+            .map(str::to_owned)
+    });
     let result = resolve_update_prompt(
         current_version,
         &latest_version,
         UpdatePromptMode::Startup,
+        theme.as_deref(),
         output,
     )
     .await?;
     match result {
         UpdatePromptResult::Continue => {
             if let Some(dismissed) = dismiss_update(cache.as_ref(), &latest_version) {
-                // The reference logs and continues when dismissal cannot persist.
-                let _ = store.store(&dismissed);
+                store.store(&dismissed);
             }
         }
         UpdatePromptResult::Updated => {
@@ -164,9 +217,10 @@ async fn resolve_update_prompt(
     current_version: &str,
     latest_version: &str,
     mode: UpdatePromptMode,
+    theme: Option<&str>,
     output: &mut impl Write,
 ) -> Result<UpdatePromptResult, StartupError> {
-    match dialog::run_update_dialog(current_version, latest_version, mode)? {
+    match dialog::run_update_dialog(current_version, latest_version, mode, theme)? {
         None => Ok(UpdatePromptResult::Quit),
         Some(UpdateChoice::Continue) => Ok(UpdatePromptResult::Continue),
         Some(UpdateChoice::Update) => {
@@ -203,20 +257,24 @@ pub fn update_checks_enabled(workspace: &WorkspaceService) -> bool {
 }
 
 /// The background check the reference schedules after mount: it refreshes the
-/// cache for the next startup and never renders anything itself.
+/// cache for the next startup and never renders anything itself. A failed check
+/// is logged as a warning, as `_check_update` logs it.
 pub async fn refresh_update_cache(
     gateway: &dyn UpdateGateway,
     store: &UpdateCacheStore,
     current_version: &str,
 ) {
-    let _ = get_update_if_available(
+    if let Err(error) = get_update_if_available(
         gateway,
         store,
         current_version,
         vibe_core::clock::now_seconds_signed(),
         false,
     )
-    .await;
+    .await
+    {
+        observability::log(LogLevel::Warning, &format!("Update check failed\n{error}"));
+    }
 }
 
 /// The gateway the running distribution is published through: the releases of

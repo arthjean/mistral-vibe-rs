@@ -722,6 +722,12 @@ def root_vectors(parser: argparse.ArgumentParser) -> list[tuple[str, list[str]]]
         ("help-long", ["--help"]),
         ("version-short", ["-v"]),
         ("bare", []),
+        ("update-command", ["update"]),
+        ("update-command-with-prompt", ["update", "review this repository"]),
+        ("update-command-with-setup", ["update", "--setup"]),
+        ("update-after-separator", ["--", "update"]),
+        ("update-after-flag", ["-c", "update"]),
+        ("update-command-capitalized", ["Update"]),
         ("positional-prompt", ["review this repository"]),
         ("two-positionals", ["first", "second"]),
         ("separator-alone", ["--"]),
@@ -906,6 +912,8 @@ STARTUP_VECTORS: tuple[tuple[str, list[str]], ...] = (
         "startup-add-dir-second-missing",
         ["--add-dir", "present", "--add-dir", "missing", "-p", "hi"],
     ),
+    ("startup-check-upgrade-workdir-missing", ["--check-upgrade", "--workdir", "missing"]),
+    ("startup-update-add-dir-missing", ["update", "--add-dir", "missing"]),
     ("startup-working-directory-deleted", ["-p", "hi"]),
 )
 

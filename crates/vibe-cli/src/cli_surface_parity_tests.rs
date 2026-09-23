@@ -1176,8 +1176,8 @@ fn the_committed_corpus_carries_the_surface_the_replay_needs() {
         }
     }
     assert_eq!(
-        startup, 4,
-        "the corpus no longer carries the four startup failures \
+        startup, 6,
+        "the corpus no longer carries the six startup failures \
          `tests/startup_directory_failures.rs` replays"
     );
     for entry in &corpus.unavailable {
@@ -2143,14 +2143,6 @@ const LEDGER: &[Divergence] = &[
         closed_by: "RECORDED",
         row: "7",
         why: "v2.24.1 made the worktree name optional (vibe/cli/entrypoint.py:158-169, nargs `?` with const True): a bare --worktree names the worktree after the prompt or a random slug; this port still declares --worktree as an Option<String> taking exactly one NAME (crates/vibe-cli/src/lib.rs:158-165)",
-    },
-    Divergence {
-        parser: "root",
-        case: "help",
-        pointer: "/help/epilogEntries",
-        closed_by: "RECORDED",
-        row: "1",
-        why: "v2.25.0 added `vibe update`, a first argument the parser rewrites to --check-upgrade (vibe/cli/entrypoint.py:206-208), and lists it before `mcp` under the epilog's Commands heading (vibe/cli/entrypoint.py:44); this port's EPILOG lists only `mcp` (crates/vibe-cli/src/lib.rs:223-231) and main intercepts only `mcp` (crates/vibe-cli/src/main.rs:17), so `update` falls to the positional prompt (crates/vibe-cli/src/lib.rs:76-80)",
     },
     Divergence {
         parser: "mcp-add",

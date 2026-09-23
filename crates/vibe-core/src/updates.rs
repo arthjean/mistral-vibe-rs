@@ -4,11 +4,11 @@
 //! background startup check replay the same cache, freshness, dismissal, and
 //! release-note rules the reference applies.
 
-use std::cmp::Ordering;
 use std::fs;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -16,6 +16,11 @@ use thiserror::Error;
 
 use crate::atomic_file::write_atomically;
 use crate::child::{ChildGroup, Rung};
+use crate::observability::{self, LogLevel};
+
+mod version;
+
+pub use version::{Version, artifact_version};
 
 /// Reference `UPDATE_CACHE_TTL_SECONDS`.
 pub const UPDATE_CACHE_TTL_SECONDS: i64 = 24 * 60 * 60;
@@ -24,7 +29,6 @@ const CACHE_SECTION: &str = "update_cache";
 /// Reference `FileSystemUpdateCacheRepository._legacy_json`.
 const LEGACY_CACHE_FILE: &str = "update_cache.json";
 const GATEWAY_TIMEOUT: Duration = Duration::from_secs(5);
-const MAX_CACHE_BYTES: u64 = 1024 * 1024;
 
 /// Reference `UpdateCache`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -120,8 +124,6 @@ impl UpdateGatewayError {
 pub enum UpdateError {
     #[error("{0}")]
     Gateway(String),
-    #[error("update cache could not be written")]
-    CacheWrite,
 }
 
 pub type UpdateFetch<'a> =
@@ -149,7 +151,7 @@ pub fn plan_update_check(
     current_version: &str,
     now: i64,
 ) -> CachePlan {
-    let Some(current) = Version::parse(current_version) else {
+    let Some(current) = Version::parse_notifier(current_version) else {
         return CachePlan::Unversioned;
     };
     if force {
@@ -163,7 +165,7 @@ pub fn plan_update_check(
 
 /// Reference `_get_cached_update_if_any`.
 fn cached_update(cache: &UpdateCache, current: &Version) -> Option<UpdateAvailability> {
-    let latest = Version::parse(&cache.latest_version)?;
+    let latest = Version::parse_notifier(&cache.latest_version)?;
     if latest <= *current {
         return None;
     }
@@ -189,7 +191,7 @@ pub fn resolve_fetch(
     current_version: &str,
     now: i64,
 ) -> FetchResolution {
-    let Some(current) = Version::parse(current_version) else {
+    let Some(current) = Version::parse_notifier(current_version) else {
         return FetchResolution {
             cache_write: None,
             availability: None,
@@ -209,7 +211,7 @@ pub fn resolve_fetch(
             error: None,
         },
         Ok(Some(latest_version)) => {
-            let Some(latest) = Version::parse(&latest_version) else {
+            let Some(latest) = Version::parse_notifier(&latest_version) else {
                 // The reference returns before touching the cache when the
                 // gateway reports a version it cannot parse.
                 return FetchResolution {
@@ -256,9 +258,9 @@ pub fn pending_update_from_cache(
     cache: Option<&UpdateCache>,
     current_version: &str,
 ) -> Option<String> {
-    let current = Version::parse(current_version)?;
+    let current = Version::parse_notifier(current_version)?;
     let cache = cache?;
-    let latest = Version::parse(&cache.latest_version)?;
+    let latest = Version::parse_notifier(&cache.latest_version)?;
     if latest <= current {
         return None;
     }
@@ -303,10 +305,17 @@ pub fn mark_version_as_seen(cache: Option<&UpdateCache>, version: &str, now: i64
 /// shared `cache.toml`, where any unreadable or malformed state reads as absent.
 /// A sibling `update_cache.json` written by the pre-TOML layout is read once and
 /// migrated into the section.
+///
+/// Like the reference repository, one store reads the disk once: the first
+/// [`Self::load`] is remembered, and every [`Self::store`] replaces what is
+/// remembered whether or not the write reached the disk. Clones share that
+/// memory, which is how one launch threads a single repository through its
+/// startup prompt, its release notes and its background check.
 #[derive(Debug, Clone)]
 pub struct UpdateCacheStore {
     path: PathBuf,
     legacy_path: PathBuf,
+    remembered: Arc<Mutex<Option<Option<UpdateCache>>>>,
 }
 
 impl UpdateCacheStore {
@@ -315,6 +324,7 @@ impl UpdateCacheStore {
         Self {
             path: vibe_home.join("cache.toml"),
             legacy_path: vibe_home.join(LEGACY_CACHE_FILE),
+            remembered: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -330,7 +340,8 @@ impl UpdateCacheStore {
         &self.legacy_path
     }
 
-    /// Reference `_read_section` followed by `_parse`.
+    /// Reference `get`: `_read_section` followed by `_parse` on the first call,
+    /// and the remembered value on every later one.
     ///
     /// The reference tests the section for truthiness, so a missing section, an
     /// empty one, and a section that is not a table all fall through to the
@@ -338,21 +349,32 @@ impl UpdateCacheStore {
     /// contents do not parse.
     #[must_use]
     pub fn load(&self) -> Option<UpdateCache> {
+        let mut remembered = self
+            .remembered
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(cache) = remembered.as_ref() {
+            return cache.clone();
+        }
         let section = self.read_document().and_then(|document| {
             document
                 .get(CACHE_SECTION)
                 .and_then(toml::Value::as_table)
                 .cloned()
         });
-        match section {
+        let cache = match section {
             Some(section) if !section.is_empty() => Self::parse_section(&section),
             _ => self.migrate_legacy(),
-        }
+        };
+        *remembered = Some(cache.clone());
+        cache
     }
 
     /// Reference `set`: the cache becomes the payload the section merge applies,
-    /// with an unset optional key omitted rather than written as empty.
-    pub fn store(&self, cache: &UpdateCache) -> Result<(), UpdateError> {
+    /// with an unset optional key omitted rather than written as empty, and it
+    /// is remembered even when the write fails, because the reference's
+    /// `write_section` logs that failure and returns.
+    pub fn store(&self, cache: &UpdateCache) {
         let mut payload = toml::map::Map::new();
         payload.insert(
             "latest_version".to_owned(),
@@ -374,17 +396,19 @@ impl UpdateCacheStore {
                 toml::Value::String(dismissed.clone()),
             );
         }
-        self.write_section(payload)
+        self.write_section(payload);
+        *self
+            .remembered
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Some(cache.clone()));
     }
 
     /// Reference `FileSystemCacheStore.write_section`, which updates the section
     /// in place: a key this port does not model survives the write, an optional
     /// key the payload omits keeps whatever the file held, and only a section
-    /// that is not a table is replaced outright.
-    fn write_section(
-        &self,
-        payload: toml::map::Map<String, toml::Value>,
-    ) -> Result<(), UpdateError> {
+    /// that is not a table is replaced outright. A failed write is logged at
+    /// debug level and otherwise ignored, as the reference ignores it.
+    fn write_section(&self, payload: toml::map::Map<String, toml::Value>) {
         let mut document = self.read_document().unwrap_or_default();
         let mut section = match document.remove(CACHE_SECTION) {
             Some(toml::Value::Table(section)) => section,
@@ -392,21 +416,31 @@ impl UpdateCacheStore {
         };
         section.extend(payload);
         document.insert(CACHE_SECTION.to_owned(), toml::Value::Table(section));
-        let encoded = toml::to_string_pretty(&toml::Value::Table(document))
-            .map_err(|_| UpdateError::CacheWrite)?;
-        if let Some(parent) = self.path.parent() {
-            fs::create_dir_all(parent).map_err(|_| UpdateError::CacheWrite)?;
+        let written = toml::to_string_pretty(&toml::Value::Table(document))
+            .map_err(|error| error.to_string())
+            .and_then(|encoded| {
+                if let Some(parent) = self.path.parent() {
+                    fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+                }
+                write_atomically(&self.path, "cache.toml", encoded.as_bytes())
+                    .map_err(|error| format!("{error:?}"))
+            });
+        if let Err(error) = written {
+            observability::log(
+                LogLevel::Debug,
+                &format!(
+                    "Failed to write cache file {}\n{error}",
+                    self.path.display()
+                ),
+            );
         }
-        write_atomically(&self.path, "cache.toml", encoded.as_bytes())
-            .map_err(|_| UpdateError::CacheWrite)
     }
 
     /// Reference `_read_section`'s fallback: the pre-TOML JSON is read once, its
     /// non-null keys are merged into the section, and the values reach the
-    /// caller whether or not that write succeeded, because the reference's
-    /// `write_section` logs and swallows its own failure.
+    /// caller whether or not that write succeeded.
     fn migrate_legacy(&self) -> Option<UpdateCache> {
-        let text = read_bounded(&self.legacy_path)?;
+        let text = fs::read_to_string(&self.legacy_path).ok()?;
         let legacy: serde_json::Value = serde_json::from_str(&text).ok()?;
         // The reference hands whatever the file held to `_parse` and raises an
         // attribute error on anything but an object. This port reads a non-object
@@ -416,7 +450,7 @@ impl UpdateCacheStore {
             .iter()
             .filter_map(|(key, value)| Some((key.clone(), legacy_value(value)?)))
             .collect();
-        let _ = self.write_section(payload);
+        self.write_section(payload);
         Self::parse_legacy(legacy)
     }
 
@@ -453,22 +487,11 @@ impl UpdateCacheStore {
         })
     }
 
+    /// Reference `_read_cache`: the whole file, of any size, or nothing when it
+    /// cannot be read or does not parse.
     fn read_document(&self) -> Option<toml::Table> {
-        toml::from_str(&read_bounded(&self.path)?).ok()
+        toml::from_str(&fs::read_to_string(&self.path).ok()?).ok()
     }
-}
-
-/// Reads one cache file, treating anything unreadable as absent.
-///
-/// The reference reads both files with no ceiling. This port refuses one past
-/// [`MAX_CACHE_BYTES`] so a file something else appended to cannot be parsed
-/// into memory, which reads as absent exactly like a corrupt one.
-fn read_bounded(path: &Path) -> Option<String> {
-    let metadata = fs::metadata(path).ok()?;
-    if metadata.len() > MAX_CACHE_BYTES {
-        return None;
-    }
-    fs::read_to_string(path).ok()
 }
 
 /// One legacy JSON value as the reference's TOML writer records it. A null is
@@ -496,6 +519,11 @@ fn legacy_value(value: &serde_json::Value) -> Option<toml::Value> {
 }
 
 /// Reference `get_update_if_available`, including its cache writes.
+///
+/// The store is read when the reference reads its repository: before the
+/// gateway only when the check is not forced, and otherwise only once the
+/// answer calls for a write, which is where `_write_update_cache` asks for the
+/// previous entry.
 pub async fn get_update_if_available(
     gateway: &dyn UpdateGateway,
     store: &UpdateCacheStore,
@@ -503,20 +531,19 @@ pub async fn get_update_if_available(
     now: i64,
     force: bool,
 ) -> Result<Option<UpdateAvailability>, UpdateError> {
-    let cache = store.load();
+    if Version::parse_notifier(current_version).is_none() {
+        return Ok(None);
+    }
+    let cache = if force { None } else { store.load() };
     match plan_update_check(force, cache.as_ref(), current_version, now) {
         CachePlan::Unversioned => return Ok(None),
         CachePlan::Cached(availability) => return Ok(availability),
         CachePlan::Fetch => {}
     }
-    let resolution = resolve_fetch(
-        gateway.fetch_update().await,
-        cache.as_ref(),
-        current_version,
-        now,
-    );
+    let resolution = resolve_fetch(gateway.fetch_update().await, None, current_version, now);
     if let Some(write) = &resolution.cache_write {
-        store.store(write)?;
+        let previous = store.load();
+        store.store(&write_cache(previous.as_ref(), &write.latest_version, now));
     }
     match resolution.error {
         Some(error) => Err(error),
@@ -540,42 +567,74 @@ impl PyPiUpdateGateway {
         project: impl Into<String>,
         base_url: impl Into<String>,
     ) -> Result<Self, UpdateGatewayError> {
-        let client = reqwest::Client::builder()
-            .timeout(GATEWAY_TIMEOUT)
-            .build()
-            .map_err(|_| UpdateGatewayError::new(UpdateGatewayCause::RequestFailed))?;
         Ok(Self {
             project: project.into(),
             base_url: base_url.into().trim_end_matches('/').to_owned(),
-            client,
+            client: gateway_client(GATEWAY_TIMEOUT)?,
         })
     }
+}
+
+/// The client both gateways send through: `httpx` applies its five-second
+/// timeout to connecting and to each read rather than to the whole exchange,
+/// follows no redirect, and `build_ssl_context` adds the certificates the
+/// environment names.
+fn gateway_client(timeout: Duration) -> Result<reqwest::Client, UpdateGatewayError> {
+    crate::http_trust::trust_certificate_environment(
+        reqwest::Client::builder()
+            .connect_timeout(timeout)
+            .read_timeout(timeout)
+            // `httpx` answers a redirect as the response it is.
+            .redirect(reqwest::redirect::Policy::none()),
+    )
+    .build()
+    .map_err(|_| UpdateGatewayError::new(UpdateGatewayCause::RequestFailed))
 }
 
 impl UpdateGateway for PyPiUpdateGateway {
     fn fetch_update(&self) -> UpdateFetch<'_> {
         Box::pin(async move {
             let url = format!("{}/simple/{}/", self.base_url, self.project);
-            let response = self
+            let request = self
                 .client
                 .get(url)
-                .header("Accept", "application/vnd.pypi.simple.v1+json")
-                .send()
-                .await
-                .map_err(|_| UpdateGatewayError::new(UpdateGatewayCause::RequestFailed))?;
-            let status = response.status().as_u16();
-            if let Some(cause) = status_cause(status) {
-                return Err(UpdateGatewayError::new(cause));
-            }
-            let body = response
-                .text()
-                .await
-                .map_err(|_| UpdateGatewayError::new(UpdateGatewayCause::InvalidResponse))?;
-            let payload: serde_json::Value = serde_json::from_str(&body)
-                .map_err(|_| UpdateGatewayError::new(UpdateGatewayCause::InvalidResponse))?;
-            Ok(select_latest_version(&payload))
+                .header("Accept", "application/vnd.pypi.simple.v1+json");
+            let (status, _, body) = exchange(request).await?;
+            resolve_pypi_response(status, &body)
         })
     }
+}
+
+/// One request as `httpx.AsyncClient.get` performs it: the whole body is read
+/// before the caller sees the status, so a connection that fails mid-body is a
+/// failed request rather than a response.
+async fn exchange(
+    request: reqwest::RequestBuilder,
+) -> Result<(u16, Option<String>, Vec<u8>), UpdateGatewayError> {
+    let failed = |_| UpdateGatewayError::new(UpdateGatewayCause::RequestFailed);
+    let response = request.send().await.map_err(failed)?;
+    let status = response.status().as_u16();
+    let remaining = response
+        .headers()
+        .get(RATE_LIMIT_REMAINING_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned);
+    let body = response.bytes().await.map_err(failed)?;
+    Ok((status, remaining, body.to_vec()))
+}
+
+/// Reference `PyPIUpdateGateway.fetch_update` once the response is in hand:
+/// the status first, then the JSON, then the selection.
+pub fn resolve_pypi_response(
+    status: u16,
+    body: &[u8],
+) -> Result<Option<String>, UpdateGatewayError> {
+    if let Some(cause) = status_cause(status) {
+        return Err(UpdateGatewayError::new(cause));
+    }
+    let payload: serde_json::Value = serde_json::from_slice(body)
+        .map_err(|_| UpdateGatewayError::new(UpdateGatewayCause::InvalidResponse))?;
+    Ok(select_latest_version(&payload))
 }
 
 /// Reference `_STATUS_CAUSES` plus the generic error branch.
@@ -590,46 +649,76 @@ pub fn status_cause(status: u16) -> Option<UpdateGatewayCause> {
     }
 }
 
-/// Reference `PyPIUpdateGateway.fetch_update`: the highest published version that
-/// still has a non-yanked artifact.
+/// Reference `PyPIUpdateGateway.fetch_update`: the highest listed version that
+/// still has a non-yanked artifact, reported in its normalized spelling.
+///
+/// `versions` and `files` are iterated the way the reference iterates
+/// `data.get(...) or []`: a list yields its items, a string its characters and
+/// an object its keys. Each listed version goes through `str()` before it is
+/// parsed, so a number is a candidate too.
 #[must_use]
 pub fn select_latest_version(payload: &serde_json::Value) -> Option<String> {
-    let published = payload
-        .get("files")
-        .and_then(serde_json::Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter(|file| file.get("yanked").and_then(serde_json::Value::as_bool) != Some(true))
-        .filter_map(|file| file.get("filename").and_then(serde_json::Value::as_str))
-        .filter_map(artifact_version)
+    let published = python_iter(payload.get("files"))
+        .filter(|file| {
+            file.is_object() && file.get("yanked") != Some(&serde_json::Value::Bool(true))
+        })
+        .filter_map(|file| {
+            file.get("filename")
+                .and_then(serde_json::Value::as_str)
+                .and_then(artifact_version)
+        })
         .collect::<Vec<_>>();
-    let mut candidates = payload
-        .get("versions")
-        .and_then(serde_json::Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(serde_json::Value::as_str)
-        .filter_map(|raw| Version::parse(raw).map(|version| (version, raw.to_owned())))
+    let mut candidates = python_iter(payload.get("versions"))
+        .filter_map(|raw| Version::parse(&python_str(&raw)?))
         .collect::<Vec<_>>();
-    candidates.sort_by(|left, right| right.0.cmp(&left.0));
+    // Python's `sorted(..., reverse=True)` is stable, so equal versions keep
+    // the order the index listed them in.
+    candidates.sort_by(|left, right| right.cmp(left));
     candidates
         .into_iter()
-        .find(|(version, _)| published.contains(version))
-        .map(|(_, raw)| raw)
+        .find(|version| published.contains(version))
+        .map(|version| version.to_string())
 }
 
-/// Reference `_parse_filename_version` for wheels and source distributions.
-fn artifact_version(filename: &str) -> Option<Version> {
-    if let Some(stem) = filename.strip_suffix(".whl") {
-        let mut parts = stem.split('-');
-        parts.next()?;
-        return parts.next().and_then(Version::parse);
+/// What `for item in value or []` visits. A truthy scalar the reference cannot
+/// iterate raises there; this port visits nothing, which reads as no update.
+fn python_iter(value: Option<&serde_json::Value>) -> impl Iterator<Item = serde_json::Value> {
+    let items = match value {
+        Some(serde_json::Value::Array(items)) => items.clone(),
+        Some(serde_json::Value::String(text)) => text
+            .chars()
+            .map(|character| serde_json::Value::String(character.to_string()))
+            .collect(),
+        Some(serde_json::Value::Object(entries)) => entries
+            .keys()
+            .map(|key| serde_json::Value::String(key.clone()))
+            .collect(),
+        _ => Vec::new(),
+    };
+    items.into_iter()
+}
+
+/// `str(value)` for the JSON values that can spell a version: a string is
+/// itself and a number is its Python spelling. Every other JSON value prints
+/// as something no version grammar accepts.
+fn python_str(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::String(text) => Some(text.clone()),
+        serde_json::Value::Number(number) => Some(number.to_string()),
+        _ => None,
     }
-    let stem = filename
-        .strip_suffix(".tar.gz")
-        .or_else(|| filename.strip_suffix(".zip"))?;
-    let (_, version) = stem.rsplit_once('-')?;
-    Version::parse(version)
+}
+
+/// Python truthiness of one JSON value.
+fn python_truthy(value: Option<&serde_json::Value>) -> bool {
+    match value {
+        None | Some(serde_json::Value::Null) => false,
+        Some(serde_json::Value::Bool(flag)) => *flag,
+        Some(serde_json::Value::Number(number)) => number.as_f64().is_some_and(|n| n != 0.0),
+        Some(serde_json::Value::String(text)) => !text.is_empty(),
+        Some(serde_json::Value::Array(items)) => !items.is_empty(),
+        Some(serde_json::Value::Object(entries)) => !entries.is_empty(),
+    }
 }
 
 /// Reference `GitHubUpdateGateway`: the releases of one repository, newest
@@ -677,16 +766,12 @@ impl GitHubUpdateGateway {
         base_url: impl Into<String>,
         timeout: Duration,
     ) -> Result<Self, UpdateGatewayError> {
-        let client = reqwest::Client::builder()
-            .timeout(timeout)
-            .build()
-            .map_err(|_| UpdateGatewayError::new(UpdateGatewayCause::RequestFailed))?;
         Ok(Self {
             owner: owner.into(),
             repository: repository.into(),
             base_url: base_url.into().trim_end_matches('/').to_owned(),
             token: None,
-            client,
+            client: gateway_client(timeout)?,
         })
     }
 
@@ -718,34 +803,30 @@ impl UpdateGateway for GitHubUpdateGateway {
             if let Some(token) = &self.token {
                 request = request.header("Authorization", format!("Bearer {token}"));
             }
-            let response = request
-                .send()
-                .await
-                .map_err(|_| UpdateGatewayError::new(UpdateGatewayCause::RequestFailed))?;
-            let status = response.status().as_u16();
-            let remaining = response
-                .headers()
-                .get(RATE_LIMIT_REMAINING_HEADER)
-                .and_then(|value| value.to_str().ok())
-                .map(str::to_owned);
-            if let Some(cause) = github_status_cause(status, remaining.as_deref()) {
-                return Err(UpdateGatewayError {
-                    cause,
-                    message: match cause {
-                        UpdateGatewayCause::NotFound => Some(Self::NOT_FOUND_MESSAGE.to_owned()),
-                        _ => None,
-                    },
-                });
-            }
-            let body = response
-                .text()
-                .await
-                .map_err(|_| UpdateGatewayError::new(UpdateGatewayCause::InvalidResponse))?;
-            let payload: serde_json::Value = serde_json::from_str(&body)
-                .map_err(|_| UpdateGatewayError::new(UpdateGatewayCause::InvalidResponse))?;
-            Ok(select_latest_release(&payload))
+            let (status, remaining, body) = exchange(request).await?;
+            resolve_github_response(status, remaining.as_deref(), &body)
         })
     }
+}
+
+/// Reference `GitHubUpdateGateway.fetch_update` once the response is in hand.
+/// `NotFound` carries this port's own sentence, as the reference carries its
+/// own there.
+pub fn resolve_github_response(
+    status: u16,
+    rate_limit_remaining: Option<&str>,
+    body: &[u8],
+) -> Result<Option<String>, UpdateGatewayError> {
+    if let Some(cause) = github_status_cause(status, rate_limit_remaining) {
+        return Err(UpdateGatewayError {
+            cause,
+            message: (cause == UpdateGatewayCause::NotFound)
+                .then(|| GitHubUpdateGateway::NOT_FOUND_MESSAGE.to_owned()),
+        });
+    }
+    let payload: serde_json::Value = serde_json::from_slice(body)
+        .map_err(|_| UpdateGatewayError::new(UpdateGatewayCause::InvalidResponse))?;
+    Ok(select_latest_release(&payload))
 }
 
 /// Reference `GitHubUpdateGateway.fetch_update` response branches, in the order
@@ -768,17 +849,20 @@ fn github_status_cause(
 }
 
 /// Reference `GitHubUpdateGateway.fetch_update` selection: the most recently
-/// published release that is neither a draft nor a prerelease.
+/// published release that is neither a draft nor a prerelease, both flags read
+/// for their truthiness.
 ///
 /// A payload that is not a list of releases reads as no update rather than as
 /// an error, which is where this port stops short of the reference: the
 /// reference reaches an unhandled attribute error there.
 #[must_use]
-fn select_latest_release(payload: &serde_json::Value) -> Option<String> {
+pub fn select_latest_release(payload: &serde_json::Value) -> Option<String> {
     let mut releases = payload
         .as_array()?
         .iter()
-        .filter(|release| !flag(release, "prerelease") && !flag(release, "draft"))
+        .filter(|release| {
+            !python_truthy(release.get("prerelease")) && !python_truthy(release.get("draft"))
+        })
         .map(|release| {
             (
                 release
@@ -800,15 +884,11 @@ fn select_latest_release(payload: &serde_json::Value) -> Option<String> {
     })
 }
 
-fn flag(release: &serde_json::Value, key: &str) -> bool {
-    release.get(key).and_then(serde_json::Value::as_bool) == Some(true)
-}
-
 /// Reference `GitHubUpdateGateway._extract_version`: one optional `v` prefix
-/// around a trimmed tag, and an empty tag is no version.
+/// around a tag stripped of Python whitespace, and an empty tag is no version.
 #[must_use]
 fn extract_release_version(tag_name: &str) -> Option<String> {
-    let tag = tag_name.trim();
+    let tag = tag_name.trim_matches(version::is_python_space);
     let version = tag.strip_prefix(['v', 'V']).unwrap_or(tag);
     (!version.is_empty()).then(|| version.to_owned())
 }
@@ -871,187 +951,12 @@ where
     }
 }
 
-/// The PEP 440 subset the reference version comparison needs: release segments
-/// with optional dev, pre-release, post-release, and local parts.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Version {
-    release: Vec<u64>,
-    dev: Option<u64>,
-    pre: Option<(PreKind, u64)>,
-    post: Option<u64>,
-    local: Option<Vec<LocalSegment>>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum PreKind {
-    Alpha,
-    Beta,
-    ReleaseCandidate,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-enum LocalSegment {
-    Text(String),
-    Number(u64),
-}
-
-impl Version {
-    /// Reference `_parse_version`, including its `-` to `+` normalization.
-    #[must_use]
-    pub fn parse(raw: &str) -> Option<Self> {
-        let normalized = raw.trim().replace('-', "+").to_ascii_lowercase();
-        let normalized = normalized.strip_prefix('v').unwrap_or(&normalized);
-        let (public, local) = match normalized.split_once('+') {
-            Some((public, local)) => (public, Some(parse_local(local)?)),
-            None => (normalized, None),
-        };
-        let mut rest = public;
-        let mut dev = None;
-        if let Some((head, tail)) = rest.split_once(".dev") {
-            dev = Some(parse_number(tail)?);
-            rest = head;
-        }
-        let mut post = None;
-        if let Some((head, tail)) = rest.split_once(".post") {
-            post = Some(parse_number(tail)?);
-            rest = head;
-        }
-        let mut pre = None;
-        for (marker, kind) in [
-            ("rc", PreKind::ReleaseCandidate),
-            ("a", PreKind::Alpha),
-            ("b", PreKind::Beta),
-        ] {
-            if let Some((head, tail)) = rest.split_once(marker)
-                && head.ends_with(|character: char| character.is_ascii_digit())
-            {
-                pre = Some((kind, parse_number(tail)?));
-                rest = head;
-                break;
-            }
-        }
-        let mut release = rest
-            .split('.')
-            .map(parse_number)
-            .collect::<Option<Vec<_>>>()?;
-        if release.is_empty() {
-            return None;
-        }
-        // PEP 440 pads shorter releases with zeros, so `2.23` and `2.23.0` must
-        // compare and hash as the same version.
-        while release.len() > 1 && release.last() == Some(&0) {
-            release.pop();
-        }
-        Some(Self {
-            release,
-            dev,
-            pre,
-            post,
-            local,
-        })
-    }
-
-    fn release_at(&self, index: usize) -> u64 {
-        self.release.get(index).copied().unwrap_or(0)
-    }
-
-    /// PEP 440 ordering of the pre/post/dev triple.
-    fn stage(&self) -> (u8, u64, u64) {
-        match (self.dev, self.pre, self.post) {
-            (Some(dev), None, None) => (0, 0, dev),
-            (_, Some((kind, number)), None) => (1, kind as u64, number),
-            (_, None, Some(post)) => (3, post, 0),
-            (_, Some((kind, number)), Some(_)) => (3, kind as u64, number),
-            (None, None, None) => (2, 0, 0),
-        }
-    }
-}
-
-impl PartialOrd for Version {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for Version {
-    fn cmp(&self, other: &Self) -> Ordering {
-        let width = self.release.len().max(other.release.len());
-        for index in 0..width {
-            match self.release_at(index).cmp(&other.release_at(index)) {
-                Ordering::Equal => {}
-                ordering => return ordering,
-            }
-        }
-        match self.stage().cmp(&other.stage()) {
-            Ordering::Equal => {}
-            ordering => return ordering,
-        }
-        match (&self.local, &other.local) {
-            (None, None) => Ordering::Equal,
-            (None, Some(_)) => Ordering::Less,
-            (Some(_), None) => Ordering::Greater,
-            (Some(left), Some(right)) => compare_local(left, right),
-        }
-    }
-}
-
-fn compare_local(left: &[LocalSegment], right: &[LocalSegment]) -> Ordering {
-    for index in 0..left.len().max(right.len()) {
-        match (left.get(index), right.get(index)) {
-            (None, None) => return Ordering::Equal,
-            (None, Some(_)) => return Ordering::Less,
-            (Some(_), None) => return Ordering::Greater,
-            (Some(LocalSegment::Number(left)), Some(LocalSegment::Number(right))) => {
-                match left.cmp(right) {
-                    Ordering::Equal => {}
-                    ordering => return ordering,
-                }
-            }
-            (Some(LocalSegment::Text(left)), Some(LocalSegment::Text(right))) => {
-                match left.cmp(right) {
-                    Ordering::Equal => {}
-                    ordering => return ordering,
-                }
-            }
-            (Some(LocalSegment::Number(_)), Some(LocalSegment::Text(_))) => {
-                return Ordering::Greater;
-            }
-            (Some(LocalSegment::Text(_)), Some(LocalSegment::Number(_))) => return Ordering::Less,
-        }
-    }
-    Ordering::Equal
-}
-
-fn parse_local(raw: &str) -> Option<Vec<LocalSegment>> {
-    if raw.is_empty() {
-        return None;
-    }
-    raw.split(['.', '+'])
-        .map(|segment| {
-            if segment.is_empty() || !segment.chars().all(|c| c.is_ascii_alphanumeric()) {
-                return None;
-            }
-            Some(match segment.parse::<u64>() {
-                Ok(number) => LocalSegment::Number(number),
-                Err(_) => LocalSegment::Text(segment.to_owned()),
-            })
-        })
-        .collect()
-}
-
-fn parse_number(raw: &str) -> Option<u64> {
-    if raw.is_empty() || !raw.bytes().all(|byte| byte.is_ascii_digit()) {
-        return None;
-    }
-    raw.parse().ok()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn version(raw: &str) -> Version {
-        Version::parse(raw).expect("valid version")
+        Version::parse_notifier(raw).expect("valid version")
     }
 
     #[test]
@@ -1064,8 +969,8 @@ mod tests {
         assert!(version("2.23.1.post1") > version("2.23.1"));
         // `-` normalizes to a local segment, which outranks the bare release.
         assert!(version("2.23.1-dev") > version("2.23.1"));
-        assert!(Version::parse("not-a-version").is_none());
-        assert!(Version::parse("").is_none());
+        assert!(Version::parse_notifier("not-a-version").is_none());
+        assert!(Version::parse_notifier("").is_none());
     }
 
     #[test]
@@ -1182,7 +1087,7 @@ mod tests {
             seen_whats_new_version: Some("2.23.1".to_owned()),
             dismissed_version: None,
         };
-        store.store(&cache).expect("cache write");
+        store.store(&cache);
         assert_eq!(store.load(), Some(cache));
         let text = fs::read_to_string(store.path()).expect("cache text");
         assert!(text.contains("kept = true"));
@@ -1720,17 +1625,18 @@ mod tests {
              dismissed_version = \"1.0.0\"\n",
         )
         .expect("existing cache");
-        store
-            .store(&UpdateCache::new("2.24.0", 42))
-            .expect("cache write");
+        store.store(&UpdateCache::new("2.24.0", 42));
         let text = fs::read_to_string(store.path()).expect("cache text");
         assert!(text.contains("kept = true"), "a sibling table survives");
         assert!(
             text.contains("custom = \"unmodeled\""),
             "a key this port does not model survives"
         );
+        // The disk carries the merge, while the store that wrote remembers the
+        // value it was given, as the reference repository does.
+        assert_eq!(store.load(), Some(UpdateCache::new("2.24.0", 42)));
         assert_eq!(
-            store.load(),
+            UpdateCacheStore::new(directory.path()).load(),
             Some(UpdateCache {
                 latest_version: "2.24.0".to_owned(),
                 stored_at_timestamp: 42,
@@ -1751,7 +1657,7 @@ mod tests {
         fs::write(store.path(), "update_cache = 5\n\n[other]\nkept = true\n")
             .expect("existing cache");
         let cache = UpdateCache::new("2.24.0", 42);
-        store.store(&cache).expect("cache write");
+        store.store(&cache);
         assert_eq!(store.load(), Some(cache));
         assert!(
             fs::read_to_string(store.path())
@@ -1760,39 +1666,43 @@ mod tests {
         );
     }
 
-    /// The ceiling is this port's own: the reference reads the file whatever its
-    /// size, so an oversized document is the one load the two answer differently.
+    /// The reference reads the file whatever its size, so a document padded
+    /// past a megabyte still answers and keeps its other tables on the next
+    /// write.
     #[test]
-    fn an_oversized_cache_reads_as_absent_and_the_next_write_produces_a_valid_file() {
+    fn a_large_cache_is_read_whole_and_keeps_its_other_tables() {
         let directory = tempfile::tempdir().expect("temporary vibe home");
         let store = UpdateCacheStore::new(directory.path());
-        let padding = "#".repeat(usize::try_from(MAX_CACHE_BYTES).expect("ceiling fits a usize"));
-        fs::write(store.path(), format!("[other]\nkept = true\n{padding}\n"))
-            .expect("oversized cache");
-        assert_eq!(store.load(), None);
-        let cache = UpdateCache::new("2.24.0", 42);
-        store.store(&cache).expect("cache write");
-        assert_eq!(store.load(), Some(cache), "the rewritten file is readable");
+        let padding = "#".repeat(1_100_000);
+        fs::write(
+            store.path(),
+            format!(
+                "[other]\nkept = true\n{padding}\n[update_cache]\nlatest_version = \"1.0.0\"\nstored_at_timestamp = 1\n"
+            ),
+        )
+        .expect("large cache");
+        assert_eq!(store.load(), Some(UpdateCache::new("1.0.0", 1)));
+        store.store(&UpdateCache::new("2.24.0", 42));
         assert!(
-            !fs::read_to_string(store.path())
+            fs::read_to_string(store.path())
                 .expect("cache text")
                 .contains("kept = true"),
-            "an unreadable document is replaced rather than appended to"
+            "the unrelated table survives the write"
         );
     }
 
-    /// The reference logs and swallows a failed cache write. This port reports
-    /// it, which is what routes the failure into the update flow's own
-    /// cache-write outcome instead of losing it.
+    /// Reference `FileSystemCacheStore.write_section` logs a failed write and
+    /// returns, and the repository remembers the value it was given, so the
+    /// same store answers with it while the disk keeps the previous entry.
     #[cfg(unix)]
     #[test]
-    fn a_failed_write_reports_the_error_and_leaves_the_previous_file_intact() {
+    fn a_failed_write_is_remembered_and_leaves_the_previous_file_intact() {
         use std::os::unix::fs::PermissionsExt as _;
 
         let directory = tempfile::tempdir().expect("temporary vibe home");
         let store = UpdateCacheStore::new(directory.path());
         let previous = UpdateCache::new("2.24.0", 42);
-        store.store(&previous).expect("first cache write");
+        store.store(&previous);
 
         let seal = |mode| {
             let mut permissions = fs::metadata(directory.path())
@@ -1803,7 +1713,8 @@ mod tests {
         };
         seal(0o500);
         let ignores_permissions = fs::write(directory.path().join("probe"), b"").is_ok();
-        let outcome = store.store(&UpdateCache::new("2.25.0", 43));
+        let next = UpdateCache::new("2.25.0", 43);
+        store.store(&next);
         // Restored before any assertion, so a failure still leaves a removable
         // temporary directory behind.
         seal(0o700);
@@ -1813,11 +1724,32 @@ mod tests {
             // only the sealed run proves anything.
             return;
         }
-        assert_eq!(outcome, Err(UpdateError::CacheWrite));
         assert_eq!(
             store.load(),
+            Some(next),
+            "the store remembers what it was given"
+        );
+        assert_eq!(
+            UpdateCacheStore::new(directory.path()).load(),
             Some(previous),
-            "a staged write that never renamed leaves the previous cache in place"
+            "a staged write that never renamed leaves the previous cache on disk"
+        );
+    }
+
+    /// Reference `get`: the disk is read once per repository, so an edit made
+    /// by another process after the first read is not seen by that repository.
+    #[test]
+    fn a_store_reads_the_disk_once_and_clones_share_what_it_read() {
+        let directory = tempfile::tempdir().expect("temporary vibe home");
+        let store = UpdateCacheStore::new(directory.path());
+        store.store(&UpdateCache::new("2.24.0", 42));
+        let clone = store.clone();
+        UpdateCacheStore::new(directory.path()).store(&UpdateCache::new("9.0.0", 1));
+        assert_eq!(store.load(), Some(UpdateCache::new("2.24.0", 42)));
+        assert_eq!(clone.load(), Some(UpdateCache::new("2.24.0", 42)));
+        assert_eq!(
+            UpdateCacheStore::new(directory.path()).load(),
+            Some(UpdateCache::new("9.0.0", 1))
         );
     }
 

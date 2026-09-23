@@ -4,6 +4,8 @@
 //! Rendering only distinguishes light from dark, so each catalog entry carries
 //! the polarity the reference theme declares.
 
+use ratatui::style::{Color, Style};
+
 use super::setup::Theme;
 
 /// Reference `AUTO_THEME`.
@@ -130,6 +132,19 @@ pub fn theme_polarity(value: &str) -> Option<Theme> {
                 Theme::Light
             }
         }),
+    }
+}
+
+/// The whole-frame style a theme's polarity implies: a light theme paints
+/// black on white, a dark one white on black, and the automatic entry or an
+/// unknown name leaves the terminal's own colors, which is where the reference
+/// falls back to its automatic theme.
+#[must_use]
+pub fn polarity_style(value: &str) -> Style {
+    match theme_polarity(value) {
+        Some(Theme::Light) => Style::default().bg(Color::White).fg(Color::Black),
+        Some(Theme::Dark) => Style::default().bg(Color::Black).fg(Color::White),
+        _ => Style::default(),
     }
 }
 

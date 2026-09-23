@@ -18,8 +18,7 @@ use super::model::{
     GRADIENT_COLORS, OnboardingModel, ScreenId, SignInVariant, THEME_VISIBLE_NEIGHBORS,
     gradient_color, masked, theme_fade_class, theme_preview_height,
 };
-use crate::tui::setup::Theme;
-use crate::tui::themes::theme_polarity;
+use crate::tui::themes;
 
 const WELCOME_PREFIX: &str = "Welcome to ";
 const WELCOME_HIGHLIGHT: &str = "Mistral Vibe";
@@ -63,11 +62,7 @@ fn hex_color(hex: &str) -> Color {
 /// The whole-frame style the selected theme's polarity implies, so a
 /// selection applies to the surrounding screen and not only the preview.
 fn polarity_style(model: &OnboardingModel) -> Style {
-    match theme_polarity(model.selected_theme()) {
-        Some(Theme::Light) => Style::default().bg(Color::White).fg(Color::Black),
-        Some(Theme::Dark) => Style::default().bg(Color::Black).fg(Color::White),
-        _ => Style::default(),
-    }
+    themes::polarity_style(model.selected_theme())
 }
 
 /// Whether the current screen carries an animation a tick must repaint: the

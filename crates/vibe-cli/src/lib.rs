@@ -222,7 +222,8 @@ pub struct Arguments {
 /// sentences are this repository's own.
 const EPILOG: &str = "\
 Commands:
-  mcp   Manage the MCP servers a session can reach.
+  update   Look for a newer release now, as --check-upgrade does.
+  mcp      Manage the MCP servers a session can reach.
 
 Environment variables:
   VIBE_HOME       Directory holding the configuration, the sessions and the logs.

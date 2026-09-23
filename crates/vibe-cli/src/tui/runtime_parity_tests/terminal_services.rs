@@ -7,8 +7,8 @@ use serde::Deserialize;
 use serde_json::Value;
 use vibe_core::updates::{
     CachePlan, UpdateAvailability, UpdateCache, UpdateCacheStore, UpdateError, UpdateGatewayCause,
-    UpdateGatewayError, Version, plan_update_check, resolve_fetch, select_latest_version,
-    status_cause,
+    UpdateGatewayError, Version, plan_update_check, resolve_fetch, resolve_github_response,
+    resolve_pypi_response,
 };
 
 use super::{REFERENCE_COMMIT, Reference, pinned_python_oracle};
@@ -143,14 +143,41 @@ enum Event {
         block_write: bool,
         cache: CachePayload,
     },
+    /// Reference `FileSystemUpdateCacheRepository` across one repository's
+    /// life: a read, a write, an optional edit by another process, and a second
+    /// read, with a fresh repository's read of the disk last.
+    UpdateCacheRoundtrip {
+        #[serde(default)]
+        document: Option<String>,
+        #[serde(default)]
+        legacy: Option<String>,
+        #[serde(default, rename = "blockWrite")]
+        block_write: bool,
+        cache: CachePayload,
+        /// `cache.toml` as another process rewrites it after the write.
+        #[serde(default)]
+        rewrite: Option<String>,
+    },
     VersionOrder {
         left: String,
         right: String,
+    },
+    /// Reference `str(Version(raw))`, or the refusal.
+    VersionString {
+        raw: String,
     },
     Pypi {
         payload: Value,
         #[serde(default = "ok_status")]
         status: u16,
+    },
+    /// Reference `GitHubUpdateGateway.fetch_update` over one stubbed response.
+    Github {
+        payload: Value,
+        #[serde(default = "ok_status")]
+        status: u16,
+        #[serde(default, rename = "rateLimitRemaining")]
+        rate_limit_remaining: Option<String>,
     },
     GatewayMessage {
         cause: String,
@@ -237,6 +264,15 @@ impl From<&CachePayload> for UpdateCache {
             seen_whats_new_version: payload.seen_whats_new_version.clone(),
             dismissed_version: payload.dismissed_version.clone(),
         }
+    }
+}
+
+/// One gateway answer as both sides record it: the version, `none`, or the
+/// cause, and never the sentence, which is prose on the GitHub side.
+fn gateway_label(result: Result<Option<String>, UpdateGatewayError>) -> String {
+    match result {
+        Ok(version) => version.unwrap_or_else(|| "none".to_owned()),
+        Err(error) => format!("error|{}", cause_label(error.cause)),
     }
 }
 
@@ -428,18 +464,46 @@ impl Replay {
                     block_write,
                 });
                 let store = UpdateCacheStore::new(home.path());
-                let outcome = match store.store(&UpdateCache::from(&cache)) {
-                    Ok(()) => "ok".to_owned(),
-                    Err(UpdateError::CacheWrite) => "error|cache_write".to_owned(),
-                    Err(UpdateError::Gateway(message)) => format!("error|{message}"),
-                };
+                store.store(&UpdateCache::from(&cache));
+                format!("cachestore|store|ok|doc={}", encode_document(store.path()))
+            }
+            Event::UpdateCacheRoundtrip {
+                document,
+                legacy,
+                block_write,
+                cache,
+                rewrite,
+            } => {
+                let home = seed_cache_home(&CacheDisk {
+                    document,
+                    legacy,
+                    pad_bytes: 0,
+                    block_write,
+                });
+                let store = UpdateCacheStore::new(home.path());
+                let first = store.load();
+                store.store(&UpdateCache::from(&cache));
+                if let Some(rewrite) = rewrite {
+                    fs::write(store.path(), rewrite).expect("rewrite cache.toml");
+                }
+                let second = store.load();
+                let fresh = UpdateCacheStore::new(home.path()).load();
                 format!(
-                    "cachestore|store|{outcome}|doc={}",
-                    encode_document(store.path())
+                    "cachestore|roundtrip|{}|{}|fresh={}",
+                    encode_cache(first.as_ref()),
+                    encode_cache(second.as_ref()),
+                    encode_cache(fresh.as_ref())
                 )
             }
+            Event::VersionString { raw } => format!(
+                "versionstr|{}",
+                Version::parse(&raw).map_or_else(|| "invalid".to_owned(), |v| v.to_string())
+            ),
             Event::VersionOrder { left, right } => {
-                match (Version::parse(&left), Version::parse(&right)) {
+                match (
+                    Version::parse_notifier(&left),
+                    Version::parse_notifier(&right),
+                ) {
                     (Some(left), Some(right)) => {
                         let order = match left.cmp(&right) {
                             std::cmp::Ordering::Less => "<",
@@ -455,13 +519,25 @@ impl Replay {
                     ),
                 }
             }
-            Event::Pypi { payload, status } => match status_cause(status) {
-                Some(cause) => format!("pypi|error|{}", cause_label(cause)),
-                None => format!(
-                    "pypi|{}",
-                    select_latest_version(&payload).unwrap_or_else(|| "none".to_owned())
-                ),
-            },
+            Event::Pypi { payload, status } => format!(
+                "pypi|{}",
+                gateway_label(resolve_pypi_response(
+                    status,
+                    &serde_json::to_vec(&payload).expect("a JSON payload encodes")
+                ))
+            ),
+            Event::Github {
+                payload,
+                status,
+                rate_limit_remaining,
+            } => format!(
+                "github|{}",
+                gateway_label(resolve_github_response(
+                    status,
+                    rate_limit_remaining.as_deref(),
+                    &serde_json::to_vec(&payload).expect("a JSON payload encodes")
+                ))
+            ),
             Event::GatewayMessage { cause } => {
                 format!("gateway|{}", parse_cause(&cause).default_message())
             }
@@ -716,9 +792,6 @@ fn observe_update_check(
             let resolution = resolve_fetch(result, cache.as_ref(), current_version, now);
             let outcome = match (&resolution.error, &resolution.availability) {
                 (Some(UpdateError::Gateway(message)), _) => format!("error|{message}"),
-                (Some(UpdateError::CacheWrite), _) => {
-                    "error|update cache could not be written".to_owned()
-                }
                 (None, Some(availability)) => availability_label(availability),
                 (None, None) => "none".to_owned(),
             };
@@ -740,7 +813,7 @@ fn corpus_replays_update_attention_narration_and_exit_behavior() {
     assert_eq!(corpus.oracle.commit, REFERENCE_COMMIT);
     assert_eq!(corpus.oracle.deterministic_runs, 10);
     assert!(!corpus.reference.version.is_empty());
-    assert_eq!(corpus.reference.source_files.len(), 14);
+    assert_eq!(corpus.reference.source_files.len(), 15);
     for entry in &corpus.unavailable {
         assert!(
             !entry.dimension.is_empty() && !entry.reason.is_empty(),

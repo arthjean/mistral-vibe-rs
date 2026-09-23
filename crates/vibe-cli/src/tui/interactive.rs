@@ -6,7 +6,7 @@
 //! loop body reads as the three phases it actually has.
 
 use std::ops::ControlFlow;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use crossterm::event::{Event, EventStream, KeyEvent, KeyEventKind};
@@ -15,6 +15,7 @@ use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use serde_json::Value;
 use vibe_core::telemetry::TelemetryRecord;
+use vibe_core::updates::UpdateCacheStore;
 
 use super::callback::{drain_callback_requests, sync_active_callbacks, sync_callback_presentation};
 use super::chat_input::{ChatInputState, InputEvent, Safety, VoicePhase};
@@ -403,6 +404,7 @@ pub async fn run_interactive(
         workspace,
         credential,
         post_mount_action,
+        update_cache,
     } = match startup::preflight(invocation).await? {
         ControlFlow::Break(exit_code) => return Ok(InteractiveExit::aborted(exit_code)),
         ControlFlow::Continue(ready) => ready,
@@ -450,11 +452,11 @@ pub async fn run_interactive(
         // preferences apply before the first frame, not only after an edit.
         workflow::apply_render_preferences(runtime, &mut state);
     }
-    announce_release_notes(&arguments, &working_directory, &mut state);
+    announce_release_notes(&update_cache, &mut state);
     // Reference `_schedule_update_notification`: refresh the cache for the next
     // startup without rendering anything or blocking input.
     let update_check = startup::scheduled_update_gateway(update_checks_enabled).map(|gateway| {
-        let store = startup::update_cache_store(&arguments, &working_directory);
+        let store = update_cache.clone();
         tokio::spawn(async move {
             startup::refresh_update_cache(&gateway, &store, env!("CARGO_PKG_VERSION")).await;
         })
@@ -791,9 +793,8 @@ fn session_exit_summary(runtime: &mut InteractiveRuntime) -> exit::SessionExitSu
 
 /// Reference `_check_and_show_whats_new`: release notes appear once per version,
 /// and the version is marked as seen even when no notes ship.
-fn announce_release_notes(arguments: &Arguments, working_directory: &Path, state: &mut TuiState) {
+fn announce_release_notes(store: &UpdateCacheStore, state: &mut TuiState) {
     let version = env!("CARGO_PKG_VERSION");
-    let store = startup::update_cache_store(arguments, working_directory);
     let cache = store.load();
     if !vibe_core::updates::should_show_whats_new(cache.as_ref(), version) {
         return;
@@ -806,9 +807,7 @@ fn announce_release_notes(arguments: &Arguments, working_directory: &Path, state
         version,
         vibe_core::clock::now_seconds_signed(),
     );
-    if store.store(&seen).is_err() {
-        state.push_diagnostic("Release notes could not be marked as seen");
-    }
+    store.store(&seen);
 }
 
 /// A launch that failed before it mounted paints its error and then waits for

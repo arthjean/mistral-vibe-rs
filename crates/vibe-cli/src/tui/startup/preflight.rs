@@ -25,6 +25,9 @@ pub(in crate::tui) struct ReadyStartup {
     /// declined and the client opens read-only.
     pub(in crate::tui) credential: Option<String>,
     pub(in crate::tui) post_mount_action: Option<super::PostMountAction>,
+    /// The one update cache the launch reads and writes, from the startup
+    /// prompt through the release notes to the background check.
+    pub(in crate::tui) update_cache: vibe_core::updates::UpdateCacheStore,
 }
 
 /// Runs every pre-session gate in reference order.
@@ -69,10 +72,10 @@ pub(in crate::tui) async fn preflight(
     let workspace = startup_host
         .into_workspace(arguments.trust)
         .map_err(StartupError::from)?;
+    let update_cache = super::update_cache_store(&arguments, &working_directory);
     if let Some(exit_code) = super::resolve_startup_update_prompt(
-        &arguments,
-        &working_directory,
         &workspace,
+        &update_cache,
         env!("CARGO_PKG_VERSION"),
         &mut std::io::stdout().lock(),
     )
@@ -86,6 +89,7 @@ pub(in crate::tui) async fn preflight(
         workspace,
         credential,
         post_mount_action,
+        update_cache,
     }))
 }
 

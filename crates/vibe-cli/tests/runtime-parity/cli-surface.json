@@ -3353,6 +3353,238 @@
     },
     {
       "argv": [
+        "update"
+      ],
+      "case": "update-command",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": true,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": null,
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "update",
+        "review this repository"
+      ],
+      "case": "update-command-with-prompt",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": true,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": "review this repository",
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "update",
+        "--setup"
+      ],
+      "case": "update-command-with-setup",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": true,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": null,
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": true,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--",
+        "update"
+      ],
+      "case": "update-after-separator",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": "update",
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "-c",
+        "update"
+      ],
+      "case": "update-after-flag",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": true,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": "update",
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "Update"
+      ],
+      "case": "update-command-capitalized",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": "Update",
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
         "review this repository"
       ],
       "case": "positional-prompt",
@@ -4820,6 +5052,40 @@
         "hi"
       ],
       "case": "startup-add-dir-second-missing",
+      "exit": 1,
+      "namespace": null,
+      "parser": "startup",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
+      "argv": [
+        "--check-upgrade",
+        "--workdir",
+        "missing"
+      ],
+      "case": "startup-check-upgrade-workdir-missing",
+      "exit": 1,
+      "namespace": null,
+      "parser": "startup",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
+      "argv": [
+        "update",
+        "--add-dir",
+        "missing"
+      ],
+      "case": "startup-update-add-dir-missing",
       "exit": 1,
       "namespace": null,
       "parser": "startup",

@@ -25,6 +25,7 @@ from types import SimpleNamespace
 from contextlib import redirect_stdout
 
 import httpx
+from packaging.version import InvalidVersion, Version
 from textual.theme import BUILTIN_THEMES
 
 from vibe.app_server.config import AudioProviderView, TTSModelConfigView
@@ -51,6 +52,7 @@ from vibe.cli.update_notifier import (
 from vibe.cli.update_notifier.adapters.filesystem_update_cache_repository import (
     FileSystemUpdateCacheRepository,
 )
+from vibe.cli.update_notifier.adapters.github_update_gateway import GitHubUpdateGateway
 from vibe.cli.update_notifier.adapters.pypi_update_gateway import PyPIUpdateGateway
 from vibe.cli.update_notifier.update import (
     UpdateError,
@@ -255,6 +257,29 @@ async def observe_update_cache_store(event: dict) -> str:
         return f"cachestore|store|{observed}|doc={encode_document(base / 'cache.toml')}"
 
 
+async def observe_update_cache_roundtrip(event: dict) -> str:
+    """One repository across a read, a write, another process's edit and a
+    second read, with a fresh repository's read of the disk last."""
+    with tempfile.TemporaryDirectory() as directory:
+        base = Path(directory)
+        seed_cache_home(base, event)
+        repository = FileSystemUpdateCacheRepository(base)
+        first = encode_cache(await repository.get())
+        await repository.set(decode_cache(event["cache"]))
+        if event.get("rewrite") is not None:
+            (base / "cache.toml").write_text(event["rewrite"])
+        second = encode_cache(await repository.get())
+        fresh = encode_cache(await FileSystemUpdateCacheRepository(base).get())
+        return f"cachestore|roundtrip|{first}|{second}|fresh={fresh}"
+
+
+def observe_version_string(event: dict) -> str:
+    try:
+        return f"versionstr|{Version(event['raw'])}"
+    except InvalidVersion:
+        return "versionstr|invalid"
+
+
 def observe_version_order(event: dict) -> str:
     left = _parse_version(event["left"])
     right = _parse_version(event["right"])
@@ -269,23 +294,36 @@ def observe_version_order(event: dict) -> str:
     return f"version|{order}|00"
 
 
-async def observe_pypi(event: dict) -> str:
+async def _observe_gateway(gateway_class, event: dict) -> str:
     payload = event["payload"]
+    headers = {}
+    if event.get("rateLimitRemaining") is not None:
+        headers["X-RateLimit-Remaining"] = event["rateLimitRemaining"]
 
     class StubClient:
         async def get(self, url, headers=None, timeout=None):
-            return httpx.Response(event.get("status", 200), json=payload)
+            return httpx.Response(event.get("status", 200), json=payload, headers=response_headers)
 
-    gateway = PyPIUpdateGateway("mistral-vibe", client=StubClient())
+    response_headers = headers
+    if gateway_class is GitHubUpdateGateway:
+        gateway = GitHubUpdateGateway("owner", "repository", client=StubClient())
+    else:
+        gateway = PyPIUpdateGateway("mistral-vibe", client=StubClient())
+    try:
+        update = await gateway.fetch_update()
+    except UpdateGatewayError as error:
+        return f"error|{error.cause.value}"
+    except Exception as error:
+        return f"raised|{type(error).__name__}"
+    return update.latest_version if update else "none"
 
-    async def run() -> str:
-        try:
-            update = await gateway.fetch_update()
-        except UpdateGatewayError as error:
-            return f"error|{error.cause.value}"
-        return update.latest_version if update else "none"
 
-    return f"pypi|{await run()}"
+async def observe_pypi(event: dict) -> str:
+    return f"pypi|{await _observe_gateway(PyPIUpdateGateway, event)}"
+
+
+async def observe_github(event: dict) -> str:
+    return f"github|{await _observe_gateway(GitHubUpdateGateway, event)}"
 
 
 def observe_gateway_message(event: dict) -> str:
@@ -556,11 +594,14 @@ ASYNC_HANDLERS = {
     "whats_new": observe_whats_new,
     "update_cache_load": observe_update_cache_load,
     "update_cache_store": observe_update_cache_store,
+    "update_cache_roundtrip": observe_update_cache_roundtrip,
     "pypi": observe_pypi,
+    "github": observe_github,
 }
 
 SYNC_HANDLERS = {
     "version_order": observe_version_order,
+    "version_string": observe_version_string,
     "gateway_message": observe_gateway_message,
     "check_upgrade_output": observe_check_upgrade_output,
     "update_dialog": observe_update_dialog,

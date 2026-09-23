@@ -15,6 +15,9 @@ use clap::{Arg, Command, CommandFactory, Error, FromArgMatches};
 
 use crate::Arguments;
 
+/// The first argument the reference reads as `--check-upgrade`.
+const UPDATE_COMMAND: &str = "update";
+
 /// A refusal, already rendered, with where it goes and what it exits.
 pub struct ParseFailure {
     /// The whole block to write, newline-terminated.
@@ -36,6 +39,15 @@ where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
 {
+    let mut argv = argv.into_iter().map(Into::into).collect::<Vec<OsString>>();
+    // Reference `parse_arguments`: `vibe update` is `vibe --check-upgrade`,
+    // decided on the first argument alone before the parser sees it, so
+    // `update` anywhere else is still a prompt (`vibe/cli/entrypoint.py:206-208`).
+    if let Some(first) = argv.get_mut(1)
+        && first == UPDATE_COMMAND
+    {
+        *first = OsString::from("--check-upgrade");
+    }
     let command = Arguments::command();
     match command.try_get_matches_from(argv) {
         Ok(matches) => Arguments::from_arg_matches(&matches).map_err(|error| failure(&error)),

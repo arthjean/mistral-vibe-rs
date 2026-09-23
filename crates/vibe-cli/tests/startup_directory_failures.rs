@@ -162,6 +162,42 @@ fn a_deleted_working_directory_explains_itself_and_offers_workdir() {
     assert_no_operating_system_error(&output);
 }
 
+/// `--check-upgrade` and its `update` spelling validate the directories before
+/// they look for a release, so a bad path fails the launch the same way it fails
+/// a session (`vibe/cli/entrypoint.py:422-456`).
+#[test]
+fn the_update_routes_refuse_a_bad_directory_before_the_network() {
+    let root = tempfile::tempdir().expect("fixture root");
+    let workspace = canonical(root.path());
+    for argv in [
+        &["--check-upgrade", "--workdir", "missing"][..],
+        &["update", "--workdir", "missing"][..],
+    ] {
+        let output = launch(root.path(), &workspace, argv);
+        let stdout = report(&output);
+        assert_eq!(output.status.code(), Some(1), "{argv:?} stdout: {stdout}");
+        assert!(
+            stdout.contains("Error: --workdir does not exist or is not a directory:"),
+            "{argv:?} must refuse the directory, stdout: {stdout}"
+        );
+        assert!(
+            !stdout.contains("Update check failed"),
+            "{argv:?} must not reach the release index, stdout: {stdout}"
+        );
+    }
+    let output = launch(
+        root.path(),
+        &workspace,
+        &["update", "--add-dir", "./missing"],
+    );
+    let stdout = report(&output);
+    assert_eq!(output.status.code(), Some(1), "stdout: {stdout}");
+    assert!(
+        stdout.contains("Error: --add-dir path does not exist or is not a directory: ./missing"),
+        "stdout: {stdout}"
+    );
+}
+
 /// Every startup failure the corpus recorded, replayed against the binary.
 ///
 /// The corpus stores the exit code and which stream carried the report, and
@@ -183,8 +219,8 @@ fn every_recorded_startup_failure_replays_at_the_process_boundary() {
         .collect();
     assert_eq!(
         cases.len(),
-        4,
-        "the corpus no longer carries the four startup vectors"
+        6,
+        "the corpus no longer carries the six startup vectors"
     );
     for case in cases {
         let id = case["case"].as_str().expect("a case carries an id");
@@ -220,9 +256,9 @@ fn every_recorded_startup_failure_replays_at_the_process_boundary() {
 
 /// One recorded vector, launched from the directory its argv was captured in.
 ///
-/// Three of them name something that has to be missing beside something that
+/// Five of them name something that has to be missing beside something that
 /// has to be there, so the fixture holds the one name they expect to resolve.
-/// The fourth is about the launch directory itself, which no argument can
+/// The sixth is about the launch directory itself, which no argument can
 /// express, so a shell moves in, removes it, and hands the launch what is left.
 /// That route needs a shell, and returns `None` where there is none.
 fn replay_startup(case: &str, argv: &[&str]) -> Option<Output> {
@@ -258,6 +294,9 @@ fn replay_startup(case: &str, argv: &[&str]) -> Option<Output> {
             .env("PATH", std::env::var_os("PATH").unwrap_or_default())
             .env("HOME", &home)
             .env("VIBE_HOME", home.join(".vibe"))
+            // An update route that got past its validation must not reach the
+            // real release index.
+            .env("VIBE_UPDATE_BASE_URL", "http://127.0.0.1:9")
             .env("TERM", "dumb")
             .stdin(Stdio::null())
             .output()
@@ -305,6 +344,7 @@ fn launch(home_root: &Path, workspace: &Path, arguments: &[&str]) -> Output {
         .env("PATH", std::env::var_os("PATH").unwrap_or_default())
         .env("HOME", &home)
         .env("VIBE_HOME", home.join(".vibe"))
+        .env("VIBE_UPDATE_BASE_URL", "http://127.0.0.1:9")
         .env("TERM", "dumb")
         .current_dir(workspace)
         .args(arguments)

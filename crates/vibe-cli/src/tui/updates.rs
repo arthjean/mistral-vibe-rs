@@ -55,7 +55,10 @@ pub fn check_failed_message(reason: &str) -> String {
     format!("✗ Update check failed: {reason}")
 }
 
-/// Reference `_run_check_upgrade` cache failure.
+/// Reference `_run_check_upgrade` cache failure. The reference prints it on an
+/// `OSError` its own cache store never raises, because `write_section` logs a
+/// failed write and returns, and this port's store does the same; the sentence
+/// is kept so the presentation trace still pins it.
 pub const CACHE_WRITE_FAILED_MESSAGE: &str =
     "✗ Update check failed while writing the update cache.";
 
@@ -124,9 +127,6 @@ pub fn classify_check_upgrade(
         },
         Err(UpdateError::Gateway(reason)) => CheckUpgradeOutcome::Failed {
             message: check_failed_message(&reason),
-        },
-        Err(UpdateError::CacheWrite) => CheckUpgradeOutcome::Failed {
-            message: CACHE_WRITE_FAILED_MESSAGE.to_owned(),
         },
     }
 }
@@ -210,12 +210,6 @@ mod tests {
             }
         );
         assert!(failure.is_failure());
-        assert_eq!(
-            classify_check_upgrade(Err(UpdateError::CacheWrite), "2.23.1"),
-            CheckUpgradeOutcome::Failed {
-                message: CACHE_WRITE_FAILED_MESSAGE.to_owned()
-            }
-        );
     }
 
     #[test]

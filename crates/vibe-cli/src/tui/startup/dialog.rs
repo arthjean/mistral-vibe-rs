@@ -53,11 +53,13 @@ pub(super) fn run_update_dialog(
     current_version: &str,
     latest_version: &str,
     mode: UpdatePromptMode,
+    theme: Option<&str>,
 ) -> Result<Option<UpdateChoice>, StartupError> {
     let mut dialog = StartupDialog::Update {
         current_version,
         latest_version,
         mode,
+        theme,
         selected: 0,
     };
     Ok(match run_dialog(&mut dialog, None)? {
@@ -110,6 +112,9 @@ enum StartupDialog<'a> {
         current_version: &'a str,
         latest_version: &'a str,
         mode: UpdatePromptMode,
+        /// Reference `UpdatePromptApp(theme=...)`: the configured theme the
+        /// prompt paints with, or `None` for the terminal's own colors.
+        theme: Option<&'a str>,
         selected: usize,
     },
 }
@@ -305,6 +310,15 @@ fn apply_session_delete_result(
 }
 
 fn draw_startup_dialog(frame: &mut ratatui::Frame<'_>, dialog: &StartupDialog<'_>) {
+    if let StartupDialog::Update {
+        theme: Some(theme), ..
+    } = dialog
+    {
+        frame.render_widget(
+            Block::default().style(super::super::themes::polarity_style(theme)),
+            frame.area(),
+        );
+    }
     let [body, footer] =
         Layout::vertical([Constraint::Min(1), Constraint::Length(2)]).areas(frame.area());
     let (title, lines, help) = match dialog {
@@ -410,6 +424,7 @@ fn draw_startup_dialog(frame: &mut ratatui::Frame<'_>, dialog: &StartupDialog<'_
             latest_version,
             mode,
             selected,
+            ..
         } => {
             let mut lines = vec![
                 Line::from(UPDATE_DIALOG_TITLE),
@@ -524,6 +539,33 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Reference `UpdatePromptApp(theme=...)`: the configured theme paints the
+    /// prompt, and no theme leaves the terminal's own colors.
+    #[test]
+    fn the_update_dialog_paints_with_the_configured_theme() {
+        use ratatui::style::Color;
+
+        let background = |theme: Option<&str>| {
+            let dialog = StartupDialog::Update {
+                current_version: "2.24.0",
+                latest_version: "2.25.7",
+                mode: UpdatePromptMode::CheckUpgrade,
+                theme,
+                selected: 0,
+            };
+            let mut terminal = Terminal::new(TestBackend::new(60, 12)).expect("terminal");
+            terminal
+                .draw(|frame| draw_startup_dialog(frame, &dialog))
+                .expect("dialog render");
+            terminal.backend().buffer()[(59, 11)].bg
+        };
+        assert_eq!(background(Some("dracula")), Color::Black);
+        assert_eq!(background(Some("solarized-light")), Color::White);
+        assert_eq!(background(Some("auto")), Color::Reset);
+        assert_eq!(background(Some("not-a-theme")), Color::Reset);
+        assert_eq!(background(None), Color::Reset);
     }
 
     #[test]

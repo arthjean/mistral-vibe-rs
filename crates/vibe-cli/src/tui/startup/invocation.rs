@@ -49,9 +49,12 @@ impl PreparedInvocation {
         mut arguments: Arguments,
         narration: &mut impl std::io::Write,
     ) -> Result<Self, StartupError> {
-        // The reference resolves forced update discovery before it reads stdin,
-        // prepares a workspace, or loads any project configuration.
+        // The reference validates `--workdir` and `--add-dir` for every route,
+        // skipping only the worktree, and resolves forced update discovery
+        // before it reads stdin or opens a session
+        // (`vibe/cli/entrypoint.py:422-456`, `vibe/cli/cli.py:433-439`).
         if InvocationIntent::from_arguments(&arguments).route == InvocationRoute::CheckUpgrade {
+            LaunchWorkspace::prepare(&mut arguments, narration)?;
             return Ok(Self::CheckUpgrade(Box::new(arguments)));
         }
         populate_piped_prompt(&mut arguments)?;
