@@ -10,6 +10,8 @@
 //! Nothing else in the engine touches the projection, so an event that reaches
 //! a client and an event that reaches the transcript are always the same event.
 
+use std::path::PathBuf;
+
 use crate::events::{
     EngineEvent, EventEnvelope, LifecycleState, ModelMessage, ProjectionReducer, ProjectionSnapshot,
 };
@@ -86,6 +88,9 @@ pub(super) struct TurnRecorder<'a> {
     reducer: ProjectionReducer,
     events: Vec<EventEnvelope>,
     next_event_id: u64,
+    /// Where the session sits, stamped on every envelope so each reducer
+    /// displays a file path against the same directory.
+    working_directory: Option<PathBuf>,
 }
 
 impl<'a> TurnRecorder<'a> {
@@ -93,6 +98,7 @@ impl<'a> TurnRecorder<'a> {
         observer: &'a dyn EventObserver,
         session_id: impl Into<String>,
         turn_id: Option<&str>,
+        working_directory: Option<PathBuf>,
     ) -> Self {
         let session_id = session_id.into();
         Self {
@@ -103,6 +109,7 @@ impl<'a> TurnRecorder<'a> {
             ),
             events: Vec::new(),
             next_event_id: 1,
+            working_directory,
         }
     }
 
@@ -137,6 +144,7 @@ impl<'a> TurnRecorder<'a> {
             session_id: self.state().session_id.clone(),
             turn_id: self.state().turn_id.clone(),
             emitted_at: current_time_millis(),
+            working_directory: self.working_directory.clone(),
             event_id: self.next_event_id,
             event,
         };

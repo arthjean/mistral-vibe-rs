@@ -355,11 +355,15 @@ impl SubagentRunner for ProviderSubagentRunner {
                 metadata: BTreeMap::from([
                     ("parent_session_id".to_owned(), context.parent_session_id),
                     ("agent".to_owned(), context.agent.name),
-                    ("working_directory".to_owned(), context.working_directory),
+                    (
+                        "working_directory".to_owned(),
+                        context.working_directory.clone(),
+                    ),
                 ]),
             };
             let outcome = ConversationEngine::new(self.provider.clone())
                 .with_tools(executor)
+                .with_working_directory(context.working_directory)
                 .with_sink(SessionTranscriptSink::new(self.store.clone(), metadata))
                 .with_limits(EngineLimits {
                     input_price_per_million_micros: self.input_price_per_million_micros,

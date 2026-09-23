@@ -16,6 +16,13 @@ result, an errored result and a skipped one. The tool list is the Linux builtin
 surface plus two stubs built by the reference's own remote factories, so the
 remote half of the contract is captured without a live server.
 
+A second family drives the three file tools over the path shapes a header
+renders differently, with the adapter bound to a session directory the way
+the agent loop binds it (``harness_files``, `vibe/core/tools/ui.py:99-121`):
+inside it, relative to it, the directory itself, dotted and doubled segments,
+a sibling sharing its prefix, outside it, and inside a session scratchpad. Each
+case records the directory it was bound to, so the replay binds the same one.
+
 Two artifacts come out of a run:
 
 ``.parity/tool-presentation-corpus.json``
@@ -40,10 +47,10 @@ default path; ``--reference`` wins over it.
 
 Run it from this repository's root, as the Rust recapture probe does. Since
 v2.24.2 the edit, read_file and write_file displays render a path through
-``display_file_path`` (`vibe/core/tools/utils.py:116`), which answers relative
-to the process cwd when the path sits under it; the authored paths live under
-``/workspace``, so only a cwd of ``/`` or ``/workspace`` would change the
-capture.
+``display_file_path`` (`vibe/core/tools/utils.py:116`). The six-case family
+binds no session directory, so those displays answer against the process cwd;
+its authored paths live under ``/workspace``, so only a cwd of ``/`` or
+``/workspace`` would change it. The path family binds ``/workspace`` itself.
 
 The wrapper re-executes itself with the reference interpreter when the current
 one cannot import ``vibe``.
@@ -68,7 +75,7 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 DEFAULT_OUTPUT = Path(".parity/tool-presentation-corpus.json")
 DEFAULT_CORPUS = Path("crates/vibe-core/tests/tool-presentation/corpus.json")
 
@@ -431,6 +438,54 @@ ERROR_MESSAGE = "the capture authored this failure"
 CALL_CASES = ("valid-arguments", "absent-arguments", "wrong-argument-type")
 RESULT_CASES = ("successful-result", "error-result", "skipped-result")
 
+#: The session directory the path family binds, and the path shapes it drives
+#: the three file tools through. Each shape is a separate branch of
+#: ``display_file_path`` or ``is_scratchpad_display_path``; none names a file on
+#: this machine, and the scratchpad one sits under ``/tmp``, which every Linux
+#: host resolves to itself.
+PATH_CWD = "/workspace"
+PATH_SHAPES: tuple[tuple[str, str], ...] = (
+    ("inside", "/workspace/src/alpha.txt"),
+    ("relative", "src/alpha.txt"),
+    ("the-directory", "/workspace"),
+    ("dotted", "/workspace/src/../alpha.txt"),
+    ("doubled-separator", "/workspace//src/./alpha.txt"),
+    ("sibling-prefix", "/workspace-other/alpha.txt"),
+    ("outside", "/elsewhere/nested/../alpha.txt"),
+    ("scratchpad", "/tmp/vibe-scratchpad-capture-0000/notes.md"),
+)
+
+#: The file tools whose headers render a path, with the argument and the result
+#: field each one names it under.
+PATH_TOOLS: dict[str, tuple[str, str]] = {
+    "edit": ("file_path", "file"),
+    "read_file": ("file_path", "file_path"),
+    "write_file": ("file_path", "file_path"),
+}
+
+
+def path_arguments(tool: str, path: str) -> dict[str, Any]:
+    """The valid arguments of ``tool`` with its path replaced.
+
+    ``read_file`` starts at the top and spells the default window out, which
+    its display leaves unnamed, so the family also measures that neither is
+    rendered.
+    """
+
+    argument, _ = PATH_TOOLS[tool]
+    arguments = {**ARGUMENTS[tool], argument: path}
+    if tool == "read_file":
+        arguments.pop("offset")
+        arguments["limit"] = 2000
+    return arguments
+
+
+def path_result(tool: str, path: str) -> dict[str, Any]:
+    """The successful result of ``tool`` with its path replaced."""
+
+    _, field = PATH_TOOLS[tool]
+    return {**RESULTS[tool], field: path}
+
 
 def capture(tree: Path) -> list[dict[str, Any]]:
     """One record per tool and case, in tool order then case order."""
@@ -493,6 +548,8 @@ def capture(tree: Path) -> list[dict[str, Any]]:
         for source, cls in stubs.items()
     ]
 
+    from vibe.core.config.harness_files import HarnessFilesManager
+
     records: list[dict[str, Any]] = []
     for source, name, cls, arguments, result in entries:
         adapter = ToolUIDataAdapter(cls)
@@ -546,6 +603,56 @@ def capture(tree: Path) -> list[dict[str, Any]]:
                     "error": ERROR_MESSAGE if case == "error-result" else None,
                     "skipped": case == "skipped-result",
                     "presentation": adapter.get_result_presentation(event).model_dump(
+                        mode="json"
+                    ),
+                }
+            )
+
+    session = HarnessFilesManager(sources=(), cwd=Path(PATH_CWD))
+    for name in sorted(PATH_TOOLS):
+        cls = builtins[name]
+        adapter = ToolUIDataAdapter(cls, harness_files=session)
+        args_model, result_model = cls._get_tool_args_results()
+        for shape, path in PATH_SHAPES:
+            arguments = path_arguments(name, path)
+            result = path_result(name, path)
+            call = ToolCallEvent(
+                tool_call_id="the-capture-call",
+                tool_name=name,
+                tool_class=cls,
+                args=args_model.model_validate(arguments),
+            )
+            records.append(
+                {
+                    "tool": name,
+                    "source": "builtin",
+                    "case": f"path-{shape}-call",
+                    "phase": "call",
+                    "cwd": PATH_CWD,
+                    "arguments": arguments,
+                    "presentation": adapter.get_call_presentation(call).model_dump(
+                        mode="json"
+                    ),
+                }
+            )
+            settled = ToolResultEvent(
+                tool_call_id="the-capture-call",
+                tool_name=name,
+                tool_class=cls,
+                result=result_model.model_validate(result),
+            )
+            records.append(
+                {
+                    "tool": name,
+                    "source": "builtin",
+                    "case": f"path-{shape}-result",
+                    "phase": "result",
+                    "cwd": PATH_CWD,
+                    "arguments": arguments,
+                    "output": result,
+                    "error": None,
+                    "skipped": False,
+                    "presentation": adapter.get_result_presentation(settled).model_dump(
                         mode="json"
                     ),
                 }

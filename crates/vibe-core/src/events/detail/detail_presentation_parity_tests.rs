@@ -40,7 +40,7 @@ const CORPUS_RELATIVE: &str = "crates/vibe-core/tests/tool-presentation/corpus.j
 const CAPTURE_SCRIPT: &str = "scripts/parity/tool_presentation.py";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 1;
+const CORPUS_SCHEMA_VERSION: u32 = 2;
 /// The case floor this epic commits to, so a regeneration that captured almost
 /// nothing fails instead of reporting a clean but empty run.
 const MINIMUM_CASES: usize = 40;
@@ -98,8 +98,6 @@ const KIND_SETTLEMENT_ROW: &str =
 const CALL_CONTENT_ROW: &str = "No call display carries a content preview";
 const INVALID_LABEL_ROW: &str = "The label an argument of the wrong class is answered with";
 const AUTHORED_CALL_TEXT_ROW: &str = "Authored call-display text in the plan and fetch tools";
-const APPROVAL_NOTE_ROW: &str = "No result display carries an approval note";
-const FILE_PATH_ROW: &str = "A file display names the file, not its cwd-relative path";
 
 /// The story range `tasks/prd-tool-infrastructure-parity.md` numbers its work
 /// in, US-254 through US-268. A closer is checked against it rather than
@@ -153,18 +151,6 @@ const ERROR_VERB: &str = "the reference's adapter publishes no verb on an errore
      port keeps the settled verb of the call";
 const SKIP_LABEL: &str = "the reference's adapter reports the default skip label; this port \
      writes its own";
-const APPROVAL_NOTE: &str = "since v2.25.4 the reference's `EffectResultDisplay` declares \
-     `approval_note` (`vibe/utils/tool_presentation.py:53` at 4a96003186b1), serialized by alias \
-     with no `exclude_none` (:9-15), and `get_result_presentation` passes the tool's display \
-     through (`vibe/core/tools/ui.py:187-194`), so every result display carries `approvalNote`, \
-     null on every captured case; this port's `EffectResultDisplay` has no such field and omits \
-     the key";
-const FILE_PATH: &str = "since v2.24.2 the reference renders these fields through \
-     `display_file_path` (`vibe/core/tools/utils.py:116-133` at 4a96003186b1; `edit.py:106-114`, \
-     `:126`, `read_file.py:258`, `write_file.py:88`), which answers the path relative to the \
-     session cwd, or the normalized absolute path when the file sits outside it, where the \
-     previous pin published `Path(...).name`; this port still renders the file name alone \
-     through `file_name` in `events/detail.rs`";
 
 /// The twelve tools the Linux surface publishes, as `get_name()` names them.
 /// The list is spelled out rather than derived from the corpus so a tool that
@@ -212,19 +198,17 @@ const CONTENT_TOOLS: [&str; 2] = ["edit", "write_file"];
 /// The three call cases every tool is driven through.
 const CALL_CASES: [&str; 3] = ["valid-arguments", "absent-arguments", "wrong-argument-type"];
 
-/// The three result cases every tool is driven through.
-const RESULT_CASES: [&str; 3] = ["successful-result", "error-result", "skipped-result"];
-
-/// The fields whose file path the reference renders through
-/// `display_file_path`, measured by the capture: the edit call's three header
-/// fields and the settled message of the three file tools.
-const FILE_PATH_FIELDS: [(&str, &str, &str); 6] = [
-    ("edit", "valid-arguments", "/display/summary"),
-    ("edit", "valid-arguments", "/display/message"),
-    ("edit", "valid-arguments", "/display/settledMessage"),
-    ("edit", "successful-result", "/display/message"),
-    ("read_file", "successful-result", "/display/message"),
-    ("write_file", "successful-result", "/display/message"),
+/// The call cases of the path family, one per path shape the capture drives
+/// the three file tools through (`PATH_SHAPES` in the capture script).
+const PATH_CALL_CASES: [&str; 8] = [
+    "path-inside-call",
+    "path-relative-call",
+    "path-the-directory-call",
+    "path-dotted-call",
+    "path-doubled-separator-call",
+    "path-sibling-prefix-call",
+    "path-outside-call",
+    "path-scratchpad-call",
 ];
 
 const PLAN_TOOL: &str = "exit_plan_mode";
@@ -361,14 +345,16 @@ fn ledger() -> Vec<Divergence> {
         }
     }
     for tool in CONTENT_TOOLS {
-        add(
-            tool,
-            "valid-arguments",
-            "/display/content",
-            RECORDED,
-            CALL_CONTENT,
-            CALL_CONTENT_ROW,
-        );
+        for case in std::iter::once("valid-arguments").chain(PATH_CALL_CASES) {
+            add(
+                tool,
+                case,
+                "/display/content",
+                RECORDED,
+                CALL_CONTENT,
+                CALL_CONTENT_ROW,
+            );
+        }
     }
     for case in CALL_CASES {
         add(
@@ -474,21 +460,6 @@ fn ledger() -> Vec<Divergence> {
             KIND_SETTLEMENT_ROW,
         );
     }
-    for tool in BUILTIN_TOOLS.into_iter().chain(REMOTE_TOOLS) {
-        for case in RESULT_CASES {
-            add(
-                tool,
-                case,
-                "/display/approvalNote",
-                RECORDED,
-                APPROVAL_NOTE,
-                APPROVAL_NOTE_ROW,
-            );
-        }
-    }
-    for (tool, case, pointer) in FILE_PATH_FIELDS {
-        add(tool, case, pointer, RECORDED, FILE_PATH, FILE_PATH_ROW);
-    }
     entries
 }
 
@@ -556,12 +527,21 @@ struct Case {
     error: Value,
     #[serde(default)]
     skipped: bool,
+    /// The session directory the adapter was bound to, present only on the
+    /// path family, whose headers are displayed against it.
+    #[serde(default)]
+    cwd: Option<String>,
     presentation: Value,
 }
 
 impl Case {
     fn id(&self) -> String {
         format!("{}/{}", self.tool, self.case)
+    }
+
+    /// The session directory the capture bound, which the replay binds too.
+    fn working_directory(&self) -> Option<&Path> {
+        self.cwd.as_deref().map(Path::new)
     }
 
     /// The recorded presentation without the projected output, which this port
@@ -779,11 +759,12 @@ fn call_detail(case: &Case) -> Option<EffectDetail> {
         "valid-arguments" | "successful-result" | "error-result" | "skipped-result" => {
             case.arguments.to_string()
         }
+        path if path.starts_with("path-") => case.arguments.to_string(),
         _ => return None,
     };
     Some(match remote_origin(case) {
         Some(remote) => EffectDetail::for_proxied_call(tool, &arguments, &remote),
-        None => EffectDetail::for_encoded_call(tool, &arguments),
+        None => EffectDetail::for_encoded_call_at(tool, &arguments, case.working_directory()),
     })
 }
 
@@ -799,7 +780,7 @@ fn remote_origin(case: &Case) -> Option<RemoteToolOrigin> {
 
 /// What this port publishes for one case, in the corpus's own shape.
 fn observed(case: &Case) -> Value {
-    let detail = call_detail(case).expect("the corpus names one of the six cases");
+    let detail = call_detail(case).expect("the corpus names one of the six cases or a path case");
     if case.phase == "call" {
         return json!({"kind": detail.kind, "display": detail.display});
     }
@@ -817,9 +798,13 @@ fn observed(case: &Case) -> Value {
         }
         None if !case.error.is_null() => EffectResultDisplay::failed(&detail.display),
         None if case.skipped => EffectResultDisplay::skipped(&case.tool),
-        None => {
-            EffectResultDisplay::completed(detail.kind, &detail.display, &case.output, &Value::Null)
-        }
+        None => EffectResultDisplay::completed_at(
+            detail.kind,
+            &detail.display,
+            &case.output,
+            &Value::Null,
+            case.working_directory(),
+        ),
     };
     json!({"kind": detail.kind, "display": display})
 }

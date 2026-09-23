@@ -279,6 +279,7 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
             session_id: "session-1".to_owned(),
             turn_id: Some("turn-1".to_owned()),
             emitted_at: 1,
+            working_directory: None,
             event_id: 1,
             event: EngineEvent::UserMessage {
                 content: "use the fixture".to_owned(),
@@ -290,6 +291,7 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
             session_id: "session-1".to_owned(),
             turn_id: Some("turn-1".to_owned()),
             emitted_at: 2,
+            working_directory: None,
             event_id: 2,
             event: call.clone(),
         })

@@ -398,16 +398,6 @@ const DIVERGENT_ENUM_VALUES: &[(&str, &str, &str)] = &[
         "v2.25.7 adds it before yolo (vibe/agents.py:12); crate::vocabulary::AgentSafety has no such value",
     ),
     (
-        "ToolEffectKind",
-        "worktree",
-        "v2.25.7 adds it (vibe/utils/tool_presentation.py:31) with WorktreeEffectDetail; vibe_core::events::ToolEffectKind has no such kind",
-    ),
-    (
-        "ToolEffectKind",
-        "process",
-        "v2.25.7 adds it (vibe/utils/tool_presentation.py:32) with ProcessEffectDetail; vibe_core::events::ToolEffectKind has no such kind",
-    ),
-    (
         "TurnErrorCode",
         "incomplete_stream",
         "v2.25.7 adds it after compaction_failed (vibe/app_server/models.py:386); vibe_core::events::TurnErrorCode has no such code",
@@ -1803,6 +1793,7 @@ fn projected_history(events: &[vibe_core::events::EngineEvent]) -> Vec<Value> {
             session_id: PROBE_SESSION.to_owned(),
             turn_id: Some("turn-1".to_owned()),
             emitted_at: 1_000 + index as u64,
+            working_directory: None,
             event_id: index as u64 + 1,
             event: event.clone(),
         };
@@ -1981,15 +1972,29 @@ async fn every_effect_kind_publishes_an_entry_that_validates_against_the_census(
         issues.is_empty(),
         "published effect entries diverge from the census: {issues:?}"
     );
+    // No tool declares these two kinds upstream either: the session worktree
+    // methods publish `worktree` (`vibe/app_server/_worktree_effects.py`), which
+    // row 5 has not ported, and nothing at the pin publishes `process`
+    // (`vibe/app_server/_effect_models.py` only declares its detail).
+    let toolless = [ToolEffectKind::Worktree, ToolEffectKind::Process];
+    for kind in toolless {
+        assert!(
+            !published.contains(kind.label()),
+            "a tool now publishes {}; probe it here instead of exempting it",
+            kind.label()
+        );
+    }
     let expected = ToolEffectKind::ALL
         .into_iter()
+        .filter(|kind| !toolless.contains(kind))
         .map(|kind| kind.label().to_owned())
         .collect::<BTreeSet<_>>();
     assert_eq!(published, expected, "not every effect kind was published");
     eprintln!(
-        "app-server surface: effect details {}/{} kinds validate",
+        "app-server surface: effect details {}/{} tool kinds validate, {} kinds no tool publishes",
         published.len(),
-        expected.len()
+        expected.len(),
+        toolless.len()
     );
 }
 

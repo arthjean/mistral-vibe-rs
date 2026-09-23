@@ -115,7 +115,11 @@ pub(super) fn public_session_state(session: &SessionRuntime) -> Value {
 pub(super) fn persisted_projection(
     hydrated: &HydratedSession,
     history_limit: u16,
+    working_directory: &str,
 ) -> ProjectionSnapshot {
+    // A file path a resumed header names is displayed against where the
+    // session sits now, which is the directory a live turn stamps as well.
+    let working_directory = Some(Path::new(working_directory));
     let session_id = &hydrated.metadata.id;
     let base_timestamp = hydrated.metadata.created_at_ms;
     // The call's name and arguments are what the effect detail is rebuilt from,
@@ -183,7 +187,8 @@ pub(super) fn persisted_projection(
                 let (title, arguments, call_index) = tool_calls_by_id
                     .remove(call_id)
                     .unwrap_or_else(|| ("Tool".to_owned(), String::new(), index));
-                let detail = EffectDetail::for_encoded_call(&title, &arguments);
+                let detail =
+                    EffectDetail::for_encoded_call_at(&title, &arguments, working_directory);
                 let state = if *is_error {
                     PublicEffectState::Failed {
                         error: PublicError {
@@ -198,11 +203,12 @@ pub(super) fn persisted_projection(
                 } else {
                     let output = json!(content);
                     PublicEffectState::Completed {
-                        display: EffectResultDisplay::completed(
+                        display: EffectResultDisplay::completed_at(
                             detail.kind,
                             &detail.display,
                             &output,
                             &Value::Null,
+                            working_directory,
                         ),
                         output,
                         output_text: content.clone(),
@@ -222,7 +228,11 @@ pub(super) fn persisted_projection(
     for (call_id, (title, arguments, index)) in tool_calls_by_id {
         history.push(PublicHistoryEntry::Effect {
             metadata: metadata(index, "effect"),
-            detail: Box::new(EffectDetail::for_encoded_call(&title, &arguments)),
+            detail: Box::new(EffectDetail::for_encoded_call_at(
+                &title,
+                &arguments,
+                working_directory,
+            )),
             state: PublicEffectState::Skipped {
                 reason: "Persisted tool call has no recorded result".to_owned(),
                 display: EffectResultDisplay::skipped(&title),

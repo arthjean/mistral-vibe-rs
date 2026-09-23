@@ -539,9 +539,13 @@ fn completed_body(kind: EffectKind, output: &Value, output_text: &str) -> Vec<Bo
                 .and_then(Value::as_str)
                 .unwrap_or(output_text),
         ),
-        EffectKind::Skill | EffectKind::Subagent | EffectKind::Tool => {
-            generic_lines(output, output_text)
-        }
+        // A worktree entry settles with no output of its own, and a process
+        // one is published only by the Unified harness this port does not run.
+        EffectKind::Skill
+        | EffectKind::Subagent
+        | EffectKind::Tool
+        | EffectKind::Worktree
+        | EffectKind::Process => generic_lines(output, output_text),
     }
 }
 
@@ -1001,7 +1005,7 @@ mod tests {
                 "output": {"path": "src/lib.rs", "content": "1|use std;\n2|fn main() {}", "startLine": 1, "endLine": 2},
             }),
         ));
-        assert_eq!(read.header_text(), "Read 2 lines from lib.rs");
+        assert_eq!(read.header_text(), "Read 2 lines from src/lib.rs");
         assert_eq!(read.body[0].text, "use std;");
         assert!(read.collapsed_by_default);
 
@@ -1010,7 +1014,7 @@ mod tests {
             json!({"file_path": "docs/readme.md"}),
             json!({"status": "completed", "output": {"path": "docs/readme.md", "content": "hello"}}),
         ));
-        assert_eq!(write.header_text(), "Created readme.md");
+        assert_eq!(write.header_text(), "Created docs/readme.md");
         assert!(!write.collapsed_by_default);
 
         let edit = effect_of(&effect(
@@ -1021,7 +1025,7 @@ mod tests {
                 "output": {"path": "src/lib.rs", "diff": "--- a\n+++ b\n-old\n+new"},
             }),
         ));
-        assert_eq!(edit.header_text(), "Edited lib.rs");
+        assert_eq!(edit.header_text(), "Edited src/lib.rs");
         assert!(!edit.collapsed_by_default);
         assert_eq!(
             edit.body

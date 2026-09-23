@@ -390,9 +390,13 @@ impl ServerConnection {
                 .map(|attachment| attachment.hydrated.metadata.updated_at_ms)
                 .filter(|timestamp| *timestamp != 0)
                 .unwrap_or(created_at),
-            snapshot: attachment
-                .as_ref()
-                .map(|attachment| persisted_projection(&attachment.hydrated, params.history_limit)),
+            snapshot: attachment.as_ref().map(|attachment| {
+                persisted_projection(
+                    &attachment.hydrated,
+                    params.history_limit,
+                    &working_directory,
+                )
+            }),
             persisted: attachment.map(|attachment| attachment.hydrated),
             session_id,
             working_directory,

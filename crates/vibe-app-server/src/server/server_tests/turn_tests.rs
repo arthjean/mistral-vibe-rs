@@ -269,6 +269,7 @@ fn closing_an_active_session_retains_ownership_until_terminal_cleanup() {
             session_id: "session-1".to_owned(),
             turn_id: None,
             emitted_at: 1,
+            working_directory: None,
             event_id: 1,
             event: vibe_core::events::EngineEvent::UserMessage {
                 content: "hello".to_owned(),
@@ -278,6 +279,7 @@ fn closing_an_active_session_retains_ownership_until_terminal_cleanup() {
             session_id: "session-1".to_owned(),
             turn_id: None,
             emitted_at: 2,
+            working_directory: None,
             event_id: 2,
             event: vibe_core::events::EngineEvent::Lifecycle {
                 state: LifecycleState::Cancelled,
@@ -349,6 +351,7 @@ fn conversation_limits_complete_with_the_public_limit_reason() {
             session_id: "session-1".to_owned(),
             turn_id: Some("turn-1".to_owned()),
             emitted_at: 1,
+            working_directory: None,
             event_id: 1,
             event: vibe_core::events::EngineEvent::UserMessage {
                 content: "bounded".to_owned(),
@@ -358,6 +361,7 @@ fn conversation_limits_complete_with_the_public_limit_reason() {
             session_id: "session-1".to_owned(),
             turn_id: Some("turn-1".to_owned()),
             emitted_at: 2,
+            working_directory: None,
             event_id: 2,
             event: vibe_core::events::EngineEvent::Lifecycle {
                 state: LifecycleState::Completed,
@@ -404,6 +408,7 @@ fn provider_terminal_failures_preserve_their_public_error() {
             session_id: "session-1".to_owned(),
             turn_id: Some("turn-1".to_owned()),
             emitted_at: 1,
+            working_directory: None,
             event_id: 1,
             event: vibe_core::events::EngineEvent::UserMessage {
                 content: "bounded".to_owned(),
@@ -413,6 +418,7 @@ fn provider_terminal_failures_preserve_their_public_error() {
             session_id: "session-1".to_owned(),
             turn_id: Some("turn-1".to_owned()),
             emitted_at: 2,
+            working_directory: None,
             event_id: 2,
             event: vibe_core::events::EngineEvent::Lifecycle {
                 state: LifecycleState::Failed,
@@ -467,6 +473,7 @@ fn a_handoff_onto_the_same_session_is_refused() {
             session_id: "session-1".to_owned(),
             turn_id: Some("turn-1".to_owned()),
             emitted_at: 1,
+            working_directory: None,
             event_id: 1,
             event: vibe_core::events::EngineEvent::UserMessage {
                 content: "clear".to_owned(),
@@ -562,6 +569,7 @@ fn handoff_atomically_migrates_the_runtime_to_the_projected_id() {
             session_id: "session-1".to_owned(),
             turn_id: None,
             emitted_at: 1,
+            working_directory: None,
             event_id: 1,
             event: vibe_core::events::EngineEvent::UserMessage {
                 content: "compact".to_owned(),
@@ -571,6 +579,7 @@ fn handoff_atomically_migrates_the_runtime_to_the_projected_id() {
             session_id: "session-1".to_owned(),
             turn_id: None,
             emitted_at: 2,
+            working_directory: None,
             event_id: 2,
             event: vibe_core::events::EngineEvent::SessionHandoff {
                 from_session_id: "session-1".to_owned(),
@@ -582,6 +591,7 @@ fn handoff_atomically_migrates_the_runtime_to_the_projected_id() {
             session_id: "session-2".to_owned(),
             turn_id: None,
             emitted_at: 3,
+            working_directory: None,
             event_id: 3,
             event: vibe_core::events::EngineEvent::Lifecycle {
                 state: LifecycleState::Completed,

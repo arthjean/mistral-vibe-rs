@@ -388,12 +388,20 @@ where
                     session_id,
                     request,
                     ..
-                } => (
-                    session_id.clone(),
-                    format!("Approve {}?", request.tool),
-                    approval_callback_detail(request),
-                    EngineCallbackKind::Approval,
-                ),
+                } => {
+                    let working_directory = self
+                        .client
+                        .server
+                        .session(session_id)
+                        .ok()
+                        .map(|session| std::path::PathBuf::from(session.working_directory));
+                    (
+                        session_id.clone(),
+                        format!("Approve {}?", request.tool),
+                        approval_callback_detail(request, working_directory.as_deref()),
+                        EngineCallbackKind::Approval,
+                    )
+                }
                 InteractiveCallbackRequest::Tool {
                     session_id,
                     title,

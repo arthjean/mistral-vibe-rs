@@ -502,6 +502,7 @@ impl TurnDriver for EchoTurnDriver {
                     session_id: reservation.session_id.clone(),
                     turn_id: Some(reservation.turn_id.clone()),
                     emitted_at: crate::host::now_millis(),
+                    working_directory: None,
                     event_id: u64::try_from(event_id).unwrap_or(0).saturating_add(1),
                     event,
                 };

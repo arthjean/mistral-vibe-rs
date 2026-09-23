@@ -567,6 +567,7 @@ impl LiveTurnDriver {
             .with_baseline(baseline)
             .with_compaction_settings(reservation.compaction.clone())
             .with_agent_profile(agent_profile)
+            .with_working_directory(&reservation.working_directory)
             .with_observer(observer);
         // Registered after automatic compaction and before nothing, which is
         // where `_setup_middleware` puts it: a cycle that reached the threshold

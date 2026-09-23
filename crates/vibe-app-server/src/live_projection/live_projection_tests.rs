@@ -14,6 +14,7 @@ fn a_retried_request_is_published_as_turn_retrying() {
             turn_id: Some("turn-1".to_owned()),
             event_id: 1,
             emitted_at: 10,
+            working_directory: None,
             event: EngineEvent::Retrying {
                 reason: "provider answered HTTP 503".to_owned(),
             },
@@ -85,6 +86,7 @@ fn a_cleared_context_publishes_session_context_cleared() {
             session_id: "session-1".to_owned(),
             turn_id: Some("turn-1".to_owned()),
             emitted_at: 10,
+            working_directory: None,
             event_id: 1,
             event: EngineEvent::UserMessage {
                 content: "plan".to_owned(),
@@ -94,6 +96,7 @@ fn a_cleared_context_publishes_session_context_cleared() {
             session_id: "session-1".to_owned(),
             turn_id: Some("turn-1".to_owned()),
             emitted_at: 11,
+            working_directory: None,
             event_id: 2,
             event: EngineEvent::SessionHandoff {
                 from_session_id: "session-1".to_owned(),
@@ -195,6 +198,7 @@ fn compaction_rebinds_history_and_resets_the_new_session_watermark() {
             session_id: "session-1".to_owned(),
             turn_id: Some("turn-1".to_owned()),
             emitted_at: 10,
+            working_directory: None,
             event_id: 1,
             event: EngineEvent::UserMessage {
                 content: "compact".to_owned(),
@@ -204,6 +208,7 @@ fn compaction_rebinds_history_and_resets_the_new_session_watermark() {
             session_id: "session-1".to_owned(),
             turn_id: Some("turn-1".to_owned()),
             emitted_at: 11,
+            working_directory: None,
             event_id: 2,
             event: EngineEvent::CompactionStarted {
                 compaction_id: "compaction-1".to_owned(),
@@ -215,6 +220,7 @@ fn compaction_rebinds_history_and_resets_the_new_session_watermark() {
             session_id: "session-1".to_owned(),
             turn_id: Some("turn-1".to_owned()),
             emitted_at: 12,
+            working_directory: None,
             event_id: 3,
             event: EngineEvent::CompactionCompleted {
                 compaction_id: "compaction-1".to_owned(),
@@ -227,6 +233,7 @@ fn compaction_rebinds_history_and_resets_the_new_session_watermark() {
             session_id: "session-1".to_owned(),
             turn_id: Some("turn-1".to_owned()),
             emitted_at: 13,
+            working_directory: None,
             event_id: 4,
             event: EngineEvent::SessionHandoff {
                 from_session_id: "session-1".to_owned(),

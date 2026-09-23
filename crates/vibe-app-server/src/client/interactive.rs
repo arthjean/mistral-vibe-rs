@@ -191,10 +191,14 @@ pub(super) struct InteractiveQuestionOption {
     #[serde(default)]
     description: String,
 }
-pub(super) fn approval_callback_detail(request: &ApprovalRequest) -> Value {
+pub(super) fn approval_callback_detail(
+    request: &ApprovalRequest,
+    working_directory: Option<&std::path::Path>,
+) -> Value {
     // The approval presents the effect it is gating, so the detail carries the
-    // same typed shape the effect entry will publish once the call is allowed.
-    let mut effect = EffectDetail::for_call(&request.tool, &request.input);
+    // same typed shape the effect entry will publish once the call is allowed,
+    // its paths shown against the same session directory.
+    let mut effect = EffectDetail::for_call_at(&request.tool, &request.input, working_directory);
     effect.display.content = Some(request.rationale.clone());
     json!({
         "kind": "approval",

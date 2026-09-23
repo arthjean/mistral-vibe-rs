@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::future::Future;
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -255,6 +256,8 @@ struct TurnSettings {
     /// event reports. Reference `self.agent_profile.name`, whose default
     /// profile is named `default`.
     agent_profile: String,
+    /// The session's directory, stamped on every event this turn emits.
+    working_directory: Option<PathBuf>,
 }
 
 impl Default for TurnSettings {
@@ -267,6 +270,7 @@ impl Default for TurnSettings {
             compaction: CompactionSettings::default(),
             invoked_skills: None,
             agent_profile: DEFAULT_AGENT_PROFILE.to_owned(),
+            working_directory: None,
         }
     }
 }
@@ -373,6 +377,15 @@ impl<P, T, C, S> ConversationEngine<P, T, C, S> {
         self.settings.agent_profile = profile.into();
         self
     }
+
+    /// Names the directory the session sits in, which every event this turn
+    /// emits carries. Absent, a file path is displayed against the process
+    /// directory.
+    #[must_use]
+    pub fn with_working_directory(mut self, directory: impl Into<PathBuf>) -> Self {
+        self.settings.working_directory = Some(directory.into());
+        self
+    }
 }
 
 impl<P, T, C, S> ConversationEngine<P, T, C, S>
@@ -441,6 +454,7 @@ where
             self.settings.observer.as_ref(),
             session_id,
             input.turn_id.as_deref(),
+            self.settings.working_directory.clone(),
         );
         let mut messages = input.messages.clone();
         let mut ledger = TurnLedger::new(&self.settings.baseline, &self.settings.limits);

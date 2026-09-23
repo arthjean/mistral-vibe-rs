@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
@@ -25,6 +27,15 @@ pub struct EventEnvelope {
     pub turn_id: Option<String>,
     #[serde(skip)]
     pub emitted_at: u64,
+    /// Where the session sat when the event was emitted, which is what a file
+    /// path in a tool header is displayed against. Reference `AgentLoop` binds
+    /// its session's directory to every presentation it computes; this port
+    /// computes presentation wherever an event is reduced, so the directory
+    /// travels with the event rather than living in one reducer. [`None`]
+    /// displays against the process directory, as the reference does when no
+    /// session is bound.
+    #[serde(skip)]
+    pub working_directory: Option<PathBuf>,
     pub event_id: u64,
     #[serde(flatten)]
     pub event: EngineEvent,
@@ -704,6 +715,7 @@ impl ProjectionReducer {
             &mut self.state,
             envelope.event_id,
             envelope.emitted_at,
+            envelope.working_directory.as_deref(),
             &envelope.event,
         )?;
         self.state.watermark = envelope.event_id;
@@ -769,6 +781,7 @@ mod tests {
             session_id: "session-1".to_owned(),
             turn_id: None,
             emitted_at: id,
+            working_directory: None,
             event_id: id,
             event,
         }
@@ -971,6 +984,7 @@ mod tests {
             session_id: "session-2".to_owned(),
             turn_id: None,
             emitted_at: 1,
+            working_directory: None,
             event_id: 1,
             event: EngineEvent::ModelText {
                 text: "foreign duplicate".to_owned(),
@@ -1005,6 +1019,7 @@ mod tests {
             session_id: "session-2".to_owned(),
             turn_id: None,
             emitted_at: 1,
+            working_directory: None,
             event_id: 1,
             event: EngineEvent::ModelText {
                 text: "wrong".to_owned(),
@@ -1225,6 +1240,7 @@ mod tests {
             session_id: from.to_owned(),
             turn_id: None,
             emitted_at: id,
+            working_directory: None,
             event_id: id,
             event: EngineEvent::SessionHandoff {
                 from_session_id: from.to_owned(),

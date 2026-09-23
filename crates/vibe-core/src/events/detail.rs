@@ -3,7 +3,7 @@
 //! A history entry used to carry an untyped `detail` object, which meant a
 //! client had to guess what an effect was and could not render a notice written
 //! by the other implementation. The reference types all three: an effect detail
-//! is a 12-variant union keyed on the tool's semantic kind, a notice detail an
+//! is a 14-variant union keyed on the tool's semantic kind, a notice detail an
 //! 8-variant union keyed on what happened, and a callback detail names whether
 //! it wants an approval or an answer.
 //!
@@ -13,12 +13,15 @@
 //! of each deriving one from the raw arguments.
 
 use std::fmt;
+use std::path::{Component, Path, PathBuf};
 
 use serde::de::{IgnoredAny, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
 
 use crate::policy::PermissionRequirement;
+use crate::scratchpad::SCRATCHPAD_PREFIX;
+use crate::workspace::tool_path;
 
 // --------------------------------------------------------------------------
 // Vocabularies
@@ -44,11 +47,18 @@ pub enum ToolEffectKind {
     WebFetch,
     Skill,
     Subagent,
+    /// A session opened in a git worktree, which the reference publishes as a
+    /// transcript entry of its own (`vibe/app_server/_worktree_effects.py`)
+    /// rather than as a tool call.
+    Worktree,
+    /// A background process the Unified harness manages
+    /// (`vibe/app_server/_unified_tool_projection.py`).
+    Process,
 }
 
 impl ToolEffectKind {
     /// Every kind, in the order the reference vocabulary declares them.
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 14] = [
         Self::Tool,
         Self::Shell,
         Self::FileEdit,
@@ -61,6 +71,8 @@ impl ToolEffectKind {
         Self::WebFetch,
         Self::Skill,
         Self::Subagent,
+        Self::Worktree,
+        Self::Process,
     ];
 
     /// Which kind a tool name maps to. A name with no mapping is a plain tool.
@@ -99,6 +111,8 @@ impl ToolEffectKind {
             Self::WebFetch => "Fetching page",
             Self::Skill => "Loading skill",
             Self::Subagent => "Running subagent",
+            Self::Worktree => "Creating worktree",
+            Self::Process => "Running process",
         }
     }
 
@@ -118,6 +132,8 @@ impl ToolEffectKind {
             Self::WebFetch => "web_fetch",
             Self::Skill => "skill",
             Self::Subagent => "subagent",
+            Self::Worktree => "worktree",
+            Self::Process => "process",
         }
     }
 
@@ -133,7 +149,8 @@ impl ToolEffectKind {
             Self::UserQuestion => ("Asking", "Asked"),
             Self::WebFetch => ("Fetching", "Fetched"),
             Self::Skill => ("Loading", "Loaded"),
-            Self::Tool | Self::Todo => ("Running", "Ran"),
+            Self::Worktree => ("Creating", "Created"),
+            Self::Tool | Self::Todo | Self::Process => ("Running", "Ran"),
         }
     }
 }
@@ -300,6 +317,12 @@ pub struct EffectResultDisplay {
     pub message: String,
     #[serde(default)]
     pub warnings: Vec<String>,
+    /// Why the call ran without asking. Reference `EffectResultDisplay`
+    /// declares it since v2.25.4 and serializes it without dropping a null, so
+    /// the key is on every result display; only the smart-approve path of the
+    /// Unified backend ever fills it, which this port does not run.
+    #[serde(default)]
+    pub approval_note: Option<String>,
     #[serde(default)]
     pub suffix: String,
 }
@@ -494,21 +517,38 @@ pub struct EffectDetail {
 }
 
 impl EffectDetail {
-    /// The detail for a call to `tool_name` with `arguments`.
+    /// The detail for a call to `tool_name` with `arguments`, with every file
+    /// path it names displayed against the process working directory.
     #[must_use]
     pub fn for_call(tool_name: &str, arguments: &Value) -> Self {
-        // A caller holding a decoded object holds no order to keep: the map it
-        // read them from iterates lexicographically already.
-        Self::for_decoded_call(tool_name, arguments, &[], None)
+        Self::for_call_at(tool_name, arguments, None)
     }
 
-    /// The shared constructor, told which order the arguments arrived in and
-    /// which remote the call is proxied to.
+    /// The detail for a call made by a session sitting in `working_directory`.
+    ///
+    /// Reference `ToolUIDataAdapter` renders a file path relative to the
+    /// session's own directory, which it binds through `file_display_harness`
+    /// (`vibe/core/tools/ui.py:119-121`), and falls back to the process
+    /// directory when none is bound. [`None`] is that fallback.
+    #[must_use]
+    pub fn for_call_at(
+        tool_name: &str,
+        arguments: &Value,
+        working_directory: Option<&Path>,
+    ) -> Self {
+        // A caller holding a decoded object holds no order to keep: the map it
+        // read them from iterates lexicographically already.
+        Self::for_decoded_call(tool_name, arguments, &[], None, working_directory)
+    }
+
+    /// The shared constructor, told which order the arguments arrived in,
+    /// which remote the call is proxied to and where the session sits.
     fn for_decoded_call(
         tool_name: &str,
         arguments: &Value,
         wire_order: &[String],
         remote: Option<&RemoteToolOrigin>,
+        working_directory: Option<&Path>,
     ) -> Self {
         // A proxy takes none of the per-kind presentations whatever its
         // published name reads like, which the generic kind is what expresses.
@@ -520,7 +560,14 @@ impl EffectDetail {
         Self {
             kind,
             tool_name: tool_name.to_owned(),
-            display: call_display(kind, tool_name, arguments, remote, wire_order),
+            display: call_display(
+                kind,
+                tool_name,
+                arguments,
+                remote,
+                wire_order,
+                working_directory,
+            ),
             input: project_input(kind, arguments),
             child_session_id: None,
             remote: remote.cloned(),
@@ -535,18 +582,36 @@ impl EffectDetail {
     /// not as a shell.
     #[must_use]
     pub fn for_proxied_call(tool_name: &str, arguments: &str, remote: &RemoteToolOrigin) -> Self {
-        Self::for_decoded_call(tool_name, &decode_arguments(arguments), &[], Some(remote))
+        Self::for_decoded_call(
+            tool_name,
+            &decode_arguments(arguments),
+            &[],
+            Some(remote),
+            None,
+        )
     }
 
     /// The detail for a call whose arguments were recorded as a JSON string,
     /// which is how the engine carries them.
     #[must_use]
     pub fn for_encoded_call(tool_name: &str, arguments: &str) -> Self {
+        Self::for_encoded_call_at(tool_name, arguments, None)
+    }
+
+    /// The same, for a session sitting in `working_directory`, as
+    /// [`Self::for_call_at`] reads it.
+    #[must_use]
+    pub fn for_encoded_call_at(
+        tool_name: &str,
+        arguments: &str,
+        working_directory: Option<&Path>,
+    ) -> Self {
         Self::for_decoded_call(
             tool_name,
             &decode_arguments(arguments),
             &wire_key_order(arguments),
             None,
+            working_directory,
         )
     }
 }
@@ -684,6 +749,13 @@ fn project_input(kind: ToolEffectKind, arguments: &Value) -> Value {
             "task": string_argument(arguments, &["task", "prompt"]),
             "agent": string_argument(arguments, &["agent", "subagent_type"]),
         }),
+        ToolEffectKind::Worktree => json!({
+            "name": string_argument(arguments, &["name"]),
+            "branch": string_argument(arguments, &["branch"]),
+            "path": string_argument(arguments, &["path"]),
+        }),
+        // Reference `ProcessEffectDetail.input` is any JSON value.
+        ToolEffectKind::Process => arguments.clone(),
     }
 }
 
@@ -708,6 +780,7 @@ fn call_display(
     arguments: &Value,
     remote: Option<&RemoteToolOrigin>,
     wire_order: &[String],
+    working_directory: Option<&Path>,
 ) -> EffectCallDisplay {
     if let Some(remote) = remote {
         let mut display = EffectCallDisplay {
@@ -722,8 +795,17 @@ fn call_display(
         todo_call_display(arguments)
     } else {
         let (verb, settled_verb) = kind.verbs();
-        let (summary, message) = call_summary(kind, tool_name, arguments, wire_order);
+        let (summary, message) =
+            call_summary(kind, tool_name, arguments, wire_order, working_directory);
         (verb.to_owned(), settled_verb.to_owned(), summary, message)
+    };
+    // The three file tools mark a path inside a session scratchpad, which is
+    // the only suffix a call header carries.
+    let suffix = match kind {
+        ToolEffectKind::FileRead | ToolEffectKind::FileWrite | ToolEffectKind::FileEdit => {
+            scratchpad_suffix(&string_argument(arguments, FILE_PATH_KEYS)).to_owned()
+        }
+        _ => String::new(),
     };
     // A call whose arguments never arrived would otherwise render a bare verb.
     let message = if message.is_empty() {
@@ -734,7 +816,7 @@ fn call_display(
     let mut display = EffectCallDisplay {
         summary,
         content: None,
-        suffix: String::new(),
+        suffix,
         verb,
         // A kind that names its own subject names it in both headers, which is
         // what keeps a settled call from renaming what it was acting on. Only a
@@ -753,6 +835,7 @@ fn call_summary(
     tool_name: &str,
     arguments: &Value,
     wire_order: &[String],
+    working_directory: Option<&Path>,
 ) -> (String, String) {
     match kind {
         ToolEffectKind::Shell => {
@@ -760,14 +843,22 @@ fn call_summary(
             (format!("bash: {command}"), command)
         }
         ToolEffectKind::FileRead => {
-            let mut message = string_argument(arguments, FILE_PATH_KEYS);
+            let mut message = display_file_path(
+                &string_argument(arguments, FILE_PATH_KEYS),
+                working_directory,
+            );
             let mut extras = Vec::new();
             if let Some(offset) = number_argument(arguments, &["offset", "startLine", "start_line"])
                 && offset > 0
             {
                 extras.push(format!("from line {offset}"));
             }
-            if let Some(limit) = number_argument(arguments, &["limit", "maxLines", "max_lines"]) {
+            // Reference `ReadFileTool.format_call_display` names the window only
+            // when it differs from the default one, so a call that spells the
+            // default out reads the same as one that leaves it implied.
+            if let Some(limit) = number_argument(arguments, &["limit", "maxLines", "max_lines"])
+                && limit != DEFAULT_READ_LIMIT
+            {
                 extras.push(format!("limit {limit} lines"));
             }
             if !extras.is_empty() {
@@ -776,12 +867,18 @@ fn call_summary(
             (format!("Reading {message}"), message)
         }
         ToolEffectKind::FileWrite => {
-            let path = string_argument(arguments, FILE_PATH_KEYS);
-            (format!("Writing {path}"), path)
+            let shown = display_file_path(
+                &string_argument(arguments, FILE_PATH_KEYS),
+                working_directory,
+            );
+            (format!("Writing {shown}"), shown)
         }
         ToolEffectKind::FileEdit => {
-            let name = file_name(&string_argument(arguments, FILE_PATH_KEYS));
-            (format!("Editing {name}"), name)
+            let shown = display_file_path(
+                &string_argument(arguments, FILE_PATH_KEYS),
+                working_directory,
+            );
+            (format!("Editing {shown}"), shown)
         }
         ToolEffectKind::FileSearch => {
             let pattern = string_argument(arguments, &["pattern", "query"]);
@@ -838,8 +935,12 @@ fn call_summary(
             (format!("Running {message}"), message)
         }
         // A tool with no presentation of its own shows its arguments, and the
-        // summary is all there is to show.
-        ToolEffectKind::Tool | ToolEffectKind::Todo => {
+        // summary is all there is to show. No tool of this port publishes the
+        // worktree or process kinds, so a call under either reads the same way.
+        ToolEffectKind::Tool
+        | ToolEffectKind::Todo
+        | ToolEffectKind::Worktree
+        | ToolEffectKind::Process => {
             let summary = generic_call_summary(tool_name, arguments, wire_order);
             (summary.clone(), summary)
         }
@@ -953,6 +1054,7 @@ impl EffectResultDisplay {
             verb: call.settled_verb.clone(),
             message: call.subject().to_owned(),
             warnings: Vec::new(),
+            approval_note: None,
             suffix: String::new(),
         }
     }
@@ -965,6 +1067,7 @@ impl EffectResultDisplay {
             verb: String::new(),
             message: format!("{tool_name}: skipped"),
             warnings: Vec::new(),
+            approval_note: None,
             suffix: String::new(),
         }
     }
@@ -988,6 +1091,7 @@ impl EffectResultDisplay {
                 verb: call.settled_verb.clone(),
                 message: settled.error.to_owned(),
                 warnings: Vec::new(),
+                approval_note: None,
                 suffix: String::new(),
             };
         }
@@ -1001,6 +1105,7 @@ impl EffectResultDisplay {
                     settled.skip_reason.to_owned()
                 },
                 warnings: Vec::new(),
+                approval_note: None,
                 suffix: String::new(),
             };
         }
@@ -1014,6 +1119,7 @@ impl EffectResultDisplay {
                 verb: String::new(),
                 message: NO_RESULT.to_owned(),
                 warnings: Vec::new(),
+                approval_note: None,
                 suffix: String::new(),
             };
         };
@@ -1035,6 +1141,7 @@ impl EffectResultDisplay {
             verb: "Ran".to_owned(),
             message: remote.settled_subject(&answered),
             warnings: Vec::new(),
+            approval_note: None,
             suffix: String::new(),
         }
     }
@@ -1063,6 +1170,19 @@ impl EffectResultDisplay {
         output: &Value,
         emitted: &Value,
     ) -> Self {
+        Self::completed_at(kind, call, output, emitted, None)
+    }
+
+    /// The same, for a session sitting in `working_directory`, which is what a
+    /// file path the result names is displayed against.
+    #[must_use]
+    pub fn completed_at(
+        kind: ToolEffectKind,
+        call: &EffectCallDisplay,
+        output: &Value,
+        emitted: &Value,
+        working_directory: Option<&Path>,
+    ) -> Self {
         if let Ok(display) = serde_json::from_value::<Self>(emitted.clone()) {
             return display;
         }
@@ -1078,7 +1198,7 @@ impl EffectResultDisplay {
             verb,
             message,
             suffix,
-        } = completed_header(kind, call, output);
+        } = completed_header(kind, call, output, working_directory);
         if kind == ToolEffectKind::UserQuestion
             && output
                 .get("cancelled")
@@ -1090,6 +1210,7 @@ impl EffectResultDisplay {
                 verb: "Cancelled".to_owned(),
                 message: "by user".to_owned(),
                 warnings,
+                approval_note: None,
                 suffix: String::new(),
             };
         }
@@ -1098,6 +1219,7 @@ impl EffectResultDisplay {
             verb,
             message,
             warnings,
+            approval_note: None,
             suffix,
         }
     }
@@ -1128,7 +1250,12 @@ impl Header {
 ///
 /// Reference builds each one from the tool's own typed result, so the shape a
 /// client renders is one table rather than a widget per tool.
-fn completed_header(kind: ToolEffectKind, call: &EffectCallDisplay, output: &Value) -> Header {
+fn completed_header(
+    kind: ToolEffectKind,
+    call: &EffectCallDisplay,
+    output: &Value,
+    working_directory: Option<&Path>,
+) -> Header {
     /// The parenthetical a capped or clipped result carries.
     const TRUNCATED: &str = "(truncated)";
     let truncated = |clipped: bool| if clipped { TRUNCATED } else { "" };
@@ -1146,23 +1273,36 @@ fn completed_header(kind: ToolEffectKind, call: &EffectCallDisplay, output: &Val
         ToolEffectKind::FileRead => {
             let lines = read_line_count(output);
             let word = if lines == 1 { "line" } else { "lines" };
-            let name = file_name(&string_argument(output, FILE_PATH_KEYS));
-            Header::new(
-                "Read",
-                format!("{lines} {word} from {name}"),
+            let path = string_argument(output, FILE_PATH_KEYS);
+            let shown = display_file_path(&path, working_directory);
+            // Reference `ReadFileTool.get_result_display` joins both marks with
+            // a space, the scratchpad one first.
+            let suffix = [
+                scratchpad_suffix(&path),
                 truncated(read_was_truncated(output, lines)),
+            ]
+            .into_iter()
+            .filter(|mark| !mark.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+            Header::new("Read", format!("{lines} {word} from {shown}"), suffix)
+        }
+        ToolEffectKind::FileWrite => {
+            let path = string_argument(output, FILE_PATH_KEYS);
+            Header::new(
+                "Created",
+                display_file_path(&path, working_directory),
+                scratchpad_suffix(&path),
             )
         }
-        ToolEffectKind::FileWrite => Header::new(
-            "Created",
-            file_name(&string_argument(output, FILE_PATH_KEYS)),
-            "",
-        ),
-        ToolEffectKind::FileEdit => Header::new(
-            "Edited",
-            file_name(&string_argument(output, EDITED_FILE_PATH_KEYS)),
-            "",
-        ),
+        ToolEffectKind::FileEdit => {
+            let path = string_argument(output, EDITED_FILE_PATH_KEYS);
+            Header::new(
+                "Edited",
+                display_file_path(&path, working_directory),
+                scratchpad_suffix(&path),
+            )
+        }
         ToolEffectKind::FileSearch => {
             let count = search_match_count(output);
             let word = if count == 1 { "match" } else { "matches" };
@@ -1228,7 +1368,8 @@ fn completed_header(kind: ToolEffectKind, call: &EffectCallDisplay, output: &Val
         }
         ToolEffectKind::Skill => Header::new("Loaded", call.subject(), ""),
         ToolEffectKind::Subagent => Header::new("Completed", call.subject(), ""),
-        ToolEffectKind::Tool => Header::new("Ran", call.subject(), ""),
+        ToolEffectKind::Worktree => Header::new("Created", call.subject(), ""),
+        ToolEffectKind::Tool | ToolEffectKind::Process => Header::new("Ran", call.subject(), ""),
     }
 }
 
@@ -1461,8 +1602,90 @@ fn bool_argument(arguments: &Value, keys: &[&str]) -> bool {
         .unwrap_or(false)
 }
 
-fn file_name(path: &str) -> String {
-    path.rsplit('/').next().unwrap_or(path).to_owned()
+/// A file path as a header shows it.
+///
+/// Reference `display_file_path` (`vibe/core/tools/utils.py:116-133`): the
+/// path is expanded and normalized without following links, then shown
+/// relative to the session's directory when it sits under it, as that
+/// directory's own name when it is the directory itself, and as the normalized
+/// absolute path everywhere else. An argument naming no path shows nothing,
+/// where the reference would name the directory: a call only reaches this with
+/// an empty path when its arguments never arrived, which it presents
+/// differently anyway.
+fn display_file_path(path: &str, working_directory: Option<&Path>) -> String {
+    if path.is_empty() {
+        return String::new();
+    }
+    let Some(root) = working_directory
+        .map(Path::to_path_buf)
+        .or_else(|| std::env::current_dir().ok())
+    else {
+        return path.to_owned();
+    };
+    let root = lexically_normalized(&tool_path::expanded(&root));
+    let requested = tool_path::expanded(Path::new(path));
+    let target = lexically_normalized(&if requested.is_absolute() {
+        requested
+    } else {
+        root.join(requested)
+    });
+    match target.strip_prefix(&root) {
+        Ok(relative) if relative.as_os_str().is_empty() => target
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_else(|| target.display().to_string()),
+        Ok(relative) => relative.display().to_string(),
+        Err(_) => target.display().to_string(),
+    }
+}
+
+/// `os.path.normpath`: `.` dropped, `..` folded into its parent, and a `..`
+/// above the root kept at the root, all without touching the filesystem.
+fn lexically_normalized(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if matches!(
+                    normalized.components().next_back(),
+                    Some(Component::Normal(_))
+                ) {
+                    normalized.pop();
+                } else if !normalized.has_root() {
+                    normalized.push("..");
+                }
+            }
+            other => normalized.push(other.as_os_str()),
+        }
+    }
+    normalized
+}
+
+/// The mark a file header carries when its path sits in a session scratchpad.
+///
+/// Reference `is_scratchpad_display_path` (`vibe/core/scratchpad.py:50-55`)
+/// resolves the path against the process directory, following links, and asks
+/// whether any component carries the scratchpad prefix, so any session's
+/// scratchpad is marked and not only this one's.
+fn scratchpad_suffix(path: &str) -> &'static str {
+    let expanded = tool_path::expanded(Path::new(path));
+    let absolute = if expanded.is_absolute() {
+        expanded
+    } else {
+        match std::env::current_dir() {
+            Ok(directory) => directory.join(expanded),
+            Err(_) => return "",
+        }
+    };
+    let in_scratchpad =
+        tool_path::resolved(&absolute)
+            .components()
+            .any(|component| match component {
+                Component::Normal(name) => name.to_string_lossy().starts_with(SCRATCHPAD_PREFIX),
+                _ => false,
+            });
+    if in_scratchpad { "(scratchpad)" } else { "" }
 }
 
 fn host_of(url: &str) -> String {

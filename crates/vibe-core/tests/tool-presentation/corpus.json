@@ -2474,10 +2474,1777 @@
       "skipped": true,
       "source": "connector",
       "tool": "connector_acme_create_issue"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace/src/alpha.txt",
+        "new_string": "two",
+        "old_string": "one",
+        "replace_all": false
+      },
+      "case": "path-inside-call",
+      "cwd": "/workspace",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": {
+            "described": "sha256:66cf59e53ad7f6469c83480d19897616",
+            "length": 35
+          },
+          "message": {
+            "described": "sha256:7748d117f1603f5fac3bde8ba677883b",
+            "length": 13
+          },
+          "settledMessage": {
+            "described": "sha256:7748d117f1603f5fac3bde8ba677883b",
+            "length": 13
+          },
+          "settledVerb": "Edited",
+          "statusText": {
+            "described": "sha256:d868fdd01755f295f90b7740277dbc99",
+            "length": 13
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:ba471c62e0a10f9bef271d21f851551a",
+            "length": 21
+          },
+          "verb": "Editing"
+        },
+        "kind": "file_edit"
+      },
+      "source": "builtin",
+      "tool": "edit"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace/src/alpha.txt",
+        "new_string": "two",
+        "old_string": "one",
+        "replace_all": false
+      },
+      "case": "path-inside-result",
+      "cwd": "/workspace",
+      "error": null,
+      "output": {
+        "file": "/workspace/src/alpha.txt",
+        "message": "replaced one occurrence",
+        "new_string": "two",
+        "old_string": "one"
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "approvalNote": null,
+          "message": {
+            "described": "sha256:7748d117f1603f5fac3bde8ba677883b",
+            "length": 13
+          },
+          "success": true,
+          "suffix": "",
+          "verb": "Edited",
+          "warnings": []
+        },
+        "kind": "file_edit",
+        "projectedOutput": {
+          "file": "/workspace/src/alpha.txt",
+          "new_string": "two",
+          "occurrences": [
+            {
+              "new_text": "two",
+              "old_text": "one",
+              "start_line": null
+            }
+          ],
+          "old_string": "one"
+        }
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "edit"
+    },
+    {
+      "arguments": {
+        "file_path": "src/alpha.txt",
+        "new_string": "two",
+        "old_string": "one",
+        "replace_all": false
+      },
+      "case": "path-relative-call",
+      "cwd": "/workspace",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": {
+            "described": "sha256:66cf59e53ad7f6469c83480d19897616",
+            "length": 35
+          },
+          "message": "src/alpha.txt",
+          "settledMessage": "src/alpha.txt",
+          "settledVerb": "Edited",
+          "statusText": {
+            "described": "sha256:d868fdd01755f295f90b7740277dbc99",
+            "length": 13
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:ba471c62e0a10f9bef271d21f851551a",
+            "length": 21
+          },
+          "verb": "Editing"
+        },
+        "kind": "file_edit"
+      },
+      "source": "builtin",
+      "tool": "edit"
+    },
+    {
+      "arguments": {
+        "file_path": "src/alpha.txt",
+        "new_string": "two",
+        "old_string": "one",
+        "replace_all": false
+      },
+      "case": "path-relative-result",
+      "cwd": "/workspace",
+      "error": null,
+      "output": {
+        "file": "src/alpha.txt",
+        "message": "replaced one occurrence",
+        "new_string": "two",
+        "old_string": "one"
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "approvalNote": null,
+          "message": "src/alpha.txt",
+          "success": true,
+          "suffix": "",
+          "verb": "Edited",
+          "warnings": []
+        },
+        "kind": "file_edit",
+        "projectedOutput": {
+          "file": "src/alpha.txt",
+          "new_string": "two",
+          "occurrences": [
+            {
+              "new_text": "two",
+              "old_text": "one",
+              "start_line": null
+            }
+          ],
+          "old_string": "one"
+        }
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "edit"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace",
+        "new_string": "two",
+        "old_string": "one",
+        "replace_all": false
+      },
+      "case": "path-the-directory-call",
+      "cwd": "/workspace",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": {
+            "described": "sha256:66cf59e53ad7f6469c83480d19897616",
+            "length": 35
+          },
+          "message": "workspace",
+          "settledMessage": "workspace",
+          "settledVerb": "Edited",
+          "statusText": {
+            "described": "sha256:d868fdd01755f295f90b7740277dbc99",
+            "length": 13
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:f28b811c4ecaa33dce53e23405a1aa8c",
+            "length": 17
+          },
+          "verb": "Editing"
+        },
+        "kind": "file_edit"
+      },
+      "source": "builtin",
+      "tool": "edit"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace",
+        "new_string": "two",
+        "old_string": "one",
+        "replace_all": false
+      },
+      "case": "path-the-directory-result",
+      "cwd": "/workspace",
+      "error": null,
+      "output": {
+        "file": "/workspace",
+        "message": "replaced one occurrence",
+        "new_string": "two",
+        "old_string": "one"
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "approvalNote": null,
+          "message": "workspace",
+          "success": true,
+          "suffix": "",
+          "verb": "Edited",
+          "warnings": []
+        },
+        "kind": "file_edit",
+        "projectedOutput": {
+          "file": "/workspace",
+          "new_string": "two",
+          "occurrences": [
+            {
+              "new_text": "two",
+              "old_text": "one",
+              "start_line": null
+            }
+          ],
+          "old_string": "one"
+        }
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "edit"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace/src/../alpha.txt",
+        "new_string": "two",
+        "old_string": "one",
+        "replace_all": false
+      },
+      "case": "path-dotted-call",
+      "cwd": "/workspace",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": {
+            "described": "sha256:66cf59e53ad7f6469c83480d19897616",
+            "length": 35
+          },
+          "message": {
+            "described": "sha256:9b331f95797e6a85455f22fa7f7133a5",
+            "length": 9
+          },
+          "settledMessage": {
+            "described": "sha256:9b331f95797e6a85455f22fa7f7133a5",
+            "length": 9
+          },
+          "settledVerb": "Edited",
+          "statusText": {
+            "described": "sha256:d868fdd01755f295f90b7740277dbc99",
+            "length": 13
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:21f7f10553d70ffbf84e54e1e4b0877c",
+            "length": 17
+          },
+          "verb": "Editing"
+        },
+        "kind": "file_edit"
+      },
+      "source": "builtin",
+      "tool": "edit"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace/src/../alpha.txt",
+        "new_string": "two",
+        "old_string": "one",
+        "replace_all": false
+      },
+      "case": "path-dotted-result",
+      "cwd": "/workspace",
+      "error": null,
+      "output": {
+        "file": "/workspace/src/../alpha.txt",
+        "message": "replaced one occurrence",
+        "new_string": "two",
+        "old_string": "one"
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "approvalNote": null,
+          "message": {
+            "described": "sha256:9b331f95797e6a85455f22fa7f7133a5",
+            "length": 9
+          },
+          "success": true,
+          "suffix": "",
+          "verb": "Edited",
+          "warnings": []
+        },
+        "kind": "file_edit",
+        "projectedOutput": {
+          "file": "/workspace/src/../alpha.txt",
+          "new_string": "two",
+          "occurrences": [
+            {
+              "new_text": "two",
+              "old_text": "one",
+              "start_line": null
+            }
+          ],
+          "old_string": "one"
+        }
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "edit"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace//src/./alpha.txt",
+        "new_string": "two",
+        "old_string": "one",
+        "replace_all": false
+      },
+      "case": "path-doubled-separator-call",
+      "cwd": "/workspace",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": {
+            "described": "sha256:66cf59e53ad7f6469c83480d19897616",
+            "length": 35
+          },
+          "message": {
+            "described": "sha256:7748d117f1603f5fac3bde8ba677883b",
+            "length": 13
+          },
+          "settledMessage": {
+            "described": "sha256:7748d117f1603f5fac3bde8ba677883b",
+            "length": 13
+          },
+          "settledVerb": "Edited",
+          "statusText": {
+            "described": "sha256:d868fdd01755f295f90b7740277dbc99",
+            "length": 13
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:ba471c62e0a10f9bef271d21f851551a",
+            "length": 21
+          },
+          "verb": "Editing"
+        },
+        "kind": "file_edit"
+      },
+      "source": "builtin",
+      "tool": "edit"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace//src/./alpha.txt",
+        "new_string": "two",
+        "old_string": "one",
+        "replace_all": false
+      },
+      "case": "path-doubled-separator-result",
+      "cwd": "/workspace",
+      "error": null,
+      "output": {
+        "file": "/workspace//src/./alpha.txt",
+        "message": "replaced one occurrence",
+        "new_string": "two",
+        "old_string": "one"
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "approvalNote": null,
+          "message": {
+            "described": "sha256:7748d117f1603f5fac3bde8ba677883b",
+            "length": 13
+          },
+          "success": true,
+          "suffix": "",
+          "verb": "Edited",
+          "warnings": []
+        },
+        "kind": "file_edit",
+        "projectedOutput": {
+          "file": "/workspace//src/./alpha.txt",
+          "new_string": "two",
+          "occurrences": [
+            {
+              "new_text": "two",
+              "old_text": "one",
+              "start_line": null
+            }
+          ],
+          "old_string": "one"
+        }
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "edit"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace-other/alpha.txt",
+        "new_string": "two",
+        "old_string": "one",
+        "replace_all": false
+      },
+      "case": "path-sibling-prefix-call",
+      "cwd": "/workspace",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": {
+            "described": "sha256:66cf59e53ad7f6469c83480d19897616",
+            "length": 35
+          },
+          "message": "/workspace-other/alpha.txt",
+          "settledMessage": "/workspace-other/alpha.txt",
+          "settledVerb": "Edited",
+          "statusText": {
+            "described": "sha256:d868fdd01755f295f90b7740277dbc99",
+            "length": 13
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:0677a6409bda6c224ed11bf280fa36f4",
+            "length": 34
+          },
+          "verb": "Editing"
+        },
+        "kind": "file_edit"
+      },
+      "source": "builtin",
+      "tool": "edit"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace-other/alpha.txt",
+        "new_string": "two",
+        "old_string": "one",
+        "replace_all": false
+      },
+      "case": "path-sibling-prefix-result",
+      "cwd": "/workspace",
+      "error": null,
+      "output": {
+        "file": "/workspace-other/alpha.txt",
+        "message": "replaced one occurrence",
+        "new_string": "two",
+        "old_string": "one"
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "approvalNote": null,
+          "message": "/workspace-other/alpha.txt",
+          "success": true,
+          "suffix": "",
+          "verb": "Edited",
+          "warnings": []
+        },
+        "kind": "file_edit",
+        "projectedOutput": {
+          "file": "/workspace-other/alpha.txt",
+          "new_string": "two",
+          "occurrences": [
+            {
+              "new_text": "two",
+              "old_text": "one",
+              "start_line": null
+            }
+          ],
+          "old_string": "one"
+        }
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "edit"
+    },
+    {
+      "arguments": {
+        "file_path": "/elsewhere/nested/../alpha.txt",
+        "new_string": "two",
+        "old_string": "one",
+        "replace_all": false
+      },
+      "case": "path-outside-call",
+      "cwd": "/workspace",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": {
+            "described": "sha256:66cf59e53ad7f6469c83480d19897616",
+            "length": 35
+          },
+          "message": "/elsewhere/alpha.txt",
+          "settledMessage": "/elsewhere/alpha.txt",
+          "settledVerb": "Edited",
+          "statusText": {
+            "described": "sha256:d868fdd01755f295f90b7740277dbc99",
+            "length": 13
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:c130061b53193905320be7ff27439a74",
+            "length": 28
+          },
+          "verb": "Editing"
+        },
+        "kind": "file_edit"
+      },
+      "source": "builtin",
+      "tool": "edit"
+    },
+    {
+      "arguments": {
+        "file_path": "/elsewhere/nested/../alpha.txt",
+        "new_string": "two",
+        "old_string": "one",
+        "replace_all": false
+      },
+      "case": "path-outside-result",
+      "cwd": "/workspace",
+      "error": null,
+      "output": {
+        "file": "/elsewhere/nested/../alpha.txt",
+        "message": "replaced one occurrence",
+        "new_string": "two",
+        "old_string": "one"
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "approvalNote": null,
+          "message": "/elsewhere/alpha.txt",
+          "success": true,
+          "suffix": "",
+          "verb": "Edited",
+          "warnings": []
+        },
+        "kind": "file_edit",
+        "projectedOutput": {
+          "file": "/elsewhere/nested/../alpha.txt",
+          "new_string": "two",
+          "occurrences": [
+            {
+              "new_text": "two",
+              "old_text": "one",
+              "start_line": null
+            }
+          ],
+          "old_string": "one"
+        }
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "edit"
+    },
+    {
+      "arguments": {
+        "file_path": "/tmp/vibe-scratchpad-capture-0000/notes.md",
+        "new_string": "two",
+        "old_string": "one",
+        "replace_all": false
+      },
+      "case": "path-scratchpad-call",
+      "cwd": "/workspace",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": {
+            "described": "sha256:66cf59e53ad7f6469c83480d19897616",
+            "length": 35
+          },
+          "message": "/tmp/vibe-scratchpad-capture-0000/notes.md",
+          "settledMessage": "/tmp/vibe-scratchpad-capture-0000/notes.md",
+          "settledVerb": "Edited",
+          "statusText": {
+            "described": "sha256:d868fdd01755f295f90b7740277dbc99",
+            "length": 13
+          },
+          "suffix": {
+            "described": "sha256:fe9a69f9bd84a25a455abe5fdad3ee3a",
+            "length": 12
+          },
+          "summary": {
+            "described": "sha256:8bc378269e179678e17d735f8395eb33",
+            "length": 50
+          },
+          "verb": "Editing"
+        },
+        "kind": "file_edit"
+      },
+      "source": "builtin",
+      "tool": "edit"
+    },
+    {
+      "arguments": {
+        "file_path": "/tmp/vibe-scratchpad-capture-0000/notes.md",
+        "new_string": "two",
+        "old_string": "one",
+        "replace_all": false
+      },
+      "case": "path-scratchpad-result",
+      "cwd": "/workspace",
+      "error": null,
+      "output": {
+        "file": "/tmp/vibe-scratchpad-capture-0000/notes.md",
+        "message": "replaced one occurrence",
+        "new_string": "two",
+        "old_string": "one"
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "approvalNote": null,
+          "message": "/tmp/vibe-scratchpad-capture-0000/notes.md",
+          "success": true,
+          "suffix": {
+            "described": "sha256:fe9a69f9bd84a25a455abe5fdad3ee3a",
+            "length": 12
+          },
+          "verb": "Edited",
+          "warnings": []
+        },
+        "kind": "file_edit",
+        "projectedOutput": {
+          "file": "/tmp/vibe-scratchpad-capture-0000/notes.md",
+          "new_string": "two",
+          "occurrences": [
+            {
+              "new_text": "two",
+              "old_text": "one",
+              "start_line": null
+            }
+          ],
+          "old_string": "one"
+        }
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "edit"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace/src/alpha.txt",
+        "limit": 2000
+      },
+      "case": "path-inside-call",
+      "cwd": "/workspace",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": {
+            "described": "sha256:7748d117f1603f5fac3bde8ba677883b",
+            "length": 13
+          },
+          "settledMessage": {
+            "described": "sha256:7748d117f1603f5fac3bde8ba677883b",
+            "length": 13
+          },
+          "settledVerb": "Read",
+          "statusText": {
+            "described": "sha256:33e97951020dc75b1cd9cd3edb4d6f53",
+            "length": 12
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:2347bfe7ce36ec578a34b40ff07fe7f6",
+            "length": 21
+          },
+          "verb": "Reading"
+        },
+        "kind": "file_read"
+      },
+      "source": "builtin",
+      "tool": "read_file"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace/src/alpha.txt",
+        "limit": 2000
+      },
+      "case": "path-inside-result",
+      "cwd": "/workspace",
+      "error": null,
+      "output": {
+        "content": "alpha",
+        "file_path": "/workspace/src/alpha.txt",
+        "num_lines": 1,
+        "requested_limit": 20,
+        "requested_offset": 3,
+        "start_line": 3,
+        "total_lines": 4,
+        "was_truncated": false
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "approvalNote": null,
+          "message": {
+            "described": "sha256:33fa0588903a9e0bef4231521cb5ca5b",
+            "length": 25
+          },
+          "success": true,
+          "suffix": {
+            "described": "sha256:05382ab6760cc8832a2c9d3104dc33b9",
+            "length": 11
+          },
+          "verb": "Read",
+          "warnings": []
+        },
+        "kind": "file_read",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "read_file"
+    },
+    {
+      "arguments": {
+        "file_path": "src/alpha.txt",
+        "limit": 2000
+      },
+      "case": "path-relative-call",
+      "cwd": "/workspace",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "src/alpha.txt",
+          "settledMessage": "src/alpha.txt",
+          "settledVerb": "Read",
+          "statusText": {
+            "described": "sha256:33e97951020dc75b1cd9cd3edb4d6f53",
+            "length": 12
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:2347bfe7ce36ec578a34b40ff07fe7f6",
+            "length": 21
+          },
+          "verb": "Reading"
+        },
+        "kind": "file_read"
+      },
+      "source": "builtin",
+      "tool": "read_file"
+    },
+    {
+      "arguments": {
+        "file_path": "src/alpha.txt",
+        "limit": 2000
+      },
+      "case": "path-relative-result",
+      "cwd": "/workspace",
+      "error": null,
+      "output": {
+        "content": "alpha",
+        "file_path": "src/alpha.txt",
+        "num_lines": 1,
+        "requested_limit": 20,
+        "requested_offset": 3,
+        "start_line": 3,
+        "total_lines": 4,
+        "was_truncated": false
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "approvalNote": null,
+          "message": {
+            "described": "sha256:33fa0588903a9e0bef4231521cb5ca5b",
+            "length": 25
+          },
+          "success": true,
+          "suffix": {
+            "described": "sha256:05382ab6760cc8832a2c9d3104dc33b9",
+            "length": 11
+          },
+          "verb": "Read",
+          "warnings": []
+        },
+        "kind": "file_read",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "read_file"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace",
+        "limit": 2000
+      },
+      "case": "path-the-directory-call",
+      "cwd": "/workspace",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "workspace",
+          "settledMessage": "workspace",
+          "settledVerb": "Read",
+          "statusText": {
+            "described": "sha256:33e97951020dc75b1cd9cd3edb4d6f53",
+            "length": 12
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:691019348eb0393329ddc7333716c629",
+            "length": 17
+          },
+          "verb": "Reading"
+        },
+        "kind": "file_read"
+      },
+      "source": "builtin",
+      "tool": "read_file"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace",
+        "limit": 2000
+      },
+      "case": "path-the-directory-result",
+      "cwd": "/workspace",
+      "error": null,
+      "output": {
+        "content": "alpha",
+        "file_path": "/workspace",
+        "num_lines": 1,
+        "requested_limit": 20,
+        "requested_offset": 3,
+        "start_line": 3,
+        "total_lines": 4,
+        "was_truncated": false
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "approvalNote": null,
+          "message": {
+            "described": "sha256:fadb4e299b67495b5f478d09cda271fa",
+            "length": 21
+          },
+          "success": true,
+          "suffix": {
+            "described": "sha256:05382ab6760cc8832a2c9d3104dc33b9",
+            "length": 11
+          },
+          "verb": "Read",
+          "warnings": []
+        },
+        "kind": "file_read",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "read_file"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace/src/../alpha.txt",
+        "limit": 2000
+      },
+      "case": "path-dotted-call",
+      "cwd": "/workspace",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": {
+            "described": "sha256:9b331f95797e6a85455f22fa7f7133a5",
+            "length": 9
+          },
+          "settledMessage": {
+            "described": "sha256:9b331f95797e6a85455f22fa7f7133a5",
+            "length": 9
+          },
+          "settledVerb": "Read",
+          "statusText": {
+            "described": "sha256:33e97951020dc75b1cd9cd3edb4d6f53",
+            "length": 12
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:547820c5a0860dd904543ee042951ee1",
+            "length": 17
+          },
+          "verb": "Reading"
+        },
+        "kind": "file_read"
+      },
+      "source": "builtin",
+      "tool": "read_file"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace/src/../alpha.txt",
+        "limit": 2000
+      },
+      "case": "path-dotted-result",
+      "cwd": "/workspace",
+      "error": null,
+      "output": {
+        "content": "alpha",
+        "file_path": "/workspace/src/../alpha.txt",
+        "num_lines": 1,
+        "requested_limit": 20,
+        "requested_offset": 3,
+        "start_line": 3,
+        "total_lines": 4,
+        "was_truncated": false
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "approvalNote": null,
+          "message": {
+            "described": "sha256:1704d0b87311a48ba880599d3c26e676",
+            "length": 21
+          },
+          "success": true,
+          "suffix": {
+            "described": "sha256:05382ab6760cc8832a2c9d3104dc33b9",
+            "length": 11
+          },
+          "verb": "Read",
+          "warnings": []
+        },
+        "kind": "file_read",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "read_file"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace//src/./alpha.txt",
+        "limit": 2000
+      },
+      "case": "path-doubled-separator-call",
+      "cwd": "/workspace",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": {
+            "described": "sha256:7748d117f1603f5fac3bde8ba677883b",
+            "length": 13
+          },
+          "settledMessage": {
+            "described": "sha256:7748d117f1603f5fac3bde8ba677883b",
+            "length": 13
+          },
+          "settledVerb": "Read",
+          "statusText": {
+            "described": "sha256:33e97951020dc75b1cd9cd3edb4d6f53",
+            "length": 12
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:2347bfe7ce36ec578a34b40ff07fe7f6",
+            "length": 21
+          },
+          "verb": "Reading"
+        },
+        "kind": "file_read"
+      },
+      "source": "builtin",
+      "tool": "read_file"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace//src/./alpha.txt",
+        "limit": 2000
+      },
+      "case": "path-doubled-separator-result",
+      "cwd": "/workspace",
+      "error": null,
+      "output": {
+        "content": "alpha",
+        "file_path": "/workspace//src/./alpha.txt",
+        "num_lines": 1,
+        "requested_limit": 20,
+        "requested_offset": 3,
+        "start_line": 3,
+        "total_lines": 4,
+        "was_truncated": false
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "approvalNote": null,
+          "message": {
+            "described": "sha256:33fa0588903a9e0bef4231521cb5ca5b",
+            "length": 25
+          },
+          "success": true,
+          "suffix": {
+            "described": "sha256:05382ab6760cc8832a2c9d3104dc33b9",
+            "length": 11
+          },
+          "verb": "Read",
+          "warnings": []
+        },
+        "kind": "file_read",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "read_file"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace-other/alpha.txt",
+        "limit": 2000
+      },
+      "case": "path-sibling-prefix-call",
+      "cwd": "/workspace",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "/workspace-other/alpha.txt",
+          "settledMessage": "/workspace-other/alpha.txt",
+          "settledVerb": "Read",
+          "statusText": {
+            "described": "sha256:33e97951020dc75b1cd9cd3edb4d6f53",
+            "length": 12
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:7b7858c4377ded6b415114db6a0bf65c",
+            "length": 34
+          },
+          "verb": "Reading"
+        },
+        "kind": "file_read"
+      },
+      "source": "builtin",
+      "tool": "read_file"
+    },
+    {
+      "arguments": {
+        "file_path": "/workspace-other/alpha.txt",
+        "limit": 2000
+      },
+      "case": "path-sibling-prefix-result",
+      "cwd": "/workspace",
+      "error": null,
+      "output": {
+        "content": "alpha",
+        "file_path": "/workspace-other/alpha.txt",
+        "num_lines": 1,
+        "requested_limit": 20,
+        "requested_offset": 3,
+        "start_line": 3,
+        "total_lines": 4,
+        "was_truncated": false
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "approvalNote": null,
+          "message": {
+            "described": "sha256:b7f2c44987c90c8a96424e5f81802ace",
+            "length": 38
+          },
+          "success": true,
+          "suffix": {
+            "described": "sha256:05382ab6760cc8832a2c9d3104dc33b9",
+            "length": 11
+          },
+          "verb": "Read",
+          "warnings": []
+        },
+        "kind": "file_read",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "read_file"
+    },
+    {
+      "arguments": {
+        "file_path": "/elsewhere/nested/../alpha.txt",
+        "limit": 2000
+      },
+      "case": "path-outside-call",
+      "cwd": "/workspace",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "/elsewhere/alpha.txt",
+          "settledMessage": "/elsewhere/alpha.txt",
+          "settledVerb": "Read",
+          "statusText": {
+            "described": "sha256:33e97951020dc75b1cd9cd3edb4d6f53",
+            "length": 12
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:43e0f2084c020247a6e8fadb911b1b9f",
+            "length": 28
+          },
+          "verb": "Reading"
+        },
+        "kind": "file_read"
+      },
+      "source": "builtin",
+      "tool": "read_file"
+    },
+    {
+      "arguments": {
+        "file_path": "/elsewhere/nested/../alpha.txt",
+        "limit": 2000
+      },
+      "case": "path-outside-result",
+      "cwd": "/workspace",
+      "error": null,
+      "output": {
+        "content": "alpha",
+        "file_path": "/elsewhere/nested/../alpha.txt",
+        "num_lines": 1,
+        "requested_limit": 20,
+        "requested_offset": 3,
+        "start_line": 3,
+        "total_lines": 4,
+        "was_truncated": false
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "approvalNote": null,
+          "message": {
+            "described": "sha256:f326ab92fdac8a82866a2e076dd60266",
+            "length": 32
+          },
+          "success": true,
+          "suffix": {
+            "described": "sha256:05382ab6760cc8832a2c9d3104dc33b9",
+            "length": 11
+          },
+          "verb": "Read",
+          "warnings": []
+        },
+        "kind": "file_read",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "read_file"
+    },
+    {
+      "arguments": {
+        "file_path": "/tmp/vibe-scratchpad-capture-0000/notes.md",
+        "limit": 2000
+      },
+      "case": "path-scratchpad-call",
+      "cwd": "/workspace",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": null,
+          "message": "/tmp/vibe-scratchpad-capture-0000/notes.md",
+          "settledMessage": "/tmp/vibe-scratchpad-capture-0000/notes.md",
+          "settledVerb": "Read",
+          "statusText": {
+            "described": "sha256:33e97951020dc75b1cd9cd3edb4d6f53",
+            "length": 12
+          },
+          "suffix": {
+            "described": "sha256:fe9a69f9bd84a25a455abe5fdad3ee3a",
+            "length": 12
+          },
+          "summary": {
+            "described": "sha256:44b08689ec624404b385e2904a41ef46",
+            "length": 50
+          },
+          "verb": "Reading"
+        },
+        "kind": "file_read"
+      },
+      "source": "builtin",
+      "tool": "read_file"
+    },
+    {
+      "arguments": {
+        "file_path": "/tmp/vibe-scratchpad-capture-0000/notes.md",
+        "limit": 2000
+      },
+      "case": "path-scratchpad-result",
+      "cwd": "/workspace",
+      "error": null,
+      "output": {
+        "content": "alpha",
+        "file_path": "/tmp/vibe-scratchpad-capture-0000/notes.md",
+        "num_lines": 1,
+        "requested_limit": 20,
+        "requested_offset": 3,
+        "start_line": 3,
+        "total_lines": 4,
+        "was_truncated": false
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "approvalNote": null,
+          "message": {
+            "described": "sha256:9d5142a14ccdf6ab78d6cf5aac3f7f36",
+            "length": 54
+          },
+          "success": true,
+          "suffix": {
+            "described": "sha256:e01048bd31f7849557285ea32d88dc18",
+            "length": 24
+          },
+          "verb": "Read",
+          "warnings": []
+        },
+        "kind": "file_read",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "read_file"
+    },
+    {
+      "arguments": {
+        "content": "alpha",
+        "file_path": "/workspace/src/alpha.txt"
+      },
+      "case": "path-inside-call",
+      "cwd": "/workspace",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": "alpha",
+          "message": {
+            "described": "sha256:7748d117f1603f5fac3bde8ba677883b",
+            "length": 13
+          },
+          "settledMessage": {
+            "described": "sha256:7748d117f1603f5fac3bde8ba677883b",
+            "length": 13
+          },
+          "settledVerb": "Created",
+          "statusText": {
+            "described": "sha256:91713a5d3c5bf8ae4e680c52bed0ded7",
+            "length": 12
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:24def423086539fe7a296ce049322213",
+            "length": 21
+          },
+          "verb": "Creating"
+        },
+        "kind": "file_write"
+      },
+      "source": "builtin",
+      "tool": "write_file"
+    },
+    {
+      "arguments": {
+        "content": "alpha",
+        "file_path": "/workspace/src/alpha.txt"
+      },
+      "case": "path-inside-result",
+      "cwd": "/workspace",
+      "error": null,
+      "output": {
+        "bytes_written": 5,
+        "content": "alpha",
+        "file_path": "/workspace/src/alpha.txt"
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "approvalNote": null,
+          "message": {
+            "described": "sha256:7748d117f1603f5fac3bde8ba677883b",
+            "length": 13
+          },
+          "success": true,
+          "suffix": "",
+          "verb": "Created",
+          "warnings": []
+        },
+        "kind": "file_write",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "write_file"
+    },
+    {
+      "arguments": {
+        "content": "alpha",
+        "file_path": "src/alpha.txt"
+      },
+      "case": "path-relative-call",
+      "cwd": "/workspace",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": "alpha",
+          "message": "src/alpha.txt",
+          "settledMessage": "src/alpha.txt",
+          "settledVerb": "Created",
+          "statusText": {
+            "described": "sha256:91713a5d3c5bf8ae4e680c52bed0ded7",
+            "length": 12
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:24def423086539fe7a296ce049322213",
+            "length": 21
+          },
+          "verb": "Creating"
+        },
+        "kind": "file_write"
+      },
+      "source": "builtin",
+      "tool": "write_file"
+    },
+    {
+      "arguments": {
+        "content": "alpha",
+        "file_path": "src/alpha.txt"
+      },
+      "case": "path-relative-result",
+      "cwd": "/workspace",
+      "error": null,
+      "output": {
+        "bytes_written": 5,
+        "content": "alpha",
+        "file_path": "src/alpha.txt"
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "approvalNote": null,
+          "message": "src/alpha.txt",
+          "success": true,
+          "suffix": "",
+          "verb": "Created",
+          "warnings": []
+        },
+        "kind": "file_write",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "write_file"
+    },
+    {
+      "arguments": {
+        "content": "alpha",
+        "file_path": "/workspace"
+      },
+      "case": "path-the-directory-call",
+      "cwd": "/workspace",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": "alpha",
+          "message": "workspace",
+          "settledMessage": "workspace",
+          "settledVerb": "Created",
+          "statusText": {
+            "described": "sha256:91713a5d3c5bf8ae4e680c52bed0ded7",
+            "length": 12
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:dcfa4552085dda728c851e499f0414be",
+            "length": 17
+          },
+          "verb": "Creating"
+        },
+        "kind": "file_write"
+      },
+      "source": "builtin",
+      "tool": "write_file"
+    },
+    {
+      "arguments": {
+        "content": "alpha",
+        "file_path": "/workspace"
+      },
+      "case": "path-the-directory-result",
+      "cwd": "/workspace",
+      "error": null,
+      "output": {
+        "bytes_written": 5,
+        "content": "alpha",
+        "file_path": "/workspace"
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "approvalNote": null,
+          "message": "workspace",
+          "success": true,
+          "suffix": "",
+          "verb": "Created",
+          "warnings": []
+        },
+        "kind": "file_write",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "write_file"
+    },
+    {
+      "arguments": {
+        "content": "alpha",
+        "file_path": "/workspace/src/../alpha.txt"
+      },
+      "case": "path-dotted-call",
+      "cwd": "/workspace",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": "alpha",
+          "message": {
+            "described": "sha256:9b331f95797e6a85455f22fa7f7133a5",
+            "length": 9
+          },
+          "settledMessage": {
+            "described": "sha256:9b331f95797e6a85455f22fa7f7133a5",
+            "length": 9
+          },
+          "settledVerb": "Created",
+          "statusText": {
+            "described": "sha256:91713a5d3c5bf8ae4e680c52bed0ded7",
+            "length": 12
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:d4b900b4a780076d442e96ee34431168",
+            "length": 17
+          },
+          "verb": "Creating"
+        },
+        "kind": "file_write"
+      },
+      "source": "builtin",
+      "tool": "write_file"
+    },
+    {
+      "arguments": {
+        "content": "alpha",
+        "file_path": "/workspace/src/../alpha.txt"
+      },
+      "case": "path-dotted-result",
+      "cwd": "/workspace",
+      "error": null,
+      "output": {
+        "bytes_written": 5,
+        "content": "alpha",
+        "file_path": "/workspace/src/../alpha.txt"
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "approvalNote": null,
+          "message": {
+            "described": "sha256:9b331f95797e6a85455f22fa7f7133a5",
+            "length": 9
+          },
+          "success": true,
+          "suffix": "",
+          "verb": "Created",
+          "warnings": []
+        },
+        "kind": "file_write",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "write_file"
+    },
+    {
+      "arguments": {
+        "content": "alpha",
+        "file_path": "/workspace//src/./alpha.txt"
+      },
+      "case": "path-doubled-separator-call",
+      "cwd": "/workspace",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": "alpha",
+          "message": {
+            "described": "sha256:7748d117f1603f5fac3bde8ba677883b",
+            "length": 13
+          },
+          "settledMessage": {
+            "described": "sha256:7748d117f1603f5fac3bde8ba677883b",
+            "length": 13
+          },
+          "settledVerb": "Created",
+          "statusText": {
+            "described": "sha256:91713a5d3c5bf8ae4e680c52bed0ded7",
+            "length": 12
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:24def423086539fe7a296ce049322213",
+            "length": 21
+          },
+          "verb": "Creating"
+        },
+        "kind": "file_write"
+      },
+      "source": "builtin",
+      "tool": "write_file"
+    },
+    {
+      "arguments": {
+        "content": "alpha",
+        "file_path": "/workspace//src/./alpha.txt"
+      },
+      "case": "path-doubled-separator-result",
+      "cwd": "/workspace",
+      "error": null,
+      "output": {
+        "bytes_written": 5,
+        "content": "alpha",
+        "file_path": "/workspace//src/./alpha.txt"
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "approvalNote": null,
+          "message": {
+            "described": "sha256:7748d117f1603f5fac3bde8ba677883b",
+            "length": 13
+          },
+          "success": true,
+          "suffix": "",
+          "verb": "Created",
+          "warnings": []
+        },
+        "kind": "file_write",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "write_file"
+    },
+    {
+      "arguments": {
+        "content": "alpha",
+        "file_path": "/workspace-other/alpha.txt"
+      },
+      "case": "path-sibling-prefix-call",
+      "cwd": "/workspace",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": "alpha",
+          "message": "/workspace-other/alpha.txt",
+          "settledMessage": "/workspace-other/alpha.txt",
+          "settledVerb": "Created",
+          "statusText": {
+            "described": "sha256:91713a5d3c5bf8ae4e680c52bed0ded7",
+            "length": 12
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:8890ada6e51fa9ce2a5535ae11490d1a",
+            "length": 34
+          },
+          "verb": "Creating"
+        },
+        "kind": "file_write"
+      },
+      "source": "builtin",
+      "tool": "write_file"
+    },
+    {
+      "arguments": {
+        "content": "alpha",
+        "file_path": "/workspace-other/alpha.txt"
+      },
+      "case": "path-sibling-prefix-result",
+      "cwd": "/workspace",
+      "error": null,
+      "output": {
+        "bytes_written": 5,
+        "content": "alpha",
+        "file_path": "/workspace-other/alpha.txt"
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "approvalNote": null,
+          "message": "/workspace-other/alpha.txt",
+          "success": true,
+          "suffix": "",
+          "verb": "Created",
+          "warnings": []
+        },
+        "kind": "file_write",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "write_file"
+    },
+    {
+      "arguments": {
+        "content": "alpha",
+        "file_path": "/elsewhere/nested/../alpha.txt"
+      },
+      "case": "path-outside-call",
+      "cwd": "/workspace",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": "alpha",
+          "message": "/elsewhere/alpha.txt",
+          "settledMessage": "/elsewhere/alpha.txt",
+          "settledVerb": "Created",
+          "statusText": {
+            "described": "sha256:91713a5d3c5bf8ae4e680c52bed0ded7",
+            "length": 12
+          },
+          "suffix": "",
+          "summary": {
+            "described": "sha256:ca623446291fd62f015243be82b0a29f",
+            "length": 28
+          },
+          "verb": "Creating"
+        },
+        "kind": "file_write"
+      },
+      "source": "builtin",
+      "tool": "write_file"
+    },
+    {
+      "arguments": {
+        "content": "alpha",
+        "file_path": "/elsewhere/nested/../alpha.txt"
+      },
+      "case": "path-outside-result",
+      "cwd": "/workspace",
+      "error": null,
+      "output": {
+        "bytes_written": 5,
+        "content": "alpha",
+        "file_path": "/elsewhere/nested/../alpha.txt"
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "approvalNote": null,
+          "message": "/elsewhere/alpha.txt",
+          "success": true,
+          "suffix": "",
+          "verb": "Created",
+          "warnings": []
+        },
+        "kind": "file_write",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "write_file"
+    },
+    {
+      "arguments": {
+        "content": "alpha",
+        "file_path": "/tmp/vibe-scratchpad-capture-0000/notes.md"
+      },
+      "case": "path-scratchpad-call",
+      "cwd": "/workspace",
+      "phase": "call",
+      "presentation": {
+        "display": {
+          "content": "alpha",
+          "message": "/tmp/vibe-scratchpad-capture-0000/notes.md",
+          "settledMessage": "/tmp/vibe-scratchpad-capture-0000/notes.md",
+          "settledVerb": "Created",
+          "statusText": {
+            "described": "sha256:91713a5d3c5bf8ae4e680c52bed0ded7",
+            "length": 12
+          },
+          "suffix": {
+            "described": "sha256:fe9a69f9bd84a25a455abe5fdad3ee3a",
+            "length": 12
+          },
+          "summary": {
+            "described": "sha256:79271faf34703b6c104462400e8623f9",
+            "length": 50
+          },
+          "verb": "Creating"
+        },
+        "kind": "file_write"
+      },
+      "source": "builtin",
+      "tool": "write_file"
+    },
+    {
+      "arguments": {
+        "content": "alpha",
+        "file_path": "/tmp/vibe-scratchpad-capture-0000/notes.md"
+      },
+      "case": "path-scratchpad-result",
+      "cwd": "/workspace",
+      "error": null,
+      "output": {
+        "bytes_written": 5,
+        "content": "alpha",
+        "file_path": "/tmp/vibe-scratchpad-capture-0000/notes.md"
+      },
+      "phase": "result",
+      "presentation": {
+        "display": {
+          "approvalNote": null,
+          "message": "/tmp/vibe-scratchpad-capture-0000/notes.md",
+          "success": true,
+          "suffix": {
+            "described": "sha256:fe9a69f9bd84a25a455abe5fdad3ee3a",
+            "length": 12
+          },
+          "verb": "Created",
+          "warnings": []
+        },
+        "kind": "file_write",
+        "projectedOutput": null
+      },
+      "skipped": false,
+      "source": "builtin",
+      "tool": "write_file"
     }
   ],
   "note": "Tool presentation corpus: what the pinned reference's ToolUIDataAdapter publishes for each tool and case, from get_call_presentation and get_result_presentation. A presentation string is committed as it stands only when it is a value this capture supplied, a path or an identifier-shaped token; everything else is committed as a {described, length} marker carrying a SHA-256 digest, so no reference prose ships while any change still fails the replay. Regenerate with scripts/parity/tool_presentation.py --corpus when the pinned reference moves.",
   "platform": "linux",
   "referenceCommit": "4a96003186b166d55b9f06895c45bb136eef61cd",
-  "schemaVersion": 1
+  "schemaVersion": 2
 }

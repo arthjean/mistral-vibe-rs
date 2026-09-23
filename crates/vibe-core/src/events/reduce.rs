@@ -12,6 +12,8 @@
 //! debris behind. `a_rejected_event_leaves_the_projection_untouched` holds the
 //! invariant.
 
+use std::path::Path;
+
 use serde_json::{Value, json};
 
 use super::detail::{
@@ -67,6 +69,7 @@ pub(super) fn reduce_event(
     state: &mut ProjectionSnapshot,
     event_id: u64,
     emitted_at: u64,
+    working_directory: Option<&Path>,
     event: &EngineEvent,
 ) -> Result<(), ProjectionError> {
     match event {
@@ -202,7 +205,7 @@ pub(super) fn reduce_event(
                 title: name.clone(),
                 detail: Box::new(match remote {
                     Some(remote) => EffectDetail::for_proxied_call(name, arguments, remote),
-                    None => EffectDetail::for_encoded_call(name, arguments),
+                    None => EffectDetail::for_encoded_call_at(name, arguments, working_directory),
                 }),
                 state: PublicEffectState::Running {
                     output_text: String::new(),
@@ -299,11 +302,12 @@ pub(super) fn reduce_event(
                                 &detail.display,
                                 &RemoteSettlement::answered(&answered),
                             ),
-                            None => EffectResultDisplay::completed(
+                            None => EffectResultDisplay::completed_at(
                                 detail.kind,
                                 &detail.display,
                                 &answered,
                                 display,
+                                working_directory,
                             ),
                         },
                         output,

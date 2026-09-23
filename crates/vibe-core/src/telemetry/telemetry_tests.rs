@@ -454,6 +454,7 @@ fn lifecycle_event(state: LifecycleState) -> EventEnvelope {
         session_id: "oracle-session".to_owned(),
         turn_id: Some("oracle-turn".to_owned()),
         emitted_at: 1,
+        working_directory: None,
         event_id: 1,
         event: EngineEvent::Lifecycle {
             state,
@@ -468,6 +469,7 @@ fn request_event() -> EventEnvelope {
         session_id: "oracle-session".to_owned(),
         turn_id: Some("oracle-turn".to_owned()),
         emitted_at: 1,
+        working_directory: None,
         event_id: 1,
         event: EngineEvent::RequestSent {
             model: "oracle-model".to_owned(),
@@ -489,6 +491,7 @@ fn tool_events(content: &str, is_error: bool) -> [EventEnvelope; 2] {
             session_id: "oracle-session".to_owned(),
             turn_id: Some("oracle-turn".to_owned()),
             emitted_at: 1,
+            working_directory: None,
             event_id: 2,
             event: EngineEvent::ToolCall {
                 call_id: "call-1".to_owned(),
@@ -501,6 +504,7 @@ fn tool_events(content: &str, is_error: bool) -> [EventEnvelope; 2] {
             session_id: "oracle-session".to_owned(),
             turn_id: Some("oracle-turn".to_owned()),
             emitted_at: 1,
+            working_directory: None,
             event_id: 3,
             event: EngineEvent::ToolResult {
                 call_id: "call-1".to_owned(),
@@ -1289,6 +1293,7 @@ fn compaction_outcome(
         session_id: "session".to_owned(),
         turn_id: Some("turn-1".to_owned()),
         emitted_at: 1,
+        working_directory: None,
         event_id: 1,
         event: EngineEvent::CompactionOutcome {
             compaction_id: "compaction-1".to_owned(),
