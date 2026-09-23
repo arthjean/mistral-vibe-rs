@@ -659,10 +659,12 @@ fn reconcile_disabled_tools(
 
 /// Resolves persisted per-tool disable entries onto the names published today.
 ///
-/// An entry may be the published name, the bare remote name, or the
-/// `mcp_{alias}_{tool}` name this port published before it adopted the
-/// reference rule. All three are migrated onto the current published name, so
-/// a preference written by an older build keeps disabling the tool it named.
+/// An entry names a remote tool, as reference `ToolManager._is_source_disabled`
+/// reads it (`vibe/core/tools/manager.py`), and that reading wins. Only an
+/// entry naming no remote tool of the server falls back to this port's own
+/// spellings: the published name its toggle persists, then the
+/// `mcp_{alias}_{tool}` name it published before it adopted the reference
+/// rule, so a preference an older build wrote keeps disabling its tool.
 fn normalize_disabled_tools(
     alias: &str,
     registered: &[String],
@@ -671,17 +673,16 @@ fn normalize_disabled_tools(
     configured
         .iter()
         .filter_map(|tool| {
+            let public = public_tool_name(ToolSource::Mcp, alias, tool);
+            if registered.contains(&public) {
+                return Some(public);
+            }
             if registered.contains(tool) {
                 return Some(tool.clone());
             }
-            if let Some(migrated) = tool
-                .strip_prefix("mcp_")
+            tool.strip_prefix("mcp_")
                 .filter(|migrated| registered.contains(&(*migrated).to_owned()))
-            {
-                return Some(migrated.to_owned());
-            }
-            let public = public_tool_name(ToolSource::Mcp, alias, tool);
-            registered.contains(&public).then_some(public)
+                .map(str::to_owned)
         })
         .collect()
 }
@@ -962,6 +963,19 @@ mod tests {
             normalize_disabled_tools("docs", &registered, &configured),
             BTreeSet::from(["docs_search".to_owned(), "docs_read".to_owned()]),
             "a preference written before the rename must still disable its tool"
+        );
+    }
+
+    /// An entry that is both a remote name and another tool's published name
+    /// disables the remote tool it names, as the reference reads it.
+    #[test]
+    fn a_remote_name_outranks_the_published_name_it_collides_with() {
+        let registered = vec!["docs_search".to_owned(), "docs_docs_search".to_owned()];
+        let configured = BTreeSet::from(["docs_search".to_owned()]);
+
+        assert_eq!(
+            normalize_disabled_tools("docs", &registered, &configured),
+            BTreeSet::from(["docs_docs_search".to_owned()])
         );
     }
 }
