@@ -59,9 +59,8 @@ pub(super) fn decode_output(bytes: &[u8]) -> String {
 }
 
 fn decode_utf16(bytes: &[u8], little_endian: bool) -> String {
-    let units = bytes.chunks_exact(2).map(|pair| {
-        let (low, high) = (pair.first().copied(), pair.get(1).copied());
-        let pair = [low.unwrap_or(0), high.unwrap_or(0)];
+    let (pairs, _) = bytes.as_chunks::<2>();
+    let units = pairs.iter().map(|&pair| {
         if little_endian {
             u16::from_le_bytes(pair)
         } else {

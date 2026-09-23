@@ -16,7 +16,7 @@
               publishes them, and the `spans` corpus family fails the moment one of them changes"
 )]
 
-use opentelemetry::trace::{Span as _, TraceContextExt, Tracer as _, TracerProvider as _};
+use opentelemetry::trace::{Span as _, TraceContextExt};
 use opentelemetry::{Context, KeyValue, global};
 use opentelemetry_sdk::error::{OTelSdkError, OTelSdkResult};
 use opentelemetry_sdk::trace::{SpanData, SpanExporter};
