@@ -39,10 +39,9 @@ use teleport::TeleportOperation;
 mod links;
 
 pub use cloud::{
-    AsyncProjectCloud, AsyncTeleportCloud, CloudConfigError, CloudError, CloudFuture,
-    DEFAULT_VIBE_CODE_BASE_URL, Project, ProjectCloud, ProjectPage, ProjectRepository,
-    TeleportCloud, TeleportFuture, TeleportRepository, TeleportRepositoryDiff,
-    TeleportStartFailure, TeleportStartRequest, VibeCodeCloudConfig,
+    CloudConfigError, CloudError, Project, ProjectCloud, ProjectPage, ProjectRepository,
+    TeleportCloud, TeleportRepository, TeleportStartFailure, TeleportStartRequest,
+    VibeCodeCloudConfig,
 };
 pub use git::{
     CommandGitProbe, GitProbe, GitPushStatus, GitSnapshot, ProjectGitSnapshot, ProjectLinkRoot,

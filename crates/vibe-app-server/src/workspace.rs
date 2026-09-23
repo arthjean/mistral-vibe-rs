@@ -641,15 +641,6 @@ impl WorkspaceService {
             .unwrap_or(true)
     }
 
-    /// The provider entry `name` resolves to in the effective configuration,
-    /// which is what the setup flow starts from before persisting it back.
-    pub fn effective_provider(
-        &self,
-        name: &str,
-    ) -> Result<Option<toml::Table>, WorkspaceServiceError> {
-        self.config.effective_provider(name).map_err(config_error)
-    }
-
     /// Upserts one provider entry keyed by name, answering whether a write
     /// happened: a provider identical to what the configuration already
     /// resolves is not written at all.

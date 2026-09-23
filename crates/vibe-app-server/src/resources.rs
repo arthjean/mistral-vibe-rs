@@ -8,7 +8,6 @@ use std::sync::{Arc, Mutex as StdMutex};
 use crate::host::now_millis;
 use crate::params::{self, optional_string, required_string, usize_param};
 use crate::vocabulary::{McpSourceKind, McpSourceStatus};
-use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use thiserror::Error;
 use tokio::sync::Mutex;
@@ -846,12 +845,6 @@ fn push_bounded<T>(values: &mut Vec<T>, limit: usize, value: T) {
         values.remove(0);
     }
     values.push(value);
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct SessionResourceParams {
-    pub session_id: String,
 }
 
 #[cfg(test)]

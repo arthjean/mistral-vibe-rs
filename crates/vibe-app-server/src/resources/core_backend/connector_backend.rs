@@ -76,7 +76,7 @@ impl CoreResourceBackend {
                         &session.tools,
                         backend,
                         session.policy.clone(),
-                        self.approval.clone(),
+                        Arc::new(BackendDenyApproval),
                     )
                     .map_err(integration_error)?;
                 if view.auth_kind != ConnectorAuthKind::None {
@@ -201,7 +201,7 @@ impl CoreResourceBackend {
                 &session.tools,
                 backend,
                 session.policy.clone(),
-                self.approval.clone(),
+                Arc::new(BackendDenyApproval),
             )
             .map_err(integration_error)?;
         session

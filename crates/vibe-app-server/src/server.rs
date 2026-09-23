@@ -66,7 +66,6 @@ use vibe_core::middleware::CompactionSettings;
 use vibe_core::observability::{FileLog, LogLevel, LogSettings};
 pub use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionRequirement,
-    PolicyError,
 };
 use vibe_core::policy::{PermissionRule, PermissionStore, ToolGuard, TrustDecision, TrustRootKind};
 use vibe_core::scratchpad::{cleanup_scratchpad, init_scratchpad, scratchpad_path};

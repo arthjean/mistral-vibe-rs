@@ -136,12 +136,6 @@ impl SessionExperiments {
         self
     }
 
-    /// The handle the telemetry census reads its exposures out of.
-    #[must_use]
-    pub fn exposures(&self) -> &ExperimentExposures {
-        &self.exposures
-    }
-
     /// Resolves this session's enrollment: what it already carries, or what a
     /// lookup answers.
     ///

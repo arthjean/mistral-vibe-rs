@@ -11,7 +11,6 @@ pub(super) struct ProgrammaticEventObserver {
     pub(super) reducer: Mutex<ProjectionReducer>,
     pub(super) emitted: Mutex<BTreeMap<String, Value>>,
     pub(super) sender: tokio::sync::mpsc::Sender<ProgrammaticUpdate>,
-    pub(super) completed_only: bool,
     pub(super) next_update_id: AtomicU64,
 }
 
@@ -36,7 +35,7 @@ impl EventObserver for ProgrammaticEventObserver {
             .lock()
             .map_err(|_| "programmatic emission lock is poisoned".to_owned())?;
         for entry in &reducer.state().history {
-            if self.completed_only && !entry.is_completed() {
+            if !entry.is_completed() {
                 continue;
             }
             let encoded = serde_json::to_value(entry).map_err(|error| error.to_string())?;
@@ -615,22 +614,6 @@ impl InProcessClient {
         params: Value,
     ) -> Result<BTreeMap<String, Value>, ClientError> {
         self.call(method, params)
-    }
-
-    pub fn public_call_with_notifications(
-        &mut self,
-        method: &str,
-        params: Value,
-    ) -> Result<PublicDispatch, ClientError> {
-        let request_id = self.take_request_id();
-        let request = request_bytes(request_id.clone(), method, params)?;
-        let batch = self.connection.dispatch(&request);
-        if batch.close_after_flush || !batch.deferred.is_empty() {
-            return Err(ClientError::InvalidResponse(format!(
-                "unexpected dispatch behavior for `{method}`"
-            )));
-        }
-        decode_public_dispatch(batch.outbound, &request_id, method)
     }
 
     pub async fn public_call_async(

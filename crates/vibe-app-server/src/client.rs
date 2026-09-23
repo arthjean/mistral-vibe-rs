@@ -33,13 +33,11 @@ use crate::server::{
 pub use vibe_core::engine::EventObserver;
 pub use vibe_core::engine::TurnOutcome as PublicTurnOutcome;
 pub use vibe_core::engine::TurnStopReason as PublicTurnStopReason;
-pub use vibe_core::events::CallbackKind as PublicCallbackKind;
 pub use vibe_core::events::{
-    ApprovalDecisionType, CallbackDetail, CallbackOutput, EffectCallDisplay, EffectDetail,
-    EffectResultDisplay, HookNotice, HookSeverity, NoticeDetail, PublicCallbackState,
-    PublicContentBlock, PublicEffectState, PublicEntryGenerationStatus, PublicEntryMetadata,
-    PublicError, PublicHistoryEntry, PublicMessageRole, PublicNoticeLevel, ToolEffectKind,
-    TurnErrorCode, UserQuestionRequest,
+    ApprovalDecisionType, CallbackDetail, EffectDetail, EffectResultDisplay, HookNotice,
+    HookSeverity, NoticeDetail, PublicCallbackState, PublicContentBlock, PublicEffectState,
+    PublicEntryGenerationStatus, PublicEntryMetadata, PublicError, PublicHistoryEntry,
+    PublicMessageRole, PublicNoticeLevel, ToolEffectKind, TurnErrorCode, UserQuestionRequest,
 };
 
 pub type DriverFuture<'a> =
@@ -449,56 +447,6 @@ pub fn programmatic_update_channel(
             reducer: Mutex::new(ProjectionReducer::new(session_id)),
             emitted: Mutex::new(BTreeMap::new()),
             sender,
-            completed_only: true,
-            next_update_id: AtomicU64::new(1),
-        }),
-        receiver,
-    )
-}
-
-pub fn interactive_update_channel(
-    session_id: impl Into<String>,
-) -> (
-    Arc<dyn EventObserver>,
-    tokio::sync::mpsc::Receiver<ProgrammaticUpdate>,
-) {
-    interactive_update_channel_after(session_id, 0)
-}
-
-pub fn interactive_update_channel_after(
-    session_id: impl Into<String>,
-    event_id: u64,
-) -> (
-    Arc<dyn EventObserver>,
-    tokio::sync::mpsc::Receiver<ProgrammaticUpdate>,
-) {
-    let (sender, receiver) = tokio::sync::mpsc::channel(MAX_PROGRAMMATIC_UPDATES);
-    (
-        Arc::new(ProgrammaticEventObserver {
-            reducer: Mutex::new(ProjectionReducer::new(session_id)),
-            emitted: Mutex::new(BTreeMap::new()),
-            sender,
-            completed_only: false,
-            next_update_id: AtomicU64::new(event_id.saturating_add(1)),
-        }),
-        receiver,
-    )
-}
-
-pub fn programmatic_update_channel_for_turn(
-    session_id: impl Into<String>,
-    turn_id: impl Into<String>,
-) -> (
-    Arc<dyn EventObserver>,
-    tokio::sync::mpsc::Receiver<ProgrammaticUpdate>,
-) {
-    let (sender, receiver) = tokio::sync::mpsc::channel(MAX_PROGRAMMATIC_UPDATES);
-    (
-        Arc::new(ProgrammaticEventObserver {
-            reducer: Mutex::new(ProjectionReducer::for_turn(session_id, turn_id)),
-            emitted: Mutex::new(BTreeMap::new()),
-            sender,
-            completed_only: true,
             next_update_id: AtomicU64::new(1),
         }),
         receiver,

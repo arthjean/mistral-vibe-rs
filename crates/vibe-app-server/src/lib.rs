@@ -15,8 +15,6 @@ pub mod resources;
 pub mod server;
 mod session_lifecycle;
 pub mod startup;
-#[cfg(any(test, feature = "test-fixtures"))]
-pub mod streaming_benchmark;
 #[cfg(test)]
 mod tool_execution_parity_tests;
 #[cfg(test)]

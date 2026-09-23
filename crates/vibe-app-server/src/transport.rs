@@ -7,8 +7,6 @@ use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 
-use vibe_protocol::ProtocolValidationError;
-
 use crate::client::{DriverError, TurnDriver, TurnReservation, public_turn_error, turn_error_code};
 use crate::live_projection::{app_server_notification, app_server_update_channel_for_turn};
 use crate::server::{AppServer, DeferredWork, ServerError, server_error_frame};
@@ -572,12 +570,8 @@ async fn fail_deferred(server: &AppServer, deferred: &[DeferredWork], message: &
 
 #[derive(Debug, thiserror::Error)]
 pub enum TransportError {
-    #[error(transparent)]
-    Protocol(#[from] ProtocolValidationError),
     #[error("transport I/O failed: {0}")]
     Io(io::Error),
-    #[error("transport is closed")]
-    Closed,
     #[error("empty transport frame")]
     EmptyFrame,
     #[error("transport frame exceeded the {limit}-byte limit")]

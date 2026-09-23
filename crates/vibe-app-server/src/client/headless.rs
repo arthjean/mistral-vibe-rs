@@ -214,14 +214,6 @@ where
         self.client.public_call(method, params)
     }
 
-    pub fn public_call_with_notifications(
-        &mut self,
-        method: &str,
-        params: Value,
-    ) -> Result<PublicDispatch, ClientError> {
-        self.client.public_call_with_notifications(method, params)
-    }
-
     pub async fn public_call_async(
         &mut self,
         method: &str,

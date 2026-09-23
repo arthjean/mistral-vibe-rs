@@ -56,7 +56,6 @@ pub struct CoreResourceBackend {
     connector_base_url: Option<Url>,
     connector_credential_reference: Arc<str>,
     config: Option<LayeredConfig>,
-    approval: Arc<dyn ApprovalAgent>,
 }
 
 impl Default for CoreResourceBackend {
@@ -72,7 +71,6 @@ impl Default for CoreResourceBackend {
             connector_base_url: None,
             connector_credential_reference: Arc::from("unconfigured"),
             config: None,
-            approval: Arc::new(BackendDenyApproval),
         }
     }
 }
@@ -129,12 +127,6 @@ impl CoreResourceBackend {
     #[must_use]
     pub fn with_connector_auth(mut self, backend: Arc<dyn ConnectorAuthBackend>) -> Self {
         self.connector_auth = Some(backend);
-        self
-    }
-
-    #[must_use]
-    pub fn with_approval(mut self, approval: Arc<dyn ApprovalAgent>) -> Self {
-        self.approval = approval;
         self
     }
 
@@ -321,7 +313,7 @@ impl ResourceBackend for CoreResourceBackend {
                     factory,
                     &session.tools,
                     session.policy.clone(),
-                    self.approval.clone(),
+                    Arc::new(BackendDenyApproval),
                 )
                 .await;
             let mut dispatch = runtime_mutation([], diagnostics);

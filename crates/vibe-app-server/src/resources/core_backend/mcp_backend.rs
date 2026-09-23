@@ -149,7 +149,7 @@ impl CoreResourceBackend {
                         factory,
                         &session.tools,
                         session.policy.clone(),
-                        self.approval.clone(),
+                        Arc::new(BackendDenyApproval),
                     )
                     .await;
                 // The alias was resolved against what is already configured, so

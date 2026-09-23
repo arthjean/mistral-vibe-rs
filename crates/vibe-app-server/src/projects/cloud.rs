@@ -208,29 +208,10 @@ impl VibeCodeCloudConfig {
         })
     }
 
-    pub fn mistral(api_key: SecretString) -> Result<Self, CloudConfigError> {
-        Self::new(DEFAULT_VIBE_CODE_BASE_URL, api_key)
-    }
-
     pub fn from_credential(api_key: impl Into<String>) -> Result<Self, CloudConfigError> {
         let base_url = std::env::var("VIBE_CODE_SESSIONS_BASE_URL")
             .unwrap_or_else(|_| DEFAULT_VIBE_CODE_BASE_URL.to_owned());
         Self::new(&base_url, SecretString::from(api_key.into()))
-    }
-
-    pub fn from_env() -> Result<Self, CloudConfigError> {
-        let api_key = std::env::var("MISTRAL_API_KEY")
-            .ok()
-            .filter(|value| !value.trim().is_empty())
-            .ok_or(CloudConfigError::MissingApiKey)?;
-        Self::from_credential(api_key)
-    }
-
-    #[must_use]
-    pub fn with_timeouts(mut self, connect_timeout: Duration, request_timeout: Duration) -> Self {
-        self.connect_timeout = connect_timeout.max(Duration::from_millis(1));
-        self.request_timeout = request_timeout.max(Duration::from_millis(1));
-        self
     }
 
     fn endpoint(&self, path: &str) -> String {
