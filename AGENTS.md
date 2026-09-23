@@ -6,14 +6,6 @@ boundaries: commands, flags, configuration, protocols, persisted state, tool
 semantics, and user-visible output. Internal design is free to differ where Rust
 offers a stronger one.
 
-Write every repository artifact in US English: code, comments, documentation,
-and commit messages. `color`, `behavior`, `normalize`, `analyzer`,
-`acknowledgment`, `modeled`, `afterward`. The exception is a spelling the
-reference or a dependency publishes, which is reproduced verbatim: `cancelled`
-is the value the Python reference emits for `TodoStatus`, the stop reason ACP
-declares, and the spelling of tokio's `CancellationToken::is_cancelled`, so it
-stays British everywhere it names that concept.
-
 ## Licensing boundary
 
 `NOTICE` declares that no upstream implementation source is copied, translated,
@@ -31,22 +23,20 @@ vendored, linked, or shipped. This binds every change:
 
 ## The behavioral oracle
 
-The Python reference is a read-only checkout outside this repository. Never
-write to it. The pin lives in exactly two places, one per language:
+The Python reference is a separate checkout, pinned in exactly two places:
 `vibe_core::parity::REFERENCE_COMMIT` (`crates/vibe-core/src/parity.rs`) and
-`EXPECTED_COMMIT` in `scripts/parity/pin.py`. Every oracle cites one of them, and
+`EXPECTED_COMMIT` in `scripts/parity/pin.py`.
 `crates/vibe-core/src/parity/parity_tests.rs` fails when a third copy appears or
-when the two disagree.
+the two disagree. The checkout defaults to `/home/arthur/dev/mistral-vibe`;
+`VIBE_REFERENCE` relocates it (on Windows it lives at `C:\dev\mistral-vibe`), and
+a capture script's `--reference` wins over both. Reference paths in comments and
+documentation use the Linux form; read them relative to the local checkout.
 
-The checkout location is machine-dependent: `C:\dev\mistral-vibe` on Windows and
-`/home/arthur/dev/mistral-vibe` on Linux. Both pin sources default to the Linux
-path and read `VIBE_REFERENCE` as an override, with `--reference` winning over
-both, so every Rust parity test now honors the variable through
-`vibe_core::parity::reference_root`. A new parity test calls that function
-rather than spelling a path. Reference paths written in comments and
-documentation use the Linux form as the canonical spelling; read them relative
-to whichever checkout is local.
-
+- Keep the checkout's tracked files at the pin. It accepts two writes:
+  `vibe_core::parity::RESTORE_COMMAND` when it sits at another commit (restore
+  it rather than re-pinning by accident), and `uv sync --frozen` after a pull or
+  re-pin, which rebuilds its gitignored environment and native harness. It is an
+  oracle once `.venv/bin/python -c "import vibe.cli.entrypoint"` succeeds there.
 - Read the reference before writing Rust that touches a public boundary. Open
   the owning module first, then implement. `vibe/cli/` is the terminal client,
   `vibe/app_server/` the session methods, `vibe/acp/` the editor protocol, and
@@ -57,32 +47,41 @@ to whichever checkout is local.
   the module that publishes it: `ask_user_question` takes its argument model
   from `vibe/questions.py` and `task` from `vibe/core/subagents.py`. Grepping
   the reference does not replace reading the declaration it points at.
-- Capture behavior with `scripts/parity/oracle.py` or
-  `scripts/parity/tool_surface.py`, both accepting `--reference <path>` and
-  re-executing themselves with the reference interpreter.
-- Rust parity tests replay committed corpora unconditionally and skip only the
-  live probe when the checkout is absent or off-pin
-  (`crates/vibe-cli/src/tui/runtime_parity_tests.rs:46`). Keep new parity tests
-  skippable the same way: a missing checkout must never fail `cargo test`.
-- Re-pinning the reference means editing the two pin sources above and
-  regenerating every committed corpus in the same change. A corpus and the
-  constant asserting it must never disagree. When the local checkout sits at
-  another commit, restore it with the command `vibe_core::parity::RESTORE_COMMAND`
-  documents rather than re-pinning by accident.
-- State a parity claim only from a measurement against the reference, and run
-  the measurement wide enough to cover what changed. Filtering `cargo test` to
-  the module you edited hides the assertions that live elsewhere and read the
-  same fixture.
+- Capture behavior with the oracle that owns the surface: an entry point in
+  `scripts/parity/`, which takes `--reference <path>` and re-executes itself
+  under the reference interpreter, or the `*-oracle.py` beside its corpus in
+  `crates/vibe-cli/tests/runtime-parity/`.
+- Rust parity tests replay committed corpora unconditionally and gate only the
+  live probe on `vibe_core::parity::off_pin_reason`, so a missing or off-pin
+  checkout skips instead of failing `cargo test`. A new parity test resolves
+  the checkout through `vibe_core::parity::reference_root` and gates the same
+  way.
+- A committed corpus changes only in a re-pin, which edits both pin sources and
+  regenerates every corpus in the same change. A replay that drifts outside a
+  re-pin is a regression or an environment leak (see Quality gates); fix the
+  cause and leave the corpus as captured.
+- State a parity claim only from a measurement against the reference, run wide
+  enough to cover what changed: filtering `cargo test` to the edited module
+  hides assertions elsewhere that read the same fixture. A run that printed
+  `skipping the live ... probe` measured the committed corpora only; report it
+  that way.
+
+`docs/parity.md` is the scorecard: one numbered row per part, the open
+divergences, and the ledger of divergences kept on purpose. Read a part's row
+before working on it. Work that moves a part's parity restates its row and the
+header's weighted total in the same change (`scorecard_tests` recomputes the
+total), and a divergence kept on purpose gets a ledger row naming what holds it
+in place (`ledger_tests` resolves every path and symbol the row names).
 
 ## Quality gates
 
-Run the CI sequence before proposing a commit, from the workspace root:
+Run the CI sequence from the workspace root before proposing a commit:
 
 ```sh
 cargo fmt --all -- --check
 cargo check --workspace --all-targets --all-features
 cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test --workspace --all-features
+env -u FORCE_COLOR VIBE_HOME="$(mktemp -d)" cargo test --workspace --all-features --no-fail-fast
 ```
 
 `--all-features` is load-bearing: `vibe-app-server`'s `test-fixtures` feature
@@ -90,11 +89,21 @@ gates the fixture binary that `tests/mcp_stdio_e2e.rs` drives, so the file
 compiles to nothing without it. Building needs the ALSA headers that `cpal`
 links against (`libasound2-dev` on Debian and Ubuntu).
 
+The test line removes two workstation inputs CI never has. The in-process
+app-server tests read the ambient vibe home, so a real `~/.vibe/config.toml`
+fails them. The live parity probes spawn the reference with the inherited
+environment, so an exported `FORCE_COLOR` makes it emit ANSI that no corpus
+holds. The opposite leak hides failures: credentials resolve from
+`MISTRAL_API_KEY`, then the OS keyring. To reproduce a failure seen only on the
+runner, add `env -u MISTRAL_API_KEY DBUS_SESSION_BUS_ADDRESS=unix:path=/nonexistent
+CI=true VIBE_REFERENCE=/nonexistent`, which removes the key, the keyring, and
+the reference checkout as the runner lacks them.
+
 ## Architecture
 
 `[workspace.metadata.vibe] dependency-layers` in `Cargo.toml` declares the
-layering, and no test enforces it. A crate never depends on a crate in a later
-layer:
+layering. No test enforces it, so check any new dependency edge by hand: a
+crate never depends on a crate in a later layer.
 
 1. `vibe-protocol`, `vibe-core`
 2. `vibe-app-server`
@@ -112,31 +121,42 @@ layer:
 
 ## Rust conventions
 
-Tooling enforces the lint set; these are the parts it cannot enforce.
+`Cargo.toml` and `clippy.toml` carry the lint set; these are the parts they
+cannot state.
 
 - A new crate declares `[lints] workspace = true` and starts its root with
   `#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]`, which
   works around Clippy issue 13981 for integration tests.
-- `unsafe_code` is forbidden workspace-wide, and `panic`, `unimplemented`, and
-  `dbg_macro` are denied. In non-test code reach for `?`, `ok_or(...)?`,
-  `unwrap_or`, `match`, or `if let`; reserve `expect("stated invariant")` for a
-  documented invariant with no better boundary.
+- In non-test code reach for `?`, `ok_or(...)?`, `unwrap_or`, `match`, or
+  `if let`; reserve `expect("stated invariant")` for a documented invariant with
+  no better boundary.
 - Unit and differential tests live beside the code they cover as
-  `#[cfg(test)] mod <name>_tests;` files under `src/`. `tests/` holds integration
-  entry points, fixture binaries, and corpus files.
+  `#[cfg(test)] mod <name>_tests;` files under `src/`; an inline `mod tests`
+  block is the older form. `tests/` holds integration entry points, fixture
+  binaries, and corpus files.
+
+## US English
+
+Write every repository artifact in US English: code, comments, documentation,
+and commit messages (`color`, `behavior`, `normalize`, `modeled`, `afterward`).
+A spelling the reference or a dependency publishes is reproduced verbatim:
+`cancelled` is the value the Python reference emits for `TodoStatus`, the stop
+reason ACP declares, and the spelling of tokio's
+`CancellationToken::is_cancelled`, so it stays British everywhere it names that
+concept.
 
 ## Delivery
 
-- `[workspace.package] version` is the source of truth, but the string is also
-  hand-written in `action.yml`, `.github/workflows/action.yml`,
-  `scripts/install.sh`, `scripts/install.ps1`, and the heading of
-  `crates/vibe-cli/whats_new.md`. A bump updates all of them in one change, and
+- `[workspace.package] version` is the source of truth. A bump also edits every
+  hand-written copy in the same change: `action.yml`,
+  `.github/workflows/action.yml`, `scripts/install.sh`, `scripts/install.ps1`,
+  and the heading of `crates/vibe-cli/whats_new.md`.
   `every_hand_written_version_matches_the_workspace_manifest` in
-  `crates/vibe-cli/src/distribution/release_parity_tests.rs` fails both on a copy
-  that disagrees and on a carrier that stops carrying the version at all.
-- Commit with Conventional Commits and a crate scope: `fix(core):`,
-  `refactor(app-server):`, `test(cli):`, `docs(protocol):`, `perf(acp):`, `ci:`.
-  Imperative, lowercase, no trailing period.
+  `crates/vibe-cli/src/distribution/release_parity_tests.rs` fails on a copy
+  that disagrees and on a carrier that stops carrying the version.
+- Commit with Conventional Commits, scoped by crate when the change stays in
+  one: `fix(core):`, `refactor(app-server):`, `test(cli):`, `docs(protocol):`,
+  `perf(acp):`, `ci:`. Imperative, lowercase, no trailing period.
 - Record user-visible changes under `## Unreleased` in `CHANGELOG.md`, and
   rewrite `crates/vibe-cli/whats_new.md` for a release.
 
