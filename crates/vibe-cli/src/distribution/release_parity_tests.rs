@@ -309,6 +309,46 @@ fn the_release_workflow_publishes_every_target_an_installer_can_ask_for() {
     );
 }
 
+/// The images the reference builds its Linux binaries in, pinned by digest in
+/// its `.github/workflows/build-and-upload.yml`: manylinux_2_28, whose glibc is
+/// the floor a published Linux binary may require.
+const MANYLINUX_IMAGES: [(&str, &str); 2] = [
+    (
+        "linux-x86_64",
+        "quay.io/pypa/manylinux_2_28_x86_64@sha256:65140ef21cef92d0c13d001708afd7d304d7a154f7120d039df99dac708f3ffb",
+    ),
+    (
+        "linux-aarch64",
+        "quay.io/pypa/manylinux_2_28_aarch64@sha256:360bf4ec4349372e9bcfb123bf11bcc4f085072bfa4f3b946d98f5a28f9c03b0",
+    ),
+];
+
+#[test]
+fn every_linux_leg_builds_on_the_reference_glibc_floor_and_proves_it() {
+    let build = workflow_job(&read(RELEASE_WORKFLOW), "build");
+    assert!(
+        build.contains("container: ${{ matrix.container || '' }}"),
+        "the build job must run each leg in the container its matrix names"
+    );
+    for (target, image) in MANYLINUX_IMAGES {
+        assert!(
+            build.contains(&format!("- target: {target}"))
+                && build.contains(&format!("container: {image}")),
+            "{target} must build in {image}, the image the reference builds Linux in"
+        );
+    }
+    assert!(
+        build.contains(
+            "bash scripts/ci/check-linux-portability.sh target/release/vibe target/release/vibe-acp"
+        ),
+        "the Linux legs must check both binaries against the glibc floor"
+    );
+    assert!(
+        read("scripts/ci/check-linux-portability.sh").contains("floor=\"2.28\""),
+        "the portability check must hold the manylinux_2_28 floor"
+    );
+}
+
 #[test]
 fn the_release_workflow_collects_one_aggregate_manifest() {
     let workflow = read(RELEASE_WORKFLOW);
