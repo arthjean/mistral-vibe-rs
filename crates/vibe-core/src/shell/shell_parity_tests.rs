@@ -30,7 +30,7 @@
 //! is checked in both directions: an entry that stops diverging fails the suite
 //! rather than rotting in the list.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -47,7 +47,7 @@ const CAPTURE_SCRIPT: &str = "scripts/parity/shell_policy.py";
 const CORPUS_RELATIVE: &str = "tests/shell-policy/policy.json";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 2;
+const CORPUS_SCHEMA_VERSION: u32 = 3;
 
 /// The commands the reference resolves to `always` and this port asks about.
 ///
@@ -57,68 +57,17 @@ const CORPUS_SCHEMA_VERSION: u32 = 2;
 /// (`vibe/core/tools/builtins/bash.py:666-715`).
 const STRICTER_THAN_THE_REFERENCE: [&str; 0] = [];
 
-/// Since 2.25.5 (c069ffa1), syntax that stops the extracted parts from
-/// describing what runs (a heredoc, a redirect to a file, a parse error)
-/// invalidates the scope: the reference drops every per-part requirement and
-/// raises one literal requirement for the whole command text, labeled with the
-/// approval label (`vibe/core/tools/builtins/bash.py:352-369,372-390,701-709`;
-/// `vibe/core/tools/builtins/_shell_permission_analysis.py:181-183,301-303,
-/// 317-325`). 2.25.4 (19b5b74f) had already made these constructs approval
-/// reasons, but appended the whole-command requirement beside the per-part
-/// ones instead of replacing them. This port still raises the per-part
-/// requirement it raised at 2.24.0, `<program> <redirect>` under
-/// `<program> *`.
-const SCOPE_INVALIDATED: &str = "reference raises one literal whole-command \
-     requirement for scope-invalidating syntax and no per-part one (2.25.5, \
-     bash.py:352-369,701-709); this port keeps the per-part `<redirect>` \
-     requirement under an arity session pattern";
-
-/// Since 2.25.5, a command with option guardrails (`git`, `find`, `sort`,
-/// `tree` and eleven more) is granted under its own literal text rather than an
-/// arity pattern, so `git reset *` can no longer cover an option the guardrail
-/// would ask about (`vibe/core/tools/builtins/bash.py:338-349`;
-/// `vibe/core/tools/builtins/_shell_command_policy.py:843-863`). This port
-/// still records the arity pattern and labels the requirement with it.
-const LITERAL_GUARDRAILED_SESSION: &str = "reference records an option-guardrailed \
-     command under its literal text (2.25.5, bash.py:338-349); this port records the \
-     arity session pattern and labels the requirement with it";
-
-/// `{}` is a brace-expansion approval reason
-/// (`vibe/core/tools/builtins/_shell_permission_analysis.py:157-160`), and
-/// since 2.25.5 (c069ffa1) an approval reason makes the reference include
-/// allowlisted parts (`scoped_command_parts`, `bash.py:352-369`), so the
-/// literal `find` requirement is raised once by `_build_required_permissions`
-/// and again by the guardrail, with no deduplication across the two lists
-/// (`vibe/core/tools/builtins/bash.py:612-664,693-700`). This port raises it
-/// once, and it equals the reference's first requirement, so only the second
-/// one is ledgered.
-const DUPLICATED_FIND_REQUIREMENT: &str = "reference raises the literal find \
-     requirement twice, once per part and once from the guardrail (2.25.5, \
-     bash.py:612-664,693-700); this port raises it once";
-
-/// Since 2.25.4 (19b5b74f), `git diff --no-index` nominates its positional
-/// operands as path candidates
-/// (`vibe/core/tools/builtins/_shell_command_policy.py:608`), so the reference
-/// asks with two outside_directory requirements, `/dev/*` then `/etc/*`, and no
-/// command requirement, because `git diff` is allowlisted and the text carries
-/// no approval reason (`vibe/core/tools/builtins/bash.py:612-664`, the globs at
-/// 661-662). This port asks with one command requirement for the segment under
-/// the session pattern `git diff *` and raises no outside_directory
-/// requirement.
-const NO_INDEX_OUTSIDE_DIRECTORIES: &str = "reference asks with outside_directory \
-     `/dev/*` and `/etc/*` for `git diff --no-index` operands (2.25.4, \
-     _shell_command_policy.py:608, bash.py:661-662); this port asks with one \
-     command requirement under `git diff *` and no outside_directory one";
-
-/// A parse error invalidates the scope on both sides, and both raise the same
-/// literal whole-command requirement after whatever the guardrail raised
-/// (`vibe/core/tools/builtins/_shell_permission_analysis.py:301-303`;
-/// `vibe/core/tools/builtins/bash.py:372-390,700-709`). Only the label differs:
-/// the reference prints its own approval wording, which the licensing boundary
-/// keeps out of this repository, and this port prints original wording naming
-/// the same cause.
-const UNSCOPED_LABEL: &str = "the whole-command requirement for a parse error carries \
-     this port's own wording where the reference prints its approval label \
+/// Syntax that stops the extracted parts from describing what runs (a
+/// heredoc, a redirect to a file, a parse error) invalidates the scope on both
+/// sides, and both raise the same literal whole-command requirement after
+/// whatever the guardrail raised
+/// (`vibe/core/tools/builtins/_shell_permission_analysis.py:293-303,317-325`;
+/// `vibe/core/tools/builtins/bash.py:372-390,700-709`). Only the label
+/// differs: the reference prints its own approval wording, which the licensing
+/// boundary keeps out of this repository, and this port prints original
+/// wording naming the same causes.
+const UNSCOPED_LABEL: &str = "the whole-command requirement for scope-invalidating syntax \
+     carries this port's own wording where the reference prints its approval label \
      (_shell_permission_analysis.py:181-183, bash.py:700-709)";
 
 /// Requirement fields that differ on a case whose permission conforms, as
@@ -129,53 +78,13 @@ const UNSCOPED_LABEL: &str = "the whole-command requirement for a parse error ca
 const REQUIREMENT_DIVERGENCES: &[(&str, &str, &str)] = &[
     (
         "python3 <<'EOF'\nprint(1)\nEOF",
-        "/requirements/0/invocationPattern",
-        SCOPE_INVALIDATED,
-    ),
-    (
-        "python3 <<'EOF'\nprint(1)\nEOF",
-        "/requirements/0/sessionPattern",
-        SCOPE_INVALIDATED,
-    ),
-    (
-        "python3 <<'EOF'\nprint(1)\nEOF",
         "/requirements/0/label",
-        SCOPE_INVALIDATED,
-    ),
-    (
-        "cat file.txt > out.txt",
-        "/requirements/0/invocationPattern",
-        SCOPE_INVALIDATED,
-    ),
-    (
-        "cat file.txt > out.txt",
-        "/requirements/0/sessionPattern",
-        SCOPE_INVALIDATED,
+        UNSCOPED_LABEL,
     ),
     (
         "cat file.txt > out.txt",
         "/requirements/0/label",
-        SCOPE_INVALIDATED,
-    ),
-    (
-        "find . -exec rm {} ;",
-        "/requirements/1",
-        DUPLICATED_FIND_REQUIREMENT,
-    ),
-    (
-        "find . -execdir rm {} ;",
-        "/requirements/1",
-        DUPLICATED_FIND_REQUIREMENT,
-    ),
-    (
-        "find . -ok rm {} ;",
-        "/requirements/1",
-        DUPLICATED_FIND_REQUIREMENT,
-    ),
-    (
-        "find . -okdir rm {} ;",
-        "/requirements/1",
-        DUPLICATED_FIND_REQUIREMENT,
+        UNSCOPED_LABEL,
     ),
     ("cat 'unterminated", "/requirements/0/label", UNSCOPED_LABEL),
     (
@@ -183,61 +92,22 @@ const REQUIREMENT_DIVERGENCES: &[(&str, &str, &str)] = &[
         "/requirements/1/label",
         UNSCOPED_LABEL,
     ),
+    ("git $SUB", "/requirements/0/label", UNSCOPED_LABEL),
+    ("sudo $CMD", "/requirements/0/label", UNSCOPED_LABEL),
+    ("git log $REF", "/requirements/0/label", UNSCOPED_LABEL),
     (
-        "git -c core.pager=sh log",
-        "/requirements/0/sessionPattern",
-        LITERAL_GUARDRAILED_SESSION,
-    ),
-    (
-        "git -c core.pager=sh log",
+        "HOME=/x git status",
         "/requirements/0/label",
-        LITERAL_GUARDRAILED_SESSION,
+        UNSCOPED_LABEL,
     ),
-    (
-        "git reset --hard",
-        "/requirements/0/sessionPattern",
-        LITERAL_GUARDRAILED_SESSION,
-    ),
-    (
-        "git reset --hard",
-        "/requirements/0/label",
-        LITERAL_GUARDRAILED_SESSION,
-    ),
-    (
-        "git reset --hard -- src",
-        "/requirements/0/sessionPattern",
-        LITERAL_GUARDRAILED_SESSION,
-    ),
-    (
-        "git reset --hard -- src",
-        "/requirements/0/label",
-        LITERAL_GUARDRAILED_SESSION,
-    ),
-    (
-        "git diff --no-index /etc/passwd /dev/null",
-        "/requirements/0/scope",
-        NO_INDEX_OUTSIDE_DIRECTORIES,
-    ),
-    (
-        "git diff --no-index /etc/passwd /dev/null",
-        "/requirements/0/invocationPattern",
-        NO_INDEX_OUTSIDE_DIRECTORIES,
-    ),
-    (
-        "git diff --no-index /etc/passwd /dev/null",
-        "/requirements/0/sessionPattern",
-        NO_INDEX_OUTSIDE_DIRECTORIES,
-    ),
-    (
-        "git diff --no-index /etc/passwd /dev/null",
-        "/requirements/0/label",
-        NO_INDEX_OUTSIDE_DIRECTORIES,
-    ),
-    (
-        "git diff --no-index /etc/passwd /dev/null",
-        "/requirements/1",
-        NO_INDEX_OUTSIDE_DIRECTORIES,
-    ),
+    ("ls >&file", "/requirements/0/label", UNSCOPED_LABEL),
+    ("cat <<< text", "/requirements/0/label", UNSCOPED_LABEL),
+    ("=ls", "/requirements/0/label", UNSCOPED_LABEL),
+    ("f() { ls; }", "/requirements/0/label", UNSCOPED_LABEL),
+    ("ls \\\n -la", "/requirements/0/label", UNSCOPED_LABEL),
+    ("[[ -n $FOO ]]", "/requirements/0/label", UNSCOPED_LABEL),
+    ("npm run $TASK", "/requirements/0/label", UNSCOPED_LABEL),
+    ("cargo $CMD", "/requirements/0/label", UNSCOPED_LABEL),
 ];
 
 #[derive(Debug, Deserialize)]
@@ -252,6 +122,10 @@ struct Corpus {
     extraction: Vec<ExtractionCase>,
     outside_dirs: Vec<OutsideCase>,
     resolutions: Vec<ResolutionCase>,
+    repository_resolutions: Vec<RepositoryCase>,
+    managed_resolutions: Vec<ManagedCase>,
+    windows_grammar: WindowsGrammar,
+    stdin_permissions: Vec<StdinCase>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -266,6 +140,10 @@ struct Counts {
     extraction_cases: usize,
     outside_dir_cases: usize,
     resolution_cases: usize,
+    repository_cases: usize,
+    managed_cases: usize,
+    windows_grammar_cases: usize,
+    stdin_permission_cases: usize,
     path_commands: usize,
 }
 
@@ -308,7 +186,126 @@ struct ResolutionCase {
     requirements: Vec<Requirement>,
 }
 
+/// A git reader resolved in a workdir holding one repository fixture.
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RepositoryCase {
+    fixture: String,
+    command: String,
+    permission: Option<String>,
+    #[serde(default)]
+    #[expect(dead_code, reason = "the reason text itself is reference prose")]
+    has_reason: bool,
+    #[serde(default)]
+    requirements: Vec<Requirement>,
+}
+
+/// A call the managed resolver answered, with the overrides it carried.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ManagedCase {
+    command: String,
+    cwd: Option<String>,
+    shell: Option<String>,
+    env: Vec<String>,
+    permission: Option<String>,
+    #[serde(default)]
+    #[expect(dead_code, reason = "the reason text itself is reference prose")]
+    has_reason: bool,
+    #[serde(default)]
+    requirements: Vec<Requirement>,
+}
+
+/// What input to a session running `command` needed, where `known` is false
+/// for a session the family does not know.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct StdinCase {
+    family: String,
+    command: String,
+    known: bool,
+    permission: Option<String>,
+    #[serde(default)]
+    #[expect(dead_code, reason = "the reference raises no reason for pager input")]
+    has_reason: bool,
+    #[serde(default)]
+    requirements: Vec<Requirement>,
+}
+
+/// What the PowerShell grammar helpers answered, which are pure string
+/// functions a POSIX host evaluates as a Windows host would.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WindowsGrammar {
+    commands: Vec<WindowsCommand>,
+    patterns: Vec<WindowsPattern>,
+    expansions: Vec<WindowsExpansion>,
+    tokens: Vec<WindowsToken>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WindowsCommand {
+    command: String,
+    parts: Vec<WindowsPart>,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct WindowsPart {
+    part: String,
+    tokens: Vec<String>,
+    forms: Vec<String>,
+    forms_without_basename: Vec<String>,
+    command_name: Option<String>,
+    file_redirections: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WindowsPattern {
+    pattern: String,
+    forms: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WindowsExpansion {
+    token: String,
+    value: String,
+    unresolved: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct WindowsToken {
+    token: String,
+    option: bool,
+    path: bool,
+    attached_value: Option<String>,
+}
+
+/// The environment the capture expanded its tokens against:
+/// `WINDOWS_EXPANSION_ENVIRONMENT` in the capture script.
+const WINDOWS_EXPANSION_ENVIRONMENT: [(&str, &str); 2] = [
+    ("USERPROFILE", "C:\\Users\\me"),
+    ("AppData", "C:\\Users\\me\\AppData\\Roaming"),
+];
+
+/// The repository configurations the capture wrote, by fixture name: the same
+/// text `REPOSITORY_FIXTURES` in the capture script writes.
+const REPOSITORY_FIXTURES: [(&str, &str); 8] = [
+    ("plain", "[core]\n\tbare = false\n"),
+    ("pager", "[core]\n\tpager = less\n"),
+    ("pager-off", "[core]\n\tpager = off\n"),
+    ("include", "[include]\n\tpath = other.config\n"),
+    ("log-pager", "[pager]\n\tlog = cat\n"),
+    ("fsmonitor", "[core]\n\tfsmonitor\n"),
+    ("diff-driver", "[diff \"x\"]\n\ttextconv = cat\n"),
+    ("gpg", "[gpg]\n\tprogram = gpg2\n"),
+];
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Requirement {
     scope: String,
@@ -434,7 +431,7 @@ fn the_path_inspecting_set_is_the_reference_set() {
     let missing = sets
         .path_commands
         .iter()
-        .filter(|program| !inspects_paths(ShellFlavor::Posix, program))
+        .filter(|program| !inspects_paths(program))
         .cloned()
         .collect::<Vec<_>>();
     assert!(
@@ -505,6 +502,7 @@ impl OperandWorkspace {
         let outside = root.path().join("elsewhere");
         let scratchpad = workdir.join(".vibe").join("scratchpad");
         fs::create_dir_all(outside.join("nested")).expect("outside tree");
+        fs::create_dir_all(workdir.join("nested")).expect("nested workdir");
         fs::create_dir_all(&scratchpad).expect("scratchpad");
         fs::write(workdir.join("inside.txt"), "inside").expect("inside file");
         fs::write(outside.join("secret.txt"), "secret").expect("outside file");
@@ -539,6 +537,15 @@ impl OperandWorkspace {
             expanded = expanded.replace(placeholder, &host);
         }
         expanded
+    }
+
+    /// `text` with every host path replaced by its placeholder.
+    fn normalize(&self, text: &str) -> String {
+        let mut normalized = text.to_owned();
+        for (placeholder, host) in self.placeholders() {
+            normalized = normalized.replace(&host, placeholder);
+        }
+        normalized
     }
 
     fn context(&self) -> ShellPolicyContext {
@@ -594,92 +601,90 @@ fn every_escaping_operand_matches_the_reference() {
     );
 }
 
-/// US-110: the permission a command resolves to is the reference's, and every
-/// requirement it raises carries the reference scope, patterns and label.
-///
-/// The ledger is the one tolerated difference, and it is checked in both
-/// directions: a listed case that stopped diverging fails, so the list cannot
-/// rot.
-#[test]
-fn every_resolution_matches_the_reference() {
-    let corpus = corpus();
-    assert_eq!(corpus.resolutions.len(), corpus.counts.resolution_cases);
-    let workspace = tempfile::tempdir().expect("workspace");
-    let context = ShellPolicyContext::new(
-        Platform::Posix,
-        parse_policy_path(Platform::Posix, &canonical(workspace.path())).expect("workdir"),
-    );
-    let lists = posix_lists();
-    let ledger = STRICTER_THAN_THE_REFERENCE
-        .iter()
-        .map(|command| (*command).to_owned())
-        .collect::<BTreeSet<String>>();
+/// What replaying one family of resolutions found.
+#[derive(Default)]
+struct Replay {
+    conforming: usize,
+    /// Cases resolving to `ask` here where the reference grants.
+    stricter: BTreeSet<String>,
+    /// `(command, pointer)` for every requirement field that differs.
+    requirement_diffs: BTreeSet<(String, String)>,
+    untolerated: Vec<String>,
+}
 
-    let mut diverging = BTreeSet::new();
-    let mut requirement_diffs = BTreeSet::new();
-    let mut untolerated = Vec::new();
-    let mut conforming = 0_usize;
-    let mut by_case = BTreeMap::new();
-    for case in &corpus.resolutions {
-        let analysis = analyze_shell(ShellFlavor::Posix, &case.command, &context, &lists);
+impl Replay {
+    /// Compares one analysis with what the reference recorded for `key`.
+    fn compare(
+        &mut self,
+        key: &str,
+        analysis: &ShellAnalysis,
+        permission: Option<&str>,
+        requirements: &[Requirement],
+        lists: &ShellCommandLists,
+        workspace: &OperandWorkspace,
+    ) {
         // The reference answering `None` defers to the configured permission,
         // which is what this port's analysis returns in the same place.
-        let expected = case
-            .permission
-            .clone()
-            .unwrap_or_else(|| permission_wire(lists.permission));
+        let expected =
+            permission.map_or_else(|| permission_wire(lists.permission), ToOwned::to_owned);
         let resolved = permission_wire(analysis.mode);
-        by_case.insert(case.command.clone(), (expected.clone(), resolved.clone()));
-
         if resolved != expected {
-            // Collected rather than asserted in place, so the ledgers below are
+            // Collected rather than asserted in place, so the ledgers are
             // still checked; the assertion at the end is as strict.
-            if !(expected == "always" && resolved == "ask") {
-                untolerated.push(format!(
+            if expected == "always" && resolved == "ask" && !analysis.requirements.is_empty() {
+                self.stricter.insert(key.to_owned());
+            } else {
+                self.untolerated.push(format!(
                     "`{}` resolves to `{resolved}` here and to `{expected}` upstream: {:?}",
-                    case.command.escape_debug(),
+                    key.escape_debug(),
                     analysis.rationale
                 ));
-                continue;
             }
-            assert!(
-                !analysis.requirements.is_empty(),
-                "`{}` withholds the grant without leaving anything to approve",
-                case.command.escape_debug()
-            );
-            diverging.insert(case.command.clone());
-            continue;
+            return;
         }
-        conforming += 1;
+        if permission.is_none() && !analysis.requirements.is_empty() {
+            self.untolerated.push(format!(
+                "`{}` defers upstream and raises requirements here: {:?}",
+                key.escape_debug(),
+                analysis.requirements
+            ));
+            return;
+        }
+        self.conforming += 1;
 
         // A conforming permission still has to raise the same requirements.
         let raised = analysis
             .requirements
             .iter()
-            .map(|requirement| Requirement {
-                scope: wire_scope(requirement.scope),
-                invocation_pattern: requirement.invocation_pattern.clone(),
-                session_pattern: requirement.session_pattern.clone(),
-                label: Label::committed(
-                    &requirement.label,
-                    &requirement.invocation_pattern,
-                    &requirement.session_pattern,
-                ),
+            .map(|requirement| {
+                let invocation_pattern = workspace.normalize(&requirement.invocation_pattern);
+                let session_pattern = workspace.normalize(&requirement.session_pattern);
+                Requirement {
+                    scope: wire_scope(requirement.scope),
+                    label: Label::committed(
+                        &workspace.normalize(&requirement.label),
+                        &invocation_pattern,
+                        &session_pattern,
+                    ),
+                    invocation_pattern,
+                    session_pattern,
+                }
             })
             .collect::<Vec<_>>();
         // A requirement only one side raises is its own divergence; the ones
         // both sides raise are still compared field by field.
-        let shared = raised.len().min(case.requirements.len());
-        for index in shared..raised.len().max(case.requirements.len()) {
-            requirement_diffs.insert((case.command.clone(), format!("/requirements/{index}")));
+        let shared = raised.len().min(requirements.len());
+        for index in shared..raised.len().max(requirements.len()) {
+            self.requirement_diffs
+                .insert((key.to_owned(), format!("/requirements/{index}")));
             eprintln!(
                 "`{}` /requirements/{index}: {:?} here, {:?} upstream",
-                case.command.escape_debug(),
+                key.escape_debug(),
                 raised.get(index),
-                case.requirements.get(index)
+                requirements.get(index)
             );
         }
-        for (index, (here, upstream)) in raised.iter().zip(&case.requirements).enumerate() {
+        for (index, (here, upstream)) in raised.iter().zip(requirements).enumerate() {
             let fields = [
                 ("scope", here.scope == upstream.scope),
                 (
@@ -694,64 +699,313 @@ fn every_resolution_matches_the_reference() {
             ];
             for (field, equal) in fields {
                 if !equal {
-                    requirement_diffs.insert((
-                        case.command.clone(),
-                        format!("/requirements/{index}/{field}"),
-                    ));
+                    self.requirement_diffs
+                        .insert((key.to_owned(), format!("/requirements/{index}/{field}")));
                     eprintln!(
                         "`{}` /requirements/{index}/{field}: {here:?} here, {upstream:?} upstream",
-                        case.command.escape_debug()
+                        key.escape_debug()
                     );
                 }
             }
         }
     }
 
-    let unlisted = diverging.difference(&ledger).cloned().collect::<Vec<_>>();
-    assert!(
-        unlisted.is_empty(),
-        "commands diverging from the reference without a ledger entry: {unlisted:?}"
-    );
-    let stale = ledger
+    /// Checks the ledgers in both directions and fails on anything untolerated.
+    fn finish(self, family: &str, total: usize) {
+        let ledger = STRICTER_THAN_THE_REFERENCE
+            .iter()
+            .map(|command| (*command).to_owned())
+            .collect::<BTreeSet<String>>();
+        let unlisted = self
+            .stricter
+            .difference(&ledger)
+            .cloned()
+            .collect::<Vec<_>>();
+        assert!(
+            unlisted.is_empty(),
+            "{family}: commands diverging from the reference without a ledger entry: {unlisted:?}"
+        );
+        let requirement_ledger = REQUIREMENT_DIVERGENCES
+            .iter()
+            .map(|(command, pointer, _)| ((*command).to_owned(), (*pointer).to_owned()))
+            .collect::<BTreeSet<_>>();
+        let unlisted = self
+            .requirement_diffs
+            .difference(&requirement_ledger)
+            .cloned()
+            .collect::<Vec<_>>();
+        assert!(
+            unlisted.is_empty(),
+            "{family}: requirements diverging from the reference without a ledger entry: {unlisted:?}"
+        );
+        eprintln!(
+            "shell policy: {family} {}/{total} conforming, {} ledgered, {} requirement fields ledgered",
+            self.conforming,
+            self.stricter.len(),
+            self.requirement_diffs.len()
+        );
+        assert!(
+            self.untolerated.is_empty(),
+            "{family}: resolutions that differ in another direction than the one tolerated \
+             (`always` upstream, `ask` here): {:#?}",
+            self.untolerated
+        );
+    }
+}
+
+/// US-110: the permission a command resolves to is the reference's, and every
+/// requirement it raises carries the reference scope, patterns and label.
+///
+/// The ledgers are the one tolerated difference, and they are checked in both
+/// directions: a listed case that stopped diverging fails, so the list cannot
+/// rot.
+#[test]
+fn every_resolution_matches_the_reference() {
+    let corpus = corpus();
+    assert_eq!(corpus.resolutions.len(), corpus.counts.resolution_cases);
+    let workspace = OperandWorkspace::build();
+    let context = workspace.context();
+    let lists = posix_lists();
+    let mut replay = Replay::default();
+    for case in &corpus.resolutions {
+        let command = workspace.expand(&case.command);
+        let analysis = analyze_shell(ShellFlavor::Posix, &command, &context, &lists);
+        replay.compare(
+            &case.command,
+            &analysis,
+            case.permission.as_deref(),
+            &case.requirements,
+            &lists,
+            &workspace,
+        );
+    }
+    // Every ledger entry is a resolution case, so the stale direction is read
+    // against this family alone.
+    let stale = STRICTER_THAN_THE_REFERENCE
         .iter()
-        .filter(|command| by_case.contains_key(*command) && !diverging.contains(*command))
+        .filter(|command| !replay.stricter.contains(**command))
         .collect::<Vec<_>>();
     assert!(
         stale.is_empty(),
         "ledger entries that no longer diverge; remove them: {stale:?}"
     );
-
-    let requirement_ledger = REQUIREMENT_DIVERGENCES
+    let stale = REQUIREMENT_DIVERGENCES
         .iter()
         .map(|(command, pointer, _)| ((*command).to_owned(), (*pointer).to_owned()))
-        .collect::<BTreeSet<_>>();
-    let unlisted = requirement_diffs
-        .difference(&requirement_ledger)
-        .cloned()
-        .collect::<Vec<_>>();
-    assert!(
-        unlisted.is_empty(),
-        "requirements diverging from the reference without a ledger entry: {unlisted:?}"
-    );
-    let stale = requirement_ledger
-        .difference(&requirement_diffs)
-        .cloned()
+        .filter(|entry| !replay.requirement_diffs.contains(entry))
         .collect::<Vec<_>>();
     assert!(
         stale.is_empty(),
         "requirement ledger entries that no longer diverge; remove them: {stale:?}"
     );
-    eprintln!(
-        "shell policy: resolutions {conforming}/{} conforming, {} ledgered, \
-         {} requirement fields ledgered",
-        corpus.counts.resolution_cases,
-        diverging.len(),
-        requirement_diffs.len()
+    replay.finish("resolutions", corpus.counts.resolution_cases);
+}
+
+/// A git reader is granted in a repository whose configuration runs nothing,
+/// and keyed to the repository it reads where the configuration could run a
+/// helper.
+#[test]
+fn every_repository_resolution_matches_the_reference() {
+    let corpus = corpus();
+    assert_eq!(
+        corpus.repository_resolutions.len(),
+        corpus.counts.repository_cases
     );
+    let lists = posix_lists();
+    let mut replay = Replay::default();
+    for (fixture, config) in REPOSITORY_FIXTURES {
+        let workspace = OperandWorkspace::build();
+        fs::create_dir_all(workspace.workdir.join(".git")).expect("git directory");
+        fs::write(workspace.workdir.join(".git").join("config"), config).expect("git config");
+        let context = workspace.context();
+        for case in corpus
+            .repository_resolutions
+            .iter()
+            .filter(|case| case.fixture == fixture)
+        {
+            let command = workspace.expand(&case.command);
+            let analysis = analyze_shell(ShellFlavor::Posix, &command, &context, &lists);
+            replay.compare(
+                &format!("{fixture}: {}", case.command),
+                &analysis,
+                case.permission.as_deref(),
+                &case.requirements,
+                &lists,
+                &workspace,
+            );
+        }
+    }
     assert!(
-        untolerated.is_empty(),
-        "resolutions that differ in another direction than the one tolerated \
-         (`always` upstream, `ask` here): {untolerated:#?}"
+        corpus
+            .repository_resolutions
+            .iter()
+            .all(|case| REPOSITORY_FIXTURES
+                .iter()
+                .any(|(name, _)| *name == case.fixture)),
+        "the corpus names a repository fixture this runner does not write"
+    );
+    replay.finish("repository resolutions", corpus.counts.repository_cases);
+}
+
+/// The managed resolver: a call's `cwd`, custom shell and custom environment
+/// are read with its command, and the denylist also matches a basename.
+#[test]
+fn every_managed_resolution_matches_the_reference() {
+    let corpus = corpus();
+    assert_eq!(
+        corpus.managed_resolutions.len(),
+        corpus.counts.managed_cases
+    );
+    let workspace = OperandWorkspace::build();
+    let lists = posix_lists();
+    let mut replay = Replay::default();
+    for case in &corpus.managed_resolutions {
+        let cwd = case.cwd.as_deref().map(|cwd| workspace.expand(cwd));
+        let context = workspace.context().managed(
+            ShellFlavor::Posix,
+            cwd.as_deref(),
+            override_requirements(case.shell.as_deref(), &case.env),
+        );
+        let analysis = analyze_shell(ShellFlavor::Posix, &case.command, &context, &lists);
+        replay.compare(
+            &format!(
+                "{} (cwd {:?}, shell {:?}, env {:?})",
+                case.command, case.cwd, case.shell, case.env
+            ),
+            &analysis,
+            case.permission.as_deref(),
+            &case.requirements,
+            &lists,
+            &workspace,
+        );
+    }
+    replay.finish("managed resolutions", corpus.counts.managed_cases);
+}
+
+/// The PowerShell grammar splits, tokenizes, names, matches and expands as the
+/// reference does.
+#[test]
+fn every_windows_grammar_answer_matches_the_reference() {
+    use super::windows;
+    let corpus = corpus();
+    let grammar = &corpus.windows_grammar;
+    assert_eq!(grammar.commands.len(), corpus.counts.windows_grammar_cases);
+    for case in &grammar.commands {
+        let parts = windows::split_command_parts(&case.command)
+            .into_iter()
+            .map(|part| {
+                let tokens = windows::split_command_tokens(&part);
+                WindowsPart {
+                    command_name: (!tokens.is_empty()).then(|| {
+                        windows::windows_command_name(&windows::invoked_command(&tokens).0)
+                    }),
+                    forms: windows::command_match_forms(&part, true),
+                    forms_without_basename: windows::command_match_forms(&part, false),
+                    file_redirections: windows::file_redirection_targets(&part),
+                    tokens,
+                    part,
+                }
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(parts, case.parts, "`{}`", case.command.escape_debug());
+    }
+    for case in &grammar.patterns {
+        assert_eq!(
+            windows::policy_pattern_forms(&case.pattern),
+            case.forms,
+            "pattern `{}`",
+            case.pattern
+        );
+    }
+    let environment = WINDOWS_EXPANSION_ENVIRONMENT
+        .iter()
+        .map(|(key, value)| ((*key).to_owned(), (*value).to_owned()))
+        .collect::<Vec<_>>();
+    let home = crate::config::user_home_directory()
+        .map(|home| home.display().to_string())
+        .unwrap_or_default();
+    for case in &grammar.expansions {
+        let (value, unresolved) =
+            windows::expand_powershell_path(&case.token, "C:\\work", &environment);
+        let value = if home.is_empty() {
+            value
+        } else {
+            value.replace(&home, "<home>")
+        };
+        assert_eq!(
+            (value, unresolved),
+            (case.value.clone(), case.unresolved),
+            "token `{}`",
+            case.token
+        );
+    }
+    for case in &grammar.tokens {
+        assert_eq!(
+            (
+                windows::looks_like_option(&case.token),
+                windows::looks_like_path(&case.token),
+                windows::attached_parameter_value(&case.token),
+            ),
+            (case.option, case.path, case.attached_value.clone()),
+            "token `{}`",
+            case.token
+        );
+    }
+    eprintln!(
+        "shell policy: windows grammar {} commands, {} patterns, {} expansions, {} tokens",
+        grammar.commands.len(),
+        grammar.patterns.len(),
+        grammar.expansions.len(),
+        grammar.tokens.len()
+    );
+}
+
+/// Input to a session is asked about exactly when the reference would, under
+/// the same pattern.
+#[test]
+fn every_stdin_permission_matches_the_reference() {
+    let corpus = corpus();
+    assert_eq!(
+        corpus.stdin_permissions.len(),
+        corpus.counts.stdin_permission_cases
+    );
+    for case in &corpus.stdin_permissions {
+        let flavor = match case.family.as_str() {
+            "posix" => ShellFlavor::Posix,
+            "git_bash" => ShellFlavor::GitBash,
+            "powershell" => ShellFlavor::PowerShell,
+            other => panic!("unknown family {other}"),
+        };
+        let context = pager_input_permission(
+            flavor,
+            "session_1",
+            case.known.then_some(case.command.as_str()),
+        );
+        let requirements = context
+            .requirements
+            .iter()
+            .map(|requirement| Requirement {
+                scope: wire_scope(requirement.scope),
+                invocation_pattern: requirement.invocation_pattern.clone(),
+                session_pattern: requirement.session_pattern.clone(),
+                label: Label::committed(
+                    &requirement.label,
+                    &requirement.invocation_pattern,
+                    &requirement.session_pattern,
+                ),
+            })
+            .collect::<Vec<_>>();
+        let label = format!("{} `{}` (known {})", case.family, case.command, case.known);
+        assert_eq!(
+            context.permission.map(permission_wire),
+            case.permission,
+            "{label}"
+        );
+        assert_eq!(requirements, case.requirements, "{label}");
+    }
+    eprintln!(
+        "shell policy: {} stdin permissions",
+        corpus.stdin_permissions.len()
     );
 }
 

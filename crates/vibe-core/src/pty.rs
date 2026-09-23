@@ -61,6 +61,7 @@ pub(crate) struct PtySpec<'a> {
     pub(crate) arguments: &'a [String],
     pub(crate) working_directory: &'a Path,
     pub(crate) environment: &'a BTreeMap<String, String>,
+    pub(crate) unset_environment: &'a [String],
 }
 
 /// The two halves a caller drives the terminal through.
@@ -176,6 +177,9 @@ fn open(spec: &PtySpec<'_>) -> Result<(PtyTerminal, PtyStreams), String> {
         builder.arg(argument);
     }
     builder.cwd(spec.working_directory);
+    for key in spec.unset_environment {
+        builder.env_remove(key);
+    }
     for (key, value) in spec.environment {
         builder.env(key, value);
     }
@@ -211,20 +215,79 @@ fn open(spec: &PtySpec<'_>) -> Result<(PtyTerminal, PtyStreams), String> {
 
 /// How a terminal child ended.
 ///
-/// `portable-pty` reports a signalled child as exit code 1 with the signal name
-/// beside it, while the pipe backend reports no code at all. Dropping the code
-/// for a signalled child is what keeps the two backends telling one story.
+/// `portable-pty` reports a signalled child as exit code 1 with the signal's
+/// description beside it, while the pipe backend reports no code at all.
+/// Dropping the code for a signalled child is what keeps the two backends
+/// telling one story, and the description is read back into the signal number
+/// so a caller can report it the way Python's `Popen.returncode` does.
 fn exit_of(status: portable_pty::ExitStatus) -> ChildExit {
-    if status.signal().is_some() {
+    if let Some(description) = status.signal() {
         return ChildExit {
             code: None,
             success: false,
+            signal: signal_number(description),
         };
     }
     ChildExit {
         code: i32::try_from(status.exit_code()).ok(),
         success: status.success(),
+        signal: None,
     }
+}
+
+/// The number of the signal `portable-pty` described.
+///
+/// `portable-pty` names a signal through `strsignal`, which this process calls
+/// under the C locale it never leaves, so the text is the C library's English
+/// description: glibc's and the BSD one's are listed, and a signal neither
+/// names comes back as `Signal N` or `Unknown signal N`, whose number is read
+/// off the text.
+#[cfg(unix)]
+fn signal_number(description: &str) -> Option<i32> {
+    use nix::sys::signal::Signal;
+    let named = match description {
+        "Hangup" => Some(Signal::SIGHUP),
+        "Interrupt" => Some(Signal::SIGINT),
+        "Quit" => Some(Signal::SIGQUIT),
+        "Illegal instruction" => Some(Signal::SIGILL),
+        "Trace/breakpoint trap" | "Trace/BPT trap" => Some(Signal::SIGTRAP),
+        "Aborted" | "Abort trap" => Some(Signal::SIGABRT),
+        "Bus error" => Some(Signal::SIGBUS),
+        "Floating point exception" => Some(Signal::SIGFPE),
+        "Killed" => Some(Signal::SIGKILL),
+        "User defined signal 1" => Some(Signal::SIGUSR1),
+        "Segmentation fault" => Some(Signal::SIGSEGV),
+        "User defined signal 2" => Some(Signal::SIGUSR2),
+        "Broken pipe" => Some(Signal::SIGPIPE),
+        "Alarm clock" => Some(Signal::SIGALRM),
+        "Terminated" => Some(Signal::SIGTERM),
+        "Child exited" => Some(Signal::SIGCHLD),
+        "Continued" => Some(Signal::SIGCONT),
+        "Stopped (signal)" | "Suspended (signal)" => Some(Signal::SIGSTOP),
+        "Stopped" | "Suspended" => Some(Signal::SIGTSTP),
+        "Stopped (tty input)" => Some(Signal::SIGTTIN),
+        "Stopped (tty output)" => Some(Signal::SIGTTOU),
+        "Urgent I/O condition" => Some(Signal::SIGURG),
+        "CPU time limit exceeded" | "Cputime limit exceeded" => Some(Signal::SIGXCPU),
+        "File size limit exceeded" | "Filesize limit exceeded" => Some(Signal::SIGXFSZ),
+        "Virtual timer expired" => Some(Signal::SIGVTALRM),
+        "Profiling timer expired" => Some(Signal::SIGPROF),
+        "Window changed" | "Window size changes" => Some(Signal::SIGWINCH),
+        "I/O possible" => Some(Signal::SIGIO),
+        "Bad system call" => Some(Signal::SIGSYS),
+        _ => None,
+    };
+    named.map(|signal| signal as i32).or_else(|| {
+        description
+            .rsplit(' ')
+            .next()
+            .and_then(|number| number.parse::<i32>().ok())
+    })
+}
+
+#[cfg(not(unix))]
+fn signal_number(_description: &str) -> Option<i32> {
+    None
 }
 
 /// One dimension of the visible display, read from the environment the session

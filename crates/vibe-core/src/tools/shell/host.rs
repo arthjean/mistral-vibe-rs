@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 
 use crate::platform::Platform;
 use crate::shell::{ShellConfig, ShellFlavor};
+use crate::tools::ToolError;
 use crate::tools::config::ToolConfigResolver;
 
 /// Which variant of the host's shell family the session publishes.
@@ -73,6 +74,17 @@ impl ShellFamily {
         matches!(self, Self::Bash | Self::GitBash)
     }
 
+    /// What the family removes from a child's environment: reference
+    /// `_shell_environment` drops `LC_ALL` on a POSIX host so its `LC_CTYPE`
+    /// takes effect.
+    pub(super) fn unset_environment(self, managed: bool) -> Vec<String> {
+        if self == Self::Bash && !managed && !cfg!(windows) {
+            vec!["LC_ALL".to_owned()]
+        } else {
+            Vec::new()
+        }
+    }
+
     pub(super) fn tool_name(self, suffix: &str) -> String {
         format!("{}_{suffix}", self.name())
     }
@@ -82,8 +94,8 @@ impl ShellFamily {
     /// Reference `_get_git_bash_env_overrides` and `_get_windows_env_overrides`
     /// pin the same three interactivity switches and a pager that exits, so a
     /// command that would wait for a terminal no operator is watching fails or
-    /// finishes instead of hanging the session. The POSIX family inherits the
-    /// process environment untouched, as the reference `Bash` does.
+    /// finishes instead of hanging the session, and reference
+    /// `_shell_environment` does the same for the legacy `bash` tool.
     ///
     /// A managed session composes a different set: reference
     /// `TerminalSessionManager._build_env` is the only environment source on
@@ -109,7 +121,28 @@ impl ShellFamily {
                 .collect::<Vec<_>>()
         };
         match (self, managed) {
-            (Self::Bash, false) => Vec::new(),
+            // Reference `_shell_environment`, which `spawn_shell_command`
+            // hands the legacy `bash` tool: a non-interactive child with a
+            // pager that exits and UTF-8 output. `LC_ALL` is removed by the
+            // caller, since it would override `LC_CTYPE`.
+            (Self::Bash, false) if cfg!(windows) => owned(&[
+                ("CI", "true"),
+                ("NONINTERACTIVE", "1"),
+                ("NO_TTY", "1"),
+                ("GIT_PAGER", "more"),
+                ("PAGER", "more"),
+            ]),
+            (Self::Bash, false) => owned(&[
+                ("CI", "true"),
+                ("NONINTERACTIVE", "1"),
+                ("NO_TTY", "1"),
+                ("TERM", "dumb"),
+                ("DEBIAN_FRONTEND", "noninteractive"),
+                ("GIT_PAGER", "cat"),
+                ("PAGER", "cat"),
+                ("LESS", "-FX"),
+                ("LC_CTYPE", "C.UTF-8"),
+            ]),
             (Self::Bash | Self::GitBash, true) => {
                 let mut environment = vec![
                     inherited("TERM", "xterm-256color"),
@@ -281,7 +314,7 @@ pub(super) fn published_family(
 /// executable for it.
 pub(super) fn family_config(family: ShellFamily, host: &HostShells) -> Option<ShellConfig> {
     match family {
-        ShellFamily::Bash => Some(ShellConfig::default_for(host.platform)),
+        ShellFamily::Bash => Some(legacy_bash_config(host)),
         ShellFamily::GitBash => host.git_bash.clone().map(|executable| ShellConfig {
             flavor: ShellFlavor::GitBash,
             arguments: windows_shell_arguments(&executable),
@@ -293,6 +326,268 @@ pub(super) fn family_config(family: ShellFamily, host: &HostShells) -> Option<Sh
             executable,
         }),
     }
+}
+
+/// Reference `PosixManagedShellBackend.resolve_shell`'s fallback ladder: zsh,
+/// then bash, then sh, each first by name on `PATH` and then at its two usual
+/// absolute locations. `$SHELL` is not consulted.
+const POSIX_SHELL_LADDER: [&str; 9] = [
+    "zsh",
+    "/bin/zsh",
+    "/usr/bin/zsh",
+    "bash",
+    "/bin/bash",
+    "/usr/bin/bash",
+    "sh",
+    "/bin/sh",
+    "/usr/bin/sh",
+];
+
+/// The shell a managed session starts, resolved the way the family's reference
+/// backend resolves it: the call's `shell` argument, then the tool's `shell`
+/// configuration key, then the family's own default.
+///
+/// A requested or configured shell that does not resolve is refused rather
+/// than replaced: reference `resolve_shell` raises, so the session never starts
+/// under a shell the caller did not ask for. `default` is the family's
+/// configuration on this host, which carries the executable a Windows family
+/// was published against.
+pub(super) fn resolve_session_shell(
+    family: ShellFamily,
+    default: &ShellConfig,
+    requested: Option<&str>,
+    configured: Option<&str>,
+) -> Result<ShellConfig, ToolError> {
+    let requested = requested.filter(|value| !value.is_empty());
+    let configured = configured.filter(|value| !value.is_empty());
+    match family {
+        ShellFamily::Bash => {
+            let executable = if let Some(requested) = requested {
+                resolve_posix_executable(requested).ok_or_else(|| {
+                    ToolError::Execution(format!("requested shell is not executable: {requested}"))
+                })?
+            } else if let Some(configured) = configured {
+                resolve_posix_executable(configured).ok_or_else(|| {
+                    ToolError::Execution(format!(
+                        "configured shell is not executable: {configured}"
+                    ))
+                })?
+            } else {
+                POSIX_SHELL_LADDER
+                    .iter()
+                    .find_map(|candidate| resolve_posix_executable(candidate))
+                    .ok_or_else(|| {
+                        ToolError::Execution(
+                            "no POSIX shell found; expected zsh, bash, or sh".to_owned(),
+                        )
+                    })?
+            };
+            Ok(ShellConfig {
+                flavor: default.flavor,
+                executable,
+                arguments: vec!["-lc".to_owned()],
+            })
+        }
+        ShellFamily::GitBash | ShellFamily::PowerShell => {
+            let Some(source) = requested.or(configured) else {
+                return Ok(default.clone());
+            };
+            let Some(executable) = resolve_windows_executable(source) else {
+                let kind = if requested.is_some() {
+                    "requested"
+                } else {
+                    "configured"
+                };
+                return Err(ToolError::Execution(format!(
+                    "{kind} shell is not executable: {source}"
+                )));
+            };
+            let resolved_family = windows_shell_family(&executable);
+            match (family, resolved_family) {
+                (ShellFamily::GitBash, WindowsShellKind::Bash)
+                | (ShellFamily::PowerShell, WindowsShellKind::PowerShell) => {}
+                (ShellFamily::GitBash, _) => {
+                    return Err(ToolError::Execution(format!(
+                        "Git Bash shell override must resolve to bash.exe, got {source}"
+                    )));
+                }
+                _ => {
+                    return Err(ToolError::Execution(format!(
+                        "PowerShell shell override must resolve to pwsh.exe or powershell.exe, \
+                         got {source}"
+                    )));
+                }
+            }
+            Ok(ShellConfig {
+                flavor: default.flavor,
+                arguments: windows_shell_arguments(&executable),
+                executable,
+            })
+        }
+    }
+}
+
+/// Reference `_posix.py` `_resolve_executable`: a candidate carrying a path
+/// separator must name an executable file, `~` expanded; a bare name is looked
+/// up on `PATH` the way `shutil.which` looks it up.
+pub(super) fn resolve_posix_executable(candidate: &str) -> Option<PathBuf> {
+    let expanded = expand_home(candidate);
+    if candidate.contains('/') {
+        return is_executable_file(&expanded).then_some(expanded);
+    }
+    let path = std::env::var_os("PATH")?;
+    std::env::split_paths(&path)
+        .map(|directory| directory.join(candidate))
+        .find(|found| is_executable_file(found))
+}
+
+/// Reference `_windows.py` `_resolve_executable`: a candidate that looks like a
+/// path (either separator or a drive colon) must name a file; a bare name is
+/// looked up on `PATH`, trying the `PATHEXT` suffixes a Windows `which` tries.
+fn resolve_windows_executable(candidate: &str) -> Option<PathBuf> {
+    let expanded = expand_home(candidate);
+    if candidate.contains(['/', '\\', ':']) {
+        return expanded.is_file().then_some(expanded);
+    }
+    let path = std::env::var_os("PATH")?;
+    let extensions = std::env::var("PATHEXT")
+        .ok()
+        .filter(|_| cfg!(windows))
+        .map(|value| {
+            value
+                .split(';')
+                .filter(|suffix| !suffix.is_empty())
+                .map(str::to_lowercase)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    std::env::split_paths(&path).find_map(|directory| {
+        let exact = directory.join(candidate);
+        if exact.is_file() {
+            return Some(exact);
+        }
+        extensions
+            .iter()
+            .map(|suffix| directory.join(format!("{candidate}{suffix}")))
+            .find(|found| found.is_file())
+    })
+}
+
+/// `Path.expanduser`: a leading `~` names the home directory.
+fn expand_home(candidate: &str) -> PathBuf {
+    let home = || std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"));
+    if candidate == "~" {
+        if let Some(home) = home() {
+            return PathBuf::from(home);
+        }
+    } else if let Some(rest) = candidate
+        .strip_prefix("~/")
+        .or_else(|| candidate.strip_prefix("~\\"))
+        && let Some(home) = home()
+    {
+        return PathBuf::from(home).join(rest);
+    }
+    PathBuf::from(candidate)
+}
+
+fn is_executable_file(path: &Path) -> bool {
+    let Ok(metadata) = std::fs::metadata(path) else {
+        return false;
+    };
+    if !metadata.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        metadata.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
+
+/// Reference `_shell_family_from_executable`, read off the basename on either
+/// separator.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum WindowsShellKind {
+    PowerShell,
+    Bash,
+    Custom,
+}
+
+pub(super) fn windows_shell_family(executable: &Path) -> WindowsShellKind {
+    let name = executable
+        .to_string_lossy()
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or_default()
+        .to_lowercase();
+    match name.as_str() {
+        "pwsh" | "pwsh.exe" | "powershell" | "powershell.exe" => WindowsShellKind::PowerShell,
+        "bash" | "bash.exe" => WindowsShellKind::Bash,
+        _ => WindowsShellKind::Custom,
+    }
+}
+
+/// The interpreter the `bash` family drives.
+///
+/// On a POSIX host reference `spawn_shell_command` hands the command to
+/// `asyncio.create_subprocess_shell` with `$SHELL` as the executable, which
+/// runs `<shell> -c <command>`, and `/bin/sh` when `$SHELL` is unset. The
+/// executable is re-read at every call (see [`legacy_posix_shell`]); this is
+/// the family's shape. On Windows reference `resolve_windows_shell` prefers a
+/// detected Git Bash, driven with `-c`, and otherwise runs `cmd.exe /d /c`.
+/// A managed session resolves its own shell through [`resolve_session_shell`]
+/// and keeps only the flavor from here.
+pub(super) fn legacy_bash_config(host: &HostShells) -> ShellConfig {
+    match host.platform {
+        Platform::Posix | Platform::GitBash => ShellConfig {
+            flavor: ShellFlavor::Posix,
+            executable: legacy_posix_shell(),
+            arguments: vec!["-c".to_owned()],
+        },
+        Platform::Windows => match &host.git_bash {
+            Some(bash) => ShellConfig {
+                flavor: ShellFlavor::GitBash,
+                executable: bash.clone(),
+                arguments: vec!["-c".to_owned()],
+            },
+            None => ShellConfig {
+                flavor: ShellFlavor::Cmd,
+                executable: windows_cmd_path(),
+                arguments: vec!["/d".to_owned(), "/c".to_owned()],
+            },
+        },
+    }
+}
+
+/// Reference `create_subprocess_shell(executable=os.environ.get("SHELL"))`.
+pub(super) fn legacy_posix_shell() -> PathBuf {
+    std::env::var_os("SHELL")
+        .filter(|shell| !shell.is_empty())
+        .map_or_else(|| PathBuf::from("/bin/sh"), PathBuf::from)
+}
+
+/// Reference `_get_windows_cmd_path`: `COMSPEC` when it names `cmd`, then
+/// `%SystemRoot%\System32\cmd.exe`, then the bare name.
+fn windows_cmd_path() -> PathBuf {
+    if let Some(comspec) = std::env::var("COMSPEC").ok().filter(|comspec| {
+        let name = comspec
+            .trim_matches('"')
+            .rsplit(['/', '\\'])
+            .next()
+            .unwrap_or_default()
+            .to_lowercase();
+        name == "cmd" || name == "cmd.exe"
+    }) {
+        return PathBuf::from(comspec);
+    }
+    if let Ok(root) = std::env::var("SystemRoot") {
+        return PathBuf::from(format!("{}\\System32\\cmd.exe", root.trim_matches('"')));
+    }
+    PathBuf::from("cmd.exe")
 }
 
 /// Reference `build_windows_shell_argv`, which reads the argument form from the

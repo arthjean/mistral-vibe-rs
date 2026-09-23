@@ -18,19 +18,38 @@ use std::path::Path;
 use crate::process::{ProcessChunk, ProcessStream};
 use crate::tools::ToolError;
 
-/// The bytes one stream produced, decoded and bounded by `limit`.
-pub(super) fn render_stream(
+/// The text one stream produced, decoded whole and then cut to its first
+/// `limit` characters, the way reference `Bash.run` slices the decoded string.
+pub(super) fn render_stream_chars(
     chunks: &[ProcessChunk],
     stream: ProcessStream,
     limit: usize,
-) -> (String, bool) {
+) -> String {
     let mut bytes = Vec::new();
     for chunk in chunks.iter().filter(|chunk| chunk.stream == stream) {
         bytes.extend_from_slice(&chunk.bytes);
     }
-    let truncated = bytes.len() > limit;
+    let text = decode_output(&bytes);
+    match text.char_indices().nth(limit) {
+        Some((end, _)) => text[..end].to_owned(),
+        None => text,
+    }
+}
+
+/// The text one stream produced, cut to its first `limit` bytes and then
+/// decoded, the way reference `_decode_limited` reads the Git Bash and
+/// PowerShell fallback streams.
+pub(super) fn render_stream_bytes(
+    chunks: &[ProcessChunk],
+    stream: ProcessStream,
+    limit: usize,
+) -> String {
+    let mut bytes = Vec::new();
+    for chunk in chunks.iter().filter(|chunk| chunk.stream == stream) {
+        bytes.extend_from_slice(&chunk.bytes);
+    }
     bytes.truncate(limit);
-    (decode_output(&bytes), truncated)
+    decode_output(&bytes)
 }
 
 /// Decodes captured console output the way reference `decode_safe` does for a

@@ -52,18 +52,19 @@ mod session;
 mod session_tools;
 mod specs;
 
-use decode::render_stream;
+use decode::{render_stream_bytes, render_stream_chars};
 use document::Document;
 pub use host::{HostShells, ShellRollout};
 use host::{ShellFamily, family_config, published_family};
 use policy::{
-    CommandWiring, command_argument, guarded_command, log_file_requirements, string_argument,
-    timeout_argument,
+    CommandWiring, command_argument, guarded_command, log_file_requirements, render_seconds,
+    stdin_requirements, string_argument, timeout_argument,
 };
-use session::{SessionShell, SessionStatus, guarded_session, run_managed_command, session_handler};
-use session_tools::{
-    is_family_session_id, resolve_log_path, run_log_file, run_output, run_sessions, run_stdin,
+use session::{
+    SessionShell, SessionStatus, guarded_session, kill_managed_session, run_managed_command,
+    session_handler,
 };
+use session_tools::{is_family_session_id, run_log_file, run_output, run_sessions, run_stdin};
 use specs::{command_spec, log_file_spec, output_spec, sessions_spec, stdin_spec};
 
 /// Reference `TerminalSessionManager.base_dir`, relative to the Vibe home.
@@ -191,7 +192,11 @@ impl ShellTools {
         // drives, not from the host, so the resolver follows the family. The
         // settings cache is shared, so an operator's `tools.<family>` entry
         // still reaches every tool published below.
-        let config = config.clone().with_posix_shell(family.uses_posix_shell());
+        // Reference `uses_posix_shell` is false for a Windows host whose `bash`
+        // tool falls back to `cmd.exe`, which composes the Windows lists.
+        let config = config.clone().with_posix_shell(
+            family.uses_posix_shell() && shell_config.flavor != crate::shell::ShellFlavor::Cmd,
+        );
         let shell = self.session_shell(session_id, family)?;
         let platform = host.platform;
         let working_directory = working_directory.to_path_buf();
@@ -234,6 +239,7 @@ impl ShellTools {
         if !managed {
             return Ok(outcomes);
         }
+        let flavor = shell_config.flavor;
         outcomes.push(publish(
             command_spec(family, true),
             guarded_command(CommandWiring {
@@ -267,19 +273,27 @@ impl ShellTools {
                 ),
             ),
         )?);
+        let stdin_shell = shell.clone();
         outcomes.push(publish(
             stdin_spec(family),
-            guarded_session(
+            Arc::new(PolicyGuardedTool::new(
                 family.tool_name("stdin"),
-                policy,
-                approval,
+                policy.clone(),
+                approval.clone(),
+                Arc::new(move |invocation| {
+                    Ok(stdin_requirements(
+                        &stdin_shell,
+                        flavor,
+                        &invocation.arguments,
+                    ))
+                }),
                 session_handler(
                     shell.clone(),
                     config.clone(),
                     family.tool_name("stdin"),
                     run_stdin,
                 ),
-            ),
+            )),
         )?);
         outcomes.push(publish(
             sessions_spec(family),
@@ -295,16 +309,13 @@ impl ShellTools {
                 ),
             ),
         )?);
-        let log_shell = shell.clone();
         outcomes.push(publish(
             log_file_spec(family),
             Arc::new(PolicyGuardedTool::new(
                 family.tool_name("log_file"),
                 policy.clone(),
                 approval.clone(),
-                Arc::new(move |invocation| {
-                    log_file_requirements(&log_shell, &invocation.arguments)
-                }),
+                Arc::new(|invocation| Ok(log_file_requirements(&invocation.arguments))),
                 session_handler(
                     shell,
                     config.clone(),
@@ -324,13 +335,20 @@ impl ShellTools {
         let Some(shell) = self.take_session_shell(session_id)? else {
             return Ok(());
         };
-        // Each session's manifest is settled before its terminal is torn down,
-        // so a later process reads what happened to it rather than reporting a
-        // session this one deliberately stopped as orphaned.
-        for session in shell.managed.lock().await.values() {
-            if session.is_running() {
-                session.settle(SessionStatus::Killed, session.snapshot().1);
-            }
+        // Reference `TerminalRuntime.close` resets every family without
+        // clearing its logs: each running session is killed through the same
+        // ladder a `kill` action takes, so its manifest records `killed` and
+        // the status its process ended with rather than an orphan a later
+        // process would report.
+        let sessions = shell
+            .managed
+            .lock()
+            .await
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
+        for session in &sessions {
+            let _ = kill_managed_session(&shell, session, SessionStatus::Killed).await;
         }
         shell.managed.lock().await.clear();
         shell
@@ -451,6 +469,7 @@ fn command_handler(
                 // delegation covers the legacy variant and leaves the managed
                 // sessions the model addresses later on this host.
                 if !managed
+                    && shell.family == ShellFamily::Bash
                     && let Some(delegated) = delegated_command(
                         client.as_ref(),
                         &working_directory,
@@ -463,11 +482,20 @@ fn command_handler(
                 {
                     return Ok(delegated);
                 }
+                if !managed && shell.family != ShellFamily::Bash {
+                    return run_windows_fallback(
+                        &shell,
+                        &config,
+                        &working_directory,
+                        &arguments,
+                        &settings,
+                        client.as_ref(),
+                        &call_id,
+                    )
+                    .await;
+                }
                 if managed {
-                    run_managed_command(&shell, &config, &working_directory, &arguments, &settings)
-                        .await
-                } else {
-                    run_legacy_command(
+                    run_managed_command(
                         &shell,
                         &config,
                         &working_directory,
@@ -476,6 +504,9 @@ fn command_handler(
                         &output,
                     )
                     .await
+                } else {
+                    run_legacy_command(&shell, &config, &working_directory, &arguments, &settings)
+                        .await
                 }
             })
         },
@@ -495,7 +526,7 @@ async fn delegated_command(
         return Ok(None);
     };
     let command = command_argument(arguments)?;
-    let timeout = timeout_argument(arguments, settings);
+    let timeout = legacy_timeout(arguments, settings);
     let limit = settings
         .max_output_bytes
         .min(output.remaining_bytes().max(1));
@@ -513,7 +544,19 @@ async fn delegated_command(
         .map_err(|error| {
             ToolError::Execution(format!("the client terminal failed: {error}: `{command}`"))
         })?;
-    command_output(&command, result.stdout, result.stderr, result.returncode).map(Some)
+    // Reference `Bash.run` slices the client's two strings to
+    // `max_output_bytes` characters, as it slices its own.
+    let cut = |text: String| match text.char_indices().nth(limit) {
+        Some((end, _)) => text[..end].to_owned(),
+        None => text,
+    };
+    command_output(
+        &command,
+        cut(result.stdout),
+        cut(result.stderr),
+        result.returncode,
+    )
+    .map(Some)
 }
 
 async fn run_legacy_command(
@@ -522,19 +565,28 @@ async fn run_legacy_command(
     working_directory: &Path,
     arguments: &Value,
     settings: &ShellCommandConfig,
-    output: &ToolOutputSink,
 ) -> Result<ToolExecutionOutput, ToolError> {
     let command = command_argument(arguments)?;
-    let timeout = timeout_argument(arguments, settings);
+    let timeout = legacy_timeout(arguments, settings);
+    // Reference `spawn_shell_command` reads `$SHELL` at every call on a POSIX
+    // host, so a session whose environment changed runs the shell it now names.
+    let mut config = config.clone();
+    if shell.family == ShellFamily::Bash && config.flavor == crate::shell::ShellFlavor::Posix {
+        config.executable = host::legacy_posix_shell();
+    }
+    // Reference `Bash.run` slices each decoded stream to `max_output_bytes`
+    // characters, so the reader keeps enough bytes for that many characters of
+    // the widest encoding.
+    let limit = settings.max_output_bytes;
     let terminal_id = shell
         .terminals
         .run(process_spec(
             shell.family,
-            config,
+            &config,
             working_directory,
             &command,
             None,
-            settings.max_output_bytes,
+            limit.saturating_mul(4),
             false,
         ))
         .await
@@ -569,23 +621,176 @@ async fn run_legacy_command(
     guard.disarm();
     let _ = shell.terminals.release(&terminal_id).await;
 
-    let limit = settings
-        .max_output_bytes
-        .min(output.remaining_bytes().max(1));
     // Reference `_run_command` cuts each stream to the window and publishes no
     // field saying so, so a truncated result is silent here too.
-    let (stdout, _) = render_stream(&read.chunks, ProcessStream::Stdout, limit);
-    let (stderr, _) = render_stream(&read.chunks, ProcessStream::Stderr, limit);
+    let stdout = render_stream_chars(&read.chunks, ProcessStream::Stdout, limit);
+    let stderr = render_stream_chars(&read.chunks, ProcessStream::Stderr, limit);
     let status = exit_status(&read.state);
     command_output(&command, stdout, stderr, status)
 }
 
+/// Runs one command through the Git Bash or PowerShell tool that stands in
+/// when the managed sessions are off.
+///
+/// Reference `GitBash.run` and `WindowsShell.run`: the call's `cwd`, `env` and
+/// `shell` apply, the shell must resolve to the family's interpreter, the wait
+/// is `timeout`, else `timeout_seconds`, else the default, capped at
+/// `max_timeout_seconds`, each stream is cut to `max_output_bytes` bytes before
+/// it is decoded, and the result names the shell that ran. A client hosting a
+/// terminal runs the resolved interpreter with the family's variables and the
+/// call's overrides.
+async fn run_windows_fallback(
+    shell: &SessionShell,
+    config: &ShellConfig,
+    working_directory: &Path,
+    arguments: &Value,
+    settings: &ShellCommandConfig,
+    client: Option<&ClientToolIo>,
+    call_id: &str,
+) -> Result<ToolExecutionOutput, ToolError> {
+    let command = command_argument(arguments)?;
+    let timeout = timeout_argument(arguments, settings);
+    let cwd = string_argument(arguments, "cwd")
+        .filter(|cwd| !cwd.is_empty())
+        .map_or_else(
+            || working_directory.to_path_buf(),
+            |cwd| crate::shell::resolve_path(&working_directory.join(cwd)),
+        );
+    let resolved = host::resolve_session_shell(
+        shell.family,
+        config,
+        string_argument(arguments, "shell"),
+        settings.shell.as_deref(),
+    )?;
+    let executable = resolved.executable.to_string_lossy().into_owned();
+    let limit = settings.max_output_bytes;
+    let timed_out = || {
+        ToolError::Execution(format!(
+            "the command timed out after {}s: `{command}`",
+            render_seconds(timeout)
+        ))
+    };
+    if let Some(client) = client.filter(|client| client.supports_terminal()) {
+        let mut environment = shell
+            .family
+            .environment(false)
+            .into_iter()
+            .collect::<std::collections::BTreeMap<_, _>>();
+        if let Some(Value::Object(overrides)) = arguments.get("env") {
+            for (key, value) in overrides {
+                if let Some(value) = value.as_str() {
+                    environment.insert(key.clone(), value.to_owned());
+                }
+            }
+        }
+        let result = client
+            .run_shell(ClientShellRequest {
+                tool_call_id: Some(call_id.to_owned()),
+                command: executable.clone(),
+                args: Some(
+                    resolved
+                        .arguments
+                        .iter()
+                        .cloned()
+                        .chain(std::iter::once(command.clone()))
+                        .collect(),
+                ),
+                env: Some(environment.into_iter().collect()),
+                cwd: cwd.to_string_lossy().into_owned(),
+                output_byte_limit: u64::try_from(limit).unwrap_or(u64::MAX),
+                timeout,
+            })
+            .await
+            .map_err(|error| {
+                ToolError::Execution(format!("the client terminal failed: {error}: `{command}`"))
+            })?;
+        let cut = |text: String| match text.char_indices().nth(limit) {
+            Some((end, _)) => text[..end].to_owned(),
+            None => text,
+        };
+        return command_output_with_shell(
+            &command,
+            &executable,
+            cut(result.stdout),
+            cut(result.stderr),
+            result.returncode,
+        );
+    }
+    let terminal_id = shell
+        .terminals
+        .run(process_spec(
+            shell.family,
+            &resolved,
+            &cwd,
+            &command,
+            arguments.get("env"),
+            limit,
+            false,
+        ))
+        .await
+        .map_err(process_error)?;
+    let mut guard = TerminalGuard::new(shell.terminals.clone(), terminal_id.clone());
+    shell
+        .terminals
+        .close_stdin(&terminal_id)
+        .await
+        .map_err(process_error)?;
+    let Ok(read) = tokio::time::timeout(timeout, shell.terminals.wait(&terminal_id)).await else {
+        shell
+            .terminals
+            .interrupt(&terminal_id)
+            .await
+            .map_err(process_error)?;
+        let _ = shell.terminals.release(&terminal_id).await;
+        guard.disarm();
+        return Err(timed_out());
+    };
+    let read = read.map_err(process_error)?;
+    guard.disarm();
+    let _ = shell.terminals.release(&terminal_id).await;
+    let stdout = render_stream_bytes(&read.chunks, ProcessStream::Stdout, limit);
+    let stderr = render_stream_bytes(&read.chunks, ProcessStream::Stderr, limit);
+    command_output_with_shell(
+        &command,
+        &executable,
+        stdout,
+        stderr,
+        exit_status(&read.state),
+    )
+}
+
+/// Reference `Bash.run`'s wait: `args.timeout or default_timeout`, so a zero
+/// means the default, and no ceiling applies to the legacy variant.
+fn legacy_timeout(arguments: &Value, settings: &ShellCommandConfig) -> u64 {
+    arguments["timeout"]
+        .as_i64()
+        .filter(|seconds| *seconds != 0)
+        .map_or(settings.default_timeout, |seconds| {
+            u64::try_from(seconds).unwrap_or(0)
+        })
+}
+
 /// What one finished command reports, whether this host ran it or a client did.
 ///
-/// A non-zero status is a tool failure rather than a result, so the two paths
-/// share this rather than each deciding when a command counts as failed.
+/// Reference `completed_shell_result`: a non-zero status is a tool failure
+/// rather than a result, and a success publishes `CapturedShellResult` in its
+/// declared order, `command`, `shell`, `exit_code`, `stdout` and `stderr`,
+/// followed by the computed `returncode` alias. The legacy tools pass no shell,
+/// so the field is the model's empty default.
 fn command_output(
     command: &str,
+    stdout: String,
+    stderr: String,
+    status: i32,
+) -> Result<ToolExecutionOutput, ToolError> {
+    command_output_with_shell(command, "", stdout, stderr, status)
+}
+
+/// [`command_output`] naming the shell that ran, which the Git Bash and
+/// PowerShell fallbacks publish.
+fn command_output_with_shell(
+    command: &str,
+    shell: &str,
     stdout: String,
     stderr: String,
     status: i32,
@@ -598,6 +803,8 @@ fn command_output(
     }
     Ok(Document::new()
         .field("command", command)
+        .field("shell", shell)
+        .field("exit_code", status)
         .field("stdout", stdout)
         .field("stderr", stderr)
         .field("returncode", status)
@@ -621,14 +828,22 @@ fn process_spec(
         .chain(std::iter::once(command.to_owned()))
         .collect();
     // Both streams share one budget in the reader, so the spec carries what the
-    // two rendered streams may need together.
-    spec.max_output_bytes = max_output_bytes.saturating_mul(2);
+    // two rendered streams may need together. A managed session is different:
+    // reference `_reader_loop` appends every byte to the session log, which is
+    // what the polling tools page through, so nothing bounds its capture but
+    // the disk.
+    spec.max_output_bytes = if managed {
+        usize::MAX
+    } else {
+        max_output_bytes.saturating_mul(2)
+    };
     // A managed session outlives its call and is fed control keys, which only a
     // terminal turns into signals, so it asks for one; the legacy variant runs
     // one command to completion and needs none.
     spec.terminal = managed;
     // The family's own variables go in first: the reference merges the call's
     // overrides over them, so a call may still ask for a pager it will read.
+    spec.unset_environment = family.unset_environment(managed);
     for (key, value) in family.environment(managed) {
         spec.environment.insert(key, value);
     }
@@ -646,10 +861,14 @@ fn process_error(error: ProcessError) -> ToolError {
     ToolError::Execution(error.to_string())
 }
 
+/// The status a finished terminal reports, the way Python's
+/// `Popen.returncode` reports it: the exit code, or the negated number of the
+/// signal that ended the child.
 fn exit_status(state: &TerminalState) -> i32 {
     match state {
-        TerminalState::Exited { code, .. } | TerminalState::Interrupted { code } => {
-            code.unwrap_or(-1)
+        TerminalState::Exited { code, signal, .. }
+        | TerminalState::Interrupted { code, signal } => {
+            code.or_else(|| signal.map(|signal| -signal)).unwrap_or(-1)
         }
         TerminalState::Running => 0,
         TerminalState::Failed { .. } => -1,

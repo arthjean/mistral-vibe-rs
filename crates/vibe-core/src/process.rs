@@ -56,9 +56,24 @@ pub struct ProcessChunk {
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum TerminalState {
     Running,
-    Exited { code: Option<i32>, success: bool },
-    Interrupted { code: Option<i32> },
-    Failed { message: String },
+    Exited {
+        code: Option<i32>,
+        success: bool,
+        /// The signal that ended the child, which a process killed by one
+        /// reports instead of a code. Kept off the wire: the terminal state a
+        /// client reads is unchanged, and the shell tools read it to report the
+        /// negated signal number the way Python's `Popen.returncode` does.
+        #[serde(default, skip)]
+        signal: Option<i32>,
+    },
+    Interrupted {
+        code: Option<i32>,
+        #[serde(default, skip)]
+        signal: Option<i32>,
+    },
+    Failed {
+        message: String,
+    },
 }
 
 impl TerminalState {
@@ -73,6 +88,9 @@ pub struct ProcessSpec {
     pub arguments: Vec<String>,
     pub working_directory: PathBuf,
     pub environment: BTreeMap<String, String>,
+    /// Inherited variables the child must not see, removed before
+    /// [`ProcessSpec::environment`] is applied.
+    pub unset_environment: Vec<String>,
     /// The ceiling on what one process may capture.
     ///
     /// This is the only bound on a drain: the queue behind it is unbounded, so
@@ -95,6 +113,7 @@ impl ProcessSpec {
             arguments: Vec::new(),
             working_directory: working_directory.into(),
             environment: BTreeMap::new(),
+            unset_environment: Vec::new(),
             max_output_bytes: DEFAULT_MAX_OUTPUT_BYTES,
             terminal: false,
         }
@@ -213,6 +232,7 @@ impl TerminalManager {
                 arguments: &spec.arguments,
                 working_directory: &spec.working_directory,
                 environment: &spec.environment,
+                unset_environment: &spec.unset_environment,
             })
             .map_err(|failures| ProcessError::Terminal {
                 program: spec.program.clone(),
@@ -247,8 +267,11 @@ impl TerminalManager {
                 let mut command = Command::new(&spec.program);
                 command
                     .args(&spec.arguments)
-                    .current_dir(&spec.working_directory)
-                    .envs(&spec.environment);
+                    .current_dir(&spec.working_directory);
+                for key in &spec.unset_environment {
+                    command.env_remove(key);
+                }
+                command.envs(&spec.environment);
                 let (child, pipes) =
                     ChildGroup::spawn(&mut command).map_err(|source| ProcessError::Spawn {
                         program: spec.program.clone(),
@@ -416,7 +439,10 @@ impl TerminalManager {
             .reap_group(self.cleanup_grace, true)
             .await
             .map_err(|error| process.termination_error(error))?;
-        *process.state.lock().await = TerminalState::Interrupted { code: status.code };
+        *process.state.lock().await = TerminalState::Interrupted {
+            code: status.code,
+            signal: status.signal,
+        };
         Ok(())
     }
 
@@ -520,6 +546,7 @@ impl TerminalManager {
             *process.state.lock().await = TerminalState::Exited {
                 code: status.code,
                 success: status.success,
+                signal: status.signal,
             };
         }
         Ok(())
@@ -761,7 +788,8 @@ mod tests {
             output.state,
             TerminalState::Exited {
                 code: Some(0),
-                success: true
+                success: true,
+                signal: None,
             }
         );
         let stdout = output

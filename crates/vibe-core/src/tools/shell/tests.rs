@@ -602,11 +602,11 @@ async fn a_managed_override_stops_an_allowlisted_command_from_running_outright()
         (json!({"command": "pwd", "cwd": "/tmp"}), "outside workdir"),
         (
             json!({"command": "pwd", "shell": "/usr/bin/python3"}),
-            "shell override: /usr/bin/python3",
+            "custom shell (/usr/bin/python3)",
         ),
         (
             json!({"command": "pwd", "env": {"LD_PRELOAD": "/tmp/hijack.so"}}),
-            "env override: LD_PRELOAD",
+            "custom environment (LD_PRELOAD)",
         ),
     ] {
         let harness = harness(ShellRollout::Managed, ApprovalDecision::Deny).await;
@@ -758,13 +758,14 @@ async fn a_flood_of_output_is_bounded_and_the_cut_is_silent() {
         .await
         .expect("a chatty command still succeeds");
     let stdout = output.typed_result["stdout"].as_str().expect("stdout");
-    assert!(
-        stdout.len() <= shell_settings().max_output_bytes,
-        "the captured stream stays inside the reference limit"
+    assert_eq!(
+        stdout.chars().count(),
+        shell_settings().max_output_bytes,
+        "the captured stream is cut to the reference limit in characters"
     );
     assert_eq!(
         output.typed_result.as_object().expect("an object").len(),
-        4,
+        6,
         "{output:?}"
     );
     assert!(
@@ -1018,6 +1019,100 @@ async fn stdin_takes_exactly_one_input_and_refuses_bad_base64_before_writing() {
     assert!(log.exists());
 }
 
+/// Input to a session that may be a pager asks, because a pager can run a
+/// command from its own prompt; input to any other session follows the
+/// configured `always`. Reference `BashStdin.resolve_permission`.
+#[tokio::test]
+async fn input_to_a_pager_session_is_asked_about() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    let plain = background_session(&harness, "cat > /dev/null").await;
+    let pager = background_session(&harness, "sleep 30; eval git log").await;
+    let asked = harness.approval_count();
+
+    harness
+        .call("bash_stdin", json!({"session_id": plain, "text": "a"}))
+        .await
+        .expect("input to a plain session");
+    assert_eq!(harness.approval_count(), asked, "{}", harness.approvals());
+
+    harness
+        .call("bash_stdin", json!({"session_id": pager, "text": "q"}))
+        .await
+        .expect("approved input to a pager session");
+    assert_eq!(harness.approval_count(), asked + 1);
+    assert!(
+        harness
+            .approvals()
+            .contains(&format!("input to pager session {pager}")),
+        "{}",
+        harness.approvals()
+    );
+}
+
+/// Reading a log is always granted; writing one falls to the configured
+/// permission and names no path. Reference `BashLogFile.resolve_permission`.
+#[tokio::test]
+async fn a_log_read_is_granted_and_a_log_write_asks() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::Deny).await;
+    let refused = harness
+        .call(
+            "bash_log_file",
+            json!({"action": "write", "relative_path": "notes.txt", "content": "x"}),
+        )
+        .await
+        .expect_err("a denied write does not run");
+    assert!(refused.to_string().contains("denied"), "{refused}");
+    assert_eq!(harness.approval_count(), 1);
+
+    harness
+        .call(
+            "bash_log_file",
+            json!({"action": "read", "relative_path": "missing.txt"}),
+        )
+        .await
+        .expect("a read runs without asking, whatever the decision");
+    assert_eq!(harness.approval_count(), 1, "a read is never asked about");
+}
+
+/// A relative log path is resolved before it is positioned: a `..` that lands
+/// back under the shell-tool directory is accepted, and a symlink aiming out
+/// of it is refused.
+#[tokio::test]
+async fn a_log_path_is_positioned_after_it_resolves() {
+    let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
+    harness
+        .call(
+            "bash_log_file",
+            json!({"action": "write", "relative_path": "notes.txt", "content": "one"}),
+        )
+        .await
+        .expect("write");
+    let read = harness
+        .call(
+            "bash_log_file",
+            json!({"action": "read", "relative_path": "sessions/../notes.txt"}),
+        )
+        .await
+        .expect("a path that folds back inside reads");
+    assert_eq!(read.typed_result["content"], json!("one"));
+
+    #[cfg(unix)]
+    {
+        let secret = harness.root().join("secret.txt");
+        std::fs::write(&secret, "not for the model").expect("secret");
+        std::os::unix::fs::symlink(&secret, harness.shell().log_root.join("link.txt"))
+            .expect("link");
+        let escaped = harness
+            .call(
+                "bash_log_file",
+                json!({"action": "read", "relative_path": "link.txt"}),
+            )
+            .await
+            .expect_err("a link aiming out is refused");
+        assert!(escaped.to_string().contains("escapes"), "{escaped}");
+    }
+}
+
 /// A session belongs to the Vibe session, not to the turn that started it, so
 /// a later call can list, inspect and stop it.
 #[tokio::test]
@@ -1055,11 +1150,19 @@ async fn a_session_started_by_one_call_is_listed_inspected_and_killed_by_another
         .await
         .expect("kill");
     assert_eq!(killed.typed_result["session"]["status"], json!("killed"));
+    // Reference `kill` keeps the session in its table, so it is still listed,
+    // now as killed.
     let after = harness
         .call("bash_sessions", json!({"action": "list"}))
         .await
         .expect("list");
-    assert_eq!(after.typed_result["sessions"], json!([]));
+    let listed = after.typed_result["sessions"]
+        .as_array()
+        .expect("a list")
+        .clone();
+    assert_eq!(listed.len(), 1, "{listed:?}");
+    assert_eq!(listed[0]["session_id"], json!(session));
+    assert_eq!(listed[0]["status"], json!("killed"));
 }
 
 /// `inspect` and `kill` name the session they need rather than guessing one.
@@ -1291,23 +1394,23 @@ async fn closing_the_session_terminates_every_session_it_left_running() {
     );
 }
 
-/// The reference clamps the foreground wait; a request past the ceiling lands
-/// on it rather than running unbounded.
+/// The reference clamps the managed foreground wait; a request past the
+/// ceiling lands on it rather than running unbounded, and a fractional or zero
+/// wait is honored as asked.
 #[test]
 fn the_foreground_wait_is_bounded_by_the_reference_ceiling() {
+    use super::policy::timeout_argument;
     let settings = shell_settings();
-    assert_eq!(timeout_argument(&json!({}), &settings), 300);
-    assert_eq!(timeout_argument(&json!({"timeout": 5}), &settings), 5);
-    // The reference reads `args.timeout or default`, so a zero is the default.
-    assert_eq!(timeout_argument(&json!({"timeout": 0}), &settings), 300);
-    assert_eq!(
-        timeout_argument(&json!({"timeout": 100_000}), &settings),
-        600
-    );
-    assert_eq!(
-        timeout_argument(&json!({"timeout_seconds": 1.2}), &settings),
-        2
-    );
+    let seconds = |arguments: Value, settings: &ShellCommandConfig| {
+        timeout_argument(&arguments, settings).as_secs_f64()
+    };
+    assert_eq!(seconds(json!({}), &settings), 300.0);
+    assert_eq!(seconds(json!({"timeout": 5}), &settings), 5.0);
+    // `ExperimentalBash.run` reads `timeout` whenever it is not None, so a zero
+    // checks the session once instead of waiting the default.
+    assert_eq!(seconds(json!({"timeout": 0}), &settings), 0.0);
+    assert_eq!(seconds(json!({"timeout": 100_000}), &settings), 600.0);
+    assert_eq!(seconds(json!({"timeout_seconds": 1.2}), &settings), 1.2);
 
     // Both bounds are the operator's to move.
     let resolver = ToolConfigResolver::new();
@@ -1317,10 +1420,21 @@ fn the_foreground_wait_is_bounded_by_the_reference_ceiling() {
             .expect("settings parse"),
     );
     let configured: ShellCommandConfig = resolver.view("bash");
-    assert_eq!(timeout_argument(&json!({}), &configured), 12);
+    assert_eq!(seconds(json!({}), &configured), 12.0);
+    assert_eq!(seconds(json!({"timeout": 100_000}), &configured), 30.0);
+}
+
+/// Reference `Bash.run` reads `args.timeout or default_timeout` and applies no
+/// ceiling to the legacy variant.
+#[test]
+fn the_legacy_wait_reads_the_default_for_zero_and_has_no_ceiling() {
+    let settings = shell_settings();
+    assert_eq!(legacy_timeout(&json!({}), &settings), 300);
+    assert_eq!(legacy_timeout(&json!({"timeout": 0}), &settings), 300);
+    assert_eq!(legacy_timeout(&json!({"timeout": 5}), &settings), 5);
     assert_eq!(
-        timeout_argument(&json!({"timeout": 100_000}), &configured),
-        30
+        legacy_timeout(&json!({"timeout": 100_000}), &settings),
+        100_000
     );
 }
 
@@ -1359,13 +1473,28 @@ fn the_shell_lists_follow_the_family_rather_than_the_host() {
 fn every_advertised_control_key_resolves_to_bytes() {
     let counted = AtomicUsize::new(0);
     for (name, sequence) in CONTROL_KEYS {
-        let bytes = super::session_tools::stdin_bytes(&json!({"control": [name]}))
-            .expect("a known control key");
+        let bytes =
+            super::session_tools::stdin_bytes(ShellFamily::Bash, &json!({"control": [name]}))
+                .expect("a known control key");
         assert_eq!(bytes, sequence);
         counted.fetch_add(1, Ordering::Relaxed);
     }
     assert_eq!(counted.load(Ordering::Relaxed), CONTROL_KEYS.len());
-    assert!(super::session_tools::stdin_bytes(&json!({"control": ["ctrl_shift_q"]})).is_err());
+    assert!(
+        super::session_tools::stdin_bytes(ShellFamily::Bash, &json!({"control": ["ctrl_shift_q"]}))
+            .is_err()
+    );
+    // A PowerShell console ends a line with a carriage return.
+    assert_eq!(
+        super::session_tools::stdin_bytes(ShellFamily::PowerShell, &json!({"text": "a\r\nb\nc"}))
+            .expect("text"),
+        b"a\rb\rc".to_vec()
+    );
+    assert_eq!(
+        super::session_tools::stdin_bytes(ShellFamily::Bash, &json!({"text": "a\r\nb"}))
+            .expect("text"),
+        b"a\r\nb".to_vec()
+    );
 }
 
 // --------------------------------------------------------------------------
@@ -1618,9 +1747,10 @@ fn the_argument_form_follows_the_resolved_executable() {
 }
 
 /// The rule reaches the running process, not only the specification: a `shell`
-/// override carries the argument form of the executable it names rather than
-/// the one the session resolved, which is what reference
-/// `build_windows_shell_argv` does with the shell it is handed.
+/// override carries the argument form of the executable it names, which is
+/// what reference `build_windows_shell_argv` does with the shell it is handed,
+/// and reference `resolve_git_bash_shell_spec` refuses an override that does
+/// not name a bash.
 #[cfg(unix)]
 #[tokio::test]
 async fn a_shell_override_carries_the_argument_form_of_the_executable_it_names() {
@@ -1632,27 +1762,39 @@ async fn a_shell_override_carries_the_argument_form_of_the_executable_it_names()
         ApprovalDecision::ApproveOnce,
     )
     .await;
-    // A stand-in for the PowerShell an operator would point a Windows session
-    // at, which reports the argument form it was launched with.
-    let executable = harness.root().join("pwsh.exe");
-    std::fs::write(&executable, "#!/bin/sh\necho \"$@\"\n").expect("the stand-in shell is written");
-    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755))
-        .expect("the stand-in shell is executable");
-
+    // Stand-ins for the shells an operator would point a Windows session at,
+    // which report the argument form they were launched with.
+    let stand_in = |name: &str| {
+        let executable = harness.root().join(name);
+        std::fs::write(&executable, "#!/bin/sh\necho \"$@\"\n")
+            .expect("the stand-in shell is written");
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755))
+            .expect("the stand-in shell is executable");
+        executable
+    };
+    let bash = stand_in("bash.exe");
     let output = harness
         .call(
             "git_bash",
-            json!({"command": "report", "shell": executable.to_string_lossy()}),
+            json!({"command": "report", "shell": bash.to_string_lossy()}),
         )
         .await
         .expect("the overridden shell runs");
     assert!(
-        output
-            .model_text
-            .contains("-NoLogo -NoProfile -Command report"),
+        output.model_text.contains("-c report"),
         "{}",
         output.model_text
     );
+
+    let pwsh = stand_in("pwsh.exe");
+    let refused = harness
+        .call(
+            "git_bash",
+            json!({"command": "report", "shell": pwsh.to_string_lossy()}),
+        )
+        .await
+        .expect_err("a Git Bash session refuses a PowerShell override");
+    assert!(refused.to_string().contains("bash.exe"), "{refused}");
 }
 
 /// Reference `get_windows_bash_path` scans every `PATH` entry rather than
@@ -1927,6 +2069,7 @@ fn a_git_bash_path_is_translated_onto_the_windows_workspace_root() {
         None,
         "more /c/work/notes.txt",
         &ShellCommandLists::from_config(&shell_settings()),
+        None,
     );
     assert_eq!(inside.path_operands, ["/c/work/notes.txt"]);
     assert!(
@@ -1949,6 +2092,7 @@ fn a_git_bash_path_is_translated_onto_the_windows_workspace_root() {
         None,
         "more /c/work/notes.txt",
         &ShellCommandLists::from_config(&shell_settings()),
+        None,
     );
     assert!(
         untranslated
@@ -1967,6 +2111,7 @@ fn a_git_bash_path_is_translated_onto_the_windows_workspace_root() {
         None,
         "cat /d/secrets/notes.txt",
         &ShellCommandLists::from_config(&shell_settings()),
+        None,
     );
     assert!(
         outside
@@ -2089,7 +2234,8 @@ async fn a_client_hosting_a_terminal_runs_the_command_through_it() {
         .await
         .expect("the client answers the command");
     assert_eq!(
-        output.model_text, "command: echo ok\nstdout: from the editor\n\nstderr: \nreturncode: 0",
+        output.model_text,
+        "command: echo ok\nshell: \nexit_code: 0\nstdout: from the editor\n\nstderr: \nreturncode: 0",
         "the delegated path publishes the same document as the local one"
     );
     assert_eq!(
@@ -2118,6 +2264,46 @@ async fn a_client_hosting_a_terminal_runs_the_command_through_it() {
     assert_eq!(cwd, &harness.root().to_string_lossy());
     assert!(*output_byte_limit > 0);
     assert_eq!(tool_call_id.as_deref(), Some("bash-1"));
+}
+
+/// Reference `GitBash.run` through a client terminal: the resolved Git Bash
+/// runs with its argument form, the family's variables under the call's
+/// overrides, in the call's `cwd`, and the result names that shell.
+#[tokio::test]
+async fn the_git_bash_fallback_runs_its_resolved_shell_on_the_client() {
+    let client = TerminalClient::hosting(true);
+    let harness =
+        terminal_client_harness_on(git_bash_host(), ShellRollout::Managed, Some(client.clone()))
+            .await;
+    std::fs::create_dir_all(harness.root().join("nested")).expect("nested");
+    let output = harness
+        .call(
+            "git_bash",
+            json!({"command": "echo ok", "cwd": "nested", "env": {"PAGER": "less"}}),
+        )
+        .await
+        .expect("the client answers the command");
+    assert_eq!(output.typed_result["shell"], json!("/bin/bash"));
+    let requests = client.requests.lock().expect("requests");
+    let ClientToolRequest::TerminalCreate {
+        command,
+        args,
+        env,
+        cwd,
+        ..
+    } = &requests[0]
+    else {
+        unreachable!("the first request creates the terminal: {requests:?}");
+    };
+    assert_eq!(command, "/bin/bash");
+    assert_eq!(
+        args.as_deref(),
+        Some(&["-c".to_owned(), "echo ok".to_owned()][..])
+    );
+    let env = env.as_ref().expect("the family's variables travel");
+    assert_eq!(env.get("PAGER").map(String::as_str), Some("less"));
+    assert_eq!(env.get("CI").map(String::as_str), Some("true"));
+    assert!(cwd.ends_with("nested"), "{cwd}");
 }
 
 /// A client that declared no terminal leaves the command on this host, so a
@@ -2246,24 +2432,29 @@ async fn a_hard_timeout_terminates_the_whole_process_group() {
     );
 }
 
-/// Output stays bounded by the session's budget and the excess is reported as
-/// dropped rather than buffered without limit.
+/// A managed session keeps everything its process printed: reference
+/// `_reader_loop` appends every byte to the log the polling tools page through,
+/// so a chatty background command loses nothing to a capture budget.
 #[tokio::test]
-async fn a_chatty_session_reports_its_dropped_output() {
+async fn a_chatty_session_keeps_its_whole_output() {
     let harness = harness(ShellRollout::Managed, ApprovalDecision::ApproveOnce).await;
     let session = background_session(
         &harness,
         "for i in $(seq 1 4000); do echo aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; done",
     )
     .await;
+    let mut cursor = 0_u64;
     for _ in 0..200 {
         let polled = harness
             .call(
                 "bash_output",
-                json!({"session_id": session, "wait_seconds": 1}),
+                json!({"session_id": session, "cursor": cursor, "wait_seconds": 1}),
             )
             .await
             .expect("the poll answers");
+        cursor = polled.typed_result["next_cursor"]
+            .as_u64()
+            .unwrap_or(cursor);
         if polled.typed_result["status"] != "running" {
             let size = super::session_tools::log_size(
                 &harness
@@ -2271,10 +2462,8 @@ async fn a_chatty_session_reports_its_dropped_output() {
                     .sessions_directory()
                     .join(format!("{session}.log")),
             );
-            assert!(
-                size <= 2 * 30_000,
-                "the log outgrew the session output budget: {size}"
-            );
+            // 4 000 lines of 40 characters, each ended by the terminal's CRLF.
+            assert_eq!(size, 4_000 * 42, "the log lost output");
             return;
         }
     }
@@ -2320,6 +2509,7 @@ async fn a_session_whose_terminal_cannot_start_fails_instead_of_running_on_pipes
         arguments: &[],
         working_directory: &std::env::temp_dir(),
         environment: &environment,
+        unset_environment: &[],
     })
     .err()
     .expect("an unstartable program exhausts the ladder");

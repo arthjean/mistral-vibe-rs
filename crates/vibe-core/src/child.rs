@@ -33,13 +33,20 @@ pub(crate) const GROUP_POLL_INTERVAL: Duration = Duration::from_millis(10);
 pub(crate) struct ChildExit {
     pub(crate) code: Option<i32>,
     pub(crate) success: bool,
+    /// The signal that ended the child, when one did.
+    pub(crate) signal: Option<i32>,
 }
 
 impl From<ExitStatus> for ChildExit {
     fn from(status: ExitStatus) -> Self {
+        #[cfg(unix)]
+        let signal = std::os::unix::process::ExitStatusExt::signal(&status);
+        #[cfg(not(unix))]
+        let signal = None;
         Self {
             code: status.code(),
             success: status.success(),
+            signal,
         }
     }
 }

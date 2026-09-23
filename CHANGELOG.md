@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- Start a managed shell session in the shell the reference resolves (the
+  requested one, then the `shell` setting, then zsh, bash and sh), report a
+  signaled process as the negated signal number, and keep answering for a
+  killed session. A managed command result carries its interleaved text in
+  `output` alone, and `max_chars` bounds the window as `max_bytes` does.
+
+- Ask about shell commands as the reference does: option guardrails for
+  `find`, `git`, `grep`, `sort` and the other inspected readers, commands
+  reached through `eval` and `exec`, a `cd` that moves later commands, and git
+  repositories whose configuration can start a program. Managed bash and Git
+  Bash also ask about a call's own cwd, shell and environment, and PowerShell
+  commands are read by their own grammar, with file redirections and paths
+  that cannot be positioned asked about.
+
+- Ask before sending input to a session that runs `git`, `less` or `more`, or
+  to an unknown one, and grant a log read without asking. A log path that
+  resolves back inside the log directory is accepted.
+
+- Run the Git Bash and PowerShell fallbacks with the call's cwd, environment,
+  shell and timeout, and name the shell in their result.
+
 - Accept a bare `--worktree`: Vibe creates a fresh worktree named after the
   prompt on the command line, or a random slug without one, on a
   `vibe/<name>` branch. A launch registers as a holder of its worktree, and

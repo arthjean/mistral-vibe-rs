@@ -1,20 +1,28 @@
 use std::collections::BTreeSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
 use crate::platform::{PathPolicyError, Platform, PolicyPath, parse_policy_path};
-use crate::policy::{PermissionMode, PermissionRequirement};
+use crate::policy::{PermissionContext, PermissionMode, PermissionRequirement, PermissionScope};
 use crate::scratchpad::is_scratchpad_path;
 use crate::tools::config::ShellCommandConfig;
 
+mod command_policy;
 mod extract;
+mod lexer;
+mod repository;
+mod windows;
 
 #[cfg(test)]
 mod shell_parity_tests;
 
-use extract::{ParsedCommand, parse_commands};
+use command_policy::{analyze_command_policy, has_option_guardrails, path_candidates};
 pub use extract::{REDIRECT_MARKER, extract_commands};
+use extract::{TextAnalysis, analyze_text};
+use lexer::{WordSplit, split_tokens, whitespace_words};
+pub(crate) use repository::resolve_path;
+use repository::{git_repository_identity, git_repository_requires_approval};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -72,6 +80,35 @@ pub struct ShellPolicyContext {
     /// something the operator is asked about. [`None`] for a session whose
     /// scratchpad could not be opened.
     pub scratchpad: Option<PathBuf>,
+    /// Which of the reference's two POSIX resolvers answers.
+    pub resolver: ShellResolver,
+    /// What the call's overrides require beside its command, appended after
+    /// everything the command earned.
+    ///
+    /// Reference `_build_context_permissions`: a custom shell and a custom
+    /// environment each carry one, and either keeps an allowlisted command from
+    /// being granted without a prompt.
+    pub context_requirements: Vec<PermissionRequirement>,
+    /// The call's environment overrides, which a PowerShell path may expand.
+    pub environment: Vec<(String, String)>,
+}
+
+/// The reference resolver a shell tool answers through.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ShellResolver {
+    /// Reference `Bash.resolve_permission` (`vibe/core/tools/builtins/bash.py`),
+    /// the non-managed `bash` tool: operands resolve against the session
+    /// directory, the denylist matches the command as written, and a host
+    /// whose shell is not POSIX defers to the configured permission.
+    #[default]
+    Legacy,
+    /// Reference `_resolve_posix_shell_permission`
+    /// (`vibe/core/tools/builtins/experimental_bash.py`), behind managed `bash`
+    /// and both `git_bash` variants: operands resolve against the call's `cwd`,
+    /// which is itself an outside directory when it leaves the workspace, the
+    /// denylist also matches the program's basename, and the context
+    /// requirements follow what the command earned.
+    Managed,
 }
 
 impl ShellPolicyContext {
@@ -84,7 +121,49 @@ impl ShellPolicyContext {
             roots: vec![working_directory.clone()],
             working_directory,
             scratchpad: None,
+            resolver: ShellResolver::Legacy,
+            context_requirements: Vec::new(),
+            environment: Vec::new(),
         }
+    }
+
+    /// The same context with the call's environment overrides.
+    #[must_use]
+    pub fn with_environment(mut self, environment: Vec<(String, String)>) -> Self {
+        self.environment = environment;
+        self
+    }
+
+    /// The same context answered by the managed resolver, from the call's
+    /// `cwd` and with `context_requirements` appended.
+    ///
+    /// Reference `resolve_tool_path(cwd, self.cwd)`: a relative `cwd` resolves
+    /// against the session directory. The roots stay what they were, so the
+    /// `cwd` is positioned against the workspace rather than against itself. A
+    /// `cwd` the policy cannot position is asked about as written.
+    #[must_use]
+    pub fn managed(
+        mut self,
+        flavor: ShellFlavor,
+        cwd: Option<&str>,
+        mut context_requirements: Vec<PermissionRequirement>,
+    ) -> Self {
+        if let Some(raw) = cwd.map(str::trim).filter(|raw| !raw.is_empty()) {
+            let expanded = expand_home(raw);
+            match normalize_operand(operand_platform(flavor), &self, &expanded) {
+                Ok(directory) => self.working_directory = directory,
+                Err(_) => context_requirements.insert(
+                    0,
+                    PermissionRequirement::outside_directory(&join_glob(
+                        &expanded,
+                        separator_for(operand_platform(flavor)),
+                    )),
+                ),
+            }
+        }
+        self.resolver = ShellResolver::Managed;
+        self.context_requirements = context_requirements;
+        self
     }
 
     /// The same context whose file tools may always reach `scratchpad`.
@@ -174,6 +253,28 @@ impl ShellCommandLists {
             .map(String::as_str)
     }
 
+    /// Reference `_matches_command_or_basename`, the managed resolver's
+    /// denylist: the segment as written, or with its program reduced to its
+    /// basename, so `/usr/bin/vim` is refused as `vim` is.
+    fn denied_by_basename(&self, segment: &str) -> Option<&str> {
+        let words = whitespace_words(segment);
+        let normalized = words.split_first().map(|(program, rest)| {
+            std::iter::once(host_basename(program))
+                .chain(rest.iter().map(String::as_str))
+                .collect::<Vec<_>>()
+                .join(" ")
+        });
+        self.denylist
+            .iter()
+            .find(|pattern| {
+                Self::matches(pattern, segment)
+                    || normalized
+                        .as_deref()
+                        .is_some_and(|normalized| Self::matches(pattern, normalized))
+            })
+            .map(String::as_str)
+    }
+
     /// Reference `_is_standalone_denylisted`: only a single-word segment is
     /// refused, by its whole text or by its basename, so `python3 script.py`
     /// runs where a bare `python3` does not.
@@ -183,7 +284,7 @@ impl ShellCommandLists {
         if words.next().is_some() {
             return None;
         }
-        let basename = first.rsplit(['/', '\\']).next().unwrap_or(first);
+        let basename = host_basename(first);
         self.denylist_standalone
             .iter()
             .find(|entry| entry.as_str() == first || entry.as_str() == basename)
@@ -206,6 +307,45 @@ impl ShellCommandLists {
             .find(|pattern| Self::matches(pattern, segment))
             .map(String::as_str)
     }
+}
+
+/// What a custom shell and a custom environment require beside the command.
+///
+/// Reference `_build_context_permissions` and
+/// `_build_git_bash_context_permissions`: the shell override carries itself
+/// verbatim as both patterns, so approving one interpreter never approves
+/// another, and the environment override is widened for the session because
+/// the names change per call. Neither is literal, so a stored grant still
+/// reads them as globs.
+#[must_use]
+pub fn override_requirements(
+    shell: Option<&str>,
+    environment: &[String],
+) -> Vec<PermissionRequirement> {
+    let mut requirements = Vec::new();
+    if let Some(shell) = shell.filter(|shell| !shell.is_empty()) {
+        let pattern = format!("shell override: {shell}");
+        requirements.push(PermissionRequirement {
+            scope: PermissionScope::CommandPattern,
+            invocation_pattern: pattern.clone(),
+            session_pattern: pattern,
+            label: format!("custom shell ({shell})"),
+            literal: false,
+        });
+    }
+    if !environment.is_empty() {
+        let mut names = environment.to_vec();
+        names.sort();
+        let names = names.join(", ");
+        requirements.push(PermissionRequirement {
+            scope: PermissionScope::CommandPattern,
+            invocation_pattern: format!("env override: {names}"),
+            session_pattern: "env override *".to_owned(),
+            label: format!("custom environment ({names})"),
+            literal: false,
+        });
+    }
+    requirements
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -272,22 +412,20 @@ const MUTATING_PATH_COMMANDS: [&str; 8] =
 /// The set is the reference union: the eight mutating commands and every
 /// read-only command of the branch, which is what makes it a superset of the
 /// read-only allowlist by construction.
-fn inspects_paths(flavor: ShellFlavor, program: &str) -> bool {
+fn inspects_paths(program: &str) -> bool {
     MUTATING_PATH_COMMANDS.contains(&program)
-        || crate::tools::config::shell_read_only_commands(matches!(
-            flavor,
-            ShellFlavor::Posix | ShellFlavor::GitBash
-        ))
-        .contains(&program)
+        || crate::tools::config::shell_read_only_commands(true).contains(&program)
 }
 
 /// Resolves the policy for `command` against the four configured lists.
 ///
-/// Reference `BashTool.resolve_permission`, in its order: the grammar extracts
-/// the segments, a denylist or standalone-denylist match refuses the whole
-/// command, the operands that leave the workspace are collected, an
-/// unconditionally allowed command runs, and everything else becomes the
-/// requirements the operator answers.
+/// The two POSIX flavors answer through the reference resolver `context`
+/// names, in its order: the grammar reads the text, the guardrails and the
+/// denylists run over every command a wrapper exposes, the operands that leave
+/// the workspace are collected, an unconditionally allowed command runs, and
+/// everything else becomes the requirements the operator answers. A `Cmd`
+/// host is not a POSIX shell, where the reference `bash` tool resolves nothing
+/// and the configured permission applies.
 ///
 /// Nothing is denied outside the two denylists. A command this port cannot
 /// classify reaches an approval prompt, which is the direction the guard is
@@ -298,87 +436,85 @@ pub fn analyze_shell(
     context: &ShellPolicyContext,
     lists: &ShellCommandLists,
 ) -> ShellAnalysis {
-    let ParsedCommand {
-        segments,
-        syntax_error,
-    } = segments_of(flavor, command);
-    // Reference `analyze_shell_command` marks both as invalidating the scope:
-    // the extracted segments stop describing what the shell runs, so no
-    // segment pattern may be granted and the text as written is the only scope.
-    let mut unscoped_reasons = Vec::new();
-    if syntax_error {
-        unscoped_reasons.push("a parse error");
+    match flavor {
+        ShellFlavor::Posix | ShellFlavor::GitBash => analyze_posix(flavor, command, context, lists),
+        ShellFlavor::Cmd => deferred(
+            lists,
+            vec!["a Windows command shell resolves no policy of its own".to_owned()],
+            Vec::new(),
+            Vec::new(),
+        ),
+        ShellFlavor::PowerShell => windows::analyze_powershell(command, context, lists),
     }
-    if matches!(flavor, ShellFlavor::Posix | ShellFlavor::GitBash) && command.contains("\\\n") {
-        unscoped_reasons.push("a line continuation");
-    }
-    if segments.is_empty() && unscoped_reasons.is_empty() {
-        // Reference `resolve_permission` returns `None` here, which defers to
-        // the configured permission rather than deciding.
-        return ShellAnalysis {
-            mode: lists.permission,
-            rationale: vec![
-                "no command was extracted; the configured permission applies".to_owned(),
-            ],
-            commands: Vec::new(),
-            path_operands: Vec::new(),
-            requirements: Vec::new(),
-        };
-    }
+}
 
-    // 1. The two denylists, which are the only thing that refuses outright.
-    for segment in &segments {
-        if let Some(pattern) = lists.denied(segment) {
-            return refusal(format!(
-                "`{segment}` matches the denylist entry `{pattern}`"
-            ));
-        }
-        if let Some(entry) = lists.denied_standalone(segment) {
-            return refusal(format!("`{entry}` is refused as a standalone command"));
-        }
+/// The analysis that resolves nothing, which the reference answers with
+/// `None`: the configured permission applies and nothing is asked about.
+fn deferred(
+    lists: &ShellCommandLists,
+    rationale: Vec<String>,
+    commands: Vec<ShellCommandNode>,
+    path_operands: Vec<String>,
+) -> ShellAnalysis {
+    ShellAnalysis {
+        mode: lists.permission,
+        rationale,
+        commands,
+        path_operands,
+        requirements: Vec::new(),
     }
+}
 
-    // 2. The guardrails an allowlist entry may not overturn.
-    let mut rationale = Vec::new();
-    let mut guardrails = Vec::new();
-    let mut seen_guardrail = BTreeSet::new();
-    for segment in &segments {
-        if !has_find_execution_predicate(segment) {
-            continue;
-        }
-        if !seen_guardrail.insert(segment.clone()) {
-            continue;
-        }
-        rationale.push(format!(
-            "`{segment}` asks `find` to run a program or write a file"
-        ));
-        guardrails.push(PermissionRequirement::exact_command(segment));
+/// Reference `Bash.resolve_permission` and `_resolve_posix_shell_permission`.
+fn analyze_posix(
+    flavor: ShellFlavor,
+    command: &str,
+    context: &ShellPolicyContext,
+    lists: &ShellCommandLists,
+) -> ShellAnalysis {
+    let managed = context.resolver == ShellResolver::Managed;
+    let text = analyze_text(command);
+    let parts = &text.parts;
+    if parts.is_empty() && !text.requires_approval() {
+        return deferred(
+            lists,
+            vec!["no command was extracted; the configured permission applies".to_owned()],
+            Vec::new(),
+            Vec::new(),
+        );
     }
-    // The guards this port keeps beyond the reference set, each of which only
-    // withholds an automatic grant. A segment they name is asked about under
-    // its own pattern, so the operator still has something to approve.
-    let withheld = withheld_segments(flavor, command, &segments, &mut rationale);
-    let guarded = !guardrails.is_empty() || !withheld.is_empty() || !unscoped_reasons.is_empty();
-
-    // 3. The operands that leave the workspace.
-    let (outside, operands) = collect_outside_directories(flavor, &segments, context);
-
-    // 4. The grant, when nothing withheld it.
-    let sensitive = segments
+    let commands = parts
         .iter()
-        .any(|segment| lists.sensitive(segment).is_some());
-    let allowed_outright = !sensitive
-        && (lists.permission == PermissionMode::Always
-            || (segments
-                .iter()
-                .all(|segment| lists.allowed(segment).is_some())
-                && outside.is_empty()));
-    let commands = segments
-        .iter()
-        .map(|segment| command_node(segment))
+        .map(|part| command_node(part))
         .collect::<Vec<_>>();
-    if allowed_outright && !guarded {
-        rationale.push("every segment is allowed and stays inside the workspace".to_owned());
+
+    // 1. The guardrails, which also carry the only two refusals.
+    let dialect = if managed {
+        GuardrailDialect::Managed
+    } else {
+        GuardrailDialect::Legacy
+    };
+    let guardrails = match guardrail_requirements(parts, context, lists, dialect) {
+        Ok(guardrails) => guardrails,
+        Err(reason) => return refusal(reason),
+    };
+
+    // 2. The operands that leave the workspace.
+    let (outside, operands) = collect_outside_directories(flavor, parts, context);
+
+    // 3. The grant, when nothing withheld it.
+    let mut rationale = text
+        .reasons
+        .iter()
+        .map(|reason| format!("the text holds {reason}"))
+        .collect::<Vec<_>>();
+    let sensitive = parts.iter().any(|part| lists.sensitive(part).is_some());
+    let unconditional = !sensitive
+        && !(managed && !context.context_requirements.is_empty())
+        && (lists.permission == PermissionMode::Always
+            || (parts.iter().all(|part| lists.allowed(part).is_some()) && outside.is_empty()));
+    if unconditional && guardrails.is_empty() && !text.requires_approval() {
+        rationale.push("every command is allowed and stays inside the workspace".to_owned());
         return ShellAnalysis {
             mode: PermissionMode::Always,
             rationale,
@@ -388,60 +524,42 @@ pub fn analyze_shell(
         };
     }
 
-    // 5. What is left is what the operator answers.
-    let mut requirements = Vec::new();
-    let mut seen_session = BTreeSet::new();
-    let scoped_segments = if unscoped_reasons.is_empty() {
-        segments.as_slice()
+    // 4. What is left is what the operator answers. Once the words stop
+    // describing what runs, no part is offered; where they still do, the
+    // approval owed for unreadable syntax sits on the commands that carried it,
+    // allowlisted ones included.
+    let (scoped, include_allowlisted) = if text.invalidates_scope {
+        (&[][..], false)
     } else {
-        &[]
+        (parts.as_slice(), text.requires_approval())
     };
-    for segment in scoped_segments {
-        let sensitive = lists.sensitive(segment);
-        if sensitive.is_none() && lists.allowed(segment).is_some() && !withheld.contains(segment) {
-            continue;
-        }
-        // A sensitive segment carries itself as its own session pattern, so
-        // approving `sudo apt update` never approves `sudo rm`.
-        let requirement = if let Some(pattern) = sensitive {
-            rationale.push(format!(
-                "`{segment}` matches the sensitive pattern `{pattern}`"
-            ));
-            PermissionRequirement::exact_command(segment)
-        } else {
-            PermissionRequirement::command(segment)
-        };
-        if seen_session.insert(requirement.session_pattern.clone()) {
-            requirements.push(requirement);
-        }
-    }
-    for glob in &outside {
-        rationale.push(format!("`{glob}` is outside the workspace roots"));
-        requirements.push(PermissionRequirement::outside_directory(glob));
+    let mut requirements = command_requirements(
+        scoped,
+        &outside,
+        include_allowlisted,
+        |part| lists.sensitive(part),
+        |part| lists.allowed(part).is_some(),
+        &mut rationale,
+    );
+    for guardrail in &guardrails {
+        rationale.push(format!(
+            "`{}` carries an option or a repository setting that needs approval",
+            guardrail.label
+        ));
     }
     requirements.extend(guardrails);
-    if !unscoped_reasons.is_empty() {
-        let label = format!(
-            "shell text the policy cannot scope ({})",
-            unscoped_reasons.join(", ")
-        );
-        rationale.push(label.clone());
+    if needs_exact_command_scope(&text, &requirements) {
+        rationale.push("only the text as written can be approved".to_owned());
         requirements.push(PermissionRequirement {
-            label,
+            label: text.approval_label(),
             ..PermissionRequirement::exact_command(command)
         });
     }
-
+    if managed {
+        requirements.extend(context.context_requirements.iter().cloned());
+    }
     if requirements.is_empty() {
-        // Reference `resolve_permission` returns `None` when it composed no
-        // requirement, which defers to the configured permission.
-        return ShellAnalysis {
-            mode: lists.permission,
-            rationale,
-            commands,
-            path_operands: operands,
-            requirements: Vec::new(),
-        };
+        return deferred(lists, rationale, commands, operands);
     }
     ShellAnalysis {
         mode: PermissionMode::Ask,
@@ -450,6 +568,373 @@ pub fn analyze_shell(
         path_operands: operands,
         requirements,
     }
+}
+
+/// The programs whose session input can drive a pager, which can run a shell
+/// command from its own prompt.
+const PAGER_SESSION_COMMANDS: [&str; 3] = ["git", "less", "more"];
+
+/// Whether the session running `command` may be a pager, so input written to
+/// it needs approval.
+///
+/// Reference `BashStdin.resolve_permission`: every command the text runs,
+/// wrappers expanded, is reduced to its lowercased basename without an `.exe`
+/// suffix. A Git Bash session keeps backslashes literal when it splits.
+#[must_use]
+pub fn session_runs_pager(flavor: ShellFlavor, command: &str) -> bool {
+    let mode = match flavor {
+        ShellFlavor::Posix => WordSplit::Posix,
+        ShellFlavor::GitBash => WordSplit::LiteralBackslash,
+        ShellFlavor::Cmd | ShellFlavor::PowerShell => {
+            return windows::runs_pager(command, &PAGER_SESSION_COMMANDS);
+        }
+    };
+    let parts = expand_guardrail_commands(&analyze_text(command).parts, host_word_split());
+    parts.iter().any(|part| {
+        split_tokens(part, mode).first().is_some_and(|program| {
+            let name = host_basename(program).to_lowercase();
+            let name = name.strip_suffix(".exe").unwrap_or(&name);
+            PAGER_SESSION_COMMANDS.contains(&name)
+        })
+    })
+}
+
+/// What input to a session needs, given the command the session runs, or
+/// `None` for a session the family does not know.
+///
+/// Reference `BashStdin.resolve_permission`: a session that may be a pager, or
+/// an unknown one, is asked about under a pattern naming the session; anything
+/// else falls to the configured permission.
+#[must_use]
+pub fn pager_input_permission(
+    flavor: ShellFlavor,
+    session_id: &str,
+    command: Option<&str>,
+) -> PermissionContext {
+    if command.is_some_and(|command| !session_runs_pager(flavor, command)) {
+        return PermissionContext::deferred();
+    }
+    let label = format!("input to pager session {session_id}");
+    PermissionContext::asking(vec![PermissionRequirement {
+        scope: PermissionScope::CommandPattern,
+        invocation_pattern: label.clone(),
+        session_pattern: label.clone(),
+        label,
+        literal: false,
+    }])
+}
+
+/// Reference `needs_exact_command_scope`: the text as written is the only
+/// scope left when the words stopped describing what runs, or when syntax
+/// needs approval and no command pattern came out of the parts.
+fn needs_exact_command_scope(text: &TextAnalysis, requirements: &[PermissionRequirement]) -> bool {
+    text.invalidates_scope
+        || (text.requires_approval()
+            && !requirements
+                .iter()
+                .any(|requirement| requirement.scope == PermissionScope::CommandPattern))
+}
+
+/// Reference `_build_required_permissions`: one requirement per session
+/// pattern the parts earn, then one per directory the call leaves the
+/// workspace for.
+fn command_requirements<'lists>(
+    parts: &[String],
+    outside: &[String],
+    include_allowlisted: bool,
+    sensitive_pattern: impl Fn(&str) -> Option<&'lists str>,
+    allowed: impl Fn(&str) -> bool,
+    rationale: &mut Vec<String>,
+) -> Vec<PermissionRequirement> {
+    let mut requirements = Vec::new();
+    let mut seen_session = BTreeSet::new();
+    for part in parts {
+        let tokens = whitespace_words(part);
+        if tokens.is_empty() {
+            continue;
+        }
+        let sensitive = sensitive_pattern(part);
+        if sensitive.is_none() && !include_allowlisted && allowed(part) {
+            continue;
+        }
+        // A sensitive part carries itself as its own session pattern, so
+        // approving `sudo apt update` never approves `sudo rm`.
+        if let Some(pattern) = sensitive {
+            rationale.push(format!(
+                "`{part}` matches the sensitive pattern `{pattern}`"
+            ));
+            requirements.push(PermissionRequirement::exact_command(part));
+            continue;
+        }
+        let requirement = command_session_requirement(part, &tokens);
+        if seen_session.insert(requirement.session_pattern.clone()) {
+            requirements.push(requirement);
+        }
+    }
+    for glob in outside {
+        rationale.push(format!("`{glob}` is outside the workspace roots"));
+        requirements.push(PermissionRequirement::outside_directory(glob));
+    }
+    requirements
+}
+
+/// Reference `command_session_pattern`: a guardrailed program keeps its own
+/// text, read literally, because a trailing `*` would cover the option its
+/// guardrail asks about; any other takes its arity pattern.
+fn command_session_requirement(part: &str, tokens: &[String]) -> PermissionRequirement {
+    if has_option_guardrails(tokens) {
+        let literal = tokens.join(" ");
+        return PermissionRequirement {
+            invocation_pattern: part.to_owned(),
+            ..PermissionRequirement::exact_command(&literal)
+        };
+    }
+    PermissionRequirement::command(part)
+}
+
+/// The requirements the per-program guardrails raise, or the refusal a
+/// denylist answers with.
+///
+/// Reference `_resolve_guardrail_permission`: every command a wrapper exposes
+/// is checked, the directory each one runs in is tracked through `cd`,
+/// `pushd` and `popd`, and a git reader is keyed to every repository it may
+/// inspect. Requirements are keyed by the command text, the first occurrence
+/// deciding the position and the last the value.
+fn guardrail_requirements(
+    parts: &[String],
+    context: &ShellPolicyContext,
+    lists: &ShellCommandLists,
+    dialect: GuardrailDialect,
+) -> Result<Vec<PermissionRequirement>, String> {
+    // PowerShell only runs on a Windows host, where the reference keeps a
+    // backslash literal.
+    let mode = match dialect {
+        GuardrailDialect::Windows => WordSplit::LiteralBackslash,
+        GuardrailDialect::Legacy | GuardrailDialect::Managed => host_word_split(),
+    };
+    let mut required: Vec<(String, PermissionRequirement)> = Vec::new();
+    let mut cwds = BTreeSet::from([host_directory(&context.working_directory)]);
+    let mut cwd_is_unknown = false;
+    for part in expand_guardrail_commands(parts, mode) {
+        let (denied, standalone) = match dialect {
+            GuardrailDialect::Legacy => (lists.denied(&part), lists.denied_standalone(&part)),
+            GuardrailDialect::Managed => (
+                lists.denied_by_basename(&part),
+                lists.denied_standalone(&part),
+            ),
+            GuardrailDialect::Windows => (
+                lists.windows_denied(&part),
+                lists.windows_denied_standalone(&part),
+            ),
+        };
+        if let Some(pattern) = denied {
+            return Err(format!("`{part}` matches the denylist entry `{pattern}`"));
+        }
+        if let Some(entry) = standalone {
+            return Err(format!("`{entry}` is refused as a standalone command"));
+        }
+        let tokens = split_tokens(&part, mode);
+        cwd_is_unknown = update_guardrail_cwds(&tokens, &mut cwds) || cwd_is_unknown;
+        let policy = analyze_command_policy(&tokens);
+        let repository = policy.inspect_git_repository
+            && (cwd_is_unknown
+                || cwds
+                    .iter()
+                    .any(|cwd| git_repository_requires_approval(&tokens, cwd)));
+        if !(policy.requires_approval || repository) {
+            continue;
+        }
+        let pattern = if policy.inspect_git_repository {
+            git_repository_pattern(&part, &cwds, cwd_is_unknown)
+        } else {
+            part.clone()
+        };
+        let requirement = PermissionRequirement {
+            label: part.clone(),
+            ..PermissionRequirement::exact_command(&pattern)
+        };
+        match required.iter_mut().find(|(key, _)| *key == part) {
+            Some((_, slot)) => *slot = requirement,
+            None => required.push((part, requirement)),
+        }
+    }
+    Ok(required
+        .into_iter()
+        .map(|(_, requirement)| requirement)
+        .collect())
+}
+
+/// Which resolver's denylist matching the guardrails apply.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GuardrailDialect {
+    /// The command as written.
+    Legacy,
+    /// The command as written, or with its program reduced to its basename.
+    Managed,
+    /// Every PowerShell form of the command: basename, suffix and alias.
+    Windows,
+}
+
+/// How the guardrails split a command into tokens on this host: the reference
+/// keeps a backslash literal on Windows.
+fn host_word_split() -> WordSplit {
+    if cfg!(windows) {
+        WordSplit::LiteralBackslash
+    } else {
+        WordSplit::Posix
+    }
+}
+
+/// The last component of `program` under the host's separators, Python's
+/// `os.path.basename`.
+fn host_basename(program: &str) -> &str {
+    let separators: &[char] = if cfg!(windows) { &['/', '\\'] } else { &['/'] };
+    program.rsplit(separators).next().unwrap_or(program)
+}
+
+/// The host directory a policy path names, rendered when it is not one.
+fn host_directory(path: &PolicyPath) -> PathBuf {
+    policy_path_to_host(path).unwrap_or_else(|| PathBuf::from(render_policy_path(path)))
+}
+
+/// Reference `_wrapped_guardrail_commands`: the command an `eval` or an `exec`
+/// runs, as far as its text shows it.
+fn wrapped_commands(part: &str, mode: WordSplit) -> Vec<String> {
+    let tokens = split_tokens(part, mode);
+    let Some(first) = tokens.first() else {
+        return Vec::new();
+    };
+    if first == "eval" {
+        let evaluated = tokens[1..].join(" ");
+        if evaluated.is_empty() {
+            return Vec::new();
+        }
+        return analyze_text(&evaluated).parts;
+    }
+    if first != "exec" {
+        return Vec::new();
+    }
+    let mut index = 1;
+    while let Some(token) = tokens.get(index) {
+        if token == "--" {
+            index += 1;
+            break;
+        }
+        if token == "-a" {
+            index += 2;
+            continue;
+        }
+        if token.starts_with('-') {
+            index += 1;
+            continue;
+        }
+        break;
+    }
+    if index >= tokens.len() {
+        return Vec::new();
+    }
+    vec![tokens[index..].join(" ")]
+}
+
+/// Reference `_expand_guardrail_commands`: every part followed, breadth first,
+/// by what it wraps, keeping repeated text because each occurrence may run in
+/// another directory. The ancestry only stops a wrapper that wraps itself.
+fn expand_guardrail_commands(parts: &[String], mode: WordSplit) -> Vec<String> {
+    let mut expanded = Vec::new();
+    let mut pending = parts
+        .iter()
+        .map(|part| (part.clone(), BTreeSet::<String>::new()))
+        .collect::<std::collections::VecDeque<_>>();
+    while let Some((part, ancestors)) = pending.pop_front() {
+        expanded.push(part.clone());
+        if ancestors.contains(&part) {
+            continue;
+        }
+        let mut next = ancestors;
+        next.insert(part.clone());
+        for wrapped in wrapped_commands(&part, mode) {
+            pending.push_back((wrapped, next.clone()));
+        }
+    }
+    expanded
+}
+
+/// Reference `_update_guardrail_cwds`: widens `cwds` to every directory a
+/// `cd`, `pushd` or `Set-Location` can reach, and answers whether the
+/// directory stopped being statically known.
+fn update_guardrail_cwds(tokens: &[String], cwds: &mut BTreeSet<PathBuf>) -> bool {
+    let Some(first) = tokens.first() else {
+        return false;
+    };
+    let program = first
+        .replace('\\', "/")
+        .rsplit('/')
+        .next()
+        .unwrap_or_default()
+        .to_lowercase();
+    if matches!(program.as_str(), "popd" | "pop-location") {
+        // A plain pop only returns to a directory an earlier push recorded.
+        return tokens.len() != 1;
+    }
+    if !matches!(
+        program.as_str(),
+        "cd" | "chdir" | "pushd" | "push-location" | "set-location" | "sl"
+    ) {
+        return false;
+    }
+    if matches!(program.as_str(), "pushd" | "push-location") && tokens.len() == 1 {
+        return false;
+    }
+    let target = match tokens {
+        [_, target] if !target.starts_with('-') && !target.contains(['*', '?', '[']) => target,
+        _ => return true,
+    };
+    let reached = cwds
+        .iter()
+        .map(|cwd| resolve_tool_path(target, cwd))
+        .collect::<Vec<_>>();
+    cwds.extend(reached);
+    false
+}
+
+/// Reference `resolve_tool_path`: `raw` made absolute against `cwd`, a
+/// leading `~` expanded, and the result resolved.
+fn resolve_tool_path(raw: &str, cwd: &Path) -> PathBuf {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return cwd.to_path_buf();
+    }
+    let expanded = PathBuf::from(expand_home(raw));
+    let joined = if expanded.is_absolute() {
+        expanded
+    } else {
+        cwd.join(expanded)
+    };
+    if joined.is_absolute() {
+        resolve_path(&joined)
+    } else {
+        joined
+    }
+}
+
+/// Reference `_git_repository_permission_pattern`: the command keyed to every
+/// repository it may read, so approving it in one repository never approves
+/// it in another whose configuration runs a helper.
+fn git_repository_pattern(command: &str, cwds: &BTreeSet<PathBuf>, cwd_is_unknown: bool) -> String {
+    let mut identities = cwds
+        .iter()
+        .map(|cwd| {
+            git_repository_identity(cwd)
+                .unwrap_or_else(|| format!("directory:{}", resolve_path(cwd).display()))
+        })
+        .collect::<BTreeSet<_>>();
+    if cwd_is_unknown {
+        identities.insert("dynamic-directory".to_owned());
+    }
+    format!(
+        "{command} [git repositories: {}]",
+        identities.into_iter().collect::<Vec<_>>().join(" | ")
+    )
 }
 
 fn refusal(reason: String) -> ShellAnalysis {
@@ -462,52 +947,6 @@ fn refusal(reason: String) -> ShellAnalysis {
     }
 }
 
-/// The segments `command` runs.
-///
-/// The bash grammar answers for the two POSIX flavors, which is what the
-/// reference parses every `bash` and `git_bash` call with. The two Windows
-/// interpreters are not bash, so their segments still come from the word split
-/// this port has always used for them; proving Windows execution equivalence is
-/// an explicit non-goal of the PRD this implements.
-fn segments_of(flavor: ShellFlavor, command: &str) -> ParsedCommand {
-    match flavor {
-        ShellFlavor::Posix | ShellFlavor::GitBash => parse_commands(command),
-        ShellFlavor::Cmd | ShellFlavor::PowerShell => ParsedCommand {
-            segments: command
-                .split(['\n', ';', '|', '&'])
-                .map(|segment| {
-                    segment
-                        .split_whitespace()
-                        .map(|word| word.trim_matches(['"', '\'']))
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                })
-                .filter(|segment| !segment.is_empty())
-                .map(|segment| normalize_windows_segment(&segment))
-                .collect(),
-            syntax_error: false,
-        },
-    }
-}
-
-/// A Windows segment under the lowercased basename its lists are written in.
-fn normalize_windows_segment(segment: &str) -> String {
-    let mut words = segment.split(' ');
-    let Some(program) = words.next() else {
-        return segment.to_owned();
-    };
-    let file = program
-        .rsplit(['/', '\\'])
-        .next()
-        .unwrap_or(program)
-        .trim_end_matches(".exe")
-        .to_ascii_lowercase();
-    std::iter::once(file.as_str())
-        .chain(words)
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
 fn command_node(segment: &str) -> ShellCommandNode {
     let mut words = segment.split(' ').filter(|word| !word.is_empty());
     let program = words.next().unwrap_or_default().to_owned();
@@ -515,110 +954,6 @@ fn command_node(segment: &str) -> ShellCommandNode {
         program,
         arguments: words.map(ToOwned::to_owned).collect(),
     }
-}
-
-/// Whether a `find` segment names one of [`FIND_EXECUTION_PREDICATES`]
-/// anywhere in its text, which also catches a predicate the reference only
-/// matches as a whole token.
-fn has_find_execution_predicate(segment: &str) -> bool {
-    if !ShellCommandLists::matches("find", segment) {
-        return false;
-    }
-    FIND_EXECUTION_PREDICATES
-        .iter()
-        .any(|predicate| segment.contains(predicate))
-}
-
-/// The segments this port withholds an automatic grant from beyond the
-/// reference set.
-///
-/// Each entry only costs an approval prompt: none of them refuses, so the guard
-/// still fails toward asking. They exist because the command text alone does not
-/// say what a call reads: a substitution runs another program, a redirect writes
-/// somewhere the segment never names, and three git options read a path the
-/// index never held. `crates/vibe-core/src/shell/shell_parity_tests.rs` records
-/// every one of them against the reference verdict, so the set cannot grow
-/// silently.
-fn withheld_segments(
-    flavor: ShellFlavor,
-    command: &str,
-    segments: &[String],
-    rationale: &mut Vec<String>,
-) -> BTreeSet<String> {
-    let mut withheld = BTreeSet::new();
-    if contains_indirection(flavor, command) {
-        rationale.push("indirection or nested shell text requires approval".to_owned());
-        withheld.extend(segments.iter().cloned());
-    }
-    for segment in segments {
-        if segment
-            .split(' ')
-            .next_back()
-            .is_some_and(|word| word == REDIRECT_MARKER)
-        {
-            rationale.push(format!(
-                "`{segment}` redirects, which the text does not name"
-            ));
-            withheld.insert(segment.clone());
-            continue;
-        }
-        if let Some(reason) = git_or_ripgrep_guard(segment) {
-            rationale.push(reason);
-            withheld.insert(segment.clone());
-        }
-    }
-    withheld
-}
-
-/// Why a `git` or `rg` segment does not ride its allowlist entry.
-fn git_or_ripgrep_guard(segment: &str) -> Option<String> {
-    let mut words = segment.split(' ').filter(|word| !word.is_empty());
-    let program = words.next()?;
-    let arguments = words.collect::<Vec<_>>();
-    if program == "git" {
-        if arguments.iter().any(|argument| {
-            matches!(*argument, "-c" | "--config-env" | "--exec-path")
-                || argument.starts_with("-c=")
-                || argument.starts_with("--config-env=")
-                || argument.starts_with("--exec-path=")
-        }) {
-            return Some("git configuration and executable overrides require approval".to_owned());
-        }
-        if arguments
-            .iter()
-            .any(|argument| matches!(*argument, "--" | "--no-index"))
-        {
-            return Some("git reading outside the index requires approval".to_owned());
-        }
-        if arguments.first() == Some(&"reset") {
-            return Some("git reset requires approval".to_owned());
-        }
-        return None;
-    }
-    if program == "rg"
-        && arguments
-            .iter()
-            .any(|argument| *argument == "--pre" || argument.starts_with("--pre="))
-    {
-        return Some("ripgrep preprocessor execution requires approval".to_owned());
-    }
-    None
-}
-
-fn contains_indirection(flavor: ShellFlavor, command: &str) -> bool {
-    command.contains("$(")
-        || command.contains('`')
-        || match flavor {
-            ShellFlavor::PowerShell => {
-                command.contains("$env:")
-                    || command.trim_start().starts_with("& ")
-                    || command.contains("iex ")
-            }
-            ShellFlavor::Cmd => {
-                command.contains('%') || command.to_ascii_lowercase().contains("call ")
-            }
-            ShellFlavor::Posix | ShellFlavor::GitBash => command.contains("${"),
-        }
 }
 
 /// The directories a call reaches outside every root, as the globs a
@@ -637,52 +972,37 @@ fn collect_outside_directories(
 ) -> (Vec<String>, Vec<String>) {
     let mut globs = BTreeSet::new();
     let mut operands = Vec::new();
+    // The managed resolver positions the call's own directory too, and names
+    // it by itself rather than by its parent.
+    if context.resolver == ShellResolver::Managed
+        && let Some(glob) = escaping_directory_glob(context, &context.working_directory)
+    {
+        globs.insert(glob);
+    }
+    // Reference `_split_command_tokens`: the legacy resolver keeps a backslash
+    // literal on a Windows host, because a path like `C:\Users\me` would
+    // otherwise lose its separators to the POSIX escape rule; the managed one
+    // always escapes.
+    let mode = match context.resolver {
+        ShellResolver::Legacy => host_word_split(),
+        ShellResolver::Managed => WordSplit::Posix,
+    };
     for segment in segments {
-        let mut words = split_operand_tokens(flavor, segment).into_iter();
-        let Some(program) = words.next() else {
+        let tokens = split_tokens(segment, mode);
+        let Some(program) = tokens.first() else {
             continue;
         };
-        if !inspects_paths(flavor, &program) {
-            continue;
-        }
-        for token in words {
-            if token.starts_with('-') {
-                continue;
-            }
-            // A `chmod` mode is not a path, and `+x` would otherwise resolve as
-            // a relative one.
-            if program == "chmod" && token.starts_with('+') {
-                continue;
-            }
+        for token in path_candidates(&tokens, inspects_paths(program)) {
             if !looks_like_path(&token) {
                 continue;
             }
-            let Some(glob) = escaping_glob(flavor, context, &token) else {
-                operands.push(token);
-                continue;
-            };
-            globs.insert(glob);
+            if let Some(glob) = escaping_glob(flavor, context, &token) {
+                globs.insert(glob);
+            }
             operands.push(token);
         }
     }
     (globs.into_iter().collect(), operands)
-}
-
-/// The tokens of a segment, as the interpreter's own quoting reads them.
-///
-/// Reference `_split_command_tokens` uses POSIX `shlex` and falls back to a
-/// whitespace split when the quoting does not close. On Windows it keeps the
-/// backslash literal, because a path like `C:\Users\me` would otherwise lose
-/// its separators to the POSIX escape rule.
-fn split_operand_tokens(flavor: ShellFlavor, segment: &str) -> Vec<String> {
-    match flavor {
-        ShellFlavor::Posix | ShellFlavor::GitBash => shlex::split(segment)
-            .unwrap_or_else(|| segment.split_whitespace().map(ToOwned::to_owned).collect()),
-        ShellFlavor::Cmd | ShellFlavor::PowerShell => segment
-            .split_whitespace()
-            .map(|word| word.trim_matches(['"', '\'']).to_owned())
-            .collect(),
-    }
 }
 
 /// Reference `_collect_outside_dirs`: only a token shaped like a path is
@@ -700,12 +1020,17 @@ fn looks_like_path(token: &str) -> bool {
 /// The operand is parsed under the interpreter's own path grammar and then
 /// positioned on the host's, which is what lets a Git Bash `/c/work/notes.txt`
 /// land on the Windows workspace root it names.
-fn escaping_glob(flavor: ShellFlavor, context: &ShellPolicyContext, token: &str) -> Option<String> {
-    let platform = match flavor {
+/// The path grammar an operand of `flavor` is written in.
+fn operand_platform(flavor: ShellFlavor) -> Platform {
+    match flavor {
         ShellFlavor::Posix => Platform::Posix,
         ShellFlavor::GitBash => Platform::GitBash,
         ShellFlavor::Cmd | ShellFlavor::PowerShell => Platform::Windows,
-    };
+    }
+}
+
+fn escaping_glob(flavor: ShellFlavor, context: &ShellPolicyContext, token: &str) -> Option<String> {
+    let platform = operand_platform(flavor);
     let expanded = expand_home(token);
     let Ok(path) = normalize_operand(platform, context, &expanded) else {
         // A path the policy cannot position is treated as outside rather than
@@ -744,6 +1069,30 @@ fn escaping_glob(flavor: ShellFlavor, context: &ShellPolicyContext, token: &str)
         &render_policy_path(&directory),
         separator_for(directory.platform),
     ))
+}
+
+/// The glob naming a managed call's own directory when it leaves the
+/// workspace, which the reference collects as the directory itself.
+fn escaping_directory_glob(context: &ShellPolicyContext, directory: &PolicyPath) -> Option<String> {
+    let host = policy_path_to_host(directory);
+    if let Some(host) = host.as_deref()
+        && is_scratchpad_path(host, context.scratchpad.as_deref())
+    {
+        return None;
+    }
+    let inside = inside_any_root(directory, &context.roots)
+        && match host.as_deref() {
+            Some(host) if host.exists() => {
+                host_path_is_authorized(directory, context) != Some(false)
+            }
+            Some(_) | None => true,
+        };
+    (!inside).then(|| {
+        join_glob(
+            &render_policy_path(directory),
+            separator_for(directory.platform),
+        )
+    })
 }
 
 /// The separator `platform` writes a path with.
@@ -1006,17 +1355,20 @@ mod tests {
     // ----------------------------------------------------------------------
 
     /// US-109: a heredoc is a redirect, so the command under it is not the bare
-    /// standalone interpreter the denylist refuses.
+    /// standalone interpreter the denylist refuses. Its body is what runs, so
+    /// only the text as written can be approved.
     #[test]
     fn a_heredoc_is_not_a_bare_standalone_interpreter() {
-        let analysis = analyze("python3 <<'EOF'\nprint(1)\nEOF");
+        let command = "python3 <<'EOF'\nprint(1)\nEOF";
+        let analysis = analyze(command);
         assert_ne!(
             analysis.mode,
             PermissionMode::Never,
             "a heredoc body is not a standalone `python3`: {:?}",
             analysis.rationale
         );
-        assert_eq!(session_patterns(&analysis), vec!["python3 *".to_owned()]);
+        assert_eq!(session_patterns(&analysis), vec![command.to_owned()]);
+        assert!(analysis.requirements[0].literal);
     }
 
     /// US-109: each segment of a chain is analyzed on its own, so approving the
@@ -1179,7 +1531,9 @@ mod tests {
     }
 
     /// US-110: `find` running a program is asked about under the whole segment,
-    /// once per distinct segment, even though `find` is allowlisted.
+    /// even though `find` is allowlisted. `{}` is syntax that needs approval,
+    /// so the part is asked about beside the guardrail, and neither list
+    /// deduplicates against the other, as upstream.
     #[test]
     fn find_running_a_program_is_asked_about_once_per_segment() {
         for predicate in ["-exec", "-execdir", "-ok", "-okdir"] {
@@ -1213,11 +1567,11 @@ mod tests {
         }
         // A plain walk stays allowlisted.
         assert_eq!(analyze("find . -name '*.rs'").mode, PermissionMode::Always);
-        // The same segment twice is one approval.
+        // The same segment twice is one approval per list.
         let repeated = analyze("find . -exec rm {} \\; && find . -exec rm {} \\;");
         assert_eq!(
             repeated.requirements.len(),
-            1,
+            2,
             "{:?}",
             repeated.requirements
         );
@@ -1365,26 +1719,19 @@ mod tests {
     /// no auto-allowed reader escapes the operand walk.
     #[test]
     fn every_read_only_allowlist_command_has_its_operands_inspected() {
-        for posix in [true, false] {
-            let flavor = if posix {
-                ShellFlavor::Posix
-            } else {
-                ShellFlavor::PowerShell
-            };
-            let uninspected = crate::tools::config::shell_read_only_commands(posix)
-                .iter()
-                .filter(|program| !inspects_paths(flavor, program))
-                .collect::<Vec<_>>();
-            assert!(
-                uninspected.is_empty(),
-                "read-only commands whose operands are never inspected: {uninspected:?}"
-            );
-        }
+        let uninspected = crate::tools::config::shell_read_only_commands(true)
+            .iter()
+            .filter(|program| !inspects_paths(program))
+            .collect::<Vec<_>>();
+        assert!(
+            uninspected.is_empty(),
+            "read-only commands whose operands are never inspected: {uninspected:?}"
+        );
         // The reference set is the union with the eight mutating commands, and
         // nothing else: a command only the shared allowlist names is not
         // inspected, which is what keeps `echo /etc/passwd` an allowed echo.
-        assert!(!inspects_paths(ShellFlavor::Posix, "echo"));
-        assert!(inspects_paths(ShellFlavor::Posix, "rm"));
+        assert!(!inspects_paths("echo"));
+        assert!(inspects_paths("rm"));
     }
 
     /// US-111: a path inside the scratchpad raises nothing, because it is the
@@ -1555,14 +1902,24 @@ mod tests {
             parse_policy_path(Platform::Windows, r"C:\work\project").expect("cwd"),
         );
         let safe = analyze_shell(
-            ShellFlavor::Cmd,
+            ShellFlavor::PowerShell,
             r"type C:\work\project\README.md",
             &context,
             &windows_lists,
         );
         assert_eq!(safe.mode, PermissionMode::Always, "{:?}", safe.rationale);
-        let unc = analyze_shell(
+        // A `cmd.exe` host is not a POSIX shell, where the reference `bash`
+        // tool resolves nothing and the configured permission applies.
+        let deferred = analyze_shell(
             ShellFlavor::Cmd,
+            r"type C:\work\project\README.md",
+            &context,
+            &windows_lists,
+        );
+        assert_eq!(deferred.mode, windows_lists.permission);
+        assert!(deferred.requirements.is_empty());
+        let unc = analyze_shell(
+            ShellFlavor::PowerShell,
             r"type \\server\share\secret.txt",
             &context,
             &windows_lists,

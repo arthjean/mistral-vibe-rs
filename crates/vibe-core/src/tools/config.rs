@@ -816,16 +816,70 @@ tool_view!(
     }
 );
 
-tool_view!(
-    /// Reference `BashToolConfig`, published by all three shell families.
-    ShellCommandConfig {
-        default_timeout: u64 = duration_seconds,
-        denylist_standalone: Vec<String> = strings,
-        max_inline_bytes: usize = count,
-        max_output_bytes: usize = count,
-        max_timeout_seconds: f64 = seconds,
+/// Reference `ExperimentalBashToolConfig`, published by all three shell
+/// families.
+///
+/// `shell` is the one optional key: reference `discover_tool_defaults` dumps
+/// the model with `exclude_none`, so the key publishes no default and the
+/// document carries it only once an operator set it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ShellCommandConfig {
+    pub shared: SharedToolConfig,
+    pub default_timeout: u64,
+    pub denylist_standalone: Vec<String>,
+    pub max_inline_bytes: usize,
+    pub max_output_bytes: usize,
+    pub max_timeout_seconds: f64,
+    /// Reference `ExperimentalBashToolConfig.shell`, the executable a managed
+    /// session starts when the call names none.
+    pub shell: Option<String>,
+}
+
+impl ToolConfigView for ShellCommandConfig {
+    fn from_resolved(config: &ResolvedToolConfig) -> Self {
+        Self {
+            shared: SharedToolConfig::from_resolved(config),
+            default_timeout: config.duration_seconds("default_timeout"),
+            denylist_standalone: config.strings("denylist_standalone"),
+            max_inline_bytes: config.count("max_inline_bytes"),
+            max_output_bytes: config.count("max_output_bytes"),
+            max_timeout_seconds: config.seconds("max_timeout_seconds"),
+            shell: config
+                .value("shell")
+                .and_then(Value::as_str)
+                .filter(|shell| !shell.is_empty())
+                .map(str::to_owned),
+        }
     }
-);
+
+    fn document(&self) -> Table {
+        let mut document = self.shared.document();
+        document.insert(
+            "default_timeout".to_owned(),
+            self.default_timeout.to_config_value(),
+        );
+        document.insert(
+            "denylist_standalone".to_owned(),
+            self.denylist_standalone.to_config_value(),
+        );
+        document.insert(
+            "max_inline_bytes".to_owned(),
+            self.max_inline_bytes.to_config_value(),
+        );
+        document.insert(
+            "max_output_bytes".to_owned(),
+            self.max_output_bytes.to_config_value(),
+        );
+        document.insert(
+            "max_timeout_seconds".to_owned(),
+            self.max_timeout_seconds.to_config_value(),
+        );
+        if let Some(shell) = &self.shell {
+            document.insert("shell".to_owned(), shell.to_config_value());
+        }
+        document
+    }
+}
 
 tool_view!(
     /// Reference `BashOutputConfig`.
@@ -1158,7 +1212,23 @@ fn merge_entry(values: &mut BTreeMap<String, Value>, settings: &Table, tool: &st
     for (key, value) in entry {
         values.insert(key.clone(), value.clone());
     }
+    // Reference `AliasChoices("max_inline_bytes", "max_inline_chars")` reads
+    // the alias only when the canonical name is absent, so an entry that sets
+    // both keeps the canonical value.
+    for (alias, canonical) in CONFIG_ALIASES {
+        if !entry.contains_key(*canonical)
+            && values.contains_key(*canonical)
+            && let Some(value) = entry.get(*alias)
+        {
+            values.insert((*canonical).to_owned(), value.clone());
+        }
+    }
 }
+
+/// The `validation_alias` choices the shell configuration models accept, as
+/// `(alias, canonical)`: `max_inline_chars` is read as `max_inline_bytes` by
+/// every model declaring the latter.
+const CONFIG_ALIASES: &[(&str, &str)] = &[("max_inline_chars", "max_inline_bytes")];
 
 /// The write guard, whether or not a panicking writer poisoned the lock.
 ///

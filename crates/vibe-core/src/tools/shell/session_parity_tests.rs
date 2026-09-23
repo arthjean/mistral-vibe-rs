@@ -73,6 +73,9 @@ const LEDGER_FILE: &str = "session_parity_ledger.rs";
 /// stops reproducing.
 const STALENESS_TEST: &str = "a_ledger_entry_whose_divergence_is_fixed_fails_the_suite";
 
+/// `CAPTURE_SHELL` in the capture script: the `shell` configuration key both
+/// sides are built with.
+const CAPTURE_SHELL: &str = "/bin/bash";
 const ROOT_PLACEHOLDER: &str = "{root}";
 const HOME_PLACEHOLDER: &str = "{home}";
 const CAPTURE_PLACEHOLDER: &str = "{capture}";
@@ -731,6 +734,16 @@ impl Scenario {
             .expect("the working directory is trusted");
         let guard = ToolGuard::new(policy, Arc::new(GrantApproval) as Arc<dyn ApprovalAgent>);
         guard.config.set_managed_shell_tools(true);
+        // Mirrors `build_tool` in the capture script, which pins the configured
+        // shell so the fallback ladder does not decide by what the capturing
+        // host happens to install.
+        guard.config.update(toml::Table::from_iter([(
+            "bash".to_owned(),
+            toml::Value::Table(toml::Table::from_iter([(
+                "shell".to_owned(),
+                toml::Value::String(CAPTURE_SHELL.to_owned()),
+            )])),
+        )]));
         let registry = ToolRegistry::default();
         let tools = ShellTools::with_host(
             root.join("vibe-home"),

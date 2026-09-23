@@ -163,19 +163,34 @@ pub const ARITY: [(&str, usize); 138] = [
 /// token alone, and an empty command has no pattern rather than a panic.
 #[must_use]
 pub fn build_session_pattern(tokens: &[&str]) -> String {
-    let Some(first) = tokens.first() else {
+    if tokens.is_empty() {
         return String::new();
-    };
-    for length in (1..=tokens.len()).rev() {
-        let prefix = tokens[..length].join(" ");
-        if let Some(arity) = arity_of(&prefix) {
-            // The reference slices with `tokens[:arity]`, which stops at the
-            // end of a command shorter than its own arity rather than padding.
-            let kept = arity.min(tokens.len());
-            return format!("{} *", tokens[..kept].join(" "));
-        }
     }
-    format!("{first} *")
+    // The reference slices with `tokens[:arity]`, which stops at the end of a
+    // command shorter than its own arity rather than padding.
+    let kept = known_session_pattern_arity(tokens)
+        .unwrap_or(1)
+        .min(tokens.len());
+    format!("{} *", tokens[..kept].join(" "))
+}
+
+/// How many leading tokens name the command, or [`None`] when the table does
+/// not model it.
+///
+/// Reference `known_session_pattern_arity`. [`None`] is kept apart from `1`
+/// because the shell analysis asks whether an unreadable token sits past the
+/// command's real boundary: the fallback boundary of an unmodeled wrapper such
+/// as `sudo` would put the program it runs past the guess.
+#[must_use]
+pub fn known_session_pattern_arity<S: AsRef<str>>(tokens: &[S]) -> Option<usize> {
+    (1..=tokens.len()).rev().find_map(|length| {
+        let prefix = tokens[..length]
+            .iter()
+            .map(AsRef::as_ref)
+            .collect::<Vec<_>>()
+            .join(" ");
+        arity_of(&prefix)
+    })
 }
 
 /// The arity the table gives `prefix`, or [`None`] when it declares none.

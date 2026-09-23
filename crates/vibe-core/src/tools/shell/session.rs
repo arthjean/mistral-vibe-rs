@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex as StdMutex};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use serde_json::{Value, json};
 use tokio::sync::Mutex;
@@ -36,10 +36,11 @@ use crate::tools::{
 
 use super::decode::read_file_window;
 use super::document::Document;
-use super::host::{ShellFamily, windows_shell_arguments};
+use super::host::{ShellFamily, resolve_session_shell};
+use super::policy::{is_hard_timeout, render_seconds, timeout_argument};
 use super::{
     PUMP_INTERVAL, SESSIONS_DIRECTORY, command_argument, exit_status, is_family_session_id,
-    process_error, process_spec, string_argument, timeout_argument,
+    process_error, process_spec, string_argument,
 };
 
 /// One Vibe session's shell state: the terminals it opened and the managed
@@ -241,6 +242,26 @@ impl ManagedSession {
         self.snapshot().0 == SessionStatus::Running
     }
 
+    /// Records the status a kill is about to produce before the kill runs, so
+    /// the reader that sees the process exit does not report it as completed.
+    /// Reference `kill` sets the status under the session's condition first.
+    fn mark(&self, status: SessionStatus) {
+        if let Ok(mut state) = self.state.lock() {
+            state.status = status;
+            state.updated_at = now_iso();
+        }
+    }
+
+    /// Records how the process ended without touching its status, for a
+    /// session a kill already marked.
+    fn record_exit(&self, exit_code: Option<i32>) {
+        if let Ok(mut state) = self.state.lock()
+            && state.exit_code.is_none()
+        {
+            state.exit_code = exit_code;
+        }
+    }
+
     pub(super) fn settle(&self, status: SessionStatus, exit_code: Option<i32>) {
         if let Ok(mut state) = self.state.lock() {
             state.status = status;
@@ -281,26 +302,26 @@ pub(super) fn now_iso() -> String {
 }
 
 pub(super) async fn run_managed_command(
-    shell: &SessionShell,
+    shell: &Arc<SessionShell>,
     config: &ShellConfig,
     working_directory: &Path,
     arguments: &Value,
     settings: &ShellCommandConfig,
+    output: &ToolOutputSink,
 ) -> Result<ToolExecutionOutput, ToolError> {
     let command = command_argument(arguments)?;
     let requested_directory = string_argument(arguments, "cwd")
         .map_or_else(|| working_directory.to_path_buf(), PathBuf::from);
-    let mut config = config.clone();
-    if let Some(executable) = string_argument(arguments, "shell") {
-        config.executable = PathBuf::from(executable);
-        // Reference `build_windows_shell_argv` derives the argument form from
-        // the executable it was handed, so an override carries its own flags
-        // rather than the ones the family resolved. The POSIX family has no
-        // such rule: its arguments stay whatever the session resolved.
-        if shell.family != ShellFamily::Bash {
-            config.arguments = windows_shell_arguments(&config.executable);
-        }
-    }
+    // Reference `ExperimentalBash.run` resolves the shell before the session
+    // exists: the call's override, then the tool's configured shell, then the
+    // family's own default, and an override that does not resolve refuses the
+    // call rather than falling back.
+    let config = resolve_session_shell(
+        shell.family,
+        config,
+        string_argument(arguments, "shell"),
+        settings.shell.as_deref(),
+    )?;
     let session = start_managed_session(
         shell,
         &config,
@@ -317,9 +338,7 @@ pub(super) async fn run_managed_command(
     // `self.config.max_output_bytes`, where the three polling tools bound theirs
     // with `max_inline_bytes`. The two defaults differ, 16 000 against 30 000,
     // so a command that prints 20 000 bytes truncates here and does not through
-    // a poll. Nothing narrows it further: this call publishes no `max_bytes`
-    // argument, and the turn's streaming budget bounds what a tool emits, which
-    // a managed command never does.
+    // a poll.
     let limit = settings.max_output_bytes;
     let handle = SessionHandle::Live(session.clone());
     let background = arguments["background"].as_bool().unwrap_or(false);
@@ -327,30 +346,42 @@ pub(super) async fn run_managed_command(
         let (document, display) = managed_command_document(&handle, true, limit)?;
         return Ok(document.into_output(display));
     }
-    let hard_timeout =
-        arguments["hard_timeout"].as_bool().unwrap_or(false) || arguments["timeout"].is_u64();
+    let hard_timeout = is_hard_timeout(arguments);
     let timeout = timeout_argument(arguments, settings);
-    let deadline = Instant::now() + Duration::from_secs(timeout);
+    let deadline = Instant::now() + timeout;
+    // Reference `_kill_on_abort`: until the session exits or is handed to the
+    // background, it belongs to this call, so a cancelled turn stops it rather
+    // than leaving a PTY behind.
+    let mut abort = AbortKill::new(shell.clone(), session.clone());
+    let mut stream = ForegroundStream::new(limit);
     while session.is_running() && Instant::now() < deadline {
         tokio::time::sleep(PUMP_INTERVAL).await;
+        stream.pump(&session, output);
     }
+    stream.pump(&session, output);
     if session.is_running() {
         if !hard_timeout {
             // A soft timeout leaves the session running, and the reference
             // reports it as a backgrounded one: the model polls it with the
             // family's output tool instead of losing the work.
+            abort.disarm();
             let (document, display) = managed_command_document(&handle, true, limit)?;
             return Ok(document.into_output(display));
         }
         kill_managed_session(shell, &session, SessionStatus::TimedOut).await?;
+        abort.disarm();
+        // The kill can push out a last line after the drain above.
+        stream.pump(&session, output);
         let (document, _) = managed_command_document(&handle, false, limit)?;
         return Err(ToolError::Execution(format!(
-            "the command timed out after {timeout}s and its process group was terminated: \
+            "the command timed out after {}s and its process group was terminated: \
              `{command}`\nsession_id: {}\noutput:\n{}",
+            render_seconds(timeout),
             session.id,
             document.model_text()
         )));
     }
+    abort.disarm();
     let (document, display) = managed_command_document(&handle, false, limit)?;
     let code = document
         .get("returncode")
@@ -379,6 +410,105 @@ pub(super) async fn run_managed_command(
         )));
     }
     Ok(document.into_output(display))
+}
+
+/// Reference `_ForegroundStream`: while a foreground command runs, what it
+/// prints reaches the client as it arrives.
+///
+/// One budget caps the whole stream, the same `max_output_bytes` the result is
+/// read under, and each piece is clipped to a whole character, so a stream
+/// never carries more than the result it precedes.
+struct ForegroundStream {
+    cursor: u64,
+    budget: usize,
+    limit: usize,
+}
+
+impl ForegroundStream {
+    fn new(limit: usize) -> Self {
+        Self {
+            cursor: 0,
+            budget: limit,
+            limit,
+        }
+    }
+
+    /// Emits what the log gained since the last pump.
+    fn pump(&mut self, session: &ManagedSession, output: &ToolOutputSink) {
+        let Ok((text, next_cursor, _)) = read_file_window(
+            &session.log_path,
+            self.cursor,
+            self.limit,
+            session.is_running(),
+        ) else {
+            return;
+        };
+        self.cursor = next_cursor;
+        let budget = self.budget.min(output.remaining_bytes());
+        if budget == 0 || text.is_empty() {
+            return;
+        }
+        let message = clip_to_bytes(&text, budget);
+        if message.is_empty() {
+            return;
+        }
+        self.budget = self.budget.saturating_sub(message.len());
+        let _ = output.emit(message);
+    }
+}
+
+/// Reference `_clip_to_bytes`: the longest prefix of `text` that fits in
+/// `limit` bytes without splitting a character.
+fn clip_to_bytes(text: &str, limit: usize) -> String {
+    if text.len() <= limit {
+        return text.to_owned();
+    }
+    let mut end = limit;
+    while end > 0 && !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    text[..end].to_owned()
+}
+
+/// Kills a foreground session when the call that owns it is dropped.
+///
+/// A cancelled turn drops the tool future, which drops this guard, which
+/// settles the session as killed and stops its process group, exactly as the
+/// reference's shielded kill does. A call that hands the session back, to its
+/// exit or to the background, disarms it first.
+struct AbortKill {
+    shell: Arc<SessionShell>,
+    session: Option<Arc<ManagedSession>>,
+}
+
+impl AbortKill {
+    fn new(shell: Arc<SessionShell>, session: Arc<ManagedSession>) -> Self {
+        Self {
+            shell,
+            session: Some(session),
+        }
+    }
+
+    fn disarm(&mut self) {
+        self.session = None;
+    }
+}
+
+impl Drop for AbortKill {
+    fn drop(&mut self) {
+        let Some(session) = self.session.take() else {
+            return;
+        };
+        if !session.is_running() {
+            return;
+        }
+        let shell = self.shell.clone();
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            handle.spawn(async move {
+                let _ = kill_managed_session(&shell, &session, SessionStatus::Killed).await;
+            });
+        }
+    }
 }
 
 pub(super) async fn start_managed_session(
@@ -476,7 +606,12 @@ pub(super) fn spawn_pump(terminals: TerminalManager, session: Arc<ManagedSession
     tokio::spawn(async move {
         loop {
             let Ok(read) = terminals.read(&session.terminal_id).await else {
-                session.settle(SessionStatus::Killed, None);
+                // A terminal released under the pump belongs to a kill, which
+                // settles the session itself; one that vanished otherwise
+                // leaves a session nothing will settle.
+                if session.is_running() {
+                    session.settle(SessionStatus::Killed, None);
+                }
                 return;
             };
             append_chunks(&session, &read.chunks, read.backpressure_dropped);
@@ -487,11 +622,11 @@ pub(super) fn spawn_pump(terminals: TerminalManager, session: Arc<ManagedSession
                         &final_read.chunks,
                         final_read.backpressure_dropped,
                     );
+                    let code = Some(exit_status(&final_read.state));
                     if session.is_running() {
-                        session.settle(
-                            SessionStatus::Completed,
-                            Some(exit_status(&final_read.state)),
-                        );
+                        session.settle(SessionStatus::Completed, code);
+                    } else {
+                        session.record_exit(code);
                     }
                 }
                 // The output is captured, so the child is reaped now rather
@@ -786,11 +921,10 @@ impl SessionWindow {
 /// What the family's command tool answers once a session has been started.
 ///
 /// Reference `_result_from_session` reads the session once and fills the whole
-/// result from that one read: `output` is what the log held, `stdout` is the
-/// same bytes with the terminal's line endings normalized, `stderr` is empty
-/// because a managed session multiplexes both streams onto one log, and
-/// `returncode` falls back to zero while `exit_code` stays null for a session
-/// that has not exited.
+/// result from that one read: `output` is what the log held, both streams
+/// interleaved by the terminal, so there is no separate `stdout` or `stderr`,
+/// and the computed `returncode` falls back to zero while `exit_code` stays
+/// null for a session that has not exited.
 pub(super) fn managed_command_document(
     handle: &SessionHandle,
     background: bool,
@@ -812,8 +946,6 @@ pub(super) fn managed_command_document(
             "output_path",
             window.log_path.to_string_lossy().into_owned(),
         )
-        .field("stdout", window.output.replace("\r\n", "\n"))
-        .field("stderr", "")
         .field("returncode", exit_code.as_i64().unwrap_or(0));
     Ok((document, window.display()))
 }
@@ -845,6 +977,12 @@ pub(super) async fn kill_managed_session(
     session: &ManagedSession,
     status: SessionStatus,
 ) -> Result<(), ToolError> {
+    // Reference `kill` answers a session that already settled with the record
+    // it holds rather than killing it again.
+    if !session.is_running() {
+        return Ok(());
+    }
+    session.mark(status);
     let read = shell.terminals.interrupt(&session.terminal_id).await;
     let exit_code = match read {
         Ok(read) => {

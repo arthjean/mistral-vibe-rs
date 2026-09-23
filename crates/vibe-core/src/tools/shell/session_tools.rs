@@ -15,6 +15,7 @@ use std::time::{Duration, Instant};
 use base64::Engine as _;
 use serde_json::{Value, json};
 
+use crate::shell::resolve_path;
 use crate::tools::{ToolError, ToolExecutionOutput, ToolOutputSink};
 
 use super::decode::{read_file_window, skip_utf8_continuation_prefix};
@@ -87,7 +88,15 @@ pub(super) async fn run_stdin(
         .to_owned();
     // The payload is decoded before the session is even looked up, so a
     // malformed one never reaches a process.
-    let bytes = stdin_bytes(&arguments)?;
+    let bytes = stdin_bytes(shell.family, &arguments)?;
+    // Reference `write_bytes` refuses an empty payload before it looks the
+    // session up: nothing would reach the process, and a call that writes
+    // nothing is a mistake rather than a no-op.
+    if bytes.is_empty() {
+        return Err(ToolError::Execution(
+            "the stdin payload is empty; send at least one byte".to_owned(),
+        ));
+    }
     let session = managed_session(&shell, &session_id).await?;
     if !session.is_running() {
         return Err(ToolError::Execution(format!(
@@ -110,7 +119,7 @@ pub(super) async fn run_stdin(
 ///
 /// The reference model accepts exactly one of the three inputs and rejects
 /// anything else, so there is no precedence to apply.
-pub(super) fn stdin_bytes(arguments: &Value) -> Result<Vec<u8>, ToolError> {
+pub(super) fn stdin_bytes(family: ShellFamily, arguments: &Value) -> Result<Vec<u8>, ToolError> {
     let text = string_argument(arguments, "text");
     let control = arguments
         .get("control")
@@ -127,6 +136,11 @@ pub(super) fn stdin_bytes(arguments: &Value) -> Result<Vec<u8>, ToolError> {
         });
     }
     if let Some(text) = text {
+        // Reference `WindowsShellStdin._build_payload`: a console reads a line
+        // as ended by a carriage return, so every line ending becomes one.
+        if family == ShellFamily::PowerShell {
+            return Ok(text.replace("\r\n", "\n").replace('\n', "\r").into_bytes());
+        }
         return Ok(text.as_bytes().to_vec());
     }
     if let Some(keys) = control {
@@ -249,8 +263,10 @@ pub(super) async fn run_sessions(
             // started it, which is what the reference does: any turn may
             // stop any session of the family.
             let session = required_session(&shell, &arguments, "kill").await?;
+            // Reference `kill` keeps the session in its table: a killed
+            // session is still listed, inspected and read, and killing it
+            // again answers its record rather than refusing.
             kill_managed_session(&shell, &session, SessionStatus::Killed).await?;
-            shell.managed.lock().await.remove(&session.id);
             let display = json!({"kind": "shell", "command": session.command});
             Ok(SessionsResult {
                 session: Some(session_document(&session.info())),
@@ -268,31 +284,37 @@ pub(super) async fn run_sessions(
                 .values()
                 .cloned()
                 .collect::<Vec<_>>();
+            // Reference `reset` answers the sessions it stopped, which are the
+            // ones still running: a session that already settled is neither
+            // killed again nor reported.
             let mut killed = Vec::new();
             for session in &sessions {
                 if session.is_running() {
                     kill_managed_session(&shell, session, SessionStatus::Killed).await?;
+                    killed.push(session.info());
                 }
-                killed.push(session.info());
             }
-            shell.managed.lock().await.clear();
             if arguments["clear_logs"].as_bool().unwrap_or(false) {
-                // Reference `reset` clears the orphans with the logs, because
-                // the manifests it would read them back from are what it just
-                // deleted.
-                for session in &sessions {
-                    let _ = std::fs::remove_file(&session.log_path);
-                    let _ = std::fs::remove_file(&session.manifest_path);
-                }
-                for manifest in shell.orphans() {
-                    if let Some(id) = manifest.get("session_id").and_then(Value::as_str) {
-                        let directory = shell.sessions_directory();
-                        let _ = std::fs::remove_file(directory.join(format!("{id}.log")));
-                        let _ = std::fs::remove_file(directory.join(format!("{id}.json")));
-                    }
-                }
+                // Only a reset that clears the logs forgets the sessions: the
+                // records it would answer from are what it deletes. Every file
+                // of this family in the sessions directory goes, whichever
+                // session wrote it and whether or not one did.
+                shell.managed.lock().await.clear();
                 if let Ok(mut orphaned) = shell.orphaned.lock() {
                     orphaned.clear();
+                }
+                let prefix = format!("{}_", shell.family.name());
+                if let Ok(entries) = std::fs::read_dir(shell.sessions_directory()) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        let owned = path
+                            .file_name()
+                            .and_then(|name| name.to_str())
+                            .is_some_and(|name| name.starts_with(&prefix));
+                        if owned && path.is_file() {
+                            let _ = std::fs::remove_file(&path);
+                        }
+                    }
                 }
             }
             let message = format!("Stopped {} {} sessions", killed.len(), shell.family.name());
@@ -389,8 +411,14 @@ pub(super) async fn run_log_file(
             })))
         }
         "write" | "append" => {
+            // Reference `BashLogFile.run` refuses a write that names no
+            // content before it touches the file.
+            let Some(content) = string_argument(&arguments, "content") else {
+                return Err(ToolError::Execution(format!(
+                    "`content` is required to {action} a log"
+                )));
+            };
             refuse_live_session_log(&shell, &path).await?;
-            let content = string_argument(&arguments, "content").unwrap_or_default();
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent).map_err(|error| {
                     ToolError::Execution(format!(
@@ -497,59 +525,51 @@ async fn log_path_of(shell: &SessionShell, arguments: &Value) -> Result<PathBuf,
     Ok(path)
 }
 
-/// The file a `<family>_log_file` call addresses, derived without reaching the
-/// session table, which is what the permission context is computed from before
-/// the handler runs.
+/// The file a `<family>_log_file` call addresses by `relative_path`.
 ///
-/// A session id resolves to that session's own log. A relative path is joined
-/// to the shell-tool directory and refused before any filesystem access when it
-/// climbs out of it or names another family's session file.
-pub(super) fn resolve_log_path(
-    shell: &SessionShell,
-    arguments: &Value,
-) -> Result<PathBuf, ToolError> {
-    if let Some(session_id) = string_argument(arguments, "session_id") {
-        // A session id names a file inside the session directory, so it is held
-        // to the same rule as a relative path: one component, this family's.
-        if !is_family_session_id(shell.family, session_id) {
-            return Err(ToolError::Execution(format!(
-                "the log path must name a {} session file",
-                shell.family.name()
-            )));
-        }
-        return Ok(shell.sessions_directory().join(format!("{session_id}.log")));
-    }
-    let Some(relative) = string_argument(arguments, "relative_path") else {
+/// Reference `resolve_log_path`: the path is joined to the shell-tool
+/// directory and resolved, symlinks included, and must stay under it, so a
+/// `..` that lands back inside is accepted while a link aiming out is not.
+/// Anything under the sessions directory must carry this family's prefix,
+/// which keeps another family's session files out of reach.
+fn resolve_log_path(shell: &SessionShell, arguments: &Value) -> Result<PathBuf, ToolError> {
+    let Some(relative) =
+        string_argument(arguments, "relative_path").filter(|path| !path.is_empty())
+    else {
         return Err(ToolError::SchemaViolation {
             path: "/relative_path".to_owned(),
             message: "is required when session_id is absent".to_owned(),
         });
     };
-    let candidate = Path::new(relative);
-    if candidate
-        .components()
-        .any(|component| !matches!(component, Component::Normal(_)))
-    {
+    let base = resolve_path(&shell.log_root);
+    let candidate = resolve_path(&shell.log_root.join(relative));
+    if !candidate.starts_with(&base) {
         return Err(ToolError::Execution(
             "the log path escapes the session log directory".to_owned(),
         ));
     }
-    let resolved = shell.log_root.join(candidate);
-    // A file directly under `sessions/` belongs to a shell family, and this
-    // tool answers only for its own.
-    if resolved.parent() == Some(shell.sessions_directory().as_path())
-        && !resolved
-            .file_name()
-            .and_then(|name| name.to_str())
-            .and_then(|name| name.strip_suffix(".log"))
-            .is_some_and(|name| is_family_session_id(shell.family, name))
-    {
-        return Err(ToolError::Execution(format!(
-            "the log path must name a {} session file",
-            shell.family.name()
-        )));
+    refuse_other_family_session_log(shell, &candidate)?;
+    Ok(candidate)
+}
+
+/// Reference `_reject_other_family_session_log`: a path under the sessions
+/// directory must be named after this family's sessions.
+fn refuse_other_family_session_log(shell: &SessionShell, path: &Path) -> Result<(), ToolError> {
+    if !path.starts_with(resolve_path(&shell.sessions_directory())) {
+        return Ok(());
     }
-    Ok(resolved)
+    let prefix = format!("{}_", shell.family.name());
+    if path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name.starts_with(&prefix))
+    {
+        return Ok(());
+    }
+    Err(ToolError::Execution(format!(
+        "the log path must name a {} session file",
+        shell.family.name()
+    )))
 }
 
 /// Whether `candidate` is one plain name belonging to `family`.

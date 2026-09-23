@@ -13,6 +13,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use serde_json::Value;
 
@@ -24,13 +25,14 @@ use crate::policy::{
 use crate::process::ClientToolIo;
 use crate::shell::{
     ShellAnalysis, ShellCommandLists, ShellConfig, ShellFlavor, ShellPolicyContext, analyze_shell,
+    override_requirements, pager_input_permission,
 };
 use crate::tools::config::{ShellCommandConfig, ToolConfigResolver};
 use crate::tools::{ToolError, ToolHandler, ToolHandlerFuture, ToolInvocation, ToolOutputSink};
 
+use super::command_handler;
 use super::host::ShellFamily;
 use super::session::SessionShell;
-use super::{command_handler, resolve_log_path};
 
 // --------------------------------------------------------------------------
 // Policy
@@ -64,25 +66,35 @@ struct ShellCallPolicy {
 }
 
 impl ShellCallPolicy {
-    /// Where a `cwd` override may point without leaving the workspace: the
-    /// directory the call runs in and every root the session authorized.
-    fn roots(&self) -> Vec<PathBuf> {
-        let mut roots = vec![self.root.clone()];
-        roots.extend(self.policy.workspace_roots());
-        roots
-    }
-
     /// What the command runs under, with the overrides the command text cannot
     /// see already folded in.
     ///
     /// An override decides where the command runs, what interprets it and what
-    /// it inherits, none of which an analysis of the text can see. So a call
-    /// carrying one stops being allowed outright and reaches the operator
-    /// instead.
+    /// it inherits, none of which an analysis of the text can see. The
+    /// reference resolver for these variants reads all three: the `cwd` is
+    /// where operands resolve and is itself an outside directory when it leaves
+    /// the workspace, and a custom shell or environment carries a requirement
+    /// of its own that keeps an allowlisted command from running unasked.
     fn analysis(&self, arguments: &Value) -> Result<ShellAnalysis, ToolError> {
         let command = command_argument(arguments)?;
         let settings: ShellCommandConfig = self.config.view(&self.tool);
-        let mut analysis = analyze(
+        let overrides = self.overrides.then(|| CallOverrides {
+            cwd: string_argument(arguments, "cwd").map(ToOwned::to_owned),
+            requirements: context_requirements(arguments),
+            environment: arguments
+                .get("env")
+                .and_then(Value::as_object)
+                .map(|overrides| {
+                    overrides
+                        .iter()
+                        .filter_map(|(key, value)| {
+                            value.as_str().map(|value| (key.clone(), value.to_owned()))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+        });
+        Ok(analyze(
             self.flavor,
             self.platform,
             &self.root,
@@ -90,46 +102,20 @@ impl ShellCallPolicy {
             self.scratchpad.clone(),
             &command,
             &ShellCommandLists::from_config(&settings),
-        );
-        if self.overrides && !override_requirements(arguments, &self.roots()).is_empty() {
-            analysis.mode = analysis.mode.min(PermissionMode::Ask);
-            analysis.rationale.push(
-                "the call overrides the working directory, the shell or the environment".to_owned(),
-            );
-        }
-        Ok(analysis)
+            overrides,
+        ))
     }
 
     /// What the operator is asked to approve, derived from the same analysis
     /// the routing read.
     fn context(&self, arguments: &Value) -> Result<PermissionContext, ToolError> {
         let analysis = self.analysis(arguments)?;
-        // The analysis already composed what the operator answers: one
-        // requirement per session pattern, one per directory the call leaves
-        // the workspace for, and one per `find` that runs a program. Rebuilding
-        // them here would be a second vocabulary to keep in step with the first.
-        let mut requirements = analysis.requirements;
-        if requirements.is_empty() {
-            // An analysis that composed none still needs something to approve,
-            // which is the whole command under its own pattern.
-            requirements.push(PermissionRequirement::command(&command_argument(
-                arguments,
-            )?));
+        // An analysis that composed nothing is the reference resolving `None`:
+        // the configured permission decides and nothing is asked about.
+        if analysis.requirements.is_empty() {
+            return Ok(PermissionContext::deferred());
         }
-        if self.overrides {
-            requirements.extend(override_requirements(arguments, &self.roots()));
-        }
-        let mut context = PermissionContext::asking(requirements);
-        // A `cwd` override is a directory the call reaches, so it travels on
-        // the context and is positioned against the trust roots the way a file
-        // tool's path is. A root the operator revoked refuses the call rather
-        // than becoming one more thing an approval reopens.
-        if self.overrides
-            && let Some(directory) = string_argument(arguments, "cwd")
-        {
-            context.paths.push(PathBuf::from(directory));
-        }
-        Ok(context)
+        Ok(PermissionContext::asking(analysis.requirements))
     }
 }
 
@@ -233,6 +219,17 @@ pub(super) fn guarded_command(wiring: CommandWiring) -> Arc<dyn ToolHandler> {
     })
 }
 
+/// The overrides a call carries beside its command.
+pub(super) struct CallOverrides {
+    /// The `cwd` argument as the call wrote it.
+    pub(super) cwd: Option<String>,
+    /// What the custom shell and environment require.
+    pub(super) requirements: Vec<PermissionRequirement>,
+    /// The environment overrides themselves, which a PowerShell path expands.
+    pub(super) environment: Vec<(String, String)>,
+}
+
+#[allow(clippy::too_many_arguments)]
 pub(super) fn analyze(
     flavor: ShellFlavor,
     platform: Platform,
@@ -241,6 +238,7 @@ pub(super) fn analyze(
     scratchpad: Option<PathBuf>,
     command: &str,
     lists: &ShellCommandLists,
+    overrides: Option<CallOverrides>,
 ) -> ShellAnalysis {
     let Ok(root) = parse_policy_path(platform, &working_directory.to_string_lossy()) else {
         // A working directory the policy cannot parse is not a reason to run
@@ -250,7 +248,7 @@ pub(super) fn analyze(
             rationale: vec!["the working directory is not a policy path".to_owned()],
             commands: Vec::new(),
             path_operands: Vec::new(),
-            requirements: Vec::new(),
+            requirements: vec![PermissionRequirement::exact_command(command)],
         };
     };
     // A listed root the policy cannot parse is left out, which positions its
@@ -258,103 +256,77 @@ pub(super) fn analyze(
     let listed = listed_roots
         .iter()
         .filter_map(|root| parse_policy_path(platform, &root.to_string_lossy()).ok());
-    analyze_shell(
-        flavor,
-        command,
-        &ShellPolicyContext::new(platform, root)
-            .with_scratchpad(scratchpad)
-            .with_roots(listed),
-        lists,
-    )
+    let mut context = ShellPolicyContext::new(platform, root)
+        .with_scratchpad(scratchpad)
+        .with_roots(listed);
+    if let Some(overrides) = overrides {
+        context = context
+            .managed(flavor, overrides.cwd.as_deref(), overrides.requirements)
+            .with_environment(overrides.environment);
+    }
+    analyze_shell(flavor, command, &context, lists)
 }
 
-/// What the managed variant's overrides require on top of the command itself.
+/// What a custom shell and a custom environment require.
+fn context_requirements(arguments: &Value) -> Vec<PermissionRequirement> {
+    let names = arguments
+        .get("env")
+        .and_then(Value::as_object)
+        .map(|overrides| overrides.keys().cloned().collect::<Vec<_>>())
+        .unwrap_or_default();
+    override_requirements(string_argument(arguments, "shell"), &names)
+}
+
+/// What a `*_log_file` call needs.
 ///
-/// The reference resolves the permission of a managed call from more than the
-/// command text: a custom shell and a custom environment each carry their own
-/// requirement (`_build_context_permissions`), and a working directory outside
-/// the session root carries an outside-directory one (`_collect_outside_dirs`).
-/// None of the three is visible to an analysis of the command string, so an
-/// allowlisted command would otherwise run somewhere else, under another
-/// interpreter, with an environment the operator never saw.
-fn override_requirements(arguments: &Value, roots: &[PathBuf]) -> Vec<PermissionRequirement> {
-    let mut requirements = Vec::new();
-    if let Some(directory) = string_argument(arguments, "cwd")
-        && !roots
-            .iter()
-            .any(|root| is_inside(root, Path::new(directory)))
-    {
-        // Reference `_collect_outside_dirs` names the directory itself, joined
-        // with `*`, rather than the file-shaped parent a file tool names.
-        requirements.push(PermissionRequirement::outside_directory(
-            &Path::new(directory).join("*").display().to_string(),
-        ));
+/// Reference `BashLogFile.resolve_permission`: a read is always granted, and a
+/// write or an append falls to the configured permission. Neither raises a
+/// requirement, so where the log sits is not asked about.
+pub(super) fn log_file_requirements(arguments: &Value) -> PermissionContext {
+    if arguments["action"].as_str() == Some("read") {
+        return PermissionContext::settled(PermissionMode::Always);
     }
-    if let Some(shell) = string_argument(arguments, "shell") {
-        // Reference `_build_context_permissions` carries the override verbatim
-        // as both patterns, so approving one interpreter never approves another.
-        // It is the one exact pattern the reference leaves unmarked, so a
-        // stored grant still reads it as a glob.
-        requirements.push(PermissionRequirement {
-            literal: false,
-            ..PermissionRequirement::exact_command(&format!("shell override: {shell}"))
-        });
-    }
-    if let Some(names) = environment_names(arguments) {
-        // The environment override is the one context permission the reference
-        // widens for the session: the names change per call, so the session
-        // pattern covers any of them.
-        requirements.push(PermissionRequirement {
-            scope: crate::policy::PermissionScope::CommandPattern,
-            invocation_pattern: format!("env override: {names}"),
-            session_pattern: "env override *".to_owned(),
-            label: format!("env override: {names}"),
-            literal: false,
-        });
-    }
-    requirements
+    PermissionContext::deferred()
 }
 
-/// The overridden variable names, sorted, or `None` when nothing is overridden.
-fn environment_names(arguments: &Value) -> Option<String> {
-    let overrides = arguments.get("env")?.as_object()?;
-    if overrides.is_empty() {
-        return None;
-    }
-    Some(overrides.keys().cloned().collect::<Vec<_>>().join(", "))
-}
-
-/// Whether `candidate` resolves inside `root`, answering `false` for anything
-/// that cannot be resolved: an unresolvable directory is not a known-safe one.
-fn is_inside(root: &Path, candidate: &Path) -> bool {
-    let Ok(root) = root.canonicalize() else {
-        return false;
-    };
-    candidate
-        .canonicalize()
-        .is_ok_and(|resolved| resolved.starts_with(&root))
-}
-
-/// The log a `*_log_file` call touches, positioned against the trust roots.
+/// What a `*_stdin` call needs.
 ///
-/// The reference declares no requirement of its own here, so what decides is
-/// the configured permission plus whether the log sits inside the workspace: a
-/// session whose log directory was redirected outside it is asked about.
-pub(super) fn log_file_requirements(
+/// Reference `BashStdin.resolve_permission`: input to a session whose command
+/// runs `git`, `less` or `more` can reach a pager's own command prompt, so it is
+/// asked about under the session's own pattern, as is input to a session this
+/// family does not know. Anything else falls to the configured permission.
+pub(super) fn stdin_requirements(
     shell: &SessionShell,
+    flavor: ShellFlavor,
     arguments: &Value,
-) -> Result<PermissionContext, ToolError> {
-    let path = resolve_log_path(shell, arguments)?;
-    Ok(PermissionContext::deferred().over_paths(vec![path]))
+) -> PermissionContext {
+    let session_id = arguments["session_id"].as_str().unwrap_or_default();
+    let live = shell.managed.try_lock().ok().and_then(|sessions| {
+        sessions
+            .get(session_id)
+            .map(|session| session.command.clone())
+    });
+    let command = live.or_else(|| {
+        shell.orphan(session_id).and_then(|manifest| {
+            manifest
+                .get("command")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned)
+        })
+    });
+    pager_input_permission(flavor, session_id, command.as_deref())
 }
 
 // --------------------------------------------------------------------------
 // Arguments
 // --------------------------------------------------------------------------
 
+/// The command a call runs, exactly as the call spelled it: reference
+/// `TerminalSessionManager.start` refuses one that is blank once stripped, but
+/// runs and reports the text it was handed.
 pub(super) fn command_argument(arguments: &Value) -> Result<String, ToolError> {
-    let command = arguments["command"].as_str().unwrap_or_default().trim();
-    if command.is_empty() {
+    let command = arguments["command"].as_str().unwrap_or_default();
+    if command.trim().is_empty() {
         return Err(ToolError::SchemaViolation {
             path: "/command".to_owned(),
             message: "must not be empty".to_owned(),
@@ -367,23 +339,37 @@ pub(super) fn string_argument<'a>(arguments: &'a Value, name: &str) -> Option<&'
     arguments.get(name).and_then(Value::as_str)
 }
 
-/// The foreground wait, in seconds, bounded by the configured maximum.
-pub(super) fn timeout_argument(arguments: &Value, settings: &ShellCommandConfig) -> u64 {
-    // The reference reads `args.timeout or default`, so a zero is falsy and
-    // means the default rather than an instant timeout.
+/// The foreground wait of a managed command, bounded by the configured
+/// maximum.
+///
+/// Reference `ExperimentalBash.run` reads the legacy `timeout` first, even at
+/// zero, then `timeout_seconds`, then the configured default, and caps the
+/// result at `max_timeout_seconds`. A wait of zero checks the session once and
+/// hands it to the background.
+pub(super) fn timeout_argument(arguments: &Value, settings: &ShellCommandConfig) -> Duration {
     let requested = arguments["timeout"]
-        .as_u64()
-        .filter(|seconds| *seconds > 0)
-        .or_else(|| {
-            arguments["timeout_seconds"].as_f64().map(|seconds| {
-                // A fractional wait rounds up: waiting less than asked would report
-                // a timeout the operator did not request.
-                seconds.ceil().max(0.0) as u64
-            })
-        })
-        .unwrap_or(settings.default_timeout);
-    let ceiling = settings.max_timeout_seconds.max(1.0) as u64;
-    requested.clamp(1, ceiling)
+        .as_i64()
+        .map(|seconds| seconds as f64)
+        .or_else(|| arguments["timeout_seconds"].as_f64())
+        .unwrap_or(settings.default_timeout as f64);
+    let bounded = requested.min(settings.max_timeout_seconds).max(0.0);
+    Duration::try_from_secs_f64(bounded).unwrap_or_default()
+}
+
+/// Whether a managed wait that expires kills the session: reference
+/// `hard_timeout or timeout is not None`.
+pub(super) fn is_hard_timeout(arguments: &Value) -> bool {
+    arguments["hard_timeout"].as_bool().unwrap_or(false) || arguments["timeout"].as_i64().is_some()
+}
+
+/// Renders a wait the way Python's `{timeout:g}` renders a float.
+pub(super) fn render_seconds(timeout: Duration) -> String {
+    let seconds = timeout.as_secs_f64();
+    if seconds.fract() == 0.0 {
+        format!("{seconds:.0}")
+    } else {
+        format!("{seconds}")
+    }
 }
 
 /// The read window one inline answer may carry: what the call asked for,
@@ -393,11 +379,15 @@ pub(super) fn byte_limit(
     sink: &ToolOutputSink,
     max_inline_bytes: usize,
 ) -> usize {
+    // Reference `args.max_bytes or config.max_inline_bytes`, read through the
+    // `max_chars` alias when the canonical name is absent. A request larger
+    // than the configured window is honored, as it is upstream; only the
+    // turn's remaining budget bounds it further.
     let requested = arguments["max_bytes"]
         .as_u64()
+        .or_else(|| arguments["max_chars"].as_u64())
+        .filter(|value| *value > 0)
         .and_then(|value| usize::try_from(value).ok())
         .unwrap_or(max_inline_bytes);
-    requested
-        .min(max_inline_bytes)
-        .min(sink.remaining_bytes().max(1))
+    requested.min(sink.remaining_bytes().max(1))
 }

@@ -157,10 +157,14 @@
     ]
   },
   "counts": {
-    "extractionCases": 28,
+    "extractionCases": 47,
+    "managedCases": 16,
     "outsideDirCases": 23,
     "pathCommands": 45,
-    "resolutionCases": 63
+    "repositoryCases": 40,
+    "resolutionCases": 132,
+    "stdinPermissionCases": 21,
+    "windowsGrammarCases": 33
   },
   "extraction": [
     {
@@ -335,6 +339,414 @@
         "cd src",
         "ls"
       ]
+    },
+    {
+      "command": "=ls -la",
+      "segments": [
+        "-la"
+      ]
+    },
+    {
+      "command": "ls ~root",
+      "segments": [
+        "ls"
+      ]
+    },
+    {
+      "command": "echo a==b",
+      "segments": [
+        "echo"
+      ]
+    },
+    {
+      "command": "ls ***/x",
+      "segments": [
+        "ls"
+      ]
+    },
+    {
+      "command": "find . $'-exec' rm {} ;",
+      "segments": [
+        "find . $'-exec' rm {}"
+      ]
+    },
+    {
+      "command": "echo $'a\\tb'",
+      "segments": [
+        "echo $'a\\tb'"
+      ]
+    },
+    {
+      "command": "git $SUB",
+      "segments": [
+        "git"
+      ]
+    },
+    {
+      "command": "echo $HOME ${HOME}",
+      "segments": [
+        "echo"
+      ]
+    },
+    {
+      "command": "ls {a,b}",
+      "segments": [
+        "ls {a,b}"
+      ]
+    },
+    {
+      "command": "echo $((1+2))",
+      "segments": [
+        "echo"
+      ]
+    },
+    {
+      "command": "diff <(ls) <(ls)",
+      "segments": [
+        "diff",
+        "ls",
+        "ls"
+      ]
+    },
+    {
+      "command": "f() { ls; }",
+      "segments": [
+        "ls"
+      ]
+    },
+    {
+      "command": "ls >/dev/null 2>&1",
+      "segments": [
+        "ls <redirect>"
+      ]
+    },
+    {
+      "command": "ls >&2",
+      "segments": [
+        "ls <redirect>"
+      ]
+    },
+    {
+      "command": "cat <<< text",
+      "segments": [
+        "cat"
+      ]
+    },
+    {
+      "command": "[[ -n $FOO ]]",
+      "segments": []
+    },
+    {
+      "command": "x=1",
+      "segments": []
+    },
+    {
+      "command": "ls \\\n -la",
+      "segments": [
+        "ls -la"
+      ]
+    },
+    {
+      "command": "eval 'sort -o x y'",
+      "segments": [
+        "eval 'sort -o x y'"
+      ]
+    }
+  ],
+  "managedResolutions": [
+    {
+      "command": "pwd",
+      "cwd": null,
+      "env": [],
+      "hasReason": false,
+      "permission": "always",
+      "requirements": [],
+      "shell": null
+    },
+    {
+      "command": "pwd",
+      "cwd": "<outside>",
+      "env": [],
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/*",
+          "label": {
+            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
+            "length": 29
+          },
+          "scope": "outside_directory",
+          "sessionPattern": "<outside>/*"
+        }
+      ],
+      "shell": null
+    },
+    {
+      "command": "pwd",
+      "cwd": "nested",
+      "env": [],
+      "hasReason": false,
+      "permission": "always",
+      "requirements": [],
+      "shell": null
+    },
+    {
+      "command": "pwd",
+      "cwd": "<scratchpad>",
+      "env": [],
+      "hasReason": false,
+      "permission": "always",
+      "requirements": [],
+      "shell": null
+    },
+    {
+      "command": "cat secret.txt",
+      "cwd": "<outside>",
+      "env": [],
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/*",
+          "label": {
+            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
+            "length": 29
+          },
+          "scope": "outside_directory",
+          "sessionPattern": "<outside>/*"
+        }
+      ],
+      "shell": null
+    },
+    {
+      "command": "cat nested/secret.txt",
+      "cwd": "<outside>",
+      "env": [],
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/*",
+          "label": {
+            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
+            "length": 29
+          },
+          "scope": "outside_directory",
+          "sessionPattern": "<outside>/*"
+        },
+        {
+          "invocationPattern": "<outside>/nested/*",
+          "label": {
+            "described": "sha256:8951ef6976f4e3c20179926384889fe6",
+            "length": 36
+          },
+          "scope": "outside_directory",
+          "sessionPattern": "<outside>/nested/*"
+        }
+      ],
+      "shell": null
+    },
+    {
+      "command": "cat ../elsewhere/secret.txt",
+      "cwd": "<workdir>",
+      "env": [],
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/*",
+          "label": {
+            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
+            "length": 29
+          },
+          "scope": "outside_directory",
+          "sessionPattern": "<outside>/*"
+        }
+      ],
+      "shell": null
+    },
+    {
+      "command": "pwd",
+      "cwd": null,
+      "env": [],
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "shell override: /bin/zsh",
+          "label": {
+            "described": "sha256:672467dc313166f179c337118f00e325",
+            "length": 23
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "shell override: /bin/zsh"
+        }
+      ],
+      "shell": "/bin/zsh"
+    },
+    {
+      "command": "pwd",
+      "cwd": null,
+      "env": [
+        "B",
+        "A"
+      ],
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "env override: A, B",
+          "label": {
+            "described": "sha256:d5b3b391a5c1da2c18b3c4024219a7e8",
+            "length": 25
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "env override *"
+        }
+      ],
+      "shell": null
+    },
+    {
+      "command": "rm -rf build",
+      "cwd": null,
+      "env": [
+        "X"
+      ],
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "rm -rf build",
+          "label": "rm *",
+          "scope": "command_pattern",
+          "sessionPattern": "rm *"
+        },
+        {
+          "invocationPattern": "shell override: /bin/zsh",
+          "label": {
+            "described": "sha256:672467dc313166f179c337118f00e325",
+            "length": 23
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "shell override: /bin/zsh"
+        },
+        {
+          "invocationPattern": "env override: X",
+          "label": {
+            "described": "sha256:a7c7d4565fd1047480490e58d8d75fdb",
+            "length": 22
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "env override *"
+        }
+      ],
+      "shell": "/bin/zsh"
+    },
+    {
+      "command": "# only a comment",
+      "cwd": null,
+      "env": [],
+      "permission": null,
+      "shell": "/bin/zsh"
+    },
+    {
+      "command": "/usr/bin/vim notes.txt",
+      "cwd": null,
+      "env": [],
+      "hasReason": true,
+      "permission": "never",
+      "requirements": [],
+      "shell": null
+    },
+    {
+      "command": "/usr/bin/python3",
+      "cwd": null,
+      "env": [],
+      "hasReason": true,
+      "permission": "never",
+      "requirements": [],
+      "shell": null
+    },
+    {
+      "command": "git status",
+      "cwd": "<outside>",
+      "env": [],
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/*",
+          "label": {
+            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
+            "length": 29
+          },
+          "scope": "outside_directory",
+          "sessionPattern": "<outside>/*"
+        }
+      ],
+      "shell": null
+    },
+    {
+      "command": "ls $X",
+      "cwd": null,
+      "env": [],
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "ls",
+          "label": "ls *",
+          "scope": "command_pattern",
+          "sessionPattern": "ls *"
+        },
+        {
+          "invocationPattern": "shell override: /bin/zsh",
+          "label": {
+            "described": "sha256:672467dc313166f179c337118f00e325",
+            "length": 23
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "shell override: /bin/zsh"
+        }
+      ],
+      "shell": "/bin/zsh"
+    },
+    {
+      "command": "sudo ls",
+      "cwd": "<outside>",
+      "env": [
+        "A"
+      ],
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "sudo ls",
+          "label": "sudo ls",
+          "scope": "command_pattern",
+          "sessionPattern": "sudo ls"
+        },
+        {
+          "invocationPattern": "<outside>/*",
+          "label": {
+            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
+            "length": 29
+          },
+          "scope": "outside_directory",
+          "sessionPattern": "<outside>/*"
+        },
+        {
+          "invocationPattern": "env override: A",
+          "label": {
+            "described": "sha256:d3bdc53d88df1d136d7cd646226b4aae",
+            "length": 22
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "env override *"
+        }
+      ],
+      "shell": null
     }
   ],
   "note": "Captured from the pinned reference by scripts/parity/shell_policy.py. Command names, node-kind names, scope values, booleans and the answers to cases this repository authored are observations; a label that is not one of its requirement's patterns is recorded as a digest and a length, and no reference-authored description, label or refusal text is recorded here.",
@@ -469,6 +881,584 @@
   "reference": {
     "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
   },
+  "repositoryResolutions": [
+    {
+      "command": "git status",
+      "fixture": "plain",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "git diff",
+      "fixture": "plain",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "git log",
+      "fixture": "plain",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "cd nested && git log",
+      "fixture": "plain",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "cd <outside> && git status",
+      "fixture": "plain",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/*",
+          "label": {
+            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
+            "length": 29
+          },
+          "scope": "outside_directory",
+          "sessionPattern": "<outside>/*"
+        }
+      ]
+    },
+    {
+      "command": "git status",
+      "fixture": "pager",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git status [git repositories: <workdir>/.git]",
+          "label": {
+            "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
+            "length": 10
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git status [git repositories: <workdir>/.git]"
+        }
+      ]
+    },
+    {
+      "command": "git diff",
+      "fixture": "pager",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git diff [git repositories: <workdir>/.git]",
+          "label": {
+            "described": "sha256:246050b60c622e9e0a8d742976690204",
+            "length": 8
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git diff [git repositories: <workdir>/.git]"
+        }
+      ]
+    },
+    {
+      "command": "git log",
+      "fixture": "pager",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git log [git repositories: <workdir>/.git]",
+          "label": {
+            "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
+            "length": 7
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git log [git repositories: <workdir>/.git]"
+        }
+      ]
+    },
+    {
+      "command": "cd nested && git log",
+      "fixture": "pager",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git log [git repositories: <workdir>/.git]",
+          "label": {
+            "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
+            "length": 7
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git log [git repositories: <workdir>/.git]"
+        }
+      ]
+    },
+    {
+      "command": "cd <outside> && git status",
+      "fixture": "pager",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/*",
+          "label": {
+            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
+            "length": 29
+          },
+          "scope": "outside_directory",
+          "sessionPattern": "<outside>/*"
+        },
+        {
+          "invocationPattern": "git status [git repositories: <workdir>/.git | directory:<outside>]",
+          "label": {
+            "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
+            "length": 10
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git status [git repositories: <workdir>/.git | directory:<outside>]"
+        }
+      ]
+    },
+    {
+      "command": "git status",
+      "fixture": "pager-off",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "git diff",
+      "fixture": "pager-off",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "git log",
+      "fixture": "pager-off",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "cd nested && git log",
+      "fixture": "pager-off",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "cd <outside> && git status",
+      "fixture": "pager-off",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/*",
+          "label": {
+            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
+            "length": 29
+          },
+          "scope": "outside_directory",
+          "sessionPattern": "<outside>/*"
+        }
+      ]
+    },
+    {
+      "command": "git status",
+      "fixture": "include",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git status [git repositories: <workdir>/.git]",
+          "label": {
+            "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
+            "length": 10
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git status [git repositories: <workdir>/.git]"
+        }
+      ]
+    },
+    {
+      "command": "git diff",
+      "fixture": "include",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git diff [git repositories: <workdir>/.git]",
+          "label": {
+            "described": "sha256:246050b60c622e9e0a8d742976690204",
+            "length": 8
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git diff [git repositories: <workdir>/.git]"
+        }
+      ]
+    },
+    {
+      "command": "git log",
+      "fixture": "include",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git log [git repositories: <workdir>/.git]",
+          "label": {
+            "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
+            "length": 7
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git log [git repositories: <workdir>/.git]"
+        }
+      ]
+    },
+    {
+      "command": "cd nested && git log",
+      "fixture": "include",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git log [git repositories: <workdir>/.git]",
+          "label": {
+            "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
+            "length": 7
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git log [git repositories: <workdir>/.git]"
+        }
+      ]
+    },
+    {
+      "command": "cd <outside> && git status",
+      "fixture": "include",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/*",
+          "label": {
+            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
+            "length": 29
+          },
+          "scope": "outside_directory",
+          "sessionPattern": "<outside>/*"
+        },
+        {
+          "invocationPattern": "git status [git repositories: <workdir>/.git | directory:<outside>]",
+          "label": {
+            "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
+            "length": 10
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git status [git repositories: <workdir>/.git | directory:<outside>]"
+        }
+      ]
+    },
+    {
+      "command": "git status",
+      "fixture": "log-pager",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "git diff",
+      "fixture": "log-pager",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "git log",
+      "fixture": "log-pager",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git log [git repositories: <workdir>/.git]",
+          "label": {
+            "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
+            "length": 7
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git log [git repositories: <workdir>/.git]"
+        }
+      ]
+    },
+    {
+      "command": "cd nested && git log",
+      "fixture": "log-pager",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git log [git repositories: <workdir>/.git]",
+          "label": {
+            "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
+            "length": 7
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git log [git repositories: <workdir>/.git]"
+        }
+      ]
+    },
+    {
+      "command": "cd <outside> && git status",
+      "fixture": "log-pager",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/*",
+          "label": {
+            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
+            "length": 29
+          },
+          "scope": "outside_directory",
+          "sessionPattern": "<outside>/*"
+        }
+      ]
+    },
+    {
+      "command": "git status",
+      "fixture": "fsmonitor",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git status [git repositories: <workdir>/.git]",
+          "label": {
+            "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
+            "length": 10
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git status [git repositories: <workdir>/.git]"
+        }
+      ]
+    },
+    {
+      "command": "git diff",
+      "fixture": "fsmonitor",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git diff [git repositories: <workdir>/.git]",
+          "label": {
+            "described": "sha256:246050b60c622e9e0a8d742976690204",
+            "length": 8
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git diff [git repositories: <workdir>/.git]"
+        }
+      ]
+    },
+    {
+      "command": "git log",
+      "fixture": "fsmonitor",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "cd nested && git log",
+      "fixture": "fsmonitor",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "cd <outside> && git status",
+      "fixture": "fsmonitor",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/*",
+          "label": {
+            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
+            "length": 29
+          },
+          "scope": "outside_directory",
+          "sessionPattern": "<outside>/*"
+        },
+        {
+          "invocationPattern": "git status [git repositories: <workdir>/.git | directory:<outside>]",
+          "label": {
+            "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
+            "length": 10
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git status [git repositories: <workdir>/.git | directory:<outside>]"
+        }
+      ]
+    },
+    {
+      "command": "git status",
+      "fixture": "diff-driver",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git status [git repositories: <workdir>/.git]",
+          "label": {
+            "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
+            "length": 10
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git status [git repositories: <workdir>/.git]"
+        }
+      ]
+    },
+    {
+      "command": "git diff",
+      "fixture": "diff-driver",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git diff [git repositories: <workdir>/.git]",
+          "label": {
+            "described": "sha256:246050b60c622e9e0a8d742976690204",
+            "length": 8
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git diff [git repositories: <workdir>/.git]"
+        }
+      ]
+    },
+    {
+      "command": "git log",
+      "fixture": "diff-driver",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git log [git repositories: <workdir>/.git]",
+          "label": {
+            "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
+            "length": 7
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git log [git repositories: <workdir>/.git]"
+        }
+      ]
+    },
+    {
+      "command": "cd nested && git log",
+      "fixture": "diff-driver",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git log [git repositories: <workdir>/.git]",
+          "label": {
+            "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
+            "length": 7
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git log [git repositories: <workdir>/.git]"
+        }
+      ]
+    },
+    {
+      "command": "cd <outside> && git status",
+      "fixture": "diff-driver",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/*",
+          "label": {
+            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
+            "length": 29
+          },
+          "scope": "outside_directory",
+          "sessionPattern": "<outside>/*"
+        },
+        {
+          "invocationPattern": "git status [git repositories: <workdir>/.git | directory:<outside>]",
+          "label": {
+            "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
+            "length": 10
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git status [git repositories: <workdir>/.git | directory:<outside>]"
+        }
+      ]
+    },
+    {
+      "command": "git status",
+      "fixture": "gpg",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "git diff",
+      "fixture": "gpg",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "git log",
+      "fixture": "gpg",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git log [git repositories: <workdir>/.git]",
+          "label": {
+            "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
+            "length": 7
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git log [git repositories: <workdir>/.git]"
+        }
+      ]
+    },
+    {
+      "command": "cd nested && git log",
+      "fixture": "gpg",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git log [git repositories: <workdir>/.git]",
+          "label": {
+            "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
+            "length": 7
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git log [git repositories: <workdir>/.git]"
+        }
+      ]
+    },
+    {
+      "command": "cd <outside> && git status",
+      "fixture": "gpg",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/*",
+          "label": {
+            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
+            "length": 29
+          },
+          "scope": "outside_directory",
+          "sessionPattern": "<outside>/*"
+        }
+      ]
+    }
+  ],
   "resolutions": [
     {
       "command": "ls -la",
@@ -1121,7 +2111,2321 @@
           "sessionPattern": "git reset --hard -- src"
         }
       ]
+    },
+    {
+      "command": "sort -o out.txt in.txt",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "sort -o out.txt in.txt",
+          "label": "sort -o out.txt in.txt",
+          "scope": "command_pattern",
+          "sessionPattern": "sort -o out.txt in.txt"
+        }
+      ]
+    },
+    {
+      "command": "sort in.txt",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "sort --random-source=/etc/hosts in.txt",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "/etc/*",
+          "label": {
+            "described": "sha256:f9089c4d60dfd86485a4c664bb4a8a07",
+            "length": 24
+          },
+          "scope": "outside_directory",
+          "sessionPattern": "/etc/*"
+        }
+      ]
+    },
+    {
+      "command": "date -s 10:00",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "date -s 10:00",
+          "label": "date -s 10:00",
+          "scope": "command_pattern",
+          "sessionPattern": "date -s 10:00"
+        }
+      ]
+    },
+    {
+      "command": "date 0101120025",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "date 0101120025",
+          "label": "date 0101120025",
+          "scope": "command_pattern",
+          "sessionPattern": "date 0101120025"
+        }
+      ]
+    },
+    {
+      "command": "date +%s",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "less -k keys notes.txt",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "less -k keys notes.txt",
+          "label": "less -k keys notes.txt",
+          "scope": "command_pattern",
+          "sessionPattern": "less -k keys notes.txt"
+        }
+      ]
+    },
+    {
+      "command": "less notes.txt",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "more +:e notes.txt",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "more +:e notes.txt",
+          "label": "more +:e notes.txt",
+          "scope": "command_pattern",
+          "sessionPattern": "more +:e notes.txt"
+        }
+      ]
+    },
+    {
+      "command": "uniq a.txt b.txt",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "uniq a.txt b.txt",
+          "label": "uniq a.txt b.txt",
+          "scope": "command_pattern",
+          "sessionPattern": "uniq a.txt b.txt"
+        }
+      ]
+    },
+    {
+      "command": "uniq a.txt",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "tree -o out.txt",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "tree -o out.txt",
+          "label": "tree -o out.txt",
+          "scope": "command_pattern",
+          "sessionPattern": "tree -o out.txt"
+        }
+      ]
+    },
+    {
+      "command": "tree -L 2",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "md5sum -c sums.txt",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "md5sum -c sums.txt",
+          "label": "md5sum -c sums.txt",
+          "scope": "command_pattern",
+          "sessionPattern": "md5sum -c sums.txt"
+        }
+      ]
+    },
+    {
+      "command": "md5sum notes.txt",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "wc --files0-from=list.txt",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "wc --files0-from=list.txt",
+          "label": "wc --files0-from=list.txt",
+          "scope": "command_pattern",
+          "sessionPattern": "wc --files0-from=list.txt"
+        }
+      ]
+    },
+    {
+      "command": "du -sh .",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "du --files0-from=list.txt",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "du --files0-from=list.txt",
+          "label": "du --files0-from=list.txt",
+          "scope": "command_pattern",
+          "sessionPattern": "du --files0-from=list.txt"
+        }
+      ]
+    },
+    {
+      "command": "file -z archive.gz",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "file -z archive.gz",
+          "label": "file -z archive.gz",
+          "scope": "command_pattern",
+          "sessionPattern": "file -z archive.gz"
+        }
+      ]
+    },
+    {
+      "command": "file notes.txt",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "grep -f /etc/hosts notes.txt",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "/etc/*",
+          "label": {
+            "described": "sha256:f9089c4d60dfd86485a4c664bb4a8a07",
+            "length": 24
+          },
+          "scope": "outside_directory",
+          "sessionPattern": "/etc/*"
+        }
+      ]
+    },
+    {
+      "command": "diff -X /etc/hosts a.txt b.txt",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "/etc/*",
+          "label": {
+            "described": "sha256:f9089c4d60dfd86485a4c664bb4a8a07",
+            "length": 24
+          },
+          "scope": "outside_directory",
+          "sessionPattern": "/etc/*"
+        }
+      ]
+    },
+    {
+      "command": "find . -delete",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "find . -delete",
+          "label": "find . -delete",
+          "scope": "command_pattern",
+          "sessionPattern": "find . -delete"
+        }
+      ]
+    },
+    {
+      "command": "find . -fprint out.txt",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "find . -fprint out.txt",
+          "label": "find . -fprint out.txt",
+          "scope": "command_pattern",
+          "sessionPattern": "find . -fprint out.txt"
+        }
+      ]
+    },
+    {
+      "command": "git log --ext-diff",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git log --ext-diff [git repositories: directory:<workdir>]",
+          "label": {
+            "described": "sha256:3d30af43661fbf95010c6ed4df3b9f22",
+            "length": 18
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git log --ext-diff [git repositories: directory:<workdir>]"
+        }
+      ]
+    },
+    {
+      "command": "git log --output=out.txt",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git log --output=out.txt [git repositories: directory:<workdir>]",
+          "label": {
+            "described": "sha256:eaafeb1fde46a5fd6dc0b136173748c1",
+            "length": 24
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git log --output=out.txt [git repositories: directory:<workdir>]"
+        }
+      ]
+    },
+    {
+      "command": "git log",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "git diff --diff-merges=remerge",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git diff --diff-merges=remerge [git repositories: directory:<workdir>]",
+          "label": {
+            "described": "sha256:089d5620fb45b9504d239d73db4476b3",
+            "length": 30
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git diff --diff-merges=remerge [git repositories: directory:<workdir>]"
+        }
+      ]
+    },
+    {
+      "command": "git status && sort -o x y && sort -o x y",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "sort -o x y",
+          "label": "sort -o x y",
+          "scope": "command_pattern",
+          "sessionPattern": "sort -o x y"
+        }
+      ]
+    },
+    {
+      "command": "sudo ls && sudo ls",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "sudo ls",
+          "label": "sudo ls",
+          "scope": "command_pattern",
+          "sessionPattern": "sudo ls"
+        },
+        {
+          "invocationPattern": "sudo ls",
+          "label": "sudo ls",
+          "scope": "command_pattern",
+          "sessionPattern": "sudo ls"
+        }
+      ]
+    },
+    {
+      "command": "eval git log --ext-diff",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "eval git log --ext-diff",
+          "label": "eval *",
+          "scope": "command_pattern",
+          "sessionPattern": "eval *"
+        },
+        {
+          "invocationPattern": "git log --ext-diff [git repositories: directory:<workdir>]",
+          "label": {
+            "described": "sha256:3d30af43661fbf95010c6ed4df3b9f22",
+            "length": 18
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git log --ext-diff [git repositories: directory:<workdir>]"
+        }
+      ]
+    },
+    {
+      "command": "eval 'sort -o x y'",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "eval 'sort -o x y'",
+          "label": "eval *",
+          "scope": "command_pattern",
+          "sessionPattern": "eval *"
+        },
+        {
+          "invocationPattern": "sort -o x y",
+          "label": "sort -o x y",
+          "scope": "command_pattern",
+          "sessionPattern": "sort -o x y"
+        }
+      ]
+    },
+    {
+      "command": "exec sort -o x y",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "exec sort -o x y",
+          "label": "exec *",
+          "scope": "command_pattern",
+          "sessionPattern": "exec *"
+        },
+        {
+          "invocationPattern": "sort -o x y",
+          "label": "sort -o x y",
+          "scope": "command_pattern",
+          "sessionPattern": "sort -o x y"
+        }
+      ]
+    },
+    {
+      "command": "exec -a name sort -o x y",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "exec -a name sort -o x y",
+          "label": "exec *",
+          "scope": "command_pattern",
+          "sessionPattern": "exec *"
+        },
+        {
+          "invocationPattern": "sort -o x y",
+          "label": "sort -o x y",
+          "scope": "command_pattern",
+          "sessionPattern": "sort -o x y"
+        }
+      ]
+    },
+    {
+      "command": "exec",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "exec",
+          "label": "exec *",
+          "scope": "command_pattern",
+          "sessionPattern": "exec *"
+        }
+      ]
+    },
+    {
+      "command": "eval vim notes.txt",
+      "hasReason": true,
+      "permission": "never",
+      "requirements": []
+    },
+    {
+      "command": "exec -- vim notes.txt",
+      "hasReason": true,
+      "permission": "never",
+      "requirements": []
+    },
+    {
+      "command": "eval python3",
+      "hasReason": true,
+      "permission": "never",
+      "requirements": []
+    },
+    {
+      "command": "cd <outside> && git status",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/*",
+          "label": {
+            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
+            "length": 29
+          },
+          "scope": "outside_directory",
+          "sessionPattern": "<outside>/*"
+        }
+      ]
+    },
+    {
+      "command": "cd $X && git status",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "cd",
+          "label": "cd *",
+          "scope": "command_pattern",
+          "sessionPattern": "cd *"
+        },
+        {
+          "invocationPattern": "git status",
+          "label": "git status",
+          "scope": "command_pattern",
+          "sessionPattern": "git status"
+        },
+        {
+          "invocationPattern": "git status [git repositories: directory:<workdir> | dynamic-directory]",
+          "label": {
+            "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
+            "length": 10
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git status [git repositories: directory:<workdir> | dynamic-directory]"
+        }
+      ]
+    },
+    {
+      "command": "pushd <outside> && popd && git status",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "pushd <outside>",
+          "label": "pushd *",
+          "scope": "command_pattern",
+          "sessionPattern": "pushd *"
+        },
+        {
+          "invocationPattern": "popd",
+          "label": "popd *",
+          "scope": "command_pattern",
+          "sessionPattern": "popd *"
+        }
+      ]
+    },
+    {
+      "command": "popd +1 && git status",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "popd +1",
+          "label": "popd *",
+          "scope": "command_pattern",
+          "sessionPattern": "popd *"
+        },
+        {
+          "invocationPattern": "git status [git repositories: directory:<workdir> | dynamic-directory]",
+          "label": {
+            "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
+            "length": 10
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git status [git repositories: directory:<workdir> | dynamic-directory]"
+        }
+      ]
+    },
+    {
+      "command": "cd -- <outside> && git status",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/*",
+          "label": {
+            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
+            "length": 29
+          },
+          "scope": "outside_directory",
+          "sessionPattern": "<outside>/*"
+        },
+        {
+          "invocationPattern": "git status [git repositories: directory:<workdir> | dynamic-directory]",
+          "label": {
+            "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
+            "length": 10
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git status [git repositories: directory:<workdir> | dynamic-directory]"
+        }
+      ]
+    },
+    {
+      "command": "git $SUB",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git $SUB",
+          "label": {
+            "described": "sha256:494a5b0a7ee50e50972bcc18056ac010",
+            "length": 51
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git $SUB"
+        }
+      ]
+    },
+    {
+      "command": "sudo $CMD",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "sudo $CMD",
+          "label": {
+            "described": "sha256:494a5b0a7ee50e50972bcc18056ac010",
+            "length": 51
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "sudo $CMD"
+        }
+      ]
+    },
+    {
+      "command": "git log $REF",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "git log $REF",
+          "label": {
+            "described": "sha256:494a5b0a7ee50e50972bcc18056ac010",
+            "length": 51
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "git log $REF"
+        }
+      ]
+    },
+    {
+      "command": "echo $HOME",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "echo",
+          "label": "echo *",
+          "scope": "command_pattern",
+          "sessionPattern": "echo *"
+        }
+      ]
+    },
+    {
+      "command": "ls {a,b}",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "ls {a,b}",
+          "label": "ls *",
+          "scope": "command_pattern",
+          "sessionPattern": "ls *"
+        }
+      ]
+    },
+    {
+      "command": "HOME=/x git status",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "HOME=/x git status",
+          "label": {
+            "described": "sha256:aa4cd38ef287a8504655ce63606a4ccb",
+            "length": 56
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "HOME=/x git status"
+        }
+      ]
+    },
+    {
+      "command": "ls &",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "ls",
+          "label": "ls *",
+          "scope": "command_pattern",
+          "sessionPattern": "ls *"
+        }
+      ]
+    },
+    {
+      "command": "( ls )",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "ls",
+          "label": "ls *",
+          "scope": "command_pattern",
+          "sessionPattern": "ls *"
+        }
+      ]
+    },
+    {
+      "command": "ls >/dev/null 2>&1",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "ls >&2",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": []
+    },
+    {
+      "command": "ls >&file",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "ls >&file",
+          "label": {
+            "described": "sha256:e436ecd66d6b18790da4595e645a1631",
+            "length": 44
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "ls >&file"
+        }
+      ]
+    },
+    {
+      "command": "cat <<< text",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "cat <<< text",
+          "label": {
+            "described": "sha256:4d43c25388b01267ba061c4e0a9b51d4",
+            "length": 86
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "cat <<< text"
+        }
+      ]
+    },
+    {
+      "command": "echo $'a'",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "echo $'a'",
+          "label": "echo *",
+          "scope": "command_pattern",
+          "sessionPattern": "echo *"
+        }
+      ]
+    },
+    {
+      "command": "=ls",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "=ls",
+          "label": {
+            "described": "sha256:14586885161ff5dd866fa86f2fac9fda",
+            "length": 53
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "=ls"
+        }
+      ]
+    },
+    {
+      "command": "ls ~root",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "ls",
+          "label": "ls *",
+          "scope": "command_pattern",
+          "sessionPattern": "ls *"
+        }
+      ]
+    },
+    {
+      "command": "f() { ls; }",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "f() { ls; }",
+          "label": {
+            "described": "sha256:61766404d151fa1921c2f0e2d887933a",
+            "length": 67
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "f() { ls; }"
+        }
+      ]
+    },
+    {
+      "command": "ls \\\n -la",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "ls \\\n -la",
+          "label": {
+            "described": "sha256:dc10c63d456920da3da1a2bfe02baf92",
+            "length": 50
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "ls \\\n -la"
+        }
+      ]
+    },
+    {
+      "command": "[[ -n $FOO ]]",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "[[ -n $FOO ]]",
+          "label": {
+            "described": "sha256:3bbbce9eecd05d39984aab47fff4176c",
+            "length": 68
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "[[ -n $FOO ]]"
+        }
+      ]
+    },
+    {
+      "command": "env FOO=1 ls",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "env FOO=1 ls",
+          "label": "env *",
+          "scope": "command_pattern",
+          "sessionPattern": "env *"
+        }
+      ]
+    },
+    {
+      "command": ". ./script.sh",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": ". ./script.sh",
+          "label": ". *",
+          "scope": "command_pattern",
+          "sessionPattern": ". *"
+        }
+      ]
+    },
+    {
+      "command": "npm run $TASK",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "npm run $TASK",
+          "label": {
+            "described": "sha256:494a5b0a7ee50e50972bcc18056ac010",
+            "length": 51
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "npm run $TASK"
+        }
+      ]
+    },
+    {
+      "command": "npm run build $ARGS",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "npm run build",
+          "label": "npm run build *",
+          "scope": "command_pattern",
+          "sessionPattern": "npm run build *"
+        }
+      ]
+    },
+    {
+      "command": "cargo $CMD",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "cargo $CMD",
+          "label": {
+            "described": "sha256:494a5b0a7ee50e50972bcc18056ac010",
+            "length": 51
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "cargo $CMD"
+        }
+      ]
+    },
+    {
+      "command": "docker compose up $SVC",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "docker compose up",
+          "label": "docker compose up *",
+          "scope": "command_pattern",
+          "sessionPattern": "docker compose up *"
+        }
+      ]
+    },
+    {
+      "command": "echo \"$(date)\"",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "echo \"$(date)\"",
+          "label": "echo *",
+          "scope": "command_pattern",
+          "sessionPattern": "echo *"
+        },
+        {
+          "invocationPattern": "date",
+          "label": "date",
+          "scope": "command_pattern",
+          "sessionPattern": "date"
+        }
+      ]
+    },
+    {
+      "command": "cat <outside>/secret.txt $X",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "cat <outside>/secret.txt",
+          "label": "cat *",
+          "scope": "command_pattern",
+          "sessionPattern": "cat *"
+        },
+        {
+          "invocationPattern": "<outside>/*",
+          "label": {
+            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
+            "length": 29
+          },
+          "scope": "outside_directory",
+          "sessionPattern": "<outside>/*"
+        }
+      ]
     }
   ],
-  "schemaVersion": 2
+  "schemaVersion": 3,
+  "stdinPermissions": [
+    {
+      "command": "git log",
+      "family": "posix",
+      "hasReason": false,
+      "known": true,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "input to pager session session_1",
+          "label": "input to pager session session_1",
+          "scope": "command_pattern",
+          "sessionPattern": "input to pager session session_1"
+        }
+      ]
+    },
+    {
+      "command": "less notes.txt",
+      "family": "posix",
+      "hasReason": false,
+      "known": true,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "input to pager session session_1",
+          "label": "input to pager session session_1",
+          "scope": "command_pattern",
+          "sessionPattern": "input to pager session session_1"
+        }
+      ]
+    },
+    {
+      "command": "more notes.txt",
+      "family": "posix",
+      "hasReason": false,
+      "known": true,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "input to pager session session_1",
+          "label": "input to pager session session_1",
+          "scope": "command_pattern",
+          "sessionPattern": "input to pager session session_1"
+        }
+      ]
+    },
+    {
+      "command": "cat notes.txt",
+      "family": "posix",
+      "known": true,
+      "permission": null
+    },
+    {
+      "command": "sleep 30; git log",
+      "family": "posix",
+      "hasReason": false,
+      "known": true,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "input to pager session session_1",
+          "label": "input to pager session session_1",
+          "scope": "command_pattern",
+          "sessionPattern": "input to pager session session_1"
+        }
+      ]
+    },
+    {
+      "command": "eval git log",
+      "family": "posix",
+      "hasReason": false,
+      "known": true,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "input to pager session session_1",
+          "label": "input to pager session session_1",
+          "scope": "command_pattern",
+          "sessionPattern": "input to pager session session_1"
+        }
+      ]
+    },
+    {
+      "command": "exec less notes.txt",
+      "family": "posix",
+      "hasReason": false,
+      "known": true,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "input to pager session session_1",
+          "label": "input to pager session session_1",
+          "scope": "command_pattern",
+          "sessionPattern": "input to pager session session_1"
+        }
+      ]
+    },
+    {
+      "command": "/usr/bin/GIT.exe log",
+      "family": "posix",
+      "hasReason": false,
+      "known": true,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "input to pager session session_1",
+          "label": "input to pager session session_1",
+          "scope": "command_pattern",
+          "sessionPattern": "input to pager session session_1"
+        }
+      ]
+    },
+    {
+      "command": "echo git",
+      "family": "posix",
+      "known": true,
+      "permission": null
+    },
+    {
+      "command": "gitk",
+      "family": "posix",
+      "known": true,
+      "permission": null
+    },
+    {
+      "command": "(git log)",
+      "family": "posix",
+      "hasReason": false,
+      "known": true,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "input to pager session session_1",
+          "label": "input to pager session session_1",
+          "scope": "command_pattern",
+          "sessionPattern": "input to pager session session_1"
+        }
+      ]
+    },
+    {
+      "command": "cat $(which less)",
+      "family": "posix",
+      "known": true,
+      "permission": null
+    },
+    {
+      "command": "",
+      "family": "posix",
+      "hasReason": false,
+      "known": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "input to pager session session_1",
+          "label": "input to pager session session_1",
+          "scope": "command_pattern",
+          "sessionPattern": "input to pager session session_1"
+        }
+      ]
+    },
+    {
+      "command": "git log",
+      "family": "git_bash",
+      "hasReason": false,
+      "known": true,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "input to pager session session_1",
+          "label": "input to pager session session_1",
+          "scope": "command_pattern",
+          "sessionPattern": "input to pager session session_1"
+        }
+      ]
+    },
+    {
+      "command": "cat notes.txt",
+      "family": "git_bash",
+      "known": true,
+      "permission": null
+    },
+    {
+      "command": "git log",
+      "family": "powershell",
+      "hasReason": false,
+      "known": true,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "input to pager session session_1",
+          "label": "input to pager session session_1",
+          "scope": "command_pattern",
+          "sessionPattern": "input to pager session session_1"
+        }
+      ]
+    },
+    {
+      "command": "& 'C:\\tools\\git.exe' log",
+      "family": "powershell",
+      "hasReason": false,
+      "known": true,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "input to pager session session_1",
+          "label": "input to pager session session_1",
+          "scope": "command_pattern",
+          "sessionPattern": "input to pager session session_1"
+        }
+      ]
+    },
+    {
+      "command": "type a | more",
+      "family": "powershell",
+      "hasReason": false,
+      "known": true,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "input to pager session session_1",
+          "label": "input to pager session session_1",
+          "scope": "command_pattern",
+          "sessionPattern": "input to pager session session_1"
+        }
+      ]
+    },
+    {
+      "command": "Get-Content a",
+      "family": "powershell",
+      "known": true,
+      "permission": null
+    },
+    {
+      "command": "less.exe x",
+      "family": "powershell",
+      "hasReason": false,
+      "known": true,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "input to pager session session_1",
+          "label": "input to pager session session_1",
+          "scope": "command_pattern",
+          "sessionPattern": "input to pager session session_1"
+        }
+      ]
+    },
+    {
+      "command": "",
+      "family": "powershell",
+      "hasReason": false,
+      "known": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "input to pager session session_1",
+          "label": "input to pager session session_1",
+          "scope": "command_pattern",
+          "sessionPattern": "input to pager session session_1"
+        }
+      ]
+    }
+  ],
+  "windowsGrammar": {
+    "commands": [
+      {
+        "command": "",
+        "parts": []
+      },
+      {
+        "command": "Get-ChildItem",
+        "parts": [
+          {
+            "commandName": "get-childitem",
+            "fileRedirections": [],
+            "forms": [
+              "get-childitem"
+            ],
+            "formsWithoutBasename": [
+              "get-childitem"
+            ],
+            "part": "Get-ChildItem",
+            "tokens": [
+              "Get-ChildItem"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "dir C:\\work && type notes.txt",
+        "parts": [
+          {
+            "commandName": "dir",
+            "fileRedirections": [],
+            "forms": [
+              "dir c:\\work",
+              "get-childitem c:\\work"
+            ],
+            "formsWithoutBasename": [
+              "dir c:\\work",
+              "get-childitem c:\\work"
+            ],
+            "part": "dir C:\\work",
+            "tokens": [
+              "dir",
+              "C:\\work"
+            ]
+          },
+          {
+            "commandName": "type",
+            "fileRedirections": [],
+            "forms": [
+              "type notes.txt",
+              "get-content notes.txt"
+            ],
+            "formsWithoutBasename": [
+              "type notes.txt",
+              "get-content notes.txt"
+            ],
+            "part": "type notes.txt",
+            "tokens": [
+              "type",
+              "notes.txt"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "ls; cat a.txt | sls needle",
+        "parts": [
+          {
+            "commandName": "ls",
+            "fileRedirections": [],
+            "forms": [
+              "ls",
+              "get-childitem"
+            ],
+            "formsWithoutBasename": [
+              "ls",
+              "get-childitem"
+            ],
+            "part": "ls",
+            "tokens": [
+              "ls"
+            ]
+          },
+          {
+            "commandName": "cat",
+            "fileRedirections": [],
+            "forms": [
+              "cat a.txt",
+              "get-content a.txt"
+            ],
+            "formsWithoutBasename": [
+              "cat a.txt",
+              "get-content a.txt"
+            ],
+            "part": "cat a.txt",
+            "tokens": [
+              "cat",
+              "a.txt"
+            ]
+          },
+          {
+            "commandName": "sls",
+            "fileRedirections": [],
+            "forms": [
+              "sls needle",
+              "select-string needle"
+            ],
+            "formsWithoutBasename": [
+              "sls needle",
+              "select-string needle"
+            ],
+            "part": "sls needle",
+            "tokens": [
+              "sls",
+              "needle"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "echo a & echo b",
+        "parts": [
+          {
+            "commandName": "echo",
+            "fileRedirections": [],
+            "forms": [
+              "echo a"
+            ],
+            "formsWithoutBasename": [
+              "echo a"
+            ],
+            "part": "echo a",
+            "tokens": [
+              "echo",
+              "a"
+            ]
+          },
+          {
+            "commandName": "echo",
+            "fileRedirections": [],
+            "forms": [
+              "echo b"
+            ],
+            "formsWithoutBasename": [
+              "echo b"
+            ],
+            "part": "echo b",
+            "tokens": [
+              "echo",
+              "b"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "cmd 2>&1 | more",
+        "parts": [
+          {
+            "commandName": "cmd",
+            "fileRedirections": [],
+            "forms": [
+              "cmd 2>&1"
+            ],
+            "formsWithoutBasename": [
+              "cmd 2>&1"
+            ],
+            "part": "cmd 2>&1",
+            "tokens": [
+              "cmd",
+              "2>&1"
+            ]
+          },
+          {
+            "commandName": "more",
+            "fileRedirections": [],
+            "forms": [
+              "more"
+            ],
+            "formsWithoutBasename": [
+              "more"
+            ],
+            "part": "more",
+            "tokens": [
+              "more"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "Get-Content x *>&1",
+        "parts": [
+          {
+            "commandName": "get-content",
+            "fileRedirections": [],
+            "forms": [
+              "get-content x *>&1"
+            ],
+            "formsWithoutBasename": [
+              "get-content x *>&1"
+            ],
+            "part": "Get-Content x *>&1",
+            "tokens": [
+              "Get-Content",
+              "x",
+              "*>&1"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "Write-Output $(Get-Date)",
+        "parts": [
+          {
+            "commandName": "write-output",
+            "fileRedirections": [],
+            "forms": [
+              "write-output $(get-date)"
+            ],
+            "formsWithoutBasename": [
+              "write-output $(get-date)"
+            ],
+            "part": "Write-Output $(Get-Date)",
+            "tokens": [
+              "Write-Output",
+              "$(Get-Date)"
+            ]
+          },
+          {
+            "commandName": "get-date",
+            "fileRedirections": [],
+            "forms": [
+              "get-date"
+            ],
+            "formsWithoutBasename": [
+              "get-date"
+            ],
+            "part": "Get-Date",
+            "tokens": [
+              "Get-Date"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "Write-Output \"$(Get-Date) and $(whoami)\"",
+        "parts": [
+          {
+            "commandName": "write-output",
+            "fileRedirections": [],
+            "forms": [
+              "write-output $(get-date) and $(whoami)"
+            ],
+            "formsWithoutBasename": [
+              "write-output $(get-date) and $(whoami)"
+            ],
+            "part": "Write-Output \"$(Get-Date) and $(whoami)\"",
+            "tokens": [
+              "Write-Output",
+              "$(Get-Date) and $(whoami)"
+            ]
+          },
+          {
+            "commandName": "get-date",
+            "fileRedirections": [],
+            "forms": [
+              "get-date"
+            ],
+            "formsWithoutBasename": [
+              "get-date"
+            ],
+            "part": "Get-Date",
+            "tokens": [
+              "Get-Date"
+            ]
+          },
+          {
+            "commandName": "whoami",
+            "fileRedirections": [],
+            "forms": [
+              "whoami"
+            ],
+            "formsWithoutBasename": [
+              "whoami"
+            ],
+            "part": "whoami",
+            "tokens": [
+              "whoami"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "Invoke-Command { Remove-Item x; ls }",
+        "parts": [
+          {
+            "commandName": "invoke-command",
+            "fileRedirections": [],
+            "forms": [
+              "invoke-command { remove-item x; ls }"
+            ],
+            "formsWithoutBasename": [
+              "invoke-command { remove-item x; ls }"
+            ],
+            "part": "Invoke-Command { Remove-Item x; ls }",
+            "tokens": [
+              "Invoke-Command",
+              "{",
+              "Remove-Item",
+              "x;",
+              "ls",
+              "}"
+            ]
+          },
+          {
+            "commandName": "remove-item",
+            "fileRedirections": [],
+            "forms": [
+              "remove-item x"
+            ],
+            "formsWithoutBasename": [
+              "remove-item x"
+            ],
+            "part": "Remove-Item x",
+            "tokens": [
+              "Remove-Item",
+              "x"
+            ]
+          },
+          {
+            "commandName": "ls",
+            "fileRedirections": [],
+            "forms": [
+              "ls",
+              "get-childitem"
+            ],
+            "formsWithoutBasename": [
+              "ls",
+              "get-childitem"
+            ],
+            "part": "ls",
+            "tokens": [
+              "ls"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "(Get-Item a).Name",
+        "parts": [
+          {
+            "commandName": "(get-item",
+            "fileRedirections": [],
+            "forms": [
+              "(get-item a).name"
+            ],
+            "formsWithoutBasename": [
+              "(get-item a).name"
+            ],
+            "part": "(Get-Item a).Name",
+            "tokens": [
+              "(Get-Item",
+              "a).Name"
+            ]
+          },
+          {
+            "commandName": "get-item",
+            "fileRedirections": [],
+            "forms": [
+              "get-item a"
+            ],
+            "formsWithoutBasename": [
+              "get-item a"
+            ],
+            "part": "Get-Item a",
+            "tokens": [
+              "Get-Item",
+              "a"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "echo '$(not a subexpression)'",
+        "parts": [
+          {
+            "commandName": "echo",
+            "fileRedirections": [],
+            "forms": [
+              "echo $(not a subexpression)"
+            ],
+            "formsWithoutBasename": [
+              "echo $(not a subexpression)"
+            ],
+            "part": "echo '$(not a subexpression)'",
+            "tokens": [
+              "echo",
+              "$(not a subexpression)"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "echo `& not a separator",
+        "parts": [
+          {
+            "commandName": "echo",
+            "fileRedirections": [],
+            "forms": [
+              "echo `& not a separator"
+            ],
+            "formsWithoutBasename": [
+              "echo `& not a separator"
+            ],
+            "part": "echo `& not a separator",
+            "tokens": [
+              "echo",
+              "`&",
+              "not",
+              "a",
+              "separator"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "echo a ^& b",
+        "parts": [
+          {
+            "commandName": "echo",
+            "fileRedirections": [],
+            "forms": [
+              "echo a ^& b"
+            ],
+            "formsWithoutBasename": [
+              "echo a ^& b"
+            ],
+            "part": "echo a ^& b",
+            "tokens": [
+              "echo",
+              "a",
+              "^&",
+              "b"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "& 'C:\\Program Files\\tool.exe' -Flag",
+        "parts": [
+          {
+            "commandName": "tool",
+            "fileRedirections": [],
+            "forms": [
+              "c:\\program files\\tool.exe -flag",
+              "tool.exe -flag",
+              "tool -flag"
+            ],
+            "formsWithoutBasename": [
+              "c:\\program files\\tool.exe -flag"
+            ],
+            "part": "'C:\\Program Files\\tool.exe' -Flag",
+            "tokens": [
+              "C:\\Program Files\\tool.exe",
+              "-Flag"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "& C:\\tools\\rm.exe -rf x",
+        "parts": [
+          {
+            "commandName": "rm",
+            "fileRedirections": [],
+            "forms": [
+              "c:\\tools\\rm.exe -rf x",
+              "rm.exe -rf x",
+              "rm -rf x"
+            ],
+            "formsWithoutBasename": [
+              "c:\\tools\\rm.exe -rf x"
+            ],
+            "part": "C:\\tools\\rm.exe -rf x",
+            "tokens": [
+              "C:\\tools\\rm.exe",
+              "-rf",
+              "x"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "C:\\tools\\RM.EXE x",
+        "parts": [
+          {
+            "commandName": "rm",
+            "fileRedirections": [],
+            "forms": [
+              "c:\\tools\\rm.exe x",
+              "rm.exe x",
+              "rm x"
+            ],
+            "formsWithoutBasename": [
+              "c:\\tools\\rm.exe x"
+            ],
+            "part": "C:\\tools\\RM.EXE x",
+            "tokens": [
+              "C:\\tools\\RM.EXE",
+              "x"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "rm.exe x",
+        "parts": [
+          {
+            "commandName": "rm",
+            "fileRedirections": [],
+            "forms": [
+              "rm.exe x",
+              "rm x"
+            ],
+            "formsWithoutBasename": [
+              "rm.exe x",
+              "rm x"
+            ],
+            "part": "rm.exe x",
+            "tokens": [
+              "rm.exe",
+              "x"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "Remove-Item x",
+        "parts": [
+          {
+            "commandName": "remove-item",
+            "fileRedirections": [],
+            "forms": [
+              "remove-item x"
+            ],
+            "formsWithoutBasename": [
+              "remove-item x"
+            ],
+            "part": "Remove-Item x",
+            "tokens": [
+              "Remove-Item",
+              "x"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "gci -Recurse",
+        "parts": [
+          {
+            "commandName": "gci",
+            "fileRedirections": [],
+            "forms": [
+              "gci -recurse",
+              "get-childitem -recurse"
+            ],
+            "formsWithoutBasename": [
+              "gci -recurse",
+              "get-childitem -recurse"
+            ],
+            "part": "gci -Recurse",
+            "tokens": [
+              "gci",
+              "-Recurse"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "type > out.txt",
+        "parts": [
+          {
+            "commandName": "type",
+            "fileRedirections": [
+              "out.txt"
+            ],
+            "forms": [
+              "type > out.txt",
+              "get-content > out.txt"
+            ],
+            "formsWithoutBasename": [
+              "type > out.txt",
+              "get-content > out.txt"
+            ],
+            "part": "type > out.txt",
+            "tokens": [
+              "type",
+              ">",
+              "out.txt"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "echo a > $null",
+        "parts": [
+          {
+            "commandName": "echo",
+            "fileRedirections": [],
+            "forms": [
+              "echo a > $null"
+            ],
+            "formsWithoutBasename": [
+              "echo a > $null"
+            ],
+            "part": "echo a > $null",
+            "tokens": [
+              "echo",
+              "a",
+              ">",
+              "$null"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "echo a > NUL",
+        "parts": [
+          {
+            "commandName": "echo",
+            "fileRedirections": [],
+            "forms": [
+              "echo a > nul"
+            ],
+            "formsWithoutBasename": [
+              "echo a > nul"
+            ],
+            "part": "echo a > NUL",
+            "tokens": [
+              "echo",
+              "a",
+              ">",
+              "NUL"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "echo a 2> 'err log.txt'",
+        "parts": [
+          {
+            "commandName": "echo",
+            "fileRedirections": [
+              "err log.txt"
+            ],
+            "forms": [
+              "echo a 2> err log.txt"
+            ],
+            "formsWithoutBasename": [
+              "echo a 2> err log.txt"
+            ],
+            "part": "echo a 2> 'err log.txt'",
+            "tokens": [
+              "echo",
+              "a",
+              "2>",
+              "err log.txt"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "echo a >> C:\\logs\\x.txt",
+        "parts": [
+          {
+            "commandName": "echo",
+            "fileRedirections": [
+              "C:\\logs\\x.txt"
+            ],
+            "forms": [
+              "echo a >> c:\\logs\\x.txt"
+            ],
+            "formsWithoutBasename": [
+              "echo a >> c:\\logs\\x.txt"
+            ],
+            "part": "echo a >> C:\\logs\\x.txt",
+            "tokens": [
+              "echo",
+              "a",
+              ">>",
+              "C:\\logs\\x.txt"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "echo a >&2",
+        "parts": [
+          {
+            "commandName": "echo",
+            "fileRedirections": [],
+            "forms": [
+              "echo a >&2"
+            ],
+            "formsWithoutBasename": [
+              "echo a >&2"
+            ],
+            "part": "echo a >&2",
+            "tokens": [
+              "echo",
+              "a",
+              ">&2"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "echo 'a > b'",
+        "parts": [
+          {
+            "commandName": "echo",
+            "fileRedirections": [],
+            "forms": [
+              "echo a > b"
+            ],
+            "formsWithoutBasename": [
+              "echo a > b"
+            ],
+            "part": "echo 'a > b'",
+            "tokens": [
+              "echo",
+              "a > b"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "echo a >`\"q`\" x",
+        "parts": [
+          {
+            "commandName": "echo",
+            "fileRedirections": [
+              "\"q\""
+            ],
+            "forms": [
+              "echo a >`q` x"
+            ],
+            "formsWithoutBasename": [
+              "echo a >`q` x"
+            ],
+            "part": "echo a >`\"q`\" x",
+            "tokens": [
+              "echo",
+              "a",
+              ">`q`",
+              "x"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "notepad",
+        "parts": [
+          {
+            "commandName": "notepad",
+            "fileRedirections": [],
+            "forms": [
+              "notepad"
+            ],
+            "formsWithoutBasename": [
+              "notepad"
+            ],
+            "part": "notepad",
+            "tokens": [
+              "notepad"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "powershell -NoExit",
+        "parts": [
+          {
+            "commandName": "powershell",
+            "fileRedirections": [],
+            "forms": [
+              "powershell -noexit"
+            ],
+            "formsWithoutBasename": [
+              "powershell -noexit"
+            ],
+            "part": "powershell -NoExit",
+            "tokens": [
+              "powershell",
+              "-NoExit"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "git status\r\ngit log",
+        "parts": [
+          {
+            "commandName": "git",
+            "fileRedirections": [],
+            "forms": [
+              "git status"
+            ],
+            "formsWithoutBasename": [
+              "git status"
+            ],
+            "part": "git status",
+            "tokens": [
+              "git",
+              "status"
+            ]
+          },
+          {
+            "commandName": "git",
+            "fileRedirections": [],
+            "forms": [
+              "git log"
+            ],
+            "formsWithoutBasename": [
+              "git log"
+            ],
+            "part": "git log",
+            "tokens": [
+              "git",
+              "log"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "@{a=1}; ${x}",
+        "parts": [
+          {
+            "commandName": "@{a=1}",
+            "fileRedirections": [],
+            "forms": [
+              "@{a=1}"
+            ],
+            "formsWithoutBasename": [
+              "@{a=1}"
+            ],
+            "part": "@{a=1}",
+            "tokens": [
+              "@{a=1}"
+            ]
+          },
+          {
+            "commandName": "${x}",
+            "fileRedirections": [],
+            "forms": [
+              "${x}"
+            ],
+            "formsWithoutBasename": [
+              "${x}"
+            ],
+            "part": "${x}",
+            "tokens": [
+              "${x}"
+            ]
+          }
+        ]
+      },
+      {
+        "command": "echo ${env:PATH}",
+        "parts": [
+          {
+            "commandName": "echo",
+            "fileRedirections": [],
+            "forms": [
+              "echo ${env:path}"
+            ],
+            "formsWithoutBasename": [
+              "echo ${env:path}"
+            ],
+            "part": "echo ${env:PATH}",
+            "tokens": [
+              "echo",
+              "${env:PATH}"
+            ]
+          }
+        ]
+      }
+    ],
+    "expansions": [
+      {
+        "token": "$HOME\\notes.txt",
+        "unresolved": false,
+        "value": "C:\\Users\\me\\notes.txt"
+      },
+      {
+        "token": "$env:APPDATA\\x",
+        "unresolved": false,
+        "value": "C:\\Users\\me\\AppData\\Roaming\\x"
+      },
+      {
+        "token": "${env:APPDATA}\\x",
+        "unresolved": false,
+        "value": "C:\\Users\\me\\AppData\\Roaming\\x"
+      },
+      {
+        "token": "$Env:appdata\\x",
+        "unresolved": false,
+        "value": "C:\\Users\\me\\AppData\\Roaming\\x"
+      },
+      {
+        "token": "$PWD\\sub",
+        "unresolved": false,
+        "value": "C:\\work\\sub"
+      },
+      {
+        "token": "$pwd",
+        "unresolved": false,
+        "value": "C:\\work"
+      },
+      {
+        "token": "$other\\x",
+        "unresolved": true,
+        "value": "$other\\x"
+      },
+      {
+        "token": "${global:x}",
+        "unresolved": true,
+        "value": "${global:x}"
+      },
+      {
+        "token": "$env:MISSING\\x",
+        "unresolved": true,
+        "value": "$env:MISSING\\x"
+      },
+      {
+        "token": "'C:\\quoted path'",
+        "unresolved": false,
+        "value": "C:\\quoted path"
+      },
+      {
+        "token": "@(1)",
+        "unresolved": true,
+        "value": "@(1)"
+      },
+      {
+        "token": "cost$",
+        "unresolved": true,
+        "value": "cost$"
+      },
+      {
+        "token": "plain.txt",
+        "unresolved": false,
+        "value": "plain.txt"
+      }
+    ],
+    "patterns": [
+      {
+        "forms": [
+          "rm",
+          "remove-item"
+        ],
+        "pattern": "rm"
+      },
+      {
+        "forms": [
+          "remove-item"
+        ],
+        "pattern": "Remove-Item"
+      },
+      {
+        "forms": [
+          "cmd /k"
+        ],
+        "pattern": "cmd /k"
+      },
+      {
+        "forms": [
+          "powershell -noexit"
+        ],
+        "pattern": "powershell -NoExit"
+      },
+      {
+        "forms": [
+          "ls -la",
+          "get-childitem -la"
+        ],
+        "pattern": "ls -la"
+      },
+      {
+        "forms": [
+          "c:\\tools\\rm.exe"
+        ],
+        "pattern": "C:\\tools\\rm.exe"
+      },
+      {
+        "forms": [
+          "git status"
+        ],
+        "pattern": "git status"
+      },
+      {
+        "forms": [
+          ""
+        ],
+        "pattern": ""
+      }
+    ],
+    "tokens": [
+      {
+        "attachedValue": null,
+        "option": true,
+        "path": false,
+        "token": "-Path"
+      },
+      {
+        "attachedValue": "C:\\x",
+        "option": true,
+        "path": true,
+        "token": "-Path:C:\\x"
+      },
+      {
+        "attachedValue": "C:\\x",
+        "option": true,
+        "path": true,
+        "token": "-Path=C:\\x"
+      },
+      {
+        "attachedValue": null,
+        "option": true,
+        "path": true,
+        "token": "/s"
+      },
+      {
+        "attachedValue": null,
+        "option": false,
+        "path": true,
+        "token": "/s:x"
+      },
+      {
+        "attachedValue": null,
+        "option": false,
+        "path": true,
+        "token": "//server"
+      },
+      {
+        "attachedValue": null,
+        "option": false,
+        "path": true,
+        "token": "/c/x"
+      },
+      {
+        "attachedValue": null,
+        "option": false,
+        "path": true,
+        "token": "C:\\x"
+      },
+      {
+        "attachedValue": null,
+        "option": false,
+        "path": true,
+        "token": "C:"
+      },
+      {
+        "attachedValue": null,
+        "option": false,
+        "path": true,
+        "token": "x:y"
+      },
+      {
+        "attachedValue": null,
+        "option": false,
+        "path": true,
+        "token": "\\\\server\\share"
+      },
+      {
+        "attachedValue": null,
+        "option": false,
+        "path": true,
+        "token": "~\\x"
+      },
+      {
+        "attachedValue": null,
+        "option": false,
+        "path": true,
+        "token": ".\\x"
+      },
+      {
+        "attachedValue": null,
+        "option": false,
+        "path": false,
+        "token": "notes.txt"
+      },
+      {
+        "attachedValue": null,
+        "option": false,
+        "path": true,
+        "token": "'C:\\quoted'"
+      },
+      {
+        "attachedValue": null,
+        "option": true,
+        "path": false,
+        "token": "-"
+      }
+    ]
+  }
 }

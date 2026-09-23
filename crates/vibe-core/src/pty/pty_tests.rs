@@ -94,6 +94,7 @@ fn a_started_terminal_reports_the_rung_that_took_it() {
         arguments: &arguments,
         working_directory: &std::env::temp_dir(),
         environment: &environment,
+        unset_environment: &[],
     })
     .expect("the host opens a terminal");
     assert_eq!(Some(&backend), PTY_BACKENDS.first());
