@@ -383,18 +383,19 @@ impl SubagentRunner for ProviderSubagentRunner {
                 .iter()
                 .filter(|message| matches!(message, ModelMessage::Assistant { .. }))
                 .count();
+            // Reference `SubagentRunAccumulator` (`vibe/core/subagents.py:41`)
+            // joins the content of every assistant message the child produced,
+            // in order and with no separator, so the narration around the
+            // child's tool calls reaches the parent with its final answer.
             Ok(SubagentRun {
                 response: outcome
                     .messages
                     .iter()
-                    .rev()
-                    .find_map(|message| match message {
-                        ModelMessage::Assistant { content, .. } if !content.is_empty() => {
-                            Some(content.clone())
-                        }
+                    .filter_map(|message| match message {
+                        ModelMessage::Assistant { content, .. } => Some(content.as_str()),
                         _ => None,
                     })
-                    .unwrap_or_else(|| "Subagent completed without a text response".to_owned()),
+                    .collect(),
                 turns_used: u32::try_from(turns_used).unwrap_or(u32::MAX),
                 completed: outcome.stop_reason == TurnStopReason::Complete,
             })

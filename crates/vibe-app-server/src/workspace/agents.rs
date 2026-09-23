@@ -379,9 +379,12 @@ impl WorkspaceService {
             commit_policy: prompt.commit_policy,
             model_info: prompt.model,
             os_tool_guidance: prompt.os_tool_guidance,
+            // Reference `system_prompt.py`: the model is shown only the skills
+            // it may load.
             skills: catalog
                 .skills
                 .values()
+                .filter(|skill| skill.model_invocable)
                 .map(|skill| SkillSummary {
                     name: skill.name.clone(),
                     description: skill.description.clone(),

@@ -369,55 +369,47 @@ async fn a_connection_with_no_write_side_leaves_the_tools_on_this_host() {
     assert_eq!(output.typed_result["content"], "        1\u{2192}on disk");
 }
 
-/// Hosting the filesystem is not a way around the workspace boundary: a path
-/// the local tools refuse never reaches the client either.
+/// A path outside the workspace is not confined away: the reference's only
+/// barrier is the permission guard, which asks through the outside-directory
+/// requirement, so a session that approves automatically hands the client the
+/// resolved absolute path exactly as it would for a file inside the root.
 #[tokio::test]
-async fn a_path_outside_the_workspace_is_refused_before_it_reaches_the_client() {
+async fn an_approved_path_outside_the_workspace_reaches_the_client_resolved() {
     let directory = tempfile::tempdir().expect("tempdir");
     let root = directory.path().join("workspace");
     std::fs::create_dir(&root).expect("workspace root");
     let outside = directory.path().join("outside.txt");
     std::fs::write(&outside, "secret\n").expect("outside file");
-    let (server, _connection, mut requests) =
-        connected(&root, &["filesystem/read", "filesystem/write", "terminal"]);
+    let (server, mut connection, mut requests) = connected(&root, &["filesystem/read"]);
 
-    for (tool, arguments) in [
-        ("read_file", json!({"file_path": outside.to_string_lossy()})),
-        (
-            "write_file",
-            json!({"file_path": "../outside.txt", "content": "overwritten\n"}),
-        ),
-        (
-            "edit",
-            json!({
-                "file_path": outside.to_string_lossy(),
-                "old_string": "secret",
-                "new_string": "leaked",
-            }),
-        ),
-    ] {
-        let failure = server
+    let reader = server.clone();
+    let call = tokio::spawn(async move {
+        reader
             .invoke_tool(
                 SESSION,
-                tool,
+                "read_file",
                 ToolInvocation {
-                    call_id: format!("{tool}-1"),
-                    arguments,
+                    call_id: "read-outside".to_owned(),
+                    arguments: json!({"file_path": "../outside.txt"}),
                 },
             )
             .await
-            .expect_err("a path outside the workspace is refused");
-        assert!(
-            failure.to_string().contains("escapes the authorized root"),
-            "{tool} did not refuse the escape: {failure}"
-        );
-    }
-    assert!(
-        requests.try_recv().is_err(),
-        "a path outside the workspace reached the client"
-    );
+    });
+
+    let (id, method, params) = delegated(&mut requests).await;
+    assert_eq!(method, "clientTool/readTextFile");
     assert_eq!(
-        std::fs::read_to_string(&outside).expect("outside file"),
-        "secret\n"
+        params["path"],
+        json!(
+            std::fs::canonicalize(&outside)
+                .expect("canonical outside file")
+                .to_string_lossy()
+        )
+    );
+    connection.dispatch(&answer(id, json!({"content": "from the editor\n"})));
+    let output = call.await.expect("the tool task joins").expect("the read");
+    assert_eq!(
+        output.typed_result["content"],
+        "        1\u{2192}from the editor"
     );
 }

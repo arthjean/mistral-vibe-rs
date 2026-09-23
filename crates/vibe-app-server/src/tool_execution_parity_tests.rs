@@ -45,14 +45,14 @@ use sha2::{Digest, Sha256};
 use tokio::sync::mpsc;
 use vibe_core::engine::CancellationToken;
 use vibe_core::extensions::{
-    ChildContext, SubagentFuture, SubagentManager, SubagentRun, SubagentRunner,
+    ChildContext, SkillDefinition, SubagentFuture, SubagentManager, SubagentRun, SubagentRunner,
 };
 use vibe_core::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionStore, ToolGuard,
     TrustDecision, TrustRootKind,
 };
-use vibe_core::skills::SkillDiscovery;
+use vibe_core::skills::{SkillDiscovery, SkillScope, SkillSource};
 use vibe_core::storage::SessionStore;
 use vibe_core::tools::builtins::{BuiltinTools, WebSearchAccess};
 use vibe_core::tools::{ToolError, ToolInvocation, ToolRegistry};
@@ -125,11 +125,6 @@ const LEDGER_EVIDENCE: &str =
 /// The accepted-divergence rows this ledger's entries are recorded under, each
 /// spelled exactly as the row's first cell spells it.
 const AUTHORED_TEXT_ROW: &str = "Authored result and error text in six tools";
-const SKILL_DETACHED_ROW: &str =
-    "A directory-less skill has no scripted registration in the replay";
-const FETCH_MARKDOWN_ROW: &str = "A fetched HTML page is stripped to prose";
-const FETCH_HEADER_ROW: &str = "The HTTP client's own request envelope";
-const FETCH_FINAL_URL_ROW: &str = "A redirected fetch reports the requested URL";
 
 /// Why a divergence stands, shared by every case that carries the same gap: the
 /// reason is a property of the gap, not of the case that happens to reveal it.
@@ -141,30 +136,10 @@ const EDIT_MESSAGE: &str = "this port writes its own applied-edit sentence; reac
      digest would mean copying its wording";
 const SKILL_PROSE: &str = "this port writes its own guidance lines around the skill body and its \
      own reuse sentence; reaching the reference digests would mean copying them";
-const SKILL_DETACHED: &str = "the reference serves a skill registered with a prompt and no \
-     directory; this port discovers skills from disk, so that skill does not exist here and the \
-     call reports it missing. No story in this PRD closes the gap, so the decision is recorded \
-     in the scorecard row this entry names";
 const PLAN_MESSAGE: &str = "this port writes its own message for each plan-review outcome; \
      reaching the reference digest would mean copying its wording";
-const FETCH_MARKDOWN: &str = "the reference converts an HTML page with `markdownify`, which keeps \
-     the heading marker and the blank line between blocks; this port strips the markup to prose \
-     instead. No story in this PRD closes the gap, so the decision is recorded in the \
-     scorecard row this entry names";
 const FETCH_TRUNCATION_MARKER: &str = "the body is cut at the same bound and only the sentence \
      that reports the cut differs; reaching the reference digest would mean copying its wording";
-const FETCH_HEADER_ENVELOPE: &str = "every header this tool sets carries the reference value; what \
-     still differs is the envelope the HTTP client writes around them: the names arrive lowercased, \
-     `Host` arrives last, `Accept-Encoding` and `Connection` are the client's own, and a redirect \
-     hop adds `Referer`. No story in this PRD closes the gap, so the decision is recorded in \
-     the scorecard row this entry names";
-const FETCH_FINAL_URL: &str = "since v2.25.5 the reference follows redirects by hand \
-     (`follow_redirects=False` and a 20-hop loop, `vibe/core/tools/builtins/web_fetch.py:35,221-252` \
-     at 4a96003186b1) and reports the URL the last hop answered from (`:160,213`), where it \
-     reported the requested URL at v2.24.0; this port still reports the requested URL \
-     (`crates/vibe-core/src/tools/builtins/web_fetch.rs:152,240,251`), so the url field and \
-     the model text that renders it differ on a redirect. The divergence is recorded in the \
-     scorecard row this entry names until a story ports the final-URL report";
 
 /// The divergences this port still carries, each with what closes it.
 ///
@@ -374,10 +349,26 @@ const LEDGER: &[Divergence] = &[
     Divergence {
         tool: "skill",
         case: "no-directory-on-disk",
-        pointer: "/outcome",
-        closed_by: RECORDED,
-        why: SKILL_DETACHED,
-        row: SKILL_DETACHED_ROW,
+        pointer: "/modelText",
+        closed_by: LICENSING,
+        why: SKILL_PROSE,
+        row: AUTHORED_TEXT_ROW,
+    },
+    Divergence {
+        tool: "skill",
+        case: "no-directory-on-disk",
+        pointer: "/projectedResult",
+        closed_by: LICENSING,
+        why: SKILL_PROSE,
+        row: AUTHORED_TEXT_ROW,
+    },
+    Divergence {
+        tool: "skill",
+        case: "no-directory-on-disk",
+        pointer: "/typedResult",
+        closed_by: LICENSING,
+        why: SKILL_PROSE,
+        row: AUTHORED_TEXT_ROW,
     },
     Divergence {
         tool: "exit_plan_mode",
@@ -546,126 +537,6 @@ const LEDGER: &[Divergence] = &[
         closed_by: LICENSING,
         why: PLAN_MESSAGE,
         row: AUTHORED_TEXT_ROW,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "a-challenge-that-persists",
-        pointer: "/requests",
-        closed_by: RECORDED,
-        why: FETCH_HEADER_ENVELOPE,
-        row: FETCH_HEADER_ROW,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "a-challenge-then-success",
-        pointer: "/requests",
-        closed_by: RECORDED,
-        why: FETCH_HEADER_ENVELOPE,
-        row: FETCH_HEADER_ROW,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "a-json-body",
-        pointer: "/requests",
-        closed_by: RECORDED,
-        why: FETCH_HEADER_ENVELOPE,
-        row: FETCH_HEADER_ROW,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "a-plain-text-page",
-        pointer: "/requests",
-        closed_by: RECORDED,
-        why: FETCH_HEADER_ENVELOPE,
-        row: FETCH_HEADER_ROW,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "a-redirect-chain",
-        pointer: "/modelText",
-        closed_by: RECORDED,
-        why: FETCH_FINAL_URL,
-        row: FETCH_FINAL_URL_ROW,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "a-redirect-chain",
-        pointer: "/projectedResult/url",
-        closed_by: RECORDED,
-        why: FETCH_FINAL_URL,
-        row: FETCH_FINAL_URL_ROW,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "a-redirect-chain",
-        pointer: "/requests",
-        closed_by: RECORDED,
-        why: FETCH_HEADER_ENVELOPE,
-        row: FETCH_HEADER_ROW,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "a-redirect-chain",
-        pointer: "/typedResult/url",
-        closed_by: RECORDED,
-        why: FETCH_FINAL_URL,
-        row: FETCH_FINAL_URL_ROW,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "a-server-error",
-        pointer: "/requests",
-        closed_by: RECORDED,
-        why: FETCH_HEADER_ENVELOPE,
-        row: FETCH_HEADER_ROW,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "an-empty-body",
-        pointer: "/requests",
-        closed_by: RECORDED,
-        why: FETCH_HEADER_ENVELOPE,
-        row: FETCH_HEADER_ROW,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "an-html-page",
-        pointer: "/modelText",
-        closed_by: RECORDED,
-        why: FETCH_MARKDOWN,
-        row: FETCH_MARKDOWN_ROW,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "an-html-page",
-        pointer: "/projectedResult/content",
-        closed_by: RECORDED,
-        why: FETCH_MARKDOWN,
-        row: FETCH_MARKDOWN_ROW,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "an-html-page",
-        pointer: "/requests",
-        closed_by: RECORDED,
-        why: FETCH_HEADER_ENVELOPE,
-        row: FETCH_HEADER_ROW,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "an-html-page",
-        pointer: "/typedResult/content",
-        closed_by: RECORDED,
-        why: FETCH_MARKDOWN,
-        row: FETCH_MARKDOWN_ROW,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "forbidden-without-the-challenge-header",
-        pointer: "/requests",
-        closed_by: RECORDED,
-        why: FETCH_HEADER_ENVELOPE,
-        row: FETCH_HEADER_ROW,
     },
     Divergence {
         tool: "web_fetch",
@@ -686,34 +557,10 @@ const LEDGER: &[Divergence] = &[
     Divergence {
         tool: "web_fetch",
         case: "larger-than-max-content-bytes",
-        pointer: "/requests",
-        closed_by: RECORDED,
-        why: FETCH_HEADER_ENVELOPE,
-        row: FETCH_HEADER_ROW,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "larger-than-max-content-bytes",
         pointer: "/typedResult/content",
         closed_by: LICENSING,
         why: FETCH_TRUNCATION_MARKER,
         row: AUTHORED_TEXT_ROW,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "no-content-type",
-        pointer: "/requests",
-        closed_by: RECORDED,
-        why: FETCH_HEADER_ENVELOPE,
-        row: FETCH_HEADER_ROW,
-    },
-    Divergence {
-        tool: "web_fetch",
-        case: "not-found",
-        pointer: "/requests",
-        closed_by: RECORDED,
-        why: FETCH_HEADER_ENVELOPE,
-        row: FETCH_HEADER_ROW,
     },
 ];
 
@@ -1439,8 +1286,9 @@ async fn harness_for(
     let guard = ToolGuard::new(policy, Arc::new(GrantApproval));
 
     // A skill the case placed on disk is reachable through the fixture tree's
-    // own root; one declared without a directory has no representation here,
-    // which is a divergence the ledger carries rather than a fixture to invent.
+    // own root; one declared without a directory joins the skills that exist
+    // without a file, which is where the reference's own prompt-only skills
+    // live too.
     let skills = case
         .script
         .get("skills")
@@ -1461,7 +1309,40 @@ async fn harness_for(
         _ => None,
     };
 
-    BuiltinTools::new(home, access)
+    let detached = case
+        .script
+        .get("skills")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|entry| entry.get("directory").is_none())
+        .map(|entry| {
+            let field = |key: &str| {
+                entry[key]
+                    .as_str()
+                    .expect("a scripted skill field")
+                    .to_owned()
+            };
+            SkillDefinition {
+                name: field("name"),
+                description: field("description"),
+                license: None,
+                compatibility: None,
+                metadata: BTreeMap::new(),
+                allowed_tools: Vec::new(),
+                user_invocable: true,
+                model_invocable: true,
+                body: field("prompt"),
+                source: SkillSource::Builtin,
+                scope: SkillScope::Global,
+                path: None,
+            }
+        });
+    detached
+        .fold(
+            BuiltinTools::new(home, access),
+            BuiltinTools::with_builtin_skill,
+        )
         .register("session-1", skills, &registry, &guard)
         .expect("universal tools register");
     WorkspaceTools::new(workspace, review)
