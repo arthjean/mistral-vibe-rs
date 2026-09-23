@@ -12,7 +12,7 @@ use vibe_app_server::server::{
 };
 use vibe_protocol::ClientToolCapability;
 
-use crate::protocol::{AcpClientCapabilities, AcpError};
+use crate::protocol::AcpClientCapabilities;
 
 pub const DEFAULT_CLIENT_TOOL_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -181,12 +181,6 @@ fn object_schema(properties: Value, required: &[&str]) -> Value {
     })
 }
 
-pub(crate) fn client_tool_for_method(method: &str) -> Option<ClientTool> {
-    ClientTool::ALL
-        .into_iter()
-        .find(|tool| tool.method() == method)
-}
-
 pub(crate) fn declared_client_tools(
     capabilities: &AcpClientCapabilities,
 ) -> Vec<ClientToolCapability> {
@@ -277,21 +271,4 @@ fn client_tool_handler(
             })
         },
     )
-}
-
-/// Client methods the agent may call directly, gated by the same table the
-/// tool registry uses.
-pub(crate) fn require_client_method(
-    method: &str,
-    capabilities: &AcpClientCapabilities,
-) -> Result<(), AcpError> {
-    let tool = client_tool_for_method(method)
-        .ok_or_else(|| AcpError::UnsupportedClientFlow(method.to_owned()))?;
-    if capability_enabled(tool.capability(), capabilities) {
-        Ok(())
-    } else {
-        Err(AcpError::UnsupportedClientFlow(format!(
-            "client did not advertise `{method}`"
-        )))
-    }
 }

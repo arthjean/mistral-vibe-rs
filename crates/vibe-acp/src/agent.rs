@@ -26,7 +26,7 @@ use crate::auth::{
     AcpAuthEnvironment, AuthController, ProductionAuthEnvironment, default_vibe_home,
     terminal_method,
 };
-use crate::client_tools::{AcpClientPort, DEFAULT_CLIENT_TOOL_TIMEOUT, require_client_method};
+use crate::client_tools::{AcpClientPort, DEFAULT_CLIENT_TOOL_TIMEOUT};
 use crate::commands;
 use crate::protocol::{
     ACP_PROTOCOL_VERSION, AcpAgentCapabilities, AcpError, AcpImplementation, AcpInitializeRequest,
@@ -314,19 +314,6 @@ where
             }),
         )
         .await
-    }
-
-    /// Calls an ACP client method on behalf of the caller, gated by the
-    /// capabilities the client advertised at initialization.
-    pub async fn client_tool(&self, method: &str, params: Value) -> Result<Value, AcpError> {
-        let capabilities = self.lock_state()?.client_capabilities();
-        require_client_method(method, &capabilities)?;
-        let session_id = params
-            .get("sessionId")
-            .and_then(Value::as_str)
-            .ok_or_else(|| AcpError::InvalidParams("sessionId is required".to_owned()))?;
-        self.session_harness(session_id)?;
-        self.call_client(method, params).await
     }
 
     async fn call_client(&self, method: &str, params: Value) -> Result<Value, AcpError> {

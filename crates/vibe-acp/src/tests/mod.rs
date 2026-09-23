@@ -11,7 +11,6 @@ mod updates;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use serde_json::{Value, json};
 use vibe_app_server::client::{
@@ -85,7 +84,6 @@ impl TurnDriver for RecordingTurnDriver {
 
 pub(super) struct RecordingClient {
     pub(super) calls: Mutex<Vec<String>>,
-    pub(super) delay: Duration,
 }
 
 impl AcpClientPort for RecordingClient {
@@ -95,7 +93,6 @@ impl AcpClientPort for RecordingClient {
                 .lock()
                 .map_err(|_| "lock poisoned".to_owned())?
                 .push(method.to_owned());
-            tokio::time::sleep(self.delay).await;
             Ok(json!({"ok": true}))
         })
     }

@@ -15,8 +15,6 @@ mod updates;
 #[cfg(test)]
 mod tests;
 
-pub const ADAPTER_NAME: &str = "vibe-acp";
-
 pub use agent::{AcpAgent, AcpExperiments};
 pub use auth::{
     AcpAuthEnvironment, AuthAttemptFuture, AuthKeyFuture, ProductionAuthEnvironment,
@@ -24,10 +22,6 @@ pub use auth::{
 };
 pub use client_tools::{AcpClientFuture, AcpClientPort, DEFAULT_CLIENT_TOOL_TIMEOUT};
 pub use protocol::{
-    ACP_PROTOCOL_VERSION, AcpAgentCapabilities, AcpClientCapabilities, AcpClientInfo, AcpError,
-    AcpFilesystemCapabilities, AcpForkSession, AcpImplementation, AcpInitializeRequest,
-    AcpInitializeResponse, AcpListSessions, AcpLoadSession, AcpLoadedSession, AcpNewSession,
-    AcpPromptCapabilities, AcpPromptResponse, AcpSession, AcpSessionInfo, AcpSessionList,
-    AcpSessionSettings, AcpSessionUpdate, AcpUsage,
+    ACP_PROTOCOL_VERSION, AcpError, AcpForkSession, AcpInitializeRequest, AcpListSessions,
+    AcpLoadSession, AcpLoadedSession, AcpNewSession, AcpSessionUpdate,
 };
-pub use updates::MAX_ACP_UPDATE_QUEUE;

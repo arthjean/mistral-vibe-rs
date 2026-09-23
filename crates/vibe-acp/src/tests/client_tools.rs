@@ -1,24 +1,19 @@
-//! Client-side tools: capability scoping, registration, and timeouts.
+//! Client-side tools: capability scoping, registration, and input schemas.
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::{Value, json};
-use vibe_app_server::client::EchoTurnDriver;
 use vibe_app_server::server::{ToolInvocation, ToolRegistry};
 
-use super::{RecordingClient, start_session};
-use crate::agent::AcpAgent;
+use super::RecordingClient;
 use crate::client_tools::{AcpClientToolFactory, ClientTool};
-use crate::protocol::{
-    AcpClientCapabilities, AcpError, AcpFilesystemCapabilities, AcpInitializeRequest,
-};
+use crate::protocol::{AcpClientCapabilities, AcpFilesystemCapabilities};
 
 #[tokio::test]
 async fn client_tool_factory_registers_capabilities_and_invokes_the_client_port() {
     let client = Arc::new(RecordingClient {
         calls: Mutex::new(Vec::new()),
-        delay: Duration::ZERO,
     });
     let factory = AcpClientToolFactory {
         client: Some(client.clone()),
@@ -125,60 +120,4 @@ fn client_tool_schemas_describe_the_acp_methods_they_call() {
         schema(tool)["properties"].get("sessionId").is_none()
             && schema(tool)["additionalProperties"] == json!(false)
     }));
-}
-
-#[tokio::test]
-async fn client_tools_are_capability_scoped_and_timeout_without_cross_session_state() {
-    let client = Arc::new(RecordingClient {
-        calls: Mutex::new(Vec::new()),
-        delay: Duration::from_millis(50),
-    });
-    let agent = AcpAgent::new(EchoTurnDriver::new("answer"))
-        .expect("agent starts")
-        .with_client_port(client.clone(), Duration::from_millis(5));
-    agent
-        .initialize_with(AcpInitializeRequest {
-            protocol_version: 1,
-            client_capabilities: AcpClientCapabilities {
-                fs: AcpFilesystemCapabilities {
-                    read_text_file: true,
-                    write_text_file: false,
-                },
-                terminal: true,
-                session: Value::Null,
-                meta: None,
-            },
-            client_info: None,
-            meta: None,
-        })
-        .expect("initialize");
-    let session = start_session(&agent, "/workspace");
-    assert!(matches!(
-        agent
-            .client_tool(
-                "fs/read_text_file",
-                json!({"sessionId": session.session_id, "path": "src/lib.rs"})
-            )
-            .await,
-        Err(AcpError::ClientToolTimeout(_))
-    ));
-    assert_eq!(
-        client.calls.lock().expect("calls").as_slice(),
-        ["fs/read_text_file"]
-    );
-    // Writes were never advertised, so the method stays unavailable.
-    assert!(matches!(
-        agent
-            .client_tool(
-                "fs/write_text_file",
-                json!({"sessionId": session.session_id, "path": "a", "content": "b"})
-            )
-            .await,
-        Err(AcpError::UnsupportedClientFlow(_))
-    ));
-    assert!(matches!(
-        agent.client_tool("fs/unknown", json!({})).await,
-        Err(AcpError::UnsupportedClientFlow(_))
-    ));
-    agent.disconnect().await.expect("disconnect");
 }

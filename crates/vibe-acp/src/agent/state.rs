@@ -83,10 +83,6 @@ where
         Ok(())
     }
 
-    pub(crate) fn client_capabilities(&self) -> AcpClientCapabilities {
-        self.client_capabilities.clone()
-    }
-
     pub(crate) fn client_context(&self) -> (AcpClientCapabilities, Option<AcpClientInfo>) {
         (self.client_capabilities.clone(), self.client_info.clone())
     }
