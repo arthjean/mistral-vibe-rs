@@ -136,14 +136,6 @@ impl RecordingSink {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .len()
     }
-
-    pub fn last(&self) -> Option<super::models::EvalResponse> {
-        self.persisted
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .last()
-            .cloned()
-    }
 }
 
 impl super::session::ExperimentStateSink for RecordingSink {

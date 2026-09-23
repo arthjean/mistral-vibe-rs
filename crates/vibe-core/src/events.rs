@@ -13,9 +13,8 @@ pub mod detail;
 pub use detail::{
     ApprovalDecision, ApprovalDecisionType, CallbackDetail, CallbackOutput, EffectCallDisplay,
     EffectDetail, EffectResultDisplay, HookNotice, HookScope, HookSeverity, NoticeDetail,
-    QuestionChoice, RemoteSettlement, RemoteToolKind, RemoteToolOrigin, TodoEffectItem,
-    TodoEffectPriority, TodoEffectStatus, ToolEffectKind, UserAnswer, UserQuestion,
-    UserQuestionRequest, UserQuestionResult,
+    QuestionChoice, RemoteSettlement, RemoteToolOrigin, TodoEffectPriority, TodoEffectStatus,
+    ToolEffectKind, UserAnswer, UserQuestion, UserQuestionRequest, UserQuestionResult,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

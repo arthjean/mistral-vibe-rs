@@ -130,15 +130,6 @@ impl OtelRedactionMode {
             _ => Self::Default,
         }
     }
-
-    #[must_use]
-    pub const fn label(self) -> &'static str {
-        match self {
-            Self::None => "none",
-            Self::Default => "default",
-            Self::Strict => "strict",
-        }
-    }
 }
 
 /// Where spans are exported and what the request carries. Reference

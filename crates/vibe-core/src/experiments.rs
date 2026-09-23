@@ -23,20 +23,13 @@ mod manager;
 mod models;
 mod session;
 
-pub use client::{
-    EvalFailure, EvalFuture, EvalHttpResponse, EvalPayload, EvalRequest, EvalTransport,
-    EvalTransportError, RemoteEvalClient, ReqwestEvalTransport,
-};
+pub use client::{EvalPayload, RemoteEvalClient};
 pub use json::{JsonValue, OrderedMap};
 pub use manager::{BUCKETING_KEY_LENGTH, ExperimentManager, hash_api_key};
-pub use models::{
-    EvalResponse, ExperimentAttributes, FeatureDefinition, FeatureRule, TrackData,
-    TrackedExperiment, TrackedExperimentResult,
-};
+pub use models::{EvalResponse, ExperimentAttributes, FeatureDefinition};
 pub use session::{
-    CredentialSource, EXPERIMENT_IDENTITY_TIMEOUT, ExperimentStateSink, build_attributes,
-    experiments_allowed, hydrate_experiments_from_session, initialize_experiments,
-    mistral_provider_and_api_key,
+    EXPERIMENT_IDENTITY_TIMEOUT, ExperimentStateSink, build_attributes,
+    hydrate_experiments_from_session, initialize_experiments,
 };
 
 /// The transport the unit tests and the parity replay stand one call before a

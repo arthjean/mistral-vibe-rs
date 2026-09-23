@@ -622,11 +622,6 @@ impl LogReader {
         Self { path: path.into() }
     }
 
-    #[must_use]
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
     /// Reference `get_logs`: `limit` entries starting `offset` non-blank lines
     /// back from the end, newest first.
     ///

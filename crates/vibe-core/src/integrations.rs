@@ -9,12 +9,8 @@ use serde_json::Value;
 use tokio::sync::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
 use url::Url;
 
-mod operational;
 mod shared;
 
-pub use operational::{
-    AccountView, Diagnostic, LogRecord, OperationalResources, OperationalStats, RuntimeView,
-};
 pub use shared::{IntegrationError, redact};
 use shared::{
     connector_availability_updates, connector_tool_spec, normalize_alias,
@@ -424,52 +420,6 @@ impl ConnectorRegistry {
         if !becoming_available {
             *gate.write().await = next.auth_state;
         }
-        let mut state = self
-            .state
-            .lock()
-            .map_err(|_| IntegrationError::LockPoisoned("connectors"))?;
-        state.views.insert(connector_id.to_owned(), next.clone());
-        Ok(next)
-    }
-
-    pub async fn fail_auth(
-        &self,
-        connector_id: &str,
-        error: &str,
-    ) -> Result<ConnectorView, IntegrationError> {
-        let _mutation = self.mutation.lock().await;
-        let (mut next, gate, tools) =
-            {
-                let state = self
-                    .state
-                    .lock()
-                    .map_err(|_| IntegrationError::LockPoisoned("connectors"))?;
-                let view = state
-                    .views
-                    .get(connector_id)
-                    .ok_or_else(|| IntegrationError::ConnectorNotFound(connector_id.to_owned()))?;
-                (
-                    view.clone(),
-                    state.auth_gates.get(connector_id).cloned().ok_or_else(|| {
-                        IntegrationError::ConnectorNotFound(connector_id.to_owned())
-                    })?,
-                    state.tools.clone(),
-                )
-            };
-        next.auth_state = ConnectorAuthState::Failed;
-        next.diagnostic = Some(redact(error));
-        if let Some(tools) = tools {
-            let updates = connector_availability_updates(&next, next.tool_names.clone());
-            if !tools
-                .set_availabilities(ToolSource::Connector, &updates)
-                .map_err(|tool_error| IntegrationError::Tool(tool_error.to_string()))?
-            {
-                return Err(IntegrationError::Tool(format!(
-                    "connector `{connector_id}` tools are no longer registered"
-                )));
-            }
-        }
-        *gate.write().await = ConnectorAuthState::Failed;
         let mut state = self
             .state
             .lock()
@@ -980,26 +930,7 @@ mod tests {
     }
 
     #[test]
-    fn operational_errors_and_logs_never_project_secrets() {
-        let resources = OperationalResources::new("2.23.1");
-        resources
-            .record_diagnostic(
-                "connector_auth",
-                "Authorization: Bearer super-secret",
-                "connector",
-            )
-            .expect("diagnostic");
-        resources
-            .record_log(1, "error", "request failed token=secret")
-            .expect("log");
-        assert_eq!(
-            resources.diagnostics().expect("diagnostics")[0].message,
-            "[redacted sensitive error]"
-        );
-        assert_eq!(
-            resources.logs(0, 10).expect("logs")[0].message,
-            "[redacted sensitive error]"
-        );
+    fn redaction_never_projects_secrets() {
         assert_eq!(
             redact("https://alice:password@example.test/path"),
             "[redacted sensitive error]"

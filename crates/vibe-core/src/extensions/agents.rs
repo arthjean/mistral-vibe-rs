@@ -304,41 +304,9 @@ impl AgentRegistry {
         }
     }
 
-    pub fn new(
-        agents: BTreeMap<String, AgentProfile>,
-        user_directory: PathBuf,
-        active: &str,
-    ) -> Result<Self, ExtensionError> {
-        if !agents.contains_key(active) {
-            return Err(ExtensionError::MissingAgent(active.to_owned()));
-        }
-        Ok(Self {
-            agents,
-            user_directory,
-            active: active.to_owned(),
-        })
-    }
-
     #[must_use]
     pub fn list(&self) -> Vec<&AgentProfile> {
         self.agents.values().collect()
-    }
-
-    pub fn profile(&self, name: &str) -> Result<&AgentProfile, ExtensionError> {
-        let profile = self
-            .agents
-            .get(name)
-            .ok_or_else(|| ExtensionError::MissingAgent(name.to_owned()))?;
-        if profile.kind != AgentKind::Agent {
-            return Err(ExtensionError::SubagentCannotBePrimary(name.to_owned()));
-        }
-        Ok(profile)
-    }
-
-    pub fn set_active(&mut self, name: &str) -> Result<&AgentProfile, ExtensionError> {
-        self.profile(name)?;
-        self.active = name.to_owned();
-        Ok(&self.agents[name])
     }
 
     pub fn register_builtin(&mut self, profile: AgentProfile) {
@@ -396,8 +364,8 @@ impl AgentRegistry {
         })?;
         self.agents.remove(name);
         if self.active == name {
-            // `new` guarantees the active agent exists; keep that invariant by
-            // falling back to a profile that is actually registered.
+            // `with_initial` seats the active agent on a registered profile;
+            // keep that invariant by falling back to one that still is.
             self.active = self
                 .agents
                 .values()

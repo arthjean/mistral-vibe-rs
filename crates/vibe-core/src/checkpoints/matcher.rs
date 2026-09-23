@@ -54,6 +54,7 @@ pub enum Tag {
 
 impl Tag {
     /// The name the reference emits for this tag, which the corpus records.
+    #[cfg(test)]
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {

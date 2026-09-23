@@ -1,7 +1,7 @@
 //! The checkpoint engine: an append-only log of what happened to the tracked
 //! files, and a read model that turns it into reviewable changes.
 //!
-//! [`Checkpointer`] owns the log and its lifecycle, and [`History`] answers
+//! [`Checkpointer`] owns the log and its lifecycle, and `History` answers
 //! every question about it: which regions a file carries, what each was built
 //! on, what decision is in force after dragging, what the file looks like with
 //! those decisions applied, and where each pending change sits in a rendered
@@ -46,18 +46,12 @@ mod recorder;
 mod review;
 
 pub use checkpointer::{Checkpointer, RETAINED_BYTES_LIMIT};
-pub use files::{CheckpointFiles, FileAccessError, FileStore, RestoreOutcome};
-pub use history::History;
-pub use lines::{FileState, decode_lines, split_lines};
-pub use matcher::{Match, Opcode, SequenceMatcher, Tag};
-pub use models::{
-    Change, CheckpointError, Decision, HunkAnchor, HunkSide, OpaqueChange, OpaqueReason, Owner,
-    Region, RegionId, TurnRegion,
-};
+pub use files::{CheckpointFiles, FileAccessError, FileStore};
+pub use lines::FileState;
+pub use models::{CheckpointError, Decision, HunkSide, Owner};
 pub use recorder::{CheckpointRecorder, RecorderError};
 pub use review::{
-    OpaqueReviewRegion, ReviewError, ReviewFile, ReviewFileStatus, ReviewHunk, ReviewRegion,
-    ReviewScope, ReviewScopeFile, ReviewState, ReviewTarget, TextReviewRegion, TurnFileDiff,
+    ReviewError, ReviewFileStatus, ReviewHunk, ReviewState, ReviewTarget, TurnFileDiff,
     decide_target, project_scope_diff, project_state, state_text,
 };
 

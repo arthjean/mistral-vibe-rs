@@ -37,7 +37,6 @@ mod state_tests;
 #[cfg(test)]
 pub(crate) mod testing;
 
-pub use env_file::{remove_env_file_key, write_env_file_key};
 pub use keyring::{
     KEYRING_SERVICE, KeyringBackend, KeyringFailure, KeyringStore, LEGACY_KEYRING_SERVICES,
     NativeKeyringBackend, PRIOR_BUILD_KEYRING_SERVICE,
@@ -46,7 +45,7 @@ pub use mcp_credentials::{
     MCP_OAUTH_KEYRING_SERVICE, delete_mcp_oauth_credential, mcp_oauth_account,
 };
 pub use persistence::{
-    ApiKeyAddedEvent, PersistOutcome, PersistReport, RemoveError, persist_api_key, remove_api_key,
+    PersistOutcome, PersistReport, RemoveError, persist_api_key, remove_api_key,
 };
 pub use provider::{
     configured_custom_domain, default_mistral_provider, is_likely_mistral_private_cloud_domain,
@@ -56,13 +55,12 @@ pub use provider::{
 pub use sign_in::{
     CODE_CHALLENGE_METHOD, MAX_CONSECUTIVE_POLL_FAILURES, POLL_INTERVAL_SECONDS, SignInAttempt,
     SignInError, SignInErrorCode, SignInEvent, SignInGateway, SignInPoll, SignInProcess,
-    SignInRuntime, SignInService, SignInStatus, SystemSignInRuntime, UtcTimestamp, code_challenge,
+    SignInService, SignInStatus, SystemSignInRuntime, UtcTimestamp, code_challenge,
     generate_code_verifier, open_system_browser,
 };
 pub use sign_in_http::{
     DEFAULT_BROWSER_AUTH_API_BASE_URL, DEFAULT_BROWSER_AUTH_BASE_URL, HttpSignInGateway,
-    ReqwestSignInClient, SignInHttpClient, SignInHttpResponse, SignInTransportError, UrlRejection,
-    browser_sign_in_bases, validate_url_against_base,
+    ReqwestSignInClient, UrlRejection, validate_url_against_base,
 };
 pub use state::{
     AuthState, AuthStateKind, DEFAULT_MISTRAL_API_ENV_KEY, assess_auth_state, resolve_api_key,

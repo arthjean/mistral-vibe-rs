@@ -14,8 +14,6 @@
 //! was never opened answers an error rather than building a transport
 //! implicitly.
 
-use std::time::Duration;
-
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
@@ -61,60 +59,6 @@ pub trait RegistryTransport {
         url: &str,
         params: &[(String, String)],
     ) -> impl Future<Output = Result<TransportResponse, String>> + Send;
-}
-
-/// The production transport: a reqwest client carrying the bearer key, the
-/// JSON accept header and the timeout. Built only by [`HttpRegistryTransport::open`],
-/// never as a side effect of constructing a [`RegistrySkillsClient`].
-#[derive(Debug)]
-pub struct HttpRegistryTransport {
-    client: reqwest::Client,
-}
-
-impl HttpRegistryTransport {
-    pub fn open(api_key: &str, timeout: Duration) -> Result<Self, RegistrySkillsError> {
-        let mut headers = reqwest::header::HeaderMap::new();
-        let mut authorization =
-            reqwest::header::HeaderValue::from_str(&format!("Bearer {api_key}"))
-                .map_err(|_| RegistrySkillsError::new("the API key is not a valid header value"))?;
-        authorization.set_sensitive(true);
-        headers.insert(reqwest::header::AUTHORIZATION, authorization);
-        headers.insert(
-            reqwest::header::ACCEPT,
-            reqwest::header::HeaderValue::from_static("application/json"),
-        );
-        let client = reqwest::Client::builder()
-            .default_headers(headers)
-            .timeout(timeout)
-            .build()
-            .map_err(|error| {
-                RegistrySkillsError::new(format!("the transport could not be built: {error}"))
-            })?;
-        Ok(Self { client })
-    }
-}
-
-impl RegistryTransport for HttpRegistryTransport {
-    async fn get(
-        &self,
-        url: &str,
-        params: &[(String, String)],
-    ) -> Result<TransportResponse, String> {
-        let response = self
-            .client
-            .get(url)
-            .query(params)
-            .send()
-            .await
-            .map_err(|error| error.to_string())?;
-        let status = response.status().as_u16();
-        let body = response
-            .bytes()
-            .await
-            .map_err(|error| error.to_string())?
-            .to_vec();
-        Ok(TransportResponse { status, body })
-    }
 }
 
 /// The catalog client over one opened transport.

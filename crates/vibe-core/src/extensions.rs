@@ -19,11 +19,11 @@ mod subagents;
 #[cfg(test)]
 use agents::{auto_approves_edits, canonical_tool_name, profile_permission_scope};
 
-pub use agents::{AgentApproval, AgentKind, AgentProfile, AgentRegistry, AgentRuntimeSettings};
-pub use hooks::{HookChainResult, HookInvocation, HookManager, HookNotice};
+pub use agents::{AgentApproval, AgentKind, AgentProfile, AgentRegistry};
+pub use hooks::{HookInvocation, HookManager};
 pub use subagents::{
-    ChildActivity, ChildContext, ChildLoggingPolicy, DelegationEffect, DelegationRequest,
-    DelegationStatus, SubagentFuture, SubagentManager, SubagentRun, SubagentRunner,
+    ChildContext, ChildLoggingPolicy, DelegationRequest, DelegationStatus, SubagentFuture,
+    SubagentManager, SubagentRun, SubagentRunner,
 };
 
 const MAX_EXTENSION_FILE_BYTES: u64 = 2 * 1024 * 1024;
@@ -532,50 +532,6 @@ fn parse_hook(value: &toml::Value, source: ExtensionSource) -> Result<HookSpec, 
     })
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SkillInjection {
-    pub name: String,
-    pub content: String,
-    pub base_directory: PathBuf,
-}
-
-#[derive(Debug, Clone)]
-pub struct SkillInjector {
-    skills: BTreeMap<String, SkillDefinition>,
-    injected: BTreeSet<String>,
-}
-
-impl SkillInjector {
-    #[must_use]
-    pub fn new(skills: BTreeMap<String, SkillDefinition>) -> Self {
-        Self {
-            skills,
-            injected: BTreeSet::new(),
-        }
-    }
-
-    pub fn invoke(&mut self, name: &str) -> Result<Option<SkillInjection>, ExtensionError> {
-        let skill = self
-            .skills
-            .get(name)
-            .ok_or_else(|| ExtensionError::MissingSkill(name.to_owned()))?;
-        if !self.injected.insert(name.to_owned()) {
-            return Ok(None);
-        }
-        Ok(Some(SkillInjection {
-            name: skill.name.clone(),
-            content: skill.body.clone(),
-            base_directory: skill
-                .path
-                .as_deref()
-                .and_then(Path::parent)
-                .map(Path::to_path_buf)
-                .unwrap_or_default(),
-        }))
-    }
-}
-
 impl crate::tracing::TracedError for ExtensionError {
     fn error_type(&self) -> &'static str {
         "ExtensionError"
@@ -681,12 +637,8 @@ pub enum ExtensionError {
     InvalidSkill(String),
     #[error("invalid hook: {0}")]
     InvalidHook(String),
-    #[error("skill `{0}` was not found")]
-    MissingSkill(String),
     #[error("agent `{0}` was not found")]
     MissingAgent(String),
-    #[error("subagent `{0}` cannot be selected as the primary agent")]
-    SubagentCannotBePrimary(String),
     #[error("agent `{0}` is not owned by the user install directory")]
     AgentNotUserOwned(String),
     #[error("agent `{0}` is not a subagent")]

@@ -200,18 +200,6 @@ pub trait McpPeerFactory: Send + Sync {
     fn connect<'a>(&'a self, config: &'a McpServerConfig) -> McpFuture<'a, Arc<dyn McpPeer>>;
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct StdioMcpPeerFactory;
-
-impl McpPeerFactory for StdioMcpPeerFactory {
-    fn connect<'a>(&'a self, config: &'a McpServerConfig) -> McpFuture<'a, Arc<dyn McpPeer>> {
-        Box::pin(async move {
-            let peer = StdioMcpPeer::connect(config, None).await?;
-            Ok(Arc::new(peer) as Arc<dyn McpPeer>)
-        })
-    }
-}
-
 #[derive(Clone, Default)]
 pub struct DefaultMcpPeerFactory {
     sampling: Option<Arc<dyn SamplingHandler>>,

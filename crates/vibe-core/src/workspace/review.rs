@@ -667,17 +667,6 @@ impl ReviewManager {
         Ok(self.lock_state()?.retention_notice.take())
     }
 
-    pub fn approve(&self) -> Result<ReviewView, WorkspaceError> {
-        let mut state = self.lock_state()?;
-        if state.active_turn.is_some() {
-            return Err(WorkspaceError::ReviewBusy);
-        }
-        clear_review(&mut state);
-        self.with_log(Checkpointer::clear)?;
-        drop(state);
-        self.view()
-    }
-
     pub fn revert(&self) -> Result<ReviewView, WorkspaceError> {
         let mut state = self.lock_state()?;
         if state.active_turn.is_some() {

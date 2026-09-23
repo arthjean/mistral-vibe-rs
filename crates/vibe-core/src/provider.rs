@@ -12,7 +12,6 @@ use serde_json::{Value, json};
 use thiserror::Error;
 use url::Url;
 
-use crate::bootstrap::BootstrapRuntime;
 use crate::events::{ModelMessage, ModelToolCall};
 
 mod request;
@@ -345,22 +344,6 @@ where
             transport,
             retry: RetryPolicy::default(),
         }
-    }
-
-    #[must_use]
-    pub fn from_bootstrap(
-        style: ProviderStyle,
-        endpoint: impl Into<String>,
-        runtime: &BootstrapRuntime,
-        transport: T,
-    ) -> Self {
-        Self::new(
-            style,
-            endpoint,
-            runtime.snapshot().model.clone(),
-            runtime.credential.clone(),
-            transport,
-        )
     }
 
     /// The model every request addresses when the turn names no override.

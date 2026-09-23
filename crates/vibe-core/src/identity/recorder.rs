@@ -158,13 +158,6 @@ impl RecordingResolver {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone()
     }
-
-    pub fn call_count(&self) -> usize {
-        self.calls
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .len()
-    }
 }
 
 impl IdentityResolver for RecordingResolver {

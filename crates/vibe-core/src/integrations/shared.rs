@@ -23,10 +23,6 @@ pub enum IntegrationError {
     InvalidConnector(String),
     #[error("connector tool failed: {0}")]
     Tool(String),
-    #[error("narration is unavailable: {0}")]
-    UnsupportedNarration(String),
-    #[error("connector backend unavailable")]
-    BackendUnavailable,
 }
 
 pub fn redact(message: &str) -> String {
@@ -58,13 +54,6 @@ pub fn redact(message: &str) -> String {
         return "[redacted sensitive error]".to_owned();
     }
     bounded.to_owned()
-}
-
-pub(super) fn push_bounded<T>(values: &mut Vec<T>, limit: usize, value: T) {
-    if values.len() == limit {
-        values.remove(0);
-    }
-    values.push(value);
 }
 
 pub(super) fn validate_definition(

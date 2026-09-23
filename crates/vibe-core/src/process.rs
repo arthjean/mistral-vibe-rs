@@ -31,8 +31,8 @@ mod client;
 #[cfg(test)]
 pub(crate) use client::shell_result;
 pub use client::{
-    ClientShellRequest, ClientShellResult, ClientToolCapability, ClientToolIo, ClientToolPort,
-    ClientToolRequest, ToolIoError,
+    ClientShellRequest, ClientToolCapability, ClientToolIo, ClientToolPort, ClientToolRequest,
+    ToolIoError,
 };
 
 pub type ToolIoFuture<'a> = Pin<Box<dyn Future<Output = Result<Value, ToolIoError>> + Send + 'a>>;

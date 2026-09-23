@@ -65,14 +65,6 @@ impl HookManager {
         }
     }
 
-    pub fn reload(&self, hooks: Vec<HookSpec>) -> Result<(), ExtensionError> {
-        *self
-            .hooks
-            .lock()
-            .map_err(|_| ExtensionError::StatePoisoned)? = hooks;
-        Ok(())
-    }
-
     pub async fn run(
         &self,
         mut invocation: HookInvocation,

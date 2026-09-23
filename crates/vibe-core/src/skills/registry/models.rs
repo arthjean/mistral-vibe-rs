@@ -110,28 +110,12 @@ pub struct RegistryMetadata {
     pub latest_version: i64,
     #[serde(default, alias = "sharing_scope")]
     pub sharing_scope: String,
-    #[serde(default, alias = "created_at")]
-    pub created_at: String,
-    #[serde(default, alias = "last_modified_at")]
-    pub last_modified_at: String,
-    #[serde(default, alias = "created_by")]
-    pub created_by: String,
-}
-
-/// The version-level registry metadata.
-#[derive(Debug, Clone, Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RegistryVersionMetadata {
-    #[serde(default, alias = "created_at")]
-    pub created_at: String,
 }
 
 /// The version-level display attributes, carrying the author aliases.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RegistryVersionAttributes {
-    #[serde(default)]
-    pub notes: String,
     #[serde(default)]
     pub aliases: Vec<String>,
 }
@@ -151,8 +135,6 @@ pub struct RegistrySkillItem {
     pub metadata: RegistryMetadata,
     #[serde(default)]
     pub version: i64,
-    #[serde(default, alias = "version_metadata")]
-    pub version_metadata: RegistryVersionMetadata,
     #[serde(default, alias = "version_attributes")]
     pub version_attributes: RegistryVersionAttributes,
 }

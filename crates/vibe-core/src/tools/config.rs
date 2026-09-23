@@ -36,8 +36,7 @@ use crate::policy::PermissionMode;
 mod lists;
 
 pub use lists::{
-    SHELL_READ_ONLY_POSIX, SHELL_READ_ONLY_WINDOWS, shell_allowlist, shell_denylist,
-    shell_denylist_standalone, shell_read_only_commands,
+    shell_allowlist, shell_denylist, shell_denylist_standalone, shell_read_only_commands,
 };
 
 pub const TOOL_SETTINGS_KEY: &str = "tools";
@@ -496,18 +495,12 @@ fn integral_float(value: &Value) -> Option<i64> {
 /// survives a round trip through this one.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResolvedToolConfig {
-    tool: String,
     values: BTreeMap<String, Value>,
     declaration: &'static ToolConfigDeclaration,
     posix_shell: bool,
 }
 
 impl ResolvedToolConfig {
-    #[must_use]
-    pub fn tool(&self) -> &str {
-        &self.tool
-    }
-
     /// The value carried under `key`, declared or not.
     #[must_use]
     pub fn value(&self, key: &str) -> Option<&Value> {
@@ -1077,7 +1070,6 @@ impl ToolConfigResolver {
             );
         }
         ResolvedToolConfig {
-            tool: tool.to_owned(),
             values,
             declaration,
             posix_shell: self.posix_shell,

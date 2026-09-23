@@ -37,12 +37,6 @@ pub enum StoreError {
     Io(#[from] io::Error),
 }
 
-/// The store root under a Vibe home, `skills-registry-cache/store`.
-#[must_use]
-pub fn store_root(vibe_home: &Path) -> PathBuf {
-    vibe_home.join("skills-registry-cache").join("store")
-}
-
 /// A skill's cache directory under the resolved store root, guarding the id.
 ///
 /// The id comes from the registry and is used as a single path segment:
@@ -71,13 +65,6 @@ fn is_plain_component(id: &str) -> bool {
 /// One version's directory under the store.
 pub fn skill_dir(root: &Path, skill_id: &str, version: i64) -> Result<PathBuf, StoreError> {
     Ok(skill_root(root, skill_id)?.join(version.to_string()))
-}
-
-/// Whether one version is fully materialized, which its `SKILL.md` witnesses.
-pub fn is_materialized(root: &Path, skill_id: &str, version: i64) -> Result<bool, StoreError> {
-    Ok(skill_dir(root, skill_id, version)?
-        .join("SKILL.md")
-        .is_file())
 }
 
 /// The highest materialized version for a skill, or [`None`] when nothing is.
@@ -123,7 +110,7 @@ pub(crate) fn materialize_with(
     let dest = skill_dir(root, &item.skill_id, item.version)?;
     let body = strip_frontmatter(&item.skill.skill_body).trim().to_owned();
     if body.is_empty() {
-        // Drop any prior cache so `is_materialized` cannot report a stale hit.
+        // Drop any prior cache so a stale `SKILL.md` never stands for this version.
         let _ = fs::remove_dir_all(&dest);
         return Ok(None);
     }

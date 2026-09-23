@@ -11,14 +11,6 @@ use toml::{Table, Value};
 use super::{ConfigError, ConfigSnapshot, ConfigWrite, JsonPointer, patch};
 
 impl super::LayeredConfig {
-    /// The provider entry `name` resolves to in the effective document, which
-    /// is the entry the setup flow starts from and hands back to
-    /// [`Self::persist_provider`] once it may have modified it.
-    pub fn effective_provider(&self, name: &str) -> Result<Option<Table>, ConfigError> {
-        let snapshot = self.load()?;
-        Ok(provider_entry(snapshot.effective.get("providers"), name).cloned())
-    }
-
     /// Upserts one provider entry into the `providers` list writes land in,
     /// keyed by `name`.
     ///
