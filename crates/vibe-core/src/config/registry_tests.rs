@@ -14,13 +14,14 @@ use super::*;
 /// definitions TOML cannot carry as null, `tools` is filled by tool discovery
 /// rather than by a declaration, and the three legacy proxy keys are unset
 /// until an operator writes one.
-const WITHOUT_DEFAULT: [&str; 6] = [
+const WITHOUT_DEFAULT: [&str; 7] = [
     "compaction_model",
     "routed_model_config",
     "tools",
     "proxy",
     "tls_ca_path",
     "dotenv_path",
+    "log_level",
 ];
 
 #[test]

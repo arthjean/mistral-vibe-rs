@@ -982,6 +982,12 @@ impl SessionStore {
         }
     }
 
+    /// The directory a session is written under.
+    pub fn session_directory(&self, selector: &str) -> Result<PathBuf, StorageError> {
+        let metadata = self.resolve(selector)?;
+        Ok(self.session_path(&metadata))
+    }
+
     fn session_path(&self, metadata: &SessionMetadata) -> PathBuf {
         self.root.join(&metadata.directory)
     }

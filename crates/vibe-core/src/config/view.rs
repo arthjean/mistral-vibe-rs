@@ -126,6 +126,38 @@ impl ConfigSnapshot {
         }
     }
 
+    /// What the active model costs per million tokens: input, output, and the
+    /// cached-input price when the model declares one. Reference
+    /// `_apply_active_model_pricing`; an undeclared price is zero.
+    #[must_use]
+    pub fn active_model_pricing(&self) -> (f64, f64, Option<f64>) {
+        let Some(entry) = self.active_model() else {
+            return (0.0, 0.0, None);
+        };
+        let price = |key: &str| {
+            entry.get(key).and_then(|value| match value {
+                Value::Float(price) => Some(*price),
+                Value::Integer(price) => Some(*price as f64),
+                _ => None,
+            })
+        };
+        (
+            price("input_price").unwrap_or_default(),
+            price("output_price").unwrap_or_default(),
+            price("cached_input_price"),
+        )
+    }
+
+    /// The name the active model is shown under. Reference
+    /// `ModelConfig.display_name`, which a model entry may leave unset.
+    #[must_use]
+    pub fn active_model_display_name(&self) -> Option<String> {
+        self.active_model()?
+            .get("display_name")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned)
+    }
+
     /// The active model entry, keyed by the alias the active model resolves to.
     ///
     /// `models` is written as an array and read back keyed by alias, so both

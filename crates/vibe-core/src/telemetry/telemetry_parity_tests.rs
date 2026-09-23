@@ -148,12 +148,6 @@ const REPIN_REQUEST_ARCH_HOST_KIND: &str = "OPEN: v2.25.0 adds `arch` \
      (vibe/core/telemetry/build_metadata.py:70 at 4a960031) and `host_kind`, always `local` \
      (vibe/core/telemetry/types.py:100 at 4a960031), to the request metadata; this port's \
      `TelemetryRequestMetadata` carries neither (crates/vibe-core/src/telemetry.rs:332-359,391-397)";
-/// Why `vibe.session_branched` has no counterpart at 4a960031.
-const REPIN_SESSION_BRANCHED: &str = "OPEN: v2.25.3 added the branch command, which raises \
-     `vibe.session_branched` with `source_session_id` and `new_session_id` \
-     (vibe/cli/textual_ui/app.py:4381-4384 at 4a960031); this port has no branch command and \
-     `TelemetryEvent::ALL` does not declare the name \
-     (crates/vibe-core/src/telemetry/vocabulary.rs:58-84)";
 /// Why `vibe.new_session` diverges at 4a960031.
 const REPIN_NEW_SESSION_HOST_KIND: &str = "OPEN: v2.25.0 adds `host_kind`, always `local`, to \
      `send_new_session` (vibe/core/telemetry/send.py:447 at 4a960031); this port's `NewSession` \
@@ -554,14 +548,6 @@ const DIVERGENCES: &[(&str, &str)] = &[
     (
         "baseMetadata/request/no-user-plan-secondary_call",
         REPIN_REQUEST_ARCH_HOST_KIND,
-    ),
-    (
-        "eventVocabulary/published/vibe.session_branched",
-        REPIN_SESSION_BRANCHED,
-    ),
-    (
-        "eventPayloads/propertyKeys/vibe.session_branched",
-        REPIN_SESSION_BRANCHED,
     ),
     (
         "eventPayloads/propertyKeys/vibe.new_session",
@@ -1146,6 +1132,7 @@ const fn declared_name(event: TelemetryEvent) -> &'static str {
         TelemetryEvent::ReadAloudRequested => "vibe.read_aloud.requested",
         TelemetryEvent::ReadAloudPlayStarted => "vibe.read_aloud.play_started",
         TelemetryEvent::ReadAloudEnded => "vibe.read_aloud.ended",
+        TelemetryEvent::SessionBranched => "vibe.session_branched",
     }
 }
 
@@ -1495,6 +1482,10 @@ fn port_record(event: &str) -> Option<TelemetryRecord> {
             status: records::ReadAloudStatus::Completed,
             error_type: None,
             elapsed: std::time::Duration::from_millis(900),
+        },
+        "vibe.session_branched" => TelemetryRecord::SessionBranched {
+            source_session_id: "oracle-source-session".to_owned(),
+            new_session_id: "oracle-new-session".to_owned(),
         },
         _ => return None,
     })

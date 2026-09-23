@@ -1258,6 +1258,10 @@ fn every_published_event_name_has_a_record() {
             error_type: None,
             elapsed: std::time::Duration::ZERO,
         },
+        TelemetryRecord::SessionBranched {
+            source_session_id: "source".to_owned(),
+            new_session_id: "copy".to_owned(),
+        },
     ];
     let produced = records
         .iter()

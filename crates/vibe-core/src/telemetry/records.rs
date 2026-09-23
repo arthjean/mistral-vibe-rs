@@ -741,6 +741,12 @@ pub enum TelemetryRecord {
     UserCopiedText {
         text_length: u64,
     },
+    /// Reference `_branch_session`: the conversation was forked into a new
+    /// session the client did not attach to.
+    SessionBranched {
+        source_session_id: String,
+        new_session_id: String,
+    },
     UserCancelledAction {
         action: String,
     },
@@ -815,6 +821,7 @@ impl TelemetryRecord {
             Self::CompactionFailed { .. } => TelemetryEvent::CompactionFailed,
             Self::SlashCommandUsed { .. } => TelemetryEvent::SlashCommandUsed,
             Self::UserCopiedText { .. } => TelemetryEvent::UserCopiedText,
+            Self::SessionBranched { .. } => TelemetryEvent::SessionBranched,
             Self::UserCancelledAction { .. } => TelemetryEvent::UserCancelledAction,
             Self::VoiceModeToggled { .. } => TelemetryEvent::VoiceModeToggled,
             Self::OnboardingApiKeyAdded { .. } => TelemetryEvent::OnboardingApiKeyAdded,
@@ -981,6 +988,14 @@ impl TelemetryRecord {
             }
             Self::UserCopiedText { text_length } => {
                 attributes.count(TelemetryField::TextLength, *text_length);
+            }
+            Self::SessionBranched {
+                source_session_id,
+                new_session_id,
+            } => {
+                attributes
+                    .label(TelemetryField::SourceSessionId, source_session_id)?
+                    .label(TelemetryField::NewSessionId, new_session_id)?;
             }
             Self::UserCancelledAction { action } => {
                 attributes.label(TelemetryField::Action, action)?;

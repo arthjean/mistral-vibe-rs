@@ -156,6 +156,16 @@ pub fn resolve_new_mcp_server_name(
 /// dropped, an IPv6 host stays bracketed and the fragment is removed. No
 /// message echoes the URL, so a credential carried in one never reaches a log.
 pub fn normalize_mcp_server_url(value: &str) -> Result<String, ConfigError> {
+    normalize_mcp_server_url_with(value, false)
+}
+
+/// [`normalize_mcp_server_url`], where `allow_insecure_http` accepts a plaintext
+/// `http://` URL on a host that is not the loopback, such as a server on the
+/// LAN. Reference `normalize_mcp_server_url(..., allow_insecure_http=...)`.
+pub fn normalize_mcp_server_url_with(
+    value: &str,
+    allow_insecure_http: bool,
+) -> Result<String, ConfigError> {
     let raw = value.trim();
     if raw.is_empty() {
         return Err(invalid("MCP server URL is required"));
@@ -181,7 +191,7 @@ pub fn normalize_mcp_server_url(value: &str) -> Result<String, ConfigError> {
     if authority_of(raw).contains('@') {
         return Err(invalid("MCP server URL must not include credentials"));
     }
-    if scheme == "http" && !crate::text::is_loopback_host(host) {
+    if scheme == "http" && !allow_insecure_http && !crate::text::is_loopback_host(host) {
         return Err(invalid(
             "MCP server URL must use https unless it points to localhost",
         ));

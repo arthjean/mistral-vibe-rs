@@ -1007,6 +1007,11 @@ pub static FIELDS: &[FieldSpec] = &[
         "Base URL sessions are shared through.",
         "",
     ),
+    FieldSpec::declared("log_level", FieldKind::Str, REPLACE).published(
+        FieldDefault::None,
+        "Lowest severity written to the session log; LOG_LEVEL and /log-level take precedence.",
+        r#"{"type": ["string", "null"]}"#,
+    ),
     // Nested configs
     FieldSpec::declared("project_context", FieldKind::Complex, REPLACE).published(
         FieldDefault::Json(DEFAULT_PROJECT_CONTEXT),

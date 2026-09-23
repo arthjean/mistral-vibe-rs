@@ -22,7 +22,7 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 
 use regex::Regex;
 use sha2::{Digest, Sha256};
@@ -356,7 +356,7 @@ impl FileLog {
         message: &str,
         exception: Option<&str>,
     ) -> Result<(), io::Error> {
-        if level < self.settings.level {
+        if level < self.threshold() {
             return Ok(());
         }
         let (ppid, pid) = process_identifiers();
@@ -380,6 +380,22 @@ impl FileLog {
         file.write_all(b"\n")
     }
 
+    /// The level a record needs. The settings resolved the environment when
+    /// the file was installed; a session override or a configured level, once
+    /// either is set, takes its place in the chain.
+    fn threshold(&self) -> LogLevel {
+        let (session, config) = level_state();
+        if session.is_none() && config.is_none() {
+            return self.settings.level;
+        }
+        LogLevelChain::resolve(
+            session,
+            env_log_level(&|name| std::env::var(name).ok()),
+            config,
+        )
+        .effective
+    }
+
     /// Reference `shouldRollover`: the record that would reach the ceiling
     /// rotates before it is written, and a ceiling of zero or less never does.
     fn rotates_before(&self, line: &str) -> bool {
@@ -395,6 +411,88 @@ impl FileLog {
             .saturating_add(1);
         size.saturating_add(written) >= ceiling
     }
+}
+
+// --------------------------------------------------------------------------
+// The level chain
+// --------------------------------------------------------------------------
+
+/// Where the level a record needs comes from. Reference `LogLevelChain`: the
+/// session override wins, then the environment, then `log_level` in
+/// `config.toml`, then [`LogLevel::DEFAULT`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LogLevelChain {
+    pub session: Option<LogLevel>,
+    pub env: Option<LogLevel>,
+    pub config: Option<LogLevel>,
+    pub effective: LogLevel,
+}
+
+impl LogLevelChain {
+    /// The chain three sources resolve to.
+    #[must_use]
+    pub fn resolve(
+        session: Option<LogLevel>,
+        env: Option<LogLevel>,
+        config: Option<LogLevel>,
+    ) -> Self {
+        Self {
+            session,
+            env,
+            config,
+            effective: session.or(env).or(config).unwrap_or(LogLevel::DEFAULT),
+        }
+    }
+}
+
+/// Reference `_get_env_log_level`: `DEBUG_MODE=true` selects `DEBUG`, and a
+/// `LOG_LEVEL` naming no level selects nothing.
+#[must_use]
+pub fn env_log_level(read: &dyn Fn(&str) -> Option<String>) -> Option<LogLevel> {
+    if read(DEBUG_MODE_VARIABLE).as_deref() == Some(DEBUG_MODE_ENABLED) {
+        return Some(LogLevel::Debug);
+    }
+    read(LOG_LEVEL_VARIABLE)
+        .as_deref()
+        .and_then(LogLevel::parse)
+}
+
+/// The session override and the configured level. Reference `_LogLevelState`,
+/// which is process-wide for the same reason: one process writes one file.
+static LEVEL_STATE: Mutex<(Option<LogLevel>, Option<LogLevel>)> = Mutex::new((None, None));
+
+fn level_state() -> (Option<LogLevel>, Option<LogLevel>) {
+    *LEVEL_STATE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// The chain as this process stands. Reference `get_log_level_chain`, which
+/// reads the environment on every call.
+#[must_use]
+pub fn log_level_chain() -> LogLevelChain {
+    let (session, config) = level_state();
+    LogLevelChain::resolve(
+        session,
+        env_log_level(&|name| std::env::var(name).ok()),
+        config,
+    )
+}
+
+/// Reference `set_session_override`.
+pub fn set_session_log_level(level: Option<LogLevel>) {
+    LEVEL_STATE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .0 = level;
+}
+
+/// Reference `set_config_log_level`, called whenever the configuration is read.
+pub fn set_config_log_level(level: Option<LogLevel>) {
+    LEVEL_STATE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .1 = level;
 }
 
 // --------------------------------------------------------------------------

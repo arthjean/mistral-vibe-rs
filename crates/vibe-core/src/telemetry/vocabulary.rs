@@ -50,12 +50,13 @@ pub enum TelemetryEvent {
     ReadAloudRequested,
     ReadAloudPlayStarted,
     ReadAloudEnded,
+    SessionBranched,
 }
 
 impl TelemetryEvent {
     /// Every name this port publishes, which is what the replay measures the
     /// vocabulary against.
-    pub const ALL: [Self; 25] = [
+    pub const ALL: [Self; 26] = [
         Self::NewSession,
         Self::SessionClosed,
         Self::Ready,
@@ -81,6 +82,7 @@ impl TelemetryEvent {
         Self::ReadAloudRequested,
         Self::ReadAloudPlayStarted,
         Self::ReadAloudEnded,
+        Self::SessionBranched,
     ];
 
     #[must_use]
@@ -111,6 +113,7 @@ impl TelemetryEvent {
             Self::ReadAloudRequested => "vibe.read_aloud.requested",
             Self::ReadAloudPlayStarted => "vibe.read_aloud.play_started",
             Self::ReadAloudEnded => "vibe.read_aloud.ended",
+            Self::SessionBranched => "vibe.session_branched",
         }
     }
 }
@@ -164,6 +167,7 @@ pub enum TelemetryField {
     NbPromptChars,
     NbSessionMessages,
     NbSkills,
+    NewSessionId,
     Outcome,
     ProjectCandidateCountLoaded,
     ProjectMultiRepoMatchCount,
@@ -178,6 +182,7 @@ pub enum TelemetryField {
     RecordingId,
     SavedProjectLinkCleared,
     SessionInitDurationMs,
+    SourceSessionId,
     SpeedSelection,
     Stage,
     Status,
@@ -238,6 +243,7 @@ impl TelemetryField {
             Self::NbPromptChars => "nb_prompt_chars",
             Self::NbSessionMessages => "nb_session_messages",
             Self::NbSkills => "nb_skills",
+            Self::NewSessionId => "new_session_id",
             Self::Outcome => "outcome",
             Self::ProjectCandidateCountLoaded => "project_candidate_count_loaded",
             Self::ProjectMultiRepoMatchCount => "project_multi_repo_match_count",
@@ -252,6 +258,7 @@ impl TelemetryField {
             Self::RecordingId => "recording_id",
             Self::SavedProjectLinkCleared => "saved_project_link_cleared",
             Self::SessionInitDurationMs => "session_init_duration_ms",
+            Self::SourceSessionId => "source_session_id",
             Self::SpeedSelection => "speed_selection",
             Self::Stage => "stage",
             Self::Status => "status",

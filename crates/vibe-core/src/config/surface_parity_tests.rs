@@ -121,11 +121,6 @@ const UNDECLARED_FIELDS: &[(&str, &str)] = &[
         "v2.25.0 split API timeouts (vibe_schema.py:604), unported; the port carries only \
          `api_timeout`",
     ),
-    (
-        "log_level",
-        "v2.24.2 configured log level (vibe_schema.py:609), undeclared; the registry declares \
-         no such key",
-    ),
 ];
 
 /// The sentinel v2.24.0 ships for `active_model`, meaning "not pinned": both
