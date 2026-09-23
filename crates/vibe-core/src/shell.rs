@@ -13,6 +13,7 @@ mod extract;
 #[cfg(test)]
 mod shell_parity_tests;
 
+use extract::{ParsedCommand, parse_commands};
 pub use extract::{REDIRECT_MARKER, extract_commands};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -221,12 +222,25 @@ pub struct ShellAnalysis {
     pub requirements: Vec<PermissionRequirement>,
 }
 
-/// The `find` predicates that make a read an execution.
+/// The `find` predicates that make a walk run a program or write a file.
 ///
-/// Reference `_FIND_EXECUTION_PREDICATES`. No allowlist entry covers a segment
-/// carrying one, because `find` on the allowlist grants a walk and not the
-/// program the walk runs.
-const FIND_EXECUTION_PREDICATES: [&str; 4] = ["-exec", "-execdir", "-ok", "-okdir"];
+/// Reference `_find_policy` in
+/// `vibe/core/tools/builtins/_shell_command_policy.py`: the side-effecting
+/// actions plus the `-files0-from` option. No allowlist entry covers a segment
+/// carrying one, because `find` on the allowlist grants a walk and not what the
+/// walk runs, deletes, or writes.
+const FIND_EXECUTION_PREDICATES: [&str; 10] = [
+    "-delete",
+    "-exec",
+    "-execdir",
+    "-files0-from",
+    "-fls",
+    "-fprint",
+    "-fprint0",
+    "-fprintf",
+    "-ok",
+    "-okdir",
+];
 
 /// The commands whose path operands are inspected.
 ///
@@ -269,8 +283,21 @@ pub fn analyze_shell(
     context: &ShellPolicyContext,
     lists: &ShellCommandLists,
 ) -> ShellAnalysis {
-    let segments = segments_of(flavor, command);
-    if segments.is_empty() {
+    let ParsedCommand {
+        segments,
+        syntax_error,
+    } = segments_of(flavor, command);
+    // Reference `analyze_shell_command` marks both as invalidating the scope:
+    // the extracted segments stop describing what the shell runs, so no
+    // segment pattern may be granted and the text as written is the only scope.
+    let mut unscoped_reasons = Vec::new();
+    if syntax_error {
+        unscoped_reasons.push("a parse error");
+    }
+    if matches!(flavor, ShellFlavor::Posix | ShellFlavor::GitBash) && command.contains("\\\n") {
+        unscoped_reasons.push("a line continuation");
+    }
+    if segments.is_empty() && unscoped_reasons.is_empty() {
         // Reference `resolve_permission` returns `None` here, which defers to
         // the configured permission rather than deciding.
         return ShellAnalysis {
@@ -307,14 +334,16 @@ pub fn analyze_shell(
         if !seen_guardrail.insert(segment.clone()) {
             continue;
         }
-        rationale.push(format!("`{segment}` asks `find` to run a program"));
+        rationale.push(format!(
+            "`{segment}` asks `find` to run a program or write a file"
+        ));
         guardrails.push(PermissionRequirement::exact_command(segment));
     }
     // The guards this port keeps beyond the reference set, each of which only
     // withholds an automatic grant. A segment they name is asked about under
     // its own pattern, so the operator still has something to approve.
     let withheld = withheld_segments(flavor, command, &segments, &mut rationale);
-    let guarded = !guardrails.is_empty() || !withheld.is_empty();
+    let guarded = !guardrails.is_empty() || !withheld.is_empty() || !unscoped_reasons.is_empty();
 
     // 3. The operands that leave the workspace.
     let (outside, operands) = collect_outside_directories(flavor, &segments, context);
@@ -347,7 +376,12 @@ pub fn analyze_shell(
     // 5. What is left is what the operator answers.
     let mut requirements = Vec::new();
     let mut seen_session = BTreeSet::new();
-    for segment in &segments {
+    let scoped_segments = if unscoped_reasons.is_empty() {
+        segments.as_slice()
+    } else {
+        &[]
+    };
+    for segment in scoped_segments {
         let sensitive = lists.sensitive(segment);
         if sensitive.is_none() && lists.allowed(segment).is_some() && !withheld.contains(segment) {
             continue;
@@ -371,6 +405,17 @@ pub fn analyze_shell(
         requirements.push(PermissionRequirement::outside_directory(glob));
     }
     requirements.extend(guardrails);
+    if !unscoped_reasons.is_empty() {
+        let label = format!(
+            "shell text the policy cannot scope ({})",
+            unscoped_reasons.join(", ")
+        );
+        rationale.push(label.clone());
+        requirements.push(PermissionRequirement {
+            label,
+            ..PermissionRequirement::exact_command(command)
+        });
+    }
 
     if requirements.is_empty() {
         // Reference `resolve_permission` returns `None` when it composed no
@@ -409,21 +454,24 @@ fn refusal(reason: String) -> ShellAnalysis {
 /// interpreters are not bash, so their segments still come from the word split
 /// this port has always used for them; proving Windows execution equivalence is
 /// an explicit non-goal of the PRD this implements.
-fn segments_of(flavor: ShellFlavor, command: &str) -> Vec<String> {
+fn segments_of(flavor: ShellFlavor, command: &str) -> ParsedCommand {
     match flavor {
-        ShellFlavor::Posix | ShellFlavor::GitBash => extract_commands(command),
-        ShellFlavor::Cmd | ShellFlavor::PowerShell => command
-            .split(['\n', ';', '|', '&'])
-            .map(|segment| {
-                segment
-                    .split_whitespace()
-                    .map(|word| word.trim_matches(['"', '\'']))
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            })
-            .filter(|segment| !segment.is_empty())
-            .map(|segment| normalize_windows_segment(&segment))
-            .collect(),
+        ShellFlavor::Posix | ShellFlavor::GitBash => parse_commands(command),
+        ShellFlavor::Cmd | ShellFlavor::PowerShell => ParsedCommand {
+            segments: command
+                .split(['\n', ';', '|', '&'])
+                .map(|segment| {
+                    segment
+                        .split_whitespace()
+                        .map(|word| word.trim_matches(['"', '\'']))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                })
+                .filter(|segment| !segment.is_empty())
+                .map(|segment| normalize_windows_segment(&segment))
+                .collect(),
+            syntax_error: false,
+        },
     }
 }
 
@@ -454,8 +502,9 @@ fn command_node(segment: &str) -> ShellCommandNode {
     }
 }
 
-/// Reference `_has_find_execution_predicate`: a `find` segment naming one of
-/// the four predicates anywhere in its text.
+/// Whether a `find` segment names one of [`FIND_EXECUTION_PREDICATES`]
+/// anywhere in its text, which also catches a predicate the reference only
+/// matches as a whole token.
 fn has_find_execution_predicate(segment: &str) -> bool {
     if !ShellCommandLists::matches("find", segment) {
         return false;
@@ -1138,16 +1187,41 @@ mod tests {
             // The grant may not widen: the segment is its own session pattern.
             assert_eq!(requirement.invocation_pattern, requirement.session_pattern);
         }
+        // Deleting or writing a file is gated the same way.
+        for command in ["find . -delete", "find . -fprint out.txt"] {
+            let analysis = analyze(command);
+            assert_eq!(analysis.mode, PermissionMode::Ask, "`{command}` must ask");
+            assert_eq!(
+                analysis.requirements,
+                vec![PermissionRequirement::exact_command(command)]
+            );
+        }
         // A plain walk stays allowlisted.
         assert_eq!(analyze("find . -name '*.rs'").mode, PermissionMode::Always);
         // The same segment twice is one approval.
-        let repeated = analyze("find . -exec rm {} ; && find . -exec rm {} ;");
+        let repeated = analyze("find . -exec rm {} \\; && find . -exec rm {} \\;");
         assert_eq!(
             repeated.requirements.len(),
             1,
             "{:?}",
             repeated.requirements
         );
+    }
+
+    /// Text the grammar cannot parse, or that a line continuation rewrites
+    /// before the shell reads it, is never granted: the extracted segments no
+    /// longer describe what runs, so the text as written is the only scope.
+    #[test]
+    fn syntax_the_segments_do_not_describe_is_asked_about_as_written() {
+        for command in ["cat 'unterminated", "cat file.txt \\\nsecret"] {
+            let analysis = analyze(command);
+            assert_eq!(analysis.mode, PermissionMode::Ask, "`{command}` must ask");
+            let [requirement] = analysis.requirements.as_slice() else {
+                panic!("one whole-command requirement: {:?}", analysis.requirements);
+            };
+            assert_eq!(requirement.invocation_pattern, command);
+            assert_eq!(requirement.session_pattern, command);
+        }
     }
 
     /// US-110: an operator who empties the allowlist is asked per segment rather

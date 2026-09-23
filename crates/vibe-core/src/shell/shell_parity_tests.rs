@@ -110,6 +110,17 @@ const NO_INDEX_OUTSIDE_DIRECTORIES: &str = "reference asks with outside_director
      _shell_command_policy.py:608, bash.py:661-662); this port asks with one \
      command requirement under `git diff *` and no outside_directory one";
 
+/// A parse error invalidates the scope on both sides, and both raise the same
+/// literal whole-command requirement after whatever the guardrail raised
+/// (`vibe/core/tools/builtins/_shell_permission_analysis.py:301-303`;
+/// `vibe/core/tools/builtins/bash.py:372-390,700-709`). Only the label differs:
+/// the reference prints its own approval wording, which the licensing boundary
+/// keeps out of this repository, and this port prints original wording naming
+/// the same cause.
+const UNSCOPED_LABEL: &str = "the whole-command requirement for a parse error carries \
+     this port's own wording where the reference prints its approval label \
+     (_shell_permission_analysis.py:181-183, bash.py:700-709)";
+
 /// Requirement fields that differ on a case whose permission conforms, as
 /// `(command, pointer, reason)`, the pointer reaching into the case's recorded
 /// resolution. The fields of the requirements both sides raise are compared
@@ -166,15 +177,11 @@ const REQUIREMENT_DIVERGENCES: &[(&str, &str, &str)] = &[
         "/requirements/1",
         DUPLICATED_FIND_REQUIREMENT,
     ),
+    ("cat 'unterminated", "/requirements/0/label", UNSCOPED_LABEL),
     (
         "find . -exec rm {} ; && find . -exec rm {} ;",
-        "/requirements/1",
-        "the `; &&` sequence is a parse error, an approval reason since 2.25.4 and \
-         a scope-invalidating one since 2.25.5: after the guardrail's literal \
-         `find . -exec rm {}`, which both sides raise first, the reference raises \
-         one literal whole-command requirement labeled with the approval label \
-         (_shell_permission_analysis.py:301-303, bash.py:700-709); this port raises \
-         nothing after it",
+        "/requirements/1/label",
+        UNSCOPED_LABEL,
     ),
     (
         "git -c core.pager=sh log",

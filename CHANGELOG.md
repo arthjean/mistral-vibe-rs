@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Ask before a shell command the policy cannot read faithfully. An allowlisted
+  `find` now asks when it deletes or writes files (`-delete`, `-fls`,
+  `-fprint`, `-fprint0`, `-fprintf`, `-files0-from`), not only when it runs a
+  program, and a command with a syntax error or a backslash-newline
+  continuation is asked about under its exact text instead of being granted.
+
 - Render `vibe --help` with the reference's structure. Every option now shows
   the value name upstream gives it (`PROMPT`, `TEXT`, `N`, `DOLLARS`, `TOOL`,
   `NAME`, `DIR`, `SESSION_ID`), carries a description, and appears in the

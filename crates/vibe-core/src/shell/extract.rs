@@ -61,6 +61,24 @@ thread_local! {
 /// cannot see what runs asks rather than grants.
 #[must_use]
 pub fn extract_commands(command: &str) -> Vec<String> {
+    parse_commands(command).segments
+}
+
+/// What the grammar made of a command: its segments, and whether the parse
+/// tree carries an error node.
+pub(crate) struct ParsedCommand {
+    pub(crate) segments: Vec<String>,
+    /// Reference `analyze_shell_command` reads `tree.root_node.has_error` as
+    /// syntax the extracted segments no longer describe.
+    pub(crate) syntax_error: bool,
+}
+
+/// [`extract_commands`], keeping whether the grammar met a syntax error.
+pub(crate) fn parse_commands(command: &str) -> ParsedCommand {
+    let unparsed = ParsedCommand {
+        segments: Vec::new(),
+        syntax_error: false,
+    };
     PARSER.with(|cell| {
         let mut slot = cell.borrow_mut();
         if slot.is_none() {
@@ -69,15 +87,15 @@ pub fn extract_commands(command: &str) -> Vec<String> {
                 .set_language(&tree_sitter_bash::LANGUAGE.into())
                 .is_err()
             {
-                return Vec::new();
+                return unparsed;
             }
             *slot = Some(parser);
         }
         let Some(parser) = slot.as_mut() else {
-            return Vec::new();
+            return unparsed;
         };
         let Some(tree) = parser.parse(command, None) else {
-            return Vec::new();
+            return unparsed;
         };
         let source = command.as_bytes();
         let mut segments = Vec::new();
@@ -97,7 +115,10 @@ pub fn extract_commands(command: &str) -> Vec<String> {
                 }
             }
         }
-        segments
+        ParsedCommand {
+            segments,
+            syntax_error: tree.root_node().has_error(),
+        }
     })
 }
 
