@@ -1,18 +1,19 @@
 //! What `/help` publishes, proved from the document builder, from the key
 //! router that [`super::SHORTCUTS`] is the table of, and from
-//! [`crate::tui::workflow::dispatch_command`], which is the entry point a
-//! submitted `/help` reaches.
+//! [`crate::tui::workflow::run_command`], which is the entry point a submitted
+//! `/help` reaches.
 
 use super::{FEATURES, HEADINGS, SHORTCUTS, Shortcut, document};
 use crate::Arguments;
 use crate::tui::chat_input::ChatInputState;
 use crate::tui::commands::{COMMANDS, CommandContext};
 use crate::tui::completion::active_token;
+use crate::tui::controls::ControlState;
 use crate::tui::input::PromptEditor;
 use crate::tui::shortcuts::{Chord, chord_of};
 use crate::tui::state::{EntrySource, EntryStatus, TranscriptEntry, TranscriptKind, TuiState};
-use crate::tui::submission::{Availability, Submission, classify};
-use crate::tui::workflow::{CommandAction, dispatch_command};
+use crate::tui::submission::{Submission, classify};
+use crate::tui::workflow::{LiveBackend, run_command};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -20,7 +21,35 @@ use std::path::Path;
 /// The context `crates/vibe-cli/tests/commands/corpus.json` recorded the help
 /// families under: every command available, nothing excluded.
 fn full_context() -> CommandContext {
-    CommandContext::new(true).with_clipboard_image_supported(true)
+    CommandContext::new(true, true).with_clipboard_image_supported(true)
+}
+
+/// Runs `/help` through the live command path with no session behind it.
+async fn submit_help(state: &mut TuiState) -> bool {
+    let arguments =
+        <Arguments as clap::Parser>::try_parse_from(["vibe"]).expect("interactive arguments");
+    let mut controls = ControlState::new("session");
+    let mut composer = ChatInputState::new();
+    composer.set_command_context(full_context());
+    let mut theme = crate::tui::setup::resolve_theme(
+        crate::tui::setup::Theme::Dark,
+        crate::tui::setup::DetectedTheme::Dark,
+        true,
+    );
+    let mut runtime = None;
+    let mut backend = LiveBackend::new(
+        &arguments,
+        Path::new("/workspace"),
+        &mut runtime,
+        state,
+        &mut controls,
+        &mut composer,
+        &mut theme,
+        false,
+    );
+    run_command("/help", &full_context(), &mut backend)
+        .await
+        .is_some_and(|follow_ups| follow_ups.is_empty())
 }
 
 fn heading_level(line: &str) -> usize {
@@ -49,7 +78,7 @@ fn the_document_carries_the_three_sections_the_corpus_recorded() {
     let text = document(&full_context());
     let lines = text.lines().collect::<Vec<_>>();
 
-    assert_eq!(lines.len(), 46, "the corpus recorded 46 lines");
+    assert_eq!(lines.len(), 52, "the corpus recorded 52 lines");
     assert_eq!(
         lines.iter().filter(|line| line.is_empty()).count(),
         5,
@@ -131,14 +160,18 @@ fn the_command_section_is_sorted_by_registry_key_with_the_canonical_alias_first(
 
 #[test]
 fn an_unavailable_command_loses_its_line_while_the_headings_stand() {
-    let bare = document(&CommandContext::new(false).with_clipboard_image_supported(false));
+    let bare = document(
+        &CommandContext::new(false, false)
+            .with_clipboard_image_supported(false)
+            .with_excluded(["teleport"]),
+    );
     assert!(
         !bare.contains("`/paste-image`"),
         "no clipboard images means no /paste-image line"
     );
     assert!(
         !bare.contains("`/teleport`"),
-        "no Vibe Code means no /teleport line"
+        "an excluded /teleport loses its line"
     );
 
     let excluded = COMMANDS
@@ -279,7 +312,10 @@ fn the_prefix_lines_name_what_the_input_path_accepts() {
         .find(|line| line.contains("shell"))
         .expect("a prefix line names the shell escape");
     assert!(shell.contains("`!<command>`"));
-    assert_eq!(classify("!ls", None), Submission::Shell);
+    assert_eq!(
+        classify("!ls", &CommandContext::default(), None),
+        Submission::Shell("ls".to_owned())
+    );
 
     let path = FEATURES
         .iter()
@@ -296,25 +332,12 @@ fn the_prefix_lines_name_what_the_input_path_accepts() {
 
 #[tokio::test]
 async fn submitting_help_writes_the_document_into_the_transcript_without_an_overlay() {
-    let arguments =
-        <Arguments as clap::Parser>::try_parse_from(["vibe"]).expect("interactive arguments");
     let mut state = TuiState::new("session");
-    let mut composer = ChatInputState::new();
-    composer.set_command_context(full_context());
-    let mut runtime = None;
 
-    let action = dispatch_command(
-        "/help",
-        &arguments,
-        Path::new("/workspace"),
-        &mut runtime,
-        &mut state,
-        &mut composer,
-        Availability::Idle,
-    )
-    .await;
-
-    assert!(matches!(action, CommandAction::Handled));
+    assert!(
+        submit_help(&mut state).await,
+        "/help asks nothing of the caller"
+    );
     assert!(
         state.overlay.is_none(),
         "the reference mounts a message, not a modal"
@@ -333,22 +356,8 @@ async fn submitting_help_writes_the_document_into_the_transcript_without_an_over
 
 #[tokio::test]
 async fn the_help_document_survives_a_canonical_resync() {
-    let arguments =
-        <Arguments as clap::Parser>::try_parse_from(["vibe"]).expect("interactive arguments");
     let mut state = TuiState::new("session");
-    let mut composer = ChatInputState::new();
-    composer.set_command_context(full_context());
-    let mut runtime = None;
-    dispatch_command(
-        "/help",
-        &arguments,
-        Path::new("/workspace"),
-        &mut runtime,
-        &mut state,
-        &mut composer,
-        Availability::Idle,
-    )
-    .await;
+    submit_help(&mut state).await;
 
     let mut replacement = TuiState::new("session");
     replacement.entries.push(TranscriptEntry {

@@ -25,22 +25,23 @@ use super::controls::ControlState;
 use super::history::PromptHistory;
 use super::input::{ExternalEditorPort, PromptEditor, SystemExternalEditor};
 use super::path_normalization::PathNormalizationManager;
-use super::prompt::PromptContext;
+use super::prompt::{PromptContext, start_injected_prompt, start_prompt};
 use super::remote_project_workflow::{handle_project_action, handle_teleport_push_response};
 use super::setup::ResolvedTheme;
 use super::shell::interrupt_shell;
 use super::state::TuiState;
-use super::submission::{Availability, restore_draft};
+use super::submission::{Occupancy, Route, classify, restore_draft, route};
 use super::terminal::{CrosstermOps, TerminalGuard};
 use super::workflow::{
-    CommandAction, OverlayEffect, OverlayKeyResult, SystemUrlOpener, cycle_agent, dispatch_command,
-    execute_mcp_effect, handle_overlay_key, handle_runtime_command, show_rewind,
+    FollowUp, LiveBackend, OverlayEffect, OverlayKeyResult, SystemUrlOpener, apply_value_edit,
+    cancel_value_edit, cycle_agent, execute_mcp_effect, handle_overlay_key, run_command,
+    show_rewind,
 };
 use super::{
-    ActiveTurn, Arguments, CliError, InteractiveRuntime, callback, copy_transcript_selection,
-    emit_attention, exit, feedback, help, interaction, page_older_debug_logs, page_older_history,
-    render, request_active_turn_interrupt, settle_transcript_pointer, stop_narration, submission,
-    suspend_session, teleport_available, unix_millis,
+    ActiveTurn, Arguments, CliError, InteractiveRuntime, callback, command_context,
+    copy_transcript_selection, emit_attention, exit, feedback, help, interaction,
+    page_older_debug_logs, page_older_history, render, request_active_turn_interrupt,
+    settle_transcript_pointer, stop_narration, submission, suspend_session, unix_millis,
 };
 
 /// The global chords the help document advertises.
@@ -219,7 +220,7 @@ pub(super) async fn handle_key(
 ) -> Result<bool, CliError> {
     context
         .input
-        .set_teleport_available(teleport_available(context.runtime.as_ref()));
+        .set_command_context(command_context(context.runtime.as_ref()));
     if callback::handle_key(
         key,
         context.runtime,
@@ -535,6 +536,10 @@ async fn navigate(key: KeyEvent, context: &mut KeyContext<'_>) -> Result<bool, C
 }
 
 async fn escape(key: KeyEvent, context: &mut KeyContext<'_>) {
+    if let Some(edit) = context.state.value_edit.take() {
+        cancel_value_edit(edit, context.runtime, context.input, context.state);
+        return;
+    }
     if stop_narration(context.runtime, context.state) {
         return;
     }
@@ -569,95 +574,101 @@ async fn escape(key: KeyEvent, context: &mut KeyContext<'_>) {
     }
 }
 
-/// `Enter`: resume a paused queue or route one submitted line.
+/// `Enter`: save a panel field, resume a paused queue, or route one submitted
+/// line.
 async fn submit(key: KeyEvent, context: &mut KeyContext<'_>) -> Result<bool, CliError> {
+    if context.state.value_edit.is_some() {
+        let value = take_submission(key, context).unwrap_or_default();
+        if let Some(edit) = context.state.value_edit.take() {
+            apply_value_edit(edit, &value, context.runtime, context.state);
+        }
+        context.refresh_composer();
+        return Ok(false);
+    }
     if resume_paused_queue(context.input.editor(), context.state) {
         return Ok(false);
     }
     let Some(submitted) = take_submission(key, context) else {
         return Ok(false);
     };
-    // Reference `on_chat_input_container_submitted` asks about the paused queue
-    // before it asks about a running job, because the two refusals tell the
-    // operator to do different things. `/exit` takes this path like every other
-    // command, so it is echoed and reported before the loop ends.
-    let availability = if context.state.prompt_queue.is_paused() {
-        Availability::QueuePaused
-    } else if context.active.is_some() || context.shell_running() {
-        Availability::Busy
-    } else {
-        Availability::Idle
+    // Reference `_dispatch_submitted_value` strips the line once, and every
+    // route below reads the stripped value.
+    let value = submitted.trim().to_owned();
+    let command_context = context.input.command_context().clone();
+    let occupancy = Occupancy {
+        turn: context.active.is_some(),
+        shell: context.shell_running(),
+        paused: context.state.prompt_queue.is_paused(),
     };
-    let command_action = dispatch_command(
-        &submitted,
-        context.arguments,
-        context.working_directory,
-        context.runtime,
-        context.state,
-        context.input,
-        availability,
-    )
-    .await;
-    context.refresh_composer();
-    match command_action {
-        CommandAction::Exit => return Ok(true),
-        CommandAction::ClipboardImageRequested => context.clipboard_images.schedule(true),
-        CommandAction::Rejected => restore_draft(
-            context.input,
-            submitted,
-            context.working_directory,
-            context.state,
-        ),
-        CommandAction::Handled => {}
-        CommandAction::Runtime(command) => {
-            let turn_active = context.active.is_some();
-            handle_runtime_command(
-                &command,
+    let kind = classify(&value, &command_context, context.runtime.as_ref());
+    // Commands run to completion before the next key is read, so the side
+    // channel is always free when a line reaches it.
+    let route = route(kind, occupancy, true);
+    if route != Route::Command {
+        context.refresh_composer();
+        let input = &mut *context.input;
+        submission::execute(
+            value,
+            route,
+            PromptContext::new(
                 context.working_directory,
                 context.runtime,
+                context.active,
                 context.state,
                 context.controls,
-                context.input,
-                context.theme,
-                turn_active,
-            )
-            .await;
-        }
-        // A command that resolves to a model turn takes the same path a typed
-        // line takes, so it queues while busy and prepares images the same way.
-        CommandAction::Prompt(prompt) => {
-            let input = &mut *context.input;
-            submission::execute(
-                prompt,
-                availability,
-                PromptContext::new(
+                context.clipboard_images,
+            ),
+            input,
+        )
+        .await?;
+        return Ok(false);
+    }
+    let follow_ups = {
+        let mut backend = LiveBackend::new(
+            context.arguments,
+            context.working_directory,
+            context.runtime,
+            context.state,
+            context.controls,
+            context.input,
+            context.theme,
+            occupancy.turn,
+        );
+        run_command(&value, &command_context, &mut backend)
+            .await
+            .unwrap_or_default()
+    };
+    context.refresh_composer();
+    for follow_up in follow_ups {
+        match follow_up {
+            FollowUp::Exit => return Ok(true),
+            FollowUp::ClipboardImage => context.clipboard_images.schedule(true),
+            FollowUp::Submit { text, injected } => {
+                let mut prompt_context = PromptContext::new(
                     context.working_directory,
                     context.runtime,
                     context.active,
                     context.state,
                     context.controls,
                     context.clipboard_images,
-                ),
-                input,
-            )
-            .await?;
-        }
-        CommandAction::Unhandled => {
-            let input = &mut *context.input;
-            submission::execute(
-                submitted,
-                availability,
-                PromptContext::new(
-                    context.working_directory,
-                    context.runtime,
-                    context.active,
-                    context.state,
-                    context.controls,
-                    context.clipboard_images,
-                ),
-                input,
-            )
-            .await?;
+                );
+                let draft = prompt_context
+                    .clipboard_images
+                    .draft(context.working_directory, text);
+                let started = if injected {
+                    start_injected_prompt(prompt_context.reborrow(), &draft).await?
+                } else {
+                    start_prompt(prompt_context.reborrow(), &draft).await?
+                };
+                if !started && !injected {
+                    restore_draft(
+                        context.input,
+                        draft.into_text(),
+                        context.working_directory,
+                        context.state,
+                    );
+                }
+            }
         }
     }
     Ok(false)

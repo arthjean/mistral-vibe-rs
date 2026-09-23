@@ -2,7 +2,7 @@ use serde_json::{Value, json};
 
 use super::super::chat_input::ChatInputState;
 use super::super::controls::ControlState;
-use super::super::interaction::{ConfigLayerTarget, OverlayAction, OverlayKind};
+use super::super::interaction::{ConfigLayerTarget, OverlayAction, OverlayKind, ValueEdit};
 use super::super::pickers::{
     ACTIVE_MODEL_FIELD, CONFIG_TARGET_ROW, THEME_FIELD, THINKING_FIELD, VOICE_MODEL_FIELDS,
     config_choice_overlay, config_target_overlay, remote_project_create_overlay, theme_overlay,
@@ -18,8 +18,8 @@ use super::config::{
 };
 use super::mcp::{McpEffect, reduce_auth_action};
 use super::{
-    OverlayEffect, resume_selected_session, show_config, show_model, show_voice, show_voice_model,
-    sync_voice_preference,
+    OverlayEffect, begin_value_edit, resume_selected_session, show_config, show_model, show_voice,
+    show_voice_model, sync_voice_preference,
 };
 
 pub(super) async fn select_overlay_item(
@@ -97,8 +97,20 @@ pub(super) async fn select_overlay_item(
                 } else {
                     let target =
                         selected_config_target(runtime).unwrap_or_else(|| "user".to_owned());
-                    composer.replace_text(format!("/config set --target {target} {key} "));
-                    state.overlay = None;
+                    let current = match configured_value(runtime, key) {
+                        Some(Value::String(text)) => text,
+                        Some(Value::Null) | None => String::new(),
+                        Some(value) => value.to_string(),
+                    };
+                    begin_value_edit(
+                        ValueEdit::Config {
+                            target,
+                            key: key.to_owned(),
+                        },
+                        current,
+                        composer,
+                        state,
+                    );
                 }
             }
         },
@@ -232,13 +244,14 @@ pub(super) async fn select_overlay_item(
                         .and_then(Value::as_str)
                         .map(ToOwned::to_owned)
                 });
-            let value = current
-                .as_deref()
-                .and_then(|value| shlex::try_quote(value).ok())
-                .map(|value| format!(" {value}"))
-                .unwrap_or_default();
-            composer.replace_text(format!("/proxy-setup {}{value}", item.id));
-            state.overlay = None;
+            begin_value_edit(
+                ValueEdit::Proxy {
+                    key: item.id.clone(),
+                },
+                current.unwrap_or_default(),
+                composer,
+                state,
+            );
         }
         OverlayKind::RemoteProjects => {
             let OverlayAction::RemoteProject(action) = item.action else {
@@ -273,7 +286,12 @@ pub(super) async fn select_overlay_item(
             };
             return Some(OverlayEffect::TeleportPush(action));
         }
-        OverlayKind::Debug | OverlayKind::Status | OverlayKind::DataRetention => {}
+        OverlayKind::Debug
+        | OverlayKind::Status
+        | OverlayKind::DataRetention
+        | OverlayKind::LogLevel
+        | OverlayKind::Skills
+        | OverlayKind::Todos => {}
     }
     None
 }

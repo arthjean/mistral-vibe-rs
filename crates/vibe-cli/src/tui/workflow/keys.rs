@@ -21,6 +21,7 @@ use super::super::setup::ResolvedTheme;
 use super::super::state::TuiState;
 use super::super::{InteractiveRuntime, preview_theme};
 use super::config::persisted_theme;
+use super::live_commands::handle_log_level_key;
 use super::mcp::{McpEffect, refresh_selected_mcp, set_selected_mcp};
 use super::overlay::select_overlay_item;
 use super::{
@@ -82,7 +83,13 @@ const fn policy(kind: OverlayKind) -> OverlayPolicy {
     };
     match kind {
         // Read-only panels: they scroll and close, and have nothing to activate.
-        OverlayKind::Debug | OverlayKind::Status | OverlayKind::DataRetention => OverlayPolicy {
+        OverlayKind::Debug
+        | OverlayKind::Status
+        | OverlayKind::DataRetention
+        | OverlayKind::Skills
+        | OverlayKind::Todos
+        // The log-level picker owns its keys and never reaches this table.
+        | OverlayKind::LogLevel => OverlayPolicy {
             activates: false,
             ..LIST
         },
@@ -146,6 +153,10 @@ pub(in crate::tui) async fn handle_overlay_key(
         OverlayKind::RemoteProjectCreate => handle_remote_project_create_key(key, runtime, state),
         OverlayKind::Sessions => {
             handle_session_picker_key(key, runtime, state, controls);
+            OverlayKeyResult::Handled
+        }
+        OverlayKind::LogLevel => {
+            handle_log_level_key(key, runtime, state);
             OverlayKeyResult::Handled
         }
         kind => reduce_list_key(policy(kind), key, runtime, state, controls, composer, theme).await,

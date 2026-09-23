@@ -64,6 +64,17 @@ impl ErrorClass {
         )
     }
 
+    /// Reference `_RETRYABLE_TURN_ERROR_CODES`: a backend failure, a rate
+    /// limit, an overlong response, or a stream cut short, each of which
+    /// `/retry` can continue.
+    #[must_use]
+    pub fn offers_retry(self) -> bool {
+        matches!(
+            self,
+            Self::RateLimit | Self::ResponseTooLong | Self::Transport | Self::Model
+        )
+    }
+
     fn severity(self) -> Severity {
         match self {
             Self::Cancellation => Severity::Notice,
@@ -97,6 +108,9 @@ const CONTEXT_TOO_LONG_MESSAGE: &str = "The conversation context exceeds the mod
      size.\n\nTo recover:\n1. Use /rewind to undo recent messages and tool outputs\n2. Then use \
      /compact to summarize the remaining conversation\n\nThis will free up context space so you \
      can continue working.";
+/// Reference `_retry_hint`, appended to a turn failure `/retry` can continue.
+pub const RETRY_HINT: &str =
+    "\n\nRun /retry [additional instructions] to continue the interrupted response.";
 const REFUSAL_LEAD: &str = "The model declined to respond and stopped early (refusal).";
 const REFUSAL_FALLBACK: &str = "This can happen with certain prompts or content. Try rephrasing \
      your request or starting a new conversation.";

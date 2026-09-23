@@ -190,12 +190,12 @@ mod tests {
     /// The two completer edges the reference answers differently, driven
     /// through the adapter the interactive loop drives: a doubled marker keeps
     /// its second slash inside the query and matches no alias, and accepting a
-    /// candidate mid-token replaces up to the caret rather than up to the
-    /// space, with the separator `ChatInputContainer._format_insertion` adds
-    /// before a surviving tail. Reference: `CommandCompleter._fuzzy_filter` and
-    /// `get_replacement_range` in `vibe/cli/autocompletion/completers.py`.
+    /// candidate mid-token replaces the whole command word, whatever the caret
+    /// bounded the query at, leaving the arguments after it untouched.
+    /// Reference: `CommandCompleter._fuzzy_filter` and `get_replacement_range`
+    /// in `vibe/cli/autocompletion/completers.py`.
     #[test]
-    fn a_doubled_marker_shows_nothing_and_a_mid_token_accept_stops_at_the_caret() {
+    fn a_doubled_marker_shows_nothing_and_a_mid_token_accept_replaces_the_word() {
         let temporary = tempfile::tempdir().expect("workspace");
         let mut state = TuiState::new("session");
 
@@ -246,8 +246,9 @@ mod tests {
         apply_event(&mut line, event, temporary.path(), &mut state);
         assert_eq!(
             line.editor().text(),
-            format!("{selected} p add x"),
-            "the accepted range ends at the caret, so the token's tail survives"
+            format!("{selected} add x"),
+            "the accepted range is the whole command word, so no tail of it survives"
         );
+        assert_eq!(line.editor().cursor(), selected.chars().count());
     }
 }

@@ -269,6 +269,5071 @@
       "id": "bareAliases"
     }
   ],
+  "dispatch": [
+    {
+      "effects": [
+        {
+          "command": "status",
+          "type": "run"
+        }
+      ],
+      "id": "idle/side-channel",
+      "input": "/status",
+      "sideChannelFree": true,
+      "state": "idle"
+    },
+    {
+      "effects": [
+        {
+          "command": "exit",
+          "type": "run"
+        }
+      ],
+      "id": "idle/side-channel-exit",
+      "input": "exit",
+      "sideChannelFree": true,
+      "state": "idle"
+    },
+    {
+      "effects": [
+        {
+          "command": "model",
+          "type": "run"
+        }
+      ],
+      "id": "idle/command",
+      "input": "/model",
+      "sideChannelFree": true,
+      "state": "idle"
+    },
+    {
+      "effects": [
+        {
+          "injected": false,
+          "text": {
+            "digest": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+            "length": 5
+          },
+          "type": "submit"
+        }
+      ],
+      "id": "idle/prompt",
+      "input": "hello",
+      "sideChannelFree": true,
+      "state": "idle"
+    },
+    {
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "review",
+            "command_type": "skill"
+          },
+          "type": "telemetry"
+        },
+        {
+          "injected": false,
+          "text": {
+            "digest": "8cd3a6324eecbb7c7e986680b145bd32e6dc43f23a8ea089bd3047302b961b87",
+            "length": 19
+          },
+          "type": "submit"
+        }
+      ],
+      "id": "idle/skill",
+      "input": "/review this change",
+      "sideChannelFree": true,
+      "state": "idle"
+    },
+    {
+      "effects": [
+        {
+          "text": {
+            "digest": "1de700c29687cae34561545f50d3c8b3d9afe88e04cc11069f8a6dc6e4ce9464",
+            "length": 6
+          },
+          "type": "shell"
+        }
+      ],
+      "id": "idle/shell",
+      "input": "!ls -la",
+      "sideChannelFree": true,
+      "state": "idle"
+    },
+    {
+      "effects": [
+        {
+          "text": {
+            "digest": "673d0f60008edc1ecedfd360c113669b483213b7bb7b32754de5220e1f23c53f",
+            "length": 29
+          },
+          "type": "error"
+        }
+      ],
+      "id": "idle/empty-shell",
+      "input": "!",
+      "sideChannelFree": true,
+      "state": "idle"
+    },
+    {
+      "effects": [
+        {
+          "echo": true,
+          "target": "ship it",
+          "type": "teleport"
+        }
+      ],
+      "id": "idle/teleport",
+      "input": "&ship it",
+      "sideChannelFree": true,
+      "state": "idle"
+    },
+    {
+      "effects": [
+        {
+          "injected": false,
+          "text": {
+            "digest": "f72f69446c6944c40b83f4725f186328c714c721fe17f17ccd050a9ffa42ff6c",
+            "length": 8
+          },
+          "type": "submit"
+        }
+      ],
+      "id": "idle/unknown-slash",
+      "input": "/nothing",
+      "sideChannelFree": true,
+      "state": "idle"
+    },
+    {
+      "effects": [
+        {
+          "command": "status",
+          "type": "run"
+        }
+      ],
+      "id": "busy/side-channel",
+      "input": "/status",
+      "sideChannelFree": true,
+      "state": "busy"
+    },
+    {
+      "effects": [
+        {
+          "command": "exit",
+          "type": "run"
+        }
+      ],
+      "id": "busy/side-channel-exit",
+      "input": "exit",
+      "sideChannelFree": true,
+      "state": "busy"
+    },
+    {
+      "effects": [
+        {
+          "hint": "busy",
+          "reason": "slashCommand",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "busy/command",
+      "input": "/model",
+      "sideChannelFree": true,
+      "state": "busy"
+    },
+    {
+      "effects": [
+        {
+          "kind": "prompt",
+          "type": "queued"
+        }
+      ],
+      "id": "busy/prompt",
+      "input": "hello",
+      "sideChannelFree": true,
+      "state": "busy"
+    },
+    {
+      "effects": [
+        {
+          "kind": "skill",
+          "type": "queued"
+        }
+      ],
+      "id": "busy/skill",
+      "input": "/review this change",
+      "sideChannelFree": true,
+      "state": "busy"
+    },
+    {
+      "effects": [
+        {
+          "hint": "busy",
+          "reason": "shell",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "busy/shell",
+      "input": "!ls -la",
+      "sideChannelFree": true,
+      "state": "busy"
+    },
+    {
+      "effects": [
+        {
+          "text": {
+            "digest": "673d0f60008edc1ecedfd360c113669b483213b7bb7b32754de5220e1f23c53f",
+            "length": 29
+          },
+          "type": "error"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "busy/empty-shell",
+      "input": "!",
+      "sideChannelFree": true,
+      "state": "busy"
+    },
+    {
+      "effects": [
+        {
+          "hint": "busy",
+          "reason": "teleport",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "busy/teleport",
+      "input": "&ship it",
+      "sideChannelFree": true,
+      "state": "busy"
+    },
+    {
+      "effects": [
+        {
+          "kind": "prompt",
+          "type": "queued"
+        }
+      ],
+      "id": "busy/unknown-slash",
+      "input": "/nothing",
+      "sideChannelFree": true,
+      "state": "busy"
+    },
+    {
+      "effects": [
+        {
+          "command": "status",
+          "type": "run"
+        }
+      ],
+      "id": "shell/side-channel",
+      "input": "/status",
+      "sideChannelFree": true,
+      "state": "shell"
+    },
+    {
+      "effects": [
+        {
+          "command": "exit",
+          "type": "run"
+        }
+      ],
+      "id": "shell/side-channel-exit",
+      "input": "exit",
+      "sideChannelFree": true,
+      "state": "shell"
+    },
+    {
+      "effects": [
+        {
+          "hint": "busy",
+          "reason": "shellRunning",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "shell/command",
+      "input": "/model",
+      "sideChannelFree": true,
+      "state": "shell"
+    },
+    {
+      "effects": [
+        {
+          "hint": "busy",
+          "reason": "shellRunning",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "shell/prompt",
+      "input": "hello",
+      "sideChannelFree": true,
+      "state": "shell"
+    },
+    {
+      "effects": [
+        {
+          "hint": "busy",
+          "reason": "shellRunning",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "shell/skill",
+      "input": "/review this change",
+      "sideChannelFree": true,
+      "state": "shell"
+    },
+    {
+      "effects": [
+        {
+          "hint": "busy",
+          "reason": "shellRunning",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "shell/shell",
+      "input": "!ls -la",
+      "sideChannelFree": true,
+      "state": "shell"
+    },
+    {
+      "effects": [
+        {
+          "hint": "busy",
+          "reason": "shellRunning",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "shell/empty-shell",
+      "input": "!",
+      "sideChannelFree": true,
+      "state": "shell"
+    },
+    {
+      "effects": [
+        {
+          "hint": "busy",
+          "reason": "shellRunning",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "shell/teleport",
+      "input": "&ship it",
+      "sideChannelFree": true,
+      "state": "shell"
+    },
+    {
+      "effects": [
+        {
+          "hint": "busy",
+          "reason": "shellRunning",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "shell/unknown-slash",
+      "input": "/nothing",
+      "sideChannelFree": true,
+      "state": "shell"
+    },
+    {
+      "effects": [
+        {
+          "command": "status",
+          "type": "run"
+        }
+      ],
+      "id": "paused/side-channel",
+      "input": "/status",
+      "sideChannelFree": true,
+      "state": "paused"
+    },
+    {
+      "effects": [
+        {
+          "command": "exit",
+          "type": "run"
+        }
+      ],
+      "id": "paused/side-channel-exit",
+      "input": "exit",
+      "sideChannelFree": true,
+      "state": "paused"
+    },
+    {
+      "effects": [
+        {
+          "hint": "paused",
+          "reason": "slashCommand",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "paused/command",
+      "input": "/model",
+      "sideChannelFree": true,
+      "state": "paused"
+    },
+    {
+      "effects": [
+        {
+          "kind": "prompt",
+          "type": "queued"
+        },
+        {
+          "type": "queueResumed"
+        }
+      ],
+      "id": "paused/prompt",
+      "input": "hello",
+      "sideChannelFree": true,
+      "state": "paused"
+    },
+    {
+      "effects": [
+        {
+          "kind": "skill",
+          "type": "queued"
+        },
+        {
+          "type": "queueResumed"
+        }
+      ],
+      "id": "paused/skill",
+      "input": "/review this change",
+      "sideChannelFree": true,
+      "state": "paused"
+    },
+    {
+      "effects": [
+        {
+          "hint": "paused",
+          "reason": "shell",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "paused/shell",
+      "input": "!ls -la",
+      "sideChannelFree": true,
+      "state": "paused"
+    },
+    {
+      "effects": [
+        {
+          "text": {
+            "digest": "673d0f60008edc1ecedfd360c113669b483213b7bb7b32754de5220e1f23c53f",
+            "length": 29
+          },
+          "type": "error"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "paused/empty-shell",
+      "input": "!",
+      "sideChannelFree": true,
+      "state": "paused"
+    },
+    {
+      "effects": [
+        {
+          "hint": "paused",
+          "reason": "teleport",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "paused/teleport",
+      "input": "&ship it",
+      "sideChannelFree": true,
+      "state": "paused"
+    },
+    {
+      "effects": [
+        {
+          "kind": "prompt",
+          "type": "queued"
+        },
+        {
+          "type": "queueResumed"
+        }
+      ],
+      "id": "paused/unknown-slash",
+      "input": "/nothing",
+      "sideChannelFree": true,
+      "state": "paused"
+    },
+    {
+      "effects": [
+        {
+          "command": "status",
+          "type": "run"
+        }
+      ],
+      "id": "pausedBusy/side-channel",
+      "input": "/status",
+      "sideChannelFree": true,
+      "state": "pausedBusy"
+    },
+    {
+      "effects": [
+        {
+          "command": "exit",
+          "type": "run"
+        }
+      ],
+      "id": "pausedBusy/side-channel-exit",
+      "input": "exit",
+      "sideChannelFree": true,
+      "state": "pausedBusy"
+    },
+    {
+      "effects": [
+        {
+          "hint": "paused",
+          "reason": "slashCommand",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "pausedBusy/command",
+      "input": "/model",
+      "sideChannelFree": true,
+      "state": "pausedBusy"
+    },
+    {
+      "effects": [
+        {
+          "kind": "prompt",
+          "type": "queued"
+        },
+        {
+          "type": "queueResumed"
+        }
+      ],
+      "id": "pausedBusy/prompt",
+      "input": "hello",
+      "sideChannelFree": true,
+      "state": "pausedBusy"
+    },
+    {
+      "effects": [
+        {
+          "kind": "skill",
+          "type": "queued"
+        },
+        {
+          "type": "queueResumed"
+        }
+      ],
+      "id": "pausedBusy/skill",
+      "input": "/review this change",
+      "sideChannelFree": true,
+      "state": "pausedBusy"
+    },
+    {
+      "effects": [
+        {
+          "hint": "paused",
+          "reason": "shell",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "pausedBusy/shell",
+      "input": "!ls -la",
+      "sideChannelFree": true,
+      "state": "pausedBusy"
+    },
+    {
+      "effects": [
+        {
+          "text": {
+            "digest": "673d0f60008edc1ecedfd360c113669b483213b7bb7b32754de5220e1f23c53f",
+            "length": 29
+          },
+          "type": "error"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "pausedBusy/empty-shell",
+      "input": "!",
+      "sideChannelFree": true,
+      "state": "pausedBusy"
+    },
+    {
+      "effects": [
+        {
+          "hint": "paused",
+          "reason": "teleport",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "pausedBusy/teleport",
+      "input": "&ship it",
+      "sideChannelFree": true,
+      "state": "pausedBusy"
+    },
+    {
+      "effects": [
+        {
+          "kind": "prompt",
+          "type": "queued"
+        },
+        {
+          "type": "queueResumed"
+        }
+      ],
+      "id": "pausedBusy/unknown-slash",
+      "input": "/nothing",
+      "sideChannelFree": true,
+      "state": "pausedBusy"
+    },
+    {
+      "effects": [
+        {
+          "command": "status",
+          "type": "run"
+        }
+      ],
+      "id": "pausedShell/side-channel",
+      "input": "/status",
+      "sideChannelFree": true,
+      "state": "pausedShell"
+    },
+    {
+      "effects": [
+        {
+          "command": "exit",
+          "type": "run"
+        }
+      ],
+      "id": "pausedShell/side-channel-exit",
+      "input": "exit",
+      "sideChannelFree": true,
+      "state": "pausedShell"
+    },
+    {
+      "effects": [
+        {
+          "hint": "paused",
+          "reason": "shellRunning",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "pausedShell/command",
+      "input": "/model",
+      "sideChannelFree": true,
+      "state": "pausedShell"
+    },
+    {
+      "effects": [
+        {
+          "hint": "paused",
+          "reason": "shellRunning",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "pausedShell/prompt",
+      "input": "hello",
+      "sideChannelFree": true,
+      "state": "pausedShell"
+    },
+    {
+      "effects": [
+        {
+          "hint": "paused",
+          "reason": "shellRunning",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "pausedShell/skill",
+      "input": "/review this change",
+      "sideChannelFree": true,
+      "state": "pausedShell"
+    },
+    {
+      "effects": [
+        {
+          "hint": "paused",
+          "reason": "shellRunning",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "pausedShell/shell",
+      "input": "!ls -la",
+      "sideChannelFree": true,
+      "state": "pausedShell"
+    },
+    {
+      "effects": [
+        {
+          "hint": "paused",
+          "reason": "shellRunning",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "pausedShell/empty-shell",
+      "input": "!",
+      "sideChannelFree": true,
+      "state": "pausedShell"
+    },
+    {
+      "effects": [
+        {
+          "hint": "paused",
+          "reason": "shellRunning",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "pausedShell/teleport",
+      "input": "&ship it",
+      "sideChannelFree": true,
+      "state": "pausedShell"
+    },
+    {
+      "effects": [
+        {
+          "hint": "paused",
+          "reason": "shellRunning",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "pausedShell/unknown-slash",
+      "input": "/nothing",
+      "sideChannelFree": true,
+      "state": "pausedShell"
+    },
+    {
+      "effects": [
+        {
+          "hint": "none",
+          "reason": "sideChannelBusy",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "busy/side-channel-occupied",
+      "input": "/status",
+      "sideChannelFree": false,
+      "state": "busy"
+    },
+    {
+      "effects": [
+        {
+          "hint": "none",
+          "reason": "sideChannelBusy",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "paused/side-channel-occupied",
+      "input": "/help",
+      "sideChannelFree": false,
+      "state": "paused"
+    }
+  ],
+  "handlers": [
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "help",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "106a5842fc5fce6f663176285ed1516dbb1e3d15c05abab12fdca46d60b539b7",
+            "length": 4
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "4b882fb4782704a690c4698e8e57e773f24d90ec4975dcc8c09523841db0686b",
+            "length": 2703
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {},
+      "id": "help",
+      "line": "/help"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "config",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "b79606fb3afea5bd1609ed40b622142f1c98125abcfe89a76a661b0e8e343910",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "name": "config",
+          "type": "panel"
+        }
+      ],
+      "fixture": {},
+      "id": "config",
+      "line": "/config"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "config",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "0908fe643cbd991245a77de18efd1ba9a797fe50f0bc62d4e2069bfed12ae20e",
+            "length": 21
+          },
+          "type": "echo"
+        },
+        {
+          "name": "config",
+          "type": "panel"
+        }
+      ],
+      "fixture": {},
+      "id": "config-arguments",
+      "line": "/config set theme dark"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "model",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "9372c470eeadd5ecd9c3c74c2b3cb633f8e2f2fad799250a0f70d652b6b825e4",
+            "length": 5
+          },
+          "type": "echo"
+        },
+        {
+          "name": "model",
+          "type": "panel"
+        }
+      ],
+      "fixture": {},
+      "id": "model",
+      "line": "/model"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "model",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "ca4ecb820d02e50684ba917f69335910036e384333c0358a0dc67cb35707c342",
+            "length": 20
+          },
+          "type": "echo"
+        },
+        {
+          "name": "model",
+          "type": "panel"
+        }
+      ],
+      "fixture": {},
+      "id": "model-arguments",
+      "line": "/model devstral-small"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "skills",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "32c1cf49a2feee269ed74dd860f72644ac71029839b21b1ce0c212efafa9ef07",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "b62acfe981d00b2748387dc1006efe7f183b6da00ea71a9abbace811b40c00b1",
+            "length": 22
+          },
+          "type": "message"
+        },
+        {
+          "name": "skills",
+          "type": "panel"
+        }
+      ],
+      "fixture": {
+        "installedSkills": [],
+        "skillCatalog": {
+          "authenticated": false,
+          "loaded": false,
+          "project_available": false,
+          "skills": [],
+          "updates": []
+        }
+      },
+      "id": "skills",
+      "line": "/skills"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "thinking",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "6ee16429668c2d8207707407c8c3ee4285a9e26eef5bd0c17ff00efe090808e2",
+            "length": 8
+          },
+          "type": "echo"
+        },
+        {
+          "name": "thinking",
+          "type": "panel"
+        }
+      ],
+      "fixture": {},
+      "id": "thinking",
+      "line": "/thinking"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "thinking",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "6f80856e5816ad8c2d440f64fea6a1c306864476cf74d0b48423f19f52034c39",
+            "length": 13
+          },
+          "type": "echo"
+        },
+        {
+          "name": "thinking",
+          "type": "panel"
+        }
+      ],
+      "fixture": {},
+      "id": "thinking-arguments",
+      "line": "/thinking high"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "reload",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "4027f515418b77482d033970fe4e6cc2c9b6dbd8d19201c31afd06d080a07f41",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "ok": true,
+          "text": {
+            "digest": "6c23308e20c5d13df26ef92379c6bafd9793226c9887627ff87dd68d98900932",
+            "length": 64
+          },
+          "type": "status"
+        }
+      ],
+      "fixture": {},
+      "id": "reload",
+      "line": "/reload"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "reload",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "4027f515418b77482d033970fe4e6cc2c9b6dbd8d19201c31afd06d080a07f41",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "ok": true,
+          "text": {
+            "digest": "6c23308e20c5d13df26ef92379c6bafd9793226c9887627ff87dd68d98900932",
+            "length": 64
+          },
+          "type": "status"
+        },
+        {
+          "text": {
+            "digest": "d9656b5e23d7e29e282be01343e4f22c135c32a05e06da9a0ce9478797e2aca1",
+            "length": 94
+          },
+          "type": "warning"
+        }
+      ],
+      "fixture": {
+        "activeModelDisplayName": "Devstral Small",
+        "reload": {
+          "strippedImages": 1
+        }
+      },
+      "id": "reload-one-image",
+      "line": "/reload"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "reload",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "4027f515418b77482d033970fe4e6cc2c9b6dbd8d19201c31afd06d080a07f41",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "ok": true,
+          "text": {
+            "digest": "6c23308e20c5d13df26ef92379c6bafd9793226c9887627ff87dd68d98900932",
+            "length": 64
+          },
+          "type": "status"
+        },
+        {
+          "text": {
+            "digest": "535b60f721a5524dc57d459f21d8acfb89b4cd5b07ee06d201b9efeb83474a01",
+            "length": 95
+          },
+          "type": "warning"
+        }
+      ],
+      "fixture": {
+        "activeModelDisplayName": "Devstral Small",
+        "reload": {
+          "strippedImages": 3
+        }
+      },
+      "id": "reload-images",
+      "line": "/reload"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "reload",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "4027f515418b77482d033970fe4e6cc2c9b6dbd8d19201c31afd06d080a07f41",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "ok": false,
+          "text": {
+            "digest": "1ea71906615820e7070257d8e12d28363a1b4aa88d943db6b4e52ddaa5cc3e79",
+            "length": 61
+          },
+          "type": "status"
+        }
+      ],
+      "fixture": {
+        "reload": {
+          "raise": "the configuration file is unreadable"
+        }
+      },
+      "id": "reload-failure",
+      "line": "/reload"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "clear",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "913a4cb91be20332f3559f8070255d7ac3e6228bb423f4441551d3f783e7d4f4",
+            "length": 5
+          },
+          "type": "echo"
+        },
+        {
+          "type": "resetTranscript"
+        },
+        {
+          "text": {
+            "digest": "913a4cb91be20332f3559f8070255d7ac3e6228bb423f4441551d3f783e7d4f4",
+            "length": 5
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "25950100937ace3c3a56874bf68daf428061907e0f9f75d9bd4444a0c4a6eca2",
+            "length": 105
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {},
+      "id": "clear",
+      "line": "/clear"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "clear",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "11507a0e2f5e69d5dfa40a62a1bd7b6ee57e6bcd85c67c9b8431b36fff21c437",
+            "length": 3
+          },
+          "type": "echo"
+        },
+        {
+          "type": "resetTranscript"
+        },
+        {
+          "text": {
+            "digest": "913a4cb91be20332f3559f8070255d7ac3e6228bb423f4441551d3f783e7d4f4",
+            "length": 5
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "25950100937ace3c3a56874bf68daf428061907e0f9f75d9bd4444a0c4a6eca2",
+            "length": 105
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {},
+      "id": "clear-new-alias",
+      "line": "/new"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "clear",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "913a4cb91be20332f3559f8070255d7ac3e6228bb423f4441551d3f783e7d4f4",
+            "length": 5
+          },
+          "type": "echo"
+        },
+        {
+          "type": "resetTranscript"
+        },
+        {
+          "text": {
+            "digest": "913a4cb91be20332f3559f8070255d7ac3e6228bb423f4441551d3f783e7d4f4",
+            "length": 5
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "079e9b6cb7140ac266acd0d08070e7e7105eda4a041499ad9b2935ffbd1b87c2",
+            "length": 25
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "sessionLog": {
+          "persisted": false
+        }
+      },
+      "id": "clear-not-persisted",
+      "line": "/clear"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "clear",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "913a4cb91be20332f3559f8070255d7ac3e6228bb423f4441551d3f783e7d4f4",
+            "length": 5
+          },
+          "type": "echo"
+        },
+        {
+          "type": "resetTranscript"
+        },
+        {
+          "text": {
+            "digest": "913a4cb91be20332f3559f8070255d7ac3e6228bb423f4441551d3f783e7d4f4",
+            "length": 5
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "079e9b6cb7140ac266acd0d08070e7e7105eda4a041499ad9b2935ffbd1b87c2",
+            "length": 25
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "sessionLog": {
+          "enabled": false
+        }
+      },
+      "id": "clear-logging-disabled",
+      "line": "/clear"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "clear",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "f96605898f2367d5ae81a1cf67da0e358f16f90f9f0f339d18cdc232114943ff",
+            "length": 31
+          },
+          "type": "echo"
+        },
+        {
+          "type": "resetTranscript"
+        },
+        {
+          "text": {
+            "digest": "913a4cb91be20332f3559f8070255d7ac3e6228bb423f4441551d3f783e7d4f4",
+            "length": 5
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "25950100937ace3c3a56874bf68daf428061907e0f9f75d9bd4444a0c4a6eca2",
+            "length": 105
+          },
+          "type": "message"
+        },
+        {
+          "injected": false,
+          "text": {
+            "digest": "a5fe1e6b8d371030882cf95e7c3415c9a97914dfc82cc0050cb9f5422a16aedd",
+            "length": 23
+          },
+          "type": "submit"
+        }
+      ],
+      "fixture": {},
+      "id": "clear-seed",
+      "line": "/clear   write the missing tests  "
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "clear",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "017aae47c3d69fa4f73c2018636b602c532d80aa52dd95e4c7b77cb79d23973b",
+            "length": 10
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "4095e70fb72a795d929f3c7dd3fd6974fa37e0e44ec5a185b5cb0aea20a23205",
+            "length": 52
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {
+        "clearHistory": {
+          "raise": "the session store is locked"
+        }
+      },
+      "id": "clear-failure",
+      "line": "/clear seed"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "copy",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "6f5a6034e770acbfb3f797e6a7eb7948d470d45f9928f92b7d72dc7c45e6d0cd",
+            "length": 4
+          },
+          "type": "echo"
+        },
+        {
+          "severity": "warning",
+          "text": {
+            "digest": "91027ce9cac3f2ad670d3d9b4a8cfd8d2b744cbca1e36bc04c02a78604798eb8",
+            "length": 34
+          },
+          "type": "notify"
+        }
+      ],
+      "fixture": {},
+      "id": "copy-nothing",
+      "line": "/copy"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "copy",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "6f5a6034e770acbfb3f797e6a7eb7948d470d45f9928f92b7d72dc7c45e6d0cd",
+            "length": 4
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "97b38b2ebda1ca4cf4ea291005d97d07c7053db2aed3ef866c04b49ecfb3448d",
+            "length": 17
+          },
+          "type": "clipboard"
+        },
+        {
+          "severity": "information",
+          "text": {
+            "digest": "67371890c19ef13407c27dd07719c28d45b881ff4f65f3f5f8e1be51d9e30d44",
+            "length": 38
+          },
+          "type": "notify"
+        },
+        {
+          "event": "vibe.user_copied_text",
+          "properties": {
+            "text_length": 17
+          },
+          "type": "telemetry"
+        }
+      ],
+      "fixture": {
+        "lastAssistantMessage": "The answer is 42."
+      },
+      "id": "copy",
+      "line": "/copy"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "copy",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "6f5a6034e770acbfb3f797e6a7eb7948d470d45f9928f92b7d72dc7c45e6d0cd",
+            "length": 4
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "97b38b2ebda1ca4cf4ea291005d97d07c7053db2aed3ef866c04b49ecfb3448d",
+            "length": 17
+          },
+          "type": "clipboard"
+        },
+        {
+          "severity": "information",
+          "text": {
+            "digest": "fa758fa55226fb48435565451e66ad200ec108d3418ce25511bbe30d891f80c0",
+            "length": 138
+          },
+          "type": "notify"
+        },
+        {
+          "event": "vibe.user_copied_text",
+          "properties": {
+            "text_length": 17
+          },
+          "type": "telemetry"
+        }
+      ],
+      "fixture": {
+        "clipboardVerified": false,
+        "lastAssistantMessage": "The answer is 42."
+      },
+      "id": "copy-unverified",
+      "line": "/copy"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "paste-image",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "acf1479983bdb59af1b3d057b3c25a2ae50220d61cbc0524292b928003662cac",
+            "length": 11
+          },
+          "type": "echo"
+        },
+        {
+          "notifyWhenEmpty": true,
+          "type": "clipboardImage"
+        }
+      ],
+      "fixture": {
+        "clipboardSupported": true
+      },
+      "id": "paste-image",
+      "line": "/paste-image"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "log",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "836ff184e7b41b1e13cb5fd89fa1de98dbbab99e9d2918913ff43b86a5c7c213",
+            "length": 3
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "c41ac5a5860048fb079e1d18bce985a5ed38e1c7d081c87968ce5699c353a6ee",
+            "length": 142
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {},
+      "id": "log",
+      "line": "/log"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "log",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "836ff184e7b41b1e13cb5fd89fa1de98dbbab99e9d2918913ff43b86a5c7c213",
+            "length": 3
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "b45f38bbe6b9872e9514e439148f3a0208b8e9ea3601377bd82535d91099ecf3",
+            "length": 45
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {
+        "sessionLog": {
+          "enabled": false
+        }
+      },
+      "id": "log-disabled",
+      "line": "/log"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "log",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "836ff184e7b41b1e13cb5fd89fa1de98dbbab99e9d2918913ff43b86a5c7c213",
+            "length": 3
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "e0f64606d81ec15eb85fcc5370380595106033b593471456d2a80729e550a8f3",
+            "length": 47
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {
+        "sessionLog": {
+          "persisted": false
+        }
+      },
+      "id": "log-not-persisted",
+      "line": "/log"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "log-level",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "7a99ec2d66256494dcbbcc06c58287f58c9c9830598c970886c0ee4ae9c265bc",
+            "length": 9
+          },
+          "type": "echo"
+        },
+        {
+          "name": "logLevel",
+          "type": "panel"
+        }
+      ],
+      "fixture": {},
+      "id": "log-level",
+      "line": "/log-level"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "log-level",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "c1d75532fc277f0fbd4563c6f13b6918975591e5fa37f62ea18e22ae1bfc9a40",
+            "length": 15
+          },
+          "type": "echo"
+        },
+        {
+          "name": "logLevel",
+          "type": "panel"
+        }
+      ],
+      "fixture": {},
+      "id": "log-level-arguments",
+      "line": "/log-level debug"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "debug",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "0b8e9e995d8d77f1e4770f0f79665aee6f3f70247b3735422daba73df4c3096f",
+            "length": 5
+          },
+          "type": "echo"
+        },
+        {
+          "name": "debugConsole",
+          "type": "panel"
+        }
+      ],
+      "fixture": {},
+      "id": "debug",
+      "line": "/debug"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "compact",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "b6b54201f23d00f5b719f532c30bc3362af2da4651d9a33cc0e94714d01c205c",
+            "length": 7
+          },
+          "type": "echo"
+        },
+        {
+          "ok": true,
+          "text": {
+            "digest": "ce1edf0a82e5eaa13850b651ed2226b6bf1e6b8f6c6b1e2a5b94fbafce56758c",
+            "length": 21
+          },
+          "type": "status"
+        }
+      ],
+      "fixture": {
+        "history": [
+          "entry"
+        ]
+      },
+      "id": "compact",
+      "line": "/compact"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "compact",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "9048f6cf898444a7f22a45c291d39a4877782c48dcbe82bdeef8070ef04b3329",
+            "length": 28
+          },
+          "type": "echo"
+        },
+        {
+          "ok": true,
+          "text": {
+            "digest": "ce1edf0a82e5eaa13850b651ed2226b6bf1e6b8f6c6b1e2a5b94fbafce56758c",
+            "length": 21
+          },
+          "type": "status"
+        }
+      ],
+      "fixture": {
+        "history": [
+          "entry"
+        ]
+      },
+      "id": "compact-instructions",
+      "line": "/compact   keep the API notes "
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "compact",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "b6b54201f23d00f5b719f532c30bc3362af2da4651d9a33cc0e94714d01c205c",
+            "length": 7
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "41011b1e3fe8300a427756ddb01aa7ac98806497f5f76222a37f7c4f20e780e8",
+            "length": 39
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {
+        "history": []
+      },
+      "id": "compact-empty",
+      "line": "/compact"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "compact",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "b6b54201f23d00f5b719f532c30bc3362af2da4651d9a33cc0e94714d01c205c",
+            "length": 7
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "65b353f483a3a1aa3424653eea02804c9451f0b5ddd5c92887a10f6c3183f6a4",
+            "length": 59
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {
+        "history": [
+          "entry"
+        ],
+        "turnActive": true
+      },
+      "id": "compact-busy",
+      "line": "/compact"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "compact",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "b6b54201f23d00f5b719f532c30bc3362af2da4651d9a33cc0e94714d01c205c",
+            "length": 7
+          },
+          "type": "echo"
+        },
+        {
+          "ok": false,
+          "text": {
+            "digest": "8b5068c1ed4db18f4c9a12e513e7a579cd4c98ea2aaa813d3756857e98373294",
+            "length": 40
+          },
+          "type": "status"
+        }
+      ],
+      "fixture": {
+        "compact": {
+          "raise": "the summary could not be produced"
+        },
+        "history": [
+          "entry"
+        ]
+      },
+      "id": "compact-failure",
+      "line": "/compact"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "exit",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "e596899f114b5162402325dfb31fdaa792fabed718628336cc7a35a24f38eaa9",
+            "length": 4
+          },
+          "type": "echo"
+        },
+        {
+          "type": "exit"
+        }
+      ],
+      "fixture": {},
+      "id": "exit",
+      "line": "/exit"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "exit",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "e596899f114b5162402325dfb31fdaa792fabed718628336cc7a35a24f38eaa9",
+            "length": 4
+          },
+          "type": "echo"
+        },
+        {
+          "type": "exit"
+        }
+      ],
+      "fixture": {},
+      "id": "exit-bare",
+      "line": "quit"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "status",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "073c1634c496cdb649d1afe0a312bbb4b7e1741b271542e4a436c3b8824b1761",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "56f2a214d83f1e09f08a1beb37cd121a78891e06da227dc01c3734749d03f07c",
+            "length": 182
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {},
+      "id": "status",
+      "line": "/status"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "status",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "073c1634c496cdb649d1afe0a312bbb4b7e1741b271542e4a436c3b8824b1761",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "db39a1c6709dfed1ebab864f270f9128deda6436edcf5c5cc883fcf731f9f291",
+            "length": 252
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "stats": {
+          "lastTurnCachedTokens": 512,
+          "lastTurnTotalTokens": 3210,
+          "sessionCachedTokens": 1000,
+          "sessionCompletionTokens": 2345,
+          "sessionCost": 0.12345,
+          "sessionPromptTokens": 12345,
+          "sessionTotalLlmTokens": 14690,
+          "steps": 7
+        }
+      },
+      "id": "status-cached",
+      "line": "/status"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "status",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "073c1634c496cdb649d1afe0a312bbb4b7e1741b271542e4a436c3b8824b1761",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "022a00b878fa6245d86c3119e0ea3a3fd046a3de24bf0c6b985039b1351b44a7",
+            "length": 210
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "stats": {
+          "lastTurnTotalTokens": 42,
+          "sessionCompletionTokens": 1,
+          "sessionCost": 1234.5,
+          "sessionPromptTokens": 9876543,
+          "sessionTotalLlmTokens": 9876544,
+          "steps": 1234567
+        }
+      },
+      "id": "status-uncached",
+      "line": "/status"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "whoami",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "f25297859cf0a70af5c053a5464a5fa647a35ceee1d91397331903846d79ffc1",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "ba72f9b152977cbe8a9e5b34503dd4d7fbe60f021c81f64ec275f5aeabbcb0ed",
+            "length": 71
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {},
+      "id": "whoami-no-identity",
+      "line": "/whoami"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "whoami",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "f25297859cf0a70af5c053a5464a5fa647a35ceee1d91397331903846d79ffc1",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "baea7762a7e8944c8eb378200ab57a2c068b5b80c7835778bf3f9846179db285",
+            "length": 139
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "account": {
+          "plan": {
+            "title": "Pro"
+          }
+        },
+        "identity": {
+          "email": "ada@example.test",
+          "name": "Ada Lovelace",
+          "organization": {
+            "id": "o",
+            "name": "Engines"
+          },
+          "workspace": {
+            "id": "w",
+            "name": "Analytical"
+          }
+        }
+      },
+      "id": "whoami",
+      "line": "/whoami"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "whoami",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "f25297859cf0a70af5c053a5464a5fa647a35ceee1d91397331903846d79ffc1",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "78b7e541b2f521fddd3e98acb4664b0f37ec220849836b7a220bfba301ab0f61",
+            "length": 42
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "account": {
+          "plan": null
+        },
+        "identity": {
+          "email": "ada@example.test",
+          "name": "ada@example.test",
+          "organization": null,
+          "workspace": null
+        }
+      },
+      "id": "whoami-name-is-email",
+      "line": "/whoami"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "whoami",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "f25297859cf0a70af5c053a5464a5fa647a35ceee1d91397331903846d79ffc1",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "66dca5c8ccebbcff298079ce7d92435057cdfd8f5f513341dce78887fc3c3ac8",
+            "length": 12
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "identity": {
+          "email": null,
+          "name": null,
+          "organization": null,
+          "workspace": null
+        }
+      },
+      "id": "whoami-sparse",
+      "line": "/whoami"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "whoami",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "f25297859cf0a70af5c053a5464a5fa647a35ceee1d91397331903846d79ffc1",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "ba72f9b152977cbe8a9e5b34503dd4d7fbe60f021c81f64ec275f5aeabbcb0ed",
+            "length": 71
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "account": {
+          "plan": {
+            "title": "Pro"
+          }
+        },
+        "identity": {
+          "raise": "unreachable"
+        }
+      },
+      "id": "whoami-identity-failure",
+      "line": "/whoami"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "whoami",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "f25297859cf0a70af5c053a5464a5fa647a35ceee1d91397331903846d79ffc1",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "552e08bf8dace55c246b224d4b56e7c4a8e971f88919bce7d7435530af24c9fa",
+            "length": 58
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "account": {
+          "raise": "unreachable"
+        },
+        "identity": {
+          "email": "ada@example.test",
+          "name": "Ada",
+          "organization": null,
+          "workspace": null
+        }
+      },
+      "id": "whoami-account-failure",
+      "line": "/whoami"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "teleport",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "e99f7ff1ebb40a91320378dcc36e550a66f22ed468fe7fcacc0604938460488f",
+            "length": 8
+          },
+          "type": "echo"
+        },
+        {
+          "echo": false,
+          "target": "",
+          "type": "teleport"
+        }
+      ],
+      "fixture": {},
+      "id": "teleport",
+      "line": "/teleport"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "teleport",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "fc255c8736efbe82584d7288262a0cab131df3770043ee8bfabf771844ce962b",
+            "length": 16
+          },
+          "type": "echo"
+        },
+        {
+          "echo": false,
+          "target": "",
+          "type": "teleport"
+        }
+      ],
+      "fixture": {},
+      "id": "teleport-arguments",
+      "line": "/teleport ship it"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "remote-project",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "f1fd3544cbc6ebefd57930ca38e1e46e1e1f0961a2aa3842a8ceee295019fc4f",
+            "length": 14
+          },
+          "type": "echo"
+        },
+        {
+          "name": "remoteProjects",
+          "type": "panel"
+        }
+      ],
+      "fixture": {
+        "openProjects": [
+          "view",
+          "picker"
+        ]
+      },
+      "id": "remote-project",
+      "line": "/remote-project"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "remote-project",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "f1fd3544cbc6ebefd57930ca38e1e46e1e1f0961a2aa3842a8ceee295019fc4f",
+            "length": 14
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "5be16c359b768a9aafd4073860d2a6835e7054360cfc5fb4d682d9e7707cc615",
+            "length": 24
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {
+        "openProjects": {
+          "error": "Vibe Code is unavailable"
+        }
+      },
+      "id": "remote-project-failure",
+      "line": "/remote-project"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "proxy-setup",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "dc883b411229e15108d1f5e1936d3df9cc7884637c6837a8cb8770a43ca51e22",
+            "length": 11
+          },
+          "type": "echo"
+        },
+        {
+          "name": "proxySetup",
+          "type": "panel"
+        }
+      ],
+      "fixture": {},
+      "id": "proxy-setup",
+      "line": "/proxy-setup"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "proxy-setup",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "3c3862e05a72fe03fec8b05da7c6b078bd327ef89fbd5e478348c35691796406",
+            "length": 41
+          },
+          "type": "echo"
+        },
+        {
+          "name": "proxySetup",
+          "type": "panel"
+        }
+      ],
+      "fixture": {},
+      "id": "proxy-setup-arguments",
+      "line": "/proxy-setup HTTPS_PROXY http://proxy.test"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "resume",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "a83a31320d921b888a48fa5edd0b4b5a29984de6e96bf7b8ac7d29ba06caf616",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "type": "removeEcho"
+        },
+        {
+          "name": "sessions",
+          "type": "panel"
+        },
+        {
+          "count": 2,
+          "type": "sessionsLoaded"
+        }
+      ],
+      "fixture": {
+        "savedSessions": 2
+      },
+      "id": "resume",
+      "line": "/resume"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "resume",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "e256ee8e7aff6957a781d8328f0f68e26996564c81fa458da59fbca2305138ad",
+            "length": 8
+          },
+          "type": "echo"
+        },
+        {
+          "type": "removeEcho"
+        },
+        {
+          "name": "sessions",
+          "type": "panel"
+        },
+        {
+          "count": 1,
+          "type": "sessionsLoaded"
+        }
+      ],
+      "fixture": {
+        "savedSessions": 1
+      },
+      "id": "resume-continue-alias",
+      "line": "/continue"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "resume",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "4edafad499ffa6156ead49f86a5fd4397ede48392fa5f96d7ea11460eccaf16c",
+            "length": 16
+          },
+          "type": "echo"
+        },
+        {
+          "type": "removeEcho"
+        },
+        {
+          "name": "sessions",
+          "type": "panel"
+        },
+        {
+          "count": 1,
+          "type": "sessionsLoaded"
+        }
+      ],
+      "fixture": {
+        "savedSessions": 1
+      },
+      "id": "resume-arguments",
+      "line": "/resume session-1"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "resume",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "a83a31320d921b888a48fa5edd0b4b5a29984de6e96bf7b8ac7d29ba06caf616",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "type": "removeEcho"
+        },
+        {
+          "name": "sessions",
+          "type": "panel"
+        },
+        {
+          "type": "closePanel"
+        },
+        {
+          "text": {
+            "digest": "a65b39a715f774e1bcfd582256511509e7c801f5cc7915963381d69762470537",
+            "length": 37
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {},
+      "id": "resume-none",
+      "line": "/resume"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "resume",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "a83a31320d921b888a48fa5edd0b4b5a29984de6e96bf7b8ac7d29ba06caf616",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "type": "removeEcho"
+        },
+        {
+          "name": "sessions",
+          "type": "panel"
+        },
+        {
+          "type": "closePanel"
+        },
+        {
+          "text": {
+            "digest": "a65b39a715f774e1bcfd582256511509e7c801f5cc7915963381d69762470537",
+            "length": 37
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "savedSessions": 2,
+        "sessionLog": {
+          "enabled": false
+        }
+      },
+      "id": "resume-logging-disabled",
+      "line": "/resume"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "rename",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "9e84869d369b2a5336f6aa599b6e91116cc3d761827ef5f4b90841b8848ec35e",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "2b37a93491753cd175a163bdc0d8192b192ef4ab6deae054b67b4288c9caf20d",
+            "length": 22
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {},
+      "id": "rename-empty",
+      "line": "/rename   "
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "rename",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "4fed3b9ca821ded13bc8b76107325904b97a09fd60b5bee2bd3a24edbbc783f3",
+            "length": 22
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "f53a1eec00881eaaf2cb54b220a21fcd6681b3e9e44ffbade0e1e284531f29bf",
+            "length": 14
+          },
+          "type": "title"
+        },
+        {
+          "text": {
+            "digest": "606037fed5825ccb99b2b44ddde05dc5db3c04ec3cccc19446ebb0924baface8",
+            "length": 36
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {},
+      "id": "rename",
+      "line": "/rename  Parser rewrite "
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "rename",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "d2cff935d2bf75430c4b513f77224e0832d8608075ec59a0b04246c4808f5a9c",
+            "length": 21
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "d9d55bbe8218f70724a7b7218f288492fe5aba4872993783f918d4d6d8795c2b",
+            "length": 47
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {
+        "rename": {
+          "raise": "the title is too long"
+        }
+      },
+      "id": "rename-failure",
+      "line": "/rename Parser rewrite"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "10182ab855ff772753c05b2fea333666b5f312835d32936b6b03e08ef2cbd6d3",
+            "length": 3
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "b99d19d94c8c604f4cb0dc5700ca12e198570b7458c1dbe2be969d2ef327450a",
+            "length": 40
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {},
+      "id": "mcp-empty",
+      "line": "/mcp"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "9064fade0bec0331a2b937fa0160d5753198cdd9c3d58f94589b665cc0b3eb3e",
+            "length": 10
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "377472fc5ad343bff7ea0452e1041a05635c3c3288f5ede2fbac4f8516852994",
+            "length": 28
+          },
+          "type": "message"
+        },
+        {
+          "initial": "",
+          "name": "mcp",
+          "type": "panel"
+        }
+      ],
+      "fixture": {
+        "mcp": {
+          "sources": [
+            "docs",
+            "search"
+          ]
+        }
+      },
+      "id": "mcp-connectors-alias",
+      "line": "/connectors"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "10182ab855ff772753c05b2fea333666b5f312835d32936b6b03e08ef2cbd6d3",
+            "length": 3
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "377472fc5ad343bff7ea0452e1041a05635c3c3288f5ede2fbac4f8516852994",
+            "length": 28
+          },
+          "type": "message"
+        },
+        {
+          "initial": "",
+          "name": "mcp",
+          "type": "panel"
+        }
+      ],
+      "fixture": {
+        "mcp": {
+          "sources": [
+            "docs",
+            "search"
+          ]
+        }
+      },
+      "id": "mcp",
+      "line": "/mcp"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "060d2a5cf775960ad5181c36308c742a8e210e1cf4ab3d2c22c9c8fefd354340",
+            "length": 10
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "377472fc5ad343bff7ea0452e1041a05635c3c3288f5ede2fbac4f8516852994",
+            "length": 28
+          },
+          "type": "message"
+        },
+        {
+          "initial": "search",
+          "name": "mcp",
+          "type": "panel"
+        }
+      ],
+      "fixture": {
+        "mcp": {
+          "sources": [
+            "docs",
+            "search"
+          ]
+        }
+      },
+      "id": "mcp-named",
+      "line": "/mcp search"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "a17894455279ff6fe0a49d39c10e12f69b4155b4981f6476b3ab8cfd08063993",
+            "length": 11
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "1e785e1b67ac8c92585d7b92833ad4f3c25a3657963321d21865efa170ed4cc7",
+            "length": 61
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {
+        "mcp": {
+          "sources": [
+            "docs",
+            "search"
+          ]
+        }
+      },
+      "id": "mcp-unknown",
+      "line": "/mcp nothing"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "10182ab855ff772753c05b2fea333666b5f312835d32936b6b03e08ef2cbd6d3",
+            "length": 3
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "f2471d52731abaa29f7e0f622f2b7f8191b4bb9239218250853dbbf7b9ce406a",
+            "length": 58
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {
+        "mcp": {
+          "connectorError": "the connector catalog timed out"
+        }
+      },
+      "id": "mcp-connector-error",
+      "line": "/mcp"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "10182ab855ff772753c05b2fea333666b5f312835d32936b6b03e08ef2cbd6d3",
+            "length": 3
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "f2471d52731abaa29f7e0f622f2b7f8191b4bb9239218250853dbbf7b9ce406a",
+            "length": 58
+          },
+          "type": "error"
+        },
+        {
+          "text": {
+            "digest": "377472fc5ad343bff7ea0452e1041a05635c3c3288f5ede2fbac4f8516852994",
+            "length": 28
+          },
+          "type": "message"
+        },
+        {
+          "initial": "",
+          "name": "mcp",
+          "type": "panel"
+        }
+      ],
+      "fixture": {
+        "mcp": {
+          "connectorError": "the connector catalog timed out",
+          "sources": [
+            "docs"
+          ]
+        }
+      },
+      "id": "mcp-connector-error-with-sources",
+      "line": "/mcp"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "20749b26cb9df33e8b5f06db8009dbfc9136fccc476358ffe77fea9f17857163",
+            "length": 10
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "9729297abe88767d0ca31bd027c45fbbadc5aca0ad396c0fb39292341f7968cc",
+            "length": 26
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {},
+      "id": "mcp-status-empty",
+      "line": "/mcp status"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "20749b26cb9df33e8b5f06db8009dbfc9136fccc476358ffe77fea9f17857163",
+            "length": 10
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "9628ca48fa8a4aa71cd2d5bc398c4959cc6101b3186fe3d9a8c77b7d61bda3ea",
+            "length": 72
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "mcp": {
+          "statuses": {
+            "docs": "needs_login",
+            "search": "authenticated"
+          }
+        }
+      },
+      "id": "mcp-status",
+      "line": "/mcp status"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "cc7a27953a4e971bb8ca0b50ce6110f49d0250ab145e0f0843f5d0e7652eeeba",
+            "length": 16
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "9d17e6313b9e4c1ba7b898a66cc71203d7deec844a412bd2b014eed8df457501",
+            "length": 18
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {},
+      "id": "mcp-status-arguments",
+      "line": "/mcp status extra"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "c7b98d69b057a6fdb382d0c2edc2b5360e1f7d203bcac5a3a1c8c1a8f7dd063c",
+            "length": 9
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "e298a14f877626bafbbd35e8d806b120ca4de0991ee6e20e727ce6d8b9b71cef",
+            "length": 25
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {},
+      "id": "mcp-login-usage",
+      "line": "/mcp login"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "031b2047b3797be324b773d62840249f269cfcd9a75cd9c934be69a668cac435",
+            "length": 14
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "e744247a78d27e66df26eec3bcfe10893b46f4ee9c6a7b9723e8ce2a52602922",
+            "length": 69
+          },
+          "type": "message"
+        },
+        {
+          "type": "openUrl",
+          "url": "https://auth.example.test/authorize"
+        },
+        {
+          "text": {
+            "digest": "73677ed9a75a862bc1166fdb9c1104c7cd97dcaaca173f7eb372fba754455175",
+            "length": 32
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "mcpLogin": {
+          "urls": [
+            "https://auth.example.test/authorize"
+          ]
+        }
+      },
+      "id": "mcp-login",
+      "line": "/mcp login docs"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "042d27ea28b76e5fd2c0db73e567d6773dcad83d4322a609212d5cee6e8d020c",
+            "length": 16
+          },
+          "type": "echo"
+        },
+        {
+          "type": "closePanel"
+        },
+        {
+          "initial": "search",
+          "name": "connectorAuth",
+          "type": "panel"
+        }
+      ],
+      "fixture": {
+        "mcp": {
+          "connectors": [
+            "search"
+          ],
+          "sources": [
+            "docs"
+          ]
+        }
+      },
+      "id": "mcp-login-connector",
+      "line": "/mcp login search"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "031b2047b3797be324b773d62840249f269cfcd9a75cd9c934be69a668cac435",
+            "length": 14
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "e744247a78d27e66df26eec3bcfe10893b46f4ee9c6a7b9723e8ce2a52602922",
+            "length": 69
+          },
+          "type": "message"
+        },
+        {
+          "type": "openUrl",
+          "url": "https://auth.example.test/authorize"
+        },
+        {
+          "text": {
+            "digest": "73677ed9a75a862bc1166fdb9c1104c7cd97dcaaca173f7eb372fba754455175",
+            "length": 32
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "mcp": {
+          "connectors": [
+            "docs"
+          ],
+          "sources": [
+            "docs"
+          ]
+        },
+        "mcpLogin": {
+          "urls": [
+            "https://auth.example.test/authorize"
+          ]
+        }
+      },
+      "id": "mcp-login-shared-alias",
+      "line": "/mcp login docs"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "060d2a5cf775960ad5181c36308c742a8e210e1cf4ab3d2c22c9c8fefd354340",
+            "length": 10
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "377472fc5ad343bff7ea0452e1041a05635c3c3288f5ede2fbac4f8516852994",
+            "length": 28
+          },
+          "type": "message"
+        },
+        {
+          "initial": "search",
+          "name": "mcp",
+          "type": "panel"
+        }
+      ],
+      "fixture": {
+        "mcp": {
+          "connectors": [
+            "search"
+          ],
+          "sources": [
+            "docs"
+          ]
+        }
+      },
+      "id": "mcp-connectors-listed",
+      "line": "/mcp search"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "031b2047b3797be324b773d62840249f269cfcd9a75cd9c934be69a668cac435",
+            "length": 14
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "082cfa494546de393847e4ea0109f63a348ba1f39d735f4128dfec8ed436cc2e",
+            "length": 24
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {
+        "mcpLogin": {
+          "error": "Unknown MCP server: docs"
+        }
+      },
+      "id": "mcp-login-failure",
+      "line": "/mcp login docs"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "0003abe6d7028087140f4bee556c8aea7a069c30bf620d5f605fa198c8666180",
+            "length": 10
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "0945eb5d6560d64db52d5640f13a22f532d65a2aa909a9ba2faa2f0f324c2c95",
+            "length": 26
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {},
+      "id": "mcp-logout-usage",
+      "line": "/mcp logout   "
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "e6a080b46eac6f76079fee0ebba67ad042b5d5ea59f96dcf6610fcf9424bb253",
+            "length": 15
+          },
+          "type": "echo"
+        },
+        {
+          "alias": "docs",
+          "type": "mcpLogout"
+        },
+        {
+          "text": {
+            "digest": "5131c60890a04bafa6298b11f6b0e090e641fa5af615927e17655e7bfa87acb3",
+            "length": 29
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {},
+      "id": "mcp-logout",
+      "line": "/mcp logout docs"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "e6a080b46eac6f76079fee0ebba67ad042b5d5ea59f96dcf6610fcf9424bb253",
+            "length": 15
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "082cfa494546de393847e4ea0109f63a348ba1f39d735f4128dfec8ed436cc2e",
+            "length": 24
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {
+        "mcpLogout": {
+          "error": "Unknown MCP server: docs"
+        }
+      },
+      "id": "mcp-logout-failure",
+      "line": "/mcp logout docs"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "ba89da2b01834efa9803d2d59908ede5c0b48c8ff5335926244ce2f32aed47f4",
+            "length": 14
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "4c8956b7711a1a56e424be49516ef01ba8b06f8098755d9c482a9dfa3ed4b3be",
+            "length": 431
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {},
+      "id": "mcp-add-help",
+      "line": "/mcp add --help"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "a783c66cd176fda7b2702b16f7f95784421af66351428c7f899482d6e8323902",
+            "length": 10
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "4c8956b7711a1a56e424be49516ef01ba8b06f8098755d9c482a9dfa3ed4b3be",
+            "length": 431
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {},
+      "id": "mcp-add-short-help",
+      "line": "/mcp add -h"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "47ee80a729ab62da1f4b3990139f25f86a195cd3d1099cb21060ceacdbcc7721",
+            "length": 7
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "e16981aed3379bc1a6904010662df7793529a8b465e90d9d57ede00c2c30191f",
+            "length": 134
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {},
+      "id": "mcp-add-usage",
+      "line": "/mcp add"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "b496ea9db74fda845323b337925afe9571616fdbac7b806514affa41b1b41d8f",
+            "length": 37
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "e16981aed3379bc1a6904010662df7793529a8b465e90d9d57ede00c2c30191f",
+            "length": 134
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {},
+      "id": "mcp-add-two-urls",
+      "line": "/mcp add https://a.test https://b.test"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "e199da8d187c228a91e116b8ce46858657c60e2e9a688e581eac989212924c43",
+            "length": 32
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "8c66a5082e3b2083bed1b0e1a90379bc2679485e3dc48908a67f14b1675d0a4e",
+            "length": 34
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {},
+      "id": "mcp-add-unknown-option",
+      "line": "/mcp add https://a.test --verbose"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "93ce5547b49eaa10fe0664adcf1f862fe87721526eaed20e255fb607dc04b205",
+            "length": 40
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "9db6a9e7a090b792a056ffd2075c3ef9941f74928a95cea07e071140e390d751",
+            "length": 41
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {},
+      "id": "mcp-add-name-twice",
+      "line": "/mcp add https://a.test --name a --name b"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "a5264dc25526e34d548554cd96cffb103e49ec4c5fe06f7454f356c2b0c82685",
+            "length": 29
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "01cbe8a7780930c334e4aca4e682cda137ccce11ec2bb1ce5cb15cf4003c819b",
+            "length": 30
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {},
+      "id": "mcp-add-name-missing",
+      "line": "/mcp add https://a.test --name"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "64491948c115996b988aec56f3d41255a1eeb142b594b65273856763c14ba9b5",
+            "length": 56
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "6fd97c251b04a2561bdb83ce5a3f9e2d81b13d9f9d1d3767ebc083122af2ca76",
+            "length": 46
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {},
+      "id": "mcp-add-transport-twice",
+      "line": "/mcp add https://a.test --transport http --transport http"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "c1387fb10d259e6fd0ec590d2bf3646c8c646e17313dcae7fde0efd1c13a2f27",
+            "length": 40
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "6717e389b8d08551fb34d5885c0471431f70b4b7f79650760ae57cb75c19891b",
+            "length": 59
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {},
+      "id": "mcp-add-transport-invalid",
+      "line": "/mcp add https://a.test --transport stdio"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "a81864dc2bbbdaab798311c7fd41c743af22fe763cb8660287e8fb03c706d7a0",
+            "length": 41
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "95eb85439ad0bc77925167d02fbd287bfe402c365ce8cf4af4c60ca2bb04b571",
+            "length": 31
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {},
+      "id": "mcp-add-scope-missing",
+      "line": "/mcp add https://a.test --scope --no-login"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "9ebf53080eb9fadb52aa2c7a44d4d43ee5e0bd51e0702d197413c789389d056d",
+            "length": 23
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "d518f04a9b625e5aa6b6058feef9e99d8af13365dc771a7aaac9e38694eb2c22",
+            "length": 48
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {},
+      "id": "mcp-add-quoting",
+      "line": "/mcp add 'https://a.test"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "c741fc772b9dba9e129b448be9fba980640713a1f08acc6855e0bdba02c822f3",
+            "length": 43
+          },
+          "type": "echo"
+        },
+        {
+          "allowInsecureHttp": false,
+          "name": "",
+          "scopes": [],
+          "transport": "streamable-http",
+          "type": "mcpAdd",
+          "url": "https://mcp.example.test"
+        },
+        {
+          "text": {
+            "digest": "7c86b1104f9f1e036544592884ab11ded8867d26720cc0957c3ee37ede808992",
+            "length": 115
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "mcpAdd": {
+          "name": "mcp-example"
+        }
+      },
+      "id": "mcp-add",
+      "line": "/mcp add https://mcp.example.test --no-login"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "8f5af5b4345497890a14145a7450954bc0e25227e997cd25afe0a8b6c9524a1a",
+            "length": 121
+          },
+          "type": "echo"
+        },
+        {
+          "allowInsecureHttp": true,
+          "name": "docs",
+          "scopes": [
+            "read",
+            "write"
+          ],
+          "transport": "http",
+          "type": "mcpAdd",
+          "url": "https://mcp.example.test"
+        },
+        {
+          "text": {
+            "digest": "970fd64ecf8f36be24ad239cc2b45a17acf5b7aaaf5f0fabc60e528619b399b6",
+            "length": 101
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "mcpAdd": {
+          "name": "docs"
+        }
+      },
+      "id": "mcp-add-options",
+      "line": "/mcp add https://mcp.example.test --name docs --scope read --scope write --transport http --allow-insecure-http --no-login"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "c741fc772b9dba9e129b448be9fba980640713a1f08acc6855e0bdba02c822f3",
+            "length": 43
+          },
+          "type": "echo"
+        },
+        {
+          "allowInsecureHttp": false,
+          "name": "",
+          "scopes": [],
+          "transport": "streamable-http",
+          "type": "mcpAdd",
+          "url": "https://mcp.example.test"
+        },
+        {
+          "text": {
+            "digest": "3aa74963ec87a988a8aff9884d82dc5f7909fd2bfd4c255078f8b3502898dda2",
+            "length": 117
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "mcpAdd": {
+          "created": false,
+          "name": "docs"
+        }
+      },
+      "id": "mcp-add-existing",
+      "line": "/mcp add https://mcp.example.test --no-login"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "f391e72e8262660f0872485a049c9a0760ac641bf1292fea03c966adc1cb8872",
+            "length": 44
+          },
+          "type": "echo"
+        },
+        {
+          "allowInsecureHttp": false,
+          "name": "docs",
+          "scopes": [],
+          "transport": "streamable-http",
+          "type": "mcpAdd",
+          "url": "https://mcp.example.test"
+        },
+        {
+          "text": {
+            "digest": "b4c780f0eb94893c9b842044ec13cd13d26cc7fb4a707bc2a4af430417b8a4c3",
+            "length": 54
+          },
+          "type": "message"
+        },
+        {
+          "text": {
+            "digest": "e744247a78d27e66df26eec3bcfe10893b46f4ee9c6a7b9723e8ce2a52602922",
+            "length": 69
+          },
+          "type": "message"
+        },
+        {
+          "type": "openUrl",
+          "url": "https://auth.example.test/authorize"
+        },
+        {
+          "text": {
+            "digest": "73677ed9a75a862bc1166fdb9c1104c7cd97dcaaca173f7eb372fba754455175",
+            "length": 32
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "mcpAdd": {
+          "name": "docs"
+        },
+        "mcpLogin": {
+          "urls": [
+            "https://auth.example.test/authorize"
+          ]
+        }
+      },
+      "id": "mcp-add-login",
+      "line": "/mcp add https://mcp.example.test --name docs"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "mcp",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "32726875d43a09de0e9884b4829d3d7d6488699c801474a9dcf1a444697e1727",
+            "length": 32
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "e0864a186fce4b1a61bfbf4099563ddaa1816883d4206a4ab1d82e83a0ba1622",
+            "length": 39
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {
+        "mcpAdd": {
+          "error": "An MCP server named docs already exists"
+        }
+      },
+      "id": "mcp-add-failure",
+      "line": "/mcp add https://mcp.example.test"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "plugins",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "92cd10e6b8b068a931196d1d73a032543d5ca1a5bf445e27a1af74258254517c",
+            "length": 7
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "ca4646eacd2825b4a81220eff7e0143b538219e1cb55bc71ca0cf02645172642",
+            "length": 33
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {},
+      "id": "plugins",
+      "line": "/plugins"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "reload-plugins",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "4fdb14bd94d3f65000786c2597095338896bafcd248860bedb6946e20fda6bfe",
+            "length": 14
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "ca4646eacd2825b4a81220eff7e0143b538219e1cb55bc71ca0cf02645172642",
+            "length": 33
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {},
+      "id": "reload-plugins",
+      "line": "/reload-plugins"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "todo",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "602fae580f5863abfb31bf356decfdc73bf1224a62aacf6b4829ffa2dbe58390",
+            "length": 4
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "838a94b9e133d723350235372e9f7e18ebba429b27a982fe48ef3b591bfa1a88",
+            "length": 13
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {},
+      "id": "todo",
+      "line": "/todo"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "voice",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "c57d7e92019708b614c90fa3685cd644f543a60153fb99ec9b67c381a245fb2a",
+            "length": 5
+          },
+          "type": "echo"
+        },
+        {
+          "name": "voice",
+          "type": "panel"
+        }
+      ],
+      "fixture": {},
+      "id": "voice",
+      "line": "/voice"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "leanstall",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "aba7c98d8a1a02491bf7ef6b1ce4b175dae04e0278f682903e702edd232eb86a",
+            "length": 9
+          },
+          "type": "echo"
+        },
+        {
+          "installed": true,
+          "name": "lean",
+          "type": "agentInstalled"
+        },
+        {
+          "ok": true,
+          "text": {
+            "digest": "6c23308e20c5d13df26ef92379c6bafd9793226c9887627ff87dd68d98900932",
+            "length": 64
+          },
+          "type": "status"
+        }
+      ],
+      "fixture": {
+        "agents": [
+          "default",
+          "plan"
+        ]
+      },
+      "id": "leanstall",
+      "line": "/leanstall"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "leanstall",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "aba7c98d8a1a02491bf7ef6b1ce4b175dae04e0278f682903e702edd232eb86a",
+            "length": 9
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "afaeef993460079b19cb25fb2915c1cff28576ef7953488978acc0ce79cc67df",
+            "length": 32
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "agents": [
+          "default",
+          "lean"
+        ]
+      },
+      "id": "leanstall-present",
+      "line": "/leanstall"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "unleanstall",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "163c8f0d4076aeeb5f1465171fc85ff2961c25e28cf6c8723f26ec6812c4719b",
+            "length": 11
+          },
+          "type": "echo"
+        },
+        {
+          "installed": false,
+          "name": "lean",
+          "type": "agentInstalled"
+        },
+        {
+          "ok": true,
+          "text": {
+            "digest": "6c23308e20c5d13df26ef92379c6bafd9793226c9887627ff87dd68d98900932",
+            "length": 64
+          },
+          "type": "status"
+        }
+      ],
+      "fixture": {
+        "agents": [
+          "default",
+          "lean"
+        ]
+      },
+      "id": "unleanstall",
+      "line": "/unleanstall"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "unleanstall",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "163c8f0d4076aeeb5f1465171fc85ff2961c25e28cf6c8723f26ec6812c4719b",
+            "length": 11
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "44e5364d4c9a12496f9a49457de901f7625c6596334850db8bd0c48ab176b093",
+            "length": 28
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "agents": [
+          "default"
+        ]
+      },
+      "id": "unleanstall-absent",
+      "line": "/unleanstall"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "rewind",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "c51185739fabdd96636a9025f6f622690e42e47c7166bdcb6b479f48e80a6202",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "name": "rewind",
+          "type": "panel"
+        }
+      ],
+      "fixture": {},
+      "id": "rewind",
+      "line": "/rewind"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "branch",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "f38c764c8aa00b6578f4254a4dc6d9b50f88fa926e270ea7859bd1b707cd8662",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "attach": false,
+          "type": "fork"
+        },
+        {
+          "event": "vibe.session_branched",
+          "properties": {
+            "new_session_id": "fedcba9876543210-copy",
+            "source_session_id": "0123456789abcdef-session"
+          },
+          "type": "telemetry"
+        },
+        {
+          "ok": true,
+          "text": {
+            "digest": "38774324f766032b43022e8f456a86cbd008d3d264aff82da7debccb6d99cfbc",
+            "length": 100
+          },
+          "type": "status"
+        }
+      ],
+      "fixture": {},
+      "id": "branch",
+      "line": "/branch"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "branch",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "536eb8f64d8cda03aaa114ac8ff1b52e575713a798e34fcec94c22c757b92838",
+            "length": 20
+          },
+          "type": "echo"
+        },
+        {
+          "attach": false,
+          "type": "fork"
+        },
+        {
+          "event": "vibe.session_branched",
+          "properties": {
+            "new_session_id": "fedcba9876543210-copy",
+            "source_session_id": "0123456789abcdef-session"
+          },
+          "type": "telemetry"
+        },
+        {
+          "ok": true,
+          "text": {
+            "digest": "38774324f766032b43022e8f456a86cbd008d3d264aff82da7debccb6d99cfbc",
+            "length": 100
+          },
+          "type": "status"
+        }
+      ],
+      "fixture": {},
+      "id": "branch-arguments",
+      "line": "/branch ignored words"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "branch",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "f38c764c8aa00b6578f4254a4dc6d9b50f88fa926e270ea7859bd1b707cd8662",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "d2e189a88d847de2d06fc30e6e451570851459f22a2669eb65dfeb4a48825b03",
+            "length": 56
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {
+        "fork": {
+          "raise": "the session has no history yet"
+        }
+      },
+      "id": "branch-failure",
+      "line": "/branch"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "retry",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "06b29bb318814108e94270528fe7994c096308b3692923723bf1ae6f98d50b4f",
+            "length": 5
+          },
+          "type": "echo"
+        }
+      ],
+      "fixture": {},
+      "id": "retry-not-offered",
+      "line": "/retry"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "retry",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "06b29bb318814108e94270528fe7994c096308b3692923723bf1ae6f98d50b4f",
+            "length": 5
+          },
+          "type": "echo"
+        },
+        {
+          "injected": true,
+          "text": {
+            "digest": "391c1817b5a156b78d76c294e402892da5a14d576eb79721caf372702d91c154",
+            "length": 249
+          },
+          "type": "submit"
+        }
+      ],
+      "fixture": {
+        "retryOffered": true
+      },
+      "id": "retry",
+      "line": "/retry"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "retry",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "ddcfae62ac13ee6fc88ac3a6aea51d2483c5649c7166ef15efb695d83f6ee50a",
+            "length": 20
+          },
+          "type": "echo"
+        },
+        {
+          "injected": true,
+          "text": {
+            "digest": "6557555aef4c95256c6b4b4cd189f7de8a39fbb3121594f542f2976d5fdae817",
+            "length": 333
+          },
+          "type": "submit"
+        }
+      ],
+      "fixture": {
+        "retryOffered": true
+      },
+      "id": "retry-instructions",
+      "line": "/retry  keep it short "
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "retry",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "06b29bb318814108e94270528fe7994c096308b3692923723bf1ae6f98d50b4f",
+            "length": 5
+          },
+          "type": "echo"
+        }
+      ],
+      "fixture": {
+        "retryOffered": true,
+        "turnActive": true
+      },
+      "id": "retry-busy",
+      "line": "/retry"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "loop",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "254637f72efcddb6a545bccbd0c3bb84e6393647deb5fd344de6584ccc1e743c",
+            "length": 4
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "0d2585431a44e771124821ebfa99bf9cc9ef600fdc24c8cabb84fc09c5475ff6",
+            "length": 19
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {},
+      "id": "loop-list-empty",
+      "line": "/loop"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "loop",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "fa7b9db4521ae74803b15761c0987d2bfbfcc8051e576ccb139e596376954615",
+            "length": 9
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "96a84a2814a6d3c6a11852ac81dc00fd3e16c581b56f6ec81c0e1c68c7e46162",
+            "length": 147
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "loops": {
+          "list": [
+            {
+              "id": "loop-1",
+              "interval_seconds": 3700,
+              "next_fire_at": 1800000125.0,
+              "prompt": "check | the build\nnow"
+            },
+            {
+              "id": "loop-2",
+              "interval_seconds": 86400,
+              "next_fire_at": 1799999995.0,
+              "prompt": "ping"
+            }
+          ]
+        }
+      },
+      "id": "loop-list",
+      "line": "/loop list"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "loop",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "b5af30cbd7e4bcd92d6753ac07c7a43f54056061cb4978660084eb5309470fe5",
+            "length": 7
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "0d2585431a44e771124821ebfa99bf9cc9ef600fdc24c8cabb84fc09c5475ff6",
+            "length": 19
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {},
+      "id": "loop-ls",
+      "line": "/loop LS"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "loop",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "bd7e2148ff508b4b4878c461fe88f2a41698f32b3b917ef468cb57d904e322cb",
+            "length": 25
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "2c962a00594ec905ef95bd400a0607501b76489d662c017ffbfe15937e116df8",
+            "length": 51
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "loops": {
+          "created": {
+            "id": "loop-7",
+            "interval_seconds": 300
+          }
+        }
+      },
+      "id": "loop-create",
+      "line": "/loop 5m   check the build  "
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "loop",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "3945c77b489ccfcaf1040f19315fea3a31cd15b362c95aff517801ce5f415476",
+            "length": 8
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "cb183c7bdecb0070f9e304122864e2c8f7e0f6b6e0aca52305221536dd9885aa",
+            "length": 37
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "loops": {
+          "created": {
+            "id": "loop-8",
+            "interval_seconds": 90
+          }
+        }
+      },
+      "id": "loop-create-interval-only",
+      "line": "/loop 90s"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "loop",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "98c2f6b573e828fff60135de4ab90117b37b5c64344de118d08b5386c625aa41",
+            "length": 18
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "80d8cba6fa46986d7698ceb0841d3a17cc287064a55387a43ddb4f92ecc97adb",
+            "length": 40
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "loops": {
+          "deletedPrompt": "check the build"
+        }
+      },
+      "id": "loop-cancel",
+      "line": "/loop cancel loop-1"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "loop",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "4e03a95a02ee0cef22150b1bfa230d2fe735ca8468c1b91b3b4dc9efb762731c",
+            "length": 14
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "80d8cba6fa46986d7698ceb0841d3a17cc287064a55387a43ddb4f92ecc97adb",
+            "length": 40
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "loops": {
+          "deletedPrompt": "check the build"
+        }
+      },
+      "id": "loop-cancel-verb",
+      "line": "/loop RM loop-1"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "loop",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "43c26f62f792ece2bfd1d31383deec7acc17842e23112b70be49568844d259df",
+            "length": 13
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "ba61e7601e08e17e39a2575c592d0284d8e4f59141bce882bc179b9b5ec3e882",
+            "length": 30
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "loops": {
+          "cleared": 3
+        }
+      },
+      "id": "loop-cancel-all",
+      "line": "/loop stop all"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "loop",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "98f1e101bc7bc79d42d1720c7fabaf14345c266ace919b96db3095d6d3373ab4",
+            "length": 11
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "d828376980744da5a617c37393b2a639e071004af4e5375c0a18efd3aa648cd4",
+            "length": 89
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {},
+      "id": "loop-cancel-missing",
+      "line": "/loop delete"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "loop",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "b2e44674f4d40483cd3ef9ecc2e4eb0a188e3087fb108a7f7e98ed26ea30cdb6",
+            "length": 13
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "127a6f3a8866e04536ab3018eec0b6d3ef89243c8f3bd0b0992f8fcd883db43a",
+            "length": 93
+          },
+          "type": "error"
+        }
+      ],
+      "fixture": {
+        "loops": {
+          "error": "Invalid interval: 5x"
+        }
+      },
+      "id": "loop-error",
+      "line": "/loop 5x check"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "data-retention",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "9e5b03b2eff96d8484e98b8cc9253ee08efaa6fb5fd90b2f026e9b59bb25ced9",
+            "length": 14
+          },
+          "type": "echo"
+        },
+        {
+          "text": {
+            "digest": "bff26f9afff7611e0f01eee0e3bfa629bff969f72fd31e8242eedf1b4a576310",
+            "length": 354
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {},
+      "id": "data-retention",
+      "line": "/data-retention"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "theme",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "3cb8201e7ff1e7777446032ef1bf4338535aadbabe464c15411cdce8c2317590",
+            "length": 5
+          },
+          "type": "echo"
+        },
+        {
+          "name": "theme",
+          "type": "panel"
+        }
+      ],
+      "fixture": {},
+      "id": "theme",
+      "line": "/theme"
+    }
+  ],
   "helpCommands": [
     {
       "aliases": [
@@ -1041,6 +6106,625 @@
       "id": "whoami"
     }
   ],
+  "logLevelApply": [
+    {
+      "applied": {
+        "cleared": false,
+        "config": null,
+        "session": null
+      },
+      "chain": {},
+      "effects": [
+        {
+          "type": "closePanel"
+        },
+        {
+          "text": {
+            "digest": "cb1274ac469fee369a27eaf72ed72200fc0025b7154ba3aeedccaa5a8943212f",
+            "length": 41
+          },
+          "type": "message"
+        },
+        {
+          "level": null,
+          "type": "sessionOverride"
+        }
+      ],
+      "id": "unchanged",
+      "persistFailure": null
+    },
+    {
+      "applied": {
+        "cleared": false,
+        "config": null,
+        "session": "DEBUG"
+      },
+      "chain": {},
+      "effects": [
+        {
+          "type": "closePanel"
+        },
+        {
+          "text": {
+            "digest": "dc9ca19688e7ef1547718350579ad2778a80ba0becd97ef0a8a0cde2779fda04",
+            "length": 44
+          },
+          "type": "message"
+        },
+        {
+          "level": "DEBUG",
+          "type": "sessionOverride"
+        }
+      ],
+      "id": "session",
+      "persistFailure": null
+    },
+    {
+      "applied": {
+        "cleared": false,
+        "config": null,
+        "session": null
+      },
+      "chain": {
+        "session": "INFO"
+      },
+      "effects": [
+        {
+          "type": "closePanel"
+        },
+        {
+          "text": {
+            "digest": "903bc6e71e5d375ce53690db340b4d3b8f603cd5889f17a65bb44067e8e1d925",
+            "length": 46
+          },
+          "type": "message"
+        },
+        {
+          "level": null,
+          "type": "sessionOverride"
+        }
+      ],
+      "id": "session-cleared",
+      "persistFailure": null
+    },
+    {
+      "applied": {
+        "cleared": false,
+        "config": "ERROR",
+        "session": null
+      },
+      "chain": {},
+      "effects": [
+        {
+          "key": "log_level",
+          "type": "configWrite",
+          "value": "ERROR"
+        },
+        {
+          "type": "closePanel"
+        },
+        {
+          "text": {
+            "digest": "caf925bde8d097062bf5f96c1d558895a0e98aa1210a39c411b7ff0dd27e6f08",
+            "length": 41
+          },
+          "type": "message"
+        },
+        {
+          "level": null,
+          "type": "sessionOverride"
+        }
+      ],
+      "id": "config",
+      "persistFailure": null
+    },
+    {
+      "applied": {
+        "cleared": false,
+        "config": "INFO",
+        "session": null
+      },
+      "chain": {
+        "config": "INFO"
+      },
+      "effects": [
+        {
+          "key": "log_level",
+          "type": "configWrite",
+          "value": "INFO"
+        },
+        {
+          "type": "closePanel"
+        },
+        {
+          "text": {
+            "digest": "0c9dd2a7691bb3ebd4b1fa55f99197086e075f85df59781fe61bf625c437610e",
+            "length": 37
+          },
+          "type": "message"
+        },
+        {
+          "level": null,
+          "type": "sessionOverride"
+        }
+      ],
+      "id": "config-kept",
+      "persistFailure": null
+    },
+    {
+      "applied": {
+        "cleared": true,
+        "config": null,
+        "session": null
+      },
+      "chain": {
+        "config": "INFO"
+      },
+      "effects": [
+        {
+          "key": "log_level",
+          "type": "configWrite",
+          "value": null
+        },
+        {
+          "type": "closePanel"
+        },
+        {
+          "text": {
+            "digest": "b53bbf1f333103232d5079da2b7d43d2c19d3cc8821c6f8fd60f98b4af97cc67",
+            "length": 38
+          },
+          "type": "message"
+        },
+        {
+          "level": null,
+          "type": "sessionOverride"
+        }
+      ],
+      "id": "config-cleared",
+      "persistFailure": null
+    },
+    {
+      "applied": {
+        "cleared": false,
+        "config": "CRITICAL",
+        "session": "DEBUG"
+      },
+      "chain": {
+        "config": "INFO",
+        "session": "ERROR"
+      },
+      "effects": [
+        {
+          "key": "log_level",
+          "type": "configWrite",
+          "value": "CRITICAL"
+        },
+        {
+          "type": "closePanel"
+        },
+        {
+          "text": {
+            "digest": "537ce385402fe5406061590079b8dcaf61cab5591d5cd68d730f0677bca36632",
+            "length": 68
+          },
+          "type": "message"
+        },
+        {
+          "level": "DEBUG",
+          "type": "sessionOverride"
+        }
+      ],
+      "id": "both",
+      "persistFailure": null
+    },
+    {
+      "applied": {
+        "cleared": false,
+        "config": "ERROR",
+        "session": null
+      },
+      "chain": {
+        "env": "INFO"
+      },
+      "effects": [
+        {
+          "key": "log_level",
+          "type": "configWrite",
+          "value": "ERROR"
+        },
+        {
+          "type": "closePanel"
+        },
+        {
+          "text": {
+            "digest": "b27a5be8523b4617b96ab21b936ed771c65b4344ab45118cbdfab7018e6ef5f9",
+            "length": 38
+          },
+          "type": "message"
+        },
+        {
+          "level": null,
+          "type": "sessionOverride"
+        }
+      ],
+      "id": "env-wins",
+      "persistFailure": null
+    },
+    {
+      "applied": {
+        "cleared": false,
+        "config": null,
+        "session": null
+      },
+      "chain": {
+        "debugMode": true
+      },
+      "effects": [
+        {
+          "type": "closePanel"
+        },
+        {
+          "text": {
+            "digest": "97c73aaf910a228d82d1f2ed9de9ef29be08dc0ac52a74c4a5695a0f67ca46b5",
+            "length": 39
+          },
+          "type": "message"
+        },
+        {
+          "level": null,
+          "type": "sessionOverride"
+        }
+      ],
+      "id": "debug-mode",
+      "persistFailure": null
+    },
+    {
+      "applied": {
+        "cleared": false,
+        "config": "ERROR",
+        "session": "DEBUG"
+      },
+      "chain": {},
+      "effects": [
+        {
+          "type": "closePanel"
+        },
+        {
+          "text": {
+            "digest": "008e73e00426e9e81ca614b2fcd25c8fc51d7a1cbc5d47db0c959b5d055e7be4",
+            "length": 71
+          },
+          "type": "error"
+        },
+        {
+          "level": "DEBUG",
+          "type": "sessionOverride"
+        }
+      ],
+      "id": "persist-failure",
+      "persistFailure": "the configuration file is read-only"
+    }
+  ],
+  "logLevelPicker": [
+    {
+      "actions": [],
+      "applied": {
+        "cleared": false,
+        "config": null,
+        "session": null
+      },
+      "chain": {},
+      "id": "open-default",
+      "initialHighlight": "WARNING",
+      "subtitles": [
+        {
+          "digest": "8cbc8e9800e749e7e4355af4fba4e98623efcebf6b6a00b45144e52d9c12fc65",
+          "length": 29
+        }
+      ]
+    },
+    {
+      "actions": [],
+      "applied": {
+        "cleared": false,
+        "config": "ERROR",
+        "session": "DEBUG"
+      },
+      "chain": {
+        "config": "ERROR",
+        "session": "DEBUG"
+      },
+      "id": "open-session",
+      "initialHighlight": "DEBUG",
+      "subtitles": [
+        {
+          "digest": "ae6dc519fe0c5f2dc74fffab40370d29b9471b8d896b120f2618cf5ba2916b31",
+          "length": 43
+        }
+      ]
+    },
+    {
+      "actions": [],
+      "applied": {
+        "cleared": false,
+        "config": null,
+        "session": null
+      },
+      "chain": {
+        "env": "INFO"
+      },
+      "id": "open-env",
+      "initialHighlight": "INFO",
+      "subtitles": [
+        {
+          "digest": "10b5c5c16d47fa00803915cfecb883373adc7782fc31e89c67730a8489f15370",
+          "length": 38
+        }
+      ]
+    },
+    {
+      "actions": [],
+      "applied": {
+        "cleared": false,
+        "config": "ERROR",
+        "session": null
+      },
+      "chain": {
+        "config": "ERROR"
+      },
+      "id": "open-config",
+      "initialHighlight": "ERROR",
+      "subtitles": [
+        {
+          "digest": "89508266427803dec80c9ef6848519ce29dd08e1a82b536312bd740f350798e3",
+          "length": 38
+        }
+      ]
+    },
+    {
+      "actions": [
+        [
+          "highlight",
+          "INFO"
+        ],
+        [
+          "toggle"
+        ]
+      ],
+      "applied": {
+        "cleared": false,
+        "config": null,
+        "session": "INFO"
+      },
+      "chain": {},
+      "id": "set-session",
+      "initialHighlight": "WARNING",
+      "subtitles": [
+        {
+          "digest": "8cbc8e9800e749e7e4355af4fba4e98623efcebf6b6a00b45144e52d9c12fc65",
+          "length": 29
+        },
+        {
+          "digest": "e0a80a4644ac25f0b5b67c4ab70b4ba170c590346cc725d5be34ed8474b7750f",
+          "length": 41
+        }
+      ]
+    },
+    {
+      "actions": [
+        [
+          "toggle"
+        ]
+      ],
+      "applied": {
+        "cleared": false,
+        "config": null,
+        "session": null
+      },
+      "chain": {
+        "session": "INFO"
+      },
+      "id": "unset-session",
+      "initialHighlight": "INFO",
+      "subtitles": [
+        {
+          "digest": "e0a80a4644ac25f0b5b67c4ab70b4ba170c590346cc725d5be34ed8474b7750f",
+          "length": 41
+        },
+        {
+          "digest": "8cbc8e9800e749e7e4355af4fba4e98623efcebf6b6a00b45144e52d9c12fc65",
+          "length": 29
+        }
+      ]
+    },
+    {
+      "actions": [
+        [
+          "highlight",
+          "CRITICAL"
+        ],
+        [
+          "badge",
+          "config"
+        ],
+        [
+          "toggle"
+        ]
+      ],
+      "applied": {
+        "cleared": false,
+        "config": "CRITICAL",
+        "session": null
+      },
+      "chain": {},
+      "id": "set-config",
+      "initialHighlight": "WARNING",
+      "subtitles": [
+        {
+          "digest": "8cbc8e9800e749e7e4355af4fba4e98623efcebf6b6a00b45144e52d9c12fc65",
+          "length": 29
+        },
+        {
+          "digest": "ecc27be59c5b06c7d55610e78e4e4863daad0c97c3a0a8894a3d049affb7b8e9",
+          "length": 44
+        }
+      ]
+    },
+    {
+      "actions": [
+        [
+          "highlight",
+          "ERROR"
+        ],
+        [
+          "badge",
+          "config"
+        ],
+        [
+          "toggle"
+        ]
+      ],
+      "applied": {
+        "cleared": true,
+        "config": null,
+        "session": null
+      },
+      "chain": {
+        "config": "ERROR"
+      },
+      "id": "clear-config",
+      "initialHighlight": "ERROR",
+      "subtitles": [
+        {
+          "digest": "89508266427803dec80c9ef6848519ce29dd08e1a82b536312bd740f350798e3",
+          "length": 38
+        },
+        {
+          "digest": "8cbc8e9800e749e7e4355af4fba4e98623efcebf6b6a00b45144e52d9c12fc65",
+          "length": 29
+        }
+      ]
+    },
+    {
+      "actions": [
+        [
+          "highlight",
+          "DEBUG"
+        ],
+        [
+          "badge",
+          "config"
+        ],
+        [
+          "toggle"
+        ]
+      ],
+      "applied": {
+        "cleared": false,
+        "config": "DEBUG",
+        "session": null
+      },
+      "chain": {
+        "config": "ERROR"
+      },
+      "id": "move-config",
+      "initialHighlight": "ERROR",
+      "subtitles": [
+        {
+          "digest": "89508266427803dec80c9ef6848519ce29dd08e1a82b536312bd740f350798e3",
+          "length": 38
+        },
+        {
+          "digest": "1b8f2ffb862eec308ad02f33136de8cdb679aed657ad5af9a528a65c08253560",
+          "length": 38
+        }
+      ]
+    },
+    {
+      "actions": [
+        [
+          "badge",
+          "config"
+        ],
+        [
+          "badge",
+          "session"
+        ],
+        [
+          "highlight",
+          "ERROR"
+        ],
+        [
+          "toggle"
+        ]
+      ],
+      "applied": {
+        "cleared": false,
+        "config": null,
+        "session": "ERROR"
+      },
+      "chain": {},
+      "id": "back-to-session",
+      "initialHighlight": "WARNING",
+      "subtitles": [
+        {
+          "digest": "8cbc8e9800e749e7e4355af4fba4e98623efcebf6b6a00b45144e52d9c12fc65",
+          "length": 29
+        },
+        {
+          "digest": "c5a2c084e65c6db88697629b33bf659b52dd3191ae68deee615bd0822ec27c53",
+          "length": 43
+        }
+      ]
+    },
+    {
+      "actions": [
+        [
+          "highlight",
+          "DEBUG"
+        ],
+        [
+          "toggle"
+        ],
+        [
+          "badge",
+          "config"
+        ],
+        [
+          "highlight",
+          "INFO"
+        ],
+        [
+          "toggle"
+        ]
+      ],
+      "applied": {
+        "cleared": false,
+        "config": "INFO",
+        "session": "DEBUG"
+      },
+      "chain": {
+        "env": "WARNING"
+      },
+      "id": "both",
+      "initialHighlight": "WARNING",
+      "subtitles": [
+        {
+          "digest": "08067e0109e24ecbaec8c94afdf2e22f76db8904c3718e3fb955e573b373ffed",
+          "length": 44
+        },
+        {
+          "digest": "ae6dc519fe0c5f2dc74fffab40370d29b9471b8d896b120f2618cf5ba2916b31",
+          "length": 43
+        },
+        {
+          "digest": "ae6dc519fe0c5f2dc74fffab40370d29b9471b8d896b120f2618cf5ba2916b31",
+          "length": 43
+        }
+      ]
+    }
+  ],
   "note": "Captured from the pinned reference by scripts/parity/commands.py. Registry keys, aliases, availability sets, parse results and document structure are observations. Every reference-authored help line is recorded as a length and a SHA-256 under helpProse and never as text, because NOTICE forbids shipping reference-authored prose; the replay in crates/vibe-cli/src/tui/commands_parity_tests.rs holds this port's own help lines permanently unequal to every digest here.",
   "parse": [
     {
@@ -1536,5 +7220,177 @@
     "commit": "4a96003186b166d55b9f06895c45bb136eef61cd",
     "version": "2.25.7"
   },
-  "schemaVersion": 2
+  "schemaVersion": 3,
+  "traits": [
+    {
+      "exits": false,
+      "id": "branch",
+      "sideChannel": false
+    },
+    {
+      "exits": false,
+      "id": "clear",
+      "sideChannel": false
+    },
+    {
+      "exits": false,
+      "id": "compact",
+      "sideChannel": false
+    },
+    {
+      "exits": false,
+      "id": "config",
+      "sideChannel": false
+    },
+    {
+      "exits": false,
+      "id": "copy",
+      "sideChannel": true
+    },
+    {
+      "exits": false,
+      "id": "data-retention",
+      "sideChannel": true
+    },
+    {
+      "exits": false,
+      "id": "debug",
+      "sideChannel": true
+    },
+    {
+      "exits": true,
+      "id": "exit",
+      "sideChannel": true
+    },
+    {
+      "exits": false,
+      "id": "help",
+      "sideChannel": true
+    },
+    {
+      "exits": false,
+      "id": "leanstall",
+      "sideChannel": false
+    },
+    {
+      "exits": false,
+      "id": "log",
+      "sideChannel": true
+    },
+    {
+      "exits": false,
+      "id": "log-level",
+      "sideChannel": false
+    },
+    {
+      "exits": false,
+      "id": "loop",
+      "sideChannel": false
+    },
+    {
+      "exits": false,
+      "id": "mcp",
+      "sideChannel": false
+    },
+    {
+      "exits": false,
+      "id": "model",
+      "sideChannel": false
+    },
+    {
+      "exits": false,
+      "id": "paste-image",
+      "sideChannel": true
+    },
+    {
+      "exits": false,
+      "id": "plugins",
+      "sideChannel": false
+    },
+    {
+      "exits": false,
+      "id": "proxy-setup",
+      "sideChannel": false
+    },
+    {
+      "exits": false,
+      "id": "reload",
+      "sideChannel": false
+    },
+    {
+      "exits": false,
+      "id": "reload-plugins",
+      "sideChannel": false
+    },
+    {
+      "exits": false,
+      "id": "remote-project",
+      "sideChannel": false
+    },
+    {
+      "exits": false,
+      "id": "rename",
+      "sideChannel": true
+    },
+    {
+      "exits": false,
+      "id": "resume",
+      "sideChannel": false
+    },
+    {
+      "exits": false,
+      "id": "retry",
+      "sideChannel": false
+    },
+    {
+      "exits": false,
+      "id": "rewind",
+      "sideChannel": false
+    },
+    {
+      "exits": false,
+      "id": "skills",
+      "sideChannel": false
+    },
+    {
+      "exits": false,
+      "id": "status",
+      "sideChannel": true
+    },
+    {
+      "exits": false,
+      "id": "teleport",
+      "sideChannel": false
+    },
+    {
+      "exits": false,
+      "id": "theme",
+      "sideChannel": false
+    },
+    {
+      "exits": false,
+      "id": "thinking",
+      "sideChannel": false
+    },
+    {
+      "exits": false,
+      "id": "todo",
+      "sideChannel": false
+    },
+    {
+      "exits": false,
+      "id": "unleanstall",
+      "sideChannel": false
+    },
+    {
+      "exits": false,
+      "id": "voice",
+      "sideChannel": false
+    },
+    {
+      "exits": false,
+      "id": "whoami",
+      "sideChannel": true
+    }
+  ]
 }

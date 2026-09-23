@@ -408,12 +408,18 @@ pub(super) async fn finish_active(
 /// Renders a failed turn the way the reference does: one classified message in
 /// the transcript, never the raw driver payload, and never twice in a row.
 pub(super) fn report_turn_failure(state: &mut TuiState, error: &DriverError) {
-    let classified = diagnostics::classify(
+    let mut classified = diagnostics::classify(
         diagnostics::driver_error_code(error),
         &error.to_string(),
         &Value::Null,
         false,
     );
+    // Reference `_mount_turn_error`: a retryable failure leaves an offer
+    // `/retry` takes up, and says so.
+    if classified.class.offers_retry() {
+        state.retry_offered = true;
+        classified.message.push_str(diagnostics::RETRY_HINT);
+    }
     if !state.errors.record(&classified) {
         return;
     }

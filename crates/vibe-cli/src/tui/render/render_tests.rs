@@ -530,6 +530,7 @@ fn completion_popup_renders_reference_widths_and_scroll_bounds() {
     let visible = [
         "/help",
         "/config",
+        "/branch",
         "/clear",
         "/compact",
         "/connectors",
@@ -537,7 +538,6 @@ fn completion_popup_renders_reference_widths_and_scroll_bounds() {
         "/copy",
         "/data-retention",
         "/debug",
-        "/exit",
     ];
     for width in [40, 80, 120] {
         let backend = TestBackend::new(width, 24);

@@ -11,7 +11,7 @@ use vibe_core::config::{ProxyEnvironmentStore, ProxyKey};
 
 use super::{REFERENCE_COMMIT, Reference, pinned_python_oracle};
 use crate::tui::chat_input::{InputMode, Safety, VoicePhase};
-use crate::tui::cloud_workflow::format_loop_list;
+use crate::tui::command_handlers::format_loop_list;
 use crate::tui::completion::CompletionEngine;
 use crate::tui::input::PromptEditor;
 use crate::tui::interaction::{
@@ -24,7 +24,7 @@ use crate::tui::pickers::{
 use crate::tui::render::{BannerContext, TokenState, UiContext, draw};
 use crate::tui::setup::{DetectedTheme, Theme, resolve_theme};
 use crate::tui::state::TuiState;
-use crate::tui::workflow::{McpEffect, reduce_auth_action, valid_auth_url};
+use crate::tui::workflow::{McpEffect, reduce_auth_action, scheduled_loop, valid_auth_url};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -236,7 +236,13 @@ fn apply(event: Event) -> String {
             overlay_observation("projects", &remote_projects_overlay(&view))
         }
         Event::Loops { loops, now_seconds } => {
-            format_loop_list(&loops, now_seconds).unwrap_or_else(|error| format!("error:{error}"))
+            let parsed = loops
+                .as_array()
+                .and_then(|loops| loops.iter().map(scheduled_loop).collect::<Option<Vec<_>>>());
+            parsed.map_or_else(
+                || "error:Scheduled-loop list is malformed".to_owned(),
+                |loops| format_loop_list(&loops, now_seconds as f64),
+            )
         }
         Event::Teleport { event } => teleport_push_overlay(&event)
             .filter(|_| event.get("kind").and_then(Value::as_str) == Some("push_required"))
@@ -326,9 +332,7 @@ fn effect_observation(effect: McpEffect) -> String {
         McpEffect::Show { .. }
         | McpEffect::ShowDetail { .. }
         | McpEffect::BeginAuth { .. }
-        | McpEffect::SetEnabled { .. }
-        | McpEffect::Status
-        | McpEffect::Add { .. } => {
+        | McpEffect::SetEnabled { .. } => {
             panic!(
                 "configuration-integrations authentication fixtures must reduce to an authentication effect"
             )

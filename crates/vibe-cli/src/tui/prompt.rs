@@ -117,6 +117,26 @@ pub(super) async fn start_prompt(
     start_prompt_with_client_id(context, prompt, None, None).await
 }
 
+/// Reference `_handle_turn(..., injected=True)`: a turn the client starts on
+/// the operator's behalf, which `/retry` is.
+pub(super) async fn start_injected_prompt(
+    context: PromptContext<'_>,
+    prompt: &PromptDraft,
+) -> Result<bool, CliError> {
+    let Some(mut prepared) = prepare_prompt_for_runtime(
+        context.working_directory,
+        prompt,
+        context.runtime,
+        context.state,
+    )
+    .await?
+    else {
+        return Ok(false);
+    };
+    prepared.turn.injected = true;
+    start_prompt_with_client_id(context, prompt, None, Some(prepared)).await
+}
+
 pub(super) async fn start_prompt_with_client_id(
     context: PromptContext<'_>,
     prompt: &PromptDraft,
@@ -148,6 +168,10 @@ pub(super) async fn start_prompt_with_client_id(
         }
     };
     prepared.turn.client_user_message_id = client_message_id.map(ToOwned::to_owned);
+    // Reference `cancel_retry_presentation` and `begin_retry`: an operator's
+    // message ends the offer a failed turn left, and the continuation `/retry`
+    // sends takes it up. A retry that fails again offers it anew.
+    state.retry_offered = false;
     // Reference `_handle_turn`: narration restarts on the prepared prompt text.
     if let Some(effect) = state.narrator.cancel()
         && let Some(runtime) = runtime.as_mut()

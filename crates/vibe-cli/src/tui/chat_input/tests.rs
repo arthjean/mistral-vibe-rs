@@ -400,12 +400,12 @@ fn history_navigation_is_observed_from_the_editor() {
 #[test]
 fn teleport_mode_is_capability_gated_and_resets_without_losing_follow_up_text() {
     let mut unavailable = ChatInputState::new();
+    unavailable.set_command_context(CommandContext::default().with_excluded(["teleport"]));
     unavailable.apply(character('&'));
     assert_eq!(unavailable.observe().mode, InputMode::Prompt);
     assert_eq!(unavailable.observe().text, "&");
 
     let mut available = ChatInputState::new();
-    available.set_teleport_available(true);
     assert_eq!(
         available.apply(character('&')),
         vec![InputEffect::ModeChanged {

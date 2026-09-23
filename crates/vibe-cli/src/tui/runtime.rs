@@ -18,6 +18,7 @@ use vibe_core::telemetry::records::{ProjectPicker, TeleportTracker};
 use super::chat_input::Safety;
 use super::clipboard_images::{ImageModel, ImageModels};
 use super::cloud_workflow::CloudWorkflowState;
+use super::commands::CommandContext;
 use super::interaction::{self, Overlay};
 use super::shell::ActiveShell;
 use super::state::TuiState;
@@ -57,6 +58,10 @@ pub(super) struct InteractiveRuntime {
     pub(super) context_window: u64,
     pub(super) auto_approve: bool,
     pub(super) vibe_code_enabled: bool,
+    /// Reference `experimental_enable_registry_skills`, which gates `/skills`.
+    /// Read at startup and after every configuration change, the moments the
+    /// reference calls `_refresh_command_registry`.
+    pub(super) registry_skills_enabled: bool,
     pub(super) config_target: Option<interaction::ConfigLayerTarget>,
     pub(super) remote_project_overlay: Option<Overlay>,
     pub(super) remote_project_draft: Option<interaction::RemoteProjectDraft>,
@@ -299,8 +304,27 @@ impl Default for BannerMetrics {
     }
 }
 
-pub(super) fn teleport_available(runtime: Option<&InteractiveRuntime>) -> bool {
-    runtime.is_some_and(|runtime| runtime.vibe_code_enabled)
+/// Reference `_command_context`: the gates the registry is filtered by.
+///
+/// `experimental_harness` is always `false` because this port runs a single
+/// backend, the counterpart of the reference's default legacy one.
+pub(super) fn command_context(runtime: Option<&InteractiveRuntime>) -> CommandContext {
+    CommandContext::new(
+        runtime.is_some_and(|runtime| runtime.registry_skills_enabled),
+        false,
+    )
+}
+
+/// Reference `_refresh_command_registry` after a configuration change: the
+/// registry gate is re-read from the configuration the session now runs on.
+/// Reads `experimental_enable_registry_skills` out of a published or effective
+/// configuration view.
+pub(super) fn registry_skills_enabled(config: &Value) -> bool {
+    config
+        .get("experimental_enable_registry_skills")
+        .or_else(|| config.get("experimentalEnableRegistrySkills"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
 }
 
 #[cfg(test)]
@@ -395,6 +419,7 @@ pub(in crate::tui) fn interactive_test_runtime_with_trust(
         context_window: super::DEFAULT_CONTEXT_WINDOW,
         auto_approve: true,
         vibe_code_enabled: true,
+        registry_skills_enabled: false,
         config_target: None,
         remote_project_overlay: None,
         remote_project_draft: None,
@@ -500,12 +525,20 @@ mod tests {
         assert!(!rejected_work_ran.load(Ordering::SeqCst));
     }
 
+    /// Reference `_command_context`: the registry gate follows the
+    /// configuration, the backend gate stays closed, and `/teleport` is offered
+    /// whether or not Vibe Code is configured, as the reference has offered it
+    /// since v2.25.7.
     #[test]
-    fn teleport_mode_uses_runtime_capability_instead_of_runtime_presence() {
-        let mut runtime = interactive_test_runtime("teleport-capability-session");
-        assert!(teleport_available(Some(&runtime)));
+    fn the_command_context_follows_the_registry_gate_and_keeps_teleport_open() {
+        let mut runtime = interactive_test_runtime("command-context-session");
         runtime.vibe_code_enabled = false;
-        assert!(!teleport_available(Some(&runtime)));
-        assert!(!teleport_available(None));
+        let context = command_context(Some(&runtime));
+        assert!(!context.registry_skills_enabled);
+        assert!(!context.experimental_harness);
+        assert!(context.is_available(super::super::commands::CommandId::Teleport));
+        runtime.registry_skills_enabled = true;
+        assert!(command_context(Some(&runtime)).registry_skills_enabled);
+        assert!(!command_context(None).registry_skills_enabled);
     }
 }

@@ -261,6 +261,13 @@ pub struct TuiState {
     /// Reference `_is_file_watcher_enabled`: the gate the completion index
     /// reads on every query, refreshed with the rest of the preferences.
     pub file_watcher_for_autocomplete: bool,
+    /// Reference `_retry_presentation`: a turn failed in a way `/retry` can
+    /// continue, and no prompt has been sent since.
+    pub retry_offered: bool,
+    /// The settings field whose value the composer is holding.
+    pub value_edit: Option<super::interaction::ValueEdit>,
+    /// The `/log-level` picker's draft, while it is open.
+    pub(in crate::tui) log_level_picker: Option<super::command_handlers::log_level::Picker>,
     turn_started_ms: Option<u64>,
     scroll_line_limit: usize,
     diagnostics: VecDeque<String>,
@@ -307,6 +314,9 @@ impl TuiState {
             narrator: NarratorManager::default(),
             speech_notice_shown: false,
             file_watcher_for_autocomplete: false,
+            retry_offered: false,
+            value_edit: None,
+            log_level_picker: None,
             turn_started_ms: None,
             scroll_line_limit: 0,
             diagnostics: VecDeque::new(),
@@ -595,6 +605,33 @@ impl TuiState {
             after_entry_id,
         });
         id
+    }
+
+    /// Takes a local entry back out of the transcript. A later local entry
+    /// anchored after it is anchored where it was, so a resync still places it.
+    pub fn remove_local(&mut self, entry_id: &str) {
+        let Some(index) = self.entry_indexes.remove(entry_id) else {
+            return;
+        };
+        self.entries.remove(index);
+        for position in self.entry_indexes.values_mut() {
+            if *position > index {
+                *position -= 1;
+            }
+        }
+        let Some(removed) = self
+            .local_entries
+            .iter()
+            .position(|position| position.entry_id == entry_id)
+            .map(|position| self.local_entries.remove(position))
+        else {
+            return;
+        };
+        for position in &mut self.local_entries {
+            if position.after_entry_id.as_deref() == Some(entry_id) {
+                position.after_entry_id.clone_from(&removed.after_entry_id);
+            }
+        }
     }
 
     pub fn settle_local(&mut self, entry_id: &str, status: EntryStatus) -> Result<(), StateError> {

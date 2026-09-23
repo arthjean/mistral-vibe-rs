@@ -1,97 +1,19 @@
 use std::future::Future;
 use std::pin::Pin;
 
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 use url::Url;
 
 use super::super::clipboard::copy_text_bounded;
+use super::super::command_handlers::mcp_authenticated;
 use super::super::interaction::{
     AuthAction, AuthActionKind, IntegrationKind, IntegrationTarget, OverlayAction, OverlayKind,
 };
 use super::super::pickers::{mcp_auth_overlay, mcp_detail_overlay, mcp_overlay};
 use super::super::runtime::{schedule_ui_call, schedule_ui_external};
 use super::super::state::{EntryStatus, TuiState};
-use super::super::{InteractiveRuntime, UiOperation, push_local_notice};
+use super::super::{InteractiveRuntime, UiOperation, push_local_document, push_local_notice};
 use super::map_value;
-
-pub(super) fn handle_mcp(arguments: &str, runtime: &mut InteractiveRuntime, state: &mut TuiState) {
-    let Some(parts) = shlex::split(arguments) else {
-        state.push_diagnostic("Invalid quoting in /mcp arguments");
-        return;
-    };
-    match parts.as_slice() {
-        [] => execute_mcp_effect(
-            McpEffect::Show { filter: None },
-            runtime,
-            state,
-            &SystemUrlOpener,
-        ),
-        [subcommand] if subcommand == "status" => execute_mcp_effect(
-            McpEffect::Status,
-            runtime,
-            state,
-            &SystemUrlOpener,
-        ),
-        [subcommand, name] if subcommand == "login" => {
-            execute_mcp_effect(
-                McpEffect::BeginAuth {
-                    kind: IntegrationKind::McpServer,
-                    source: name.clone(),
-                    enable_on_complete: false,
-                },
-                runtime,
-                state,
-                &SystemUrlOpener,
-            );
-        }
-        [subcommand, name] if subcommand == "logout" => {
-            execute_mcp_effect(
-                McpEffect::Logout {
-                    source: name.clone(),
-                },
-                runtime,
-                state,
-                &SystemUrlOpener,
-            );
-        }
-        [subcommand, name] if subcommand == "connector-login" => {
-            execute_mcp_effect(
-                McpEffect::BeginAuth {
-                    kind: IntegrationKind::Connector,
-                    source: name.clone(),
-                    enable_on_complete: false,
-                },
-                runtime,
-                state,
-                &SystemUrlOpener,
-            );
-        }
-        [subcommand] if subcommand == "login" || subcommand == "logout" => {
-            state.push_diagnostic(format!("Usage: /mcp {subcommand} <alias>"));
-        }
-        [subcommand, rest @ ..] if subcommand == "add" => {
-            if let Some(params) = parse_mcp_add(rest, state) {
-                execute_mcp_effect(
-                    McpEffect::Add { params },
-                    runtime,
-                    state,
-                    &SystemUrlOpener,
-                );
-            }
-        }
-        [name] => execute_mcp_effect(
-            McpEffect::Show {
-                filter: Some(name.clone()),
-            },
-            runtime,
-            state,
-            &SystemUrlOpener,
-        ),
-        _ => state.push_diagnostic(
-            "Usage: /mcp [name|status|login <alias>|logout <alias>|add <url> [--name <alias>] [--transport http|streamable-http]]",
-        ),
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(in crate::tui) enum McpEffect {
@@ -110,10 +32,6 @@ pub(in crate::tui) enum McpEffect {
         target: IntegrationTarget,
         detail: bool,
         enabled: bool,
-    },
-    Status,
-    Add {
-        params: Map<String, Value>,
     },
     OpenUrl {
         kind: IntegrationKind,
@@ -175,8 +93,17 @@ pub(in crate::tui) enum McpPendingOperation {
     },
     CopyUrl,
     OpenUrl,
-    Status,
-    Add,
+    /// A `/mcp login` waiting for the browser: the wait elapsed, and the login
+    /// is asked whether it finished.
+    AwaitLogin {
+        source: String,
+        attempt: u32,
+    },
+    /// What the login answered when asked.
+    LoginChecked {
+        source: String,
+        attempt: u32,
+    },
 }
 
 type UrlOpenFuture = Pin<Box<dyn Future<Output = Result<(), String>> + Send + 'static>>;
@@ -278,24 +205,6 @@ pub(in crate::tui) fn execute_mcp_effect(
                     "disabled": !enabled,
                 }),
                 UiOperation::Mcp(McpPendingOperation::SetEnabled { target, detail }),
-                state,
-            );
-        }
-        McpEffect::Status => {
-            schedule_ui_call(
-                runtime,
-                "mcp/read",
-                json!({}),
-                UiOperation::Mcp(McpPendingOperation::Status),
-                state,
-            );
-        }
-        McpEffect::Add { params } => {
-            schedule_ui_call(
-                runtime,
-                "mcp/add",
-                Value::Object(params),
-                UiOperation::Mcp(McpPendingOperation::Add),
                 state,
             );
         }
@@ -412,14 +321,14 @@ fn schedule_read_integrations(
 }
 
 /// The MCP servers of a published source list, under the key the pickers read.
-fn server_sources(value: &Value) -> Value {
+pub(super) fn server_sources(value: &Value) -> Value {
     json!({"mcp": {"sources": sources_of(value, "server").collect::<Vec<_>>()}})
 }
 
 /// The connectors of a published source list, in the shape the connector picker
 /// reads: it renders an authorization state and a flat tool list, and the
 /// published source carries both under other names.
-fn connector_sources(value: &Value) -> Value {
+pub(super) fn connector_sources(value: &Value) -> Value {
     json!({
         "connectors": {
             "sources": sources_of(value, "connector")
@@ -478,6 +387,44 @@ pub(in crate::tui) fn apply_pending_operation(
             return;
         }
     };
+    match operation {
+        McpPendingOperation::AwaitLogin { source, attempt } => {
+            schedule_ui_call(
+                runtime,
+                "mcp/auth/complete",
+                json!({"name": source}),
+                UiOperation::Mcp(McpPendingOperation::LoginChecked { source, attempt }),
+                state,
+            );
+            return;
+        }
+        McpPendingOperation::LoginChecked { source, attempt } => {
+            let verified = dispatch
+                .result
+                .get("auth")
+                .and_then(|auth| auth.get("verified"))
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            if verified {
+                push_local_document(state, mcp_authenticated(&source));
+            } else if attempt < super::LOGIN_POLL_ATTEMPTS {
+                schedule_ui_external(
+                    runtime,
+                    UiOperation::Mcp(McpPendingOperation::AwaitLogin {
+                        source,
+                        attempt: attempt.saturating_add(1),
+                    }),
+                    async {
+                        tokio::time::sleep(super::LOGIN_POLL_INTERVAL).await;
+                        Ok(())
+                    },
+                    state,
+                );
+            }
+            return;
+        }
+        _ => {}
+    }
     let value = map_value(dispatch.result);
     match operation {
         McpPendingOperation::ReadIntegrations { filter, detail } => {
@@ -579,6 +526,8 @@ pub(in crate::tui) fn apply_pending_operation(
         McpPendingOperation::SetEnabled { target, detail } => {
             schedule_read_integrations(runtime, None, detail.then_some(target), state);
         }
+        // Answered before the dispatch is read as a runtime.
+        McpPendingOperation::AwaitLogin { .. } | McpPendingOperation::LoginChecked { .. } => {}
         operation @ (McpPendingOperation::CopyUrl | McpPendingOperation::OpenUrl) => {
             let message = if matches!(operation, McpPendingOperation::CopyUrl) {
                 "Authentication URL copied to the clipboard"
@@ -586,64 +535,6 @@ pub(in crate::tui) fn apply_pending_operation(
                 "Authentication URL opened in the browser"
             };
             push_local_notice(state, message, EntryStatus::Completed);
-        }
-        McpPendingOperation::Status => {
-            let sources = value
-                .pointer("/mcp/sources")
-                .and_then(Value::as_array)
-                .cloned()
-                .unwrap_or_default();
-            if sources.is_empty() {
-                push_local_notice(state, "No MCP servers configured.", EntryStatus::Completed);
-            } else {
-                let mut lines = vec!["### MCP auth status".to_owned(), String::new()];
-                for source in sources {
-                    let name = source
-                        .get("name")
-                        .and_then(Value::as_str)
-                        .unwrap_or("unknown");
-                    let status = source
-                        .get("status")
-                        .and_then(Value::as_str)
-                        .unwrap_or("unknown");
-                    lines.push(format!("- `{name}`: `{status}`"));
-                }
-                push_local_notice(state, &lines.join("\n"), EntryStatus::Completed);
-            }
-        }
-        McpPendingOperation::Add => {
-            if let Some(diagnostics) = value.get("diagnostics").and_then(Value::as_array)
-                && !diagnostics.is_empty()
-            {
-                for diagnostic in diagnostics.iter().filter_map(Value::as_str) {
-                    state.push_diagnostic(diagnostic);
-                }
-                schedule_read_integrations(runtime, None, None, state);
-                return;
-            }
-            let Some(alias) = value
-                .get("name")
-                .and_then(Value::as_str)
-                .map(ToOwned::to_owned)
-            else {
-                state.push_diagnostic("MCP add response omitted the source name");
-                return;
-            };
-            push_local_notice(
-                state,
-                &format!("MCP server `{alias}` added in disabled state"),
-                EntryStatus::Completed,
-            );
-            execute_mcp_effect(
-                McpEffect::BeginAuth {
-                    kind: IntegrationKind::McpServer,
-                    source: alias,
-                    enable_on_complete: true,
-                },
-                runtime,
-                state,
-                &SystemUrlOpener,
-            );
         }
     }
 }
@@ -658,7 +549,7 @@ pub(in crate::tui) fn valid_auth_url(value: &str) -> bool {
     })
 }
 
-async fn open_auth_url(url: String) -> Result<(), String> {
+pub(super) async fn open_auth_url(url: String) -> Result<(), String> {
     let candidates: &[(&str, &[&str])] = if cfg!(target_os = "macos") {
         &[("open", &[])]
     } else if cfg!(target_os = "windows") {
@@ -677,87 +568,6 @@ async fn open_auth_url(url: String) -> Result<(), String> {
         }
     }
     Err("Authentication URL could not be opened".to_owned())
-}
-
-fn parse_mcp_add(arguments: &[String], state: &mut TuiState) -> Option<Map<String, Value>> {
-    const USAGE: &str = "Usage: /mcp add <url> [--name <alias>] [--transport http|streamable-http]";
-    let mut url = None;
-    let mut name_seen = false;
-    let mut transport_seen = false;
-    let mut params = Map::new();
-    let mut index = 0;
-    while index < arguments.len() {
-        let key = arguments[index].as_str();
-        match key {
-            "--name" => {
-                if name_seen {
-                    state.push_diagnostic("Usage: /mcp add accepts --name only once");
-                    return None;
-                }
-                let value = mcp_option_value(arguments, index, "--name", state)?;
-                name_seen = true;
-                params.insert("name".to_owned(), json!(value));
-                index += 2;
-            }
-            "--transport" => {
-                if transport_seen {
-                    state.push_diagnostic("Usage: /mcp add accepts --transport only once");
-                    return None;
-                }
-                let value = mcp_option_value(arguments, index, "--transport", state)?;
-                if value != "streamable-http" && value != "http" {
-                    state.push_diagnostic("/mcp add transport must be `http` or `streamable-http`");
-                    return None;
-                }
-                transport_seen = true;
-                params.insert("transport".to_owned(), json!(value));
-                index += 2;
-            }
-            "--scope" | "--no-login" => {
-                state.push_diagnostic(format!(
-                    "`{key}` is not supported by this runtime; configure OAuth metadata explicitly before adding the server"
-                ));
-                return None;
-            }
-            option if option.starts_with("--") => {
-                state.push_diagnostic(format!("Unknown /mcp add option `{key}`"));
-                return None;
-            }
-            value if url.is_none() => {
-                url = Some(value.to_owned());
-                index += 1;
-            }
-            _ => {
-                state.push_diagnostic(USAGE);
-                return None;
-            }
-        }
-    }
-    let Some(url) = url else {
-        state.push_diagnostic(USAGE);
-        return None;
-    };
-    if !transport_seen {
-        params.insert("transport".to_owned(), json!("streamable-http"));
-    }
-    params.insert("url".to_owned(), json!(url));
-    params.insert("disabled".to_owned(), json!(true));
-    Some(params)
-}
-
-fn mcp_option_value<'a>(
-    arguments: &'a [String],
-    index: usize,
-    option: &str,
-    state: &mut TuiState,
-) -> Option<&'a String> {
-    let value = arguments
-        .get(index.saturating_add(1))
-        .filter(|value| !value.starts_with("--"));
-    if value.is_none() {
-        state.push_diagnostic(format!("Missing value after `{option}`"));
-    }
-    value
 }
 
 pub(super) fn refresh_selected_mcp(state: &mut TuiState) -> Option<McpEffect> {

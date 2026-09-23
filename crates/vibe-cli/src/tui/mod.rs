@@ -7,6 +7,7 @@ mod chat_input_parity_tests;
 pub mod clipboard;
 mod clipboard_images;
 mod cloud_workflow;
+mod command_handlers;
 pub mod commands;
 #[cfg(test)]
 mod commands_parity_tests;
@@ -85,7 +86,7 @@ use self::hydration::{
 use self::narration::apply_narrator_effect;
 use self::path_normalization::PathNormalizationManager;
 use self::remote_project_workflow::start_teleport;
-use self::runtime::{InteractiveRuntime, RuntimeSkill, UiOperation, teleport_available};
+use self::runtime::{InteractiveRuntime, RuntimeSkill, UiOperation, command_context};
 use self::session::{parse_runtime_skills, refresh_server_banner_metrics};
 use self::setup::{
     EnvironmentThemeDetector, ResolvedTheme, TerminalThemeDetector, Theme, resolve_theme,

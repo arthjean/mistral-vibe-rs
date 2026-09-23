@@ -59,31 +59,14 @@ const FAMILIES: [&str; 5] = ["constants", "ignoreRules", "walk", "changes", "ran
 /// prose-free note and the fixture declarations every family is measured over.
 const METADATA: [&str; 4] = ["schemaVersion", "reference", "note", "fixtures"];
 
-/// The shared cause of every `ranking` entry below, followed by what that case
-/// shows. Each entry stays scoped to its own case, so a case whose scores come
-/// back into line fails as stale on its own.
-macro_rules! fuzzy_rescored {
-    ($detail:literal) => {
-        concat!(
-            "DRIFT (v2.24.5, 50d99cf7): the reference replaced the prefix, word-boundary and \
-             consecutive strategies and their 2.0/1.8/1.3 multipliers with one DP-optimal \
-             alignment scored without a multiplier (vibe/cli/autocompletion/fuzzy.py:18-35, :47, \
-             :98-165, :168-214 at 4a960031); the candidate set is unchanged because both match \
-             exactly the subsequences, but this port still scores the best greedy strategy times \
-             20/18/13 hundredths (crates/vibe-cli/src/tui/completion/fuzzy.rs:60-85): ",
-            $detail
-        )
-    };
-}
-
 /// Cases where this build answers something other than the reference, each
 /// with the reason. A case that conforms while listed here fails the replay as
 /// a stale entry, and a case that diverges without an entry fails naming the
 /// family, the case and the observed and expected values.
 ///
 /// The non-goal `WALK_SKIP_DIR_NAMES`, exported by the reference and imported
-/// by nothing at the pinned commit, the drift the v2.25.3 cap removal opened,
-/// and one entry per ranking case the v2.24.5 fuzzy rewrite rescored.
+/// by nothing at the pinned commit, and the drift the v2.25.3 cap removal
+/// opened.
 const DIVERGENCES: &[(&str, &str)] = &[
     (
         "constants/walkSkipDirNames",
@@ -100,168 +83,6 @@ const DIVERGENCES: &[(&str, &str)] = &[
          container.py:97-101), so every indexed entry is ranked; this port still stops ranking \
          after MAX_INDEXED_ENTRIES = 32000 entries (crates/vibe-cli/src/tui/completion/path.rs:16, \
          :346), which differs only on trees past 32000 entries",
-    ),
-    (
-        "ranking/ranking/main",
-        fuzzy_rescored!(
-            "fuzzyScore differs on the one candidate (`@src/main.rs`: reference 13500, port 24300)"
-        ),
-    ),
-    (
-        "ranking/ranking/main.rs",
-        fuzzy_rescored!(
-            "fuzzyScore differs on the one candidate (`@src/main.rs`: reference 17600, port 31680)"
-        ),
-    ),
-    (
-        "ranking/ranking/lib",
-        fuzzy_rescored!(
-            "fuzzyScore differs on the one candidate (`@src/lib.rs`: reference 12300, port 22140)"
-        ),
-    ),
-    (
-        "ranking/ranking/cargo",
-        fuzzy_rescored!(
-            "fuzzyScore differs on 3 of 4 candidates (`@Cargo.toml`: reference 20300, port 40600), which reorders the list from position 2: reference `@packages/parser/package.json`, port `@packages/render/package.json`"
-        ),
-    ),
-    (
-        "ranking/ranking/Cargo.toml",
-        fuzzy_rescored!(
-            "fuzzyScore differs on the one candidate (`@Cargo.toml`: reference 27000, port 54000)"
-        ),
-    ),
-    (
-        "ranking/ranking/cargo.lock",
-        fuzzy_rescored!(
-            "fuzzyScore differs on the one candidate (`@Cargo.lock`: reference 26800, port 53600)"
-        ),
-    ),
-    (
-        "ranking/ranking/parser",
-        fuzzy_rescored!(
-            "fuzzyScore differs on 10 of 10 candidates (`@src/parser/`: reference 15900, port 28620)"
-        ),
-    ),
-    (
-        "ranking/ranking/src/parser",
-        fuzzy_rescored!(
-            "fuzzyScore differs on 4 of 4 candidates (`@src/parser/`: reference 27000, port 54000)"
-        ),
-    ),
-    (
-        "ranking/ranking/tokens",
-        fuzzy_rescored!(
-            "fuzzyScore differs on 2 of 2 candidates (`@src/parser/tokens.rs`: reference 14500, port 26100)"
-        ),
-    ),
-    (
-        "ranking/ranking/tokenstream",
-        fuzzy_rescored!(
-            "fuzzyScore differs on the one candidate (`@src/parser/tokenStream.rs`: reference 20600, port 37080)"
-        ),
-    ),
-    (
-        "ranking/ranking/table",
-        fuzzy_rescored!(
-            "fuzzyScore differs on 2 of 2 candidates (`@src/render/table.rs`: reference 13300, port 23940)"
-        ),
-    ),
-    (
-        "ranking/ranking/tablecell",
-        fuzzy_rescored!(
-            "fuzzyScore differs on the one candidate (`@src/render/tableCell.rs`: reference 18200, port 32760)"
-        ),
-    ),
-    (
-        "ranking/ranking/render",
-        fuzzy_rescored!(
-            "fuzzyScore differs on 7 of 7 candidates (`@src/render/`: reference 15900, port 20670), which reorders the list from position 0: reference `@src/render/`, port `@docs/render.md`"
-        ),
-    ),
-    (
-        "ranking/ranking/rendertest",
-        fuzzy_rescored!(
-            "fuzzyScore differs on the one candidate (`@tests/render_test.rs`: reference 19650, port 35370)"
-        ),
-    ),
-    (
-        "ranking/ranking/srcmain",
-        fuzzy_rescored!(
-            "fuzzyScore differs on the one candidate (`@src/main.rs`: reference 22250, port 40050)"
-        ),
-    ),
-    (
-        "ranking/ranking/pkgjson",
-        fuzzy_rescored!(
-            "fuzzyScore differs on 2 of 2 candidates (`@packages/parser/package.json`: reference 11450, port 17250)"
-        ),
-    ),
-    (
-        "ranking/ranking/package.json",
-        fuzzy_rescored!(
-            "fuzzyScore differs on 2 of 2 candidates (`@packages/parser/package.json`: reference 21200, port 27560)"
-        ),
-    ),
-    (
-        "ranking/ranking/.ts",
-        fuzzy_rescored!(
-            "fuzzyScore differs on the one candidate (`@packages/parser/src/index.ts`: reference 8100, port 14580)"
-        ),
-    ),
-    (
-        "ranking/ranking/md",
-        fuzzy_rescored!(
-            "fuzzyScore differs on 2 of 3 candidates (`@docs/parser.md`: reference 9500, port 17100)"
-        ),
-    ),
-    (
-        "ranking/ranking/docs/render.md",
-        fuzzy_rescored!(
-            "fuzzyScore differs on the one candidate (`@docs/render.md`: reference 32300, port 64600)"
-        ),
-    ),
-    (
-        "ranking/ranking/café",
-        fuzzy_rescored!(
-            "fuzzyScore differs on 3 of 3 candidates (`@café/`: reference 19300, port 38600)"
-        ),
-    ),
-    (
-        "ranking/ranking/naïve",
-        fuzzy_rescored!(
-            "fuzzyScore differs on the one candidate (`@café/naïve.txt`: reference 14500, port 26100)"
-        ),
-    ),
-    (
-        "ranking/hidden/.",
-        fuzzy_rescored!(
-            "fuzzyScore differs on 6 of 6 candidates (`@.config/`: reference 15700, port 31400)"
-        ),
-    ),
-    (
-        "ranking/hidden/.env",
-        fuzzy_rescored!(
-            "fuzzyScore differs on the one candidate (`@src/.env`: reference 14000, port 25200)"
-        ),
-    ),
-    (
-        "ranking/hidden/visible",
-        fuzzy_rescored!(
-            "fuzzyScore differs on the one candidate (`@visible.txt`: reference 22900, port 45800)"
-        ),
-    ),
-    (
-        "ranking/plain/guide",
-        fuzzy_rescored!(
-            "fuzzyScore differs on the one candidate (`@docs/guide.md`: reference 14500, port 26100)"
-        ),
-    ),
-    (
-        "ranking/wide/entry-0",
-        fuzzy_rescored!(
-            "fuzzyScore differs on 100 of 100 candidates (`@entry-000.txt`: reference 23400, port 46800)"
-        ),
     ),
 ];
 

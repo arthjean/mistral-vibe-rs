@@ -50,39 +50,15 @@ pub(super) fn handle_project_action(
     execute_project_command(action.into(), working_directory, runtime, state);
 }
 
-pub(super) fn handle_project_command(
-    command_arguments: &str,
+/// Reference `_vibe_code_project_command`: `/remote-project` opens the
+/// project picker and reads no arguments; what the picker offers is chosen in
+/// the picker.
+pub(super) fn open_project_picker(
     working_directory: &Path,
     runtime: &mut InteractiveRuntime,
     state: &mut TuiState,
 ) {
-    let Some(parsed_arguments) = shlex::split(command_arguments) else {
-        state.push_diagnostic("Invalid quoting in /remote-project arguments");
-        return;
-    };
-    let command = match parsed_arguments.as_slice() {
-        [] => ProjectCommand::Open,
-        [open] if open == "open" => ProjectCommand::Open,
-        [select, project_id] if select == "select" => ProjectCommand::Select(project_id.clone()),
-        [more] if more == "more" => ProjectCommand::More,
-        [create, name] if create == "create" => ProjectCommand::Create {
-            name: name.clone(),
-            default_branch: "main".to_owned(),
-        },
-        [create, name, default_branch] if create == "create" => ProjectCommand::Create {
-            name: name.clone(),
-            default_branch: default_branch.clone(),
-        },
-        [unlink] if unlink == "unlink" => ProjectCommand::Unlink,
-        [cancel] if cancel == "cancel" => ProjectCommand::Cancel,
-        _ => {
-            state.push_diagnostic(
-                "Usage: /remote-project [open|more|select <id>|create <name> [branch]|unlink|cancel]",
-            );
-            return;
-        }
-    };
-    execute_project_command(command, working_directory, runtime, state);
+    execute_project_command(ProjectCommand::Open, working_directory, runtime, state);
 }
 
 #[derive(PartialEq, Eq)]
@@ -222,43 +198,20 @@ fn execute_project_command(
     }
 }
 
+/// Reference `_handle_teleport_command`: `/teleport` teleports the session
+/// as it stands, and `&prompt` teleports it with `prompt` to run remotely.
 pub(super) fn handle_teleport_command(
-    command_arguments: &str,
+    prompt: Option<&str>,
     working_directory: &Path,
     runtime: &mut InteractiveRuntime,
     state: &mut TuiState,
 ) {
-    let arguments = command_arguments.split_whitespace().collect::<Vec<_>>();
-    if let Some(action) = arguments.first()
-        && matches!(*action, "approve" | "deny" | "cancel")
-    {
-        let Some(operation_id) = runtime.cloud.teleport_operation_id().map(ToOwned::to_owned)
-        else {
-            state.push_diagnostic("No Teleport operation is active");
-            return;
-        };
-        let (method, params) = if *action == "cancel" {
-            (
-                "vibeCode/teleport/cancel",
-                json!({"operationId": operation_id}),
-            )
-        } else {
-            (
-                "vibeCode/teleport/push/respond",
-                json!({"operationId": operation_id, "approved": *action == "approve"}),
-            )
-        };
-        schedule_project_call(
-            runtime,
-            method,
-            params,
-            ProjectPendingOperation::TeleportResponse,
-            state,
-        );
-        return;
-    }
-    let prompt = (!arguments.is_empty()).then(|| arguments.join(" "));
-    start_teleport(prompt.as_deref(), working_directory, runtime, state);
+    start_teleport(
+        prompt.filter(|prompt| !prompt.is_empty()),
+        working_directory,
+        runtime,
+        state,
+    );
 }
 
 pub(super) fn handle_teleport_push_response(

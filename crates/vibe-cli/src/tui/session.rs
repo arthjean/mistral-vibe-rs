@@ -126,6 +126,7 @@ pub(super) fn start_runtime(
         context_window: arguments.max_tokens.unwrap_or(DEFAULT_CONTEXT_WINDOW),
         auto_approve: session.intent.auto_approve,
         vibe_code_enabled: preferences.vibe_code_enabled,
+        registry_skills_enabled: preferences.registry_skills_enabled,
         config_target: None,
         remote_project_overlay: None,
         remote_project_draft: None,
@@ -156,6 +157,7 @@ struct StartupPreferences {
     mode: String,
     reasoning_effort: Option<String>,
     vibe_code_enabled: bool,
+    registry_skills_enabled: bool,
 }
 
 fn startup_preferences(
@@ -224,6 +226,7 @@ fn startup_preferences(
             })
             .and_then(Value::as_bool)
             .unwrap_or(true),
+        registry_skills_enabled: config.is_some_and(super::runtime::registry_skills_enabled),
     })
 }
 

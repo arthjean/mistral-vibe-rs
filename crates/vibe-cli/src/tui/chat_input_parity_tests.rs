@@ -67,37 +67,12 @@ struct LedgeredDivergence {
 // 4a96003 (2.25.7). Every reference path is
 // read at that commit; every port path at the state these entries were
 // measured against.
-const WHY_REGISTRY: &str = "row 2: the reference registry grew. v2.24.2 registers /log-level \
-     (vibe/cli/commands.py:103) and v2.25.3 /branch (vibe/cli/commands.py:214), both ungated, and \
-     v2.25.7 removes the Vibe Code gate, so /teleport (vibe/cli/commands.py:140) and \
-     /remote-project (vibe/cli/commands.py:145) are always registered. This port has no LogLevel or \
-     Branch command (crates/vibe-cli/src/tui/commands.rs:10-39) and offers /teleport and \
-     /remote-project only when CommandContext::vibe_code_enabled is set \
-     (crates/vibe-cli/src/tui/commands.rs:414), which the replay leaves off, so its popup lacks \
-     the missing aliases";
-const WHY_CLEAR_DESCRIPTION: &str = "row 2: v2.24.1 rewrote the /clear description \
-     (vibe/cli/commands.py:75-80), recorded here as its digest. This port still describes /clear \
-     with the 2.24.0 text (crates/vibe-cli/src/tui/commands.rs:175), whose digest the replay \
-     reports";
 const WHY_BARE_AT_LISTING: &str = "row 14: v2.25.3 answers a bare @ with \
      PathCompleter._list_current_directory (vibe/cli/autocompletion/completers.py:436-461, routed \
      at vibe/cli/autocompletion/completers.py:474-475): every non-hidden working-directory entry, \
      with no ignore rules, sorted case-insensitively, so @build.log and @ignored/ appear and \
      @README.md sorts after @notes.txt. This port answers it from its gitignore-filtered index \
      (crates/vibe-cli/src/tui/completion/path.rs:384-391 and :635-660) in its own order";
-const WHY_CARET_REQUERY: &str = "row 14: v2.24.1 re-runs completion on a pure caret move \
-     (ChatTextArea.watch_selection, vibe/cli/textual_ui/widgets/chat_input/text_area.py:452-464), \
-     so moving the caret re-ranks, reopens or closes the popup for the text before it, and a later \
-     Up, Tab or Enter acts on that popup. This port refreshes completion only after an edit bumps \
-     the editor revision (crates/vibe-cli/src/tui/chat_input.rs:585-599), so the popup keeps the \
-     list from before the move and the keys that follow act on it";
-const WHY_WHOLE_WORD_REPLACEMENT: &str = "row 14: v2.24.1 makes \
-     CommandCompleter.get_replacement_range replace the whole command word up to the first \
-     whitespace regardless of the caret (vibe/cli/autocompletion/completers.py:91-101), so Tab \
-     with the caret inside /mcp yields '/mcp add x' with the caret at 4. This port replaces only up \
-     to the caret (crates/vibe-cli/src/tui/completion.rs:740-747), yielding '/mcp p add x' with \
-     the caret at 5; the comparator reports the cursor field first, which masks the text \
-     divergence behind it";
 const WHY_PASTED_PATH_MENTION: &str = "row 14: v2.25.3 passes every paste through \
      maybe_prepend_at_for_path (vibe/cli/textual_ui/widgets/chat_input/text_area.py:387, \
      vibe/cli/textual_ui/widgets/chat_input/paste_path.py:27-40 and :80-92), which turns a pasted \
@@ -115,28 +90,6 @@ const WHY_TURN_MESSAGE: &str = "row 14: v2.24.1 renames TurnStartParams.input to
      (crates/vibe-app-server/src/client.rs:222). Masked behind that first field: with no session \
      directory v2.25.5 inlines the image as base64 (vibe/core/session/image_snapshot.py:77-82) \
      where this port records a file source";
-const WHY_PATH_RANKING: &str = "row 14: v2.24.5 rewrote the reference fuzzy scorer \
-     (vibe/cli/autocompletion/fuzzy.py, fuzzy_match at :47). Scoring the pattern /e with the \
-     2.24.0 and 2.25.7 fuzzy_match gives docs/guide.md 90.0 in both but src/inner/deep.rs 93.5 \
-     then 84.5, and PathCompleter ranks on that score here (MatchRank, \
-     vibe/cli/autocompletion/completers.py:105-115), so for @/e the reference now ranks \
-     @docs/guide.md second. This port's scorer (crates/vibe-cli/src/tui/completion/fuzzy.rs:60) \
-     still ranks @src/inner/deep.rs second, as the 2.24.0 capture did";
-const WHY_REGISTRY_AND_SLASH_RANKING: &str = "rows 2 and 14: two reference changes meet at \
-     the query /mp. The registry grew (see WHY_REGISTRY): /remote-project, always registered \
-     since v2.25.7 (vibe/cli/commands.py:145), matches mp and joins the list. And the v2.24.5 \
-     fuzzy scorer rewrite (vibe/cli/autocompletion/fuzzy.py, fuzzy_match at :47) scores compact \
-     110.0 where the 2.24.0 scorer gave 198.0, against 157.5 for mcp in both, so \
-     CommandCompleter._fuzzy_filter (vibe/cli/autocompletion/completers.py:54-68, unchanged in \
-     this range) now ranks /mcp above /compact. This port lacks /remote-project in the default \
-     context (crates/vibe-cli/src/tui/commands.rs:414) and its scorer \
-     (crates/vibe-cli/src/tui/completion/fuzzy.rs:60) still ranks /compact first";
-const WHY_TELEPORT_MODE: &str = "row 14: v2.25.7 always registers /teleport \
-     (vibe/cli/commands.py:140), so a leading & switches to teleport mode \
-     (ChatTextArea.mode_characters, vibe/cli/textual_ui/widgets/chat_input/text_area.py:804-808). \
-     This port enables that mode only when CommandContext::vibe_code_enabled is set \
-     (crates/vibe-cli/src/tui/chat_input.rs:746-748, crates/vibe-cli/src/tui/commands.rs:414), \
-     which the replay leaves off, so & stays literal prompt text";
 
 const DIVERGENCES: &[LedgeredDivergence] = &[
     LedgeredDivergence {
@@ -176,80 +129,10 @@ const DIVERGENCES: &[LedgeredDivergence] = &[
     },
     LedgeredDivergence {
         trace: "async-history-recall-closes",
-        dimension: "state",
-        path: "completion.items",
-        events: &[4, 5],
-        reason: WHY_CARET_REQUERY,
-    },
-    LedgeredDivergence {
-        trace: "async-history-recall-closes",
-        dimension: "effects",
-        path: "$",
-        events: &[5],
-        reason: WHY_CARET_REQUERY,
-    },
-    LedgeredDivergence {
-        trace: "async-history-recall-closes",
         dimension: "render",
         path: "popupRows",
         events: &[0],
         reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "async-history-recall-closes",
-        dimension: "render",
-        path: "popupRows",
-        events: &[4],
-        reason: WHY_CARET_REQUERY,
-    },
-    LedgeredDivergence {
-        trace: "async-history-recall-closes",
-        dimension: "render",
-        path: "cursorCell[1]",
-        events: &[5],
-        reason: WHY_CARET_REQUERY,
-    },
-    LedgeredDivergence {
-        trace: "commands-excluded",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "commands-excluded",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "commands-full-surface",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "commands-full-surface",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "commands-unknown-alias",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "commands-unknown-alias",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0],
-        reason: WHY_REGISTRY,
     },
     LedgeredDivergence {
         trace: "corpus-dot-query",
@@ -322,13 +205,6 @@ const DIVERGENCES: &[LedgeredDivergence] = &[
         reason: WHY_PASTED_PATH_MENTION,
     },
     LedgeredDivergence {
-        trace: "external-editor-refreshes-completion",
-        dimension: "state",
-        path: "completion.items",
-        events: &[5],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
         trace: "history-down-restores-draft",
         dimension: "state",
         path: "history.loadedEntry",
@@ -358,24 +234,10 @@ const DIVERGENCES: &[LedgeredDivergence] = &[
     },
     LedgeredDivergence {
         trace: "mention-external-path-submission",
-        dimension: "state",
-        path: "completion.items[1].label",
-        events: &[10],
-        reason: WHY_PATH_RANKING,
-    },
-    LedgeredDivergence {
-        trace: "mention-external-path-submission",
         dimension: "render",
         path: "popupRows",
         events: &[8],
         reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "mention-external-path-submission",
-        dimension: "render",
-        path: "popupRows[1]",
-        events: &[10],
-        reason: WHY_PATH_RANKING,
     },
     LedgeredDivergence {
         trace: "mention-image-payload-submission",
@@ -413,62 +275,6 @@ const DIVERGENCES: &[LedgeredDivergence] = &[
         reason: WHY_BARE_AT_LISTING,
     },
     LedgeredDivergence {
-        trace: "mode-backspace-keeps-text",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0, 1, 3, 4],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "mode-backspace-resets",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "modes-slash-prefix",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0, 1],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "modes-slash-prefix",
-        dimension: "state",
-        path: "completion.items[0].description.digest",
-        events: &[2],
-        reason: WHY_CLEAR_DESCRIPTION,
-    },
-    LedgeredDivergence {
-        trace: "modes-teleport-available",
-        dimension: "state",
-        path: "mode",
-        events: &[0, 1, 2, 3, 4, 5, 6],
-        reason: WHY_TELEPORT_MODE,
-    },
-    LedgeredDivergence {
-        trace: "modes-teleport-available",
-        dimension: "effects",
-        path: "[0].mode",
-        events: &[0],
-        reason: WHY_TELEPORT_MODE,
-    },
-    LedgeredDivergence {
-        trace: "modes-teleport-available",
-        dimension: "render",
-        path: "cursorCell[1]",
-        events: &[0, 1, 2, 3, 4, 5, 6],
-        reason: WHY_TELEPORT_MODE,
-    },
-    LedgeredDivergence {
-        trace: "paste-mode-characters",
-        dimension: "state",
-        path: "completion.items[0].description.digest",
-        events: &[0],
-        reason: WHY_CLEAR_DESCRIPTION,
-    },
-    LedgeredDivergence {
         trace: "path-accept-directory",
         dimension: "state",
         path: "completion.items",
@@ -505,38 +311,10 @@ const DIVERGENCES: &[LedgeredDivergence] = &[
     },
     LedgeredDivergence {
         trace: "path-mid-token-completion",
-        dimension: "state",
-        path: "completion.items",
-        events: &[16, 17],
-        reason: WHY_CARET_REQUERY,
-    },
-    LedgeredDivergence {
-        trace: "path-mid-token-completion",
-        dimension: "state",
-        path: "cursor",
-        events: &[18],
-        reason: WHY_CARET_REQUERY,
-    },
-    LedgeredDivergence {
-        trace: "path-mid-token-completion",
         dimension: "render",
         path: "popupRows",
         events: &[8],
         reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "path-mid-token-completion",
-        dimension: "render",
-        path: "popupRows",
-        events: &[16, 17],
-        reason: WHY_CARET_REQUERY,
-    },
-    LedgeredDivergence {
-        trace: "path-mid-token-completion",
-        dimension: "render",
-        path: "cursorCell[1]",
-        events: &[18],
-        reason: WHY_CARET_REQUERY,
     },
     LedgeredDivergence {
         trace: "path-trigger-after-punctuation",
@@ -609,48 +387,6 @@ const DIVERGENCES: &[LedgeredDivergence] = &[
         reason: WHY_BARE_AT_LISTING,
     },
     LedgeredDivergence {
-        trace: "popup-render-120",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0, 1],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "popup-render-120",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0, 1],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "popup-render-40",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0, 1],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "popup-render-40",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0, 1],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "popup-render-80",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0, 1],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "popup-render-80",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0, 1],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
         trace: "popup-render-path-bound",
         dimension: "state",
         path: "completion.items",
@@ -663,300 +399,6 @@ const DIVERGENCES: &[LedgeredDivergence] = &[
         path: "popupRows",
         events: &[0],
         reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "slash-double-marker",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-double-marker",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-no-match",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-no-match",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-arrows",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0, 1, 2, 3, 4],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-arrows",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0, 1, 2, 3, 4],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-caret-at-line-start",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0, 1],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-caret-at-line-start",
-        dimension: "state",
-        path: "completion.items[0].description.digest",
-        events: &[2],
-        reason: WHY_CLEAR_DESCRIPTION,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-caret-at-line-start",
-        dimension: "state",
-        path: "completion.items",
-        events: &[3],
-        reason: WHY_CARET_REQUERY,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-caret-at-line-start",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0, 1],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-caret-at-line-start",
-        dimension: "render",
-        path: "popupRows",
-        events: &[3],
-        reason: WHY_CARET_REQUERY,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-enter-submits",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0, 1],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-enter-submits",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0, 1],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-escape",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0, 1, 2],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-escape",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0, 1, 2],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-mid-token-cursor",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0, 1, 16],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-mid-token-cursor",
-        dimension: "state",
-        path: "completion.items",
-        events: &[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
-        reason: WHY_REGISTRY_AND_SLASH_RANKING,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-mid-token-cursor",
-        dimension: "state",
-        path: "completion.items",
-        events: &[15],
-        reason: WHY_CARET_REQUERY,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-mid-token-cursor",
-        dimension: "state",
-        path: "cursor",
-        events: &[17],
-        reason: WHY_WHOLE_WORD_REPLACEMENT,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-mid-token-cursor",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0, 1, 16],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-mid-token-cursor",
-        dimension: "render",
-        path: "popupRows",
-        events: &[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
-        reason: WHY_REGISTRY_AND_SLASH_RANKING,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-mid-token-cursor",
-        dimension: "render",
-        path: "popupRows",
-        events: &[15],
-        reason: WHY_CARET_REQUERY,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-mid-token-cursor",
-        dimension: "render",
-        path: "cursorCell[1]",
-        events: &[17],
-        reason: WHY_WHOLE_WORD_REPLACEMENT,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-right",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0, 1, 3],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-right",
-        dimension: "state",
-        path: "completion.items",
-        events: &[2],
-        reason: WHY_CARET_REQUERY,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-right",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0, 1, 3],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-right",
-        dimension: "render",
-        path: "popupRows",
-        events: &[2],
-        reason: WHY_CARET_REQUERY,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-tab-applies",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0, 1],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-tab-applies",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0, 1],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-wraps-selection",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0, 1, 2],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-popup-wraps-selection",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0, 1, 2],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-ranking-c",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0, 1],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-ranking-c",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0, 1],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-ranking-empty-boosts",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-ranking-empty-boosts",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-ranking-fuzzy",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0, 1],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-ranking-fuzzy",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0, 1],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-skill-entries",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0, 1, 2],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-skill-entries",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0, 1, 2],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-uppercase-alias",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0, 1],
-        reason: WHY_REGISTRY,
-    },
-    LedgeredDivergence {
-        trace: "slash-uppercase-alias",
-        dimension: "state",
-        path: "completion.items[0].description.digest",
-        events: &[2],
-        reason: WHY_CLEAR_DESCRIPTION,
-    },
-    LedgeredDivergence {
-        trace: "slash-uppercase-alias",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0, 1],
-        reason: WHY_REGISTRY,
     },
 ];
 const OBSERVABLE_EFFECTS: &[&str] = &[
@@ -1351,10 +793,6 @@ impl Replay {
         {
             state.set_viewport_width(width);
         }
-        let vibe_code_enabled = setup
-            .pointer("/commands/vibeCodeEnabled")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
         let excluded = setup
             .pointer("/commands/excluded")
             .and_then(Value::as_array)
@@ -1362,9 +800,8 @@ impl Replay {
             .flatten()
             .filter_map(Value::as_str)
             .collect::<Vec<_>>();
-        state.set_command_context(
-            CommandContext::new(vibe_code_enabled).with_excluded(excluded.iter().copied()),
-        );
+        state
+            .set_command_context(CommandContext::default().with_excluded(excluded.iter().copied()));
         state.set_user_skills(
             skills
                 .iter()

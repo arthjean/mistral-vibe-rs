@@ -25,12 +25,12 @@ use std::path::Path;
 
 #[test]
 fn official_textual_commands_are_all_registered_with_their_aliases() {
-    // This list is this port's default registry, not a measurement. The 2.25.7
-    // reference also registers /branch and /log-level and no longer gates
-    // /teleport and /remote-project; the chat-input corpus measures that and
-    // `WHY_REGISTRY` in `chat_input_parity_tests.rs` ledgers it.
+    // This port's default registry: the reference's under a context that opens
+    // neither the registry-skills nor the experimental-harness gate, which the
+    // commands corpus measures family by family.
     let aliases = command_aliases().collect::<Vec<_>>();
     let mut expected = vec![
+        "/branch",
         "/clear",
         "/compact",
         "/config",
@@ -43,17 +43,20 @@ fn official_textual_commands_are_all_registered_with_their_aliases() {
         "/help",
         "/leanstall",
         "/log",
+        "/log-level",
         "/loop",
         "/mcp",
         "/model",
         "/new",
         "/proxy-setup",
         "/reload",
+        "/remote-project",
         "/rename",
         "/resume",
         "/retry",
         "/rewind",
         "/status",
+        "/teleport",
         "/theme",
         "/thinking",
         "/unleanstall",
@@ -106,7 +109,7 @@ fn official_textual_commands_are_all_registered_with_their_aliases() {
 
 #[test]
 fn command_availability_tracks_capabilities_exclusions_and_platform_support() {
-    let context = CommandContext::new(true).with_excluded(["voice"]);
+    let context = CommandContext::new(true, true).with_excluded(["voice"]);
     let aliases = command_aliases_in(&context).collect::<Vec<_>>();
     assert!(aliases.contains(&"/teleport"));
     assert!(aliases.contains(&"/remote-project"));
@@ -375,19 +378,27 @@ async fn a_submitted_command_renders_under_the_slash_prompt_and_writes_no_user_m
     let arguments =
         <crate::Arguments as clap::Parser>::try_parse_from(["vibe"]).expect("arguments");
     let mut state = TuiState::new("session");
+    let context = CommandContext::new(true, true).with_clipboard_image_supported(true);
     let mut composer = crate::tui::chat_input::ChatInputState::new();
-    composer.set_command_context(CommandContext::new(true).with_clipboard_image_supported(true));
+    composer.set_command_context(context.clone());
+    let mut controls = crate::tui::controls::ControlState::new("session");
+    let mut theme = crate::tui::setup::resolve_theme(
+        crate::tui::setup::Theme::Dark,
+        crate::tui::setup::DetectedTheme::Dark,
+        true,
+    );
     let mut runtime = None;
-    crate::tui::workflow::dispatch_command(
-        "/exit",
+    let mut backend = crate::tui::workflow::LiveBackend::new(
         &arguments,
         Path::new("/workspace"),
         &mut runtime,
         &mut state,
+        &mut controls,
         &mut composer,
-        crate::tui::submission::Availability::Idle,
-    )
-    .await;
+        &mut theme,
+        false,
+    );
+    crate::tui::workflow::run_command("/exit", &context, &mut backend).await;
 
     let rows = transcript_rows(&mut state, 16);
     let echoes = rows
@@ -448,7 +459,7 @@ fn assistant_markdown_is_rendered_semantically_instead_of_literally() {
 /// naming keys and commands lose their backticks.
 #[test]
 fn the_help_document_renders_as_markdown_in_the_transcript() {
-    let context = CommandContext::new(true).with_clipboard_image_supported(true);
+    let context = CommandContext::new(true, true).with_clipboard_image_supported(true);
     let mut state = TuiState::new("session");
     state.entries.push(TranscriptEntry {
         id: "help".to_owned(),
@@ -458,9 +469,9 @@ fn the_help_document_renders_as_markdown_in_the_transcript() {
         status: EntryStatus::Completed,
         source: EntrySource::Restored,
     });
-    // The document is 46 lines: a viewport that only shows its tail cannot say
+    // The document is 52 lines: a viewport that only shows its tail cannot say
     // whether the headings render.
-    let text = rendered_transcript(&mut state, 60);
+    let text = rendered_transcript(&mut state, 80);
 
     assert!(text.contains("Key Bindings"));
     assert!(!text.contains("### Key Bindings"));

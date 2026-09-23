@@ -20,7 +20,6 @@ use vibe_core::updates::UpdateCacheStore;
 use super::callback::{drain_callback_requests, sync_active_callbacks, sync_callback_presentation};
 use super::chat_input::{ChatInputState, InputEvent, Safety, VoicePhase};
 use super::clipboard_images::ClipboardImageManager;
-use super::commands::CommandContext;
 use super::composer::{
     apply_effects as apply_composer_effects, apply_event as apply_composer_event,
 };
@@ -36,7 +35,7 @@ use super::prompt::PromptContext;
 use super::queue::start_next_queued_prompt;
 use super::render::{BannerContext, TokenState, UiContext, draw};
 use super::runtime::{
-    BannerMetrics, InteractiveRuntime, apply_ui_operation_completion, teleport_available,
+    BannerMetrics, InteractiveRuntime, apply_ui_operation_completion, command_context,
 };
 use super::session::{banner_metrics_from_workspace, start_runtime};
 use super::setup::{EnvironmentThemeDetector, ResolvedTheme, TerminalThemeDetector, Theme};
@@ -451,6 +450,12 @@ pub async fn run_interactive(
         // Reference `_on_config_changed`: rendering, notification, and narration
         // preferences apply before the first frame, not only after an edit.
         workflow::apply_render_preferences(runtime, &mut state);
+        // Reference `_build_command_registry` reads the registry-skills gate
+        // once, when the session is ready, and never rebuilds the registry.
+        runtime.registry_skills_enabled = runtime
+            .published_config()
+            .as_ref()
+            .is_some_and(super::runtime::registry_skills_enabled);
     }
     announce_release_notes(&update_cache, &mut state);
     // Reference `_schedule_update_notification`: refresh the cache for the next
@@ -476,7 +481,7 @@ pub async fn run_interactive(
     );
     input.replace_history(history_load.entries);
     input.set_viewport_width(state.viewport.0);
-    input.set_command_context(CommandContext::new(teleport_available(runtime.as_ref())));
+    input.set_command_context(command_context(runtime.as_ref()));
     if let Some(diagnostic) = history_load.diagnostic {
         state.push_diagnostic(diagnostic);
     }

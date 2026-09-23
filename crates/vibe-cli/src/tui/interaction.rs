@@ -30,6 +30,29 @@ pub enum OverlayKind {
     RemoteProjects,
     RemoteProjectCreate,
     TeleportApproval,
+    LogLevel,
+    Skills,
+    Todos,
+}
+
+/// A settings field whose new value the operator is typing into the composer.
+///
+/// The reference edits these inline in its settings screens. This client's
+/// panels are lists, so the value is typed where every other line is typed,
+/// and `Enter` saves it rather than submitting it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ValueEdit {
+    Config { target: String, key: String },
+    Proxy { key: String },
+}
+
+impl ValueEdit {
+    #[must_use]
+    pub fn field(&self) -> &str {
+        match self {
+            Self::Config { key, .. } | Self::Proxy { key } => key,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -226,6 +249,17 @@ impl Overlay {
             query: String::new(),
             notice: None,
             selected,
+        }
+    }
+
+    /// Moves the selection onto the item `id` names, when it is selectable.
+    pub fn select_id(&mut self, id: &str) {
+        if let Some(index) = self
+            .items
+            .iter()
+            .position(|item| item.id == id && !item.disabled)
+        {
+            self.selected = Some(index);
         }
     }
 

@@ -146,13 +146,6 @@ impl ChatInputState {
         self.feedback_active
     }
 
-    pub fn set_teleport_available(&mut self, available: bool) {
-        self.completion.set_vibe_code_enabled(available);
-        if !self.teleport_available() && self.mode == InputMode::Teleport {
-            self.mode = InputMode::Prompt;
-        }
-    }
-
     pub fn set_command_context(&mut self, context: CommandContext) {
         self.completion.set_command_context(context);
         if !self.teleport_available() && self.mode == InputMode::Teleport {
@@ -312,6 +305,15 @@ impl ChatInputState {
     /// honored yields [`InputEffect::Rejected`] and leaves the state valid.
     pub fn apply(&mut self, event: InputEvent) -> Vec<InputEffect> {
         let mut effects = Vec::new();
+        // Reference `ChatTextArea.watch_selection`: a key or a click that moves
+        // the caret or the selection without changing the text re-runs
+        // completion at the new caret.
+        let moves_caret = matches!(event, InputEvent::Key { .. } | InputEvent::Mouse { .. });
+        let caret_before = (
+            self.editor.revision(),
+            self.editor.cursor(),
+            self.editor.selection(),
+        );
         match event {
             InputEvent::Key { key, char, mods } => {
                 self.apply_key(key, char, &mods, &mut effects);
@@ -401,6 +403,12 @@ impl ChatInputState {
             }
             InputEvent::Resize { width, height } => self.set_viewport(width, height),
             InputEvent::SafetyChanged { value } => self.safety = value,
+        }
+        if moves_caret
+            && self.editor.revision() == caret_before.0
+            && (self.editor.cursor(), self.editor.selection()) != (caret_before.1, caret_before.2)
+        {
+            self.refresh_completion(&mut effects);
         }
         effects
     }
@@ -706,13 +714,15 @@ impl ChatInputState {
     }
 
     fn refresh_completion(&mut self, effects: &mut Vec<InputEffect>) {
-        self.completion.cancel();
         if self.secret_input {
+            self.completion.cancel();
             return;
         }
         let Some((range, query)) = active_token(&self.editor) else {
+            self.completion.cancel();
             return;
         };
+        self.completion.requery();
         effects.push(InputEffect::RequestCompletion {
             request: CompletionRequest::new(self.completion.generation(), range, query),
         });

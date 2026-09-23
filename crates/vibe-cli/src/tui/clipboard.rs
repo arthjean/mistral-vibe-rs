@@ -28,6 +28,24 @@ pub(in crate::tui) fn copy_and_report(state: &mut TuiState, subject: &str, text:
     }
 }
 
+/// Reference `copy_to_clipboard`: outside an SSH session the platform command
+/// is tried first, and only its success counts as verified; the terminal
+/// escape is written either way, so a copy is never refused outright.
+pub(in crate::tui) fn copy_text_verified(text: &str) -> bool {
+    if text.is_empty() {
+        return false;
+    }
+    let ssh = ["SSH_CONNECTION", "SSH_TTY"]
+        .into_iter()
+        .any(|name| std::env::var_os(name).is_some_and(|value| !value.is_empty()));
+    let verified = !ssh
+        && copy_commands()
+            .iter()
+            .any(|(program, arguments)| write_command(program, arguments, text.as_bytes()).is_ok());
+    drop(write_osc52(text));
+    verified
+}
+
 #[cfg(test)]
 use vibe_core::images::MAX_IMAGE_BYTES;
 use vibe_core::images::{ImageDigest, validate_image_size};

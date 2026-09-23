@@ -56,6 +56,9 @@ pub struct CompletionEngine {
     /// One index per process, shared with the worker so a workspace root is
     /// walked once however a mention query is answered.
     path_index: PathIndex,
+    /// The list and highlight a re-query replaced, so an answer with the same
+    /// list keeps the highlight.
+    carried: Option<(Vec<CompletionCandidate>, usize)>,
 }
 
 #[derive(Debug, Clone)]
@@ -269,13 +272,6 @@ impl CompletionEngine {
         &self.command_context
     }
 
-    pub fn set_vibe_code_enabled(&mut self, enabled: bool) {
-        if self.command_context.vibe_code_enabled != enabled {
-            self.command_context.vibe_code_enabled = enabled;
-            self.cancel();
-        }
-    }
-
     pub fn set_command_context(&mut self, context: CommandContext) {
         if self.command_context != context {
             self.command_context = context;
@@ -335,7 +331,7 @@ impl CompletionEngine {
             self.cancel();
             return Ok(());
         };
-        self.cancel();
+        self.requery();
         let request = CompletionRequest::new(self.generation, token_range, query);
         if let Some(resolution) = self.dispatch_request(request, workspace)? {
             let _ = self.apply_resolution(editor, resolution);
@@ -478,6 +474,7 @@ impl CompletionEngine {
         candidates: Vec<CompletionCandidate>,
     ) {
         self.active = None;
+        let carried = self.carried.take();
         let mut result = ranked_completion(generation, query, candidates);
         if result
             .candidates
@@ -487,10 +484,13 @@ impl CompletionEngine {
             result.candidates.truncate(MAX_VISIBLE_COMPLETIONS);
         }
         if !result.candidates.is_empty() {
+            let selected = carried
+                .filter(|(previous, _)| *previous == result.candidates)
+                .map_or(0, |(_, selected)| selected);
             self.active = Some(ActiveCompletion {
                 token_range,
                 result,
-                selected: 0,
+                selected,
             });
         }
     }
@@ -611,6 +611,23 @@ impl CompletionEngine {
     }
 
     pub fn cancel(&mut self) {
+        self.carried = None;
+        self.retire();
+    }
+
+    /// Supersedes the open list with a query about to be answered. Reference
+    /// `SlashCommandController.on_text_changed` and its path counterpart keep
+    /// the highlighted row when the new answer is the same list, which a caret
+    /// move usually produces.
+    pub fn requery(&mut self) {
+        self.carried = self
+            .active
+            .take()
+            .map(|active| (active.result.candidates, active.selected));
+        self.retire();
+    }
+
+    fn retire(&mut self) {
         self.generation = self.generation.saturating_add(1);
         self.active = None;
         if let Some(worker) = &self.worker {
@@ -743,8 +760,11 @@ fn slash_token(text: &str, cursor_byte: usize) -> Option<(Range<usize>, String)>
     // yields the empty head word the reference answers with the full list, and
     // a second slash stays inside the query, where it matches no alias.
     let head_word = &text[1..query_end.max(1)];
+    // `CommandCompleter.get_replacement_range` replaces the whole command
+    // word, up to the first whitespace of any kind, wherever the caret sits.
+    let word_end = text.find(char::is_whitespace).unwrap_or(text.len());
     Some((
-        0..grapheme_count(&text[..query_end]),
+        0..grapheme_count(&text[..word_end]),
         format!("/{head_word}"),
     ))
 }
@@ -1000,7 +1020,6 @@ mod tests {
     fn capability_updates_preserve_command_exclusions() {
         let mut engine = CompletionEngine::default();
         engine.set_command_context(CommandContext::default().with_excluded(["voice"]));
-        engine.set_vibe_code_enabled(true);
         let labels = engine
             .prompt_candidates(Path::new("/workspace"), "/")
             .expect("in-memory slash candidates")
@@ -1089,14 +1108,15 @@ mod tests {
         assert_eq!(slash_token("///", 3), Some((0..3, "///".to_owned())));
         assert_eq!(
             slash_token("/help", 0),
-            Some((0..0, "/".to_owned())),
+            Some((0..5, "/".to_owned())),
             "a caret before the marker searches for the empty head word"
         );
         assert_eq!(
             slash_token("/mcp add x", 3),
-            Some((0..3, "/mc".to_owned())),
-            "the head word and its range both end at the caret, not at the space"
+            Some((0..4, "/mc".to_owned())),
+            "the head word ends at the caret and the range at the first whitespace"
         );
+        assert_eq!(slash_token("/mcp\nnext", 2), Some((0..4, "/m".to_owned())));
         assert_eq!(slash_token("/", 1), Some((0..1, "/".to_owned())));
         assert_eq!(
             slash_token("/help", 6),
@@ -1104,6 +1124,32 @@ mod tests {
             "`SlashCommandController.on_text_changed` drops a caret past the text"
         );
         assert_eq!(slash_token("help", 4), None, "a bare line is not a command");
+    }
+
+    /// Reference `SlashCommandController.on_text_changed`: a re-query that
+    /// answers the same list keeps the highlighted row, and one that answers
+    /// another list starts over at the top.
+    #[test]
+    fn a_requery_with_the_same_list_keeps_the_highlight() {
+        let workspace = Path::new("/workspace");
+        let mut editor = PromptEditor::default();
+        editor.set_text("/co x");
+        let mut engine = CompletionEngine::default();
+        engine
+            .refresh(&editor, workspace)
+            .expect("slash completion");
+        assert!(engine.move_selection(1));
+        editor.move_left(false);
+        engine
+            .refresh(&editor, workspace)
+            .expect("slash completion");
+        assert_eq!(engine.view().map(|view| view.selected), Some(1));
+
+        editor.set_text("/c x");
+        engine
+            .refresh(&editor, workspace)
+            .expect("slash completion");
+        assert_eq!(engine.view().map(|view| view.selected), Some(0));
     }
 
     /// `ChatInputContainer._format_insertion`, branch by branch.

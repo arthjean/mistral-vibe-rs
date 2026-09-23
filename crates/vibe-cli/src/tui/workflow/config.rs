@@ -186,15 +186,6 @@ pub(super) fn update_proxy_value(
     }
 }
 
-pub(super) fn reset_config_value(
-    path: &str,
-    runtime: &mut InteractiveRuntime,
-    state: &mut TuiState,
-) {
-    let target = selected_config_target(runtime).unwrap_or_else(|| "user".to_owned());
-    reset_config_value_at(path, &target, runtime, state);
-}
-
 pub(super) fn reset_config_value_at(
     path: &str,
     target: &str,
@@ -379,6 +370,14 @@ pub(in crate::tui) fn apply_render_preferences(
     state.ask_confirmation_on_exit = configured_value(runtime, "ask_confirmation_on_exit")
         .and_then(|value| value.as_bool())
         .unwrap_or(true);
+    // Reference `_normalize_log_level`: the configured level, case-insensitive,
+    // sits under the session override and the environment.
+    vibe_core::observability::set_config_log_level(
+        configured_value(runtime, "log_level")
+            .as_ref()
+            .and_then(Value::as_str)
+            .and_then(|level| vibe_core::observability::LogLevel::parse(level.trim())),
+    );
     // Reference `_is_file_watcher_enabled`: the completion index watches the
     // workspace only while this key is on, and stops watching when it goes off.
     state.file_watcher_for_autocomplete =

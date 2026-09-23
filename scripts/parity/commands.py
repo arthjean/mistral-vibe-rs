@@ -50,9 +50,11 @@ checkout whose virtual environment sits somewhere else.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import contextlib
 import hashlib
 import json
+import logging
 import os
 from pathlib import Path
 import shutil
@@ -66,7 +68,7 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, EXPECTED_VERSION, RESTORE_COMMAND
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 DEFAULT_OUTPUT = Path("crates/vibe-cli/tests/commands/corpus.json")
 DEFAULT_CACHE = Path(".parity")
 INTERPRETER_VARIABLE = "VIBE_PARITY_PYTHON"
@@ -612,6 +614,1042 @@ def capture_help(module: Any, registry: Any) -> dict[str, list[dict[str, Any]]]:
     }
 
 
+# --------------------------------------------------------------------------
+# Command traits
+# --------------------------------------------------------------------------
+
+
+def capture_traits(registry: Any) -> list[dict[str, Any]]:
+    """What each command declares about how it runs: whether it runs on the side
+    channel while a job holds the composer, and whether running it ends the
+    session."""
+
+    return [
+        {"id": name, "sideChannel": command.side_channel, "exits": command.exits}
+        for name, command in sorted(registry.commands.items())
+    ]
+
+
+# --------------------------------------------------------------------------
+# Handlers, dispatch and the log-level panel
+# --------------------------------------------------------------------------
+#
+# The reference's command handlers are methods of ``VibeApp``, a Textual app
+# that needs a terminal, an app server and a session to exist. The capture runs
+# those methods anyway, bound to ``StubApp``: an object whose UI surface records
+# what it is asked to show and whose app-server resources answer from a fixture
+# the scenario authors. Every attribute ``StubApp`` does not define resolves to
+# the reference's own ``VibeApp`` member, so the code that decides what a
+# command does is the pinned reference's. What is recorded is what an operator
+# observes: messages by kind, each text as a length and a SHA-256, panels by
+# name, telemetry, submitted turns, the clipboard, exits and refusals.
+
+
+class _Boom(Exception):
+    """The failure a fixture raises. Its text is authored by this script."""
+
+
+def _ns(**values: Any) -> Any:
+    import types
+
+    return types.SimpleNamespace(**values)
+
+
+def _objectify(value: Any) -> Any:
+    if isinstance(value, dict):
+        return _ns(**{key: _objectify(item) for key, item in value.items()})
+    if isinstance(value, list):
+        return [_objectify(item) for item in value]
+    return value
+
+
+def _fail_if_requested(value: Any) -> None:
+    if isinstance(value, dict) and "raise" in value:
+        raise _Boom(value["raise"])
+    if isinstance(value, dict) and "error" in value:
+        raise _response_error(value["error"])
+
+
+def _response_error(message: str) -> Exception:
+    from vibe.app_server.protocol import (
+        AppServerResponseError,
+        ProtocolError,
+        ProtocolErrorCode,
+    )
+
+    return AppServerResponseError(
+        ProtocolError(code=ProtocolErrorCode.INVALID_PARAMS, message=message)
+    )
+
+
+class _Capture:
+    """Everything one scenario did that an operator could observe, in order."""
+
+    def __init__(self) -> None:
+        self.items: list[Any] = []
+
+    def add(self, **effect: Any) -> None:
+        self.items.append(effect)
+
+    def widget(self, widget: Any) -> None:
+        self.items.append(widget)
+
+
+#: Refusal sentences the reference publishes through ``_warn_not_queueable``,
+#: recorded by the reason they state rather than by their prose.
+_REFUSALS = (
+    ("Slash commands cannot be queued", "slashCommand"),
+    ("Teleport cannot be queued", "teleport"),
+    ("Shell commands cannot be queued", "shell"),
+    ("Input cannot be queued while a shell command is running", "shellRunning"),
+    ("A slash command is already running", "sideChannelBusy"),
+)
+
+
+def _widget_effect(widget: Any) -> dict[str, Any]:
+    from vibe.cli.textual_ui.widgets.status_message import IndicatorState, StatusMessage
+
+    name = type(widget).__name__
+    if name == "SlashCommandMessage":
+        return {"type": "echo", "text": widget._content}  # noqa: SLF001
+    if name == "UserCommandMessage":
+        return {"type": "message", "text": widget._content}  # noqa: SLF001
+    if name == "ErrorMessage":
+        return {"type": "error", "text": widget._error}  # noqa: SLF001
+    if name == "WarningMessage":
+        return {"type": "warning", "text": widget._message}  # noqa: SLF001
+    if isinstance(widget, StatusMessage):
+        return {
+            "type": "status",
+            "text": widget.get_content(),
+            "ok": widget._state is not IndicatorState.ERROR,  # noqa: SLF001
+        }
+    raise OracleError(f"a handler mounted a widget the capture cannot read: {name}")
+
+
+def _serialize(capture: _Capture, hints: dict[str, str]) -> list[dict[str, Any]]:
+    effects: list[dict[str, Any]] = []
+    for item in capture.items:
+        effect = dict(item) if isinstance(item, dict) else _widget_effect(item)
+        if effect["type"] == "notify" and effect["severity"] == "warning":
+            refusal = next(
+                (reason for prefix, reason in _REFUSALS if effect["text"].startswith(prefix)),
+                None,
+            )
+            if refusal is not None:
+                hint = next(
+                    (name for name, text in hints.items() if effect["text"].endswith(text)),
+                    "none",
+                )
+                effects.append({"type": "refused", "reason": refusal, "hint": hint})
+                continue
+        if isinstance(effect.get("text"), str):
+            effect["text"] = digest(effect["text"])
+        effects.append(effect)
+    return effects
+
+
+class _StubApp:
+    """A ``VibeApp`` whose UI surface records and whose resources are fixtures."""
+
+    def __init__(self, vibe_app: type, registry: Any, fixture: dict[str, Any]) -> None:
+        from vibe.cli.textual_ui.app import BottomApp
+        from vibe.cli.textual_ui.scheduled_loop_runner import ScheduledLoopCommands
+
+        values = {
+            "_vibe_app": vibe_app,
+            "capture": _Capture(),
+            "fixture": fixture,
+            "commands": registry,
+            "_tools_collapsed": False,
+            "_mount_first": False,
+            "_pending_turn": False,
+            "_agent_task": None,
+            "_bash_task": None,
+            "_debug_console": None,
+            "_todo_tracker": None,
+            "_show_resume_picker": False,
+            "_loading_widget": None,
+            "_banner": None,
+            "_whats_new_message": None,
+            "_current_bottom_app": BottomApp.Input,
+        }
+        self.__dict__.update(values)
+        server = _FakeAppServer(self, fixture)
+        self.__dict__.update(
+            {
+                "app_server": server,
+                "_app_server": server,
+                "event_handler": _ns(
+                    current_compact=None,
+                    begin_retry=lambda command=None: bool(fixture.get("retryOffered")),
+                ),
+                "_queue": _FakeQueue(self, fixture),
+                "_side_channel": _ns(enqueue=self._enqueue_side_channel),
+                "_messages_area": _ns(mount=self._mount_and_scroll),
+                "_loading_area": _ns(mount=self._ignore),
+                "_chat_widget": _ns(scroll_home=lambda **_: None),
+                "_load_more": _ns(hide=self._ignore),
+                "_terminal_notifier": _ns(
+                    set_default_title=lambda title: self.capture.add(
+                        type="title", text=title
+                    )
+                ),
+                "_vibe_code_project_picker": _ns(clear_teleport=lambda: None),
+                "_session_ready": _ns(wait=self._ignore),
+                "config": _ns(
+                    active_model=_ns(
+                        display_name=fixture.get("activeModelDisplayName", "Model")
+                    )
+                ),
+                "_loop_commands": ScheduledLoopCommands(
+                    _FakeLoops(fixture), tools_collapsed=lambda: False
+                ),
+            }
+        )
+
+    def __getattr__(self, name: str) -> Any:
+        import inspect
+        import types
+
+        raw = inspect.getattr_static(self._vibe_app, name)
+        if isinstance(raw, staticmethod):
+            return raw.__func__
+        if isinstance(raw, property):
+            return raw.fget(self)
+        if callable(raw):
+            return types.MethodType(raw, self)
+        return raw
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        self.__dict__[name] = value
+
+    async def _ignore(self, *_arguments: Any, **_keywords: Any) -> None:
+        return None
+
+    def _noop(self, *_arguments: Any, **_keywords: Any) -> None:
+        return None
+
+    # What the operator sees ----------------------------------------------
+
+    async def _mount_and_scroll(self, widget: Any, *_arguments: Any, **_keywords: Any) -> None:
+        self.capture.widget(widget)
+
+    async def mount(self, widget: Any, *_arguments: Any, **_keywords: Any) -> None:
+        if type(widget).__name__ != "DebugConsole":
+            raise OracleError(f"unexpected mount of {type(widget).__name__}")
+        self.capture.add(type="panel", name="debugConsole")
+
+    def notify(self, message: Any, *, severity: str = "information", **_keywords: Any) -> None:
+        self.capture.add(type="notify", severity=severity, text=str(message))
+
+    def push_screen(self, screen: Any, *_arguments: Any, **_keywords: Any) -> None:
+        names = {"ConfigScreen": "config", "TodoOverlayScreen": "todos"}
+        name = type(screen).__name__
+        self.capture.add(type="panel", name=names.get(name, name))
+
+    async def _switch_from_input(self, widget: Any, *_arguments: Any, **_keywords: Any) -> None:
+        marker = getattr(widget, "panel_effect", None)
+        if marker is not None:
+            self.capture.add(**marker)
+            return
+        names = {
+            "SkillsBrowserApp": "skills",
+            "PluginsApp": "plugins",
+            "LogLevelPickerApp": "logLevel",
+        }
+        name = type(widget).__name__
+        self.capture.add(type="panel", name=names.get(name, name))
+
+    async def _switch_to_input_app(self, *_arguments: Any, **_keywords: Any) -> None:
+        self.capture.add(type="closePanel")
+
+    def _panel(name: str):  # noqa: N805  evaluated in the class body
+        async def switch(self: _StubApp, *_arguments: Any, **_keywords: Any) -> None:
+            self.capture.add(type="panel", name=name)
+
+        return switch
+
+    _switch_to_model_picker_app = _panel("model")
+    _switch_to_thinking_picker_app = _panel("thinking")
+    _switch_to_theme_picker_app = _panel("theme")
+    _switch_to_voice_app = _panel("voice")
+    _switch_to_proxy_setup_app = _panel("proxySetup")
+    _show_vibe_code_project_picker = _panel("remoteProjects")
+    del _panel
+
+    def _build_picker(self, sessions: list[Any], *, loading: bool = False) -> Any:
+        capture = self.capture
+
+        def load_sessions(loaded: list[Any], _titles: dict[str, str]) -> None:
+            capture.add(type="sessionsLoaded", count=len(loaded))
+
+        return _ns(
+            is_mounted=True,
+            load_sessions=load_sessions,
+            panel_effect={"type": "panel", "name": "sessions"},
+        )
+
+    def _get_last_assistant_message_text(self) -> str | None:
+        return self.fixture.get("lastAssistantMessage")
+
+    @contextlib.contextmanager
+    def batch_update(self):
+        yield
+
+    def run_worker(self, awaitable: Any, **_keywords: Any) -> None:
+        self.__dict__.setdefault("_workers", []).append(awaitable)
+
+    def exit(self, *_arguments: Any, **_keywords: Any) -> None:
+        self.capture.add(type="exit")
+
+    async def _begin_shutdown(self) -> None:
+        return None
+
+    async def _reset_message_widgets(self) -> None:
+        self.capture.add(type="resetTranscript")
+
+    async def _handle_user_message(self, text: str, *_arguments: Any, **_keywords: Any) -> None:
+        self.capture.add(type="submit", text=text, injected=False)
+
+    async def _handle_turn(self, text: str, *, injected: bool = False, **_keywords: Any) -> None:
+        self.capture.add(type="submit", text=text, injected=injected)
+
+    async def _handle_teleport_command(
+        self, value: str | None = None, show_message: bool = True
+    ) -> None:
+        self.capture.add(type="teleport", target=value or "", echo=show_message)
+
+    async def _handle_bash_command(self, command: str) -> None:
+        self.capture.add(type="shell", text=command)
+
+    async def _enqueue_prompt_with_resources(
+        self, content: str, *, skill_name: str | None = None
+    ) -> bool:
+        self.capture.add(type="queued", kind="skill" if skill_name else "prompt")
+        return True
+
+    def _enqueue_side_channel(self, name: str, _command: Any, _arguments: str, _display: str) -> bool:
+        if not self.fixture.get("sideChannelFree", True):
+            return False
+        self.capture.add(type="run", command=name)
+        return True
+
+    def action_rewind_prev(self) -> None:
+        self.capture.add(type="panel", name="rewind")
+
+    def action_show_todos(self) -> None:
+        self.capture.add(type="panel", name="todos")
+
+
+    def query_one(self, *_arguments: Any, **_keywords: Any) -> Any:
+        return self.__dict__.setdefault("_input", _ns(value=""))
+
+    async def _persist_config_changes(self, changes: dict[str, Any]) -> None:
+        _fail_if_requested(self.fixture.get("persist", {}))
+        for key, value in changes.items():
+            self.capture.add(type="configWrite", key=key, value=value)
+
+    async def _remove_config_field(self, field: str) -> None:
+        _fail_if_requested(self.fixture.get("persist", {}))
+        self.capture.add(type="configWrite", key=field, value=None)
+
+    _refresh_context_progress = _noop
+    _refresh_banner = _noop
+    _reset_todo_presentation = _noop
+    _sync_terminal_title = _noop
+    _mark_session_ready = _noop
+    _reset_ui_state = _noop
+    _on_busy_state_changed = _noop
+    _apply_config_to_ui = _ignore
+    _ensure_loading_widget = _ignore
+    _remove_loading_widget = _ignore
+    _process_startup_prompt_when_available = _ignore
+
+
+class _FakeAppServer:
+    def __init__(self, app: _StubApp, fixture: dict[str, Any]) -> None:
+        self._fixture = fixture
+        self.session_id = fixture.get("sessionId", "0123456789abcdef-session")
+        self.cwd = "/workspace"
+        self.history = fixture.get("history", [])
+        self.turn_active = fixture.get("turnActive", False)
+        self.resources = _FakeResources(app, fixture)
+
+    async def clear_history(self) -> None:
+        _fail_if_requested(self._fixture.get("clearHistory", {}))
+
+    async def compact(self, *, extra_instructions: str = "") -> None:
+        _fail_if_requested(self._fixture.get("compact", {}))
+
+    def exit_summary(self) -> Any:
+        return None
+
+
+class _FakeResources:
+    def __init__(self, app: _StubApp, fixture: dict[str, Any]) -> None:
+        async def answer(key: str) -> Any:
+            value = fixture.get(key)
+            _fail_if_requested(value)
+            return _objectify(value)
+
+        self.telemetry = _ns(
+            record=lambda event, properties=None, **_: app.capture.add(
+                type="telemetry", event=event, properties=dict(properties or {})
+            )
+        )
+        self.runtime = _FakeRuntime(fixture)
+        self.sessions = _FakeSessions(app, fixture)
+        self.identity = _ns(read=lambda: answer("identity"))
+        self.account = _ns(read=lambda: answer("account"), current=None)
+        self.config = _FakeConfig(fixture)
+        self.mcp = _FakeMcp(app, fixture)
+        self.plugins = _ns(read=lambda: answer("plugins"), reload=lambda: answer("plugins"))
+        self.agents = _FakeAgents(app, fixture)
+        self.skills = _ns(
+            read_installed=lambda: answer("installedSkills"),
+            catalog=lambda: answer("skillCatalog"),
+        )
+        self.vibe_code = _ns(open_projects=lambda: answer("openProjects"))
+
+
+class _FakeRuntime:
+    def __init__(self, fixture: dict[str, Any]) -> None:
+        stats = fixture.get("stats", {})
+        self.stats = _ns(
+            steps=stats.get("steps", 0),
+            session_prompt_tokens=stats.get("sessionPromptTokens", 0),
+            session_cached_tokens=stats.get("sessionCachedTokens", 0),
+            session_completion_tokens=stats.get("sessionCompletionTokens", 0),
+            session_total_llm_tokens=stats.get("sessionTotalLlmTokens", 0),
+            last_turn_total_tokens=stats.get("lastTurnTotalTokens", 0),
+            last_turn_cached_tokens=stats.get("lastTurnCachedTokens", 0),
+            session_cost=stats.get("sessionCost", 0.0),
+        )
+        log = fixture.get("sessionLog", {})
+        self.session_log = _ns(
+            enabled=log.get("enabled", True),
+            persisted=log.get("persisted", True),
+            path=log.get("path", "/home/operator/.vibe/logs/session/0123456789abcdef-session"),
+        )
+        self.experimental_harness = False
+
+    async def wait_until_ready(self) -> None:
+        return None
+
+    def get_skill(self, name: str) -> Any:
+        if name == "review":
+            return _ns(name="review", user_invocable=True)
+        return None
+
+
+class _FakeSessions:
+    def __init__(self, app: _StubApp, fixture: dict[str, Any]) -> None:
+        self._app = app
+        self._fixture = fixture
+
+    async def read_log(self) -> Any:
+        return self._app.app_server.resources.runtime.session_log
+
+    async def rename(self, title: str) -> str:
+        _fail_if_requested(self._fixture.get("rename", {}))
+        return title
+
+    async def fork(self, entry_id: str | None = None, *, attach: bool = True) -> Any:
+        _fail_if_requested(self._fixture.get("fork", {}))
+        self._app.capture.add(type="fork", attach=attach)
+        new_id = self._fixture.get("forkedSessionId", "fedcba9876543210-copy")
+        return _ns(state=_ns(session=_ns(id=new_id)))
+
+    async def list(self, cwd: str) -> list[Any]:
+        return [
+            _ns(id=f"session-{index}", title=None, preview="saved")
+            for index in range(self._fixture.get("savedSessions", 0))
+        ]
+
+
+class _FakeConfig:
+    def __init__(self, fixture: dict[str, Any]) -> None:
+        self._fixture = fixture
+        self.current = _ns(experimental_enable_registry_skills=False)
+
+    async def reload(self, *, reload_runtime: bool = False) -> int:
+        value = self._fixture.get("reload", {})
+        _fail_if_requested(value)
+        return value.get("strippedImages", 0)
+
+
+class _FakeMcp:
+    def __init__(self, app: _StubApp, fixture: dict[str, Any]) -> None:
+        self._app = app
+        self._fixture = fixture
+        self.state = None
+
+    async def read(self) -> Any:
+        from vibe.app_server.models import MCPSourceKind
+
+        mcp = self._fixture.get("mcp", {})
+        sources = [
+            _ns(name=name, kind=MCPSourceKind.SERVER) for name in mcp.get("sources", [])
+        ] + [
+            _ns(name=name, kind=MCPSourceKind.CONNECTOR)
+            for name in mcp.get("connectors", [])
+        ]
+        return _ns(
+            sources=sources,
+            connector_error=mcp.get("connectorError"),
+            statuses=dict(mcp.get("statuses", {})),
+        )
+
+    async def add(self, **keywords: Any) -> Any:
+        added = self._fixture.get("mcpAdd", {})
+        _fail_if_requested(added)
+        self._app.capture.add(
+            type="mcpAdd",
+            url=keywords["url"],
+            name=keywords["name"] or "",
+            scopes=list(keywords["scopes"]),
+            transport=keywords["transport"],
+            allowInsecureHttp=keywords["allow_insecure_http"],
+        )
+        return _ns(name=added.get("name", "server"), created=added.get("created", True))
+
+    async def login(self, alias: str):
+        login = self._fixture.get("mcpLogin", {})
+        _fail_if_requested(login)
+        for url in login.get("urls", []):
+            yield _ns(url=url)
+
+    async def logout(self, alias: str) -> None:
+        _fail_if_requested(self._fixture.get("mcpLogout", {}))
+        self._app.capture.add(type="mcpLogout", alias=alias)
+
+
+class _FakeAgents:
+    def __init__(self, app: _StubApp, fixture: dict[str, Any]) -> None:
+        self._app = app
+        self.all = [_ns(name=name) for name in fixture.get("agents", ["default"])]
+
+    async def set_installed(self, name: str, *, installed: bool) -> None:
+        self._app.capture.add(type="agentInstalled", name=name, installed=installed)
+
+
+class _FakeLoops:
+    def __init__(self, fixture: dict[str, Any]) -> None:
+        self._fixture = fixture.get("loops", {})
+
+    async def list(self) -> list[Any]:
+        _fail_if_requested(self._fixture)
+        return [_objectify(loop) for loop in self._fixture.get("list", [])]
+
+    async def create(self, interval: str, prompt: str) -> Any:
+        _fail_if_requested(self._fixture)
+        created = {"id": "loop-1", "interval_seconds": 300, **self._fixture.get("created", {})}
+        created["prompt"] = prompt
+        return _objectify(created)
+
+    async def delete(self, loop_id: str) -> Any:
+        _fail_if_requested(self._fixture)
+        return _objectify({"id": loop_id, "prompt": self._fixture.get("deletedPrompt", "check")})
+
+    async def clear(self) -> int:
+        _fail_if_requested(self._fixture)
+        return self._fixture.get("cleared", 0)
+
+
+class _FakeQueue:
+    def __init__(self, app: _StubApp, fixture: dict[str, Any]) -> None:
+        self._app = app
+        self.paused = False
+        self.has_server_work = False
+
+    async def clear_server_queue(self) -> None:
+        return None
+
+    async def resume(self) -> None:
+        self._app.capture.add(type="queueResumed")
+
+
+#: The instant the loop list measures "next in" from, so the capture is stable.
+LOOP_CLOCK = 1_800_000_000.0
+
+
+@contextlib.contextmanager
+def _patched_reference(app: _StubApp, module: Any):
+    """Module-level seams the handlers reach without going through ``self``."""
+
+    from vibe.cli import clipboard
+    from vibe.cli.textual_ui import app as app_module
+    from vibe.cli.textual_ui import scheduled_loop_runner
+    from vibe.cli.textual_ui.widgets import messages
+
+    capture = app.capture
+    fixture = app.fixture
+
+    def connector_auth_app_class() -> Any:
+        def build(**keywords: Any) -> Any:
+            return _ns(
+                panel_effect={
+                    "type": "panel",
+                    "name": "connectorAuth",
+                    "initial": keywords.get("connector_name") or "",
+                }
+            )
+
+        return build
+
+    def mcp_app_class() -> Any:
+        def build(**keywords: Any) -> Any:
+            return _ns(
+                panel_effect={
+                    "type": "panel",
+                    "name": "mcp",
+                    "initial": keywords.get("initial_source") or "",
+                }
+            )
+
+        return build
+
+    def copy_to_clipboard(text: str) -> bool:
+        capture.add(type="clipboard", text=text)
+        return bool(fixture.get("clipboardVerified", True))
+
+    async def paste_image(_app: Any, *, notify_when_empty: bool = False) -> None:
+        capture.add(type="clipboardImage", notifyWhenEmpty=notify_when_empty)
+
+    async def remove_echo(_widget: Any) -> None:
+        capture.add(type="removeEcho")
+
+    def open_browser(url: str, *_arguments: Any, **_keywords: Any) -> bool:
+        capture.add(type="openUrl", url=url)
+        return True
+
+    replaced = [
+        (app_module, "_get_mcp_app_class", mcp_app_class),
+        (app_module, "_get_connector_auth_app_class", connector_auth_app_class),
+        (clipboard, "copy_to_clipboard", copy_to_clipboard),
+        (app_module, "handle_clipboard_image_paste", paste_image),
+        (messages.SlashCommandMessage, "remove", remove_echo),
+        (app_module.webbrowser, "open", open_browser),
+        (scheduled_loop_runner.time, "time", lambda: LOOP_CLOCK),
+    ]
+    saved = [(owner, name, getattr(owner, name)) for owner, name, _ in replaced]
+    for owner, name, value in replaced:
+        setattr(owner, name, value)
+    try:
+        with clipboard_support(module, bool(fixture.get("clipboardSupported", False))):
+            yield
+    finally:
+        for owner, name, value in saved:
+            setattr(owner, name, value)
+
+
+def _stub_registry(module: Any, context: dict[str, Any]) -> Any:
+    merged = {
+        "registrySkillsEnabled": True,
+        "experimentalHarness": True,
+        "clipboardSupported": True,
+        "excluded": [],
+        **context,
+    }
+    return build_registry(module, merged)
+
+
+async def _drain(app: _StubApp) -> None:
+    current = asyncio.current_task()
+    for _ in range(10):
+        pending = [
+            task for task in asyncio.all_tasks() if task is not current and not task.done()
+        ]
+        workers = app.__dict__.pop("_workers", [])
+        if not pending and not workers:
+            return
+        for worker in workers:
+            await worker
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+
+
+def _reject_hints(app_module: Any) -> dict[str, str]:
+    return {
+        "busy": app_module._REJECT_HINT_BUSY,  # noqa: SLF001
+        "paused": app_module._REJECT_HINT_PAUSED,  # noqa: SLF001
+    }
+
+
+#: ``(id, line, context, fixture)``: every command, and every branch of each
+#: handler an operator can reach, over fixtures this script authors. The
+#: context defaults to every gate open, so a gated command is reachable.
+HANDLER_SCENARIOS: tuple[tuple[str, str, dict[str, Any], dict[str, Any]], ...] = (
+    ("help", "/help", {}, {}),
+    ("config", "/config", {}, {}),
+    ("config-arguments", "/config set theme dark", {}, {}),
+    ("model", "/model", {}, {}),
+    ("model-arguments", "/model devstral-small", {}, {}),
+    ("skills", "/skills", {}, {"installedSkills": [], "skillCatalog": {"skills": [], "updates": [], "project_available": False, "loaded": False, "authenticated": False}}),
+    ("thinking", "/thinking", {}, {}),
+    ("thinking-arguments", "/thinking high", {}, {}),
+    ("reload", "/reload", {}, {}),
+    ("reload-one-image", "/reload", {}, {"reload": {"strippedImages": 1}, "activeModelDisplayName": "Devstral Small"}),
+    ("reload-images", "/reload", {}, {"reload": {"strippedImages": 3}, "activeModelDisplayName": "Devstral Small"}),
+    ("reload-failure", "/reload", {}, {"reload": {"raise": "the configuration file is unreadable"}}),
+    ("clear", "/clear", {}, {}),
+    ("clear-new-alias", "/new", {}, {}),
+    ("clear-not-persisted", "/clear", {}, {"sessionLog": {"persisted": False}}),
+    ("clear-logging-disabled", "/clear", {}, {"sessionLog": {"enabled": False}}),
+    ("clear-seed", "/clear   write the missing tests  ", {}, {}),
+    ("clear-failure", "/clear seed", {}, {"clearHistory": {"raise": "the session store is locked"}}),
+    ("copy-nothing", "/copy", {}, {}),
+    ("copy", "/copy", {}, {"lastAssistantMessage": "The answer is 42."}),
+    ("copy-unverified", "/copy", {}, {"lastAssistantMessage": "The answer is 42.", "clipboardVerified": False}),
+    ("paste-image", "/paste-image", {}, {"clipboardSupported": True}),
+    ("log", "/log", {}, {}),
+    ("log-disabled", "/log", {}, {"sessionLog": {"enabled": False}}),
+    ("log-not-persisted", "/log", {}, {"sessionLog": {"persisted": False}}),
+    ("log-level", "/log-level", {}, {}),
+    ("log-level-arguments", "/log-level debug", {}, {}),
+    ("debug", "/debug", {}, {}),
+    ("compact", "/compact", {}, {"history": ["entry"]}),
+    ("compact-instructions", "/compact   keep the API notes ", {}, {"history": ["entry"]}),
+    ("compact-empty", "/compact", {}, {"history": []}),
+    ("compact-busy", "/compact", {}, {"history": ["entry"], "turnActive": True}),
+    ("compact-failure", "/compact", {}, {"history": ["entry"], "compact": {"raise": "the summary could not be produced"}}),
+    ("exit", "/exit", {}, {}),
+    ("exit-bare", "quit", {}, {}),
+    ("status", "/status", {}, {}),
+    ("status-cached", "/status", {}, {"stats": {"steps": 7, "sessionPromptTokens": 12345, "sessionCachedTokens": 1000, "sessionCompletionTokens": 2345, "sessionTotalLlmTokens": 14690, "lastTurnTotalTokens": 3210, "lastTurnCachedTokens": 512, "sessionCost": 0.12345}}),
+    ("status-uncached", "/status", {}, {"stats": {"steps": 1234567, "sessionPromptTokens": 9876543, "sessionCompletionTokens": 1, "sessionTotalLlmTokens": 9876544, "lastTurnTotalTokens": 42, "sessionCost": 1234.5}}),
+    ("whoami-no-identity", "/whoami", {}, {}),
+    ("whoami", "/whoami", {}, {"identity": {"name": "Ada Lovelace", "email": "ada@example.test", "workspace": {"id": "w", "name": "Analytical"}, "organization": {"id": "o", "name": "Engines"}}, "account": {"plan": {"title": "Pro"}}}),
+    ("whoami-name-is-email", "/whoami", {}, {"identity": {"name": "ada@example.test", "email": "ada@example.test", "workspace": None, "organization": None}, "account": {"plan": None}}),
+    ("whoami-sparse", "/whoami", {}, {"identity": {"name": None, "email": None, "workspace": None, "organization": None}}),
+    ("whoami-identity-failure", "/whoami", {}, {"identity": {"raise": "unreachable"}, "account": {"plan": {"title": "Pro"}}}),
+    ("whoami-account-failure", "/whoami", {}, {"identity": {"name": "Ada", "email": "ada@example.test", "workspace": None, "organization": None}, "account": {"raise": "unreachable"}}),
+    ("teleport", "/teleport", {}, {}),
+    ("teleport-arguments", "/teleport ship it", {}, {}),
+    ("remote-project", "/remote-project", {}, {"openProjects": ["view", "picker"]}),
+    ("remote-project-failure", "/remote-project", {}, {"openProjects": {"error": "Vibe Code is unavailable"}}),
+    ("proxy-setup", "/proxy-setup", {}, {}),
+    ("proxy-setup-arguments", "/proxy-setup HTTPS_PROXY http://proxy.test", {}, {}),
+    ("resume", "/resume", {}, {"savedSessions": 2}),
+    ("resume-continue-alias", "/continue", {}, {"savedSessions": 1}),
+    ("resume-arguments", "/resume session-1", {}, {"savedSessions": 1}),
+    ("resume-none", "/resume", {}, {}),
+    ("resume-logging-disabled", "/resume", {}, {"savedSessions": 2, "sessionLog": {"enabled": False}}),
+    ("rename-empty", "/rename   ", {}, {}),
+    ("rename", "/rename  Parser rewrite ", {}, {}),
+    ("rename-failure", "/rename Parser rewrite", {}, {"rename": {"raise": "the title is too long"}}),
+    ("mcp-empty", "/mcp", {}, {}),
+    ("mcp-connectors-alias", "/connectors", {}, {"mcp": {"sources": ["docs", "search"]}}),
+    ("mcp", "/mcp", {}, {"mcp": {"sources": ["docs", "search"]}}),
+    ("mcp-named", "/mcp search", {}, {"mcp": {"sources": ["docs", "search"]}}),
+    ("mcp-unknown", "/mcp nothing", {}, {"mcp": {"sources": ["docs", "search"]}}),
+    ("mcp-connector-error", "/mcp", {}, {"mcp": {"connectorError": "the connector catalog timed out"}}),
+    ("mcp-connector-error-with-sources", "/mcp", {}, {"mcp": {"sources": ["docs"], "connectorError": "the connector catalog timed out"}}),
+    ("mcp-status-empty", "/mcp status", {}, {}),
+    ("mcp-status", "/mcp status", {}, {"mcp": {"statuses": {"search": "authenticated", "docs": "needs_login"}}}),
+    ("mcp-status-arguments", "/mcp status extra", {}, {}),
+    ("mcp-login-usage", "/mcp login", {}, {}),
+    ("mcp-login", "/mcp login docs", {}, {"mcpLogin": {"urls": ["https://auth.example.test/authorize"]}}),
+    ("mcp-login-connector", "/mcp login search", {}, {"mcp": {"sources": ["docs"], "connectors": ["search"]}}),
+    ("mcp-login-shared-alias", "/mcp login docs", {}, {"mcp": {"sources": ["docs"], "connectors": ["docs"]}, "mcpLogin": {"urls": ["https://auth.example.test/authorize"]}}),
+    ("mcp-connectors-listed", "/mcp search", {}, {"mcp": {"sources": ["docs"], "connectors": ["search"]}}),
+    ("mcp-login-failure", "/mcp login docs", {}, {"mcpLogin": {"error": "Unknown MCP server: docs"}}),
+    ("mcp-logout-usage", "/mcp logout   ", {}, {}),
+    ("mcp-logout", "/mcp logout docs", {}, {}),
+    ("mcp-logout-failure", "/mcp logout docs", {}, {"mcpLogout": {"error": "Unknown MCP server: docs"}}),
+    ("mcp-add-help", "/mcp add --help", {}, {}),
+    ("mcp-add-short-help", "/mcp add -h", {}, {}),
+    ("mcp-add-usage", "/mcp add", {}, {}),
+    ("mcp-add-two-urls", "/mcp add https://a.test https://b.test", {}, {}),
+    ("mcp-add-unknown-option", "/mcp add https://a.test --verbose", {}, {}),
+    ("mcp-add-name-twice", "/mcp add https://a.test --name a --name b", {}, {}),
+    ("mcp-add-name-missing", "/mcp add https://a.test --name", {}, {}),
+    ("mcp-add-transport-twice", "/mcp add https://a.test --transport http --transport http", {}, {}),
+    ("mcp-add-transport-invalid", "/mcp add https://a.test --transport stdio", {}, {}),
+    ("mcp-add-scope-missing", "/mcp add https://a.test --scope --no-login", {}, {}),
+    ("mcp-add-quoting", "/mcp add 'https://a.test", {}, {}),
+    ("mcp-add", "/mcp add https://mcp.example.test --no-login", {}, {"mcpAdd": {"name": "mcp-example"}}),
+    ("mcp-add-options", "/mcp add https://mcp.example.test --name docs --scope read --scope write --transport http --allow-insecure-http --no-login", {}, {"mcpAdd": {"name": "docs"}}),
+    ("mcp-add-existing", "/mcp add https://mcp.example.test --no-login", {}, {"mcpAdd": {"name": "docs", "created": False}}),
+    ("mcp-add-login", "/mcp add https://mcp.example.test --name docs", {}, {"mcpAdd": {"name": "docs"}, "mcpLogin": {"urls": ["https://auth.example.test/authorize"]}}),
+    ("mcp-add-failure", "/mcp add https://mcp.example.test", {}, {"mcpAdd": {"error": "An MCP server named docs already exists"}}),
+    ("plugins", "/plugins", {}, {}),
+    ("reload-plugins", "/reload-plugins", {}, {}),
+    ("todo", "/todo", {}, {}),
+    ("voice", "/voice", {}, {}),
+    ("leanstall", "/leanstall", {}, {"agents": ["default", "plan"]}),
+    ("leanstall-present", "/leanstall", {}, {"agents": ["default", "lean"]}),
+    ("unleanstall", "/unleanstall", {}, {"agents": ["default", "lean"]}),
+    ("unleanstall-absent", "/unleanstall", {}, {"agents": ["default"]}),
+    ("rewind", "/rewind", {}, {}),
+    ("branch", "/branch", {}, {}),
+    ("branch-arguments", "/branch ignored words", {}, {}),
+    ("branch-failure", "/branch", {}, {"fork": {"raise": "the session has no history yet"}}),
+    ("retry-not-offered", "/retry", {}, {}),
+    ("retry", "/retry", {}, {"retryOffered": True}),
+    ("retry-instructions", "/retry  keep it short ", {}, {"retryOffered": True}),
+    ("retry-busy", "/retry", {}, {"retryOffered": True, "turnActive": True}),
+    ("loop-list-empty", "/loop", {}, {}),
+    ("loop-list", "/loop list", {}, {"loops": {"list": [{"id": "loop-1", "prompt": "check | the build\nnow", "interval_seconds": 3700, "next_fire_at": LOOP_CLOCK + 125}, {"id": "loop-2", "prompt": "ping", "interval_seconds": 86400, "next_fire_at": LOOP_CLOCK - 5}]}}),
+    ("loop-ls", "/loop LS", {}, {}),
+    ("loop-create", "/loop 5m   check the build  ", {}, {"loops": {"created": {"id": "loop-7", "interval_seconds": 300}}}),
+    ("loop-create-interval-only", "/loop 90s", {}, {"loops": {"created": {"id": "loop-8", "interval_seconds": 90}}}),
+    ("loop-cancel", "/loop cancel loop-1", {}, {"loops": {"deletedPrompt": "check the build"}}),
+    ("loop-cancel-verb", "/loop RM loop-1", {}, {"loops": {"deletedPrompt": "check the build"}}),
+    ("loop-cancel-all", "/loop stop all", {}, {"loops": {"cleared": 3}}),
+    ("loop-cancel-missing", "/loop delete", {}, {}),
+    ("loop-error", "/loop 5x check", {}, {"loops": {"error": "Invalid interval: 5x"}}),
+    ("data-retention", "/data-retention", {}, {}),
+    ("theme", "/theme", {}, {}),
+)
+
+
+def capture_handlers(module: Any) -> list[dict[str, Any]]:
+    """What each command's handler does, scenario by scenario."""
+
+    from vibe.cli.textual_ui import app as app_module
+
+    hints = _reject_hints(app_module)
+    cases: list[dict[str, Any]] = []
+    for identifier, line, context, fixture in HANDLER_SCENARIOS:
+
+        async def drive() -> list[dict[str, Any]]:
+            registry = _stub_registry(module, context)
+            app = _StubApp(app_module.VibeApp, registry, fixture)
+            with _patched_reference(app, module):
+                handled = await app_module.VibeApp._handle_command(app, line)  # noqa: SLF001
+                await _drain(app)
+            if not handled:
+                app.capture.add(type="unhandled")
+            return _serialize(app.capture, hints)
+
+        cases.append(
+            {
+                "id": identifier,
+                "line": line,
+                "context": context,
+                "fixture": fixture,
+                "effects": asyncio.run(drive()),
+            }
+        )
+    return cases
+
+
+#: The composer states a submitted line can meet: nothing running, a model
+#: turn, a shell command, and each of those with the queue paused.
+DISPATCH_STATES = ("idle", "busy", "shell", "paused", "pausedBusy", "pausedShell")
+
+#: One line of every kind ``classify`` tells apart, plus the side-channel and
+#: exiting commands and a slash line that names nothing.
+DISPATCH_INPUTS = (
+    ("side-channel", "/status"),
+    ("side-channel-exit", "exit"),
+    ("command", "/model"),
+    ("prompt", "hello"),
+    ("skill", "/review this change"),
+    ("shell", "!ls -la"),
+    ("empty-shell", "!"),
+    ("teleport", "&ship it"),
+    ("unknown-slash", "/nothing"),
+)
+
+
+def capture_dispatch(module: Any) -> list[dict[str, Any]]:
+    """What happens to a submitted line in each composer state."""
+
+    from vibe.cli.textual_ui import app as app_module
+
+    hints = _reject_hints(app_module)
+    scenarios = [
+        (f"{state}/{kind}", state, text, True)
+        for state in DISPATCH_STATES
+        for kind, text in DISPATCH_INPUTS
+    ] + [
+        ("busy/side-channel-occupied", "busy", "/status", False),
+        ("paused/side-channel-occupied", "paused", "/help", False),
+    ]
+    cases: list[dict[str, Any]] = []
+    for identifier, state, text, free in scenarios:
+
+        async def drive() -> list[dict[str, Any]]:
+            fixture = {"sideChannelFree": free}
+            app = _StubApp(app_module.VibeApp, _stub_registry(module, {}), fixture)
+            if state in ("busy", "pausedBusy"):
+                app.__dict__["_pending_turn"] = True
+            held_shell = None
+            if state in ("shell", "pausedShell"):
+                held_shell = asyncio.get_running_loop().create_future()
+                app.__dict__["_bash_task"] = held_shell
+            app._queue.paused = state.startswith("paused")  # noqa: SLF001
+
+            async def run_command(value: str) -> bool:
+                resolved = app.commands.parse_command(value)
+                app.capture.add(type="run", command=resolved[0] if resolved else "")
+                return True
+
+            app.__dict__["_handle_command"] = run_command
+            with _patched_reference(app, module):
+                await app_module.VibeApp._dispatch_submitted_value(app, text)  # noqa: SLF001
+                if held_shell is not None:
+                    held_shell.cancel()
+                await _drain(app)
+            effects = _serialize(app.capture, hints)
+            restored = app.__dict__.get("_input")
+            if restored is not None and restored.value:
+                effects.append({"type": "restored"})
+            return effects
+
+        cases.append(
+            {
+                "id": identifier,
+                "state": state,
+                "input": text,
+                "sideChannelFree": free,
+                "effects": asyncio.run(drive()),
+            }
+        )
+    return cases
+
+
+#: ``(id, chain, applied, persist failure)`` for the panel's apply handler.
+LOG_LEVEL_APPLY: tuple[tuple[str, dict[str, Any], dict[str, Any], str | None], ...] = (
+    ("unchanged", {}, {"session": None, "config": None, "cleared": False}, None),
+    ("session", {}, {"session": "DEBUG", "config": None, "cleared": False}, None),
+    ("session-cleared", {"session": "INFO"}, {"session": None, "config": None, "cleared": False}, None),
+    ("config", {}, {"session": None, "config": "ERROR", "cleared": False}, None),
+    ("config-kept", {"config": "INFO"}, {"session": None, "config": "INFO", "cleared": False}, None),
+    ("config-cleared", {"config": "INFO"}, {"session": None, "config": None, "cleared": True}, None),
+    ("both", {"session": "ERROR", "config": "INFO"}, {"session": "DEBUG", "config": "CRITICAL", "cleared": False}, None),
+    ("env-wins", {"env": "INFO"}, {"session": None, "config": "ERROR", "cleared": False}, None),
+    ("debug-mode", {"debugMode": True}, {"session": None, "config": None, "cleared": False}, None),
+    ("persist-failure", {}, {"session": "DEBUG", "config": "ERROR", "cleared": False}, "the configuration file is read-only"),
+)
+
+
+@contextlib.contextmanager
+def _log_level_state(chain: dict[str, Any]):
+    from vibe.observability import logging as observability
+
+    state = observability._log_level_state  # noqa: SLF001
+    saved = (state._session_override, state._config_level)  # noqa: SLF001
+    environment = {key: os.environ.get(key) for key in ("LOG_LEVEL", "DEBUG_MODE")}
+    os.environ.pop("LOG_LEVEL", None)
+    os.environ.pop("DEBUG_MODE", None)
+    if chain.get("env"):
+        os.environ["LOG_LEVEL"] = chain["env"]
+    if chain.get("debugMode"):
+        os.environ["DEBUG_MODE"] = "true"
+    state._session_override = chain.get("session")  # noqa: SLF001
+    state._config_level = chain.get("config")  # noqa: SLF001
+    try:
+        yield observability
+    finally:
+        state._session_override, state._config_level = saved  # noqa: SLF001
+        for key, value in environment.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
+def capture_log_level_apply(module: Any) -> list[dict[str, Any]]:
+    """What closing the log-level panel writes and reports."""
+
+    from vibe.cli.textual_ui import app as app_module
+    from vibe.cli.textual_ui.widgets.log_level_picker import LogLevelPickerApp
+
+    hints = _reject_hints(app_module)
+    cases: list[dict[str, Any]] = []
+    for identifier, chain, applied, failure in LOG_LEVEL_APPLY:
+
+        async def drive() -> list[dict[str, Any]]:
+            fixture = {"persist": {"raise": failure}} if failure else {}
+            app = _StubApp(app_module.VibeApp, _stub_registry(module, {}), fixture)
+            message = LogLevelPickerApp.Applied(
+                applied["session"], applied["config"], config_cleared=applied["cleared"]
+            )
+            with _log_level_state(chain) as observability:
+                await app_module.VibeApp.on_log_level_picker_app_applied(app, message)
+                after = observability.get_log_level_chain()
+            effects = _serialize(app.capture, hints)
+            effects.append({"type": "sessionOverride", "level": after.session})
+            return effects
+
+        cases.append(
+            {
+                "id": identifier,
+                "chain": chain,
+                "applied": applied,
+                "persistFailure": failure,
+                "effects": asyncio.run(drive()),
+            }
+        )
+    return cases
+
+
+#: ``(id, chain, actions)`` for the panel itself. An action is ``highlight``
+#: with a level, ``badge`` with ``session`` or ``config``, or ``toggle``.
+LOG_LEVEL_PICKER: tuple[tuple[str, dict[str, Any], list[list[str]]], ...] = (
+    ("open-default", {}, []),
+    ("open-session", {"session": "DEBUG", "config": "ERROR"}, []),
+    ("open-env", {"env": "INFO"}, []),
+    ("open-config", {"config": "ERROR"}, []),
+    ("set-session", {}, [["highlight", "INFO"], ["toggle"]]),
+    ("unset-session", {"session": "INFO"}, [["toggle"]]),
+    ("set-config", {}, [["highlight", "CRITICAL"], ["badge", "config"], ["toggle"]]),
+    ("clear-config", {"config": "ERROR"}, [["highlight", "ERROR"], ["badge", "config"], ["toggle"]]),
+    ("move-config", {"config": "ERROR"}, [["highlight", "DEBUG"], ["badge", "config"], ["toggle"]]),
+    ("back-to-session", {}, [["badge", "config"], ["badge", "session"], ["highlight", "ERROR"], ["toggle"]]),
+    ("both", {"env": "WARNING"}, [["highlight", "DEBUG"], ["toggle"], ["badge", "config"], ["highlight", "INFO"], ["toggle"]]),
+)
+
+
+def capture_log_level_picker(module: Any) -> list[dict[str, Any]]:
+    """The panel's own state machine: where it opens, what each toggle does to
+    the subtitle, and what closing it applies."""
+
+    from vibe.cli.textual_ui.widgets.log_level_picker import LogLevelPickerApp
+
+    cases: list[dict[str, Any]] = []
+    for identifier, chain, actions in LOG_LEVEL_PICKER:
+        with _log_level_state(chain) as observability:
+            picker = LogLevelPickerApp(chain=observability.get_log_level_chain())
+            picker._redraw = lambda: None  # noqa: SLF001  nothing is mounted
+            posted: list[Any] = []
+            picker.post_message = posted.append  # type: ignore[method-assign]
+            subtitles = [digest(picker._subtitle_text())]  # noqa: SLF001
+            highlighted = [picker._highlighted_level]  # noqa: SLF001
+            for action in actions:
+                match action:
+                    case ["highlight", level]:
+                        picker._highlighted_level = level  # noqa: SLF001
+                    case ["badge", badge]:
+                        picker._focused_badge = badge  # noqa: SLF001
+                    case ["toggle"]:
+                        picker._toggle_badge()  # noqa: SLF001
+                        subtitles.append(digest(picker._subtitle_text()))  # noqa: SLF001
+                    case _:
+                        raise OracleError(f"unknown log-level action {action}")
+            picker.action_apply()
+            applied = posted[-1]
+        cases.append(
+            {
+                "id": identifier,
+                "chain": chain,
+                "actions": actions,
+                "initialHighlight": highlighted[0],
+                "subtitles": subtitles,
+                "applied": {
+                    "session": applied.session_level,
+                    "config": applied.config_level,
+                    "cleared": applied.config_cleared,
+                },
+            }
+        )
+    return cases
+
+
 NOTE = (
     "Captured from the pinned reference by scripts/parity/commands.py. Registry "
     "keys, aliases, availability sets, parse results and document structure are "
@@ -635,6 +1673,9 @@ def build_corpus(reference: Path, tree: Path, expected: str) -> dict[str, Any]:
         )
     import vibe.cli.commands as module
 
+    # Handler failures are logged with a traceback the capture records as an
+    # effect instead; the log lines would only be noise on stderr.
+    logging.getLogger("vibe").addHandler(logging.NullHandler())
     full = next(context for context in CONTEXTS if context["id"] == FULL_CONTEXT)
     registry = build_registry(module, full)
     inventory = capture_inventory(registry)
@@ -662,6 +1703,11 @@ def build_corpus(reference: Path, tree: Path, expected: str) -> dict[str, Any]:
         "parse": capture_parse(module),
     }
     corpus.update(capture_help(module, registry))
+    corpus["traits"] = capture_traits(registry)
+    corpus["dispatch"] = capture_dispatch(module)
+    corpus["handlers"] = capture_handlers(module)
+    corpus["logLevelApply"] = capture_log_level_apply(module)
+    corpus["logLevelPicker"] = capture_log_level_picker(module)
     if GUARD.attempts:
         raise OracleError(f"the capture reached the network: {GUARD.attempts}")
     return corpus

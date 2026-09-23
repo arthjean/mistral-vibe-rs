@@ -11,12 +11,14 @@ pub enum CommandId {
     Help,
     Config,
     Model,
+    Skills,
     Thinking,
     Reload,
     Clear,
     Copy,
     PasteImage,
     Log,
+    LogLevel,
     Debug,
     Compact,
     Exit,
@@ -28,10 +30,14 @@ pub enum CommandId {
     Resume,
     Rename,
     Mcp,
+    Plugins,
+    ReloadPlugins,
+    Todo,
     Voice,
     InstallLean,
     UninstallLean,
     Rewind,
+    Branch,
     Retry,
     Loop,
     DataRetention,
@@ -45,12 +51,14 @@ impl CommandId {
         Self::Help,
         Self::Config,
         Self::Model,
+        Self::Skills,
         Self::Thinking,
         Self::Reload,
         Self::Clear,
         Self::Copy,
         Self::PasteImage,
         Self::Log,
+        Self::LogLevel,
         Self::Debug,
         Self::Compact,
         Self::Exit,
@@ -62,10 +70,14 @@ impl CommandId {
         Self::Resume,
         Self::Rename,
         Self::Mcp,
+        Self::Plugins,
+        Self::ReloadPlugins,
+        Self::Todo,
         Self::Voice,
         Self::InstallLean,
         Self::UninstallLean,
         Self::Rewind,
+        Self::Branch,
         Self::Retry,
         Self::Loop,
         Self::DataRetention,
@@ -73,20 +85,41 @@ impl CommandId {
     ];
 }
 
+/// What decides whether a command is offered, one variant per predicate the
+/// reference registry declares (`vibe/cli/commands.py`, `is_available`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommandGate {
+    /// No predicate: offered unless excluded.
+    Always,
+    /// `/paste-image`, offered on the one platform whose clipboard the
+    /// reference reads images from.
+    ClipboardImage,
+    /// `/skills`, offered while `experimental_enable_registry_skills` is set.
+    RegistrySkills,
+    /// `/plugins`, `/reload-plugins` and `/todo`, offered only when the session
+    /// runs on the Unified harness backend.
+    ExperimentalHarness,
+}
+
+/// Reference `CommandContext` (`vibe/cli/commands.py:10-13`), plus the two
+/// inputs the reference reads from elsewhere: the host platform and the
+/// excluded keys.
+///
+/// `experimental_harness` is the reference's backend selection. This port runs
+/// one backend, the equivalent of the reference's default legacy one, so every
+/// production context answers `false` here, which is what a reference session
+/// launched without `--experimental-harness` answers too.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommandContext {
-    pub vibe_code_enabled: bool,
+    pub registry_skills_enabled: bool,
+    pub experimental_harness: bool,
     pub clipboard_image_supported: bool,
     excluded: BTreeSet<String>,
 }
 
 impl Default for CommandContext {
     fn default() -> Self {
-        Self {
-            vibe_code_enabled: false,
-            clipboard_image_supported: clipboard_image_supported_by_platform(),
-            excluded: BTreeSet::new(),
-        }
+        Self::new(false, false)
     }
 }
 
@@ -96,9 +129,10 @@ const fn clipboard_image_supported_by_platform() -> bool {
 
 impl CommandContext {
     #[must_use]
-    pub fn new(vibe_code_enabled: bool) -> Self {
+    pub fn new(registry_skills_enabled: bool, experimental_harness: bool) -> Self {
         Self {
-            vibe_code_enabled,
+            registry_skills_enabled,
+            experimental_harness,
             clipboard_image_supported: clipboard_image_supported_by_platform(),
             excluded: BTreeSet::new(),
         }
@@ -118,10 +152,7 @@ impl CommandContext {
 
     #[must_use]
     pub fn is_available(&self, id: CommandId) -> bool {
-        COMMANDS
-            .iter()
-            .find(|command| command.id == id)
-            .is_some_and(|command| command_available_in(command, self))
+        definition(id).is_some_and(|command| command_available_in(command, self))
     }
 }
 
@@ -131,6 +162,12 @@ pub struct CommandDefinition {
     pub name: &'static str,
     pub aliases: &'static [&'static str],
     pub description: &'static str,
+    /// Reference `Command.side_channel`: the command runs at once while a turn
+    /// or a paused queue holds the composer, instead of being refused.
+    pub side_channel: bool,
+    /// Reference `Command.exits`: running the command ends the session.
+    pub exits: bool,
+    pub gate: CommandGate,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -140,10 +177,11 @@ pub struct ParsedCommand<'a> {
     pub arguments: &'a str,
 }
 
-/// Commands exposed by the pinned Python reference, and the sole source of
-/// parseable aliases. Every [`CommandId`] appears here exactly once.
+/// Commands exposed by the pinned Python reference, in the reference's
+/// declaration order, and the sole source of parseable aliases. Every
+/// [`CommandId`] appears here exactly once.
 pub const COMMANDS: &[CommandDefinition] = &[
-    command(CommandId::Help, "help", &["/help"], "Show help message"),
+    command(CommandId::Help, "help", &["/help"], "Show help message").side_channel(),
     command(
         CommandId::Config,
         "config",
@@ -156,6 +194,13 @@ pub const COMMANDS: &[CommandDefinition] = &[
         &["/model"],
         "Select active model",
     ),
+    command(
+        CommandId::Skills,
+        "skills",
+        &["/skills"],
+        "Browse, import, and manage skills",
+    )
+    .gated(CommandGate::RegistrySkills),
     command(
         CommandId::Thinking,
         "thinking",
@@ -172,32 +217,43 @@ pub const COMMANDS: &[CommandDefinition] = &[
         CommandId::Clear,
         "clear",
         &["/clear", "/new"],
-        "Clear conversation history",
+        "Start a new conversation. Optionally pass a prompt to seed it.",
     ),
     command(
         CommandId::Copy,
         "copy",
         &["/copy"],
         "Copy the last agent message to the clipboard",
-    ),
+    )
+    .side_channel(),
     command(
         CommandId::PasteImage,
         "paste-image",
         &["/paste-image"],
         "Paste an image from the OS clipboard into the prompt",
-    ),
+    )
+    .side_channel()
+    .gated(CommandGate::ClipboardImage),
     command(
         CommandId::Log,
         "log",
         &["/log"],
         "Show path to current interaction log file",
+    )
+    .side_channel(),
+    command(
+        CommandId::LogLevel,
+        "log-level",
+        &["/log-level"],
+        "Change the log level for this session or persist it to config.toml.",
     ),
     command(
         CommandId::Debug,
         "debug",
         &["/debug"],
         "Toggle debug console",
-    ),
+    )
+    .side_channel(),
     command(
         CommandId::Compact,
         "compact",
@@ -209,19 +265,23 @@ pub const COMMANDS: &[CommandDefinition] = &[
         "exit",
         &["/exit", "exit", "quit", ":q", ":quit"],
         "Exit the application",
-    ),
+    )
+    .side_channel()
+    .exits(),
     command(
         CommandId::Status,
         "status",
         &["/status"],
         "Display agent statistics",
-    ),
+    )
+    .side_channel(),
     command(
         CommandId::Whoami,
         "whoami",
         &["/whoami"],
         "Display the Mistral signed-in user, workspace, and plan",
-    ),
+    )
+    .side_channel(),
     command(
         CommandId::Teleport,
         "teleport",
@@ -251,13 +311,35 @@ pub const COMMANDS: &[CommandDefinition] = &[
         "rename",
         &["/rename"],
         "Rename the current session",
-    ),
+    )
+    .side_channel(),
     command(
         CommandId::Mcp,
         "mcp",
         &["/mcp", "/connectors"],
         "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
     ),
+    command(
+        CommandId::Plugins,
+        "plugins",
+        &["/plugins"],
+        "Display the plugins this session is running",
+    )
+    .gated(CommandGate::ExperimentalHarness),
+    command(
+        CommandId::ReloadPlugins,
+        "reload-plugins",
+        &["/reload-plugins"],
+        "Re-pin this session's plugins and report what changed",
+    )
+    .gated(CommandGate::ExperimentalHarness),
+    command(
+        CommandId::Todo,
+        "todo",
+        &["/todo"],
+        "Show the current todo list",
+    )
+    .gated(CommandGate::ExperimentalHarness),
     command(
         CommandId::Voice,
         "voice",
@@ -283,6 +365,12 @@ pub const COMMANDS: &[CommandDefinition] = &[
         "Rewind to a previous message (or press Esc twice)",
     ),
     command(
+        CommandId::Branch,
+        "branch",
+        &["/branch"],
+        "Fork the current conversation into a new resumable session, leaving this session unchanged. Resume the copy with `vibe --resume <id>`.",
+    ),
+    command(
         CommandId::Retry,
         "retry",
         &["/retry"],
@@ -299,7 +387,8 @@ pub const COMMANDS: &[CommandDefinition] = &[
         "data-retention",
         &["/data-retention"],
         "Show data retention information",
-    ),
+    )
+    .side_channel(),
     command(CommandId::Theme, "theme", &["/theme"], "Select theme"),
 ];
 
@@ -314,7 +403,34 @@ const fn command(
         name,
         aliases,
         description,
+        side_channel: false,
+        exits: false,
+        gate: CommandGate::Always,
     }
+}
+
+impl CommandDefinition {
+    const fn side_channel(mut self) -> Self {
+        self.side_channel = true;
+        self
+    }
+
+    const fn exits(mut self) -> Self {
+        self.exits = true;
+        self
+    }
+
+    const fn gated(mut self, gate: CommandGate) -> Self {
+        self.gate = gate;
+        self
+    }
+}
+
+/// The table row for `id`. [`COMMANDS`] carries every identifier, which
+/// `command_ids_and_definitions_agree` holds, so `None` is unreachable.
+#[must_use]
+pub fn definition(id: CommandId) -> Option<&'static CommandDefinition> {
+    COMMANDS.iter().find(|command| command.id == id)
 }
 
 #[must_use]
@@ -362,10 +478,7 @@ pub fn parse_command_in<'a>(input: &'a str, context: &CommandContext) -> Option<
 /// in [`COMMANDS`], so the fallback is unreachable rather than a silent name.
 #[must_use]
 pub fn command_name(id: CommandId) -> &'static str {
-    COMMANDS
-        .iter()
-        .find(|command| command.id == id)
-        .map_or("", |command| command.name)
+    definition(id).map_or("", |command| command.name)
 }
 
 /// What reference `_handle_command` shows above a command's own output.
@@ -409,10 +522,11 @@ pub fn command_available_in(command: &CommandDefinition, context: &CommandContex
     if context.excluded.contains(command.name) {
         return false;
     }
-    match command.id {
-        CommandId::PasteImage => context.clipboard_image_supported,
-        CommandId::Teleport | CommandId::RemoteProject => context.vibe_code_enabled,
-        _ => true,
+    match command.gate {
+        CommandGate::Always => true,
+        CommandGate::ClipboardImage => context.clipboard_image_supported,
+        CommandGate::RegistrySkills => context.registry_skills_enabled,
+        CommandGate::ExperimentalHarness => context.experimental_harness,
     }
 }
 
