@@ -61,16 +61,6 @@ const CORPUS_SCHEMA_VERSION: u32 = 1;
 /// captured almost nothing fails instead of reporting a clean but empty run.
 const MINIMUM_SCENARIOS: usize = 120;
 
-/// v2.25.5 added `disable_model_invocation` to the reference's `SkillMetadata`
-/// (`vibe/core/skills/models.py:27,80-86` at 4a96003186b1), so every accepted
-/// record's `model_dump()` now carries `disable_model_invocation: false`.
-const METADATA_MODEL_INVOCATION: &str = "OPEN: (row 28) v2.25.5 added the \
-     `disable-model-invocation` frontmatter key to the reference's `SkillMetadata` \
-     (`vibe/core/skills/models.py:27,80-86` at 4a96003186b1), so this accepted record \
-     dumps `disable_model_invocation: false`; the port's `SkillMetadata` \
-     (`crates/vibe-core/src/skills/schema.rs:31-40`) declares no such field, so its record \
-     lacks the key";
-
 /// v2.25.0 scoped each skill root: project harness roots publish `project`.
 const DISCOVERY_PROJECT_SCOPE: &str = "OPEN: (row 28) v2.25.0 made the reference's \
      `_compute_search_paths` pair every root with a scope \
@@ -154,54 +144,6 @@ const DIVERGENCES: &[(&str, &str)] = &[
          sides, and this entry holds the two digests permanently unequal, failing the replay \
          the moment the sentence conforms",
     ),
-    ("metadata/minimal", METADATA_MODEL_INVOCATION),
-    ("metadata/all-fields", METADATA_MODEL_INVOCATION),
-    ("metadata/allowed-tools-string", METADATA_MODEL_INVOCATION),
-    ("metadata/allowed-tools-list", METADATA_MODEL_INVOCATION),
-    ("metadata/allowed-tools-null", METADATA_MODEL_INVOCATION),
-    (
-        "metadata/allowed-tools-empty-string",
-        METADATA_MODEL_INVOCATION,
-    ),
-    (
-        "metadata/allowed-tools-underscore-spelling",
-        METADATA_MODEL_INVOCATION,
-    ),
-    (
-        "metadata/allowed-tools-both-spellings",
-        METADATA_MODEL_INVOCATION,
-    ),
-    ("metadata/user-invocable-hyphen", METADATA_MODEL_INVOCATION),
-    (
-        "metadata/user-invocable-underscore",
-        METADATA_MODEL_INVOCATION,
-    ),
-    (
-        "metadata/user-invocable-both-spellings",
-        METADATA_MODEL_INVOCATION,
-    ),
-    (
-        "metadata/user-invocable-string-false",
-        METADATA_MODEL_INVOCATION,
-    ),
-    (
-        "metadata/user-invocable-string-no",
-        METADATA_MODEL_INVOCATION,
-    ),
-    (
-        "metadata/metadata-non-string-values",
-        METADATA_MODEL_INVOCATION,
-    ),
-    ("metadata/metadata-null", METADATA_MODEL_INVOCATION),
-    ("metadata/metadata-int-keys", METADATA_MODEL_INVOCATION),
-    ("metadata/extra-key-ignored", METADATA_MODEL_INVOCATION),
-    ("metadata/name-64-chars", METADATA_MODEL_INVOCATION),
-    ("metadata/description-1024-chars", METADATA_MODEL_INVOCATION),
-    (
-        "metadata/compatibility-500-chars",
-        METADATA_MODEL_INVOCATION,
-    ),
-    ("metadata/license-null", METADATA_MODEL_INVOCATION),
     ("discovery/project-vibe-skills", DISCOVERY_PROJECT_SCOPE),
     ("discovery/project-agents-skills", DISCOVERY_PROJECT_SCOPE),
     ("discovery/project-both-roots", DISCOVERY_PROJECT_SCOPE),
@@ -912,6 +854,7 @@ fn metadata_fields(metadata: &SkillMetadata) -> Value {
         "metadata": metadata.metadata,
         "name": metadata.name,
         "user_invocable": metadata.user_invocable,
+        "disable_model_invocation": metadata.disable_model_invocation,
     })
 }
 
@@ -925,6 +868,7 @@ fn named_definition(name: &str) -> SkillDefinition {
         metadata: BTreeMap::new(),
         allowed_tools: Vec::new(),
         user_invocable: true,
+        model_invocable: true,
         body: String::new(),
         source: SkillSource::Local,
         scope: SkillScope::Global,
@@ -979,6 +923,10 @@ fn projection_definition(skill: &Value) -> SkillDefinition {
             .unwrap_or_default(),
         user_invocable: skill
             .get("user_invocable")
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
+        model_invocable: skill
+            .get("model_invocable")
             .and_then(Value::as_bool)
             .unwrap_or(true),
         body: text("prompt"),

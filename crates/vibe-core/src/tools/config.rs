@@ -197,8 +197,16 @@ pub const BASE_DECLARATION: ToolConfigDeclaration = declare_tool!(
     sensitive_patterns: ToolConfigDefault::Texts(&[]),
 );
 
-/// Reference `read_file.py` and `edit.py` `sensitive_patterns`.
-const DOTENV_PATTERNS: &[&str] = &["**/.env", "**/.env.*"];
+/// Reference `DEFAULT_SENSITIVE_PATTERNS` (`vibe/core/tools/utils.py`), the
+/// `sensitive_patterns` default of `read_file`, `write_file`, `edit` and `grep`.
+pub(crate) const DOTENV_PATTERNS: &[&str] = &[
+    "**/.env",
+    "**/.env.*",
+    "**/.env~",
+    "**/.envrc",
+    "**/.envrc.*",
+    "**/.envrc~",
+];
 
 /// Reference `grep.py` `exclude_patterns`.
 const GREP_EXCLUDE_PATTERNS: &[&str] = &[

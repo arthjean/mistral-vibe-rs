@@ -69,10 +69,15 @@ pub(super) fn todo_spec() -> ToolSpec {
             .define("TodoItem", item)
             .required(
                 "action",
-                Property::string().described(
-                    "Required on every call: `read` to view the current list, `write` to replace \
-                     it",
-                ),
+                // Reference v2.25.5 `TodoArgs.action` is `Literal["read", "write"]`,
+                // which Pydantic publishes as an inline enum and enforces before
+                // the call runs.
+                Property::string()
+                    .constrained("enum", json!(["read", "write"]))
+                    .described(
+                        "Required on every call: `read` to view the current list, `write` to \
+                         replace it",
+                    ),
             )
             .optional(
                 "todos",

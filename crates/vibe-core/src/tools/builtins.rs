@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::config::DotenvValues;
-use crate::extensions::DiscoveryRoots;
+use crate::extensions::{DiscoveryRoots, SkillDefinition};
 use crate::policy::{
     PermissionContext, PermissionMode, PermissionRequirement, PolicyGuardedTool, ToolGuard,
 };
@@ -41,9 +41,7 @@ use skill::{SkillInvocationResolver, run_skill, skill_spec};
 use skill::{render_skill, skill_files};
 use todo::{run_todo, todo_spec};
 #[cfg(test)]
-use web_fetch::{
-    FETCH_ACCEPT, FETCH_ACCEPT_LANGUAGE, HONEST_USER_AGENT, fetch_timeout, html_to_text,
-};
+use web_fetch::{FETCH_ACCEPT, FETCH_ACCEPT_LANGUAGE, HONEST_USER_AGENT, fetch_timeout};
 use web_fetch::{fetch_url, web_fetch_handler, web_fetch_spec};
 #[cfg(test)]
 use web_search::parse_search_response;
@@ -51,9 +49,9 @@ use web_search::{web_search_handler, web_search_spec};
 
 /// How many hops `web_fetch` follows before it refuses the chain.
 ///
-/// The reference leaves its HTTP client at the default, so a smaller budget
-/// here would refuse a page the reference reads. The bound still exists: a
-/// redirect loop terminates rather than running until the timeout.
+/// Reference `web_fetch.py:_MAX_REDIRECTS`: the twenty-first redirect is
+/// refused, so a redirect loop terminates rather than running until the
+/// timeout.
 const MAX_FETCH_REDIRECTS: usize = 20;
 /// How many skill names an unknown-skill error lists before it truncates.
 const MAX_LISTED_SKILLS: usize = 40;
@@ -158,6 +156,9 @@ pub struct BuiltinTools {
     /// Which skills each session has already loaded, so a second request for
     /// one is acknowledged instead of rendered again.
     loaded_skills: Arc<Mutex<BTreeMap<String, BTreeSet<String>>>>,
+    /// The skills that exist without a file on disk, which a discovered skill
+    /// of the same name never shadows.
+    builtin_skills: Arc<BTreeMap<String, SkillDefinition>>,
 }
 
 impl std::fmt::Debug for BuiltinTools {
@@ -178,7 +179,17 @@ impl BuiltinTools {
             web_search,
             todos: Arc::new(Mutex::new(BTreeMap::new())),
             loaded_skills: Arc::new(Mutex::new(BTreeMap::new())),
+            builtin_skills: Arc::new(crate::skills::builtins::builtin_skills()),
         }
+    }
+
+    /// The same tools with one more skill that has no directory on disk, the
+    /// way the reference's skill manager holds a skill registered with a
+    /// prompt alone.
+    #[must_use]
+    pub fn with_builtin_skill(mut self, skill: SkillDefinition) -> Self {
+        Arc::make_mut(&mut self.builtin_skills).insert(skill.name.clone(), skill);
+        self
     }
 
     /// The same tools reaching the endpoint with another credential, or none.
@@ -242,9 +253,11 @@ impl BuiltinTools {
                     "web_fetch",
                     policy.clone(),
                     approval.clone(),
-                    // Reference `WebFetchTool.resolve_permission`: a configured
+                    // Reference `WebFetch.resolve_permission`: a configured
                     // `always` or `never` settles the call, and everything else
-                    // asks for the host the fetch reaches.
+                    // asks for the origin the fetch reaches, scheme and port
+                    // included, so approving `https://host` does not cover
+                    // `http://host` or another port on it.
                     {
                         let settings = config.clone();
                         Arc::new(move |invocation: &ToolInvocation| {
@@ -253,11 +266,11 @@ impl BuiltinTools {
                                 return Ok(PermissionContext::settled(configured.permission));
                             }
                             let url = fetch_url(&invocation.arguments)?;
-                            let Some(domain) = url.host_str() else {
+                            let Some(origin) = web_fetch::url_origin(&url) else {
                                 return Ok(PermissionContext::deferred());
                             };
                             Ok(PermissionContext::asking(vec![
-                                PermissionRequirement::url_domain(domain),
+                                PermissionRequirement::url_pattern(&origin),
                             ]))
                         })
                     },
@@ -299,6 +312,7 @@ impl BuiltinTools {
                 skills,
                 ..DiscoveryRoots::default()
             },
+            builtins: self.builtin_skills.clone(),
             loaded: self.loaded_skills.clone(),
             session_id: session_id.to_owned(),
         }));
@@ -326,17 +340,19 @@ impl BuiltinTools {
             ..DiscoveryRoots::default()
         };
         let loaded = self.loaded_skills.clone();
+        let builtins = self.builtin_skills.clone();
         let session_id = session_id.to_owned();
         Arc::new(
             move |invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {
                 let roots = roots.clone();
+                let builtins = builtins.clone();
                 let loaded = loaded.clone();
                 let session_id = session_id.clone();
                 let name = invocation.arguments["name"]
                     .as_str()
                     .unwrap_or_default()
                     .to_owned();
-                Box::pin(async move { run_skill(&roots, &loaded, &session_id, &name) })
+                Box::pin(async move { run_skill(&roots, &builtins, &loaded, &session_id, &name) })
             },
         )
     }
@@ -990,6 +1006,119 @@ mod tests {
         assert!(!files.iter().any(|file| file == "SKILL.md"));
     }
 
+    /// Reference `sample_skill_files`: tooling directories are pruned at every
+    /// depth, a link to a directory is never followed, and a directory with no
+    /// `SKILL.md` of its own samples nothing.
+    #[test]
+    fn a_skill_file_sample_prunes_tooling_and_follows_no_directory_link() {
+        let directory = tempdir().expect("tempdir");
+        let base = directory.path();
+        std::fs::write(base.join("SKILL.md"), "skill\n").expect("own file");
+        for kept in ["references/api.md", "scripts/run.sh"] {
+            let path = base.join(kept);
+            std::fs::create_dir_all(path.parent().expect("parent")).expect("directory");
+            std::fs::write(path, "x\n").expect("seed");
+        }
+        for pruned in [
+            "node_modules/left-pad/index.js",
+            ".git/HEAD",
+            "scripts/__pycache__/run.pyc",
+            "dist/bundle.js",
+        ] {
+            let path = base.join(pruned);
+            std::fs::create_dir_all(path.parent().expect("parent")).expect("directory");
+            std::fs::write(path, "x\n").expect("seed");
+        }
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(base, base.join("loop")).expect("directory link");
+
+        assert_eq!(skill_files(base), ["references/api.md", "scripts/run.sh"]);
+
+        std::fs::remove_file(base.join("SKILL.md")).expect("remove");
+        assert!(skill_files(base).is_empty());
+    }
+
+    /// Reference v2.25.5 `get_model_invocable_skill`: a skill that disables
+    /// model invocation, in its frontmatter or through `agents/openai.yaml`,
+    /// is unknown to the tool and absent from the names it offers instead.
+    #[tokio::test]
+    async fn a_skill_the_model_may_not_invoke_is_unknown_to_the_tool() {
+        let directory = tempdir().expect("tempdir");
+        let skills = directory.path().join(".vibe/skills");
+        let seed = |name: &str, extra: &str| {
+            std::fs::create_dir_all(skills.join(name)).expect("skill directory");
+            std::fs::write(
+                skills.join(name).join("SKILL.md"),
+                format!("---\nname: {name}\ndescription: a {name}\n{extra}---\nDo it.\n"),
+            )
+            .expect("skill file");
+        };
+        seed("visible", "");
+        seed("explicit", "disable-model-invocation: true\n");
+        seed("policed", "");
+        std::fs::create_dir_all(skills.join("policed/agents")).expect("agents directory");
+        std::fs::write(
+            skills.join("policed/agents/openai.yaml"),
+            "policy:\n  allow_implicit_invocation: false\n",
+        )
+        .expect("policy");
+        let registry = registered(directory.path(), None).await;
+
+        for name in ["explicit", "policed"] {
+            let refused = registry
+                .invoke(
+                    "skill",
+                    ToolInvocation {
+                        call_id: format!("skill-{name}"),
+                        arguments: json!({"name": name}),
+                    },
+                )
+                .await
+                .expect_err("a skill the model may not invoke is not found");
+            let refused = refused.to_string();
+            let offered = refused
+                .split_once("available skills:")
+                .map(|(_, names)| names)
+                .expect("the refusal offers names");
+            assert!(offered.contains("visible"), "{refused}");
+            assert!(!offered.contains("explicit"), "{refused}");
+            assert!(!offered.contains("policed"), "{refused}");
+        }
+    }
+
+    /// Reference `load_openai_skill_metadata`: no file and no policy allow
+    /// implicit invocation, the policy decides when it is set, and a policy
+    /// that does not validate disables it.
+    #[test]
+    fn the_openai_metadata_policy_decides_implicit_invocation() {
+        let directory = tempdir().expect("tempdir");
+        let skill = directory.path().join("SKILL.md");
+        std::fs::write(&skill, "skill\n").expect("skill");
+        assert!(crate::skills::openai_allows_implicit_invocation(&skill));
+        std::fs::create_dir_all(directory.path().join("agents")).expect("agents");
+        let metadata = directory.path().join("agents/openai.yaml");
+        for (document, allowed) in [
+            ("", true),
+            ("interface:\n  display_name: Probe\n", true),
+            ("policy:\n", true),
+            ("policy:\n  allow_implicit_invocation: true\n", true),
+            ("policy:\n  products: [codex]\n", true),
+            ("policy:\n  allow_implicit_invocation: false\n", false),
+            ("policy:\n  allow_implicit_invocation: \"false\"\n", false),
+            ("policy:\n  allow_implicit_invocatio: true\n", false),
+            ("policy:\n  products: codex\n", false),
+            ("- a list\n", false),
+            ("policy: [unclosed\n", false),
+        ] {
+            std::fs::write(&metadata, document).expect("metadata");
+            assert_eq!(
+                crate::skills::openai_allows_implicit_invocation(&skill),
+                allowed,
+                "{document:?}"
+            );
+        }
+    }
+
     /// US-115: a skill with no directory on disk renders without the two lines
     /// that would otherwise name an empty path.
     #[test]
@@ -1002,6 +1131,7 @@ mod tests {
             metadata: BTreeMap::new(),
             allowed_tools: Vec::new(),
             user_invocable: false,
+            model_invocable: true,
             body: "Do the thing.".to_owned(),
             source: crate::skills::SkillSource::Builtin,
             scope: crate::skills::SkillScope::Builtin,
@@ -1276,17 +1406,75 @@ mod tests {
 
         let request = requests.recv().expect("the fixture recorded the request");
         assert!(
-            request.contains(&format!("accept: {FETCH_ACCEPT}\r\n")),
+            request.contains(&format!("Accept: {FETCH_ACCEPT}\r\n")),
             "{request}"
         );
         assert!(
-            request.contains(&format!("accept-language: {FETCH_ACCEPT_LANGUAGE}\r\n")),
+            request.contains(&format!("Accept-Language: {FETCH_ACCEPT_LANGUAGE}\r\n")),
             "{request}"
         );
         assert!(
-            request.contains(&format!("user-agent: {}\r\n", settings.user_agent)),
+            request.contains(&format!("User-Agent: {}\r\n", settings.user_agent)),
             "{request}"
         );
+        // The head httpx writes: title-case names, `Host` first, then its two
+        // client defaults, then the call's three headers.
+        let names = request
+            .split("\r\n")
+            .skip(1)
+            .take_while(|line| !line.is_empty())
+            .filter_map(|line| line.split_once(':').map(|(name, _)| name))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            names,
+            [
+                "Host",
+                "Accept-Encoding",
+                "Connection",
+                "User-Agent",
+                "Accept",
+                "Accept-Language"
+            ],
+            "{request}"
+        );
+        assert!(
+            request.contains("Accept-Encoding: gzip, deflate, zstd\r\n"),
+            "{request}"
+        );
+        assert!(request.contains("Connection: keep-alive\r\n"), "{request}");
+    }
+
+    /// httpx undoes each `Content-Encoding` it offered, last applied first,
+    /// and skips one it does not know.
+    #[test]
+    fn a_compressed_body_is_decoded_the_way_httpx_decodes_it() {
+        use std::io::Write as _;
+
+        let text = b"a page worth compressing, a page worth compressing".to_vec();
+        let mut gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        gzip.write_all(&text).expect("gzip");
+        let gzip = gzip.finish().expect("gzip");
+        let mut zlib = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+        zlib.write_all(&text).expect("zlib");
+        let zlib = zlib.finish().expect("zlib");
+        let mut raw =
+            flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::default());
+        raw.write_all(&text).expect("deflate");
+        let raw = raw.finish().expect("deflate");
+        let zstd = zstd::stream::encode_all(text.as_slice(), 0).expect("zstd");
+        let layered = zstd::stream::encode_all(gzip.as_slice(), 0).expect("layered");
+
+        let decode = |body: &[u8], encoding: &str| {
+            web_fetch::decode_content(body, &[encoding.to_owned()]).expect("decode")
+        };
+        assert_eq!(decode(&gzip, "gzip"), text);
+        assert_eq!(decode(&zlib, "deflate"), text);
+        assert_eq!(decode(&raw, "Deflate"), text);
+        assert_eq!(decode(&zstd, "zstd"), text);
+        assert_eq!(decode(&layered, "gzip, zstd"), text);
+        assert_eq!(decode(&text, "br"), text);
+        assert_eq!(decode(b"", "gzip"), b"");
+        assert!(web_fetch::decode_content(b"not gzip", &["gzip".to_owned()]).is_err());
     }
 
     /// US-251: a bot challenge is answered by one retry under an agent that
@@ -1313,11 +1501,11 @@ mod tests {
         let first = requests.recv().expect("the first try was recorded");
         let retry = requests.recv().expect("the retry was recorded");
         assert!(
-            !first.contains(&format!("user-agent: {HONEST_USER_AGENT}\r\n")),
+            !first.contains(&format!("User-Agent: {HONEST_USER_AGENT}\r\n")),
             "the first try wears the browser agent: {first}"
         );
         assert!(
-            retry.contains(&format!("user-agent: {HONEST_USER_AGENT}\r\n")),
+            retry.contains(&format!("User-Agent: {HONEST_USER_AGENT}\r\n")),
             "the retry names itself: {retry}"
         );
         assert!(
@@ -1456,6 +1644,110 @@ mod tests {
             .expect_err("an unbounded redirect chain is refused");
         assert!(refused.to_string().contains("127.0.0.1"), "{refused}");
         assert!(!refused.to_string().contains("token=secret"), "{refused}");
+    }
+
+    /// Reference v2.25.5 `_fetch_url`: a followed redirect reports the URL the
+    /// last hop answered from, not the one the call asked for.
+    #[tokio::test]
+    async fn a_redirect_reports_the_url_the_last_hop_answered_from() {
+        let directory = tempdir().expect("tempdir");
+        let registry = registered_with(directory.path(), None, Arc::new(AllowApproval)).await;
+        let base = serve_once(vec![
+            redirect_response("/middle"),
+            redirect_response("final?page=2"),
+            http_response("arrived"),
+        ]);
+
+        let fetched = registry
+            .invoke(
+                "web_fetch",
+                ToolInvocation {
+                    call_id: "fetch-1".to_owned(),
+                    arguments: json!({"url": format!("{base}/start")}),
+                },
+            )
+            .await
+            .expect("fetch");
+        let landed = format!("{base}/final?page=2");
+        assert_eq!(fetched.typed_result["url"], json!(landed));
+        assert_eq!(fetched.typed_result["content"], json!("arrived"));
+        assert!(
+            fetched.model_text.contains(&format!("url: {landed}")),
+            "{}",
+            fetched.model_text
+        );
+    }
+
+    /// Reference `_do_fetch`: a hop that leaves the approved origin is refused
+    /// rather than followed, because the approval named one origin, and the
+    /// other origin is never contacted.
+    #[tokio::test]
+    async fn a_redirect_to_another_origin_is_refused() {
+        let directory = tempdir().expect("tempdir");
+        let registry = registered_with(directory.path(), None, Arc::new(AllowApproval)).await;
+        let (elsewhere, contacted) = serve_recording(vec![http_response("unapproved")]);
+        let base = serve_once(vec![redirect_response(&format!("{elsewhere}/page"))]);
+
+        let refused = registry
+            .invoke(
+                "web_fetch",
+                ToolInvocation {
+                    call_id: "fetch-1".to_owned(),
+                    arguments: json!({"url": format!("{base}/start")}),
+                },
+            )
+            .await
+            .expect_err("another origin needs its own approval");
+        assert!(
+            refused.to_string().contains("its own web_fetch approval"),
+            "{refused}"
+        );
+        assert!(
+            contacted.recv_timeout(SETTLE).is_err(),
+            "the other origin was contacted"
+        );
+    }
+
+    /// Reference `_url_origin`: the scope an approval names is the scheme, the
+    /// host and a port other than the scheme's default.
+    #[test]
+    fn a_fetch_is_scoped_to_its_origin() {
+        let origin = |text: &str| web_fetch::url_origin(&Url::parse(text).expect("url"));
+        assert_eq!(
+            origin("https://Example.COM:443/a?b#c").as_deref(),
+            Some("https://example.com")
+        );
+        assert_eq!(
+            origin("http://example.com:8080/").as_deref(),
+            Some("http://example.com:8080")
+        );
+        assert_eq!(origin("http://[::1]:80/x").as_deref(), Some("http://[::1]"));
+        assert_eq!(origin("ftp://example.com/"), None);
+    }
+
+    /// `str(httpx.URL)` keeps an empty path empty, which `url` does not.
+    #[test]
+    fn a_reported_url_is_rendered_the_way_httpx_renders_it() {
+        let rendered =
+            |text: &str| web_fetch::httpx_rendering(&Url::parse(text).expect("url"), text);
+        assert_eq!(rendered("https://example.com"), "https://example.com");
+        assert_eq!(
+            rendered("https://example.com?x=1"),
+            "https://example.com?x=1"
+        );
+        assert_eq!(rendered("https://example.com/"), "https://example.com/");
+        assert_eq!(
+            rendered("https://example.com/a b"),
+            "https://example.com/a%20b"
+        );
+        let base = Url::parse("http://a.test/b").expect("url");
+        let joined = base.join("//other.test").expect("join");
+        assert_eq!(
+            web_fetch::httpx_rendering(&joined, "//other.test"),
+            "http://other.test"
+        );
+        let joined = base.join("/x").expect("join");
+        assert_eq!(web_fetch::httpx_rendering(&joined, "/x"), "http://a.test/x");
     }
 
     /// A host that accepts and never answers fails at the requested timeout,
@@ -1728,15 +2020,6 @@ mod tests {
         assert!(fetched.model_text.contains(&"İ".repeat(9)), "{fetched:?}");
         assert!(fetched.model_text.contains("Body"), "{fetched:?}");
         assert!(!fetched.model_text.contains("é = 1"), "{fetched:?}");
-    }
-
-    #[test]
-    fn html_reaches_the_model_as_prose_without_scripts_or_tags() {
-        let text = html_to_text(
-            "<html><head><style>a{color:red}</style></head><body><script>alert('x')</script>\
-             <h1>Title</h1><p>Body &amp; more</p></body></html>",
-        );
-        assert_eq!(text, "Title\nBody & more");
     }
 
     #[test]

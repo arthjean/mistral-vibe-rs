@@ -228,14 +228,14 @@ async fn a_rule_answers_for_its_own_scope_only() {
     let store = PermissionStore::default();
     store
         .add_rule(
-            PermissionRequirement::url_domain("example.com").approved_rule("web_fetch", "session"),
+            PermissionRequirement::url_pattern("example.com").approved_rule("web_fetch", "session"),
         )
         .await;
 
     let same_scope = store
         .resolve(
             "web_fetch",
-            &PermissionContext::asking(vec![PermissionRequirement::url_domain("example.com")]),
+            &PermissionContext::asking(vec![PermissionRequirement::url_pattern("example.com")]),
         )
         .await
         .expect("resolution");
@@ -458,13 +458,22 @@ async fn a_sensitive_path_asks_even_at_permission_always() {
 
     let sensitive_context =
         resolve_file_tool_permission(&directory.path().join(".env"), "read_file", &settings, None);
+    let resolved = std::fs::canonicalize(directory.path())
+        .expect("the directory resolves")
+        .join(".env")
+        .display()
+        .to_string();
     assert_eq!(
         sensitive_context.requirements,
-        [PermissionRequirement::sensitive_file(".env", "read_file")]
+        [PermissionRequirement::sensitive_file(
+            &resolved,
+            "read_file"
+        )]
     );
     assert_eq!(
-        sensitive_context.requirements[0].session_pattern, "*",
-        "an approval covers the sensitive class for the session"
+        sensitive_context.requirements[0].session_pattern,
+        glob_escape(&resolved),
+        "an approval covers this one sensitive file for the session"
     );
     let sensitive = store
         .resolve("read_file", &sensitive_context)
@@ -779,7 +788,7 @@ async fn approval_lock_serializes_user_decisions_without_holding_policy_state() 
             .authorize(
                 "web_fetch",
                 Value::Null,
-                PermissionContext::asking(vec![PermissionRequirement::url_domain("one.example")]),
+                PermissionContext::asking(vec![PermissionRequirement::url_pattern("one.example")]),
                 first_approval.as_ref(),
             )
             .await
@@ -803,7 +812,7 @@ async fn approval_lock_serializes_user_decisions_without_holding_policy_state() 
             .authorize(
                 "web_fetch",
                 Value::Null,
-                PermissionContext::asking(vec![PermissionRequirement::url_domain("two.example")]),
+                PermissionContext::asking(vec![PermissionRequirement::url_pattern("two.example")]),
                 second_approval.as_ref(),
             )
             .await
@@ -978,4 +987,15 @@ fn the_denial_prefix_is_what_a_denial_reports() {
             .starts_with(super::DENIAL_PREFIX),
         "only a refusal carries the prefix"
     );
+}
+
+#[test]
+fn a_sensitive_file_approval_does_not_cover_another_sensitive_file() {
+    let first = PermissionRequirement::sensitive_file("/work/a[1]/.env", "read_file");
+    assert_eq!(first.session_pattern, "/work/a[[]1]/.env");
+    let rule = first.approved_rule("read_file", "approved");
+    assert!(rule.covers("read_file", &first));
+    let second = PermissionRequirement::sensitive_file("/work/b/.env", "read_file");
+    assert!(!rule.covers("read_file", &second));
+    assert_eq!(glob_escape("/a*b?c[d]"), "/a[*]b[?]c[[]d]");
 }

@@ -128,27 +128,27 @@ struct SnapshotState {
 
 /// The checkpoint engine's filesystem port, backed by the workspace.
 ///
-/// Every path arrives in the display form the engine keys its log by and is
-/// confined before it is touched, so the engine cannot address anything the
-/// rest of the workspace would refuse. A path that resolves outside the root
-/// fails rather than reading as absent, because the engine would otherwise
-/// record a deletion for a file it was never allowed to look at.
+/// Every path arrives in the display form the engine keys its log by, which is
+/// relative for a file under the root and absolute for one a file tool reached
+/// outside it, and is located the way the tool that wrote it located it. A
+/// path that cannot be resolved fails rather than reading as absent, because
+/// the engine would otherwise record a deletion for a file it never saw.
 #[derive(Clone)]
 struct WorkspaceFiles {
     workspace: Arc<Workspace>,
 }
 
 impl WorkspaceFiles {
-    fn confined(&self, path: &str, operation: &'static str) -> Result<PathBuf, FileAccessError> {
+    fn located(&self, path: &str, operation: &'static str) -> Result<PathBuf, FileAccessError> {
         self.workspace
-            .confined(Path::new(path), false)
+            .located(Path::new(path), false)
             .map_err(|error| FileAccessError::new(operation, path, error))
     }
 }
 
 impl CheckpointFiles for WorkspaceFiles {
     fn read_bytes(&self, path: &str) -> Result<Option<Vec<u8>>, FileAccessError> {
-        let relative = self.confined(path, "reading")?;
+        let relative = self.located(path, "reading")?;
         // One read, classified by what it failed with, rather than a presence
         // check followed by a read: the check answers for a moment that has
         // passed by the time the read lands, and a file deleted in between
@@ -170,21 +170,21 @@ impl CheckpointFiles for WorkspaceFiles {
     }
 
     fn write_bytes(&self, path: &str, data: &[u8]) -> Result<(), FileAccessError> {
-        let relative = self.confined(path, "writing")?;
+        let relative = self.located(path, "writing")?;
         self.workspace
             .atomic_replace(&relative, data)
             .map_err(|error| FileAccessError::new("writing", path, error))
     }
 
     fn remove(&self, path: &str) -> Result<(), FileAccessError> {
-        let relative = self.confined(path, "deleting")?;
+        let relative = self.located(path, "deleting")?;
         self.workspace
             .remove(&relative)
             .map_err(|error| FileAccessError::new("deleting", path, error))
     }
 
     fn exists(&self, path: &str) -> bool {
-        self.confined(path, "reading")
+        self.located(path, "reading")
             .is_ok_and(|relative| self.workspace.exists(&relative))
     }
 }
@@ -455,7 +455,7 @@ impl ReviewManager {
         path: impl AsRef<Path>,
         content: impl AsRef<[u8]>,
     ) -> Result<MutationResult, WorkspaceError> {
-        let relative = self.workspace.confined(path.as_ref(), false)?;
+        let relative = self.workspace.located(path.as_ref(), false)?;
         self.capture_baseline(&relative)?;
         self.workspace.write_new(&relative, content.as_ref())
     }
@@ -473,7 +473,7 @@ impl ReviewManager {
         path: impl AsRef<Path>,
         operations: &[EditOperation],
     ) -> Result<MutationResult, WorkspaceError> {
-        let relative = self.workspace.confined(path.as_ref(), true)?;
+        let relative = self.workspace.located(path.as_ref(), true)?;
         let lock = self.workspace.write_lock(&relative)?;
         let _guard = lock.lock().map_err(|_| WorkspaceError::LockPoisoned {
             surface: "file write locks",
@@ -1164,10 +1164,19 @@ mod tests {
             files.read_bytes("a-directory").is_err(),
             "something that is there and will not open is never absence"
         );
-        assert!(
-            files.read_bytes("../outside.txt").is_err(),
-            "a path the workspace refuses is never absence either"
-        );
+        // A file a tool reached outside the root is keyed by its absolute
+        // path and read through the same port, so a rewind restores it too.
+        let outside = tempdir().expect("outside");
+        let kept = std::fs::canonicalize(outside.path())
+            .expect("canonical")
+            .join("kept.txt");
+        std::fs::write(&kept, "outside\n").expect("seed outside");
+        let kept = kept.to_string_lossy().into_owned();
+        assert_eq!(files.read_bytes(&kept), Ok(Some(b"outside\n".to_vec())));
+        files
+            .write_bytes(&kept, b"restored\n")
+            .expect("write outside");
+        assert_eq!(files.read_bytes(&kept), Ok(Some(b"restored\n".to_vec())));
     }
 
     /// The engine is fed by the turn boundaries the server already drives, so a

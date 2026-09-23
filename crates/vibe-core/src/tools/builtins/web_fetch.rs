@@ -1,16 +1,21 @@
 //! The `web_fetch` tool: one URL, rendered as text.
 //!
-//! Redirects are followed to a bound, because a redirect chain is a way to
-//! reach a host the operator never approved. What comes back is reduced to text
-//! by a small HTML reader rather than a parser dependency: the need is the
-//! visible prose, and script, style and markup are what stands between the
-//! model and it.
+//! Redirects are followed by hand, to a bound and only within the origin the
+//! operator approved, because a redirect chain is a way to reach a host the
+//! operator never approved. An HTML body is converted to Markdown the way the
+//! reference converts it (see [`markdown`]), because the Markdown is what its
+//! model reads.
 
 use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::{Value, json};
 use url::Url;
+
+mod entities;
+mod html;
+mod markdown;
+mod numeric;
 
 use super::{MAX_FETCH_REDIRECTS, declared_document};
 use crate::schema::{ObjectSchema, Property};
@@ -25,14 +30,14 @@ use crate::tools::{
 /// | Reference directive | Covered by |
 /// |---|---|
 /// | The tool retrieves the content of one URL | "Retrieve one web page" |
-/// | HTML is converted to text before the model sees it | "HTML arrives as text" |
+/// | HTML is converted to Markdown before the model sees it | "HTML arrives as Markdown" |
 /// | Long pages are truncated | "a long page is truncated" |
 /// | The timeout is optional and capped | the `timeout` description, "at most 120" |
 pub(super) fn web_fetch_spec() -> ToolSpec {
     ToolSpec {
         name: "web_fetch".to_owned(),
-        description: "Retrieve one web page over http or https. HTML arrives as text with the \
-                      markup stripped, and a long page is truncated rather than flooding the \
+        description: "Retrieve one web page over http or https. HTML arrives as Markdown, \
+                      and a long page is truncated rather than flooding the \
                       conversation."
             .to_owned(),
         input_schema: ObjectSchema::new()
@@ -152,20 +157,24 @@ pub(super) async fn run_web_fetch(
     let url = fetch_url(arguments)?;
     let timeout = fetch_timeout(arguments, settings)?;
     let host = url.host_str().unwrap_or("the requested host").to_owned();
+    let approved = url_origin(&url)
+        .ok_or_else(|| ToolError::Execution(format!("`{host}` names no host a fetch can reach")))?;
+    // Reference `_do_fetch` turns the client's own redirect handling off and
+    // follows each hop itself, so every hop is checked against the origin the
+    // operator approved rather than trusted because the server named it.
+    // httpx writes field names in title case, so the client does too.
     let client = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::limited(MAX_FETCH_REDIRECTS))
+        .redirect(reqwest::redirect::Policy::none())
+        .http1_title_case_headers()
         .timeout(timeout)
         .build()
         .map_err(|error| ToolError::Execution(error.to_string()))?;
-    let send = |agent: String| {
-        let request = client
-            .get(url.clone())
-            .header(reqwest::header::USER_AGENT, agent)
-            .header(reqwest::header::ACCEPT, FETCH_ACCEPT)
-            .header(reqwest::header::ACCEPT_LANGUAGE, FETCH_ACCEPT_LANGUAGE);
+    let send = |target: Url, agent: String| {
+        let headers = request_headers(&target, &agent);
+        let request = client.get(target);
         let host = host.clone();
         async move {
-            request.send().await.map_err(|error| {
+            request.headers(headers?).send().await.map_err(|error| {
                 // A URL can carry credentials or a query string, so the failure
                 // names the host and nothing else.
                 if error.is_timeout() {
@@ -173,26 +182,67 @@ pub(super) async fn run_web_fetch(
                         "fetching from {host} timed out after {} seconds",
                         timeout.as_secs()
                     ))
-                } else if error.is_redirect() {
-                    ToolError::Execution(format!(
-                        "fetching from {host} exceeded {MAX_FETCH_REDIRECTS} redirects"
-                    ))
                 } else {
                     ToolError::Execution(format!("fetching from {host} failed"))
                 }
             })
         }
     };
-    let response = send(settings.user_agent.clone()).await?;
-    // Reference `_do_fetch`: one retry and no more, so a host that answers
-    // every agent with a challenge fails instead of looping.
-    let response = if is_challenge(&response) {
-        send(HONEST_USER_AGENT.to_owned()).await?
+    // Reference `_normalize_url` prefixes `https://` to anything that names no
+    // scheme, and httpx renders the result from that text.
+    let raw = arguments["url"].as_str().unwrap_or_default().trim();
+    let written = if raw.contains("://") {
+        raw.to_owned()
     } else {
-        response
+        format!("https://{}", raw.trim_start_matches('/'))
+    };
+    let mut current = url.clone();
+    let mut shown = httpx_rendering(&current, &written);
+    // Reference `_fetch_url` hands its headers dictionary to every hop, so once
+    // a challenge made it honest the later hops keep the honest agent.
+    let mut agent = settings.user_agent.clone();
+    let mut hop = 0_usize;
+    let response = loop {
+        let mut response = send(current.clone(), agent.clone()).await?;
+        // Reference `_do_fetch`: one retry per hop and no more, so a host that
+        // answers every agent with a challenge fails instead of looping.
+        if is_challenge(&response) {
+            agent = HONEST_USER_AGENT.to_owned();
+            response = send(current.clone(), agent.clone()).await?;
+        }
+        let Some(location) = redirect_location(&response) else {
+            break response;
+        };
+        if hop == MAX_FETCH_REDIRECTS {
+            return Err(ToolError::Execution(format!(
+                "fetching from {host} exceeded {MAX_FETCH_REDIRECTS} redirects"
+            )));
+        }
+        let next = current.join(&location).map_err(|_| {
+            ToolError::Execution(format!("fetching from {host} was redirected to no URL"))
+        })?;
+        match url_origin(&next) {
+            Some(origin) if origin == approved => {}
+            Some(origin) => {
+                return Err(ToolError::Execution(format!(
+                    "fetching from {approved} was redirected to {origin}, which needs its own \
+                     web_fetch approval"
+                )));
+            }
+            None => {
+                return Err(ToolError::Execution(format!(
+                    "fetching from {host} was redirected to no http or https URL"
+                )));
+            }
+        }
+        shown = httpx_rendering(&next, &location);
+        current = next;
+        hop += 1;
     };
     let status = response.status();
-    if !status.is_success() {
+    // Reference `response.is_error`: only a 4xx or a 5xx fails the call, so a
+    // redirect status that names no location answers with its own body.
+    if status.is_client_error() || status.is_server_error() {
         return Err(ToolError::Execution(format!(
             "fetching from {host} returned HTTP {}",
             status.as_u16()
@@ -204,14 +254,29 @@ pub(super) async fn run_web_fetch(
         .and_then(|value| value.to_str().ok())
         .unwrap_or("text/plain")
         .to_owned();
-    let body = response
-        .text()
+    let encodings = response
+        .headers()
+        .get_all(reqwest::header::CONTENT_ENCODING)
+        .iter()
+        .map(|value| String::from_utf8_lossy(value.as_bytes()).into_owned())
+        .collect::<Vec<_>>();
+    let raw = response
+        .bytes()
         .await
-        .map_err(|_| ToolError::Execution(format!("the body from {host} is not text")))?;
-    // Reference `run`: the HTML reader is reached on `text/html` alone, so a
-    // body that merely names an HTML-adjacent type keeps its own bytes.
+        .map_err(|_| ToolError::Execution(format!("fetching from {host} failed")))?;
+    let decoded = decode_content(&raw, &encodings).map_err(|_| {
+        ToolError::Execution(format!(
+            "the body from {host} does not decode as its Content-Encoding says"
+        ))
+    })?;
+    // Reference `response.text`: no charset names another codec here, and a
+    // byte that is not UTF-8 is replaced rather than refused.
+    let body = String::from_utf8_lossy(&decoded).into_owned();
+    // Reference `run`: the converter is reached on `text/html` alone, so a
+    // body that merely names an HTML-adjacent type keeps its own bytes, and a
+    // page the converter fails on fails the call with the converter's message.
     let text = if content_type.contains("text/html") {
-        html_to_text(&body)
+        markdown::html_to_markdown(&body).map_err(|error| ToolError::Execution(error.0))?
     } else {
         body
     };
@@ -237,7 +302,7 @@ pub(super) async fn run_web_fetch(
     // line from it, so both the typed result and the text the model reads
     // follow the declaration rather than the body alone.
     let model_text = reference_text::joined(&[
-        ("url", url.as_str().to_owned()),
+        ("url", shown.clone()),
         ("content", content.clone()),
         ("content_type", content_type.clone()),
         (
@@ -246,13 +311,159 @@ pub(super) async fn run_web_fetch(
         ),
     ]);
     Ok(ToolExecutionOutput::new(model_text)
-        .displayed_as(json!({"kind": "webFetch", "url": url.as_str()}))
+        .displayed_as(json!({"kind": "webFetch", "url": shown}))
         .typed(json!({
-            "url": url.as_str(),
+            "url": shown,
             "content": content,
             "content_type": content_type,
             "was_truncated": truncated,
         })))
+}
+
+/// The encodings the request offers, which are the ones httpx decodes with
+/// `zstandard` installed, as the reference runtime ships it.
+pub(super) const FETCH_ACCEPT_ENCODING: &str = "gzip, deflate, zstd";
+
+/// The request head the reference sends, field for field and in its order.
+///
+/// httpx starts from its client defaults (`Host`, `Accept-Encoding`,
+/// `Connection`), then applies the call's own three headers. `Host` is set
+/// here rather than left to the client, which would otherwise append it after
+/// the others; it names a port only when the scheme's default is not the one
+/// in use, as httpx writes it.
+fn request_headers(target: &Url, agent: &str) -> Result<reqwest::header::HeaderMap, ToolError> {
+    use reqwest::header::{
+        ACCEPT, ACCEPT_ENCODING, ACCEPT_LANGUAGE, CONNECTION, HOST, HeaderMap, HeaderValue,
+        USER_AGENT,
+    };
+    let invalid = |field: &str| ToolError::Execution(format!("the {field} header is not valid"));
+    let authority = match (target.host_str(), target.port()) {
+        (Some(host), Some(port)) => format!("{host}:{port}"),
+        (Some(host), None) => host.to_owned(),
+        (None, _) => String::new(),
+    };
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        HOST,
+        HeaderValue::from_str(&authority).map_err(|_| invalid("Host"))?,
+    );
+    headers.insert(
+        ACCEPT_ENCODING,
+        HeaderValue::from_static(FETCH_ACCEPT_ENCODING),
+    );
+    headers.insert(CONNECTION, HeaderValue::from_static("keep-alive"));
+    headers.insert(
+        USER_AGENT,
+        HeaderValue::from_str(agent).map_err(|_| invalid("User-Agent"))?,
+    );
+    headers.insert(ACCEPT, HeaderValue::from_static(FETCH_ACCEPT));
+    headers.insert(
+        ACCEPT_LANGUAGE,
+        HeaderValue::from_static(FETCH_ACCEPT_LANGUAGE),
+    );
+    Ok(headers)
+}
+
+/// The body with every `Content-Encoding` the response names undone.
+///
+/// httpx `Response._get_content_decoder`: the values are split on commas and
+/// lowered, an encoding it does not know is skipped rather than refused, and
+/// the ones it knows are undone last applied first. `deflate` reads the zlib
+/// wrapper and falls back to a raw stream, as its `DeflateDecoder` does, and
+/// an empty body decodes to nothing whatever it claims.
+pub(super) fn decode_content(body: &[u8], encodings: &[String]) -> std::io::Result<Vec<u8>> {
+    use std::io::Read as _;
+
+    let applied = encodings
+        .iter()
+        .flat_map(|value| value.split(','))
+        .map(|value| value.trim().to_ascii_lowercase())
+        .filter(|value| matches!(value.as_str(), "gzip" | "deflate" | "zstd"))
+        .collect::<Vec<_>>();
+    let mut data = body.to_vec();
+    for encoding in applied.iter().rev() {
+        if data.is_empty() {
+            break;
+        }
+        let mut decoded = Vec::new();
+        match encoding.as_str() {
+            "gzip" => {
+                flate2::read::GzDecoder::new(data.as_slice()).read_to_end(&mut decoded)?;
+            }
+            "deflate" => {
+                if flate2::read::ZlibDecoder::new(data.as_slice())
+                    .read_to_end(&mut decoded)
+                    .is_err()
+                {
+                    decoded.clear();
+                    flate2::read::DeflateDecoder::new(data.as_slice()).read_to_end(&mut decoded)?;
+                }
+            }
+            _ => decoded = zstd::stream::decode_all(data.as_slice())?,
+        }
+        data = decoded;
+    }
+    Ok(data)
+}
+
+/// The origin a URL belongs to, `scheme://host[:port]` with the scheme's
+/// default port left out, or [`None`] for a URL no fetch can reach.
+///
+/// Reference `_url_origin`: this is what an approval names and what every
+/// redirect hop has to stay on. `host_str` already brackets an IPv6 literal the
+/// way the reference does.
+pub(super) fn url_origin(url: &Url) -> Option<String> {
+    if !matches!(url.scheme(), "http" | "https") {
+        return None;
+    }
+    let host = url.host_str().filter(|host| !host.is_empty())?;
+    Some(match url.port() {
+        Some(port) => format!("{}://{host}:{port}", url.scheme()),
+        None => format!("{}://{host}", url.scheme()),
+    })
+}
+
+/// Where a response redirects to, when it is a redirect that names one.
+///
+/// httpx `Response.has_redirect_location`: the five redirect statuses with a
+/// `Location` header. A `300` or a `304` is an answer, not a hop.
+fn redirect_location(response: &reqwest::Response) -> Option<String> {
+    if !matches!(response.status().as_u16(), 301 | 302 | 303 | 307 | 308) {
+        return None;
+    }
+    response
+        .headers()
+        .get(reqwest::header::LOCATION)
+        .map(|value| String::from_utf8_lossy(value.as_bytes()).into_owned())
+}
+
+/// A URL as `str(httpx.URL)` renders it, given the text it was parsed from.
+///
+/// Both parsers normalize the same way except for one thing: `url` always
+/// writes a `/` path after the authority, while httpx keeps an empty path when
+/// the text had none, so `https://example.com?q` stays without the slash.
+pub(super) fn httpx_rendering(url: &Url, written: &str) -> String {
+    let after_scheme = match written.find("://") {
+        Some(index) => &written[index + 3..],
+        None => match written.strip_prefix("//") {
+            Some(rest) => rest,
+            // A relative reference inherits the base's path, which is never
+            // empty once a request was made with it.
+            None => return url.as_str().to_owned(),
+        },
+    };
+    let path_is_empty = !after_scheme
+        .find(['/', '?', '#'])
+        .is_some_and(|index| after_scheme[index..].starts_with('/'));
+    if path_is_empty && url.path() == "/" {
+        format!(
+            "{}{}",
+            &url[..url::Position::BeforePath],
+            &url[url::Position::AfterPath..]
+        )
+    } else {
+        url.as_str().to_owned()
+    }
 }
 
 /// Whether a response is the bot challenge the reference retries once.
@@ -263,121 +474,4 @@ fn is_challenge(response: &reqwest::Response) -> bool {
             .get(CHALLENGE_HEADER)
             .and_then(|value| value.to_str().ok())
             .is_some_and(|value| value == CHALLENGE_VALUE)
-}
-
-/// Strips markup so an HTML page reaches the model as prose.
-///
-/// The reference runs `markdownify`; there is no equivalent in this workspace
-/// and the non-goals exclude execution-trace parity, so this drops the elements
-/// that carry no prose and then the tags, which is what makes the body
-/// readable.
-pub(super) fn html_to_text(html: &str) -> String {
-    let without_blocks = ["script", "style", "noscript", "iframe", "svg"]
-        .into_iter()
-        .fold(html.to_owned(), |document, tag| {
-            drop_element(&document, tag)
-        });
-    let mut text = String::with_capacity(without_blocks.len());
-    let mut tag = String::new();
-    let mut inside_tag = false;
-    for character in without_blocks.chars() {
-        match character {
-            '<' => {
-                inside_tag = true;
-                tag.clear();
-            }
-            '>' if inside_tag => {
-                inside_tag = false;
-                // A block-level tag ends a line; an inline one only separates
-                // words, so `a<b>bold</b>c` does not become three lines.
-                text.push(if is_block_tag(&tag) { '\n' } else { ' ' });
-            }
-            _ if inside_tag => tag.push(character),
-            _ => text.push(character),
-        }
-    }
-    let text = text
-        .replace("&nbsp;", " ")
-        .replace("&amp;", "&")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&#39;", "'");
-    text.lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-/// Whether a tag body names an element that breaks the line around its text.
-pub(super) fn is_block_tag(tag: &str) -> bool {
-    let name = tag
-        .trim_start_matches('/')
-        .split([' ', '\t', '\n', '\r', '/'])
-        .next()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    matches!(
-        name.as_str(),
-        "address"
-            | "article"
-            | "aside"
-            | "blockquote"
-            | "br"
-            | "div"
-            | "dd"
-            | "dl"
-            | "dt"
-            | "figure"
-            | "footer"
-            | "form"
-            | "h1"
-            | "h2"
-            | "h3"
-            | "h4"
-            | "h5"
-            | "h6"
-            | "header"
-            | "hr"
-            | "li"
-            | "main"
-            | "nav"
-            | "ol"
-            | "p"
-            | "pre"
-            | "section"
-            | "table"
-            | "tbody"
-            | "td"
-            | "tfoot"
-            | "th"
-            | "thead"
-            | "tr"
-            | "ul"
-    )
-}
-
-/// Removes every `<tag ...> ... </tag>` span, case-insensitively.
-///
-/// The case fold is ASCII-only on purpose: element names are ASCII, and a full
-/// Unicode fold changes the byte length of characters such as U+0130, which
-/// would slide every offset found in the folded copy off its counterpart in the
-/// original and slice a fetched page mid-codepoint.
-pub(super) fn drop_element(document: &str, tag: &str) -> String {
-    let lowered = document.to_ascii_lowercase();
-    let open = format!("<{tag}");
-    let close = format!("</{tag}>");
-    let mut result = String::with_capacity(document.len());
-    let mut cursor = 0;
-    while let Some(start) = lowered[cursor..].find(&open) {
-        let start = cursor + start;
-        result.push_str(&document[cursor..start]);
-        cursor = match lowered[start..].find(&close) {
-            Some(end) => start + end + close.len(),
-            None => document.len(),
-        };
-    }
-    result.push_str(&document[cursor..]);
-    result
 }

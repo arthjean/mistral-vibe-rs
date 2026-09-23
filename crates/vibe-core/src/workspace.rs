@@ -19,6 +19,7 @@ use crate::tools::reference_text;
 mod review;
 mod search;
 pub mod text_file;
+pub(crate) mod tool_path;
 mod tools;
 
 pub use tools::WorkspaceTools;
@@ -212,6 +213,8 @@ pub struct SearchOptions {
     pub timeout: Option<Duration>,
     /// The budget the joined match list is clipped to.
     pub max_output_bytes: usize,
+    /// The patterns naming a file whose matches are dropped from the answer.
+    pub sensitive_patterns: Vec<String>,
 }
 
 impl SearchOptions {
@@ -236,6 +239,7 @@ impl SearchOptions {
             timeout: (config.default_timeout > 0)
                 .then(|| Duration::from_secs(config.default_timeout)),
             max_output_bytes: config.max_output_bytes,
+            sensitive_patterns: config.shared.sensitive_patterns.clone(),
         }
     }
 }
@@ -383,9 +387,9 @@ impl Workspace {
     ///
     /// The returned flag reports whether the byte budget cut the file short.
     fn read_text(&self, relative: &Path) -> Result<(String, bool), WorkspaceError> {
-        let mut file = self
-            .directory
-            .open(relative)
+        let (directory, relative_to) = self.dir_for(relative)?;
+        let mut file = directory
+            .open(&relative_to)
             .map_err(|source| WorkspaceError::Io {
                 path: relative.to_path_buf(),
                 source,
@@ -489,10 +493,10 @@ impl Workspace {
         limit: usize,
         max_bytes: usize,
     ) -> Result<BoundedRead, WorkspaceError> {
-        let relative = self.confined(path.as_ref(), true)?;
-        let file = self
-            .directory
-            .open(&relative)
+        let relative = self.located(path.as_ref(), true)?;
+        let (directory, relative_to) = self.dir_for(&relative)?;
+        let file = directory
+            .open(&relative_to)
             .map_err(|source| WorkspaceError::Io {
                 path: relative.clone(),
                 source,
@@ -675,7 +679,8 @@ impl Workspace {
     }
 
     fn write_new(&self, path: &Path, content: &[u8]) -> Result<MutationResult, WorkspaceError> {
-        let relative = self.confined(path, false)?;
+        let relative = self.located(path, false)?;
+        let (directory, relative_to) = self.dir_for(&relative)?;
         if content.len() > self.max_read_bytes {
             return Err(WorkspaceError::WriteLimit {
                 actual: content.len(),
@@ -685,11 +690,11 @@ impl Workspace {
         // The reference `WriteFileConfig.create_parent_dirs` defaults to true,
         // so a write into a directory that does not exist yet creates it rather
         // than failing.
-        if let Some(parent) = relative
+        if let Some(parent) = relative_to
             .parent()
             .filter(|parent| !parent.as_os_str().is_empty())
         {
-            self.directory
+            directory
                 .create_dir_all(parent)
                 .map_err(|source| WorkspaceError::Io {
                     path: parent.to_path_buf(),
@@ -698,9 +703,8 @@ impl Workspace {
         }
         let mut options = OpenOptions::new();
         options.write(true).create_new(true);
-        let mut file = self
-            .directory
-            .open_with(&relative, &options)
+        let mut file = directory
+            .open_with(&relative_to, &options)
             .map_err(|source| {
                 // `create_new` is what refuses an overwrite, and the reference
                 // answers that case by naming `edit` rather than reporting a
@@ -731,27 +735,27 @@ impl Workspace {
     }
 
     fn atomic_replace(&self, relative: &Path, content: &[u8]) -> Result<(), WorkspaceError> {
+        let (directory, relative_to) = self.dir_for(relative)?;
         let sequence = self.next_temporary.fetch_add(1, Ordering::Relaxed);
-        let parent = relative.parent().unwrap_or(Path::new("."));
+        let parent = relative_to.parent().unwrap_or(Path::new("."));
         let temporary = parent.join(format!(".vibe-{sequence}.tmp"));
         let mut options = OpenOptions::new();
         options.write(true).create_new(true);
-        let mut file = self
-            .directory
+        let mut file = directory
             .open_with(&temporary, &options)
             .map_err(|source| WorkspaceError::Io {
                 path: temporary.clone(),
                 source,
             })?;
         if let Err(source) = file.write_all(content).and_then(|()| file.sync_all()) {
-            let _ = self.directory.remove_file(&temporary);
+            let _ = directory.remove_file(&temporary);
             return Err(WorkspaceError::Io {
                 path: temporary,
                 source,
             });
         }
-        self.directory
-            .rename(&temporary, &self.directory, relative)
+        directory
+            .rename(&temporary, &directory, &relative_to)
             .map_err(|source| WorkspaceError::Io {
                 path: relative.to_path_buf(),
                 source,
@@ -759,8 +763,9 @@ impl Workspace {
     }
 
     fn remove(&self, relative: &Path) -> Result<(), WorkspaceError> {
-        self.directory
-            .remove_file(relative)
+        let (directory, relative_to) = self.dir_for(relative)?;
+        directory
+            .remove_file(&relative_to)
             .map_err(|source| WorkspaceError::Io {
                 path: relative.to_path_buf(),
                 source,
@@ -768,8 +773,9 @@ impl Workspace {
     }
 
     fn read_raw(&self, relative: &Path) -> Result<Vec<u8>, WorkspaceError> {
-        self.directory
-            .read(relative)
+        let (directory, relative_to) = self.dir_for(relative)?;
+        directory
+            .read(&relative_to)
             .map_err(|source| WorkspaceError::Io {
                 path: relative.to_path_buf(),
                 source,
@@ -781,9 +787,9 @@ impl Workspace {
         relative: &Path,
         max_bytes: usize,
     ) -> Result<Vec<u8>, WorkspaceError> {
-        let metadata = self
-            .directory
-            .metadata(relative)
+        let (directory, relative_to) = self.dir_for(relative)?;
+        let metadata = directory
+            .metadata(&relative_to)
             .map_err(|source| WorkspaceError::Io {
                 path: relative.to_path_buf(),
                 source,
@@ -806,21 +812,24 @@ impl Workspace {
     }
 
     fn exists(&self, relative: &Path) -> bool {
-        self.directory.metadata(relative).is_ok()
+        self.dir_for(relative)
+            .is_ok_and(|(directory, relative_to)| directory.metadata(&relative_to).is_ok())
     }
 
-    /// Whether a confined path names a directory.
+    /// Whether a located path names a directory.
     fn is_directory(&self, relative: &Path) -> bool {
-        self.directory
-            .metadata(relative)
-            .map(|metadata| metadata.is_dir())
-            .unwrap_or(false)
+        self.dir_for(relative)
+            .is_ok_and(|(directory, relative_to)| {
+                directory
+                    .metadata(&relative_to)
+                    .is_ok_and(|metadata| metadata.is_dir())
+            })
     }
 
     /// Whether the path a caller wrote resolves to something that exists.
     #[must_use]
     pub fn exists_at(&self, path: &str) -> bool {
-        self.confined(Path::new(path), false)
+        self.located(Path::new(path), false)
             .is_ok_and(|relative| self.exists(&relative))
     }
 
@@ -872,6 +881,73 @@ impl Workspace {
         }
         discovered.reverse();
         Ok(discovered)
+    }
+
+    /// Where a file tool's path argument lands: relative to the root when it
+    /// resolves inside it, and absolute when it resolves anywhere else.
+    ///
+    /// Reference `resolve_tool_path` expands a leading `~`, anchors a relative
+    /// path on the working directory and resolves links, and the tool then
+    /// reaches whatever that names. Whether it may is the permission chain's
+    /// question, answered before the tool runs: a path outside every trusted
+    /// root raises an `outside_directory` requirement there, and the session
+    /// scratchpad is granted outright. This is the one place that lets a path
+    /// past the root, and only the file tools and the checkpoint log their
+    /// edits feed call it; every other surface stays on [`Self::confined`].
+    pub(crate) fn located(
+        &self,
+        requested: &Path,
+        must_exist: bool,
+    ) -> Result<PathBuf, WorkspaceError> {
+        let expanded = tool_path::expanded(requested);
+        let absolute = if expanded.is_absolute() {
+            expanded
+        } else {
+            self.canonical_root.join(expanded)
+        };
+        let resolved = tool_path::resolved(&absolute);
+        if must_exist && let Err(source) = std::fs::metadata(&resolved) {
+            return Err(WorkspaceError::Io {
+                path: requested.to_path_buf(),
+                source,
+            });
+        }
+        Ok(match resolved.strip_prefix(&self.canonical_root) {
+            Ok(inside) if inside.as_os_str().is_empty() => PathBuf::from("."),
+            Ok(inside) => inside.to_path_buf(),
+            Err(_) => resolved,
+        })
+    }
+
+    /// The capability handle a located path is reached through, and the path
+    /// relative to it.
+    ///
+    /// A relative path is the workspace's own. An absolute one was placed
+    /// outside the root by [`Self::located`], already resolved, and is reached
+    /// through a handle on its filesystem root, so every operation below stays
+    /// the same code whichever side of the root it lands on.
+    fn dir_for(&self, located: &Path) -> Result<(Arc<Dir>, PathBuf), WorkspaceError> {
+        if !located.is_absolute() {
+            return Ok((self.directory.clone(), located.to_path_buf()));
+        }
+        let mut anchor = PathBuf::new();
+        let mut below = PathBuf::new();
+        for component in located.components() {
+            match component {
+                Component::Prefix(_) | Component::RootDir => anchor.push(component.as_os_str()),
+                other => below.push(other.as_os_str()),
+            }
+        }
+        let directory = Dir::open_ambient_dir(&anchor, ambient_authority()).map_err(|source| {
+            WorkspaceError::Io {
+                path: anchor.clone(),
+                source,
+            }
+        })?;
+        if below.as_os_str().is_empty() {
+            below.push(".");
+        }
+        Ok((Arc::new(directory), below))
     }
 
     fn confined(&self, requested: &Path, must_exist: bool) -> Result<PathBuf, WorkspaceError> {
@@ -1847,12 +1923,9 @@ let old = 2;
     /// `sensitive_patterns` would otherwise stop, and the same name inside the
     /// workspace still asks.
     ///
-    /// What stops the scratchpad read here is the workspace confinement, one
-    /// layer past the permission: this port serves the file tools through a
-    /// `cap-std` root while the reference serves any absolute path. That
-    /// boundary is `read_file`'s own contract and moves with US-113, so the
-    /// assertion below names the confinement rather than an approval, which is
-    /// what proves the permission chain granted the path.
+    /// The scratchpad sits outside the workspace root, and reference
+    /// `resolve_file_tool_permission` grants it before anything else is read,
+    /// so the read lands rather than stopping at the root.
     #[tokio::test]
     async fn a_registered_file_tool_reaches_the_scratchpad_without_asking() {
         let root = tempdir().expect("workspace");
@@ -1890,11 +1963,10 @@ let old = 2;
                 },
             )
             .await
-            .expect_err("the workspace confinement stops it one layer past the guard");
-        let granted = granted.to_string();
+            .expect("the scratchpad is read without asking");
         assert!(
-            granted.contains("escapes the authorized root"),
-            "the scratchpad passed the permission chain: {granted}"
+            granted.model_text.contains("SECRET=1"),
+            "the scratchpad read: {granted:?}"
         );
 
         let asked = registry
@@ -2554,6 +2626,100 @@ let old = 2;
         assert!(!directory.path().join("big.txt").exists());
     }
 
+    struct ApproveApproval;
+
+    impl ApprovalAgent for ApproveApproval {
+        fn request<'a>(&'a self, _request: ApprovalRequest) -> ApprovalFuture<'a> {
+            Box::pin(async { Ok(ApprovalDecision::ApproveOnce) })
+        }
+    }
+
+    /// Reference `resolve_tool_path`: once the operator approves the
+    /// `outside_directory` requirement, every file tool reaches a path outside
+    /// the root, written absolute, relative or under `~`-free whitespace, and
+    /// the edit it makes is checkpointed under its absolute path.
+    #[tokio::test]
+    async fn an_approved_path_outside_the_root_is_reached_by_every_file_tool() {
+        let parent = tempdir().expect("parent");
+        let parent_path = std::fs::canonicalize(parent.path()).expect("canonical");
+        let root = parent_path.join("project");
+        let outside = parent_path.join("elsewhere");
+        std::fs::create_dir_all(&root).expect("root");
+        std::fs::create_dir_all(&outside).expect("outside");
+        std::fs::write(outside.join("notes.txt"), "alpha needle\n").expect("seed");
+
+        let workspace = Arc::new(Workspace::open(&root).expect("workspace"));
+        let review = Arc::new(ReviewManager::new(workspace.clone()));
+        review.begin_turn("turn-1").expect("turn");
+        let policy = PermissionStore::default();
+        policy
+            .set_trust(&root, TrustDecision::Trusted, TrustRootKind::Workspace)
+            .await
+            .expect("trust");
+        let registry = ToolRegistry::default();
+        WorkspaceTools::new(workspace, review.clone())
+            .register(
+                &registry,
+                &ToolGuard::new(policy, Arc::new(ApproveApproval)),
+            )
+            .expect("register");
+        let invoke = |name: &'static str, arguments: serde_json::Value| {
+            let registry = &registry;
+            async move {
+                registry
+                    .invoke(
+                        name,
+                        ToolInvocation {
+                            call_id: format!("{name}-call"),
+                            arguments,
+                        },
+                    )
+                    .await
+            }
+        };
+        let notes = outside.join("notes.txt").to_string_lossy().into_owned();
+
+        let read = invoke("read_file", json!({"file_path": format!("  {notes} ")}))
+            .await
+            .expect("an approved outside read lands");
+        assert_eq!(read.typed_result["file_path"], json!(notes));
+        assert!(read.model_text.contains("alpha needle"), "{read:?}");
+
+        let found = invoke("grep", json!({"pattern": "needle", "path": "../elsewhere"}))
+            .await
+            .expect("an approved outside search lands");
+        assert_eq!(found.typed_result["match_count"], json!(1));
+
+        invoke(
+            "edit",
+            json!({"file_path": notes, "old_string": "alpha", "new_string": "beta"}),
+        )
+        .await
+        .expect("an approved outside edit lands");
+        assert_eq!(
+            std::fs::read_to_string(outside.join("notes.txt")).expect("edited"),
+            "beta needle\n"
+        );
+        invoke(
+            "write_file",
+            json!({"file_path": "../elsewhere/new/created.txt", "content": "made\n"}),
+        )
+        .await
+        .expect("an approved outside write lands");
+        assert_eq!(
+            std::fs::read_to_string(outside.join("new/created.txt")).expect("written"),
+            "made\n"
+        );
+
+        let tracked = review
+            .with_log(|log| log.history().tracked_paths())
+            .expect("log");
+        assert!(
+            tracked.contains(&notes),
+            "the outside edit is tracked under its absolute path: {tracked:?}"
+        );
+    }
+
     // ----------------------------------------------------------------
     // EP-034: the builtin bodies
     // ----------------------------------------------------------------
@@ -2657,6 +2823,42 @@ let old = 2;
             .expect_err("an expired budget answers nothing");
 
         assert!(error.to_string().contains("did not finish"), "{error}");
+    }
+
+    /// Reference `Grep._drop_sensitive_matches`: a match found in a file a
+    /// sensitive pattern names is left out, whether the call names the file
+    /// itself or walks a directory holding it, and the case of the name does
+    /// not matter.
+    #[test]
+    fn grep_drops_the_matches_a_sensitive_pattern_names() {
+        let directory = tempdir().expect("tempdir");
+        std::fs::write(directory.path().join(".env"), "TOKEN=needle\n").expect("seed");
+        std::fs::write(directory.path().join("key.PEM"), "needle\n").expect("seed");
+        std::fs::write(directory.path().join("notes.txt"), "needle\n").expect("seed");
+        let workspace = Workspace::open(directory.path()).expect("workspace");
+
+        let named = workspace
+            .search("needle", ".env", &SearchOptions::default())
+            .expect("search");
+        assert_eq!(named.matches, "");
+        assert_eq!(named.match_count, 0);
+
+        let options = SearchOptions {
+            sensitive_patterns: vec!["**/*.pem".to_owned()],
+            ..SearchOptions::default()
+        };
+        let walked = workspace.search("needle", ".", &options).expect("search");
+        assert_eq!(walked.matches, "./notes.txt:1:needle");
+        assert_eq!(walked.match_count, 1);
+
+        let unfiltered = SearchOptions {
+            sensitive_patterns: Vec::new(),
+            ..SearchOptions::default()
+        };
+        let named = workspace
+            .search("needle", ".env", &unfiltered)
+            .expect("search");
+        assert_eq!(named.matches, ".env:1:TOKEN=needle");
     }
 
     /// US-113: a subdirectory's `AGENTS.md` reaches the model once, and the

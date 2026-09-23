@@ -60,6 +60,12 @@ pub struct SkillDefinition {
     pub metadata: BTreeMap<String, String>,
     pub allowed_tools: Vec<String>,
     pub user_invocable: bool,
+    /// Whether the model may see and load the skill. Reference
+    /// `SkillInfo.model_invocable`: false when the frontmatter sets
+    /// `disable-model-invocation` or `agents/openai.yaml` disallows implicit
+    /// invocation. A user can still invoke it by name.
+    #[serde(skip)]
+    pub model_invocable: bool,
     pub body: String,
     pub source: SkillSource,
     pub scope: SkillScope,
@@ -444,6 +450,8 @@ fn parse_skill(path: &Path) -> Result<SkillDefinition, ExtensionError> {
         metadata: metadata.metadata,
         allowed_tools: metadata.allowed_tools,
         user_invocable: metadata.user_invocable,
+        model_invocable: !metadata.disable_model_invocation
+            && crate::skills::openai_allows_implicit_invocation(path),
         body: body.trim().to_owned(),
         source: SkillSource::Local,
         scope: SkillScope::Global,

@@ -314,6 +314,7 @@ fn seeded(name: &str) -> SkillDefinition {
         metadata: BTreeMap::new(),
         allowed_tools: Vec::new(),
         user_invocable: true,
+        model_invocable: true,
         body: String::new(),
         source: SkillSource::Builtin,
         scope: SkillScope::Global,

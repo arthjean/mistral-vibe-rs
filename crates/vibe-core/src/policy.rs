@@ -148,28 +148,32 @@ impl PermissionRequirement {
         }
     }
 
-    /// A file whose name matched the tool's `sensitive_patterns`.
+    /// A file whose resolved path matched the tool's `sensitive_patterns`.
     ///
-    /// Reference `resolve_file_tool_permission` names the file itself and grants
-    /// the whole class for the session, which is why the session pattern is `*`.
+    /// Reference `resolve_file_tool_permission` (since v2.24.1) scopes the
+    /// grant to that one file: the invocation pattern is the resolved path and
+    /// the session pattern its `glob.escape`, so approving one sensitive file
+    /// leaves every other one asking.
     #[must_use]
-    pub fn sensitive_file(file_name: &str, tool: &str) -> Self {
+    pub fn sensitive_file(resolved: &str, tool: &str) -> Self {
         Self {
             scope: PermissionScope::FilePattern,
-            invocation_pattern: file_name.to_owned(),
-            session_pattern: "*".to_owned(),
+            invocation_pattern: resolved.to_owned(),
+            session_pattern: glob_escape(resolved),
             label: format!("accessing sensitive files ({tool})"),
         }
     }
 
-    /// A host a fetch reaches. Reference `WebFetchTool.resolve_permission`.
+    /// The URL scope a fetch reaches: the origin a `web_fetch` call names
+    /// (reference `WebFetch.resolve_permission`), or the host a connector
+    /// calls.
     #[must_use]
-    pub fn url_domain(domain: &str) -> Self {
+    pub fn url_pattern(scope: &str) -> Self {
         Self {
             scope: PermissionScope::UrlPattern,
-            invocation_pattern: domain.to_owned(),
-            session_pattern: domain.to_owned(),
-            label: format!("fetching from {domain}"),
+            invocation_pattern: scope.to_owned(),
+            session_pattern: scope.to_owned(),
+            label: format!("fetching from {scope}"),
         }
     }
 
@@ -285,6 +289,34 @@ impl PermissionRule {
             self.pattern.trim_end_matches(" *").len(),
         )
     }
+}
+
+/// Python `glob.escape`: every `*`, `?` and `[` wrapped in brackets so the
+/// text matches only itself, a Windows drive prefix left as written.
+#[must_use]
+pub fn glob_escape(text: &str) -> String {
+    let drive = if cfg!(windows) {
+        match Path::new(text).components().next() {
+            Some(std::path::Component::Prefix(prefix)) => {
+                prefix.as_os_str().to_string_lossy().len()
+            }
+            _ => 0,
+        }
+    } else {
+        0
+    };
+    let (drive, rest) = text.split_at(drive.min(text.len()));
+    let mut escaped = drive.to_owned();
+    for character in rest.chars() {
+        if matches!(character, '*' | '?' | '[') {
+            escaped.push('[');
+            escaped.push(character);
+            escaped.push(']');
+        } else {
+            escaped.push(character);
+        }
+    }
+    escaped
 }
 
 /// Whether `text` matches `pattern`, with the trailing arguments optional.
@@ -1077,17 +1109,13 @@ pub fn resolve_file_tool_permission(
     }
     let mut context = PermissionContext::deferred().over_paths(vec![path.to_path_buf()]);
     if let Some(pattern) = matched_path_pattern(&settings.sensitive_patterns, &subject) {
-        let file_name = resolved.file_name().map_or_else(
-            || subject.clone(),
-            |name| name.to_string_lossy().into_owned(),
-        );
         context.permission = Some(PermissionMode::Ask);
         context.reason = Some(format!(
             "`{subject}` matches the `{tool}` sensitive pattern `{pattern}`"
         ));
         context
             .requirements
-            .push(PermissionRequirement::sensitive_file(&file_name, tool));
+            .push(PermissionRequirement::sensitive_file(&subject, tool));
     }
     context
 }
@@ -1124,10 +1152,23 @@ fn matched_pattern<'a>(patterns: &'a [String], subject: &str) -> Option<&'a Stri
 
 /// The first entry of `patterns` naming `subject` as a path, in the order the
 /// operator wrote them.
+///
+/// Reference `matches_sensitive_pattern` (`vibe/core/tools/utils.py`) lowers
+/// both sides before `PurePath.match`, so `.ENV` is as sensitive as `.env`.
 fn matched_path_pattern<'a>(patterns: &'a [String], subject: &str) -> Option<&'a String> {
+    let subject = subject.to_lowercase();
     patterns
         .iter()
-        .find(|pattern| path_pattern_matches(pattern, subject))
+        .find(|pattern| path_pattern_matches(&pattern.to_lowercase(), &subject))
+}
+
+/// Whether a resolved absolute path is one a sensitive pattern names.
+///
+/// `grep` drops the matches it finds in such a file, which is how the
+/// reference keeps a search from reading what `read_file` would ask about.
+#[must_use]
+pub fn matches_sensitive_pattern(patterns: &[String], resolved: &Path) -> bool {
+    matched_path_pattern(patterns, &resolved.display().to_string()).is_some()
 }
 
 /// Whether `pattern` names `subject` the way a sensitive pattern names a file.

@@ -542,7 +542,7 @@ impl ConnectorRegistry {
                             return Ok(PermissionContext::deferred());
                         };
                         Ok(PermissionContext::asking(vec![
-                            PermissionRequirement::url_domain(domain),
+                            PermissionRequirement::url_pattern(domain),
                         ]))
                     }),
                     handler,

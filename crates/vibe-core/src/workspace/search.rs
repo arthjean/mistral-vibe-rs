@@ -8,12 +8,12 @@
 //! crates that binary is assembled from, so the search needs no external
 //! program on the host.
 //!
-//! Two deliberate departures, both recorded in `docs/parity.md`:
+//! The search path resolves the way every file tool's does
+//! ([`Workspace::located`]): inside the root or outside it, once the permission
+//! chain approved the latter.
 //!
-//! * The walk is confined to the workspace root. A path outside it is refused
-//!   here rather than searched and then reported, which is the confinement every
-//!   other file tool in this port already applies.
-//! * The matches are ordered by path and then by line. `rg` walks in parallel
+//! One deliberate departure, recorded in `docs/parity.md`: the matches are
+//! ordered by path and then by line. `rg` walks in parallel
 //!   and emits whichever file finished first, so its order is not a contract
 //!   anything can conform to: the capture that feeds
 //!   `tool_execution_parity_tests` recorded two different orders for the same
@@ -61,10 +61,10 @@ pub(super) fn run(
     if pattern.trim().is_empty() {
         return Err(WorkspaceError::EmptyPattern);
     }
-    // The confinement runs first and on the path as written, so a target that
-    // escapes the root is named as such rather than reported as missing.
+    // A target that resolves nowhere is reported as missing, under the path as
+    // it was written.
     let relative = workspace
-        .confined(Path::new(requested), true)
+        .located(Path::new(requested), true)
         .map_err(|error| match error {
             WorkspaceError::Io { .. } => WorkspaceError::MissingSearchPath(requested.to_owned()),
             other => other,
@@ -122,13 +122,16 @@ pub(super) fn run(
             if !entry.file_type().is_some_and(|kind| kind.is_file()) {
                 continue;
             }
+            if is_sensitive(entry.path(), options) {
+                continue;
+            }
             let display = match entry.path().strip_prefix(&absolute) {
                 Ok(inside) => joined_display(requested, inside),
                 Err(_) => path_display(entry.path()),
             };
             collect(&matcher, entry.path(), &display, per_file_cap, &mut hits)?;
         }
-    } else {
+    } else if !is_sensitive(&absolute, options) {
         collect(
             &matcher,
             &absolute,
@@ -144,6 +147,20 @@ pub(super) fn run(
             .then_with(|| left.line.cmp(&right.line))
     });
     Ok(assemble(&hits, options))
+}
+
+/// Whether `path` is a file whose matches the answer leaves out.
+///
+/// Reference `Grep._drop_sensitive_matches` resolves every output line's path
+/// and drops the line when a sensitive pattern names it, before the match cap
+/// applies. Every line of one file shares that verdict, so asking once per file
+/// answers the same.
+fn is_sensitive(path: &Path, options: &SearchOptions) -> bool {
+    if options.sensitive_patterns.is_empty() {
+        return false;
+    }
+    let resolved = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    crate::policy::matches_sensitive_pattern(&options.sensitive_patterns, &resolved)
 }
 
 /// The `path:line:text` lines, capped and clipped the way the reference caps

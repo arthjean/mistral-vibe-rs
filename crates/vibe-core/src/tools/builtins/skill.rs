@@ -51,22 +51,27 @@ pub(super) fn skill_spec() -> ToolSpec {
 
 pub(super) fn run_skill(
     roots: &DiscoveryRoots,
+    builtins: &BTreeMap<String, SkillDefinition>,
     loaded: &Mutex<BTreeMap<String, BTreeSet<String>>>,
     session_id: &str,
     name: &str,
 ) -> Result<ToolExecutionOutput, ToolError> {
-    let catalog = discover_extensions(
-        roots,
-        BTreeMap::new(),
-        crate::skills::builtins::builtin_skills(),
-        BTreeMap::new(),
-    );
-    let Some(skill) = catalog.skills.get(name) else {
+    let catalog = discover_extensions(roots, BTreeMap::new(), builtins.clone(), BTreeMap::new());
+    // Reference v2.25.5 `get_model_invocable_skill`: a skill that disables
+    // model invocation is unknown to the model, and the names it is offered
+    // instead are the ones it may load.
+    let Some(skill) = catalog
+        .skills
+        .get(name)
+        .filter(|skill| skill.model_invocable)
+    else {
         // An unknown name is answered with what does exist: a model that
         // guessed the name can correct itself without another round trip.
         let available = catalog
             .skills
-            .keys()
+            .values()
+            .filter(|skill| skill.model_invocable)
+            .map(|skill| &skill.name)
             .take(MAX_LISTED_SKILLS)
             .cloned()
             .collect::<Vec<_>>();
@@ -159,6 +164,7 @@ pub(super) fn skill_output(
 /// again.
 pub(super) struct SkillInvocationResolver {
     pub(super) roots: DiscoveryRoots,
+    pub(super) builtins: Arc<BTreeMap<String, SkillDefinition>>,
     pub(super) loaded: Arc<Mutex<BTreeMap<String, BTreeSet<String>>>>,
     pub(super) session_id: String,
 }
@@ -176,7 +182,7 @@ impl crate::skills::InvokedSkillResolver for SkillInvocationResolver {
         let catalog = discover_extensions(
             &self.roots,
             BTreeMap::new(),
-            crate::skills::builtins::builtin_skills(),
+            (*self.builtins).clone(),
             BTreeMap::new(),
         );
         let parsed = crate::skills::parse_skill_command(&catalog.skills, prompt)?;
@@ -241,27 +247,76 @@ pub(super) fn render_skill(skill: &SkillDefinition, base: Option<&Path>) -> Stri
     lines.join("\n")
 }
 
-/// The files that ship with a skill, sorted, without its own `SKILL.md`, and
+/// Reference `skill.py:_SKIP_DIR_NAMES`: directories a skill sample never
+/// descends into, because they hold tooling output rather than skill files.
+const SKIPPED_DIRECTORIES: [&str; 10] = [
+    ".git",
+    "node_modules",
+    "__pycache__",
+    ".venv",
+    "venv",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".pytest_cache",
+    "dist",
+    "build",
+];
+
+/// Reference `skill.py:_MAX_WALKED_ENTRIES`: the walk stops once this many
+/// files were seen, so a skill directory holding a large tree costs a bounded
+/// walk before the sample is sorted and cut.
+const MAX_WALKED_FILES: usize = 200;
+
+/// The files that ship with a skill, sorted, without any `SKILL.md`, and
 /// capped so a large bundle cannot flood the conversation.
+///
+/// Reference `sample_skill_files`: a directory with no `SKILL.md` file of its
+/// own samples nothing, the walk is top-down and never follows a symbolic
+/// link to a directory, the skipped directory names are pruned at every
+/// depth, and the walk stops after the directory that brought the count to
+/// [`MAX_WALKED_FILES`].
 pub(super) fn skill_files(base: &Path) -> Vec<String> {
-    let mut names = Vec::new();
-    let mut pending = vec![base.to_path_buf()];
-    while let Some(directory) = pending.pop() {
-        let Ok(entries) = std::fs::read_dir(&directory) else {
-            continue;
-        };
-        for entry in entries.filter_map(Result::ok) {
-            let path = entry.path();
-            if path.is_dir() {
-                pending.push(path);
-            } else if entry.file_name() != "SKILL.md"
-                && let Ok(relative) = path.strip_prefix(base)
-            {
-                names.push(relative.to_string_lossy().replace('\\', "/"));
-            }
-        }
+    if !base.join("SKILL.md").is_file() {
+        return Vec::new();
     }
+    let mut names = Vec::new();
+    walk_skill_directory(base, base, &mut names);
     names.sort();
     names.truncate(MAX_LISTED_SKILL_FILES);
     names
+}
+
+/// One `os.walk` step: this directory's files, then each kept subdirectory in
+/// listing order. Answers whether the walk may continue.
+fn walk_skill_directory(base: &Path, directory: &Path, names: &mut Vec<String>) -> bool {
+    let Ok(entries) = std::fs::read_dir(directory) else {
+        return true;
+    };
+    let mut subdirectories = Vec::new();
+    for entry in entries.filter_map(Result::ok) {
+        let path = entry.path();
+        // `os.walk` classifies an entry by following links, so a link to a
+        // directory is a directory it lists and does not descend into, and a
+        // link to a file, or to nothing, is a file.
+        if path.is_dir() {
+            let linked = entry.file_type().is_ok_and(|kind| kind.is_symlink());
+            let skipped = entry
+                .file_name()
+                .to_str()
+                .is_some_and(|name| SKIPPED_DIRECTORIES.contains(&name));
+            if !linked && !skipped {
+                subdirectories.push(path);
+            }
+        } else if entry.file_name() != "SKILL.md"
+            && let Ok(relative) = path.strip_prefix(base)
+        {
+            names.push(relative.to_string_lossy().replace('\\', "/"));
+        }
+    }
+    if names.len() >= MAX_WALKED_FILES {
+        return false;
+    }
+    subdirectories
+        .iter()
+        .all(|subdirectory| walk_skill_directory(base, subdirectory, names))
 }

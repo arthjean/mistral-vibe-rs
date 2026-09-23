@@ -21,7 +21,7 @@ fn a_tool_with_no_settings_resolves_to_its_declared_defaults() {
     assert_eq!(grep.codeignore_file, ".vibeignore");
     assert_eq!(grep.exclude_patterns.len(), 23);
     assert_eq!(grep.shared.permission, PermissionMode::Always);
-    assert_eq!(grep.shared.sensitive_patterns, ["**/.env", "**/.env.*"]);
+    assert_eq!(grep.shared.sensitive_patterns, DOTENV_PATTERNS);
     // The reference returns the class defaults untouched when neither an
     // override nor a session permission exists.
     assert_eq!(

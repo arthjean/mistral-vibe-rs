@@ -13,6 +13,7 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 
 use super::review::{self, ReviewManager};
+use super::tool_path;
 use super::{
     BoundedRead, EditOperation, EditResult, INSTRUCTION_FILE, MutationResult, ReadFileResult,
     SearchOptions, WARNING_TAG, Workspace, WriteFileResult, path_display, unified_diff,
@@ -150,10 +151,7 @@ fn read_handler(
             // The budget is read per call, so an operator who raises it
             // between two turns is obeyed on the second one.
             let settings: ReadFileConfig = config.view("read_file");
-            let path = invocation.arguments["file_path"]
-                .as_str()
-                .unwrap_or_default()
-                .to_owned();
+            let path = tool_argument(invocation, "file_path");
             // `offset` is nullable and defaults to null, so an absent or
             // explicitly null offset both mean "start at line one".
             let offset = invocation.arguments["offset"]
@@ -229,10 +227,11 @@ fn grep_handler(workspace: Arc<Workspace>, config: ToolConfigResolver) -> Arc<dy
                 .as_str()
                 .unwrap_or_default()
                 .to_owned();
-            let path = invocation.arguments["path"]
-                .as_str()
-                .unwrap_or(".")
-                .to_owned();
+            let path = if invocation.arguments["path"].is_string() {
+                tool_argument(invocation, "path")
+            } else {
+                ".".to_owned()
+            };
             let requested = invocation.arguments["max_matches"]
                 .as_u64()
                 .and_then(|limit| usize::try_from(limit).ok());
@@ -349,10 +348,7 @@ fn edit_handler(
             let review = review.clone();
             let client = client.clone();
             let workspace = workspace.clone();
-            let path = invocation.arguments["file_path"]
-                .as_str()
-                .unwrap_or_default()
-                .to_owned();
+            let path = tool_argument(invocation, "file_path");
             let old_text = invocation.arguments["old_string"]
                 .as_str()
                 .unwrap_or_default()
@@ -463,10 +459,7 @@ fn write_handler(
             let client = client.clone();
             let workspace = workspace.clone();
             let settings: WriteFileConfig = config.view("write_file");
-            let path = invocation.arguments["file_path"]
-                .as_str()
-                .unwrap_or_default()
-                .to_owned();
+            let path = tool_argument(invocation, "file_path");
             let content = invocation.arguments["content"]
                 .as_str()
                 .unwrap_or_default()
@@ -548,16 +541,22 @@ fn file_tool_permission(
     let config = guard.config.clone();
     let scratchpad = guard.scratchpad.clone();
     Arc::new(move |invocation: &ToolInvocation| {
-        let requested = invocation.arguments[argument].as_str().unwrap_or_default();
+        let requested = tool_path::normalized(
+            argument,
+            invocation.arguments[argument].as_str().unwrap_or_default(),
+        )?;
         if requested.is_empty() && argument != "path" {
             return Err(ToolError::Execution(format!(
                 "{tool} {argument} is missing"
             )));
         }
+        // Reference `resolve_file_tool_permission` expands `~` and anchors a
+        // relative path on the working directory before anything is matched,
+        // which is the same resolution the handler reaches the file through.
         let path = if requested.is_empty() {
             root.clone()
         } else {
-            root.join(requested)
+            root.join(tool_path::expanded(Path::new(&requested)))
         };
         let settings: SharedToolConfig = config.view(tool);
         Ok(resolve_file_tool_permission(
@@ -569,14 +568,22 @@ fn file_tool_permission(
     })
 }
 
+/// A path argument as the tool reads it, after the permission chain accepted
+/// it. The chain already refused one that does not normalize, so the argument
+/// as written is only the fallback for a handler invoked without it.
+fn tool_argument(invocation: &ToolInvocation, argument: &str) -> String {
+    let raw = invocation.arguments[argument].as_str().unwrap_or_default();
+    tool_path::normalized(argument, raw).unwrap_or_else(|_| raw.to_owned())
+}
+
 /// The parent directory `path` needs and does not have, or [`None`] when it
 /// has one.
 ///
-/// A path the workspace refuses outright is not reported here: the confinement
-/// check that follows names it, and answering "the parent is missing" for a
-/// path that escapes the root would name the wrong problem.
+/// A path that cannot be resolved is not reported here: the write that follows
+/// names it, and answering "the parent is missing" for it would name the wrong
+/// problem.
 fn missing_parent(workspace: &Workspace, path: &str) -> Option<String> {
-    let relative = workspace.confined(Path::new(path), false).ok()?;
+    let relative = workspace.located(Path::new(path), false).ok()?;
     let parent = relative
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())?;
@@ -589,18 +596,17 @@ fn missing_parent(workspace: &Workspace, path: &str) -> Option<String> {
 /// The path a delegated request carries, or the error the local path would
 /// have raised for it.
 ///
-/// Hosting the filesystem is not a way around the workspace boundary: the same
-/// confinement the local tools apply runs first, so a path that escapes the
-/// root is refused here rather than handed to an editor that would happily open
-/// it. What travels is the confined absolute path, which is the only form a
-/// client can resolve: the request carries no working directory.
+/// The path resolves exactly as it would locally, so a client is handed the
+/// file the permission chain approved. What travels is the resolved absolute
+/// path, which is the only form a client can resolve: the request carries no
+/// working directory.
 fn delegated_path(
     workspace: &Workspace,
     path: &str,
     must_exist: bool,
 ) -> Result<(PathBuf, String), ToolError> {
     let relative = workspace
-        .confined(Path::new(path), must_exist)
+        .located(Path::new(path), must_exist)
         .map_err(|error| ToolError::Execution(error.to_string()))?;
     let display = path_display(&relative);
     Ok((workspace.root().join(relative), display))
@@ -759,7 +765,7 @@ fn local_read(
         ));
     }
     let relative = workspace
-        .confined(Path::new(path), false)
+        .located(Path::new(path), false)
         .map_err(|error| ToolError::Execution(error.to_string()))?;
     let display = workspace.absolute_display(&relative);
     if !workspace.exists(&relative) {

@@ -226,6 +226,63 @@ pub fn parse_skill_command(
     })
 }
 
+/// Whether a skill's optional `agents/openai.yaml` lets the model invoke it
+/// on its own.
+///
+/// Reference `SkillManager._openai_allows_implicit_invocation` over
+/// `load_openai_skill_metadata` (`vibe/core/skills/parser.py`): no file allows
+/// it, `policy.allow_implicit_invocation` decides when it is set, and a file
+/// that cannot be read or does not validate disables it, so a typo in the
+/// policy never makes an explicit-only skill visible. The policy mapping is
+/// strict (a key other than `allow_implicit_invocation` and `products` is
+/// invalid, and neither is coerced); the document around it may carry
+/// anything.
+#[must_use]
+pub fn openai_allows_implicit_invocation(skill_path: &Path) -> bool {
+    let Some(directory) = skill_path.parent() else {
+        return true;
+    };
+    let metadata = directory.join("agents").join("openai.yaml");
+    if !metadata.is_file() {
+        return true;
+    }
+    let Ok(bytes) = std::fs::read(&metadata) else {
+        return false;
+    };
+    let Ok(document) = parser::yaml_document(&String::from_utf8_lossy(&bytes)) else {
+        return false;
+    };
+    let policy = match document {
+        Value::Null => return true,
+        Value::Object(mut mapping) => mapping.remove("policy"),
+        _ => return false,
+    };
+    let policy = match policy {
+        None | Some(Value::Null) => return true,
+        Some(Value::Object(policy)) => policy,
+        Some(_) => return false,
+    };
+    if policy
+        .keys()
+        .any(|key| key != "allow_implicit_invocation" && key != "products")
+    {
+        return false;
+    }
+    let products_valid = match policy.get("products") {
+        None => true,
+        Some(Value::Array(products)) => products.iter().all(Value::is_string),
+        Some(_) => false,
+    };
+    if !products_valid {
+        return false;
+    }
+    match policy.get("allow_implicit_invocation") {
+        None | Some(Value::Null) => true,
+        Some(Value::Bool(allowed)) => *allowed,
+        Some(_) => false,
+    }
+}
+
 /// The opening tag a rendered skill body starts with, which is also the
 /// dedup marker: reference `skill_content_marker` searches the stored tool
 /// messages for it to decide whether a skill is already loaded.

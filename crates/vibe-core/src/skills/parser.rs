@@ -108,7 +108,7 @@ enum Node {
 /// Parses one YAML document into a JSON value, resolving plain scalars the
 /// PyYAML way. An empty stream is the null document, which the caller reads as
 /// an empty mapping.
-fn yaml_document(text: &str) -> Result<Value, SkillParseError> {
+pub(crate) fn yaml_document(text: &str) -> Result<Value, SkillParseError> {
     let mut stack: Vec<Node> = Vec::new();
     let mut root: Option<Value> = None;
     let mut anchors: BTreeMap<usize, Value> = BTreeMap::new();

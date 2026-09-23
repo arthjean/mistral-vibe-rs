@@ -54,6 +54,7 @@ fn vibe() -> SkillDefinition {
         metadata: BTreeMap::new(),
         allowed_tools: Vec::new(),
         user_invocable: false,
+        model_invocable: true,
         body: VIBE_BODY
             .replace("__REPOSITORY__", env!("CARGO_PKG_REPOSITORY"))
             .replace("__VERSION__", env!("CARGO_PKG_VERSION")),
@@ -77,6 +78,7 @@ fn skill_creator() -> SkillDefinition {
         metadata: BTreeMap::new(),
         allowed_tools: Vec::new(),
         user_invocable: true,
+        model_invocable: true,
         body: SKILL_CREATOR_BODY.to_owned(),
         source: SkillSource::Builtin,
         scope: SkillScope::Global,

@@ -53,40 +53,17 @@ struct Divergence {
 
 /// Every difference the replay admits, measured at the pin in
 /// `crate::parity::REFERENCE_COMMIT`.
-const DIVERGENCES: &[Divergence] = &[
-    Divergence {
-        pointer: "/requirement/fields/4",
-        port: "undeclared",
-        reason: "v2.25.5 adds `literal` to `RequiredPermission`, excluded from \
+const DIVERGENCES: &[Divergence] = &[Divergence {
+    pointer: "/requirement/fields/4",
+    port: "undeclared",
+    reason: "v2.25.5 adds `literal` to `RequiredPermission`, excluded from \
                  serialization and read by `PermissionStore.covers` to compare a \
                  grant as text instead of as a glob \
                  (`vibe/permissions.py:27`, `vibe/core/tools/permissions.py:38-47` \
                  at 4a96003186b1). The wire shape is \
                  unchanged, but `PermissionRequirement` declares no such field, \
                  refuses it on input, and `PermissionRule::covers` always globs.",
-    },
-    Divergence {
-        pointer: "/fileToolChain/sensitiveInvocationPattern",
-        port: ".env",
-        reason: "v2.24.1 scopes a sensitive-file requirement to the file itself: \
-                 the invocation pattern is the resolved absolute path \
-                 (`vibe/core/tools/utils.py:203-216` at \
-                 4a96003186b1). \
-                 `PermissionRequirement::sensitive_file` still names only the file \
-                 name.",
-    },
-    Divergence {
-        pointer: "/fileToolChain/sensitiveSessionPattern",
-        port: "*",
-        reason: "v2.24.1 grants a sensitive file for the session under the \
-                 `glob.escape` of its resolved absolute path, so approving one \
-                 sensitive file no longer covers another \
-                 (`vibe/core/tools/utils.py:203-216` at \
-                 4a96003186b1). \
-                 `PermissionRequirement::sensitive_file` still grants `*`, which \
-                 covers every sensitive file for that tool.",
-    },
-];
+}];
 
 /// Whether the port's `answer` at `pointer` is the reference `expected` one or
 /// the divergence [`DIVERGENCES`] records there, failing on anything else and
@@ -673,13 +650,20 @@ fn the_sensitive_chain_answers_like_the_reference() {
 #[test]
 fn the_shipped_sensitive_defaults_still_name_a_dotenv_file() {
     let settings = ToolConfigResolver::new().view::<SharedToolConfig>("read_file");
-    assert_eq!(settings.sensitive_patterns, ["**/.env", "**/.env.*"]);
+    assert_eq!(
+        settings.sensitive_patterns,
+        crate::tools::config::DOTENV_PATTERNS
+    );
     for path in [
         "/.env",
         "/srv/.env",
         "/srv/app/.env",
         "/srv/app/.env.local",
         "/srv/app/nested/deep/.env.production",
+        "/srv/app/.env~",
+        "/srv/app/.envrc",
+        "/srv/app/.envrc.local",
+        "/srv/app/.envrc~",
     ] {
         assert!(
             matched_path_pattern(&settings.sensitive_patterns, path).is_some(),

@@ -23,6 +23,7 @@ command-group = { version = "5.0.1", features = ["with-tokio"] }
 cpal = "0.18.1"
 crossterm = { version = "0.29.0", features = ["event-stream"] }
 futures-util = "0.3.33"
+flate2 = "1.1.9"
 fs2 = "0.4.3"
 getrandom = "0.4.1"
 grep-regex = "0.1.14"

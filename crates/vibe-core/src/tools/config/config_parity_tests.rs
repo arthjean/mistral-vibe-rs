@@ -48,53 +48,9 @@ struct Divergence {
     reason: &'static str,
 }
 
-/// The two-entry sensitive list the v2.24.0 reference shipped.
-const DOTENV_PORT: &str = r#"["**/.env","**/.env.*"]"#;
-
 /// Every difference the replay admits, measured at the pin in
 /// `crate::parity::REFERENCE_COMMIT`.
-const DIVERGENCES: &[Divergence] = &[
-    Divergence {
-        pointer: "/tools/edit/sensitive_patterns",
-        port: DOTENV_PORT,
-        reason: "v2.24.1 grows `DEFAULT_SENSITIVE_PATTERNS` from two entries to \
-                 six, adding `**/.env~`, `**/.envrc`, `**/.envrc.*` and \
-                 `**/.envrc~` (`vibe/core/tools/utils.py:35-42`, read as the \
-                 `edit` default at `vibe/core/tools/builtins/edit.py:77` at \
-                 4a96003186b1). This port's \
-                 `DOTENV_PATTERNS` still declares the two v2.24.0 entries.",
-    },
-    Divergence {
-        pointer: "/tools/grep/sensitive_patterns",
-        port: DOTENV_PORT,
-        reason: "v2.24.1 grows `DEFAULT_SENSITIVE_PATTERNS` from two entries to \
-                 six, adding `**/.env~`, `**/.envrc`, `**/.envrc.*` and \
-                 `**/.envrc~` (`vibe/core/tools/utils.py:35-42`, read as the \
-                 `grep` default at `vibe/core/tools/builtins/grep.py:46` at \
-                 4a96003186b1). This port's \
-                 `DOTENV_PATTERNS` still declares the two v2.24.0 entries.",
-    },
-    Divergence {
-        pointer: "/tools/read_file/sensitive_patterns",
-        port: DOTENV_PORT,
-        reason: "v2.24.1 grows `DEFAULT_SENSITIVE_PATTERNS` from two entries to \
-                 six, adding `**/.env~`, `**/.envrc`, `**/.envrc.*` and \
-                 `**/.envrc~` (`vibe/core/tools/utils.py:35-42`, read as the \
-                 `read_file` default at `vibe/core/tools/builtins/read_file.py:87` at \
-                 4a96003186b1). This port's \
-                 `DOTENV_PATTERNS` still declares the two v2.24.0 entries.",
-    },
-    Divergence {
-        pointer: "/tools/write_file/sensitive_patterns",
-        port: DOTENV_PORT,
-        reason: "v2.24.1 grows `DEFAULT_SENSITIVE_PATTERNS` from two entries to \
-                 six, adding `**/.env~`, `**/.envrc`, `**/.envrc.*` and \
-                 `**/.envrc~` (`vibe/core/tools/utils.py:35-42`, read as the \
-                 `write_file` default at `vibe/core/tools/builtins/write_file.py:50` at \
-                 4a96003186b1). This port's \
-                 `DOTENV_PATTERNS` still declares the two v2.24.0 entries.",
-    },
-];
+const DIVERGENCES: &[Divergence] = &[];
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

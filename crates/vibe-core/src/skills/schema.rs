@@ -26,7 +26,7 @@ impl SkillValidationError {
     }
 }
 
-/// The validated frontmatter, carrying all seven fields the reference schema
+/// The validated frontmatter, carrying all eight fields the reference schema
 /// declares.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SkillMetadata {
@@ -37,6 +37,9 @@ pub struct SkillMetadata {
     pub metadata: BTreeMap<String, String>,
     pub allowed_tools: Vec<String>,
     pub user_invocable: bool,
+    /// Reference v2.25.5 `disable-model-invocation`: the skill stays in the
+    /// slash menu but the model can neither see nor load it.
+    pub disable_model_invocation: bool,
 }
 
 impl SkillMetadata {
@@ -61,6 +64,16 @@ impl SkillMetadata {
             Some(value) => lax_bool(value)
                 .ok_or_else(|| SkillValidationError::new("user-invocable", "must be a boolean"))?,
         };
+        let disable_model_invocation = match aliased(
+            frontmatter,
+            "disable-model-invocation",
+            "disable_model_invocation",
+        ) {
+            None => false,
+            Some(value) => lax_bool(value).ok_or_else(|| {
+                SkillValidationError::new("disable-model-invocation", "must be a boolean")
+            })?,
+        };
         Ok(Self {
             name,
             description,
@@ -69,6 +82,7 @@ impl SkillMetadata {
             metadata,
             allowed_tools,
             user_invocable,
+            disable_model_invocation,
         })
     }
 }
