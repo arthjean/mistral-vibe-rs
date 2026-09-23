@@ -13,12 +13,22 @@
 //! forbids shipping. Replay therefore runs unconditionally; only the live probe
 //! that recaptures from the pinned checkout skips when it is absent.
 //!
-//! One divergence is expected and enumerated. This port withholds an automatic
-//! grant in three places the reference grants outright, listed in
-//! [`STRICTER_THAN_THE_REFERENCE`]. Each one only costs an approval prompt, so
-//! the guard still fails toward asking; the ledger exists so the set cannot grow
-//! silently, and a case that stops diverging fails the suite rather than rotting
-//! in the list.
+//! Divergences are enumerated, never tolerated wholesale. A resolution where
+//! this port asks and the reference grants belongs in
+//! [`STRICTER_THAN_THE_REFERENCE`], which only costs an approval prompt, so the
+//! guard still fails toward asking. Nothing that lets this port grant without a
+//! prompt where the reference asks has a ledger: a resolution in that direction
+//! fails, and so does a `find` primary the reference gates and this port does
+//! not, since `find` is allowlisted and the call would be granted outright.
+//!
+//! A requirement field that differs on a case whose permission conforms belongs
+//! in [`REQUIREMENT_DIVERGENCES`]. Both sides ask there, so the operator is
+//! always prompted, but some entries are permissive in what a session grant
+//! covers: where the reference records the literal command text, this port
+//! records an arity pattern such as `git reset *` or `python3 *`, so one
+//! approval here releases more later calls than it does upstream. Every ledger
+//! is checked in both directions: an entry that stops diverging fails the suite
+//! rather than rotting in the list.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -26,6 +36,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 
 use super::*;
 use crate::parity::{off_pin_reason, pinned_interpreter, reference_root};
@@ -36,20 +47,190 @@ const CAPTURE_SCRIPT: &str = "scripts/parity/shell_policy.py";
 const CORPUS_RELATIVE: &str = "tests/shell-policy/policy.json";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 1;
+const CORPUS_SCHEMA_VERSION: u32 = 2;
 
 /// The commands the reference resolves to `always` and this port asks about.
 ///
-/// None of them is refused: each reaches the operator under its own pattern.
-/// The reason is that the command text does not say what the call reads. A
-/// substitution runs a program the text never names, a redirect writes to a
-/// target the segment never carries, and `--no-index` reads a path the index
-/// never held. The other guards this port keeps cost nothing here, because the
-/// reference already asks about the commands they name.
-const STRICTER_THAN_THE_REFERENCE: [&str; 3] = [
-    "cat $(which ls)",
-    "cat file.txt > out.txt",
-    "git diff --no-index /etc/passwd /dev/null",
+/// Empty at 2.25.7: the three entries it held at 2.24.0 (`cat $(which ls)`,
+/// `cat file.txt > out.txt` and `git diff --no-index /etc/passwd /dev/null`)
+/// stopped diverging, because the reference now asks about all three too
+/// (`vibe/core/tools/builtins/bash.py:666-715`).
+const STRICTER_THAN_THE_REFERENCE: [&str; 0] = [];
+
+/// Since 2.25.5 (c069ffa1), syntax that stops the extracted parts from
+/// describing what runs (a heredoc, a redirect to a file, a parse error)
+/// invalidates the scope: the reference drops every per-part requirement and
+/// raises one literal requirement for the whole command text, labeled with the
+/// approval label (`vibe/core/tools/builtins/bash.py:352-369,372-390,701-709`;
+/// `vibe/core/tools/builtins/_shell_permission_analysis.py:181-183,301-303,
+/// 317-325`). 2.25.4 (19b5b74f) had already made these constructs approval
+/// reasons, but appended the whole-command requirement beside the per-part
+/// ones instead of replacing them. This port still raises the per-part
+/// requirement it raised at 2.24.0, `<program> <redirect>` under
+/// `<program> *`.
+const SCOPE_INVALIDATED: &str = "reference raises one literal whole-command \
+     requirement for scope-invalidating syntax and no per-part one (2.25.5, \
+     bash.py:352-369,701-709); this port keeps the per-part `<redirect>` \
+     requirement under an arity session pattern";
+
+/// Since 2.25.5, a command with option guardrails (`git`, `find`, `sort`,
+/// `tree` and eleven more) is granted under its own literal text rather than an
+/// arity pattern, so `git reset *` can no longer cover an option the guardrail
+/// would ask about (`vibe/core/tools/builtins/bash.py:338-349`;
+/// `vibe/core/tools/builtins/_shell_command_policy.py:843-863`). This port
+/// still records the arity pattern and labels the requirement with it.
+const LITERAL_GUARDRAILED_SESSION: &str = "reference records an option-guardrailed \
+     command under its literal text (2.25.5, bash.py:338-349); this port records the \
+     arity session pattern and labels the requirement with it";
+
+/// `{}` is a brace-expansion approval reason
+/// (`vibe/core/tools/builtins/_shell_permission_analysis.py:157-160`), and
+/// since 2.25.5 (c069ffa1) an approval reason makes the reference include
+/// allowlisted parts (`scoped_command_parts`, `bash.py:352-369`), so the
+/// literal `find` requirement is raised once by `_build_required_permissions`
+/// and again by the guardrail, with no deduplication across the two lists
+/// (`vibe/core/tools/builtins/bash.py:612-664,693-700`). This port raises it
+/// once, and it equals the reference's first requirement, so only the second
+/// one is ledgered.
+const DUPLICATED_FIND_REQUIREMENT: &str = "reference raises the literal find \
+     requirement twice, once per part and once from the guardrail (2.25.5, \
+     bash.py:612-664,693-700); this port raises it once";
+
+/// Since 2.25.4 (19b5b74f), `git diff --no-index` nominates its positional
+/// operands as path candidates
+/// (`vibe/core/tools/builtins/_shell_command_policy.py:608`), so the reference
+/// asks with two outside_directory requirements, `/dev/*` then `/etc/*`, and no
+/// command requirement, because `git diff` is allowlisted and the text carries
+/// no approval reason (`vibe/core/tools/builtins/bash.py:612-664`, the globs at
+/// 661-662). This port asks with one command requirement for the segment under
+/// the session pattern `git diff *` and raises no outside_directory
+/// requirement.
+const NO_INDEX_OUTSIDE_DIRECTORIES: &str = "reference asks with outside_directory \
+     `/dev/*` and `/etc/*` for `git diff --no-index` operands (2.25.4, \
+     _shell_command_policy.py:608, bash.py:661-662); this port asks with one \
+     command requirement under `git diff *` and no outside_directory one";
+
+/// Requirement fields that differ on a case whose permission conforms, as
+/// `(command, pointer, reason)`, the pointer reaching into the case's recorded
+/// resolution. The fields of the requirements both sides raise are compared
+/// pairwise; a bare `/requirements/<index>` pointer names a requirement that
+/// only one side raises.
+const REQUIREMENT_DIVERGENCES: &[(&str, &str, &str)] = &[
+    (
+        "python3 <<'EOF'\nprint(1)\nEOF",
+        "/requirements/0/invocationPattern",
+        SCOPE_INVALIDATED,
+    ),
+    (
+        "python3 <<'EOF'\nprint(1)\nEOF",
+        "/requirements/0/sessionPattern",
+        SCOPE_INVALIDATED,
+    ),
+    (
+        "python3 <<'EOF'\nprint(1)\nEOF",
+        "/requirements/0/label",
+        SCOPE_INVALIDATED,
+    ),
+    (
+        "cat file.txt > out.txt",
+        "/requirements/0/invocationPattern",
+        SCOPE_INVALIDATED,
+    ),
+    (
+        "cat file.txt > out.txt",
+        "/requirements/0/sessionPattern",
+        SCOPE_INVALIDATED,
+    ),
+    (
+        "cat file.txt > out.txt",
+        "/requirements/0/label",
+        SCOPE_INVALIDATED,
+    ),
+    (
+        "find . -exec rm {} ;",
+        "/requirements/1",
+        DUPLICATED_FIND_REQUIREMENT,
+    ),
+    (
+        "find . -execdir rm {} ;",
+        "/requirements/1",
+        DUPLICATED_FIND_REQUIREMENT,
+    ),
+    (
+        "find . -ok rm {} ;",
+        "/requirements/1",
+        DUPLICATED_FIND_REQUIREMENT,
+    ),
+    (
+        "find . -okdir rm {} ;",
+        "/requirements/1",
+        DUPLICATED_FIND_REQUIREMENT,
+    ),
+    (
+        "find . -exec rm {} ; && find . -exec rm {} ;",
+        "/requirements/1",
+        "the `; &&` sequence is a parse error, an approval reason since 2.25.4 and \
+         a scope-invalidating one since 2.25.5: after the guardrail's literal \
+         `find . -exec rm {}`, which both sides raise first, the reference raises \
+         one literal whole-command requirement labeled with the approval label \
+         (_shell_permission_analysis.py:301-303, bash.py:700-709); this port raises \
+         nothing after it",
+    ),
+    (
+        "git -c core.pager=sh log",
+        "/requirements/0/sessionPattern",
+        LITERAL_GUARDRAILED_SESSION,
+    ),
+    (
+        "git -c core.pager=sh log",
+        "/requirements/0/label",
+        LITERAL_GUARDRAILED_SESSION,
+    ),
+    (
+        "git reset --hard",
+        "/requirements/0/sessionPattern",
+        LITERAL_GUARDRAILED_SESSION,
+    ),
+    (
+        "git reset --hard",
+        "/requirements/0/label",
+        LITERAL_GUARDRAILED_SESSION,
+    ),
+    (
+        "git reset --hard -- src",
+        "/requirements/0/sessionPattern",
+        LITERAL_GUARDRAILED_SESSION,
+    ),
+    (
+        "git reset --hard -- src",
+        "/requirements/0/label",
+        LITERAL_GUARDRAILED_SESSION,
+    ),
+    (
+        "git diff --no-index /etc/passwd /dev/null",
+        "/requirements/0/scope",
+        NO_INDEX_OUTSIDE_DIRECTORIES,
+    ),
+    (
+        "git diff --no-index /etc/passwd /dev/null",
+        "/requirements/0/invocationPattern",
+        NO_INDEX_OUTSIDE_DIRECTORIES,
+    ),
+    (
+        "git diff --no-index /etc/passwd /dev/null",
+        "/requirements/0/sessionPattern",
+        NO_INDEX_OUTSIDE_DIRECTORIES,
+    ),
+    (
+        "git diff --no-index /etc/passwd /dev/null",
+        "/requirements/0/label",
+        NO_INDEX_OUTSIDE_DIRECTORIES,
+    ),
+    (
+        "git diff --no-index /etc/passwd /dev/null",
+        "/requirements/1",
+        NO_INDEX_OUTSIDE_DIRECTORIES,
+    ),
 ];
 
 #[derive(Debug, Deserialize)]
@@ -126,7 +307,46 @@ struct Requirement {
     scope: String,
     invocation_pattern: String,
     session_pattern: String,
-    label: String,
+    label: Label,
+}
+
+/// A requirement label as the corpus commits it.
+///
+/// A label that is one of its requirement's two patterns is the case's own
+/// command text and survives verbatim. Any other label is reference-authored
+/// text, committed as a digest and a length, so the port's label is reduced
+/// the same way before the two are compared.
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+enum Label {
+    Verbatim(String),
+    Described(Described),
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+struct Described {
+    described: String,
+    length: usize,
+}
+
+impl Label {
+    /// The committed form of `label`, by the capture script's rule.
+    fn committed(label: &str, invocation_pattern: &str, session_pattern: &str) -> Self {
+        if label == invocation_pattern || label == session_pattern {
+            return Self::Verbatim(label.to_owned());
+        }
+        let hash = Sha256::digest(label.as_bytes());
+        let hex = hash.iter().fold(String::new(), |mut accumulator, byte| {
+            use std::fmt::Write as _;
+            let _ = write!(accumulator, "{byte:02x}");
+            accumulator
+        });
+        Self::Described(Described {
+            described: format!("sha256:{}", &hex[..32]),
+            length: label.chars().count(),
+        })
+    }
 }
 
 fn corpus_path() -> PathBuf {
@@ -245,6 +465,8 @@ fn the_path_inspecting_set_is_the_reference_set() {
         posix_lists().allowlist,
         "the default allowlist diverged"
     );
+    // No ledger: `find` is allowlisted, so a primary the reference gates and
+    // this port does not is a call granted here without a prompt.
     assert_eq!(
         sets.find_execution_predicates,
         FIND_EXECUTION_PREDICATES
@@ -387,6 +609,8 @@ fn every_resolution_matches_the_reference() {
         .collect::<BTreeSet<String>>();
 
     let mut diverging = BTreeSet::new();
+    let mut requirement_diffs = BTreeSet::new();
+    let mut untolerated = Vec::new();
     let mut conforming = 0_usize;
     let mut by_case = BTreeMap::new();
     for case in &corpus.resolutions {
@@ -401,13 +625,16 @@ fn every_resolution_matches_the_reference() {
         by_case.insert(case.command.clone(), (expected.clone(), resolved.clone()));
 
         if resolved != expected {
-            assert!(
-                expected == "always" && resolved == "ask",
-                "`{}` resolves to `{resolved}` here and to `{expected}` upstream, \
-                 which is not the one tolerated direction: {:?}",
-                case.command.escape_debug(),
-                analysis.rationale
-            );
+            // Collected rather than asserted in place, so the ledgers below are
+            // still checked; the assertion at the end is as strict.
+            if !(expected == "always" && resolved == "ask") {
+                untolerated.push(format!(
+                    "`{}` resolves to `{resolved}` here and to `{expected}` upstream: {:?}",
+                    case.command.escape_debug(),
+                    analysis.rationale
+                ));
+                continue;
+            }
             assert!(
                 !analysis.requirements.is_empty(),
                 "`{}` withholds the grant without leaving anything to approve",
@@ -426,42 +653,50 @@ fn every_resolution_matches_the_reference() {
                 scope: wire_scope(requirement.scope),
                 invocation_pattern: requirement.invocation_pattern.clone(),
                 session_pattern: requirement.session_pattern.clone(),
-                label: requirement.label.clone(),
+                label: Label::committed(
+                    &requirement.label,
+                    &requirement.invocation_pattern,
+                    &requirement.session_pattern,
+                ),
             })
             .collect::<Vec<_>>();
-        assert_eq!(
-            raised.len(),
-            case.requirements.len(),
-            "`{}` raises {} requirements here and {} upstream: {raised:?}",
-            case.command.escape_debug(),
-            raised.len(),
-            case.requirements.len()
-        );
-        for (here, upstream) in raised.iter().zip(&case.requirements) {
-            assert_eq!(
-                here.scope,
-                upstream.scope,
-                "`{}`",
-                case.command.escape_debug()
+        // A requirement only one side raises is its own divergence; the ones
+        // both sides raise are still compared field by field.
+        let shared = raised.len().min(case.requirements.len());
+        for index in shared..raised.len().max(case.requirements.len()) {
+            requirement_diffs.insert((case.command.clone(), format!("/requirements/{index}")));
+            eprintln!(
+                "`{}` /requirements/{index}: {:?} here, {:?} upstream",
+                case.command.escape_debug(),
+                raised.get(index),
+                case.requirements.get(index)
             );
-            assert_eq!(
-                here.invocation_pattern,
-                upstream.invocation_pattern,
-                "`{}`",
-                case.command.escape_debug()
-            );
-            assert_eq!(
-                here.session_pattern,
-                upstream.session_pattern,
-                "`{}`",
-                case.command.escape_debug()
-            );
-            assert_eq!(
-                here.label,
-                upstream.label,
-                "`{}`",
-                case.command.escape_debug()
-            );
+        }
+        for (index, (here, upstream)) in raised.iter().zip(&case.requirements).enumerate() {
+            let fields = [
+                ("scope", here.scope == upstream.scope),
+                (
+                    "invocationPattern",
+                    here.invocation_pattern == upstream.invocation_pattern,
+                ),
+                (
+                    "sessionPattern",
+                    here.session_pattern == upstream.session_pattern,
+                ),
+                ("label", here.label == upstream.label),
+            ];
+            for (field, equal) in fields {
+                if !equal {
+                    requirement_diffs.insert((
+                        case.command.clone(),
+                        format!("/requirements/{index}/{field}"),
+                    ));
+                    eprintln!(
+                        "`{}` /requirements/{index}/{field}: {here:?} here, {upstream:?} upstream",
+                        case.command.escape_debug()
+                    );
+                }
+            }
         }
     }
 
@@ -478,10 +713,38 @@ fn every_resolution_matches_the_reference() {
         stale.is_empty(),
         "ledger entries that no longer diverge; remove them: {stale:?}"
     );
+
+    let requirement_ledger = REQUIREMENT_DIVERGENCES
+        .iter()
+        .map(|(command, pointer, _)| ((*command).to_owned(), (*pointer).to_owned()))
+        .collect::<BTreeSet<_>>();
+    let unlisted = requirement_diffs
+        .difference(&requirement_ledger)
+        .cloned()
+        .collect::<Vec<_>>();
+    assert!(
+        unlisted.is_empty(),
+        "requirements diverging from the reference without a ledger entry: {unlisted:?}"
+    );
+    let stale = requirement_ledger
+        .difference(&requirement_diffs)
+        .cloned()
+        .collect::<Vec<_>>();
+    assert!(
+        stale.is_empty(),
+        "requirement ledger entries that no longer diverge; remove them: {stale:?}"
+    );
     eprintln!(
-        "shell policy: resolutions {conforming}/{} conforming, {} ledgered",
+        "shell policy: resolutions {conforming}/{} conforming, {} ledgered, \
+         {} requirement fields ledgered",
         corpus.counts.resolution_cases,
-        diverging.len()
+        diverging.len(),
+        requirement_diffs.len()
+    );
+    assert!(
+        untolerated.is_empty(),
+        "resolutions that differ in another direction than the one tolerated \
+         (`always` upstream, `ask` here): {untolerated:#?}"
     );
 }
 

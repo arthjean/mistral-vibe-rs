@@ -10,14 +10,14 @@ renders the help document ``/help`` prints. This script drives that class
 directly, over inputs it authors, and writes
 ``crates/vibe-cli/tests/commands/corpus.json``.
 
-The corpus records seven families the Rust replay in
+The corpus records eight families the Rust replay in
 ``crates/vibe-cli/src/tui/commands_parity_tests.rs`` compares this build
 against::
 
     counts          how many keys, aliases, slash aliases and bare aliases exist
     inventory       every alias of every registry key, attributed to its key
     availability    which keys survive each context the CLI can produce
-    parse           what a submitted line resolves to, over 50 authored probes
+    parse           what a submitted line resolves to, over 61 authored probes
     helpDocument    the whole document's line and section totals
     helpSections    each section's position, heading level and line count
     helpCommands    each command line's position and ordered alias list
@@ -28,11 +28,13 @@ lines are authored prose ``NOTICE`` forbids reproducing, so the corpus records
 each one as a length plus a digest and never as text. The replay compares this
 port's own lines against those digests and requires permanent inequality.
 
-The registry imports ``vibe.utils``, which imports pydantic, so the ambient
-interpreter is usually not enough: like every other oracle here the script
-re-executes itself under the reference's virtual environment while importing the
-*pinned* tree, extracted out of the checkout with ``git archive`` so the checkout
-is never moved and an off-pin working tree is still an oracle.
+Like every other oracle here the script re-executes itself under the
+reference's virtual environment while importing the *pinned* tree, extracted out
+of the checkout with ``git archive`` so the checkout is never moved and an
+off-pin working tree is still an oracle. At the current pin the registry module
+imports only the standard library and ``vibe.cli.constants``, so the re-exec is
+what guarantees the *pinned* ``vibe`` package is the one imported rather than a
+dependency requirement.
 
 Usage::
 
@@ -64,7 +66,7 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, EXPECTED_VERSION, RESTORE_COMMAND
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 DEFAULT_OUTPUT = Path("crates/vibe-cli/tests/commands/corpus.json")
 DEFAULT_CACHE = Path(".parity")
 INTERPRETER_VARIABLE = "VIBE_PARITY_PYTHON"
@@ -84,16 +86,51 @@ NON_CLIPBOARD_SYSTEM = "Linux"
 #: first in sort order.
 EXCLUDED_KEYS = ("help", "mcp", "theme")
 
-#: Every context the CLI can produce: ``vibe_code_enabled`` crossed with
-#: clipboard support, plus one carrying a non-empty excluded set.
+#: Every gate the registry reads, each opened alone and all opened together,
+#: plus one context carrying a non-empty excluded set. ``CommandContext``
+#: (``vibe/cli/commands.py:10-13``) carries ``registry_skills_enabled`` and
+#: ``experimental_harness``, and ``/paste-image`` reads the host platform; no
+#: predicate reads two of them, so one context per gate reaches every branch.
 CONTEXTS: tuple[dict[str, Any], ...] = (
-    {"id": "baseline", "vibeCodeEnabled": False, "clipboardSupported": False, "excluded": []},
-    {"id": "clipboard", "vibeCodeEnabled": False, "clipboardSupported": True, "excluded": []},
-    {"id": "vibeCode", "vibeCodeEnabled": True, "clipboardSupported": False, "excluded": []},
-    {"id": "full", "vibeCodeEnabled": True, "clipboardSupported": True, "excluded": []},
+    {
+        "id": "baseline",
+        "registrySkillsEnabled": False,
+        "experimentalHarness": False,
+        "clipboardSupported": False,
+        "excluded": [],
+    },
+    {
+        "id": "clipboard",
+        "registrySkillsEnabled": False,
+        "experimentalHarness": False,
+        "clipboardSupported": True,
+        "excluded": [],
+    },
+    {
+        "id": "registrySkills",
+        "registrySkillsEnabled": True,
+        "experimentalHarness": False,
+        "clipboardSupported": False,
+        "excluded": [],
+    },
+    {
+        "id": "experimentalHarness",
+        "registrySkillsEnabled": False,
+        "experimentalHarness": True,
+        "clipboardSupported": False,
+        "excluded": [],
+    },
+    {
+        "id": "full",
+        "registrySkillsEnabled": True,
+        "experimentalHarness": True,
+        "clipboardSupported": True,
+        "excluded": [],
+    },
     {
         "id": "excluded",
-        "vibeCodeEnabled": True,
+        "registrySkillsEnabled": True,
+        "experimentalHarness": True,
         "clipboardSupported": True,
         "excluded": list(EXCLUDED_KEYS),
     },
@@ -156,13 +193,17 @@ PARSE_PROBES: tuple[tuple[str, str, str], ...] = (
     ("retry-with-long-argument", FULL_CONTEXT, "/retry " + "continue the response " * 12),
     ("paste-image-full", FULL_CONTEXT, "/paste-image"),
     ("paste-image-baseline", "baseline", "/paste-image"),
-    ("paste-image-vibe-code", "vibeCode", "/paste-image"),
+    ("paste-image-experimental-harness", "experimentalHarness", "/paste-image"),
     ("paste-image-clipboard", "clipboard", "/paste-image"),
     ("teleport-full", FULL_CONTEXT, "/teleport"),
     ("teleport-baseline", "baseline", "/teleport"),
-    ("teleport-vibe-code", "vibeCode", "/teleport"),
+    ("teleport-experimental-harness", "experimentalHarness", "/teleport"),
     ("remote-project-baseline", "baseline", "/remote-project"),
     ("status-baseline", "baseline", "/status"),
+    ("skills-baseline", "baseline", "/skills"),
+    ("skills-registry-skills", "registrySkills", "/skills"),
+    ("todo-baseline", "baseline", "/todo"),
+    ("todo-experimental-harness", "experimentalHarness", "/todo"),
     ("help-excluded", "excluded", "/help"),
     ("connectors-excluded", "excluded", "/connectors"),
     ("theme-excluded", "excluded", "/theme"),
@@ -262,9 +303,9 @@ def reexecute_with_reference_interpreter(
 ) -> None:
     """Re-runs this script under an interpreter importing the *pinned* tree.
 
-    ``vibe.cli.commands`` imports ``vibe.utils``, which imports pydantic, so an
-    ambient interpreter without the reference's dependencies cannot act as the
-    oracle even though the registry itself is plain dataclasses.
+    The parent process never puts the extracted tree on ``sys.path``, so an
+    ambient ``vibe`` (or none) is what it would import; the re-exec is what
+    makes the pinned tree win over the checkout's editable install.
     """
 
     if os.environ.get(_REEXEC_MARKER) == str(tree):
@@ -375,7 +416,10 @@ def build_registry(module: Any, context: dict[str, Any]) -> Any:
     with clipboard_support(module, context["clipboardSupported"]):
         return module.CommandRegistry(
             excluded_commands=list(context["excluded"]),
-            vibe_code_enabled=context["vibeCodeEnabled"],
+            context=module.CommandContext(
+                registry_skills_enabled=context["registrySkillsEnabled"],
+                experimental_harness=context["experimentalHarness"],
+            ),
         )
 
 
@@ -420,7 +464,8 @@ def capture_availability(module: Any) -> list[dict[str, Any]]:
         cases.append(
             {
                 "id": context["id"],
-                "vibeCodeEnabled": context["vibeCodeEnabled"],
+                "registrySkillsEnabled": context["registrySkillsEnabled"],
+                "experimentalHarness": context["experimentalHarness"],
                 "clipboardSupported": context["clipboardSupported"],
                 "excluded": list(context["excluded"]),
                 "keys": keys,

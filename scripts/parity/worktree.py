@@ -1,32 +1,40 @@
 #!/usr/bin/env python3
 """Capture the pinned Python reference's worktree contract over scripted repositories.
 
-Row 5 of the scorecard was scored from a reading of `vibe/core/worktree.py`
-rather than from a measurement, and a reading cannot tell a missing guard from
-an unreachable one. This oracle drives the reference's own functions and writes
-down what they answer, so the Rust replay compares a verdict instead of a claim.
+Row 5 of the scorecard was once scored from a reading of the reference's
+worktree module rather than from a measurement, and a reading cannot tell a
+missing guard from an unreachable one. This oracle drives the reference's own
+functions and writes down what they answer, so the Rust replay compares a
+verdict instead of a claim.
+
+The contract lives in `vibe/core/git/worktree/repository.py` since v2.24.2,
+which split the former `vibe/core/worktree.py` into that package and
+`vibe/core/git/repo.py`; the error hierarchy is `vibe/core/git/errors.py`, where
+`GitError` is the base every refusal below derives from. The capture opens the
+repository the way `_enter_worktree` does (`vibe/cli/entrypoint.py:221-246`),
+through `WorktreeRepository.open`, and catches `GitError` as that caller does.
 
 Six entry points are driven, each over its own family of cases:
 
 ``name``
-    ``_is_portable_worktree_name`` and ``_validate_branch`` over a list of names
-    this capture authors, covering every shape the reference rejects on
-    portability and every shape ``git check-ref-format --branch`` rejects.
+    ``_is_portable_worktree_name`` and ``GitRepo.validate_branch`` over a list
+    of names this capture authors, covering every shape the reference rejects
+    on portability and every shape ``git check-ref-format --branch`` rejects.
 ``managedRoot``
     ``_worktree_root`` over synthetic common-git-dir strings, so the replay
     recomputes the twelve-hex naming rule instead of comparing a path that only
     exists on the machine that captured it.
 ``prepare``
-    ``prepare_worktree_session`` over scripted repositories, recording the
+    ``WorktreeRepository.prepare`` over scripted repositories, recording the
     prepared record plus what the call left behind when it failed.
 ``cleanup``
-    ``inspect_worktree_for_cleanup`` over a prepared worktree that was then
-    dirtied, committed to, or committed to on a detached HEAD.
+    ``PreparedWorktree.inspect_for_cleanup`` over a prepared worktree that was
+    then dirtied, committed to, or committed to on a detached HEAD.
 ``list``
-    ``list_linked_worktrees`` over a repository holding a primary checkout, two
-    linked worktrees, a detached one and a prunable record.
+    ``WorktreeRepository.linked`` over a repository holding a primary checkout,
+    two linked worktrees, a detached one and a prunable record.
 ``targetCwd``
-    ``_target_cwd`` over a synthetic directory tree exercising each of its four
+    ``_target_cwd`` over a synthetic directory tree exercising each of its
     guards.
 
 Every scripted repository is built under a temporary directory this capture
@@ -645,7 +653,7 @@ PREPARE_CASES: tuple[dict[str, Any], ...] = (
 )
 
 #: One cleanup case per row: what happens inside the prepared worktree before
-#: `inspect_worktree_for_cleanup` is asked what it sees.
+#: `PreparedWorktree.inspect_for_cleanup` is asked what it sees.
 CLEANUP_CASES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("clean", ()),
     ("uncommitted", ("modify",)),
@@ -681,33 +689,37 @@ LIST_CASES: tuple[tuple[str, str, str], ...] = (
 def capture_names(worktree_module: Any) -> list[dict[str, Any]]:
     """Both name verdicts, taken from the reference's own two functions.
 
-    `_validate_branch` wants a repository because it runs `git check-ref-format`
-    through it, so one scripted checkout serves the whole list.
+    `GitRepo.validate_branch` wants a repository because it runs
+    `git check-ref-format` through it, so one scripted checkout serves the whole
+    list.
     """
+
+    from vibe.core.git.errors import GitError
+    from vibe.core.git.repo import GitRepo
 
     records: list[dict[str, Any]] = []
     with tempfile.TemporaryDirectory(prefix="vibe-worktree-names-") as temporary:
         checkout = Path(temporary).resolve() / CHECKOUT
         initialize_checkout(checkout)
-        repo = worktree_module._open_repo(checkout)
-        for case, name in AUTHORED_NAMES:
-            observed: dict[str, Any] = {
-                "portable": worktree_module._is_portable_worktree_name(name)
-            }
-            try:
-                worktree_module._validate_branch(repo, name)
-            except worktree_module.WorktreeError:
-                observed["branchValid"] = False
-            else:
-                observed["branchValid"] = True
-            records.append(
-                {
-                    "family": "name",
-                    "case": case,
-                    "input": {"name": name},
-                    "observed": observed,
+        with GitRepo.open(checkout) as repo:
+            for case, name in AUTHORED_NAMES:
+                observed: dict[str, Any] = {
+                    "portable": worktree_module._is_portable_worktree_name(name)
                 }
-            )
+                try:
+                    repo.validate_branch(name)
+                except GitError:
+                    observed["branchValid"] = False
+                else:
+                    observed["branchValid"] = True
+                records.append(
+                    {
+                        "family": "name",
+                        "case": case,
+                        "input": {"name": name},
+                        "observed": observed,
+                    }
+                )
     return records
 
 
@@ -739,7 +751,26 @@ def capture_managed_roots(worktree_module: Any) -> list[dict[str, Any]]:
     return records
 
 
+def prepare(
+    worktree_module: Any, name: str, base: Path, branch: str | None = None
+) -> Any:
+    """One named preparation, opened the way `_enter_worktree` opens it.
+
+    A reused worktree comes back holding a pending attachment claim, which the
+    reference's own callers release once a session holds it or startup is
+    abandoned; the capture holds no session, so it releases the claim at once.
+    """
+
+    with worktree_module.WorktreeRepository.open(base) as repository:
+        prepared = repository.prepare(name, branch=branch)
+    if prepared.pending_hold is not None:
+        prepared.pending_hold.release()
+    return prepared
+
+
 def capture_prepare(worktree_module: Any, temporary: Path) -> list[dict[str, Any]]:
+    from vibe.core.git.errors import GitError
+
     records: list[dict[str, Any]] = []
     for specification in PREPARE_CASES:
         setup = specification["setup"]
@@ -755,18 +786,14 @@ def capture_prepare(worktree_module: Any, temporary: Path) -> list[dict[str, Any
             base = root if specification["base"] == "." else root / specification["base"]
             observed: dict[str, Any]
             try:
-                prepared = worktree_module.prepare_worktree_session(
-                    name, base, branch=branch
-                )
+                prepared = prepare(worktree_module, name, base, branch)
                 if specification.get("twice"):
-                    prepared = worktree_module.prepare_worktree_session(
-                        name, base, branch=branch
-                    )
+                    prepared = prepare(worktree_module, name, base, branch)
                 observed = {
                     "outcome": "prepared",
                     "prepared": prepared_record(prepared, projection),
                 }
-            except worktree_module.WorktreeError as error:
+            except GitError as error:
                 observed = error_record(error, projection)
             target = managed_directory(worktree_module, checkout) / name
             observed["residue"] = {
@@ -805,6 +832,8 @@ def apply_mutation(worktree: Path, step: str) -> None:
 
 
 def capture_cleanup(worktree_module: Any, temporary: Path) -> list[dict[str, Any]]:
+    from vibe.core.git.errors import GitError
+
     records: list[dict[str, Any]] = []
     for case, mutations in CLEANUP_CASES:
         with case_root(worktree_module, "plain", temporary) as root:
@@ -814,12 +843,12 @@ def capture_cleanup(worktree_module: Any, temporary: Path) -> list[dict[str, Any
                 managed_directory(worktree_module, checkout).name,
                 head_commit(checkout),
             )
-            prepared = worktree_module.prepare_worktree_session("review", checkout)
+            prepared = prepare(worktree_module, "review", checkout)
             for step in mutations:
                 apply_mutation(prepared.root, step)
             observed: dict[str, Any]
             try:
-                state = worktree_module.inspect_worktree_for_cleanup(prepared)
+                state = prepared.inspect_for_cleanup()
                 observed = {
                     "outcome": "inspected",
                     "hasUncommittedChanges": state.has_uncommitted_changes,
@@ -828,7 +857,7 @@ def capture_cleanup(worktree_module: Any, temporary: Path) -> list[dict[str, Any
                     "isClean": state.is_clean,
                     "reasons": [describe(reason) for reason in state.reasons],
                 }
-            except worktree_module.WorktreeError as error:
+            except GitError as error:
                 observed = error_record(error, projection)
             records.append(
                 {
@@ -843,15 +872,18 @@ def capture_cleanup(worktree_module: Any, temporary: Path) -> list[dict[str, Any
 
 
 def capture_list(worktree_module: Any, temporary: Path) -> list[dict[str, Any]]:
+    from vibe.core.git.errors import GitError
+
     records: list[dict[str, Any]] = []
     for case, setup, base in LIST_CASES:
         with case_root(worktree_module, setup, temporary) as root:
             projection = Projection(root, None, None)
             observed: dict[str, Any]
             try:
-                linked = worktree_module.list_linked_worktrees(
+                with worktree_module.WorktreeRepository.open(
                     root if base == "." else root / base
-                )
+                ) as repository:
+                    linked = repository.linked()
                 observed = {
                     "outcome": "listed",
                     "worktrees": [
@@ -865,7 +897,7 @@ def capture_list(worktree_module: Any, temporary: Path) -> list[dict[str, Any]]:
                         for worktree in linked
                     ],
                 }
-            except worktree_module.WorktreeError as error:
+            except GitError as error:
                 observed = error_record(error, projection)
             records.append(
                 {
@@ -880,6 +912,8 @@ def capture_list(worktree_module: Any, temporary: Path) -> list[dict[str, Any]]:
 
 
 def capture_target_cwd(worktree_module: Any, temporary: Path) -> list[dict[str, Any]]:
+    from vibe.core.git.errors import GitError
+
     records: list[dict[str, Any]] = []
     for case, relative_base in TARGET_CWD_CASES:
         with case_root(worktree_module, "target-tree", temporary) as root:
@@ -890,7 +924,7 @@ def capture_target_cwd(worktree_module: Any, temporary: Path) -> list[dict[str, 
                     root / TREE, Path(relative_base)
                 )
                 observed = {"outcome": "resolved", "path": projection.path(resolved)}
-            except worktree_module.WorktreeError as error:
+            except GitError as error:
                 observed = error_record(error, projection)
             records.append(
                 {
@@ -905,11 +939,17 @@ def capture_target_cwd(worktree_module: Any, temporary: Path) -> list[dict[str, 
 
 
 def capture(pinned: Path) -> list[dict[str, Any]]:
-    from vibe.core import worktree as worktree_module
+    # The module rather than the package: the package re-exports only public
+    # names, and the capture also drives `_worktree_root`, `_target_cwd` and
+    # `_is_portable_worktree_name`.
+    from vibe.core.git.worktree import repository as worktree_module
 
     module_path = Path(worktree_module.__file__).resolve()
     if not module_path.is_relative_to(pinned.resolve()):
-        raise OracleError(f"`vibe.core.worktree` was imported from {module_path}, not {pinned}")
+        raise OracleError(
+            f"`vibe.core.git.worktree.repository` was imported from {module_path}, "
+            f"not {pinned}"
+        )
 
     with tempfile.TemporaryDirectory(prefix="vibe-worktree-") as raw:
         temporary = Path(raw).resolve()

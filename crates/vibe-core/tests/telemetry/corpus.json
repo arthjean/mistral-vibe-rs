@@ -28,8 +28,16 @@
       "base": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
+        "experiment_assignments": [
+          {
+            "experiment_id": "ab",
+            "experiment_name": "oracle-ab",
+            "variation_name": "on"
+          }
+        ],
         "experiments": {
           "ab": "on"
         },
@@ -44,8 +52,10 @@
       "baseKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "client_name",
         "client_version",
+        "experiment_assignments",
         "experiments",
         "os",
         "os_version",
@@ -66,10 +76,12 @@
       "request": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "call_source": "vibe_code",
         "call_type": "main_call",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
+        "host_kind": "local",
         "message_id": "oracle-message",
         "os": "{platformId}",
         "os_version": "{platformVersion}",
@@ -82,10 +94,12 @@
       "requestKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "call_source",
         "call_type",
         "client_name",
         "client_version",
+        "host_kind",
         "message_id",
         "os",
         "os_version",
@@ -98,11 +112,16 @@
       "requestKeysWithNulls": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "call_source",
         "call_type",
         "client_name",
         "client_version",
+        "experiment_assignments",
+        "experiment_attributes",
         "experiments",
+        "harness_backend",
+        "host_kind",
         "message_id",
         "os",
         "os_version",
@@ -121,8 +140,16 @@
       "base": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
+        "experiment_assignments": [
+          {
+            "experiment_id": "ab",
+            "experiment_name": "oracle-ab",
+            "variation_name": "on"
+          }
+        ],
         "experiments": {
           "ab": "on"
         },
@@ -137,8 +164,10 @@
       "baseKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "client_name",
         "client_version",
+        "experiment_assignments",
         "experiments",
         "os",
         "os_version",
@@ -159,10 +188,12 @@
       "request": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "call_source": "vibe_code",
         "call_type": "secondary_call",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
+        "host_kind": "local",
         "os": "{platformId}",
         "os_version": "{platformVersion}",
         "parent_session_id": "oracle-parent-session",
@@ -174,10 +205,12 @@
       "requestKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "call_source",
         "call_type",
         "client_name",
         "client_version",
+        "host_kind",
         "os",
         "os_version",
         "parent_session_id",
@@ -189,11 +222,16 @@
       "requestKeysWithNulls": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "call_source",
         "call_type",
         "client_name",
         "client_version",
+        "experiment_assignments",
+        "experiment_attributes",
         "experiments",
+        "harness_backend",
+        "host_kind",
         "message_id",
         "os",
         "os_version",
@@ -210,6 +248,7 @@
     },
     {
       "base": {
+        "arch": "{arch}",
         "os": "{platformId}",
         "os_version": "{platformVersion}",
         "parent_session_id": "oracle-parent-session",
@@ -218,6 +257,7 @@
         "version": "{version}"
       },
       "baseKeys": [
+        "arch",
         "os",
         "os_version",
         "parent_session_id",
@@ -228,8 +268,10 @@
       "case": "no-launch-context-main_call",
       "launchFields": null,
       "request": {
+        "arch": "{arch}",
         "call_source": "vibe_code",
         "call_type": "main_call",
+        "host_kind": "local",
         "message_id": "oracle-message",
         "os": "{platformId}",
         "os_version": "{platformVersion}",
@@ -239,8 +281,10 @@
         "version": "{version}"
       },
       "requestKeys": [
+        "arch",
         "call_source",
         "call_type",
+        "host_kind",
         "message_id",
         "os",
         "os_version",
@@ -252,11 +296,16 @@
       "requestKeysWithNulls": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "call_source",
         "call_type",
         "client_name",
         "client_version",
+        "experiment_assignments",
+        "experiment_attributes",
         "experiments",
+        "harness_backend",
+        "host_kind",
         "message_id",
         "os",
         "os_version",
@@ -270,6 +319,7 @@
     },
     {
       "base": {
+        "arch": "{arch}",
         "os": "{platformId}",
         "os_version": "{platformVersion}",
         "parent_session_id": "oracle-parent-session",
@@ -278,6 +328,7 @@
         "version": "{version}"
       },
       "baseKeys": [
+        "arch",
         "os",
         "os_version",
         "parent_session_id",
@@ -288,8 +339,10 @@
       "case": "no-launch-context-secondary_call",
       "launchFields": null,
       "request": {
+        "arch": "{arch}",
         "call_source": "vibe_code",
         "call_type": "secondary_call",
+        "host_kind": "local",
         "os": "{platformId}",
         "os_version": "{platformVersion}",
         "parent_session_id": "oracle-parent-session",
@@ -298,8 +351,10 @@
         "version": "{version}"
       },
       "requestKeys": [
+        "arch",
         "call_source",
         "call_type",
+        "host_kind",
         "os",
         "os_version",
         "parent_session_id",
@@ -310,11 +365,16 @@
       "requestKeysWithNulls": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "call_source",
         "call_type",
         "client_name",
         "client_version",
+        "experiment_assignments",
+        "experiment_attributes",
         "experiments",
+        "harness_backend",
+        "host_kind",
         "message_id",
         "os",
         "os_version",
@@ -330,6 +390,7 @@
       "base": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
         "os": "{platformId}",
@@ -340,6 +401,7 @@
       "baseKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "client_name",
         "client_version",
         "os",
@@ -358,10 +420,12 @@
       "request": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "call_source": "vibe_code",
         "call_type": "main_call",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
+        "host_kind": "local",
         "message_id": "oracle-message",
         "os": "{platformId}",
         "os_version": "{platformVersion}",
@@ -371,10 +435,12 @@
       "requestKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "call_source",
         "call_type",
         "client_name",
         "client_version",
+        "host_kind",
         "message_id",
         "os",
         "os_version",
@@ -384,11 +450,16 @@
       "requestKeysWithNulls": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "call_source",
         "call_type",
         "client_name",
         "client_version",
+        "experiment_assignments",
+        "experiment_attributes",
         "experiments",
+        "harness_backend",
+        "host_kind",
         "message_id",
         "os",
         "os_version",
@@ -407,6 +478,7 @@
       "base": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
         "os": "{platformId}",
@@ -417,6 +489,7 @@
       "baseKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "client_name",
         "client_version",
         "os",
@@ -435,10 +508,12 @@
       "request": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "call_source": "vibe_code",
         "call_type": "secondary_call",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
+        "host_kind": "local",
         "os": "{platformId}",
         "os_version": "{platformVersion}",
         "terminal_emulator": "ghostty",
@@ -447,10 +522,12 @@
       "requestKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "call_source",
         "call_type",
         "client_name",
         "client_version",
+        "host_kind",
         "os",
         "os_version",
         "terminal_emulator",
@@ -459,11 +536,16 @@
       "requestKeysWithNulls": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "call_source",
         "call_type",
         "client_name",
         "client_version",
+        "experiment_assignments",
+        "experiment_attributes",
         "experiments",
+        "harness_backend",
+        "host_kind",
         "message_id",
         "os",
         "os_version",
@@ -482,6 +564,7 @@
       "base": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
         "os": "{platformId}",
@@ -493,6 +576,7 @@
       "baseKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "client_name",
         "client_version",
         "os",
@@ -512,10 +596,12 @@
       "request": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "call_source": "vibe_code",
         "call_type": "main_call",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
+        "host_kind": "local",
         "message_id": "oracle-message",
         "os": "{platformId}",
         "os_version": "{platformVersion}",
@@ -526,10 +612,12 @@
       "requestKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "call_source",
         "call_type",
         "client_name",
         "client_version",
+        "host_kind",
         "message_id",
         "os",
         "os_version",
@@ -540,11 +628,16 @@
       "requestKeysWithNulls": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "call_source",
         "call_type",
         "client_name",
         "client_version",
+        "experiment_assignments",
+        "experiment_attributes",
         "experiments",
+        "harness_backend",
+        "host_kind",
         "message_id",
         "os",
         "os_version",
@@ -563,6 +656,7 @@
       "base": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
         "os": "{platformId}",
@@ -574,6 +668,7 @@
       "baseKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "client_name",
         "client_version",
         "os",
@@ -593,10 +688,12 @@
       "request": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "call_source": "vibe_code",
         "call_type": "secondary_call",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
+        "host_kind": "local",
         "os": "{platformId}",
         "os_version": "{platformVersion}",
         "session_id": "oracle-session",
@@ -606,10 +703,12 @@
       "requestKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "call_source",
         "call_type",
         "client_name",
         "client_version",
+        "host_kind",
         "os",
         "os_version",
         "session_id",
@@ -619,11 +718,16 @@
       "requestKeysWithNulls": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "call_source",
         "call_type",
         "client_name",
         "client_version",
+        "experiment_assignments",
+        "experiment_attributes",
         "experiments",
+        "harness_backend",
+        "host_kind",
         "message_id",
         "os",
         "os_version",
@@ -642,6 +746,7 @@
       "base": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
         "os": "{platformId}",
@@ -653,6 +758,7 @@
       "baseKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "client_name",
         "client_version",
         "os",
@@ -672,10 +778,12 @@
       "request": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "call_source": "vibe_code",
         "call_type": "main_call",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
+        "host_kind": "local",
         "message_id": "oracle-message",
         "os": "{platformId}",
         "os_version": "{platformVersion}",
@@ -686,10 +794,12 @@
       "requestKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "call_source",
         "call_type",
         "client_name",
         "client_version",
+        "host_kind",
         "message_id",
         "os",
         "os_version",
@@ -700,11 +810,16 @@
       "requestKeysWithNulls": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "call_source",
         "call_type",
         "client_name",
         "client_version",
+        "experiment_assignments",
+        "experiment_attributes",
         "experiments",
+        "harness_backend",
+        "host_kind",
         "message_id",
         "os",
         "os_version",
@@ -723,6 +838,7 @@
       "base": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
         "os": "{platformId}",
@@ -734,6 +850,7 @@
       "baseKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "client_name",
         "client_version",
         "os",
@@ -753,10 +870,12 @@
       "request": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "call_source": "vibe_code",
         "call_type": "secondary_call",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
+        "host_kind": "local",
         "os": "{platformId}",
         "os_version": "{platformVersion}",
         "parent_session_id": "oracle-parent-session",
@@ -766,10 +885,12 @@
       "requestKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "call_source",
         "call_type",
         "client_name",
         "client_version",
+        "host_kind",
         "os",
         "os_version",
         "parent_session_id",
@@ -779,11 +900,16 @@
       "requestKeysWithNulls": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "call_source",
         "call_type",
         "client_name",
         "client_version",
+        "experiment_assignments",
+        "experiment_attributes",
         "experiments",
+        "harness_backend",
+        "host_kind",
         "message_id",
         "os",
         "os_version",
@@ -802,8 +928,16 @@
       "base": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
+        "experiment_assignments": [
+          {
+            "experiment_id": "ab",
+            "experiment_name": "oracle-ab",
+            "variation_name": "off"
+          }
+        ],
         "experiments": {
           "ab": "off"
         },
@@ -817,8 +951,10 @@
       "baseKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "client_name",
         "client_version",
+        "experiment_assignments",
         "experiments",
         "os",
         "os_version",
@@ -838,10 +974,12 @@
       "request": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "call_source": "vibe_code",
         "call_type": "main_call",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
+        "host_kind": "local",
         "message_id": "oracle-message",
         "os": "{platformId}",
         "os_version": "{platformVersion}",
@@ -853,10 +991,12 @@
       "requestKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "call_source",
         "call_type",
         "client_name",
         "client_version",
+        "host_kind",
         "message_id",
         "os",
         "os_version",
@@ -868,11 +1008,16 @@
       "requestKeysWithNulls": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "call_source",
         "call_type",
         "client_name",
         "client_version",
+        "experiment_assignments",
+        "experiment_attributes",
         "experiments",
+        "harness_backend",
+        "host_kind",
         "message_id",
         "os",
         "os_version",
@@ -891,8 +1036,16 @@
       "base": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
+        "experiment_assignments": [
+          {
+            "experiment_id": "ab",
+            "experiment_name": "oracle-ab",
+            "variation_name": "off"
+          }
+        ],
         "experiments": {
           "ab": "off"
         },
@@ -906,8 +1059,10 @@
       "baseKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "client_name",
         "client_version",
+        "experiment_assignments",
         "experiments",
         "os",
         "os_version",
@@ -927,10 +1082,12 @@
       "request": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "call_source": "vibe_code",
         "call_type": "secondary_call",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
+        "host_kind": "local",
         "os": "{platformId}",
         "os_version": "{platformVersion}",
         "parent_session_id": "oracle-parent-session",
@@ -941,10 +1098,12 @@
       "requestKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "call_source",
         "call_type",
         "client_name",
         "client_version",
+        "host_kind",
         "os",
         "os_version",
         "parent_session_id",
@@ -955,11 +1114,16 @@
       "requestKeysWithNulls": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "call_source",
         "call_type",
         "client_name",
         "client_version",
+        "experiment_assignments",
+        "experiment_attributes",
         "experiments",
+        "harness_backend",
+        "host_kind",
         "message_id",
         "os",
         "os_version",
@@ -1075,6 +1239,7 @@
       "agentEntrypoints": [
         "cli",
         "acp",
+        "desktop",
         "programmatic",
         "unknown"
       ],
@@ -1087,13 +1252,17 @@
         "client_name",
         "client_version",
         "os",
+        "arch",
         "os_version",
         "version",
         "terminal_emulator",
         "session_id",
         "parent_session_id",
         "experiments",
-        "user_plan"
+        "experiment_assignments",
+        "user_plan",
+        "experiment_attributes",
+        "harness_backend"
       ],
       "callSourceDefault": "vibe_code",
       "callTypes": [
@@ -1121,6 +1290,7 @@
       "requestMetadataFields": [
         "call_type",
         "call_source",
+        "host_kind",
         "message_id"
       ],
       "teleportContextSummaryStatuses": [
@@ -1213,6 +1383,7 @@
       "properties": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
         "init_duration_ms": 1234,
@@ -1227,6 +1398,7 @@
       "propertyKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "client_name",
         "client_version",
         "init_duration_ms",
@@ -1241,6 +1413,7 @@
       "propertyTypes": {
         "agent_entrypoint": "string",
         "agent_version": "string",
+        "arch": "string",
         "client_name": "string",
         "client_version": "string",
         "init_duration_ms": "int",
@@ -1281,6 +1454,7 @@
       "properties": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
         "init_duration_ms": 1234,
@@ -1295,6 +1469,7 @@
       "propertyKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "client_name",
         "client_version",
         "init_duration_ms",
@@ -1309,6 +1484,7 @@
       "propertyTypes": {
         "agent_entrypoint": "string",
         "agent_version": "string",
+        "arch": "string",
         "client_name": "string",
         "client_version": "string",
         "init_duration_ms": "int",
@@ -1432,6 +1608,7 @@
       "properties": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
         "init_duration_ms": 1234,
@@ -1446,6 +1623,7 @@
       "propertyKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "client_name",
         "client_version",
         "init_duration_ms",
@@ -1460,6 +1638,7 @@
       "propertyTypes": {
         "agent_entrypoint": "string",
         "agent_version": "string",
+        "arch": "string",
         "client_name": "string",
         "client_version": "string",
         "init_duration_ms": "int",
@@ -1500,6 +1679,7 @@
       "properties": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
         "init_duration_ms": 1234,
@@ -1514,6 +1694,7 @@
       "propertyKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "client_name",
         "client_version",
         "init_duration_ms",
@@ -1528,6 +1709,7 @@
       "propertyTypes": {
         "agent_entrypoint": "string",
         "agent_version": "string",
+        "arch": "string",
         "client_name": "string",
         "client_version": "string",
         "init_duration_ms": "int",
@@ -1567,6 +1749,7 @@
       "properties": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
         "init_duration_ms": 1234,
@@ -1581,6 +1764,7 @@
       "propertyKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "client_name",
         "client_version",
         "init_duration_ms",
@@ -1595,6 +1779,7 @@
       "propertyTypes": {
         "agent_entrypoint": "string",
         "agent_version": "string",
+        "arch": "string",
         "client_name": "string",
         "client_version": "string",
         "init_duration_ms": "int",
@@ -1635,6 +1820,7 @@
       "properties": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
         "init_duration_ms": 1234,
@@ -1649,6 +1835,7 @@
       "propertyKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "client_name",
         "client_version",
         "init_duration_ms",
@@ -1663,6 +1850,7 @@
       "propertyTypes": {
         "agent_entrypoint": "string",
         "agent_version": "string",
+        "arch": "string",
         "client_name": "string",
         "client_version": "string",
         "init_duration_ms": "int",
@@ -1702,6 +1890,7 @@
       "properties": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
         "init_duration_ms": 1234,
@@ -1716,6 +1905,7 @@
       "propertyKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "client_name",
         "client_version",
         "init_duration_ms",
@@ -1730,6 +1920,7 @@
       "propertyTypes": {
         "agent_entrypoint": "string",
         "agent_version": "string",
+        "arch": "string",
         "client_name": "string",
         "client_version": "string",
         "init_duration_ms": "int",
@@ -1770,6 +1961,7 @@
       "properties": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
         "init_duration_ms": 1234,
@@ -1784,6 +1976,7 @@
       "propertyKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "client_name",
         "client_version",
         "init_duration_ms",
@@ -1798,6 +1991,7 @@
       "propertyTypes": {
         "agent_entrypoint": "string",
         "agent_version": "string",
+        "arch": "string",
         "client_name": "string",
         "client_version": "string",
         "init_duration_ms": "int",
@@ -1921,6 +2115,7 @@
       "properties": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
         "extra": 1,
@@ -1935,6 +2130,7 @@
       "propertyKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "client_name",
         "client_version",
         "extra",
@@ -1949,6 +2145,7 @@
       "propertyTypes": {
         "agent_entrypoint": "string",
         "agent_version": "string",
+        "arch": "string",
         "client_name": "string",
         "client_version": "string",
         "extra": "int",
@@ -1988,6 +2185,7 @@
       "properties": {
         "agent_entrypoint": "cli",
         "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
         "client_name": "oracle-client",
         "client_version": "oracle-client-version",
         "init_duration_ms": 1234,
@@ -2002,6 +2200,7 @@
       "propertyKeys": [
         "agent_entrypoint",
         "agent_version",
+        "arch",
         "client_name",
         "client_version",
         "init_duration_ms",
@@ -2016,6 +2215,7 @@
       "propertyTypes": {
         "agent_entrypoint": "string",
         "agent_version": "string",
+        "arch": "string",
         "client_name": "string",
         "client_version": "string",
         "init_duration_ms": "int",
@@ -2197,6 +2397,7 @@
       "properties": {
         "entrypoint": "cli",
         "has_agents_md": true,
+        "host_kind": "local",
         "nb_mcp_servers": 2,
         "nb_models": 4,
         "nb_skills": 3
@@ -2204,6 +2405,7 @@
       "propertyKeys": [
         "entrypoint",
         "has_agents_md",
+        "host_kind",
         "nb_mcp_servers",
         "nb_models",
         "nb_skills"
@@ -2211,6 +2413,7 @@
       "propertyTypes": {
         "entrypoint": "string",
         "has_agents_md": "bool",
+        "host_kind": "string",
         "nb_mcp_servers": "int",
         "nb_models": "int",
         "nb_skills": "int"
@@ -2364,6 +2567,17 @@
       "source": "driven"
     },
     {
+      "correlated": null,
+      "event": "vibe.session_branched",
+      "properties": null,
+      "propertyKeys": [
+        "new_session_id",
+        "source_session_id"
+      ],
+      "propertyTypes": null,
+      "source": "callSite"
+    },
+    {
       "correlated": false,
       "event": "vibe.session_closed",
       "properties": {},
@@ -2395,7 +2609,14 @@
       "propertyKeys": [
         "agent_ready_duration_ms",
         "first_frame_duration_ms",
-        "session_init_duration_ms"
+        "harness_selection_source",
+        "has_initial_prompt",
+        "is_cold_start",
+        "is_resuming_session",
+        "prompt_for_workspace_trust",
+        "session_init_duration_ms",
+        "show_resume_picker",
+        "teleport_on_start"
       ],
       "propertyTypes": null,
       "source": "callSite"
@@ -2484,6 +2705,7 @@
       "event": "vibe.tool_call_finished",
       "properties": {
         "agent_profile_name": "oracle-profile",
+        "approval_source": "user",
         "approval_type": "session",
         "bash_background": false,
         "decision": "approved",
@@ -2497,6 +2719,7 @@
       },
       "propertyKeys": [
         "agent_profile_name",
+        "approval_source",
         "approval_type",
         "bash_background",
         "decision",
@@ -2510,6 +2733,7 @@
       ],
       "propertyTypes": {
         "agent_profile_name": "string",
+        "approval_source": "string",
         "approval_type": "string",
         "bash_background": "bool",
         "decision": "string",
@@ -2592,6 +2816,7 @@
       "event": "vibe.at_mention_inserted",
       "sender": "send_at_mention_inserted",
       "sites": [
+        "vibe/cli/textual_ui/app.py",
         "vibe/core/telemetry/send.py"
       ],
       "source": "driven"
@@ -2707,6 +2932,14 @@
         "vibe/core/telemetry/send.py"
       ],
       "source": "driven"
+    },
+    {
+      "event": "vibe.session_branched",
+      "sender": null,
+      "sites": [
+        "vibe/cli/textual_ui/app.py"
+      ],
+      "source": "callSite"
     },
     {
       "event": "vibe.session_closed",
@@ -4080,7 +4313,7 @@
     }
   ],
   "reference": {
-    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7"
+    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
   },
   "schemaVersion": 1,
   "spans": [

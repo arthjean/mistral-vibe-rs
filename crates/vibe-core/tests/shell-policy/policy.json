@@ -47,8 +47,14 @@
       "which"
     ],
     "findExecutionPredicates": [
+      "-delete",
       "-exec",
       "-execdir",
+      "-files0-from",
+      "-fls",
+      "-fprint",
+      "-fprint0",
+      "-fprintf",
       "-ok",
       "-okdir"
     ],
@@ -331,7 +337,7 @@
       ]
     }
   ],
-  "note": "Captured from the pinned reference by scripts/parity/shell_policy.py. Command names, node-kind names, scope values, booleans and the answers to cases this repository authored are observations; no reference-authored description or refusal text is recorded here.",
+  "note": "Captured from the pinned reference by scripts/parity/shell_policy.py. Command names, node-kind names, scope values, booleans and the answers to cases this repository authored are observations; a label that is not one of its requirement's patterns is recorded as a digest and a length, and no reference-authored description, label or refusal text is recorded here.",
   "outsideDirs": [
     {
       "command": "cat <workdir>/inside.txt",
@@ -461,7 +467,7 @@
     }
   ],
   "reference": {
-    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7"
+    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
   },
   "resolutions": [
     {
@@ -730,10 +736,13 @@
       "permission": "ask",
       "requirements": [
         {
-          "invocationPattern": "python3 <redirect>",
-          "label": "python3 *",
+          "invocationPattern": "python3 <<'EOF'\nprint(1)\nEOF",
+          "label": {
+            "described": "sha256:e436ecd66d6b18790da4595e645a1631",
+            "length": 44
+          },
           "scope": "command_pattern",
-          "sessionPattern": "python3 *"
+          "sessionPattern": "python3 <<'EOF'\nprint(1)\nEOF"
         }
       ]
     },
@@ -744,8 +753,18 @@
     {
       "command": "cat 'unterminated",
       "hasReason": false,
-      "permission": "always",
-      "requirements": []
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "cat 'unterminated",
+          "label": {
+            "described": "sha256:74440bf3141d30983fb296d758656799",
+            "length": 47
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "cat 'unterminated"
+        }
+      ]
     },
     {
       "command": "sudo apt update",
@@ -789,6 +808,12 @@
           "label": "find . -exec rm {}",
           "scope": "command_pattern",
           "sessionPattern": "find . -exec rm {}"
+        },
+        {
+          "invocationPattern": "find . -exec rm {}",
+          "label": "find . -exec rm {}",
+          "scope": "command_pattern",
+          "sessionPattern": "find . -exec rm {}"
         }
       ]
     },
@@ -797,6 +822,12 @@
       "hasReason": false,
       "permission": "ask",
       "requirements": [
+        {
+          "invocationPattern": "find . -execdir rm {}",
+          "label": "find . -execdir rm {}",
+          "scope": "command_pattern",
+          "sessionPattern": "find . -execdir rm {}"
+        },
         {
           "invocationPattern": "find . -execdir rm {}",
           "label": "find . -execdir rm {}",
@@ -815,6 +846,12 @@
           "label": "find . -ok rm {}",
           "scope": "command_pattern",
           "sessionPattern": "find . -ok rm {}"
+        },
+        {
+          "invocationPattern": "find . -ok rm {}",
+          "label": "find . -ok rm {}",
+          "scope": "command_pattern",
+          "sessionPattern": "find . -ok rm {}"
         }
       ]
     },
@@ -823,6 +860,12 @@
       "hasReason": false,
       "permission": "ask",
       "requirements": [
+        {
+          "invocationPattern": "find . -okdir rm {}",
+          "label": "find . -okdir rm {}",
+          "scope": "command_pattern",
+          "sessionPattern": "find . -okdir rm {}"
+        },
         {
           "invocationPattern": "find . -okdir rm {}",
           "label": "find . -okdir rm {}",
@@ -841,6 +884,15 @@
           "label": "find . -exec rm {}",
           "scope": "command_pattern",
           "sessionPattern": "find . -exec rm {}"
+        },
+        {
+          "invocationPattern": "find . -exec rm {} ; && find . -exec rm {} ;",
+          "label": {
+            "described": "sha256:907c04349f3cb86847fe445cf9b69c6b",
+            "length": 64
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "find . -exec rm {} ; && find . -exec rm {} ;"
         }
       ]
     },
@@ -961,14 +1013,37 @@
     {
       "command": "cat $(which ls)",
       "hasReason": false,
-      "permission": "always",
-      "requirements": []
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "cat",
+          "label": "cat *",
+          "scope": "command_pattern",
+          "sessionPattern": "cat *"
+        },
+        {
+          "invocationPattern": "which ls",
+          "label": "which *",
+          "scope": "command_pattern",
+          "sessionPattern": "which *"
+        }
+      ]
     },
     {
       "command": "cat file.txt > out.txt",
       "hasReason": false,
-      "permission": "always",
-      "requirements": []
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "cat file.txt > out.txt",
+          "label": {
+            "described": "sha256:e436ecd66d6b18790da4595e645a1631",
+            "length": 44
+          },
+          "scope": "command_pattern",
+          "sessionPattern": "cat file.txt > out.txt"
+        }
+      ]
     },
     {
       "command": "git -c core.pager=sh log",
@@ -977,17 +1052,36 @@
       "requirements": [
         {
           "invocationPattern": "git -c core.pager=sh log",
-          "label": "git -c *",
+          "label": "git -c core.pager=sh log",
           "scope": "command_pattern",
-          "sessionPattern": "git -c *"
+          "sessionPattern": "git -c core.pager=sh log"
         }
       ]
     },
     {
       "command": "git diff --no-index /etc/passwd /dev/null",
       "hasReason": false,
-      "permission": "always",
-      "requirements": []
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "/dev/*",
+          "label": {
+            "described": "sha256:65045be59e3055f4b55830d2f45fb46b",
+            "length": 24
+          },
+          "scope": "outside_directory",
+          "sessionPattern": "/dev/*"
+        },
+        {
+          "invocationPattern": "/etc/*",
+          "label": {
+            "described": "sha256:f9089c4d60dfd86485a4c664bb4a8a07",
+            "length": 24
+          },
+          "scope": "outside_directory",
+          "sessionPattern": "/etc/*"
+        }
+      ]
     },
     {
       "command": "rg --pre helper needle .",
@@ -1009,9 +1103,9 @@
       "requirements": [
         {
           "invocationPattern": "git reset --hard",
-          "label": "git reset *",
+          "label": "git reset --hard",
           "scope": "command_pattern",
-          "sessionPattern": "git reset *"
+          "sessionPattern": "git reset --hard"
         }
       ]
     },
@@ -1022,12 +1116,12 @@
       "requirements": [
         {
           "invocationPattern": "git reset --hard -- src",
-          "label": "git reset *",
+          "label": "git reset --hard -- src",
           "scope": "command_pattern",
-          "sessionPattern": "git reset *"
+          "sessionPattern": "git reset --hard -- src"
         }
       ]
     }
   ],
-  "schemaVersion": 1
+  "schemaVersion": 2
 }

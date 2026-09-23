@@ -1,6 +1,6 @@
 {
   "oracle": {
-    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd",
     "deterministicRuns": 10,
     "engine": "python-textual-capture"
   },
@@ -111,7 +111,7 @@
     "script": "configuration-integrations-oracle.py"
   },
   "reference": {
-    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd",
     "sourceFiles": [
       "vibe/cli/textual_ui/screens/config/config_screen.py",
       "vibe/cli/textual_ui/screens/config/edit.py",
@@ -130,7 +130,12 @@
   "schemaVersion": 5,
   "traces": [
     {
-      "divergences": [],
+      "divergences": [
+        {
+          "event": 2,
+          "reason": "Since v2.25.0 the reference refuses a proxy URL variable whose value lacks an http:// or https:// scheme: `set_proxy_var` checks every key in `PROXY_URL_VARS` (vibe/core/proxy_setup.py:16-17, :42-45 at 4a96003186b166d55b9f06895c45bb136eef61cd) and `_config_proxy_write` answers the `ProxySetupError` as INVALID_PARAMS (vibe/app_server/_resources.py:710-727), so `ALL_PROXY=socks5://all.example` fails the write; only that `error` status is a reference measurement. The reference writes one key per `set_proxy_var` call in wire order with no rollback (vibe/app_server/_resources.py:716-722, vibe/core/proxy_setup.py:35-51), so keys that precede ALL_PROXY in the payload stay written; the recorded file content comes from the oracle's restore-on-error convention, not from the reference. The Rust `ProxyEnvironmentStore::write` (crates/vibe-core/src/config/proxy.rs:100-121) rejects only control characters and writes every change."
+        }
+      ],
       "events": [
         {
           "kind": "config",
@@ -255,13 +260,17 @@
       "reference": [
         "config|Settings|-|Save changes to:enabled:project configuration layer;Popular settings:disabled:;active model:enabled:codestral · string · project config · Model.;Advanced settings:disabled:;api key:disabled:[redacted] · string · effective · Secret.;custom runtime:disabled:7 · number · effective · schema unavailable; read-only;enable update checks:enabled:True · boolean · effective · Updates.;limits › max turns:enabled:12 · integer · env · Turn limit.;optional note:enabled:— · string · defaults · Optional.",
         "proxy|Proxy Configuration|-|HTTP_PROXY:enabled:https://proxy.example · Proxy URL for HTTP requests;HTTPS_PROXY:enabled:not set · Proxy URL for HTTPS requests;ALL_PROXY:enabled:socks5://proxy.example · Proxy URL for all requests (fallback);NO_PROXY:enabled:localhost,.internal · Comma-separated list of hosts to bypass proxy;SSL_CERT_FILE:enabled:/certs/ca.pem · Path to custom SSL certificate file;SSL_CERT_DIR:enabled:/certs · Path to directory containing SSL certificates",
-        "proxy-fs|ok|\"CUSTOM=value\\nHTTP_PROXY='https://new.example'\\nALL_PROXY='socks5://all.example'\\nNO_PROXY='localhost,.internal'\\nSSL_CERT_FILE='/certs/ca.pem'\\nSSL_CERT_DIR='/certs'\\n\"",
+        "proxy-fs|error|\"CUSTOM=value\\nHTTP_PROXY='old'\\n\"",
         "proxy-fs|error|\"CUSTOM=value\\nHTTP_PROXY='old'\\n\""
       ],
       "story": "US-031"
     },
     {
       "divergences": [
+        {
+          "event": 0,
+          "reason": "Since v2.25.5 the reference titles the connector group `Available Connectors` (vibe/cli/textual_ui/widgets/mcp_app.py:397-402 at 4a96003186b166d55b9f06895c45bb136eef61cd, was `Workspace Connectors` at b78b451:mcp_app.py:254); the Rust MCP overlay still emits `Workspace Connectors` (crates/vibe-cli/src/tui/pickers/integrations.rs:71). Every other row of the list matches."
+        },
         {
           "event": 2,
           "reason": "The reference points at the `r` binding in a disabled hint; the Rust detail view exposes the refresh as a selectable action so credential setup stays executable from the overlay."
@@ -525,7 +534,7 @@
       ],
       "id": "grouped-mcp-connector-lifecycle",
       "reference": [
-        "mcp|MCP Servers & Connectors|-|Local MCP Servers:disabled:;github:enabled:streamable-http · 1/2 tools · enabled;:disabled:;Workspace Connectors:disabled:;Calendar:enabled:connector · 1 tool · connected;Drive:enabled:connector · 1 tool · needs auth;Vault:enabled:connector · 1 tool · needs setup;Archive:enabled:connector · no tools · disabled;Broken:enabled:connector · no tools · error - try refreshing",
+        "mcp|MCP Servers & Connectors|-|Local MCP Servers:disabled:;github:enabled:streamable-http · 1/2 tools · enabled;:disabled:;Available Connectors:disabled:;Calendar:enabled:connector · 1 tool · connected;Drive:enabled:connector · 1 tool · needs auth;Vault:enabled:connector · 1 tool · needs setup;Archive:enabled:connector · no tools · disabled;Broken:enabled:connector · no tools · error - try refreshing",
         "mcp-detail|MCP Server: github|-|read:enabled:Read files (disabled);search:enabled:Search repositories",
         "mcp-detail|Connector: Vault|-|Set up credentials in the Mistral dashboard, then press r to refresh.:disabled:",
         "auth|MCP Server: github|Once authenticated in your browser, return to Vibe|This MCP server requires authentication:disabled:;:disabled:;Press enter to open auth in your browser:enabled:;Copy URL to clipboard:enabled:;Manually show the URL:enabled:",

@@ -245,17 +245,184 @@ fn result(envelope: Envelope) -> Value {
     }
 }
 
-/// The answer, checked against the reference model the corpus names for the
-/// method before it is read.
-fn conforming(method: &str, envelope: Envelope) -> Value {
-    let value = result(envelope);
-    let issues = census_issues(method, &value);
-    assert!(
-        issues.is_empty(),
-        "{method} diverges from the reference census: {issues:?}"
-    );
-    value
-}
+/// v2.25.7 reshaped the project-link wire models around a directory rather
+/// than a repository root (vibe/app_server/protocol.py:1639-1668,1699-1702,
+/// 1750-1753 at 4a96003); this port still answers the v2.24.0 shapes.
+const LINKED_PROJECT: &str = "v2.25.7: ProjectLinksLinkedProject is projectId plus localLinks (vibe/app_server/protocol.py:1644-1646); this port answers repoLocalPaths";
+const INSPECTED_DIRECTORY: &str = "v2.25.7: the root is a ProjectLinksInspectedDirectory of directoryPath, directoryName and git (vibe/app_server/protocol.py:1665-1668); this port answers the v2.24.0 root fields";
+const PICKER_CANDIDATE: &str = "v2.25.7: ProjectLinksPickerCandidate is projectId, name and recommended (vibe/app_server/protocol.py:1699-1702); this port still answers matchKind";
+const PROJECT_LINK: &str = "v2.25.7: ProjectLink names a directoryPath (vibe/app_server/protocol.py:1750-1753); this port answers repoLocalPath";
+
+/// Every census issue an answer below raises, as `(method, issue, reason)`.
+/// The loop fails on an issue missing here and on an entry no answer raises
+/// any more, so the list can only shrink toward conformance.
+const CENSUS_DIVERGENCES: &[(&str, &str, &str)] = &[
+    (
+        "projectLinks/list",
+        "/projects/0/localLinks: ProjectLinksLinkedProject requires this field and it is absent",
+        LINKED_PROJECT,
+    ),
+    (
+        "projectLinks/list",
+        "/projects/0/repoLocalPaths: ProjectLinksLinkedProject does not declare this field",
+        LINKED_PROJECT,
+    ),
+    (
+        "projectLinks/resolveRoot",
+        "/root/directoryName: ProjectLinksInspectedDirectory requires this field and it is absent",
+        INSPECTED_DIRECTORY,
+    ),
+    (
+        "projectLinks/resolveRoot",
+        "/root/directoryPath: ProjectLinksInspectedDirectory requires this field and it is absent",
+        INSPECTED_DIRECTORY,
+    ),
+    (
+        "projectLinks/resolveRoot",
+        "/root/git: ProjectLinksInspectedDirectory requires this field and it is absent",
+        INSPECTED_DIRECTORY,
+    ),
+    (
+        "projectLinks/resolveRoot",
+        "/root/currentBranch: ProjectLinksInspectedDirectory does not declare this field",
+        INSPECTED_DIRECTORY,
+    ),
+    (
+        "projectLinks/resolveRoot",
+        "/root/defaultBranch: ProjectLinksInspectedDirectory does not declare this field",
+        INSPECTED_DIRECTORY,
+    ),
+    (
+        "projectLinks/resolveRoot",
+        "/root/repoLocalPath: ProjectLinksInspectedDirectory does not declare this field",
+        INSPECTED_DIRECTORY,
+    ),
+    (
+        "projectLinks/resolveRoot",
+        "/root/repoName: ProjectLinksInspectedDirectory does not declare this field",
+        INSPECTED_DIRECTORY,
+    ),
+    (
+        "projectLinks/inspectRoot",
+        "/root/directoryName: ProjectLinksInspectedDirectory requires this field and it is absent",
+        INSPECTED_DIRECTORY,
+    ),
+    (
+        "projectLinks/inspectRoot",
+        "/root/directoryPath: ProjectLinksInspectedDirectory requires this field and it is absent",
+        INSPECTED_DIRECTORY,
+    ),
+    (
+        "projectLinks/inspectRoot",
+        "/root/git: ProjectLinksInspectedDirectory requires this field and it is absent",
+        INSPECTED_DIRECTORY,
+    ),
+    (
+        "projectLinks/inspectRoot",
+        "/root/currentBranch: ProjectLinksInspectedDirectory does not declare this field",
+        INSPECTED_DIRECTORY,
+    ),
+    (
+        "projectLinks/inspectRoot",
+        "/root/defaultBranch: ProjectLinksInspectedDirectory does not declare this field",
+        INSPECTED_DIRECTORY,
+    ),
+    (
+        "projectLinks/inspectRoot",
+        "/root/repoLocalPath: ProjectLinksInspectedDirectory does not declare this field",
+        INSPECTED_DIRECTORY,
+    ),
+    (
+        "projectLinks/inspectRoot",
+        "/root/repoName: ProjectLinksInspectedDirectory does not declare this field",
+        INSPECTED_DIRECTORY,
+    ),
+    (
+        "projectLinks/inspectRoot",
+        "/root/repoUrl: ProjectLinksInspectedDirectory does not declare this field",
+        INSPECTED_DIRECTORY,
+    ),
+    (
+        "projectLinks/picker/load",
+        "/candidates/items/0/matchKind: ProjectLinksPickerCandidate does not declare this field",
+        PICKER_CANDIDATE,
+    ),
+    (
+        "projectLinks/picker/load",
+        "/candidates/items/1/matchKind: ProjectLinksPickerCandidate does not declare this field",
+        PICKER_CANDIDATE,
+    ),
+    (
+        "projectLinks/picker/load",
+        "/root/directoryName: ProjectLinksInspectedDirectory requires this field and it is absent",
+        INSPECTED_DIRECTORY,
+    ),
+    (
+        "projectLinks/picker/load",
+        "/root/directoryPath: ProjectLinksInspectedDirectory requires this field and it is absent",
+        INSPECTED_DIRECTORY,
+    ),
+    (
+        "projectLinks/picker/load",
+        "/root/git: ProjectLinksInspectedDirectory requires this field and it is absent",
+        INSPECTED_DIRECTORY,
+    ),
+    (
+        "projectLinks/picker/load",
+        "/root/currentBranch: ProjectLinksInspectedDirectory does not declare this field",
+        INSPECTED_DIRECTORY,
+    ),
+    (
+        "projectLinks/picker/load",
+        "/root/defaultBranch: ProjectLinksInspectedDirectory does not declare this field",
+        INSPECTED_DIRECTORY,
+    ),
+    (
+        "projectLinks/picker/load",
+        "/root/repoLocalPath: ProjectLinksInspectedDirectory does not declare this field",
+        INSPECTED_DIRECTORY,
+    ),
+    (
+        "projectLinks/picker/load",
+        "/root/repoName: ProjectLinksInspectedDirectory does not declare this field",
+        INSPECTED_DIRECTORY,
+    ),
+    (
+        "projectLinks/picker/loadMore",
+        "/candidates/items/0/matchKind: ProjectLinksPickerCandidate does not declare this field",
+        PICKER_CANDIDATE,
+    ),
+    (
+        "projectLinks/link",
+        "/link/directoryPath: ProjectLink requires this field and it is absent",
+        PROJECT_LINK,
+    ),
+    (
+        "projectLinks/link",
+        "/link/repoLocalPath: ProjectLink does not declare this field",
+        PROJECT_LINK,
+    ),
+    (
+        "projectLinks/save",
+        "/link/directoryPath: ProjectLink requires this field and it is absent",
+        PROJECT_LINK,
+    ),
+    (
+        "projectLinks/save",
+        "/link/repoLocalPath: ProjectLink does not declare this field",
+        PROJECT_LINK,
+    ),
+    (
+        "projectLinks/create",
+        "/link/directoryPath: ProjectLink requires this field and it is absent",
+        PROJECT_LINK,
+    ),
+    (
+        "projectLinks/create",
+        "/link/repoLocalPath: ProjectLink does not declare this field",
+        PROJECT_LINK,
+    ),
+];
 
 fn error_code(envelope: Envelope) -> String {
     match envelope {
@@ -950,6 +1117,7 @@ fn every_answer_validates_against_the_reference_census() {
 
     // Ordered so each answer carries something: the store holds a link before it
     // is listed and inspected, and the root is unlinked only at the end.
+    let mut raised = Vec::new();
     for (method, params) in [
         ("projectLinks/list", json!({})),
         ("projectLinks/resolveRoot", json!({"rootPath": root_path})),
@@ -978,12 +1146,37 @@ fn every_answer_validates_against_the_reference_census() {
         ),
         ("projectLinks/unlink", json!({"rootPath": root_path})),
     ] {
-        let answer = conforming(method, call(&server, &mut connection, method, &params));
+        let answer = result(call(&server, &mut connection, method, &params));
         assert!(
             !answer.as_object().is_some_and(serde_json::Map::is_empty),
             "{method} answered with nothing to validate"
         );
+        raised.extend(
+            census_issues(method, &answer)
+                .into_iter()
+                .map(|issue| (method, issue)),
+        );
     }
+    let recorded = CENSUS_DIVERGENCES
+        .iter()
+        .map(|(method, issue, _)| (*method, (*issue).to_owned()))
+        .collect::<Vec<_>>();
+    let unrecorded = raised
+        .iter()
+        .filter(|raised| !recorded.contains(raised))
+        .collect::<Vec<_>>();
+    assert!(
+        unrecorded.is_empty(),
+        "these answers diverge from the reference census and are unrecorded: {unrecorded:?}"
+    );
+    let stale = recorded
+        .iter()
+        .filter(|recorded| !raised.contains(recorded))
+        .collect::<Vec<_>>();
+    assert!(
+        stale.is_empty(),
+        "these recorded divergences are no longer raised and are stale: {stale:?}"
+    );
 }
 
 #[test]

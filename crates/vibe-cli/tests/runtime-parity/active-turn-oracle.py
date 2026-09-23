@@ -2,9 +2,9 @@
 
 Every observation is measured from reference code. The approval and question
 widgets are mounted in a Textual harness and driven through their real key
-actions; the callback FIFO, the typed queue and the shell stream are exercised
-through the reference methods themselves over the minimum state each one reads.
-Nothing here restates a rule the reference implements.
+actions; the callback FIFO, the busy-time queue and the shell stream are
+exercised through the reference methods themselves over the minimum state each
+one reads. Nothing here restates a rule the reference implements.
 
 Usage::
 
@@ -182,8 +182,15 @@ async def capture_fifo_trace(presented: str) -> list[str]:
             self._pending_callbacks: deque[Any] = deque()
             self._active_callback: Any = None
             self._pending_local_question = None
+            # Since v2.25.0 `_show_callback` flags the loading widget before it
+            # presents (vibe/cli/textual_ui/app.py:3059-3069); with none
+            # mounted it only asks for one, which changes no FIFO decision.
+            self._loading_widget = None
             self._terminal_notifier = _Notifier()
             self.app_server = _AppServer()
+
+        async def _ensure_loading_widget(self, *_: Any, **__: Any) -> None:
+            return None
 
         async def _wait_for_typing_pause(self) -> None:
             return None
@@ -388,41 +395,158 @@ async def capture_plan_trace(workdir: Path) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# US-027: the typed queue, its rollback and its shell boundaries
+# US-027: busy-time submissions, the paused queue and the drain
 # ---------------------------------------------------------------------------
 
+# The four inputs the corpus submits while a turn is running.
+QUEUE_INPUTS = ["first", "second", "!pwd", "third"]
 
-def capture_queue_trace() -> list[str]:
-    from vibe.cli.textual_ui.message_queue import MessageQueue, QueuedItemKind
 
-    queue = MessageQueue()
+async def capture_queue_trace() -> list[str]:
+    """Submits the corpus inputs through the reference busy path and drains.
+
+    Since v2.25.0 the reference keeps no local typed queue. A busy input goes
+    through ``VibeApp._handle_queue_submit`` (vibe/cli/textual_ui/app.py:2028),
+    which enqueues prompts into ``QueueController``
+    (vibe/cli/textual_ui/message_queue.py:141) and refuses anything it cannot
+    queue. The controller folds every busy prompt into one app-server queue
+    item, pausing is that server queue's state, and the server promotes the
+    item as one turn. The app server here is a double holding only the queue:
+    items in FIFO order, the paused flag, and the promoted identifiers.
+    """
+    from vibe.app_server.models import (
+        PreparedPrompt,
+        PublicQueuedTurn,
+        PublicTurnQueue,
+    )
+    from vibe.cli.commands import CommandRegistry
+    from vibe.cli.textual_ui.app import _REJECT_HINT_BUSY, VibeApp
+    from vibe.cli.textual_ui.message_queue import QueueController, QueuePorts
+
+    class Server:
+        def __init__(self) -> None:
+            self.items: list[Any] = []
+            self.paused = False
+            self.started: set[str] = set()
+            self.created = 0
+
+        def turn_queue(self) -> Any:
+            return PublicTurnQueue.model_construct(
+                items=list(self.items), paused=self.paused, max_items=32
+            )
+
+        async def enqueue(self, _content: str, **_: Any) -> Any:
+            self.created += 1
+            item = PublicQueuedTurn.model_construct(
+                id=f"queue-{self.created}", created_at=self.created, entries=[]
+            )
+            self.items.append(item)
+            return item
+
+        async def replace(self, item_id: str, _content: str, **_: Any) -> Any:
+            return next((item for item in self.items if item.id == item_id), None)
+
+        async def remove(self, item_id: str) -> bool:
+            before = len(self.items)
+            self.items = [item for item in self.items if item.id != item_id]
+            return len(self.items) != before
+
+        async def resume(self) -> Any:
+            self.paused = False
+            return self.turn_queue()
+
+    async def unused(*_: Any, **__: Any) -> Any:
+        raise AssertionError("the trace never steers or refreshes")
+
+    async def nothing(*_: Any, **__: Any) -> None:
+        return None
+
+    server = Server()
+    queue = QueueController(
+        QueuePorts(
+            mount_and_scroll=nothing,
+            current_turn_queue=server.turn_queue,
+            enqueue_turn=server.enqueue,
+            replace_queued_turn=server.replace,
+            remove_queued_turn=server.remove,
+            resume_turn_queue=server.resume,
+            steer_turn=unused,
+            steer_queued_turn=unused,
+            refresh_session_state=unused,
+            turn_has_started=lambda item_id: item_id in server.started,
+            set_loading_queue_count=lambda _count: None,
+            maybe_show_feedback_bar=nothing,
+            send_mention_telemetry=lambda *_: None,
+            send_skill_telemetry=lambda _name: None,
+        )
+    )
+
+    class Workspace:
+        async def prepare_prompt(self, message: str) -> Any:
+            return PreparedPrompt(display_text=message, prompt_text=message)
+
+    class Runtime:
+        def get_skill(self, _name: str) -> None:
+            return None
+
+    class Resources:
+        workspace = Workspace()
+        runtime = Runtime()
+
+    class AppServer:
+        resources = Resources()
+
+    warnings: list[str] = []
+
+    class StateDouble:
+        # The reference methods under measurement.
+        _handle_queue_submit = VibeApp._handle_queue_submit  # noqa: SLF001
+        _enqueue_prompt_with_resources = VibeApp._enqueue_prompt_with_resources  # noqa: SLF001
+        _prepare_prompt_or_abort = VibeApp._prepare_prompt_or_abort  # noqa: SLF001
+        _resolve_skill = VibeApp._resolve_skill  # noqa: SLF001
+        _warn_not_queueable = VibeApp._warn_not_queueable  # noqa: SLF001
+
+        def __init__(self) -> None:
+            # A turn is running, so no shell command is.
+            self._bash_task = None
+            self._queue = queue
+            self._session_ready = asyncio.Event()
+            self._session_ready.set()
+            self._tools_collapsed = False
+            self.commands = CommandRegistry()
+            self.app_server = AppServer()
+
+        def notify(self, message: str, **_: Any) -> None:
+            warnings.append(message)
+
+        async def _mount_and_scroll(self, widget: Any, **_: Any) -> None:
+            raise AssertionError(f"unexpected error widget: {widget!r}")
+
+    state = StateDouble()
     observations: list[str] = []
-    for text in ["first", "second"]:
-        queue.append_prompt(text)
-        observations.append(f"queued:{text}")
-    queue.append_bash("pwd")
-    observations.append("queued:!pwd")
-    queue.append_prompt("third")
-    observations.append("queued:third")
+    for value in QUEUE_INPUTS:
+        accepted = await state._handle_queue_submit(  # noqa: SLF001
+            value, reject_hint=_REJECT_HINT_BUSY
+        )
+        observations.append(f"{'queued' if accepted else 'rejected'}:{value}")
 
-    queue.pause()
-    observations.append(f"queue:paused:{len(queue)}")
-    queue.resume()
-    observations.append(f"queue:resumed:{len(queue)}")
+    # The server pauses its queue, as it does when the running turn ends
+    # interrupted (vibe/app_server/_turns.py:750), and the client reconciles
+    # from the queue snapshot it receives.
+    server.paused = True
+    await queue.sync_server_queue(server.turn_queue())
+    observations.append(f"queue:{'paused' if queue.paused else 'running'}:{len(queue)}")
+    await queue.resume()
+    observations.append(f"queue:{'paused' if queue.paused else 'resumed'}:{len(queue)}")
 
-    # Draining stops at every shell boundary, so a batch is homogeneous.
-    while queue:
-        batch: list[Any] = []
-        kind = queue.items[0].kind
-        while queue and queue.items[0].kind == kind:
-            item = queue.pop_first()
-            if item is None:
-                break
-            batch.append(item)
-            if kind is QueuedItemKind.BASH:
-                break
-        label = "shell" if kind is QueuedItemKind.BASH else "prompt"
-        observations.append(f"batch:{label}:{len(batch)}")
+    # Draining is the server promoting its head item until none is left; a
+    # batch is how many queued prompts that one promotion delivered.
+    while server.items:
+        item = server.items.pop(0)
+        server.started.add(item.id)
+        before = len(queue)
+        await queue.turn_started(item.id)
+        observations.append(f"batch:prompt:{before - len(queue)}")
     return observations
 
 
@@ -484,6 +608,12 @@ async def capture_shell_trace() -> list[str]:
         async def _ensure_loading_widget(self, _label: str) -> None:
             return None
 
+        def _on_busy_state_changed(self, _running: bool) -> None:
+            # Called before streaming since v2.25.1
+            # (vibe/cli/textual_ui/app.py:2856-2858); it only feeds the queue
+            # count and the tab title.
+            return None
+
         async def _remove_loading_widget(self) -> None:
             return None
 
@@ -518,7 +648,7 @@ async def capture(workdir: Path) -> dict[str, list[str]]:
         "canonical-server-fifo-beats-identifier-order": await capture_fifo_trace(approval[0]),
         "questions-tabs-multi-select-and-other": await capture_questions_trace(),
         "plan-review-live-file-refresh": await capture_plan_trace(workdir),
-        "typed-queue-rollback-and-shell-boundaries": capture_queue_trace(),
+        "typed-queue-rollback-and-shell-boundaries": await capture_queue_trace(),
         "shell-stream-and-identity-cancellation": await capture_shell_trace(),
     }
 

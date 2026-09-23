@@ -1,8 +1,7 @@
 {
   "constants": {
     "playback": {
-      "blockSize": 4096,
-      "dtype": "int16",
+      "bufferMs": 200,
       "sampleWidth": 2
     },
     "speech": {
@@ -192,9 +191,9 @@
   ],
   "note": "Voice corpus: what the pinned reference resolves an audio session from, per configuration document. Every document, alias, model name, provider name, host and variable is authored by scripts/parity/voice.py; the reference contributes resolved values, defaults and exception class names, and no reference-authored text, no reference source and no machine path is recorded. A failure is recorded as a stage and an exception class rather than a message, so the replay compares causes. The two wire frames are intercepted at the last call before the network, the websocket opener and the HTTP sender, so nothing is ever sent. No credential is recorded: every variable a document names carries a sentinel during the capture and is recorded as a variable name and an origin. Regenerate with scripts/parity/voice.py --corpus when the pinned reference moves.",
   "reference": {
-    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7"
+    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
   },
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "speechResolution": [
     {
       "case": "defaults",

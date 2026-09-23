@@ -39,7 +39,7 @@ from vibe.core.tools.builtins.ask_user_question import (
     AskUserQuestion,
     AskUserQuestionArgs,
 )
-from vibe.core.tools.builtins.bash import Bash, BashArgs, BashResult
+from vibe.core.tools.builtins.bash import Bash, BashArgs, CapturedShellResult
 from vibe.core.tools.builtins.edit import Edit, EditArgs, EditResult
 from vibe.core.tools.builtins.grep import Grep, GrepArgs, GrepResult
 from vibe.core.tools.builtins.read_file import ReadFile, ReadFileArgs, ReadFileResult
@@ -60,7 +60,6 @@ from vibe.core.tools.ui import ToolUIDataAdapter
 from vibe.core.types import ToolCallEvent, ToolResultEvent
 from vibe.questions import UserAnswer, UserQuestion
 from vibe.cli.textual_ui.app import VibeApp
-from vibe.cli.textual_ui.handlers.event_handler import _NON_GROUPED_EFFECT_KINDS
 from vibe.cli.textual_ui.widgets.context_progress import ContextProgress, TokenState
 from vibe.cli.textual_ui.widgets.debug_console import LOG_LEVEL_COLORS, DebugConsole
 from vibe.cli.textual_ui.widgets.links import _is_safe_url, linkify_urls_in_text
@@ -71,13 +70,17 @@ from vibe.cli.textual_ui.widgets.tool_widgets import (
     effect_result_is_collapsible,
     get_result_widget,
 )
-from vibe.cli.textual_ui.widgets.tools import ToolCallMessage, ToolResultMessage
+from vibe.cli.textual_ui.widgets.tools import (
+    ToolCallMessage,
+    ToolResultMessage,
+    is_manual_shell_entry,
+)
 
 DETAIL_ADAPTER = TypeAdapter(EffectDetail)
 STATE_ADAPTER = TypeAdapter(EffectState)
 
 TOOLS: dict[str, tuple[type, type[BaseModel], type[BaseModel] | None]] = {
-    "bash": (Bash, BashArgs, BashResult),
+    "bash": (Bash, BashArgs, CapturedShellResult),
     "read_file": (ReadFile, ReadFileArgs, ReadFileResult),
     "write_file": (WriteFile, WriteFileArgs, WriteFileResult),
     "edit": (Edit, EditArgs, EditResult),
@@ -106,6 +109,12 @@ def widget_text(widget: Widget) -> list[str]:
     async def run() -> list[str]:
         app = Harness(widget)
         async with app.run_test() as pilot:
+            await pilot.pause()
+            # The edit result renders its diff in a worker thread
+            # (vibe/cli/textual_ui/widgets/tool_widgets.py EditResultWidget
+            # on_mount), so an idle pause alone can walk the tree before the
+            # diff lands.
+            await app.workers.wait_for_complete()
             await pilot.pause()
             lines: list[str] = []
             # A Markdown node owns its rendered block, so its own children are
@@ -333,7 +342,7 @@ def observe_effect(event: dict) -> str:
             message,
             suffix,
             f"collapsible={int(effect_result_is_collapsible(detail))}",
-            f"grouped={int(detail.kind not in _NON_GROUPED_EFFECT_KINDS)}",
+            f"grouped={int(not is_manual_shell_entry(entry))}",
             "body=" + "⏎".join(body),
         ]
     )
@@ -469,7 +478,6 @@ def main() -> None:
             "hookIcons": {
                 severity.value: icon for severity, icon in _HOOK_SEVERITY_ICONS.items()
             },
-            "nonGroupedKinds": sorted(kind.value for kind in _NON_GROUPED_EFFECT_KINDS),
             "traceExpected": trace_expected,
         },
         sys.stdout,

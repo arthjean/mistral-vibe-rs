@@ -13,6 +13,11 @@
 //! which is what `NOTICE` forbids shipping. Replay therefore runs
 //! unconditionally; only the live probe that recaptures from the pinned
 //! checkout skips when it is absent.
+//!
+//! A default the replay finds different is admitted only through
+//! [`DIVERGENCES`], one entry per corpus pointer carrying the value this port
+//! declares instead. An entry whose divergence stopped reproducing fails the
+//! replay until it is removed.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -30,6 +35,66 @@ const CORPUS_RELATIVE: &str = "tests/tool-config/defaults.json";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
 const CORPUS_SCHEMA_VERSION: u32 = 1;
+
+/// One observed difference from the reference, scoped to the corpus pointer
+/// of the `(tool, key)` default it contradicts.
+struct Divergence {
+    /// The JSON pointer into the corpus whose reference default this port does
+    /// not declare.
+    pointer: &'static str,
+    /// The default this port declares instead, as compact JSON.
+    port: &'static str,
+    /// The reference change and its evidence, and what this port does instead.
+    reason: &'static str,
+}
+
+/// The two-entry sensitive list the v2.24.0 reference shipped.
+const DOTENV_PORT: &str = r#"["**/.env","**/.env.*"]"#;
+
+/// Every difference the replay admits, measured at the pin in
+/// `crate::parity::REFERENCE_COMMIT`.
+const DIVERGENCES: &[Divergence] = &[
+    Divergence {
+        pointer: "/tools/edit/sensitive_patterns",
+        port: DOTENV_PORT,
+        reason: "v2.24.1 grows `DEFAULT_SENSITIVE_PATTERNS` from two entries to \
+                 six, adding `**/.env~`, `**/.envrc`, `**/.envrc.*` and \
+                 `**/.envrc~` (`vibe/core/tools/utils.py:35-42`, read as the \
+                 `edit` default at `vibe/core/tools/builtins/edit.py:77` at \
+                 4a96003186b1). This port's \
+                 `DOTENV_PATTERNS` still declares the two v2.24.0 entries.",
+    },
+    Divergence {
+        pointer: "/tools/grep/sensitive_patterns",
+        port: DOTENV_PORT,
+        reason: "v2.24.1 grows `DEFAULT_SENSITIVE_PATTERNS` from two entries to \
+                 six, adding `**/.env~`, `**/.envrc`, `**/.envrc.*` and \
+                 `**/.envrc~` (`vibe/core/tools/utils.py:35-42`, read as the \
+                 `grep` default at `vibe/core/tools/builtins/grep.py:46` at \
+                 4a96003186b1). This port's \
+                 `DOTENV_PATTERNS` still declares the two v2.24.0 entries.",
+    },
+    Divergence {
+        pointer: "/tools/read_file/sensitive_patterns",
+        port: DOTENV_PORT,
+        reason: "v2.24.1 grows `DEFAULT_SENSITIVE_PATTERNS` from two entries to \
+                 six, adding `**/.env~`, `**/.envrc`, `**/.envrc.*` and \
+                 `**/.envrc~` (`vibe/core/tools/utils.py:35-42`, read as the \
+                 `read_file` default at `vibe/core/tools/builtins/read_file.py:87` at \
+                 4a96003186b1). This port's \
+                 `DOTENV_PATTERNS` still declares the two v2.24.0 entries.",
+    },
+    Divergence {
+        pointer: "/tools/write_file/sensitive_patterns",
+        port: DOTENV_PORT,
+        reason: "v2.24.1 grows `DEFAULT_SENSITIVE_PATTERNS` from two entries to \
+                 six, adding `**/.env~`, `**/.envrc`, `**/.envrc.*` and \
+                 `**/.envrc~` (`vibe/core/tools/utils.py:35-42`, read as the \
+                 `write_file` default at `vibe/core/tools/builtins/write_file.py:50` at \
+                 4a96003186b1). This port's \
+                 `DOTENV_PATTERNS` still declares the two v2.24.0 entries.",
+    },
+];
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -130,14 +195,29 @@ fn the_declared_tool_configuration_matches_the_reference_enumeration() {
         let actual = as_json(document);
         for (key, value) in expected {
             pairs += 1;
-            match actual.get(key) {
-                None => divergences.push(format!("{tool}.{key} has no declaration")),
-                Some(found) if found != value => {
+            let pointer = format!("/tools/{tool}/{key}");
+            let entry = DIVERGENCES.iter().find(|entry| entry.pointer == pointer);
+            match (actual.get(key), entry) {
+                (None, _) => divergences.push(format!("{tool}.{key} has no declaration")),
+                (Some(found), Some(entry)) if found != value => {
+                    let ledgered: JsonValue =
+                        serde_json::from_str(entry.port).expect("a ledgered default is JSON");
+                    if *found != ledgered {
+                        divergences.push(format!(
+                            "{tool}.{key} is {found}, and its ledger entry says {}",
+                            entry.port
+                        ));
+                    }
+                }
+                (Some(found), None) if found != value => {
                     divergences.push(format!(
                         "{tool}.{key} is {found}, the reference says {value}"
                     ));
                 }
-                Some(_) => {}
+                (Some(_), Some(_)) => divergences.push(format!(
+                    "{tool}.{key} converged on the reference; remove its DIVERGENCES entry"
+                )),
+                (Some(_), None) => {}
             }
         }
         for key in actual.keys() {
@@ -163,12 +243,51 @@ fn the_declared_tool_configuration_matches_the_reference_enumeration() {
     assert_eq!(corpus.counts.keys, keys.len());
     assert_eq!(corpus.counts.pairs, pairs);
     println!(
-        "tool configuration: {}/{} (tool, key) pairs declared across {} classes and {} keys, at {}",
-        pairs,
+        "tool configuration: {}/{} (tool, key) pairs declared as the reference does, {} admitted divergences, across {} classes and {} keys, at {}",
+        pairs - DIVERGENCES.len(),
         corpus.counts.pairs,
+        DIVERGENCES.len(),
         corpus.counts.tools,
         corpus.counts.keys,
         &corpus.reference.commit[..12]
+    );
+}
+
+/// Every ledger entry points at a corpus value that exists and cites the pin
+/// it was measured at, so an entry cannot outlive the case it admits.
+#[test]
+fn every_divergence_names_a_corpus_pointer_and_its_evidence() {
+    let raw = fs::read_to_string(corpus_path()).expect("committed corpus reads");
+    let corpus: JsonValue = serde_json::from_str(&raw).expect("corpus parses");
+    for entry in DIVERGENCES {
+        assert!(
+            corpus.pointer(entry.pointer).is_some(),
+            "`{}` names nothing in the corpus",
+            entry.pointer
+        );
+        assert!(
+            // The short form every corpus prints: the full hash may only be written in
+            // the two pin sources, which `the_reference_commit_is_written_in_exactly_two_places`
+            // enforces.
+            entry.reason.contains(&REFERENCE_COMMIT[..12]),
+            "`{}` does not cite the pin it was measured at",
+            entry.pointer
+        );
+    }
+    let mut pointers = DIVERGENCES
+        .iter()
+        .map(|entry| entry.pointer)
+        .collect::<Vec<_>>();
+    pointers.sort_unstable();
+    pointers.dedup();
+    assert_eq!(
+        pointers.len(),
+        DIVERGENCES.len(),
+        "a pointer is ledgered twice"
+    );
+    eprintln!(
+        "tool configuration: {} admitted divergences",
+        DIVERGENCES.len()
     );
 }
 

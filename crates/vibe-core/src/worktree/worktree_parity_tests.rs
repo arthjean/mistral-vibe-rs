@@ -112,6 +112,12 @@ const FIXED_EMAIL: &str = "oracle@example.invalid";
 /// What a divergence names when no story can close it, because closing it would
 /// mean shipping reference prose.
 const LICENSING: &str = "NOTICE";
+/// What a divergence names when no story is scheduled to close it and the
+/// scorecard's divergence tables record it instead. The audit test holds the
+/// scorecard to naming the entry's `family/case`, so this closer cannot be
+/// claimed without a row a reader can look up.
+const RECORDED: &str = "docs/parity.md";
+const SCORECARD_RELATIVE: &str = "docs/parity.md";
 
 /// One tolerated gap between this port and the reference.
 #[derive(Debug, Clone, Copy)]
@@ -123,7 +129,8 @@ struct Divergence {
     case: &'static str,
     /// Matched by prefix against the reported JSON pointer.
     pointer: &'static str,
-    /// The story that closes this gap, or [`LICENSING`] when none can.
+    /// The story that closes this gap, [`LICENSING`] when none can, or
+    /// [`RECORDED`] when the scorecard records it and no story is scheduled.
     closed_by: &'static str,
     /// Why the gap stands, asserted non-empty so an entry cannot be added
     /// without a stated reason.
@@ -141,7 +148,58 @@ impl Divergence {
 /// A pointer is matched by prefix, so `/prepared` covers every field under it.
 /// Keep the list ordered by family then by case.
 const LEDGER: &[Divergence] = &[
+    // Enumeration.
+    Divergence {
+        family: "list",
+        case: "not-a-repository",
+        pointer: "/errorClass",
+        closed_by: RECORDED,
+        why: "v2.24.2 (5e6aa0f6) moved the repository check into the git layer: \
+              `WorktreeRepository.open` goes through `GitRepo.open`, which raises \
+              `GitRepositoryNotFoundError` (vibe/core/git/repo.py:143-152, a `GitError` subclass \
+              at vibe/core/git/errors.py:10) where v2.24.0 raised `WorktreeNotFoundError`. The \
+              message digest is unchanged. This port still refuses with \
+              `WorktreeError::RepositoryRequired` (crates/vibe-core/src/worktree.rs:389-397), the \
+              variant its error enum models on the v2.24.0 class",
+    },
     // Preparation.
+    Divergence {
+        family: "prepare",
+        case: "invalid-branch",
+        pointer: "/errorClass",
+        closed_by: RECORDED,
+        why: "v2.24.2 (5e6aa0f6) moved branch validation to `GitRepo.validate_branch`, which \
+              raises the base `GitError` (vibe/core/git/repo.py:388-392) rather than the \
+              worktree-level `WorktreeError` v2.24.0 raised, and rewords the sentence. This port \
+              still refuses with `WorktreeError::InvalidBranch` \
+              (crates/vibe-core/src/worktree.rs:984), a worktree-level variant with no git-level \
+              counterpart in its error enum",
+    },
+    Divergence {
+        family: "prepare",
+        case: "outside-repository",
+        pointer: "/errorClass",
+        closed_by: RECORDED,
+        why: "v2.24.2 (5e6aa0f6) moved the repository check into the git layer: \
+              `WorktreeRepository.open` goes through `GitRepo.open`, which raises \
+              `GitRepositoryNotFoundError` (vibe/core/git/repo.py:143-152, a `GitError` subclass \
+              at vibe/core/git/errors.py:10) where v2.24.0 raised `WorktreeNotFoundError`. The \
+              message digest is unchanged. This port still refuses with \
+              `WorktreeError::RepositoryRequired` (crates/vibe-core/src/worktree.rs:389-397), the \
+              variant its error enum models on the v2.24.0 class",
+    },
+    Divergence {
+        family: "prepare",
+        case: "separate-git-dir-linked-base",
+        pointer: "/errorClass",
+        closed_by: RECORDED,
+        why: "v2.24.2 (5e6aa0f6) moved primary-checkout resolution to \
+              `GitRepo._primary_worktree_root`, which raises the base `GitError` \
+              (vibe/core/git/repo.py:367-377) rather than the worktree-level `WorktreeError`; the \
+              message digest is unchanged. This port still refuses with the generic \
+              `WorktreeError::Failed` (crates/vibe-core/src/worktree.rs:758-762), which cannot \
+              tell a git-level refusal from a worktree-level one",
+    },
     //
     // `prepare/missing-base` carries no entry, and now for the right reason.
     // That case names a base inside an untracked subdirectory, which exists in
@@ -157,8 +215,23 @@ const LEDGER: &[Divergence] = &[
     // Cleanup carries no entry: US-286 restated the commit-count reason from
     // the reference's own form, so all three commit cases now digest equal
     // beside the two booleans that always did.
-    // Enumeration carries no entry: US-280 wrote `list_linked_worktrees` and
-    // every case of the family now replays field for field.
+    // The rest of enumeration carries no entry: US-280 wrote
+    // `list_linked_worktrees` and every other case of the family replays field
+    // for field.
+    //
+    // Working directory resolution.
+    Divergence {
+        family: "targetCwd",
+        case: "aliased-component",
+        pointer: "/outcome",
+        closed_by: RECORDED,
+        why: "v2.24.4 (dcb1c7d4) added a guard to `_target_cwd` that refuses a base reached \
+              through a symbolic link below the worktree root, even one landing inside it \
+              (vibe/core/git/worktree/repository.py:1297-1307), so `aliased`, a link to the \
+              sibling `sub`, is now a `WorktreeError`. This port's `target_cwd` \
+              (crates/vibe-core/src/worktree.rs:798-844) checks existence, directory, \
+              containment and a foreign `.git` only, and resolves `aliased` to `tree/sub`",
+    },
 ];
 
 // --------------------------------------------------------------------------
@@ -653,10 +726,14 @@ impl Projection {
 
 /// The exception class the reference would have raised for this refusal.
 ///
-/// The reference publishes three: `WorktreeError` and two subclasses for the
-/// cases a caller discriminates. This port publishes one enum with the same two
-/// distinguished variants, so the mapping is the whole of the comparison and
-/// the sentence never enters it.
+/// At v2.24.0 the reference published three: `WorktreeError` and two
+/// subclasses for the cases a caller discriminates. This port publishes one
+/// enum with the same two distinguished variants, so the mapping is the whole of
+/// the comparison and the sentence never enters it. v2.24.2 rebased that
+/// hierarchy on a git-level `GitError` (vibe/core/git/errors.py), with
+/// `WorktreeError` now one of its subclasses; the mapping still names the
+/// classes this port's enum was modeled on, and each case the new hierarchy
+/// moved is a [`LEDGER`] entry rather than a rename here.
 fn error_class(error: &super::WorktreeError) -> &'static str {
     match error {
         super::WorktreeError::RepositoryRequired => "WorktreeNotFoundError",
@@ -1053,13 +1130,24 @@ fn a_ledger_entry_whose_divergence_is_fixed_fails_the_suite() {
 
 #[test]
 fn every_ledger_entry_names_what_closes_it() {
+    let scorecard = fs::read_to_string(repo_root().join(SCORECARD_RELATIVE))
+        .expect("the scorecard is committed");
     for entry in LEDGER {
         assert!(
-            entry.closed_by.starts_with("US-") || entry.closed_by == LICENSING,
-            "a tolerated divergence names the story that closes it or the licensing boundary that \
-             keeps it open, not {}",
+            entry.closed_by.starts_with("US-")
+                || entry.closed_by == LICENSING
+                || entry.closed_by == RECORDED,
+            "a tolerated divergence names the story that closes it, the licensing boundary that \
+             keeps it open, or the scorecard that records it, not {}",
             entry.closed_by
         );
+        if entry.closed_by == RECORDED {
+            let id = format!("`{}/{}`", entry.family, entry.case);
+            assert!(
+                scorecard.contains(&id),
+                "{id} claims `{SCORECARD_RELATIVE}` records it, and the scorecard does not name it"
+            );
+        }
         assert!(entry.pointer.starts_with('/'), "{}", entry.pointer);
         assert_ne!(
             entry.case, "*",

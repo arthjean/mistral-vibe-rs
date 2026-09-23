@@ -1,6 +1,6 @@
 {
   "oracle": {
-    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd",
     "deterministicRuns": 10,
     "engine": "python-reference-capture"
   },
@@ -69,7 +69,7 @@
     "script": "terminal-services-oracle.py"
   },
   "reference": {
-    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd",
     "sourceFiles": [
       "vibe/cli/cli.py",
       "vibe/cli/session_exit.py",
@@ -86,7 +86,7 @@
       "vibe/setup/update_prompt/update_prompt_dialog.py",
       "vibe/utils/cache_store.py"
     ],
-    "version": "2.24.0"
+    "version": "2.25.7"
   },
   "schemaVersion": 1,
   "traces": [
@@ -780,6 +780,36 @@
       "story": "US-225"
     },
     {
+      "divergences": [
+        {
+          "event": 0,
+          "reason": "Since v2.25.1 (2817f3df) the reference adapter renders the terminal title on every notify, focus and blur, with a tab-state indicator that production enables by default (vibe/cli/textual_ui/notifications/adapters/textual_notification_adapter.py:55-70, 80-90, 110-128 at 4a96003186b166d55b9f06895c45bb136eef61cd; wired at vibe/cli/textual_ui/app.py:744-754, default at vibe/core/config/vibe_schema.py:594). A focused notify now renders the plain title with no bell (textual_notification_adapter.py:63-70, 110-119). This port still writes a title only when it rings the bell and when focus returns (crates/vibe-cli/src/tui/attention.rs:101-129), and has no tab-state indicator. So a focused completion writes nothing here."
+        },
+        {
+          "event": 1,
+          "reason": "Since v2.25.1 (2817f3df) the reference adapter renders the terminal title on every notify, focus and blur, with a tab-state indicator that production enables by default (vibe/cli/textual_ui/notifications/adapters/textual_notification_adapter.py:55-70, 80-90, 110-128 at 4a96003186b166d55b9f06895c45bb136eef61cd; wired at vibe/cli/textual_ui/app.py:744-754, default at vibe/core/config/vibe_schema.py:594). A blur now renders the plain title (textual_notification_adapter.py:88-90). This port still writes a title only when it rings the bell and when focus returns (crates/vibe-cli/src/tui/attention.rs:101-129), and has no tab-state indicator. So a blur writes nothing here."
+        },
+        {
+          "event": 2,
+          "reason": "Since v2.25.1 (2817f3df) the reference adapter renders the terminal title on every notify, focus and blur, with a tab-state indicator that production enables by default (vibe/cli/textual_ui/notifications/adapters/textual_notification_adapter.py:55-70, 80-90, 110-128 at 4a96003186b166d55b9f06895c45bb136eef61cd; wired at vibe/cli/textual_ui/app.py:744-754, default at vibe/core/config/vibe_schema.py:594). On this event both sides ring once and write the Action Required title; the observation differs only by the titles the reference rendered at earlier events of this trace, which this port never writes."
+        },
+        {
+          "event": 3,
+          "reason": "Since v2.25.1 (2817f3df) the reference adapter renders the terminal title on every notify, focus and blur, with a tab-state indicator that production enables by default (vibe/cli/textual_ui/notifications/adapters/textual_notification_adapter.py:55-70, 80-90, 110-128 at 4a96003186b166d55b9f06895c45bb136eef61cd; wired at vibe/cli/textual_ui/app.py:744-754, default at vibe/core/config/vibe_schema.py:594). A throttled notify while blurred still records its context and renders the Task Complete title, skipping only the bell (textual_notification_adapter.py:67-70, 135-143). This port still writes a title only when it rings the bell and when focus returns (crates/vibe-cli/src/tui/attention.rs:101-129), and has no tab-state indicator. So a throttled notify writes nothing here."
+        },
+        {
+          "event": 4,
+          "reason": "Since v2.25.1 (2817f3df) the reference adapter renders the terminal title on every notify, focus and blur, with a tab-state indicator that production enables by default (vibe/cli/textual_ui/notifications/adapters/textual_notification_adapter.py:55-70, 80-90, 110-128 at 4a96003186b166d55b9f06895c45bb136eef61cd; wired at vibe/cli/textual_ui/app.py:744-754, default at vibe/core/config/vibe_schema.py:594). On this event both sides ring and write the Task Complete title; the observation differs only by the titles the reference rendered at earlier events of this trace, which this port never writes."
+        },
+        {
+          "event": 5,
+          "reason": "Since v2.25.1 (2817f3df) the reference adapter renders the terminal title on every notify, focus and blur, with a tab-state indicator that production enables by default (vibe/cli/textual_ui/notifications/adapters/textual_notification_adapter.py:55-70, 80-90, 110-128 at 4a96003186b166d55b9f06895c45bb136eef61cd; wired at vibe/cli/textual_ui/app.py:744-754, default at vibe/core/config/vibe_schema.py:594). On this event both sides restore the plain title on focus; the observation differs only by the titles the reference rendered at earlier events of this trace, which this port never writes."
+        },
+        {
+          "event": 6,
+          "reason": "Since v2.25.1 (2817f3df) the reference adapter renders the terminal title on every notify, focus and blur, with a tab-state indicator that production enables by default (vibe/cli/textual_ui/notifications/adapters/textual_notification_adapter.py:55-70, 80-90, 110-128 at 4a96003186b166d55b9f06895c45bb136eef61cd; wired at vibe/cli/textual_ui/app.py:744-754, default at vibe/core/config/vibe_schema.py:594). A focused notify now renders the plain title with no bell (textual_notification_adapter.py:63-70, 110-119). This port still writes a title only when it rings the bell and when focus returns (crates/vibe-cli/src/tui/attention.rs:101-129), and has no tab-state indicator. So a focused completion writes nothing here."
+        }
+      ],
       "events": [
         {
           "action": "notify",
@@ -831,17 +861,35 @@
       ],
       "id": "attention-unfocused",
       "reference": [
-        "attention|bells=0|writes=",
-        "attention|bells=0|writes=",
-        "attention|bells=1|writes=\u001b]0;Vibe - Action Required\u0007",
-        "attention|bells=1|writes=\u001b]0;Vibe - Action Required\u0007",
-        "attention|bells=2|writes=\u001b]0;Vibe - Action Required\u0007⏎\u001b]0;Vibe - Task Complete\u0007",
-        "attention|bells=2|writes=\u001b]0;Vibe - Action Required\u0007⏎\u001b]0;Vibe - Task Complete\u0007⏎\u001b]0;Vibe\u0007",
-        "attention|bells=2|writes=\u001b]0;Vibe - Action Required\u0007⏎\u001b]0;Vibe - Task Complete\u0007⏎\u001b]0;Vibe\u0007"
+        "attention|bells=0|writes=\u001b]0;Vibe\u0007",
+        "attention|bells=0|writes=\u001b]0;Vibe\u0007⏎\u001b]0;Vibe\u0007",
+        "attention|bells=1|writes=\u001b]0;Vibe\u0007⏎\u001b]0;Vibe\u0007⏎\u001b]0;Vibe - Action Required\u0007",
+        "attention|bells=1|writes=\u001b]0;Vibe\u0007⏎\u001b]0;Vibe\u0007⏎\u001b]0;Vibe - Action Required\u0007⏎\u001b]0;Vibe - Task Complete\u0007",
+        "attention|bells=2|writes=\u001b]0;Vibe\u0007⏎\u001b]0;Vibe\u0007⏎\u001b]0;Vibe - Action Required\u0007⏎\u001b]0;Vibe - Task Complete\u0007⏎\u001b]0;Vibe - Task Complete\u0007",
+        "attention|bells=2|writes=\u001b]0;Vibe\u0007⏎\u001b]0;Vibe\u0007⏎\u001b]0;Vibe - Action Required\u0007⏎\u001b]0;Vibe - Task Complete\u0007⏎\u001b]0;Vibe - Task Complete\u0007⏎\u001b]0;Vibe\u0007",
+        "attention|bells=2|writes=\u001b]0;Vibe\u0007⏎\u001b]0;Vibe\u0007⏎\u001b]0;Vibe - Action Required\u0007⏎\u001b]0;Vibe - Task Complete\u0007⏎\u001b]0;Vibe - Task Complete\u0007⏎\u001b]0;Vibe\u0007⏎\u001b]0;Vibe\u0007"
       ],
       "story": "US-038"
     },
     {
+      "divergences": [
+        {
+          "event": 1,
+          "reason": "Since v2.25.1 (2817f3df) the reference adapter renders the terminal title on every notify, focus and blur, with a tab-state indicator that production enables by default (vibe/cli/textual_ui/notifications/adapters/textual_notification_adapter.py:55-70, 80-90, 110-128 at 4a96003186b166d55b9f06895c45bb136eef61cd; wired at vibe/cli/textual_ui/app.py:744-754, default at vibe/core/config/vibe_schema.py:594). A blur now renders the plain title even while notifications are disabled (textual_notification_adapter.py:88-90). This port still writes a title only when it rings the bell and when focus returns (crates/vibe-cli/src/tui/attention.rs:101-129), and has no tab-state indicator. So a blur writes nothing here."
+        },
+        {
+          "event": 2,
+          "reason": "Since v2.25.1 (2817f3df) the reference adapter renders the terminal title on every notify, focus and blur, with a tab-state indicator that production enables by default (vibe/cli/textual_ui/notifications/adapters/textual_notification_adapter.py:55-70, 80-90, 110-128 at 4a96003186b166d55b9f06895c45bb136eef61cd; wired at vibe/cli/textual_ui/app.py:744-754, default at vibe/core/config/vibe_schema.py:594). A disabled Action Required notify now sets the waiting state and renders the `?` indicator title without a bell (textual_notification_adapter.py:56-65, 121-128). This port still writes a title only when it rings the bell and when focus returns (crates/vibe-cli/src/tui/attention.rs:101-129), and has no tab-state indicator. So a disabled notify writes nothing here."
+        },
+        {
+          "event": 3,
+          "reason": "Since v2.25.1 (2817f3df) the reference adapter renders the terminal title on every notify, focus and blur, with a tab-state indicator that production enables by default (vibe/cli/textual_ui/notifications/adapters/textual_notification_adapter.py:55-70, 80-90, 110-128 at 4a96003186b166d55b9f06895c45bb136eef61cd; wired at vibe/cli/textual_ui/app.py:744-754, default at vibe/core/config/vibe_schema.py:594). On this event both sides write nothing when notifications are re-enabled; the observation differs only by the titles the reference rendered at earlier events of this trace, which this port never writes."
+        },
+        {
+          "event": 4,
+          "reason": "Since v2.25.1 (2817f3df) the reference adapter renders the terminal title on every notify, focus and blur, with a tab-state indicator that production enables by default (vibe/cli/textual_ui/notifications/adapters/textual_notification_adapter.py:55-70, 80-90, 110-128 at 4a96003186b166d55b9f06895c45bb136eef61cd; wired at vibe/cli/textual_ui/app.py:744-754, default at vibe/core/config/vibe_schema.py:594). On this event both sides ring once and write the Action Required title; the observation differs only by the titles the reference rendered at earlier events of this trace, which this port never writes."
+        }
+      ],
       "events": [
         {
           "action": "policy",
@@ -882,10 +930,10 @@
       "id": "attention-disabled",
       "reference": [
         "attention|bells=0|writes=",
-        "attention|bells=0|writes=",
-        "attention|bells=0|writes=",
-        "attention|bells=0|writes=",
-        "attention|bells=1|writes=\u001b]0;Vibe - Action Required\u0007"
+        "attention|bells=0|writes=\u001b]0;Vibe\u0007",
+        "attention|bells=0|writes=\u001b]0;Vibe\u0007⏎\u001b]0;? Vibe\u0007",
+        "attention|bells=0|writes=\u001b]0;Vibe\u0007⏎\u001b]0;? Vibe\u0007",
+        "attention|bells=1|writes=\u001b]0;Vibe\u0007⏎\u001b]0;? Vibe\u0007⏎\u001b]0;Vibe - Action Required\u0007"
       ],
       "story": "US-038"
     },
@@ -893,15 +941,15 @@
       "divergences": [
         {
           "event": 1,
-          "reason": "The `always` notification policy is a Rust-only superset of the reference boolean, so a focused terminal still receives the effect."
+          "reason": "The `always` notification policy is a Rust-only superset of the reference boolean, so this port rings and writes the Task Complete title while focused. Since v2.25.1 (2817f3df) the reference adapter renders the terminal title on every notify, focus and blur, with a tab-state indicator that production enables by default (vibe/cli/textual_ui/notifications/adapters/textual_notification_adapter.py:55-70, 80-90, 110-128 at 4a96003186b166d55b9f06895c45bb136eef61cd; wired at vibe/cli/textual_ui/app.py:744-754, default at vibe/core/config/vibe_schema.py:594). The reference, still bell-free while focused, now renders the plain title here instead of writing nothing."
         },
         {
           "event": 2,
-          "reason": "The Rust-only `always` policy already notified while focused, so the blur observation carries that extra effect."
+          "reason": "Since v2.25.1 (2817f3df) the reference adapter renders the terminal title on every notify, focus and blur, with a tab-state indicator that production enables by default (vibe/cli/textual_ui/notifications/adapters/textual_notification_adapter.py:55-70, 80-90, 110-128 at 4a96003186b166d55b9f06895c45bb136eef61cd; wired at vibe/cli/textual_ui/app.py:744-754, default at vibe/core/config/vibe_schema.py:594). A blur now renders the plain title (textual_notification_adapter.py:88-90), which this port does not write; the observation also carries the bell and title the Rust-only `always` policy produced at event 1."
         },
         {
           "event": 3,
-          "reason": "The Rust-only `always` policy already notified while focused, so the unfocused observation carries that extra effect."
+          "reason": "Both sides ring and write the Task Complete title here. The observation differs by the bell and title the Rust-only `always` policy produced at event 1 and by the plain titles the reference rendered at events 1 and 2 (textual_notification_adapter.py:63-70, 88-90, 110-119 at 4a96003186b166d55b9f06895c45bb136eef61cd), which this port never writes (crates/vibe-cli/src/tui/attention.rs:101-129)."
         }
       ],
       "events": [
@@ -937,9 +985,9 @@
       "id": "attention-always",
       "reference": [
         "attention|bells=0|writes=",
-        "attention|bells=0|writes=",
-        "attention|bells=0|writes=",
-        "attention|bells=1|writes=\u001b]0;Vibe - Task Complete\u0007"
+        "attention|bells=0|writes=\u001b]0;Vibe\u0007",
+        "attention|bells=0|writes=\u001b]0;Vibe\u0007⏎\u001b]0;Vibe\u0007",
+        "attention|bells=1|writes=\u001b]0;Vibe\u0007⏎\u001b]0;Vibe\u0007⏎\u001b]0;Vibe - Task Complete\u0007"
       ],
       "story": "US-038"
     },

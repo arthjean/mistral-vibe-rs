@@ -1000,7 +1000,17 @@ def _perform(step: dict[str, Any], manager: Any, sessions: list[str]) -> None:
     session_id = sessions[step["session"]]
     match step["do"]:
         case "wait":
-            manager.wait_for_exit(session_id, float(step["seconds"]))
+            # The manager no longer publishes a blocking wait (the reference's
+            # `wait_for_exit` is gone at 2.25.7), so the action polls the status
+            # `info` refreshes, which leaves `running` at the moment the reader
+            # thread finishes, and gives up at the deadline the way the old
+            # wait did. The replay's own `wait` polls on the same 25 ms beat.
+            deadline = time.monotonic() + float(step["seconds"])
+            while (
+                manager.info(session_id).status == "running"
+                and time.monotonic() < deadline
+            ):
+                time.sleep(0.025)
         case "delete-log":
             Path(manager.info(session_id).output_path).unlink(missing_ok=True)
         case unsupported:

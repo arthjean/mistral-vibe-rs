@@ -50,7 +50,7 @@ const CORPUS_RELATIVE: &str = "crates/vibe-cli/tests/onboarding/corpus.json";
 const CAPTURE_SCRIPT: &str = "scripts/parity/onboarding.py";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 2;
+const CORPUS_SCHEMA_VERSION: u32 = 3;
 /// The scenario floor this replay commits to, so a regeneration that captured
 /// almost nothing fails instead of reporting a clean but empty run.
 const MINIMUM_SCENARIOS: usize = 50;
@@ -59,11 +59,21 @@ const MINIMUM_SCENARIOS: usize = 50;
 const FULL_SCREEN_SET: usize = 7;
 const MANUAL_SCREEN_SET: usize = 3;
 
-/// Cases where this port answers something other than the reference, each
-/// with the reason. EP-055 landed the screen graph, so the ledger is empty: a
-/// case that diverges fails naming the family, the case and the observed and
-/// expected values, and a new divergence needs a new named entry here.
-const DIVERGENCES: &[(&str, &str)] = &[];
+/// Comparisons where this port answers something other than the reference,
+/// each keyed `family/case/field` with the reason. A comparison that diverges
+/// fails naming the family, the case, the field and the observed and expected
+/// values, and a new divergence needs a new named entry here.
+const DIVERGENCES: &[(&str, &str)] = &[(
+    "screenGraph/custom-domain-sign-in-upserts-the-provider/baseUrlWrites",
+    "row 31: since v2.24.2 (5e6aa0f6) the reference also persists the top-level \
+     console_base_url a custom-domain sign-in derives (https://console.internal.example here): \
+     apply_custom_domain sets it (vibe/setup/onboarding/__init__.py:175-177), \
+     persist_credentials puts it in the batched request when it differs from the configured \
+     one (:221-233) and persist_provider_credentials writes it \
+     (vibe/setup/auth/api_key_persistence.py:162-187), at 4a96003186b1; this port writes \
+     only the provider entry (onboarding/model.rs persist_credentials, through \
+     OnboardingPorts::persist_provider) and has no port for the console URL",
+)];
 
 // --------------------------------------------------------------------------
 // The corpus
@@ -144,6 +154,9 @@ struct Effects {
     factory_calls: Option<u64>,
     persist_calls: Vec<Value>,
     provider_writes: Vec<Value>,
+    /// The top-level `console_base_url` and `vibe_base_url` writes the batched
+    /// provider persist carries alongside the provider entry.
+    base_url_writes: Vec<Value>,
     service_closes: u64,
 }
 
@@ -230,7 +243,8 @@ fn covers(entry: &str, key: &str) -> bool {
 struct Report {
     conformant: usize,
     total: usize,
-    divergences: Vec<String>,
+    /// Each divergence as its `family/case/field` key and its message.
+    divergences: Vec<(String, String)>,
     observed: Vec<String>,
 }
 
@@ -248,9 +262,11 @@ impl Report {
             self.conformant += 1;
             return;
         }
-        self.observed.push(format!("{family}/{case}"));
-        self.divergences.push(format!(
-            "{family}/{case}: {field} diverges: reference {expected:?}, port {actual:?}"
+        let key = format!("{family}/{case}/{field}");
+        self.observed.push(key.clone());
+        self.divergences.push((
+            key,
+            format!("{family}/{case}: {field} diverges: reference {expected:?}, port {actual:?}"),
         ));
     }
 }
@@ -262,11 +278,8 @@ fn settle(report: &Report, family: &str) -> usize {
     let unrecorded = report
         .divergences
         .iter()
-        .filter(|line| {
-            let key = line.split(':').next().unwrap_or_default();
-            !DIVERGENCES.iter().any(|(entry, _)| covers(entry, key))
-        })
-        .cloned()
+        .filter(|(key, _)| !DIVERGENCES.iter().any(|(entry, _)| covers(entry, key)))
+        .map(|(_, line)| line.clone())
         .collect::<Vec<_>>();
     assert!(
         unrecorded.is_empty(),
@@ -319,6 +332,9 @@ struct Recorder {
     persist_outcome: PersistOutcome,
     persist_calls: Vec<Value>,
     provider_writes: Vec<Value>,
+    /// Stays empty: `OnboardingPorts` has no port for the top-level console
+    /// or vibe base URL, so this port never writes either.
+    base_url_writes: Vec<Value>,
 }
 
 impl Recorder {
@@ -331,6 +347,7 @@ impl Recorder {
             persist_outcome,
             persist_calls: Vec::new(),
             provider_writes: Vec::new(),
+            base_url_writes: Vec::new(),
         }
     }
 }
@@ -1478,6 +1495,13 @@ fn run_screen_graph(cases: &[GraphScenario], report: &mut Report) {
             "providerWrites",
             &scenario.effects.provider_writes,
             &drive.recorder.provider_writes,
+        );
+        report.check(
+            "screenGraph",
+            case,
+            "baseUrlWrites",
+            &scenario.effects.base_url_writes,
+            &drive.recorder.base_url_writes,
         );
         if let Some(themes) = &scenario.themes {
             report.check(

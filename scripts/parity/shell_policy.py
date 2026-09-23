@@ -13,11 +13,21 @@ the four questions EP-033 ports:
 * what ``BashTool.resolve_permission`` decides for a fixed command list, down
   to the scope, the two patterns and the label of every requirement it raises.
 
+Since 2.25.4 the reference keeps its ``find`` gate as a set local to
+``_find_policy`` (``vibe/core/tools/builtins/_shell_command_policy.py``), which
+nothing can import. The predicates are therefore measured rather than read:
+every GNU ``find`` action, plus the ``-files0-from`` option, is offered to
+``analyze_shell_command_policy`` and the ones it gates are recorded.
+
 The corpus is committed, like the permission-vocabulary one: it records command
 names, node-kind names, booleans and the answers to cases this repository
-authored. Every recorded label is the command text the case itself carries, or
-a placeholder substituted for a host path. No reference-authored prose is
-recorded, which is what ``NOTICE`` forbids shipping.
+authored. A label survives verbatim only when it is one of its requirement's two
+patterns, which is the command text the case itself carries; every other label
+(the outside-workdir label, and the exact-command label that names the syntax
+requiring approval) is reference-authored text and is committed as
+``{"described": "sha256:...", "length": n}``, which still fails the replay on
+any change. No reference-authored prose is recorded, which is what ``NOTICE``
+forbids shipping.
 
 Usage::
 
@@ -34,6 +44,7 @@ when the current one cannot.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -45,7 +56,7 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 DEFAULT_OUTPUT = Path("crates/vibe-core/tests/shell-policy/policy.json")
 INTERPRETER_VARIABLE = "VIBE_PARITY_PYTHON"
 
@@ -190,6 +201,29 @@ OUTSIDE_DIR_CASES: tuple[str, ...] = (
     "cat ../../../../etc/passwd",
 )
 
+#: Every action GNU findutils documents (``man find``, ACTIONS), plus the
+#: ``-files0-from`` option, offered one at a time to the reference ``find``
+#: policy. The ones it gates are what ``findExecutionPredicates`` records; the
+#: rest (``-print``, ``-prune`` and the like) are the negative controls.
+FIND_PRIMARY_CANDIDATES: tuple[str, ...] = (
+    "-delete",
+    "-exec",
+    "-execdir",
+    "-files0-from",
+    "-fls",
+    "-fprint",
+    "-fprint0",
+    "-fprintf",
+    "-ls",
+    "-ok",
+    "-okdir",
+    "-print",
+    "-print0",
+    "-printf",
+    "-prune",
+    "-quit",
+)
+
 
 class OracleError(RuntimeError):
     """Raised when the corpus cannot be produced from an authoritative state."""
@@ -273,8 +307,10 @@ def capture_extraction(reference: Path) -> list[dict[str, Any]]:
 def capture_command_sets(reference: Path) -> dict[str, Any]:
     """The sets that decide which commands have their operands inspected."""
     sys.path.insert(0, str(reference))
+    from vibe.core.tools.builtins._shell_command_policy import (
+        analyze_shell_command_policy,
+    )
     from vibe.core.tools.builtins.bash import (
-        _FIND_EXECUTION_PREDICATES,
         _MUTATING_PATH_COMMANDS,
         _PATH_COMMANDS,
         _get_default_allowlist,
@@ -287,7 +323,11 @@ def capture_command_sets(reference: Path) -> dict[str, Any]:
     return {
         "pathCommands": sorted(_PATH_COMMANDS),
         "mutatingPathCommands": sorted(_MUTATING_PATH_COMMANDS),
-        "findExecutionPredicates": sorted(_FIND_EXECUTION_PREDICATES),
+        "findExecutionPredicates": sorted(
+            candidate
+            for candidate in FIND_PRIMARY_CANDIDATES
+            if analyze_shell_command_policy(["find", ".", candidate]).requires_approval
+        ),
         "readOnlyCommands": list(readers),
         "allowlist": list(_get_default_allowlist()),
         # The reference documents `_PATH_COMMANDS` as a superset of the
@@ -345,6 +385,7 @@ def capture_outside_dirs(reference: Path) -> list[dict[str, Any]]:
     import tempfile
 
     from vibe.core.tools.builtins.bash import _collect_outside_dirs, _extract_commands
+    from vibe.core.workspace import Workspace
 
     with tempfile.TemporaryDirectory() as root:
         workdir = Path(root) / "workspace"
@@ -363,8 +404,7 @@ def capture_outside_dirs(reference: Path) -> list[dict[str, Any]]:
             command = _expand(case, placeholders)
             dirs = _collect_outside_dirs(
                 _extract_commands(command),
-                cwd=workdir,
-                project_roots=[workdir],
+                workspace=Workspace.for_session(workdir, [workdir]),
                 scratchpad_dir=scratchpad,
             )
             captured.append(
@@ -409,13 +449,28 @@ def capture_resolutions(reference: Path) -> list[dict[str, Any]]:
                             "scope": str(required.scope.value),
                             "invocationPattern": required.invocation_pattern,
                             "sessionPattern": required.session_pattern,
-                            "label": required.label,
+                            "label": committed_label(required),
                         }
                         for required in context.required_permissions
                     ],
                 }
             )
         return captured
+
+
+def describe(value: str) -> dict[str, Any]:
+    """The committable form of a string that may carry reference-authored prose."""
+    return {
+        "described": "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()[:32],
+        "length": len(value),
+    }
+
+
+def committed_label(required: Any) -> str | dict[str, Any]:
+    """A requirement's label, verbatim only when it is one of its own patterns."""
+    if required.label in (required.invocation_pattern, required.session_pattern):
+        return required.label
+    return describe(required.label)
 
 
 def build_corpus(reference: Path, expected_commit: str | None) -> dict[str, Any]:
@@ -431,8 +486,10 @@ def build_corpus(reference: Path, expected_commit: str | None) -> dict[str, Any]
             "Captured from the pinned reference by "
             "scripts/parity/shell_policy.py. Command names, node-kind names, "
             "scope values, booleans and the answers to cases this repository "
-            "authored are observations; no reference-authored description or "
-            "refusal text is recorded here."
+            "authored are observations; a label that is not one of its "
+            "requirement's patterns is recorded as a digest and a length, and "
+            "no reference-authored description, label or refusal text is "
+            "recorded here."
         ),
         "counts": {
             "extractionCases": len(extraction),

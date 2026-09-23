@@ -17,10 +17,10 @@ from vibe.app_server.models import (
     MCPSourceSummary,
     MCPState,
     MCPToolSummary,
+    RemoteProjectLink,
     ScheduledLoop,
     VibeCodePickerContext,
     VibeCodeProject,
-    VibeCodeProjectLink,
     VibeCodeRepository,
 )
 from vibe.app_server.config import ProxySettingsView
@@ -60,9 +60,13 @@ from vibe.cli.textual_ui.widgets.vibe_code_project.picker import (
     build_project_picker_items,
 )
 
-# `app.py:2992` mounts the picker with this exact title.
+# `vibe/cli/textual_ui/app.py:5084` mounts the picker with this exact title.
 PROJECT_PICKER_TITLE = "Vibe Code project"
-from vibe.core.proxy_setup import SUPPORTED_PROXY_VARS, parse_proxy_command
+from vibe.core.proxy_setup import (
+    PROXY_URL_VARS,
+    SUPPORTED_PROXY_VARS,
+    parse_proxy_command,
+)
 
 
 class CapturedOption:
@@ -357,8 +361,10 @@ def observe_proxy_mutation(event: dict) -> str:
     with tempfile.TemporaryDirectory() as directory:
         path = Path(directory) / ".env"
         path.write_text(event["initial"])
-        # The wire payload is unordered; the reference writes the supported keys
-        # in their canonical order.
+        # The oracle imposes the canonical `SUPPORTED_PROXY_VARS` order. The
+        # pinned reference instead iterates `params.changes.items()` in wire
+        # order (`vibe/app_server/_resources.py:716-722`), one `set_proxy_var`
+        # call and one file write per key, with no rollback on failure.
         changes = {
             key: event["changes"][key]
             for key in SUPPORTED_PROXY_VARS
@@ -366,8 +372,21 @@ def observe_proxy_mutation(event: dict) -> str:
         }
         try:
             for key, value in changes.items():
+                # Oracle convention: neither `set_proxy_var` nor dotenv
+                # `set_key` refuses a line break at the pin.
                 if value is not None and ("\n" in value or "\r" in value):
                     raise ValueError("newline")
+                # `set_proxy_var` refuses a URL variable without an http(s)
+                # scheme (`vibe/core/proxy_setup.py:42-45`) before it writes.
+                # Keys the reference wrote earlier in the loop stay on disk:
+                # the restore below is the oracle's convention, so only the
+                # `error` status of a refused write is a reference measurement.
+                if (
+                    value is not None
+                    and key in PROXY_URL_VARS
+                    and not value.startswith(("http://", "https://"))
+                ):
+                    raise ValueError("scheme")
                 if value is None:
                     unset_key(path, key)
                 else:
@@ -563,7 +582,7 @@ def observe_projects(event: dict) -> str:
         repo_root="/workspace",
         repo_url=context.get("repoUrl", ""),
         repo_name=context.get("repoName", ""),
-        saved_link=VibeCodeProjectLink(repo_root="/workspace", repo_url=saved.get("repoUrl", ""), project_id=saved["projectId"], project_name=saved["projectName"]) if saved else None,
+        saved_link=RemoteProjectLink(repo_root="/workspace", repo_url=saved.get("repoUrl", ""), project_id=saved["projectId"], project_name=saved["projectName"]) if saved else None,
     )
     has_more = bool(view.get("state", {}).get("nextCursor"))
     widget = VibeCodeProjectPickerApp(
@@ -653,7 +672,7 @@ def main() -> None:
         repo_root="/workspace",
         repo_url="https://github.com/acme/repo.git",
         repo_name="repo",
-        saved_link=VibeCodeProjectLink(
+        saved_link=RemoteProjectLink(
             repo_root="/workspace",
             repo_url="https://github.com/acme/repo.git",
             project_id="current",

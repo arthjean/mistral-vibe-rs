@@ -1075,7 +1075,7 @@
     {
       "accepted": true,
       "arguments": {
-        "action": "sample",
+        "action": "read",
         "todos": []
       },
       "case": "empty-todos",
@@ -1084,7 +1084,7 @@
     {
       "accepted": false,
       "arguments": {
-        "action": "sample",
+        "action": "read",
         "todos": [
           {
             "content": "sample"
@@ -1115,7 +1115,7 @@
         "arguments": [
           "action"
         ],
-        "digest": "sha256:804b522b591a7376857395c197ce134ab00fa035cadda3ac12e313644429d28d",
+        "digest": "sha256:c9986aa7f7f97952a6172487e976dbaef88c8c61d99d1aaa7534399bd484e846",
         "error": "ToolError",
         "namesTool": true,
         "pointers": [
@@ -1127,7 +1127,7 @@
     {
       "accepted": false,
       "arguments": {
-        "action": "sample",
+        "action": "read",
         "todos": {
           "not": "an array"
         }
@@ -1173,7 +1173,7 @@
         "arguments": [
           "action"
         ],
-        "digest": "sha256:e535247926eaaba3db6e4cf8b2997f503a51191f62c884de342614fcbb6897a9",
+        "digest": "sha256:e02ba2caf892b76838a2b40ef3b9e6a84ac06a0787aa7f5812ca1ba5c15f563d",
         "error": "ToolError",
         "namesTool": true,
         "pointers": [
@@ -1185,7 +1185,7 @@
     {
       "accepted": true,
       "arguments": {
-        "action": "sample",
+        "action": "read",
         "todos": null
       },
       "case": "null-todos",
@@ -1194,7 +1194,7 @@
     {
       "accepted": true,
       "arguments": {
-        "action": "sample"
+        "action": "read"
       },
       "case": "required-only",
       "tool": "todo"
@@ -1203,9 +1203,28 @@
       "accepted": true,
       "arguments": {
         "__unexpected__": 1,
-        "action": "sample"
+        "action": "read"
       },
       "case": "unexpected-key",
+      "tool": "todo"
+    },
+    {
+      "accepted": false,
+      "arguments": {
+        "action": "__not_a_member__"
+      },
+      "case": "unknown-enum-action",
+      "rejection": {
+        "arguments": [
+          "action"
+        ],
+        "digest": "sha256:b57f4d8daa7259abd6a92864828190627b2d98c119b0e19712373f971a69140d",
+        "error": "ToolError",
+        "namesTool": true,
+        "pointers": [
+          "$.action"
+        ]
+      },
       "tool": "todo"
     },
     {
@@ -1672,7 +1691,7 @@
           "action",
           "todos"
         ],
-        "digest": "sha256:fd48b72280747501e4565178e63f585faadf9af510ceebbaaf3556dfc627cc1d",
+        "digest": "sha256:45ef68a84c0e24e6bbfd52b515b7a8cabbe768224cf13eb68dab31087abb0e54",
         "error": "ToolError",
         "namesTool": true,
         "pointers": [
@@ -1727,6 +1746,6 @@
   ],
   "note": "Argument fixtures with the verdict the reference Pydantic gave them. Payloads and case names are authored by scripts/parity/tool_surface.py; the captured values are the accepted flag and, for a rejection, the shape of the error the model reads: its type, whether it names the tool, which arguments it objected to, and a digest of the text. multiArgument holds the same measurement for payloads breaking more than one argument at once, which is what says whether a rejection names every argument or only the first. Schemas come from digest.json. Regenerate with scripts/parity/tool_surface.py --fixtures when the pinned reference moves.",
   "platform": "linux",
-  "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+  "referenceCommit": "4a96003186b166d55b9f06895c45bb136eef61cd",
   "schemaVersion": 2
 }

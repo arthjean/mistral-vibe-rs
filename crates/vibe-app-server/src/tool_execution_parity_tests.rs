@@ -129,6 +129,7 @@ const SKILL_DETACHED_ROW: &str =
     "A directory-less skill has no scripted registration in the replay";
 const FETCH_MARKDOWN_ROW: &str = "A fetched HTML page is stripped to prose";
 const FETCH_HEADER_ROW: &str = "The HTTP client's own request envelope";
+const FETCH_FINAL_URL_ROW: &str = "A redirected fetch reports the requested URL";
 
 /// Why a divergence stands, shared by every case that carries the same gap: the
 /// reason is a property of the gap, not of the case that happens to reveal it.
@@ -157,6 +158,13 @@ const FETCH_HEADER_ENVELOPE: &str = "every header this tool sets carries the ref
      `Host` arrives last, `Accept-Encoding` and `Connection` are the client's own, and a redirect \
      hop adds `Referer`. No story in this PRD closes the gap, so the decision is recorded in \
      the scorecard row this entry names";
+const FETCH_FINAL_URL: &str = "since v2.25.5 the reference follows redirects by hand \
+     (`follow_redirects=False` and a 20-hop loop, `vibe/core/tools/builtins/web_fetch.py:35,221-252` \
+     at 4a96003186b1) and reports the URL the last hop answered from (`:160,213`), where it \
+     reported the requested URL at v2.24.0; this port still reports the requested URL \
+     (`crates/vibe-core/src/tools/builtins/web_fetch.rs:152,240,251`), so the url field and \
+     the model text that renders it differ on a redirect. The divergence is recorded in the \
+     scorecard row this entry names until a story ports the final-URL report";
 
 /// The divergences this port still carries, each with what closes it.
 ///
@@ -574,10 +582,34 @@ const LEDGER: &[Divergence] = &[
     Divergence {
         tool: "web_fetch",
         case: "a-redirect-chain",
+        pointer: "/modelText",
+        closed_by: RECORDED,
+        why: FETCH_FINAL_URL,
+        row: FETCH_FINAL_URL_ROW,
+    },
+    Divergence {
+        tool: "web_fetch",
+        case: "a-redirect-chain",
+        pointer: "/projectedResult/url",
+        closed_by: RECORDED,
+        why: FETCH_FINAL_URL,
+        row: FETCH_FINAL_URL_ROW,
+    },
+    Divergence {
+        tool: "web_fetch",
+        case: "a-redirect-chain",
         pointer: "/requests",
         closed_by: RECORDED,
         why: FETCH_HEADER_ENVELOPE,
         row: FETCH_HEADER_ROW,
+    },
+    Divergence {
+        tool: "web_fetch",
+        case: "a-redirect-chain",
+        pointer: "/typedResult/url",
+        closed_by: RECORDED,
+        why: FETCH_FINAL_URL,
+        row: FETCH_FINAL_URL_ROW,
     },
     Divergence {
         tool: "web_fetch",
@@ -1487,9 +1519,11 @@ async fn harness_for(
             .create("parent-1", &tree.display().to_string(), None, 1)
             .expect("the parent session is created");
         // The case names the profile the call runs under. Anything but the
-        // default one means the call already sits inside a subagent, which is
-        // the depth the delegation guard reads off the parent.
-        if case.script.get("agent").and_then(Value::as_str) != Some("default") {
+        // reference's top-level `ask` profile (named `default` before v2.24.1,
+        // `vibe/core/agents/models.py:18`) means the call already sits inside a
+        // subagent, which is the depth the delegation guard reads off the
+        // parent.
+        if case.script.get("agent").and_then(Value::as_str) != Some("ask") {
             metadata.agent_profile = Some(json!({
                 "name": DEFAULT_SUBAGENT,
                 "kind": "subagent",

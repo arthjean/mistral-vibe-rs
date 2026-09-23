@@ -5,7 +5,8 @@ The reference checkout is a read-only behavioral oracle. This script asks it
 four questions whose answers are the contract EP-032 ports:
 
 * which scopes ``PermissionScope`` declares, and under which wire values;
-* which fields ``RequiredPermission`` carries, and under which aliases;
+* which fields ``RequiredPermission`` carries, under which aliases, and which
+  of them stay off the wire;
 * what the arity table holds, entry by entry;
 * what ``build_session_pattern`` and ``wildcard_match`` answer for a fixed case
   list, so the two functions are replayed rather than re-read.
@@ -41,7 +42,7 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 DEFAULT_OUTPUT = Path("crates/vibe-core/tests/permission-surface/vocabulary.json")
 INTERPRETER_VARIABLE = "VIBE_PARITY_PYTHON"
 
@@ -100,9 +101,11 @@ WILDCARD_CASES: tuple[tuple[str, str], ...] = (
 
 #: ``(pattern, absolute path)`` pairs whose verdict is recorded under both
 #: matchers the reference uses. ``sensitive_patterns`` is matched with
-#: ``PurePath.match``, which is right-anchored and compares component by
-#: component, while the allowlist and the denylist stay on ``fnmatch``, whose
-#: ``*`` crosses a separator and whose match is whole-string. The pairs are
+#: ``matches_sensitive_pattern``, which folds case and then runs
+#: ``PurePath.match``, right-anchored and component by component
+#: (``vibe/core/tools/utils.py:45-48`` at the pin), while the allowlist and the
+#: denylist stay on ``fnmatch``, whose ``*`` crosses a separator and whose match
+#: is whole-string. The pairs are
 #: chosen so most of them answer differently under the two, which is what makes
 #: the corpus able to fail a port that runs one matcher for both. The last two
 #: separate ``**`` from ``*`` at the root, where only the first stands in for a
@@ -214,7 +217,12 @@ def reexecute_with_reference_interpreter(
 
 
 def capture_vocabulary(reference: Path) -> dict[str, Any]:
-    """The scope values and the requirement fields, with their wire aliases."""
+    """The scope values and the requirement fields, with their wire aliases.
+
+    A field the model excludes from serialization is recorded with
+    ``excluded`` set, since it is declared on the model and read on input but
+    never crosses the wire: ``literal`` at ``vibe/permissions.py:27``.
+    """
     sys.path.insert(0, str(reference))
     from vibe.permissions import PermissionScope, RequiredPermission
 
@@ -226,6 +234,7 @@ def capture_vocabulary(reference: Path) -> dict[str, Any]:
             "name": name,
             "alias": field.alias or name,
             "required": field.is_required(),
+            "excluded": bool(field.exclude),
         }
         for name, field in RequiredPermission.model_fields.items()
     ]
@@ -277,14 +286,21 @@ def capture_file_tool_labels(reference: Path) -> dict[str, str]:
     They are recorded as format strings this repository re-derives rather than
     as reference prose: each is a fixed word joined to a value the call itself
     carries, which is an observation of the shape and not of any authored text.
+    The sensitive requirement names the resolved file and its ``glob.escape``
+    form (``vibe/core/tools/utils.py:203-216`` at the pin), so the temporary
+    working directory is recorded as ``<workdir>``, the way the outside glob is
+    recorded as ``<glob>``.
     """
     sys.path.insert(0, str(reference))
+    import glob
     import tempfile
 
     from vibe.core.tools.base import ToolPermission
     from vibe.core.tools.utils import resolve_file_tool_permission
+    from vibe.core.workspace import Workspace
 
     with tempfile.TemporaryDirectory() as workdir:
+        root = str(Path(workdir).resolve())
         sensitive = resolve_file_tool_permission(
             ".env",
             tool_name="read_file",
@@ -292,8 +308,7 @@ def capture_file_tool_labels(reference: Path) -> dict[str, str]:
             denylist=[],
             config_permission=ToolPermission.ALWAYS,
             sensitive_patterns=["**/.env"],
-            cwd=Path(workdir),
-            project_roots=[],
+            workspace=Workspace.for_session(Path(workdir)),
             scratchpad_dir=Path(workdir) / "scratchpad",
         )
         with tempfile.TemporaryDirectory() as outside:
@@ -304,8 +319,7 @@ def capture_file_tool_labels(reference: Path) -> dict[str, str]:
                 denylist=[],
                 config_permission=ToolPermission.ALWAYS,
                 sensitive_patterns=[],
-                cwd=Path(workdir),
-                project_roots=[],
+                workspace=Workspace.for_session(Path(workdir)),
                 scratchpad_dir=Path(workdir) / "scratchpad",
             )
             if sensitive is None or escaping is None:
@@ -315,8 +329,12 @@ def capture_file_tool_labels(reference: Path) -> dict[str, str]:
             outside_glob = str(Path(outside).resolve() / "*")
             return {
                 "sensitiveScope": str(sensitive_required.scope.value),
-                "sensitiveInvocationPattern": sensitive_required.invocation_pattern,
-                "sensitiveSessionPattern": sensitive_required.session_pattern,
+                "sensitiveInvocationPattern": sensitive_required.invocation_pattern.replace(
+                    root, "<workdir>"
+                ),
+                "sensitiveSessionPattern": sensitive_required.session_pattern.replace(
+                    glob.escape(root), "<workdir>"
+                ),
                 "sensitiveLabel": sensitive_required.label.replace(
                     "read_file", "<tool>"
                 ),
@@ -335,21 +353,23 @@ def capture_file_tool_labels(reference: Path) -> dict[str, str]:
 def capture_sensitive_matches(reference: Path) -> list[dict[str, Any]]:
     """What each matcher answers for the recorded pattern and path pairs.
 
-    ``resolve_file_tool_permission`` runs ``PurePath.match`` over
+    ``resolve_file_tool_permission`` runs ``matches_sensitive_pattern`` over
     ``sensitive_patterns`` and ``fnmatch`` over the allowlist and the denylist,
-    so the two verdicts are captured side by side. A pattern the matcher refuses
+    so the two verdicts are captured side by side, each through the function
+    the reference itself calls. A pattern the matcher refuses
     outright is recorded as the exception it raised rather than as a verdict,
     which is what says the sensitive branch has an unmatchable input to survive.
     """
     sys.path.insert(0, str(reference))
     import fnmatch
-    from pathlib import PurePath
+
+    from vibe.core.tools.utils import matches_sensitive_pattern
 
     captured: list[dict[str, Any]] = []
     for pattern, path in SENSITIVE_CASES:
         entry: dict[str, Any] = {"pattern": pattern, "path": path}
         try:
-            entry["sensitiveMatches"] = bool(PurePath(path).match(pattern))
+            entry["sensitiveMatches"] = bool(matches_sensitive_pattern(path, [pattern]))
         except Exception as error:  # noqa: BLE001 - the refusal is the measurement
             entry["sensitiveMatches"] = None
             entry["sensitiveRaises"] = type(error).__name__
@@ -371,6 +391,7 @@ def capture_sensitive_chain(reference: Path) -> list[dict[str, Any]]:
 
     from vibe.core.tools.base import ToolPermission
     from vibe.core.tools.utils import resolve_file_tool_permission
+    from vibe.core.workspace import Workspace
 
     captured: list[dict[str, Any]] = []
     with tempfile.TemporaryDirectory() as workdir:
@@ -382,8 +403,7 @@ def capture_sensitive_chain(reference: Path) -> list[dict[str, Any]]:
                 denylist=[],
                 config_permission=ToolPermission.ALWAYS,
                 sensitive_patterns=[pattern],
-                cwd=Path(workdir),
-                project_roots=[],
+                workspace=Workspace.for_session(Path(workdir)),
                 scratchpad_dir=Path(workdir) / "scratchpad",
             )
             scopes = (

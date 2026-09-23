@@ -40,11 +40,11 @@ const CORPUS_RELATIVE: &str = "crates/vibe-cli/tests/commands/corpus.json";
 const CAPTURE_SCRIPT: &str = "scripts/parity/commands.py";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the capture
 /// script.
-const CORPUS_SCHEMA_VERSION: u32 = 1;
+const CORPUS_SCHEMA_VERSION: u32 = 2;
 /// The comparison floor this replay commits to, read off the first real capture
 /// rather than estimated, so a regeneration that captured almost nothing fails
 /// instead of reporting a clean but empty run.
-const MINIMUM_COMPARISONS: usize = 395;
+const MINIMUM_COMPARISONS: usize = 445;
 
 /// Keys the corpus carries that are not families: the pin, the layout and the
 /// prose-free note.
@@ -65,7 +65,12 @@ const FAMILIES: &[Family] = &[
     },
     Family {
         name: "availability",
-        inputs: &["vibeCodeEnabled", "clipboardSupported", "excluded"],
+        inputs: &[
+            "registrySkillsEnabled",
+            "experimentalHarness",
+            "clipboardSupported",
+            "excluded",
+        ],
         answers: &["keys", "count"],
     },
     Family {
@@ -98,12 +103,19 @@ const FAMILIES: &[Family] = &[
 /// Cases where this build answers something other than the reference, each with
 /// the reason and the story that closes it.
 ///
-/// Only `helpProse` is left, and permanently. `NOTICE` forbids reproducing the
+/// `ACCEPTED` entries are permanent. `NOTICE` forbids reproducing the
 /// reference's authored lines, so the three headings, the eight shortcut lines
 /// and the two prefix lines are this port's own prose and differ from the
-/// reference's in both byte length and digest. The twenty-eight command lines
-/// are not prose and are not listed here: they conform exactly, which is what
-/// makes the split measurable rather than a blanket exemption.
+/// reference's in both byte length and digest. The command lines are not prose
+/// and carry no `ACCEPTED` entry.
+///
+/// `OPEN` entries record what the re-pin to 2.25.7 measured and this port has
+/// not followed: six registry keys added upstream since 2.24.0, the
+/// `vibe_code_enabled` gate the reference dropped from `/teleport` and
+/// `/remote-project`, and the rewritten `clear` description. Every other
+/// command line this port renders still hashes to a reference digest; the
+/// `helpCommands` and `helpProse` entries for them record only the offset the
+/// missing keys displace them by.
 const DIVERGENCES: &[(&str, &str)] = &[
     (
         "helpProse/length/line-00",
@@ -208,6 +220,730 @@ const DIVERGENCES: &[(&str, &str)] = &[
     (
         "helpProse/digest/line-16",
         "ACCEPTED: the third heading is authored prose, so this port writes its own",
+    ),
+    (
+        "counts/count/keys",
+        "OPEN: the reference counts the six keys it added since v2.24.0 (`branch`, `log-level`, `plugins`, `reload-plugins`, `skills`, `todo`), each with one slash alias (vibe/cli/commands.py:41-250 @4a960031); this port's table lacks them (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "counts/count/aliases",
+        "OPEN: the reference counts the six keys it added since v2.24.0 (`branch`, `log-level`, `plugins`, `reload-plugins`, `skills`, `todo`), each with one slash alias (vibe/cli/commands.py:41-250 @4a960031); this port's table lacks them (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "counts/count/slashAliases",
+        "OPEN: the reference counts the six keys it added since v2.24.0 (`branch`, `log-level`, `plugins`, `reload-plugins`, `skills`, `todo`), each with one slash alias (vibe/cli/commands.py:41-250 @4a960031); this port's table lacks them (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "inventory/aliases/branch",
+        "OPEN: reference v2.25.3 added the `branch` key (ungated, vibe/cli/commands.py:214-222 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "inventory/aliases/log-level",
+        "OPEN: reference v2.24.2 added the `log-level` key (ungated, vibe/cli/commands.py:103-109 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "inventory/aliases/plugins",
+        "OPEN: reference v2.24.5 added the `plugins` key (gated on experimental_harness at :180, vibe/cli/commands.py:176-181 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "inventory/aliases/reload-plugins",
+        "OPEN: reference v2.24.5 added the `reload-plugins` key (gated on experimental_harness at :186, vibe/cli/commands.py:182-187 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "inventory/aliases/skills",
+        "OPEN: reference v2.25.0 added the `skills` key (gated on registry_skills_enabled at :63, vibe/cli/commands.py:59-64 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "inventory/aliases/todo",
+        "OPEN: reference v2.25.5 added the `todo` key (gated on experimental_harness at :192, vibe/cli/commands.py:188-193 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "availability/keys/baseline",
+        "OPEN: under this context the reference keeps 29 keys; this port lacks `branch`, `log-level` and closes its `vibe_code_enabled` gate on `remote-project` and `teleport` (crates/vibe-cli/src/tui/commands.rs:414), which reference v2.25.7 ungated (vibe/cli/commands.py:140-149 @4a960031); the missing keys come from vibe/cli/commands.py:103-109, :214-222 @4a960031",
+    ),
+    (
+        "availability/count/baseline",
+        "OPEN: under this context the reference keeps 29 keys; this port lacks `branch`, `log-level` and closes its `vibe_code_enabled` gate on `remote-project` and `teleport` (crates/vibe-cli/src/tui/commands.rs:414), which reference v2.25.7 ungated (vibe/cli/commands.py:140-149 @4a960031); the missing keys come from vibe/cli/commands.py:103-109, :214-222 @4a960031",
+    ),
+    (
+        "availability/keys/clipboard",
+        "OPEN: under this context the reference keeps 30 keys; this port lacks `branch`, `log-level` and closes its `vibe_code_enabled` gate on `remote-project` and `teleport` (crates/vibe-cli/src/tui/commands.rs:414), which reference v2.25.7 ungated (vibe/cli/commands.py:140-149 @4a960031); the missing keys come from vibe/cli/commands.py:103-109, :214-222 @4a960031",
+    ),
+    (
+        "availability/count/clipboard",
+        "OPEN: under this context the reference keeps 30 keys; this port lacks `branch`, `log-level` and closes its `vibe_code_enabled` gate on `remote-project` and `teleport` (crates/vibe-cli/src/tui/commands.rs:414), which reference v2.25.7 ungated (vibe/cli/commands.py:140-149 @4a960031); the missing keys come from vibe/cli/commands.py:103-109, :214-222 @4a960031",
+    ),
+    (
+        "availability/keys/registrySkills",
+        "OPEN: under this context the reference keeps 30 keys; this port lacks `branch`, `log-level`, `skills` and closes its `vibe_code_enabled` gate on `remote-project` and `teleport` (crates/vibe-cli/src/tui/commands.rs:414), which reference v2.25.7 ungated (vibe/cli/commands.py:140-149 @4a960031); the missing keys come from vibe/cli/commands.py:103-109, :214-222, :59-64 @4a960031",
+    ),
+    (
+        "availability/count/registrySkills",
+        "OPEN: under this context the reference keeps 30 keys; this port lacks `branch`, `log-level`, `skills` and closes its `vibe_code_enabled` gate on `remote-project` and `teleport` (crates/vibe-cli/src/tui/commands.rs:414), which reference v2.25.7 ungated (vibe/cli/commands.py:140-149 @4a960031); the missing keys come from vibe/cli/commands.py:103-109, :214-222, :59-64 @4a960031",
+    ),
+    (
+        "availability/keys/experimentalHarness",
+        "OPEN: under this context the reference keeps 32 keys; this port lacks `branch`, `log-level`, `plugins`, `reload-plugins`, `todo` and closes its `vibe_code_enabled` gate on `remote-project` and `teleport` (crates/vibe-cli/src/tui/commands.rs:414), which reference v2.25.7 ungated (vibe/cli/commands.py:140-149 @4a960031); the missing keys come from vibe/cli/commands.py:103-109, :176-181, :182-187, :188-193, :214-222 @4a960031",
+    ),
+    (
+        "availability/count/experimentalHarness",
+        "OPEN: under this context the reference keeps 32 keys; this port lacks `branch`, `log-level`, `plugins`, `reload-plugins`, `todo` and closes its `vibe_code_enabled` gate on `remote-project` and `teleport` (crates/vibe-cli/src/tui/commands.rs:414), which reference v2.25.7 ungated (vibe/cli/commands.py:140-149 @4a960031); the missing keys come from vibe/cli/commands.py:103-109, :176-181, :182-187, :188-193, :214-222 @4a960031",
+    ),
+    (
+        "availability/keys/full",
+        "OPEN: under this context the reference keeps 34 keys; this port lacks `branch`, `log-level`, `plugins`, `reload-plugins`, `skills`, `todo`; the missing keys come from vibe/cli/commands.py:103-109, :176-181, :182-187, :188-193, :214-222, :59-64 @4a960031",
+    ),
+    (
+        "availability/count/full",
+        "OPEN: under this context the reference keeps 34 keys; this port lacks `branch`, `log-level`, `plugins`, `reload-plugins`, `skills`, `todo`; the missing keys come from vibe/cli/commands.py:103-109, :176-181, :182-187, :188-193, :214-222, :59-64 @4a960031",
+    ),
+    (
+        "availability/keys/excluded",
+        "OPEN: under this context the reference keeps 31 keys; this port lacks `branch`, `log-level`, `plugins`, `reload-plugins`, `skills`, `todo`; the missing keys come from vibe/cli/commands.py:103-109, :176-181, :182-187, :188-193, :214-222, :59-64 @4a960031",
+    ),
+    (
+        "availability/count/excluded",
+        "OPEN: under this context the reference keeps 31 keys; this port lacks `branch`, `log-level`, `plugins`, `reload-plugins`, `skills`, `todo`; the missing keys come from vibe/cli/commands.py:103-109, :176-181, :182-187, :188-193, :214-222, :59-64 @4a960031",
+    ),
+    (
+        "parse/key/teleport-baseline",
+        "OPEN: reference v2.25.7 dropped `vibe_code_enabled` from CommandContext and ungated `teleport` and `remote-project` (vibe/cli/commands.py:10-13, :140-149 @4a960031); this port still gates both on it (crates/vibe-cli/src/tui/commands.rs:414), closed in every context that closes a reference gate",
+    ),
+    (
+        "parse/alias/teleport-baseline",
+        "OPEN: reference v2.25.7 dropped `vibe_code_enabled` from CommandContext and ungated `teleport` and `remote-project` (vibe/cli/commands.py:10-13, :140-149 @4a960031); this port still gates both on it (crates/vibe-cli/src/tui/commands.rs:414), closed in every context that closes a reference gate",
+    ),
+    (
+        "parse/arguments/teleport-baseline",
+        "OPEN: reference v2.25.7 dropped `vibe_code_enabled` from CommandContext and ungated `teleport` and `remote-project` (vibe/cli/commands.py:10-13, :140-149 @4a960031); this port still gates both on it (crates/vibe-cli/src/tui/commands.rs:414), closed in every context that closes a reference gate",
+    ),
+    (
+        "parse/key/teleport-experimental-harness",
+        "OPEN: reference v2.25.7 dropped `vibe_code_enabled` from CommandContext and ungated `teleport` and `remote-project` (vibe/cli/commands.py:10-13, :140-149 @4a960031); this port still gates both on it (crates/vibe-cli/src/tui/commands.rs:414), closed in every context that closes a reference gate",
+    ),
+    (
+        "parse/alias/teleport-experimental-harness",
+        "OPEN: reference v2.25.7 dropped `vibe_code_enabled` from CommandContext and ungated `teleport` and `remote-project` (vibe/cli/commands.py:10-13, :140-149 @4a960031); this port still gates both on it (crates/vibe-cli/src/tui/commands.rs:414), closed in every context that closes a reference gate",
+    ),
+    (
+        "parse/arguments/teleport-experimental-harness",
+        "OPEN: reference v2.25.7 dropped `vibe_code_enabled` from CommandContext and ungated `teleport` and `remote-project` (vibe/cli/commands.py:10-13, :140-149 @4a960031); this port still gates both on it (crates/vibe-cli/src/tui/commands.rs:414), closed in every context that closes a reference gate",
+    ),
+    (
+        "parse/key/remote-project-baseline",
+        "OPEN: reference v2.25.7 dropped `vibe_code_enabled` from CommandContext and ungated `teleport` and `remote-project` (vibe/cli/commands.py:10-13, :140-149 @4a960031); this port still gates both on it (crates/vibe-cli/src/tui/commands.rs:414), closed in every context that closes a reference gate",
+    ),
+    (
+        "parse/alias/remote-project-baseline",
+        "OPEN: reference v2.25.7 dropped `vibe_code_enabled` from CommandContext and ungated `teleport` and `remote-project` (vibe/cli/commands.py:10-13, :140-149 @4a960031); this port still gates both on it (crates/vibe-cli/src/tui/commands.rs:414), closed in every context that closes a reference gate",
+    ),
+    (
+        "parse/arguments/remote-project-baseline",
+        "OPEN: reference v2.25.7 dropped `vibe_code_enabled` from CommandContext and ungated `teleport` and `remote-project` (vibe/cli/commands.py:10-13, :140-149 @4a960031); this port still gates both on it (crates/vibe-cli/src/tui/commands.rs:414), closed in every context that closes a reference gate",
+    ),
+    (
+        "parse/key/skills-registry-skills",
+        "OPEN: reference v2.25.0 added the `skills` key (gated on registry_skills_enabled at :63, vibe/cli/commands.py:59-64 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "parse/alias/skills-registry-skills",
+        "OPEN: reference v2.25.0 added the `skills` key (gated on registry_skills_enabled at :63, vibe/cli/commands.py:59-64 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "parse/arguments/skills-registry-skills",
+        "OPEN: reference v2.25.0 added the `skills` key (gated on registry_skills_enabled at :63, vibe/cli/commands.py:59-64 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "parse/key/todo-experimental-harness",
+        "OPEN: reference v2.25.5 added the `todo` key (gated on experimental_harness at :192, vibe/cli/commands.py:188-193 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "parse/alias/todo-experimental-harness",
+        "OPEN: reference v2.25.5 added the `todo` key (gated on experimental_harness at :192, vibe/cli/commands.py:188-193 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "parse/arguments/todo-experimental-harness",
+        "OPEN: reference v2.25.5 added the `todo` key (gated on experimental_harness at :192, vibe/cli/commands.py:188-193 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "helpDocument/count/lineCount",
+        "OPEN: the reference's command section lists 34 keys under the full context (vibe/cli/commands.py:325-334 @4a960031); this port lists its 28, lacking `branch`, `log-level`, `plugins`, `reload-plugins`, `skills`, `todo`",
+    ),
+    (
+        "helpDocument/count/commandLineCount",
+        "OPEN: the reference's command section lists 34 keys under the full context (vibe/cli/commands.py:325-334 @4a960031); this port lists its 28, lacking `branch`, `log-level`, `plugins`, `reload-plugins`, `skills`, `todo`",
+    ),
+    (
+        "helpSections/lineCount/commands",
+        "OPEN: the reference's command section lists 34 keys under the full context (vibe/cli/commands.py:325-334 @4a960031); this port lists its 28, lacking `branch`, `log-level`, `plugins`, `reload-plugins`, `skills`, `todo`",
+    ),
+    (
+        "helpCommands/index/branch",
+        "OPEN: reference v2.25.3 added the `branch` key (ungated, vibe/cli/commands.py:214-222 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "helpCommands/line/branch",
+        "OPEN: reference v2.25.3 added the `branch` key (ungated, vibe/cli/commands.py:214-222 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "helpCommands/aliases/branch",
+        "OPEN: reference v2.25.3 added the `branch` key (ungated, vibe/cli/commands.py:214-222 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "helpCommands/index/clear",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch` sort before `clear` upstream but are absent here, so its index shifts by 1; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/clear",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch` sort before `clear` upstream but are absent here, so its line shifts by 1; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/compact",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch` sort before `compact` upstream but are absent here, so its index shifts by 1; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/compact",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch` sort before `compact` upstream but are absent here, so its line shifts by 1; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/config",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch` sort before `config` upstream but are absent here, so its index shifts by 1; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/config",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch` sort before `config` upstream but are absent here, so its line shifts by 1; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/copy",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch` sort before `copy` upstream but are absent here, so its index shifts by 1; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/copy",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch` sort before `copy` upstream but are absent here, so its line shifts by 1; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/data-retention",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch` sort before `data-retention` upstream but are absent here, so its index shifts by 1; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/data-retention",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch` sort before `data-retention` upstream but are absent here, so its line shifts by 1; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/debug",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch` sort before `debug` upstream but are absent here, so its index shifts by 1; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/debug",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch` sort before `debug` upstream but are absent here, so its line shifts by 1; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/exit",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch` sort before `exit` upstream but are absent here, so its index shifts by 1; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/exit",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch` sort before `exit` upstream but are absent here, so its line shifts by 1; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/help",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch` sort before `help` upstream but are absent here, so its index shifts by 1; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/help",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch` sort before `help` upstream but are absent here, so its line shifts by 1; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/leanstall",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch` sort before `leanstall` upstream but are absent here, so its index shifts by 1; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/leanstall",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch` sort before `leanstall` upstream but are absent here, so its line shifts by 1; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/log",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch` sort before `log` upstream but are absent here, so its index shifts by 1; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/log",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch` sort before `log` upstream but are absent here, so its line shifts by 1; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/log-level",
+        "OPEN: reference v2.24.2 added the `log-level` key (ungated, vibe/cli/commands.py:103-109 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "helpCommands/line/log-level",
+        "OPEN: reference v2.24.2 added the `log-level` key (ungated, vibe/cli/commands.py:103-109 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "helpCommands/aliases/log-level",
+        "OPEN: reference v2.24.2 added the `log-level` key (ungated, vibe/cli/commands.py:103-109 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "helpCommands/index/loop",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level` sort before `loop` upstream but are absent here, so its index shifts by 2; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/loop",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level` sort before `loop` upstream but are absent here, so its line shifts by 2; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/mcp",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level` sort before `mcp` upstream but are absent here, so its index shifts by 2; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/mcp",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level` sort before `mcp` upstream but are absent here, so its line shifts by 2; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/model",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level` sort before `model` upstream but are absent here, so its index shifts by 2; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/model",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level` sort before `model` upstream but are absent here, so its line shifts by 2; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/paste-image",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level` sort before `paste-image` upstream but are absent here, so its index shifts by 2; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/paste-image",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level` sort before `paste-image` upstream but are absent here, so its line shifts by 2; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/plugins",
+        "OPEN: reference v2.24.5 added the `plugins` key (gated on experimental_harness at :180, vibe/cli/commands.py:176-181 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "helpCommands/line/plugins",
+        "OPEN: reference v2.24.5 added the `plugins` key (gated on experimental_harness at :180, vibe/cli/commands.py:176-181 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "helpCommands/aliases/plugins",
+        "OPEN: reference v2.24.5 added the `plugins` key (gated on experimental_harness at :180, vibe/cli/commands.py:176-181 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "helpCommands/index/proxy-setup",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins` sort before `proxy-setup` upstream but are absent here, so its index shifts by 3; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/proxy-setup",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins` sort before `proxy-setup` upstream but are absent here, so its line shifts by 3; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/reload",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins` sort before `reload` upstream but are absent here, so its index shifts by 3; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/reload",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins` sort before `reload` upstream but are absent here, so its line shifts by 3; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/reload-plugins",
+        "OPEN: reference v2.24.5 added the `reload-plugins` key (gated on experimental_harness at :186, vibe/cli/commands.py:182-187 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "helpCommands/line/reload-plugins",
+        "OPEN: reference v2.24.5 added the `reload-plugins` key (gated on experimental_harness at :186, vibe/cli/commands.py:182-187 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "helpCommands/aliases/reload-plugins",
+        "OPEN: reference v2.24.5 added the `reload-plugins` key (gated on experimental_harness at :186, vibe/cli/commands.py:182-187 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "helpCommands/index/remote-project",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins`, `reload-plugins` sort before `remote-project` upstream but are absent here, so its index shifts by 4; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/remote-project",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins`, `reload-plugins` sort before `remote-project` upstream but are absent here, so its line shifts by 4; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/rename",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins`, `reload-plugins` sort before `rename` upstream but are absent here, so its index shifts by 4; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/rename",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins`, `reload-plugins` sort before `rename` upstream but are absent here, so its line shifts by 4; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/resume",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins`, `reload-plugins` sort before `resume` upstream but are absent here, so its index shifts by 4; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/resume",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins`, `reload-plugins` sort before `resume` upstream but are absent here, so its line shifts by 4; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/retry",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins`, `reload-plugins` sort before `retry` upstream but are absent here, so its index shifts by 4; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/retry",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins`, `reload-plugins` sort before `retry` upstream but are absent here, so its line shifts by 4; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/rewind",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins`, `reload-plugins` sort before `rewind` upstream but are absent here, so its index shifts by 4; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/rewind",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins`, `reload-plugins` sort before `rewind` upstream but are absent here, so its line shifts by 4; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/skills",
+        "OPEN: reference v2.25.0 added the `skills` key (gated on registry_skills_enabled at :63, vibe/cli/commands.py:59-64 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "helpCommands/line/skills",
+        "OPEN: reference v2.25.0 added the `skills` key (gated on registry_skills_enabled at :63, vibe/cli/commands.py:59-64 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "helpCommands/aliases/skills",
+        "OPEN: reference v2.25.0 added the `skills` key (gated on registry_skills_enabled at :63, vibe/cli/commands.py:59-64 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "helpCommands/index/status",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins`, `reload-plugins`, `skills` sort before `status` upstream but are absent here, so its index shifts by 5; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/status",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins`, `reload-plugins`, `skills` sort before `status` upstream but are absent here, so its line shifts by 5; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/teleport",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins`, `reload-plugins`, `skills` sort before `teleport` upstream but are absent here, so its index shifts by 5; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/teleport",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins`, `reload-plugins`, `skills` sort before `teleport` upstream but are absent here, so its line shifts by 5; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/theme",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins`, `reload-plugins`, `skills` sort before `theme` upstream but are absent here, so its index shifts by 5; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/theme",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins`, `reload-plugins`, `skills` sort before `theme` upstream but are absent here, so its line shifts by 5; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/thinking",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins`, `reload-plugins`, `skills` sort before `thinking` upstream but are absent here, so its index shifts by 5; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/thinking",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins`, `reload-plugins`, `skills` sort before `thinking` upstream but are absent here, so its line shifts by 5; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/todo",
+        "OPEN: reference v2.25.5 added the `todo` key (gated on experimental_harness at :192, vibe/cli/commands.py:188-193 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "helpCommands/line/todo",
+        "OPEN: reference v2.25.5 added the `todo` key (gated on experimental_harness at :192, vibe/cli/commands.py:188-193 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "helpCommands/aliases/todo",
+        "OPEN: reference v2.25.5 added the `todo` key (gated on experimental_harness at :192, vibe/cli/commands.py:188-193 @4a960031); this port's table has no such key (crates/vibe-cli/src/tui/commands.rs:145-304)",
+    ),
+    (
+        "helpCommands/index/unleanstall",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins`, `reload-plugins`, `skills`, `todo` sort before `unleanstall` upstream but are absent here, so its index shifts by 6; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/unleanstall",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins`, `reload-plugins`, `skills`, `todo` sort before `unleanstall` upstream but are absent here, so its line shifts by 6; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/voice",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins`, `reload-plugins`, `skills`, `todo` sort before `voice` upstream but are absent here, so its index shifts by 6; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/voice",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins`, `reload-plugins`, `skills`, `todo` sort before `voice` upstream but are absent here, so its line shifts by 6; its alias list conforms",
+    ),
+    (
+        "helpCommands/index/whoami",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins`, `reload-plugins`, `skills`, `todo` sort before `whoami` upstream but are absent here, so its index shifts by 6; its alias list conforms",
+    ),
+    (
+        "helpCommands/line/whoami",
+        "OPEN: the command section sorts by key (vibe/cli/commands.py:325-334 @4a960031) and `branch`, `log-level`, `plugins`, `reload-plugins`, `skills`, `todo` sort before `whoami` upstream but are absent here, so its line shifts by 6; its alias list conforms",
+    ),
+    (
+        "helpProse/length/line-18",
+        "OPEN: reference line 18 is the line of `branch`, which this port lacks (vibe/cli/commands.py:214-222 @4a960031, v2.25.3); this port's line 18 is its `clear` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-18",
+        "OPEN: reference line 18 is the line of `branch`, which this port lacks (vibe/cli/commands.py:214-222 @4a960031, v2.25.3); this port's line 18 is its `clear` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-19",
+        "OPEN: reference line 19 is the `clear` line, whose description v2.24.1 rewrote (vibe/cli/commands.py:75-81 @4a960031; this port keeps the old one at crates/vibe-cli/src/tui/commands.rs:175); this port's line 19 is its `compact` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-19",
+        "OPEN: reference line 19 is the `clear` line, whose description v2.24.1 rewrote (vibe/cli/commands.py:75-81 @4a960031; this port keeps the old one at crates/vibe-cli/src/tui/commands.rs:175); this port's line 19 is its `compact` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-20",
+        "OPEN: reference line 20 is the `compact` line, which this port renders identically one or more lines earlier; this port's line 20 is its `config` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-20",
+        "OPEN: reference line 20 is the `compact` line, which this port renders identically one or more lines earlier; this port's line 20 is its `config` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-21",
+        "OPEN: reference line 21 is the `config` line, which this port renders identically one or more lines earlier; this port's line 21 is its `copy` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-21",
+        "OPEN: reference line 21 is the `config` line, which this port renders identically one or more lines earlier; this port's line 21 is its `copy` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-22",
+        "OPEN: reference line 22 is the `copy` line, which this port renders identically one or more lines earlier; this port's line 22 is its `data-retention` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-22",
+        "OPEN: reference line 22 is the `copy` line, which this port renders identically one or more lines earlier; this port's line 22 is its `data-retention` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-23",
+        "OPEN: reference line 23 is the `data-retention` line, which this port renders identically one or more lines earlier; this port's line 23 is its `debug` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-23",
+        "OPEN: reference line 23 is the `data-retention` line, which this port renders identically one or more lines earlier; this port's line 23 is its `debug` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-24",
+        "OPEN: reference line 24 is the `debug` line, which this port renders identically one or more lines earlier; this port's line 24 is its `exit` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-24",
+        "OPEN: reference line 24 is the `debug` line, which this port renders identically one or more lines earlier; this port's line 24 is its `exit` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-25",
+        "OPEN: reference line 25 is the `exit` line, which this port renders identically one or more lines earlier; this port's line 25 is its `help` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-25",
+        "OPEN: reference line 25 is the `exit` line, which this port renders identically one or more lines earlier; this port's line 25 is its `help` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-26",
+        "OPEN: reference line 26 is the `help` line, which this port renders identically one or more lines earlier; this port's line 26 is its `leanstall` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-26",
+        "OPEN: reference line 26 is the `help` line, which this port renders identically one or more lines earlier; this port's line 26 is its `leanstall` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-27",
+        "OPEN: reference line 27 is the `leanstall` line, which this port renders identically one or more lines earlier; this port's line 27 is its `log` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-27",
+        "OPEN: reference line 27 is the `leanstall` line, which this port renders identically one or more lines earlier; this port's line 27 is its `log` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-28",
+        "OPEN: reference line 28 is the `log` line, which this port renders identically one or more lines earlier; this port's line 28 is its `loop` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-28",
+        "OPEN: reference line 28 is the `log` line, which this port renders identically one or more lines earlier; this port's line 28 is its `loop` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-29",
+        "OPEN: reference line 29 is the line of `log-level`, which this port lacks (vibe/cli/commands.py:103-109 @4a960031, v2.24.2); this port's line 29 is its `mcp` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-29",
+        "OPEN: reference line 29 is the line of `log-level`, which this port lacks (vibe/cli/commands.py:103-109 @4a960031, v2.24.2); this port's line 29 is its `mcp` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-30",
+        "OPEN: reference line 30 is the `loop` line, which this port renders identically one or more lines earlier; this port's line 30 is its `model` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-30",
+        "OPEN: reference line 30 is the `loop` line, which this port renders identically one or more lines earlier; this port's line 30 is its `model` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-31",
+        "OPEN: reference line 31 is the `mcp` line, which this port renders identically one or more lines earlier; this port's line 31 is its `paste-image` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-31",
+        "OPEN: reference line 31 is the `mcp` line, which this port renders identically one or more lines earlier; this port's line 31 is its `paste-image` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-32",
+        "OPEN: reference line 32 is the `model` line, which this port renders identically one or more lines earlier; this port's line 32 is its `proxy-setup` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-32",
+        "OPEN: reference line 32 is the `model` line, which this port renders identically one or more lines earlier; this port's line 32 is its `proxy-setup` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-33",
+        "OPEN: reference line 33 is the `paste-image` line, which this port renders identically one or more lines earlier; this port's line 33 is its `reload` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-33",
+        "OPEN: reference line 33 is the `paste-image` line, which this port renders identically one or more lines earlier; this port's line 33 is its `reload` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-34",
+        "OPEN: reference line 34 is the line of `plugins`, which this port lacks (vibe/cli/commands.py:176-181 @4a960031, v2.24.5); this port's line 34 is its `remote-project` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-34",
+        "OPEN: reference line 34 is the line of `plugins`, which this port lacks (vibe/cli/commands.py:176-181 @4a960031, v2.24.5); this port's line 34 is its `remote-project` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-35",
+        "OPEN: reference line 35 is the `proxy-setup` line, which this port renders identically one or more lines earlier; this port's line 35 is its `rename` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-35",
+        "OPEN: reference line 35 is the `proxy-setup` line, which this port renders identically one or more lines earlier; this port's line 35 is its `rename` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-36",
+        "OPEN: reference line 36 is the `reload` line, which this port renders identically one or more lines earlier; this port's line 36 is its `resume` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-36",
+        "OPEN: reference line 36 is the `reload` line, which this port renders identically one or more lines earlier; this port's line 36 is its `resume` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-37",
+        "OPEN: reference line 37 is the line of `reload-plugins`, which this port lacks (vibe/cli/commands.py:182-187 @4a960031, v2.24.5); this port's line 37 is its `retry` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-37",
+        "OPEN: reference line 37 is the line of `reload-plugins`, which this port lacks (vibe/cli/commands.py:182-187 @4a960031, v2.24.5); this port's line 37 is its `retry` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-38",
+        "OPEN: reference line 38 is the `remote-project` line, which this port renders identically one or more lines earlier; this port's line 38 is its `rewind` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-38",
+        "OPEN: reference line 38 is the `remote-project` line, which this port renders identically one or more lines earlier; this port's line 38 is its `rewind` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-39",
+        "OPEN: reference line 39 is the `rename` line, which this port renders identically one or more lines earlier; this port's line 39 is its `status` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-39",
+        "OPEN: reference line 39 is the `rename` line, which this port renders identically one or more lines earlier; this port's line 39 is its `status` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-40",
+        "OPEN: reference line 40 is the `resume` line, which this port renders identically one or more lines earlier; this port's line 40 is its `teleport` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-40",
+        "OPEN: reference line 40 is the `resume` line, which this port renders identically one or more lines earlier; this port's line 40 is its `teleport` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-41",
+        "OPEN: reference line 41 is the `retry` line, which this port renders identically one or more lines earlier; this port's line 41 is its `theme` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-41",
+        "OPEN: reference line 41 is the `retry` line, which this port renders identically one or more lines earlier; this port's line 41 is its `theme` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-42",
+        "OPEN: reference line 42 is the `rewind` line, which this port renders identically one or more lines earlier; this port's line 42 is its `thinking` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-42",
+        "OPEN: reference line 42 is the `rewind` line, which this port renders identically one or more lines earlier; this port's line 42 is its `thinking` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-43",
+        "OPEN: reference line 43 is the line of `skills`, which this port lacks (vibe/cli/commands.py:59-64 @4a960031, v2.25.0); this port's line 43 is its `unleanstall` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-43",
+        "OPEN: reference line 43 is the line of `skills`, which this port lacks (vibe/cli/commands.py:59-64 @4a960031, v2.25.0); this port's line 43 is its `unleanstall` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-44",
+        "OPEN: reference line 44 is the `status` line, which this port renders identically one or more lines earlier; this port's line 44 is its `voice` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-44",
+        "OPEN: reference line 44 is the `status` line, which this port renders identically one or more lines earlier; this port's line 44 is its `voice` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-45",
+        "OPEN: reference line 45 is the `teleport` line, which this port renders identically one or more lines earlier; this port's line 45 is its `whoami` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-45",
+        "OPEN: reference line 45 is the `teleport` line, which this port renders identically one or more lines earlier; this port's line 45 is its `whoami` line, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-46",
+        "OPEN: reference line 46 is the `theme` line, which this port renders identically one or more lines earlier; this port's document ends before line 46, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-46",
+        "OPEN: reference line 46 is the `theme` line, which this port renders identically one or more lines earlier; this port's document ends before line 46, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-47",
+        "OPEN: reference line 47 is the `thinking` line, which this port renders identically one or more lines earlier; this port's document ends before line 47, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-47",
+        "OPEN: reference line 47 is the `thinking` line, which this port renders identically one or more lines earlier; this port's document ends before line 47, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-48",
+        "OPEN: reference line 48 is the line of `todo`, which this port lacks (vibe/cli/commands.py:188-193 @4a960031, v2.25.5); this port's document ends before line 48, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-48",
+        "OPEN: reference line 48 is the line of `todo`, which this port lacks (vibe/cli/commands.py:188-193 @4a960031, v2.25.5); this port's document ends before line 48, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-49",
+        "OPEN: reference line 49 is the `unleanstall` line, which this port renders identically one or more lines earlier; this port's document ends before line 49, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-49",
+        "OPEN: reference line 49 is the `unleanstall` line, which this port renders identically one or more lines earlier; this port's document ends before line 49, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-50",
+        "OPEN: reference line 50 is the `voice` line, which this port renders identically one or more lines earlier; this port's document ends before line 50, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-50",
+        "OPEN: reference line 50 is the `voice` line, which this port renders identically one or more lines earlier; this port's document ends before line 50, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/length/line-51",
+        "OPEN: reference line 51 is the `whoami` line, which this port renders identically one or more lines earlier; this port's document ends before line 51, displaced by the keys it lacks",
+    ),
+    (
+        "helpProse/digest/line-51",
+        "OPEN: reference line 51 is the `whoami` line, which this port renders identically one or more lines earlier; this port's document ends before line 51, displaced by the keys it lacks",
     ),
 ];
 
@@ -366,8 +1102,10 @@ fn settle(report: &Report, family: &str) -> usize {
 /// contract rather than prose: the aliases come from the registry and the
 /// descriptions are already byte-identical to the reference's, which the four
 /// `commands-*` popup traces assert and which no story of this PRD may rewrite.
-/// Measured against the committed corpus, all twenty-eight lines rebuilt from
-/// `COMMANDS` hash to a digest `helpProse` records, so routing them through this
+/// Measured against the corpus captured at 2.25.7, twenty-seven of the
+/// twenty-eight lines rebuilt from `COMMANDS` hash to a digest `helpProse`
+/// records; `clear` is the exception because upstream rewrote its description,
+/// which the `OPEN` ledger records. Routing them through this
 /// function would make US-231 unsatisfiable: it would forbid the very lines its
 /// own criteria require. `helpCommands` is what compares them, on their order
 /// and their alias list, which is the part a port can get wrong.
@@ -381,6 +1119,15 @@ fn port_help_lines() -> Vec<String> {
 /// The definitions are read out of the `availability` family rather than
 /// restated here, so the parse family resolves under exactly the contexts the
 /// capture recorded and a new context is added in one place.
+///
+/// The reference's `CommandContext` carries `registry_skills_enabled` and
+/// `experimental_harness` (`vibe/cli/commands.py:10-13` at the pin), and this
+/// port's carries `vibe_code_enabled`, a gate the reference dropped. Neither
+/// side can be handed the other's flags, so the port's surplus gate is opened
+/// exactly where the context opens every reference gate (`full` and
+/// `excluded`) and closed everywhere else. That keeps the gate this port still
+/// applies to `/teleport` and `/remote-project` observable in the contexts that
+/// close a gate, instead of hiding it behind the port's default of `true`.
 fn port_contexts(corpus: &Map<String, Value>) -> BTreeMap<String, CommandContext> {
     cases(corpus, "availability")
         .iter()
@@ -397,17 +1144,20 @@ fn port_contexts(corpus: &Map<String, Value>) -> BTreeMap<String, CommandContext
                         .to_owned()
                 })
                 .collect::<Vec<_>>();
-            let context = CommandContext::new(
-                case.get("vibeCodeEnabled")
+            let flag = |name: &str| {
+                case.get(name)
                     .and_then(Value::as_bool)
-                    .expect("every availability case declares vibeCodeEnabled"),
-            )
-            .with_clipboard_image_supported(
-                case.get("clipboardSupported")
-                    .and_then(Value::as_bool)
-                    .expect("every availability case declares clipboardSupported"),
-            )
-            .with_excluded(excluded.iter().map(String::as_str));
+                    .unwrap_or_else(|| panic!("every availability case declares {name}"))
+            };
+            let every_reference_gate_open =
+                flag("registrySkillsEnabled") && flag("experimentalHarness");
+            let context = CommandContext::new(every_reference_gate_open)
+                .with_clipboard_image_supported(
+                    case.get("clipboardSupported")
+                        .and_then(Value::as_bool)
+                        .expect("every availability case declares clipboardSupported"),
+                )
+                .with_excluded(excluded.iter().map(String::as_str));
             (case_id(case).to_owned(), context)
         })
         .collect()

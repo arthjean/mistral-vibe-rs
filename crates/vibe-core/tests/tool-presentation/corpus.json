@@ -136,6 +136,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": {
             "described": "sha256:758c3a5f64c3ab8e4f033d8d47213cb8",
             "length": 23
@@ -179,6 +180,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "the capture authored this failure",
           "success": false,
           "suffix": "",
@@ -219,6 +221,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "Skipped",
           "success": false,
           "suffix": "",
@@ -332,6 +335,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "echo alpha",
           "success": true,
           "suffix": "",
@@ -356,6 +360,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "the capture authored this failure",
           "success": false,
           "suffix": "",
@@ -380,6 +385,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "Skipped",
           "success": false,
           "suffix": "",
@@ -408,14 +414,8 @@
             "described": "sha256:66cf59e53ad7f6469c83480d19897616",
             "length": 35
           },
-          "message": {
-            "described": "sha256:9b331f95797e6a85455f22fa7f7133a5",
-            "length": 9
-          },
-          "settledMessage": {
-            "described": "sha256:9b331f95797e6a85455f22fa7f7133a5",
-            "length": 9
-          },
+          "message": "/workspace/alpha.txt",
+          "settledMessage": "/workspace/alpha.txt",
           "settledVerb": "Edited",
           "statusText": {
             "described": "sha256:d868fdd01755f295f90b7740277dbc99",
@@ -423,8 +423,8 @@
           },
           "suffix": "",
           "summary": {
-            "described": "sha256:21f7f10553d70ffbf84e54e1e4b0877c",
-            "length": 17
+            "described": "sha256:c5726909e5852f1e052bd9b1a63c0b20",
+            "length": 28
           },
           "verb": "Editing"
         },
@@ -506,10 +506,8 @@
       "phase": "result",
       "presentation": {
         "display": {
-          "message": {
-            "described": "sha256:9b331f95797e6a85455f22fa7f7133a5",
-            "length": 9
-          },
+          "approvalNote": null,
+          "message": "/workspace/alpha.txt",
           "success": true,
           "suffix": "",
           "verb": "Edited",
@@ -546,6 +544,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "the capture authored this failure",
           "success": false,
           "suffix": "",
@@ -572,6 +571,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "Skipped",
           "success": false,
           "suffix": "",
@@ -683,6 +683,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "the plan was accepted",
           "success": true,
           "suffix": "",
@@ -704,6 +705,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "the capture authored this failure",
           "success": false,
           "suffix": "",
@@ -725,6 +727,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "Skipped",
           "success": false,
           "suffix": "",
@@ -847,6 +850,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": {
             "described": "sha256:0af6e5eac1681dd31a0bb1aef8378dcf",
             "length": 15
@@ -885,6 +889,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "the capture authored this failure",
           "success": false,
           "suffix": "",
@@ -910,6 +915,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "Skipped",
           "success": false,
           "suffix": "",
@@ -1035,9 +1041,10 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": {
-            "described": "sha256:1704d0b87311a48ba880599d3c26e676",
-            "length": 21
+            "described": "sha256:0a437ba3980bb9b79b6eb54c19717202",
+            "length": 32
           },
           "success": true,
           "suffix": {
@@ -1066,6 +1073,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "the capture authored this failure",
           "success": false,
           "suffix": "",
@@ -1091,6 +1099,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "Skipped",
           "success": false,
           "suffix": "",
@@ -1207,6 +1216,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": {
             "described": "sha256:4c53154976a88ae7367b2a303c5680ab",
             "length": 15
@@ -1233,6 +1243,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "the capture authored this failure",
           "success": false,
           "suffix": "",
@@ -1256,6 +1267,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "Skipped",
           "success": false,
           "suffix": "",
@@ -1371,6 +1383,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": {
             "described": "sha256:f04bc9d4993ba324a0c9ee8c141c78bf",
             "length": 10
@@ -1398,6 +1411,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "the capture authored this failure",
           "success": false,
           "suffix": "",
@@ -1422,6 +1436,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "Skipped",
           "success": false,
           "suffix": "",
@@ -1561,6 +1576,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": {
             "described": "sha256:551e5c6d3f08db920998f88d0e8f6ef5",
             "length": 7
@@ -1595,6 +1611,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "the capture authored this failure",
           "success": false,
           "suffix": "",
@@ -1626,6 +1643,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "Skipped",
           "success": false,
           "suffix": "",
@@ -1736,6 +1754,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": {
             "described": "sha256:6a1e22595ce7397b185c2338fd7092f6",
             "length": 49
@@ -1763,6 +1782,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "the capture authored this failure",
           "success": false,
           "suffix": "",
@@ -1787,6 +1807,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "Skipped",
           "success": false,
           "suffix": "",
@@ -1899,6 +1920,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": {
             "described": "sha256:b140619018bf422527a7b6aba1cd31c6",
             "length": 31
@@ -1925,6 +1947,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "the capture authored this failure",
           "success": false,
           "suffix": "",
@@ -1948,6 +1971,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "Skipped",
           "success": false,
           "suffix": "",
@@ -2060,10 +2084,8 @@
       "phase": "result",
       "presentation": {
         "display": {
-          "message": {
-            "described": "sha256:9b331f95797e6a85455f22fa7f7133a5",
-            "length": 9
-          },
+          "approvalNote": null,
+          "message": "/workspace/alpha.txt",
           "success": true,
           "suffix": "",
           "verb": "Created",
@@ -2087,6 +2109,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "the capture authored this failure",
           "success": false,
           "suffix": "",
@@ -2111,6 +2134,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "Skipped",
           "success": false,
           "suffix": "",
@@ -2222,6 +2246,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "create_issue",
           "success": true,
           "suffix": "",
@@ -2246,6 +2271,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "the capture authored this failure",
           "success": false,
           "suffix": "",
@@ -2270,6 +2296,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "Skipped",
           "success": false,
           "suffix": "",
@@ -2381,6 +2408,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": {
             "described": "sha256:f168610d5ed4053c4987cf85d70f7427",
             "length": 22
@@ -2408,6 +2436,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "the capture authored this failure",
           "success": false,
           "suffix": "",
@@ -2432,6 +2461,7 @@
       "phase": "result",
       "presentation": {
         "display": {
+          "approvalNote": null,
           "message": "Skipped",
           "success": false,
           "suffix": "",
@@ -2448,6 +2478,6 @@
   ],
   "note": "Tool presentation corpus: what the pinned reference's ToolUIDataAdapter publishes for each tool and case, from get_call_presentation and get_result_presentation. A presentation string is committed as it stands only when it is a value this capture supplied, a path or an identifier-shaped token; everything else is committed as a {described, length} marker carrying a SHA-256 digest, so no reference prose ships while any change still fails the replay. Regenerate with scripts/parity/tool_presentation.py --corpus when the pinned reference moves.",
   "platform": "linux",
-  "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+  "referenceCommit": "4a96003186b166d55b9f06895c45bb136eef61cd",
   "schemaVersion": 1
 }

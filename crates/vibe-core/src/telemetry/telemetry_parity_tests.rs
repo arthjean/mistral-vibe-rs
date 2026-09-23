@@ -126,6 +126,45 @@ const FAMILIES: [&str; 15] = [
 /// over.
 const METADATA: [&str; 4] = ["schemaVersion", "reference", "note", "documents"];
 
+/// Why every sent envelope diverges at 4a960031: the base metadata an event
+/// merges gained the machine architecture.
+const REPIN_ENVELOPE_ARCH: &str = "OPEN: v2.25.0 stamps `arch`, `platform.machine().lower()`, \
+     into the base metadata every datalake event merges (vibe/core/telemetry/build_metadata.py:41 \
+     at 4a960031); this port's `TelemetryBaseMetadata` has no architecture field \
+     (crates/vibe-core/src/telemetry.rs:332-359), so the sent properties lack the key";
+/// Why a base census without experiments diverges at 4a960031.
+const REPIN_BASE_ARCH: &str = "OPEN: v2.25.0 adds `arch`, `platform.machine().lower()`, to \
+     `build_base_metadata` (vibe/core/telemetry/build_metadata.py:41 at 4a960031); this port's \
+     `TelemetryBaseMetadata` has no architecture field (crates/vibe-core/src/telemetry.rs:332-359)";
+/// Why a base census with experiments diverges at 4a960031.
+const REPIN_BASE_ARCH_ASSIGNMENTS: &str = "OPEN: v2.25.0 adds `arch` \
+     (vibe/core/telemetry/build_metadata.py:41 at 4a960031), and v2.24.3 made the builder take \
+     `experiment_assignments` and echo them beside the `experiments` map it now derives from them \
+     (build_metadata.py:22-53, vibe/core/telemetry/types.py:49-60,78 at 4a960031); this port's \
+     `TelemetryBaseMetadata` carries the map only and no architecture \
+     (crates/vibe-core/src/telemetry.rs:332-359)";
+/// Why every request census diverges at 4a960031.
+const REPIN_REQUEST_ARCH_HOST_KIND: &str = "OPEN: v2.25.0 adds `arch` \
+     (vibe/core/telemetry/build_metadata.py:70 at 4a960031) and `host_kind`, always `local` \
+     (vibe/core/telemetry/types.py:100 at 4a960031), to the request metadata; this port's \
+     `TelemetryRequestMetadata` carries neither (crates/vibe-core/src/telemetry.rs:332-359,391-397)";
+/// Why `vibe.session_branched` has no counterpart at 4a960031.
+const REPIN_SESSION_BRANCHED: &str = "OPEN: v2.25.3 added the branch command, which raises \
+     `vibe.session_branched` with `source_session_id` and `new_session_id` \
+     (vibe/cli/textual_ui/app.py:4381-4384 at 4a960031); this port has no branch command and \
+     `TelemetryEvent::ALL` does not declare the name \
+     (crates/vibe-core/src/telemetry/vocabulary.rs:58-84)";
+/// Why `vibe.new_session` diverges at 4a960031.
+const REPIN_NEW_SESSION_HOST_KIND: &str = "OPEN: v2.25.0 adds `host_kind`, always `local`, to \
+     `send_new_session` (vibe/core/telemetry/send.py:447 at 4a960031); this port's `NewSession` \
+     projection sends no such key (crates/vibe-core/src/telemetry/records.rs:864-888)";
+/// Why `vibe.tool_call_finished` diverges at 4a960031.
+const REPIN_TOOL_CALL_APPROVAL_SOURCE: &str = "OPEN: v2.25.5 adds `approval_source`, the \
+     decision's `ApprovalSource` value or null (vibe/core/telemetry/send.py:363-367,379 and \
+     vibe/core/agent_loop/_loop.py:248-265 at 4a960031; the capture authors a user approval, so \
+     the type is string); this port's `ToolDecision` carries a verdict and an approval type only \
+     (crates/vibe-core/src/telemetry/records.rs:330-333,922-936)";
+
 /// Cases where this build answers something other than the reference, each with
 /// the reason and the story that closes it.
 ///
@@ -186,6 +225,367 @@ const DIVERGENCES: &[(&str, &str)] = &[
     (
         "logPagination/cursor/file-shrank-between-polls",
         "ACCEPTED: as above",
+    ),
+    // -- Re-pin to v2.25.7 (4a960031): reference drift this port has not followed
+    (
+        "constants/agentEntrypoints/declared",
+        "OPEN: v2.24.4 added `desktop` to `AgentEntrypoint` (vibe/utils/__init__.py:8 at \
+         4a960031); `vibe_protocol::ClientEntrypoint` still declares only unknown, cli, acp and \
+         programmatic (crates/vibe-protocol/src/handshake.rs:8-18)",
+    ),
+    (
+        "constants/baseMetadataFields/declared",
+        "OPEN: `TelemetryBaseMetadata` grew from 12 to 16 fields: `experiment_assignments` \
+         (v2.24.3), `experiment_attributes` (v2.24.4), `arch` and `harness_backend` (v2.25.0) \
+         (vibe/core/telemetry/types.py:63-94 at 4a960031); this port's base metadata still \
+         publishes the 12 fields of v2.24.0",
+    ),
+    (
+        "constants/requestMetadataFields/declared",
+        "OPEN: v2.25.0 added `host_kind`, always `local`, to `TelemetryRequestMetadata` \
+         (vibe/core/telemetry/types.py:97-101 at 4a960031); this port's request metadata still \
+         publishes call_type, call_source and message_id only",
+    ),
+    (
+        "envelope/propertyKeys/mistral-active-correlation-no",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/propertyTypes/mistral-active-correlation-no",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/properties/mistral-active-correlation-no",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/propertyKeys/mistral-active-correlation-yes",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/propertyTypes/mistral-active-correlation-yes",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/properties/mistral-active-correlation-yes",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/propertyKeys/third-party-active-mistral-configured-correlation-no",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/propertyTypes/third-party-active-mistral-configured-correlation-no",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/properties/third-party-active-mistral-configured-correlation-no",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/propertyKeys/third-party-active-mistral-configured-correlation-yes",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/propertyTypes/third-party-active-mistral-configured-correlation-yes",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/properties/third-party-active-mistral-configured-correlation-yes",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/propertyKeys/mistral-behind-a-proxy-correlation-no",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/propertyTypes/mistral-behind-a-proxy-correlation-no",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/properties/mistral-behind-a-proxy-correlation-no",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/propertyKeys/mistral-behind-a-proxy-correlation-yes",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/propertyTypes/mistral-behind-a-proxy-correlation-yes",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/properties/mistral-behind-a-proxy-correlation-yes",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/propertyKeys/mistral-base-without-a-version-segment-correlation-no",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/propertyTypes/mistral-base-without-a-version-segment-correlation-no",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/properties/mistral-base-without-a-version-segment-correlation-no",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/propertyKeys/mistral-base-without-a-version-segment-correlation-yes",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/propertyTypes/mistral-base-without-a-version-segment-correlation-yes",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/properties/mistral-base-without-a-version-segment-correlation-yes",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/propertyKeys/caller-properties-win-over-metadata",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/propertyTypes/caller-properties-win-over-metadata",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/properties/caller-properties-win-over-metadata",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/propertyKeys/empty-correlation-id",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/propertyTypes/empty-correlation-id",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "envelope/properties/empty-correlation-id",
+        REPIN_ENVELOPE_ARCH,
+    ),
+    (
+        "baseMetadata/baseKeys/full-launch-context-main_call",
+        REPIN_BASE_ARCH_ASSIGNMENTS,
+    ),
+    (
+        "baseMetadata/base/full-launch-context-main_call",
+        REPIN_BASE_ARCH_ASSIGNMENTS,
+    ),
+    (
+        "baseMetadata/requestKeys/full-launch-context-main_call",
+        REPIN_REQUEST_ARCH_HOST_KIND,
+    ),
+    (
+        "baseMetadata/request/full-launch-context-main_call",
+        REPIN_REQUEST_ARCH_HOST_KIND,
+    ),
+    (
+        "baseMetadata/baseKeys/full-launch-context-secondary_call",
+        REPIN_BASE_ARCH_ASSIGNMENTS,
+    ),
+    (
+        "baseMetadata/base/full-launch-context-secondary_call",
+        REPIN_BASE_ARCH_ASSIGNMENTS,
+    ),
+    (
+        "baseMetadata/requestKeys/full-launch-context-secondary_call",
+        REPIN_REQUEST_ARCH_HOST_KIND,
+    ),
+    (
+        "baseMetadata/request/full-launch-context-secondary_call",
+        REPIN_REQUEST_ARCH_HOST_KIND,
+    ),
+    (
+        "baseMetadata/baseKeys/no-launch-context-main_call",
+        REPIN_BASE_ARCH,
+    ),
+    (
+        "baseMetadata/base/no-launch-context-main_call",
+        REPIN_BASE_ARCH,
+    ),
+    (
+        "baseMetadata/requestKeys/no-launch-context-main_call",
+        REPIN_REQUEST_ARCH_HOST_KIND,
+    ),
+    (
+        "baseMetadata/request/no-launch-context-main_call",
+        REPIN_REQUEST_ARCH_HOST_KIND,
+    ),
+    (
+        "baseMetadata/baseKeys/no-launch-context-secondary_call",
+        REPIN_BASE_ARCH,
+    ),
+    (
+        "baseMetadata/base/no-launch-context-secondary_call",
+        REPIN_BASE_ARCH,
+    ),
+    (
+        "baseMetadata/requestKeys/no-launch-context-secondary_call",
+        REPIN_REQUEST_ARCH_HOST_KIND,
+    ),
+    (
+        "baseMetadata/request/no-launch-context-secondary_call",
+        REPIN_REQUEST_ARCH_HOST_KIND,
+    ),
+    (
+        "baseMetadata/baseKeys/no-session-main_call",
+        REPIN_BASE_ARCH,
+    ),
+    ("baseMetadata/base/no-session-main_call", REPIN_BASE_ARCH),
+    (
+        "baseMetadata/requestKeys/no-session-main_call",
+        REPIN_REQUEST_ARCH_HOST_KIND,
+    ),
+    (
+        "baseMetadata/request/no-session-main_call",
+        REPIN_REQUEST_ARCH_HOST_KIND,
+    ),
+    (
+        "baseMetadata/baseKeys/no-session-secondary_call",
+        REPIN_BASE_ARCH,
+    ),
+    (
+        "baseMetadata/base/no-session-secondary_call",
+        REPIN_BASE_ARCH,
+    ),
+    (
+        "baseMetadata/requestKeys/no-session-secondary_call",
+        REPIN_REQUEST_ARCH_HOST_KIND,
+    ),
+    (
+        "baseMetadata/request/no-session-secondary_call",
+        REPIN_REQUEST_ARCH_HOST_KIND,
+    ),
+    (
+        "baseMetadata/baseKeys/empty-experiments-main_call",
+        REPIN_BASE_ARCH,
+    ),
+    (
+        "baseMetadata/base/empty-experiments-main_call",
+        REPIN_BASE_ARCH,
+    ),
+    (
+        "baseMetadata/requestKeys/empty-experiments-main_call",
+        REPIN_REQUEST_ARCH_HOST_KIND,
+    ),
+    (
+        "baseMetadata/request/empty-experiments-main_call",
+        REPIN_REQUEST_ARCH_HOST_KIND,
+    ),
+    (
+        "baseMetadata/baseKeys/empty-experiments-secondary_call",
+        REPIN_BASE_ARCH,
+    ),
+    (
+        "baseMetadata/base/empty-experiments-secondary_call",
+        REPIN_BASE_ARCH,
+    ),
+    (
+        "baseMetadata/requestKeys/empty-experiments-secondary_call",
+        REPIN_REQUEST_ARCH_HOST_KIND,
+    ),
+    (
+        "baseMetadata/request/empty-experiments-secondary_call",
+        REPIN_REQUEST_ARCH_HOST_KIND,
+    ),
+    (
+        "baseMetadata/baseKeys/no-terminal-emulator-main_call",
+        REPIN_BASE_ARCH,
+    ),
+    (
+        "baseMetadata/base/no-terminal-emulator-main_call",
+        REPIN_BASE_ARCH,
+    ),
+    (
+        "baseMetadata/requestKeys/no-terminal-emulator-main_call",
+        REPIN_REQUEST_ARCH_HOST_KIND,
+    ),
+    (
+        "baseMetadata/request/no-terminal-emulator-main_call",
+        REPIN_REQUEST_ARCH_HOST_KIND,
+    ),
+    (
+        "baseMetadata/baseKeys/no-terminal-emulator-secondary_call",
+        REPIN_BASE_ARCH,
+    ),
+    (
+        "baseMetadata/base/no-terminal-emulator-secondary_call",
+        REPIN_BASE_ARCH,
+    ),
+    (
+        "baseMetadata/requestKeys/no-terminal-emulator-secondary_call",
+        REPIN_REQUEST_ARCH_HOST_KIND,
+    ),
+    (
+        "baseMetadata/request/no-terminal-emulator-secondary_call",
+        REPIN_REQUEST_ARCH_HOST_KIND,
+    ),
+    (
+        "baseMetadata/baseKeys/no-user-plan-main_call",
+        REPIN_BASE_ARCH_ASSIGNMENTS,
+    ),
+    (
+        "baseMetadata/base/no-user-plan-main_call",
+        REPIN_BASE_ARCH_ASSIGNMENTS,
+    ),
+    (
+        "baseMetadata/requestKeys/no-user-plan-main_call",
+        REPIN_REQUEST_ARCH_HOST_KIND,
+    ),
+    (
+        "baseMetadata/request/no-user-plan-main_call",
+        REPIN_REQUEST_ARCH_HOST_KIND,
+    ),
+    (
+        "baseMetadata/baseKeys/no-user-plan-secondary_call",
+        REPIN_BASE_ARCH_ASSIGNMENTS,
+    ),
+    (
+        "baseMetadata/base/no-user-plan-secondary_call",
+        REPIN_BASE_ARCH_ASSIGNMENTS,
+    ),
+    (
+        "baseMetadata/requestKeys/no-user-plan-secondary_call",
+        REPIN_REQUEST_ARCH_HOST_KIND,
+    ),
+    (
+        "baseMetadata/request/no-user-plan-secondary_call",
+        REPIN_REQUEST_ARCH_HOST_KIND,
+    ),
+    (
+        "eventVocabulary/published/vibe.session_branched",
+        REPIN_SESSION_BRANCHED,
+    ),
+    (
+        "eventPayloads/propertyKeys/vibe.session_branched",
+        REPIN_SESSION_BRANCHED,
+    ),
+    (
+        "eventPayloads/propertyKeys/vibe.new_session",
+        REPIN_NEW_SESSION_HOST_KIND,
+    ),
+    (
+        "eventPayloads/propertyTypes/vibe.new_session",
+        REPIN_NEW_SESSION_HOST_KIND,
+    ),
+    (
+        "eventPayloads/propertyKeys/vibe.tool_call_finished",
+        REPIN_TOOL_CALL_APPROVAL_SOURCE,
+    ),
+    (
+        "eventPayloads/propertyTypes/vibe.tool_call_finished",
+        REPIN_TOOL_CALL_APPROVAL_SOURCE,
+    ),
+    (
+        "eventPayloads/propertyKeys/vibe.startup",
+        "OPEN: `vibe.startup` grew from three durations to ten keys: v2.24.1 added \
+         `has_initial_prompt`, `teleport_on_start`, `show_resume_picker`, `is_resuming_session`, \
+         `prompt_for_workspace_trust` and `is_cold_start`, and v2.25.1 `harness_selection_source` \
+         (vibe/cli/textual_ui/app.py:1708-1729 at 4a960031); this port's `Startup` record sends the \
+         three durations only (crates/vibe-core/src/telemetry/records.rs:289-293,894-907)",
     ),
 ];
 
@@ -880,8 +1280,9 @@ impl Sent {
     }
 }
 
-/// The corpus masks three host-dependent values, so a comparison substitutes
-/// what this host answers before comparing.
+/// The corpus masks four host-dependent values, so a comparison substitutes
+/// what this host answers before comparing. This build publishes no machine
+/// architecture, so `{arch}` stands for the host's target architecture.
 fn unmask(value: &Value) -> Value {
     let Some(text) = value.as_str() else {
         return value.clone();
@@ -889,6 +1290,7 @@ fn unmask(value: &Value) -> Value {
     match text {
         "{platformId}" => Value::String(platform_id()),
         "{platformVersion}" => platform_version().map_or(Value::Null, Value::String),
+        "{arch}" => Value::String(std::env::consts::ARCH.to_owned()),
         _ => Value::String(text.replace("{version}", env!("CARGO_PKG_VERSION"))),
     }
 }

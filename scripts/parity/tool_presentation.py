@@ -5,8 +5,9 @@ The tool-surface oracle compares declarations and the tool-execution oracle
 compares results. Neither one looks at the header a client draws while a call
 runs or after it settles, which is the contract `vibe/core/tools/ui.py`
 publishes through ``ToolUIDataAdapter``: an effect kind, eight call-display
-fields and five result-display fields, plus the projected output a widget
-renders.
+fields and six result-display fields (``approval_note`` joined the other five
+in v2.25.4, `vibe/utils/tool_presentation.py:53`), plus the projected output a
+widget renders.
 
 This oracle builds one adapter per published tool and drives both presentation
 entry points over six cases: a call with valid arguments, a call whose arguments
@@ -36,6 +37,13 @@ Usage::
 
 ``VIBE_REFERENCE`` sets the checkout for machines that do not hold it at the
 default path; ``--reference`` wins over it.
+
+Run it from this repository's root, as the Rust recapture probe does. Since
+v2.24.2 the edit, read_file and write_file displays render a path through
+``display_file_path`` (`vibe/core/tools/utils.py:116`), which answers relative
+to the process cwd when the path sits under it; the authored paths live under
+``/workspace``, so only a cwd of ``/`` or ``/workspace`` would change the
+capture.
 
 The wrapper re-executes itself with the reference interpreter when the current
 one cannot import ``vibe``.

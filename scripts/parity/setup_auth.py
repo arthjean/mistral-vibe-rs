@@ -1624,7 +1624,8 @@ def capture_constants() -> dict[str, Any]:
         _generate_code_challenge,
         _generate_code_verifier,
     )
-    from vibe.setup.auth.http_browser_sign_in_gateway import HTTP_GONE, _DEFAULT_PORTS
+    from vibe.setup.auth.browser_sign_in_gateway import _DEFAULT_PORTS
+    from vibe.setup.auth.http_browser_sign_in_gateway import HTTP_GONE
     from vibe.utils.keyring import _KEYRING_SERVICE, _LEGACY_KEYRING_SERVICES
 
     generated = _generate_code_verifier()

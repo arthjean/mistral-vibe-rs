@@ -1,6 +1,6 @@
 {
   "oracle": {
-    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd",
     "deterministicRuns": 10,
     "engine": "python-textual-capture"
   },
@@ -15,16 +15,12 @@
         "error": "✕",
         "muted": "□",
         "success": "✓"
-      },
-      "nonGroupedKinds": [
-        "file_edit",
-        "file_write"
-      ]
+      }
     },
     "script": "semantic-transcript-oracle.py"
   },
   "reference": {
-    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd",
     "sourceFiles": [
       "vibe/cli/textual_ui/handlers/event_handler.py",
       "vibe/cli/textual_ui/widgets/tools.py",
@@ -43,7 +39,20 @@
   "schemaVersion": 1,
   "traces": [
     {
-      "divergences": [],
+      "divergences": [
+        {
+          "event": 1,
+          "reason": "Axis 14. Since v2.24.2 the reference names a read file by its cwd-relative path, not its basename: ReadFile.get_result_display builds the message from display_file_path (vibe/core/tools/builtins/read_file.py:258, vibe/core/tools/utils.py:116-133 at 4a96003186b166d55b9f06895c45bb136eef61cd), so this relative path `crates/vibe-cli/src/lib.rs` is shown whole. The port still shows the basename `lib.rs` through file_name (crates/vibe-core/src/events/detail.rs:1149, :1464). Indicator, suffix, collapse, grouping and body match."
+        },
+        {
+          "event": 2,
+          "reason": "Axis 14. Two fields differ. Message: since v2.24.2 the reference names a written file by display_file_path (vibe/core/tools/builtins/write_file.py:88, vibe/core/tools/utils.py:116-133 at 4a96003186b166d55b9f06895c45bb136eef61cd), giving `docs/readme.md`, while the port shows the basename `readme.md` (crates/vibe-core/src/events/detail.rs:1156-1160, :1464). Grouping: since v2.25.1 the reference no longer keeps file_write and file_edit out of the tool group; only a manual `!` shell entry (tool name `shell`) stands alone (is_manual_shell_entry and entry_keeps_tool_group in vibe/cli/textual_ui/widgets/tools.py:100-134, vibe/cli/textual_ui/handlers/event_handler.py:269-278 at 4a96003186b166d55b9f06895c45bb136eef61cd), so grouped=1. The port still keeps file_write out of the group by kind (joins_tool_group in crates/vibe-cli/src/tui/transcript.rs:41-43), so grouped=0."
+        },
+        {
+          "event": 3,
+          "reason": "Axis 14. Two fields differ. Message: since v2.24.2 the reference names an edited file by display_file_path (vibe/core/tools/builtins/edit.py:126, vibe/core/tools/utils.py:116-133 at 4a96003186b166d55b9f06895c45bb136eef61cd), giving `crates/vibe-cli/src/lib.rs`, while the port shows the basename `lib.rs` (crates/vibe-core/src/events/detail.rs:1161-1165, :1464). Grouping: since v2.25.1 the reference groups every effect except a manual `!` shell entry (vibe/cli/textual_ui/widgets/tools.py:100-134, vibe/cli/textual_ui/handlers/event_handler.py:269-278 at 4a96003186b166d55b9f06895c45bb136eef61cd), so grouped=1, while the port keeps file_edit out of the group by kind (crates/vibe-cli/src/tui/transcript.rs:41-43), so grouped=0. The diff body matches."
+        }
+      ],
       "events": [
         {
           "arguments": {
@@ -263,9 +272,9 @@
       "id": "us034-effect-kinds",
       "reference": [
         "effect|shell|success|Ran|cargo test||collapsible=1|grouped=1|body=running 3 tests⏎ok",
-        "effect|file_read|success|Read|2 lines from lib.rs|(truncated)|collapsible=1|grouped=1|body=use std::io;⏎fn main() {}",
-        "effect|file_write|success|Created|readme.md||collapsible=0|grouped=0|body=hello",
-        "effect|file_edit|success|Edited|lib.rs||collapsible=0|grouped=0|body=- old⏎+ new",
+        "effect|file_read|success|Read|2 lines from crates/vibe-cli/src/lib.rs|(truncated)|collapsible=1|grouped=1|body=use std::io;⏎fn main() {}",
+        "effect|file_write|success|Created|docs/readme.md||collapsible=0|grouped=1|body=hello",
+        "effect|file_edit|success|Edited|crates/vibe-cli/src/lib.rs||collapsible=0|grouped=1|body=- old⏎+ new",
         "effect|file_search|success|Searched|todo (1 match)||collapsible=1|grouped=1|body=crates/vibe-cli/src/lib.rs:4:// todo",
         "effect|todo|success|Updated|2 todos||collapsible=1|grouped=1|body=☐ review⏎☑ ship",
         "effect|user_question|success|Answered|\"Ship it?\" → Yes||collapsible=0|grouped=1|body=",
@@ -461,7 +470,12 @@
       "story": "US-035"
     },
     {
-      "divergences": [],
+      "divergences": [
+        {
+          "event": 4,
+          "reason": "Axis 14. Since v2.25.0 the reference's loading hint with queued messages adds an Enter-to-steer segment between the interrupt and cancel segments (LoadingWidget._format_hint in vibe/cli/textual_ui/widgets/loading.py:222-229 at 4a96003186b166d55b9f06895c45bb136eef61cd). The port's queued hint keeps the two-segment form without it (Activity::hint in crates/vibe-cli/src/tui/diagnostics.rs:264). Status and elapsed time match."
+        }
+      ],
       "events": [
         {
           "currentTokens": 0,
@@ -511,7 +525,7 @@
         "context|64k/128k tokens (50%)",
         "context|999k/1.0M tokens (100%)",
         "activity|Reading file|9s|(9s Esc/Ctrl+C to interrupt)",
-        "activity|Generating|1m15s|(1m15s Esc to interrupt · Ctrl+C to cancel last queued message)",
+        "activity|Generating|1m15s|(1m15s Esc to interrupt · Enter to steer · Ctrl+C to cancel last queued message)",
         "activity|Generating|1h2m5s|(1h2m5s Esc/Ctrl+C to interrupt)"
       ],
       "story": "US-035"

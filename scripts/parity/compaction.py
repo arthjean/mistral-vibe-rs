@@ -20,8 +20,10 @@ Seven families come out of the pure half, and are what the Rust replay compares:
 ``messageSelections`` which user turns survive a budget
 
 An eighth section, ``managerScenarios``, records the call sequence, the retry
-ladder, the fallback decision and the failure reason for each scripted response.
-Nothing replays it yet; the summarizer that will is EP-044.
+ladder, the fallback decision, the failure reason and the transcript left behind
+for each scripted response. Since 2.24.1 the reference appends the envelope to the
+live history instead of replacing it (``vibe/core/compaction/manager.py``), and no
+longer takes a ``reset_session`` hook.
 
 Two artifacts come out of a run::
 
@@ -859,7 +861,6 @@ async def capture_manager() -> list[dict[str, Any]]:
             available_tools=lambda: [],
             tool_choice=lambda: "auto",
             save=nothing,
-            reset_session=nothing,
             telemetry_client=telemetry,
             session_ids=lambda: ("session-1", None),
         )

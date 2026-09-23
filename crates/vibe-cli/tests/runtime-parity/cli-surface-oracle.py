@@ -81,8 +81,24 @@ _REEXEC_MARKER = "VIBE_PARITY_PINNED_TREE"
 #: whichever terminal ran it.
 COLUMNS = 80
 
-#: The reference files this corpus is an oracle for.
-SOURCE_FILES = ("vibe/cli/entrypoint.py", "vibe/cli/mcp_command.py")
+#: The reference files this corpus is an oracle for. The root parser declares
+#: two of its flags through helpers in ``vibe/_experimental_harness.py``.
+SOURCE_FILES = (
+    "vibe/cli/entrypoint.py",
+    "vibe/cli/mcp_command.py",
+    "vibe/_experimental_harness.py",
+)
+
+#: Where the pinned tree keeps the Unified Harness runtime package. The root
+#: parser hides ``--experimental-harness`` and ``--smart-approve`` unless
+#: ``importlib.util.find_spec`` locates ``mistralai_vibe_local_harness``
+#: (``vibe/_experimental_harness.py:22-26``). The published wheel ships the
+#: package (``pyproject.toml`` ``[tool.maturin] python-packages``), and the only
+#: other copy an interpreter could find is a gitignored build staged at the
+#: checkout root (``.gitignore:106``), so the capture puts the pinned tree's own
+#: source directory on the path and the answer comes from the pin. ``find_spec``
+#: never executes the package, so its compiled ``_native`` module is not needed.
+HARNESS_RUNTIME_SOURCE = Path("harness/runtimes/python/python")
 
 #: The marker a digested field carries, so an audit can tell a redaction from a
 #: value that merely looks like one.
@@ -238,7 +254,11 @@ def reexecute_with_reference_interpreter(
     environment = dict(os.environ)
     environment[_REEXEC_MARKER] = str(tree)
     environment["PYTHONPATH"] = os.pathsep.join(
-        [str(tree), *([environment["PYTHONPATH"]] if environment.get("PYTHONPATH") else [])]
+        [
+            str(tree),
+            str(tree / HARNESS_RUNTIME_SOURCE),
+            *([environment["PYTHONPATH"]] if environment.get("PYTHONPATH") else []),
+        ]
     )
     os.execve(str(interpreter), [str(interpreter), *sys.argv], environment)
 
@@ -597,7 +617,7 @@ def help_record(parser: argparse.ArgumentParser) -> dict[str, Any]:
 # value-taking optional in its ``--flag=value`` form, and every optional at its
 # shortest unambiguous prefix. A store-true optional has no distinct "with no
 # value" form, which is why the second and third families cover twelve of the
-# nineteen rather than all of them. The remaining vectors are written out below.
+# twenty-two rather than all of them. The remaining vectors are written out below.
 
 #: A valid value per long option, keyed by its declared spelling. A new optional
 #: in the reference lands here as a missing key rather than as silent coverage
@@ -612,6 +632,9 @@ VALID_VALUES: dict[str, list[str]] = {
     "--disabled-tools": ["web_search"],
     "--output": ["json"],
     "--agent": ["reviewer"],
+    "--experimental-harness": [],
+    "--legacy-harness": [],
+    "--smart-approve": [],
     "--auto-approve": [],
     "--setup": [],
     "--check-upgrade": [],
@@ -849,8 +872,8 @@ UNAVAILABLE: list[dict[str, str]] = [
         "argv": "mcp remove docs",
         "reason": (
             "removing a persisted OAuth server deletes its keyring credentials before "
-            "the config entry (vibe/core/tools/mcp/management.py:36-49), and this "
-            "capture drives no keyring"
+            "the config entry (vibe/app_server/mcp_catalog.py:866-881 and 1092-1103, "
+            "vibe/app_server/_mcp_auth.py:263-280), and this capture drives no keyring"
         ),
     },
     {
@@ -858,7 +881,7 @@ UNAVAILABLE: list[dict[str, str]] = [
         "argv": "mcp add docs --transport http --url https://example.invalid/mcp",
         "reason": (
             "an OAuth add without --no-login starts a browser login against a live "
-            "authorization server (vibe/cli/mcp_command.py:211-249)"
+            "authorization server (vibe/cli/mcp_command.py:221-259)"
         ),
     },
     {
@@ -873,7 +896,7 @@ UNAVAILABLE: list[dict[str, str]] = [
 
 
 #: The startup failures the reference reports after the parse and before the app
-#: server is reached (`vibe/cli/entrypoint.py:279-325`). Every vector is driven
+#: server is reached (`vibe/cli/entrypoint.py:420-457`). Every vector is driven
 #: from a fixture directory with a relative argument, so the argv a case commits
 #: names no machine path, and every one of them is expected to exit 1.
 STARTUP_VECTORS: tuple[tuple[str, list[str]], ...] = (
@@ -972,7 +995,12 @@ def drive_mcp(case: str, argv: list[str]) -> dict[str, Any]:
 
 
 def drive_startup(case: str, argv: list[str]) -> dict[str, Any]:
-    """One startup failure, driven through the ``main`` the reference installs.
+    """One startup failure, driven through the reference's ``main``.
+
+    The ``vibe`` console script lands on ``vibe.cli.launcher:main``, which hands
+    every argv to ``vibe.cli.entrypoint.main`` unless ``VIBE_CLI=rust`` selects
+    the reference's own Rust client (``vibe/cli/launcher.py:16-31``), so the
+    entry point is driven directly.
 
     The record keeps the exit code and which stream carried the report, and
     drops the two last-line fields on purpose: the ``--workdir`` report prints

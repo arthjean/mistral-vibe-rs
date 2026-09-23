@@ -15,6 +15,11 @@
 //! observations, and no reference-authored description text, which is what
 //! `NOTICE` forbids shipping. Replay therefore runs unconditionally; only the
 //! live probe that recaptures from the pinned checkout skips when it is absent.
+//!
+//! A difference the replay observes is admitted only through [`DIVERGENCES`],
+//! one entry per corpus pointer carrying the answer this port gives instead.
+//! An entry whose divergence stopped reproducing fails the replay until it is
+//! removed.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -31,7 +36,91 @@ const CAPTURE_SCRIPT: &str = "scripts/parity/permission_surface.py";
 const CORPUS_RELATIVE: &str = "tests/permission-surface/vocabulary.json";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 2;
+const CORPUS_SCHEMA_VERSION: u32 = 3;
+
+/// One observed difference from the reference, scoped to the corpus pointer
+/// it contradicts.
+struct Divergence {
+    /// The JSON pointer into the corpus whose reference answer this port does
+    /// not give.
+    pointer: &'static str,
+    /// What this port answers instead, with `<workdir>` standing for the
+    /// canonical temporary workspace the way the corpus records it.
+    port: &'static str,
+    /// The reference change and its evidence, and what this port does instead.
+    reason: &'static str,
+}
+
+/// Every difference the replay admits, measured at the pin in
+/// `crate::parity::REFERENCE_COMMIT`.
+const DIVERGENCES: &[Divergence] = &[
+    Divergence {
+        pointer: "/requirement/fields/4",
+        port: "undeclared",
+        reason: "v2.25.5 adds `literal` to `RequiredPermission`, excluded from \
+                 serialization and read by `PermissionStore.covers` to compare a \
+                 grant as text instead of as a glob \
+                 (`vibe/permissions.py:27`, `vibe/core/tools/permissions.py:38-47` \
+                 at 4a96003186b1). The wire shape is \
+                 unchanged, but `PermissionRequirement` declares no such field, \
+                 refuses it on input, and `PermissionRule::covers` always globs.",
+    },
+    Divergence {
+        pointer: "/fileToolChain/sensitiveInvocationPattern",
+        port: ".env",
+        reason: "v2.24.1 scopes a sensitive-file requirement to the file itself: \
+                 the invocation pattern is the resolved absolute path \
+                 (`vibe/core/tools/utils.py:203-216` at \
+                 4a96003186b1). \
+                 `PermissionRequirement::sensitive_file` still names only the file \
+                 name.",
+    },
+    Divergence {
+        pointer: "/fileToolChain/sensitiveSessionPattern",
+        port: "*",
+        reason: "v2.24.1 grants a sensitive file for the session under the \
+                 `glob.escape` of its resolved absolute path, so approving one \
+                 sensitive file no longer covers another \
+                 (`vibe/core/tools/utils.py:203-216` at \
+                 4a96003186b1). \
+                 `PermissionRequirement::sensitive_file` still grants `*`, which \
+                 covers every sensitive file for that tool.",
+    },
+];
+
+/// Whether the port's `answer` at `pointer` is the reference `expected` one or
+/// the divergence [`DIVERGENCES`] records there, failing on anything else and
+/// on a ledger entry that no longer reproduces.
+fn check_against_ledger(pointer: &str, expected: &str, answer: &str) {
+    let entry = DIVERGENCES.iter().find(|entry| entry.pointer == pointer);
+    match entry {
+        None => assert_eq!(
+            answer, expected,
+            "`{pointer}` diverged from the reference and no ledger entry admits it"
+        ),
+        Some(entry) => {
+            assert_ne!(
+                answer, expected,
+                "`{pointer}` converged on the reference; remove its DIVERGENCES entry"
+            );
+            assert_eq!(
+                answer, entry.port,
+                "`{pointer}` diverges differently from its ledger entry"
+            );
+        }
+    }
+}
+
+/// Python's `glob.escape` for a POSIX path: each metacharacter is wrapped in a
+/// one-character class.
+fn glob_escape(path: &str) -> String {
+    path.chars()
+        .map(|character| match character {
+            '*' | '?' | '[' => format!("[{character}]"),
+            other => other.to_string(),
+        })
+        .collect()
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -82,6 +171,8 @@ struct RequirementField {
     name: String,
     alias: String,
     required: bool,
+    /// Declared on the model and read on input, but never serialized.
+    excluded: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -167,6 +258,46 @@ fn corpus() -> Corpus {
     corpus
 }
 
+/// Every ledger entry points at a corpus value that exists and cites the pin
+/// it was measured at, so an entry cannot outlive the case it admits.
+#[test]
+fn every_divergence_names_a_corpus_pointer_and_its_evidence() {
+    let raw = fs::read_to_string(corpus_path()).expect("committed corpus reads");
+    let corpus: serde_json::Value = serde_json::from_str(&raw).expect("corpus parses");
+    for entry in DIVERGENCES {
+        assert!(
+            corpus.pointer(entry.pointer).is_some(),
+            "`{}` names nothing in the corpus",
+            entry.pointer
+        );
+        assert!(
+            // The short form every corpus prints: the full hash may only be written in
+            // the two pin sources, which `the_reference_commit_is_written_in_exactly_two_places`
+            // enforces.
+            entry
+                .reason
+                .contains(&crate::parity::REFERENCE_COMMIT[..12]),
+            "`{}` does not cite the pin it was measured at",
+            entry.pointer
+        );
+    }
+    let mut pointers = DIVERGENCES
+        .iter()
+        .map(|entry| entry.pointer)
+        .collect::<Vec<_>>();
+    pointers.sort_unstable();
+    pointers.dedup();
+    assert_eq!(
+        pointers.len(),
+        DIVERGENCES.len(),
+        "a pointer is ledgered twice"
+    );
+    eprintln!(
+        "permission surface: {} admitted divergences",
+        DIVERGENCES.len()
+    );
+}
+
 /// US-105: the four scopes, and nothing else.
 #[test]
 fn the_scope_vocabulary_is_the_reference_one() {
@@ -202,20 +333,50 @@ fn the_requirement_model_is_the_reference_one() {
     let object = wire.as_object().expect("a requirement is an object");
 
     // The serialized object is key-sorted, so the declared aliases are compared
-    // in the same order rather than in the reference's declaration order.
+    // in the same order rather than in the reference's declaration order. A
+    // field the reference excludes from serialization never crosses the wire.
     let mut declared = corpus
         .requirement
         .fields
         .iter()
+        .filter(|field| !field.excluded)
         .map(|field| field.alias.clone())
         .collect::<Vec<_>>();
     declared.sort();
     let spoken = object.keys().cloned().collect::<Vec<_>>();
-    assert_eq!(spoken, declared, "the requirement field set diverged");
+    assert_eq!(spoken, declared, "the requirement wire field set diverged");
     assert!(
-        corpus.requirement.fields.iter().all(|field| field.required),
-        "the reference declares every requirement field as required"
+        corpus
+            .requirement
+            .fields
+            .iter()
+            .filter(|field| !field.excluded)
+            .all(|field| field.required),
+        "the reference declares every wire requirement field as required"
     );
+
+    // An excluded field is still declared, so the reference reads it on input.
+    // A `null` value makes the refusal name the key when it is undeclared here
+    // and the type when it is declared, whatever type the field has.
+    for (index, field) in corpus.requirement.fields.iter().enumerate() {
+        if !field.excluded {
+            continue;
+        }
+        let mut carrying = wire.clone();
+        carrying[field.alias.as_str()] = serde_json::Value::Null;
+        let undeclared = serde_json::from_value::<PermissionRequirement>(carrying)
+            .err()
+            .is_some_and(|error| {
+                error
+                    .to_string()
+                    .contains(&format!("unknown field `{}`", field.alias))
+            });
+        check_against_ledger(
+            &format!("/requirement/fields/{index}"),
+            "declared",
+            if undeclared { "undeclared" } else { "declared" },
+        );
+    }
     assert!(
         corpus.requirement.forbids_extra,
         "the reference model forbids a surplus field"
@@ -339,11 +500,27 @@ fn the_file_tool_chain_produces_the_reference_requirements() {
         .first()
         .expect("a sensitive path raises a requirement");
     assert_eq!(wire_scope(requirement.scope), chain.sensitive_scope);
-    assert_eq!(
-        requirement.invocation_pattern,
-        chain.sensitive_invocation_pattern
+    // The corpus records the resolved working directory as `<workdir>`, raw in
+    // the invocation pattern and `glob.escape`d in the session pattern. The
+    // port's answer is folded into the same placeholder form, so the corpus
+    // value, the answer and the ledger entry are all compared alike.
+    let root = workspace
+        .path()
+        .canonicalize()
+        .expect("canonical")
+        .display()
+        .to_string();
+    let escaped = glob_escape(&root);
+    check_against_ledger(
+        "/fileToolChain/sensitiveInvocationPattern",
+        &chain.sensitive_invocation_pattern,
+        &requirement.invocation_pattern.replace(&root, "<workdir>"),
     );
-    assert_eq!(requirement.session_pattern, chain.sensitive_session_pattern);
+    check_against_ledger(
+        "/fileToolChain/sensitiveSessionPattern",
+        &chain.sensitive_session_pattern,
+        &requirement.session_pattern.replace(&escaped, "<workdir>"),
+    );
     assert_eq!(
         requirement.label,
         chain.sensitive_label.replace("<tool>", "read_file")

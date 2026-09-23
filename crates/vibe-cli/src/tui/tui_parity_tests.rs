@@ -25,6 +25,10 @@ use std::path::Path;
 
 #[test]
 fn official_textual_commands_are_all_registered_with_their_aliases() {
+    // This list is this port's default registry, not a measurement. The 2.25.7
+    // reference also registers /branch and /log-level and no longer gates
+    // /teleport and /remote-project; the chat-input corpus measures that and
+    // `WHY_REGISTRY` in `chat_input_parity_tests.rs` ledgers it.
     let aliases = command_aliases().collect::<Vec<_>>();
     let mut expected = vec![
         "/clear",

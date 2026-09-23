@@ -6,8 +6,9 @@
 //! reference today:
 //!
 //! - `parity`: Rust must match; a divergence fails.
-//! - `gap`: Rust is known to diverge; matching now also fails, so closing a
-//!   gap cannot go unrecorded.
+//! - `gap`: Rust is known to diverge, at exactly the events and pointers
+//!   [`DIVERGENCES`] ledgers with their reasons; matching now also fails, so
+//!   closing a gap cannot go unrecorded.
 //! - `deferred`: the oracle records the dimension but no Rust observation
 //!   exists yet. The runner does not compare it and names the story that will.
 //! - `unavailable`: the scenario could not be recorded on this host.
@@ -25,8 +26,11 @@ use crate::tui::commands::CommandContext;
 use crate::tui::completion::CompletionRequest;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
+use sha2::{Digest, Sha256};
 
-const SCHEMA_VERSION: u32 = 1;
+/// Version 2 records completion descriptions as `{length, digest}`: they are
+/// prose the reference authors, so the corpus never carries their text.
+const SCHEMA_VERSION: u32 = 2;
 const MAX_EFFECT_ROUNDS: usize = 8;
 /// Recorded in the corpus but not compared yet, with the story that closes it.
 const DEFERRED_DIMENSIONS: &[(&str, &str)] = &[];
@@ -40,6 +44,921 @@ const WORKSPACE_PLACEHOLDER: &str = "__WORKSPACE__";
 /// entry is removed when that story lands, turning the field into a real
 /// assertion.
 const UNMODELED_STATE_PATHS: &[(&str, &str)] = &[];
+
+/// One pointer at which this port diverges from the pinned reference in a
+/// trace whose dimension `expectations.json` declares `gap`, and the events
+/// that diverge there.
+///
+/// `path` is the first differing field of an observation as the runner reports
+/// it after the dimension name (`completion.items`, `[0].mode`), and `$` when
+/// the whole observation differs, as an effect list of another length. A `gap`
+/// dimension must diverge at exactly the ledgered events and pointers: an
+/// unledgered one fails as a regression and a ledgered one that stopped
+/// reproducing fails as stale.
+struct LedgeredDivergence {
+    trace: &'static str,
+    dimension: &'static str,
+    path: &'static str,
+    events: &'static [usize],
+    reason: &'static str,
+}
+
+// Reasons, one per reference change the corpus recaptured at
+// 4a96003 (2.25.7). Every reference path is
+// read at that commit; every port path at the state these entries were
+// measured against.
+const WHY_REGISTRY: &str = "row 2: the reference registry grew. v2.24.2 registers /log-level \
+     (vibe/cli/commands.py:103) and v2.25.3 /branch (vibe/cli/commands.py:214), both ungated, and \
+     v2.25.7 removes the Vibe Code gate, so /teleport (vibe/cli/commands.py:140) and \
+     /remote-project (vibe/cli/commands.py:145) are always registered. This port has no LogLevel or \
+     Branch command (crates/vibe-cli/src/tui/commands.rs:10-39) and offers /teleport and \
+     /remote-project only when CommandContext::vibe_code_enabled is set \
+     (crates/vibe-cli/src/tui/commands.rs:414), which the replay leaves off, so its popup lacks \
+     the missing aliases";
+const WHY_CLEAR_DESCRIPTION: &str = "row 2: v2.24.1 rewrote the /clear description \
+     (vibe/cli/commands.py:75-80), recorded here as its digest. This port still describes /clear \
+     with the 2.24.0 text (crates/vibe-cli/src/tui/commands.rs:175), whose digest the replay \
+     reports";
+const WHY_BARE_AT_LISTING: &str = "row 14: v2.25.3 answers a bare @ with \
+     PathCompleter._list_current_directory (vibe/cli/autocompletion/completers.py:436-461, routed \
+     at vibe/cli/autocompletion/completers.py:474-475): every non-hidden working-directory entry, \
+     with no ignore rules, sorted case-insensitively, so @build.log and @ignored/ appear and \
+     @README.md sorts after @notes.txt. This port answers it from its gitignore-filtered index \
+     (crates/vibe-cli/src/tui/completion/path.rs:384-391 and :635-660) in its own order";
+const WHY_CARET_REQUERY: &str = "row 14: v2.24.1 re-runs completion on a pure caret move \
+     (ChatTextArea.watch_selection, vibe/cli/textual_ui/widgets/chat_input/text_area.py:452-464), \
+     so moving the caret re-ranks, reopens or closes the popup for the text before it, and a later \
+     Up, Tab or Enter acts on that popup. This port refreshes completion only after an edit bumps \
+     the editor revision (crates/vibe-cli/src/tui/chat_input.rs:585-599), so the popup keeps the \
+     list from before the move and the keys that follow act on it";
+const WHY_WHOLE_WORD_REPLACEMENT: &str = "row 14: v2.24.1 makes \
+     CommandCompleter.get_replacement_range replace the whole command word up to the first \
+     whitespace regardless of the caret (vibe/cli/autocompletion/completers.py:91-101), so Tab \
+     with the caret inside /mcp yields '/mcp add x' with the caret at 4. This port replaces only up \
+     to the caret (crates/vibe-cli/src/tui/completion.rs:740-747), yielding '/mcp p add x' with \
+     the caret at 5; the comparator reports the cursor field first, which masks the text \
+     divergence behind it";
+const WHY_PASTED_PATH_MENTION: &str = "row 14: v2.25.3 passes every paste through \
+     maybe_prepend_at_for_path (vibe/cli/textual_ui/widgets/chat_input/text_area.py:387, \
+     vibe/cli/textual_ui/widgets/chat_input/paste_path.py:27-40 and :80-92), which turns a pasted \
+     existing absolute path of any type into an @ mention. This port's normalize_pasted_text \
+     mentions image paths only (crates/vibe-cli/src/tui/path_mentions.rs:7-17), so a pasted text \
+     file path stays verbatim";
+const WHY_DRAFT_LOAD_MARKER: &str = "row 14: v2.25.5 clears the history load marker once Down \
+     leaves history navigation (vibe/cli/textual_ui/widgets/chat_input/body.py:228-231), so the \
+     restored draft reports loadedEntry false. This port restores the draft through \
+     load_history_text (crates/vibe-cli/src/tui/input.rs:535-538), which sets history_loaded \
+     (crates/vibe-cli/src/tui/input.rs:616)";
+const WHY_TURN_MESSAGE: &str = "row 14: v2.24.1 renames TurnStartParams.input to message \
+     (vibe/app_server/protocol.py:1925, input surviving only as a read-only property at \
+     vibe/app_server/protocol.py:1932-1934). This port's TurnRequest still serializes input \
+     (crates/vibe-app-server/src/client.rs:222). Masked behind that first field: with no session \
+     directory v2.25.5 inlines the image as base64 (vibe/core/session/image_snapshot.py:77-82) \
+     where this port records a file source";
+const WHY_PATH_RANKING: &str = "row 14: v2.24.5 rewrote the reference fuzzy scorer \
+     (vibe/cli/autocompletion/fuzzy.py, fuzzy_match at :47). Scoring the pattern /e with the \
+     2.24.0 and 2.25.7 fuzzy_match gives docs/guide.md 90.0 in both but src/inner/deep.rs 93.5 \
+     then 84.5, and PathCompleter ranks on that score here (MatchRank, \
+     vibe/cli/autocompletion/completers.py:105-115), so for @/e the reference now ranks \
+     @docs/guide.md second. This port's scorer (crates/vibe-cli/src/tui/completion/fuzzy.rs:60) \
+     still ranks @src/inner/deep.rs second, as the 2.24.0 capture did";
+const WHY_REGISTRY_AND_SLASH_RANKING: &str = "rows 2 and 14: two reference changes meet at \
+     the query /mp. The registry grew (see WHY_REGISTRY): /remote-project, always registered \
+     since v2.25.7 (vibe/cli/commands.py:145), matches mp and joins the list. And the v2.24.5 \
+     fuzzy scorer rewrite (vibe/cli/autocompletion/fuzzy.py, fuzzy_match at :47) scores compact \
+     110.0 where the 2.24.0 scorer gave 198.0, against 157.5 for mcp in both, so \
+     CommandCompleter._fuzzy_filter (vibe/cli/autocompletion/completers.py:54-68, unchanged in \
+     this range) now ranks /mcp above /compact. This port lacks /remote-project in the default \
+     context (crates/vibe-cli/src/tui/commands.rs:414) and its scorer \
+     (crates/vibe-cli/src/tui/completion/fuzzy.rs:60) still ranks /compact first";
+const WHY_TELEPORT_MODE: &str = "row 14: v2.25.7 always registers /teleport \
+     (vibe/cli/commands.py:140), so a leading & switches to teleport mode \
+     (ChatTextArea.mode_characters, vibe/cli/textual_ui/widgets/chat_input/text_area.py:804-808). \
+     This port enables that mode only when CommandContext::vibe_code_enabled is set \
+     (crates/vibe-cli/src/tui/chat_input.rs:746-748, crates/vibe-cli/src/tui/commands.rs:414), \
+     which the replay leaves off, so & stays literal prompt text";
+
+const DIVERGENCES: &[LedgeredDivergence] = &[
+    LedgeredDivergence {
+        trace: "async-cancelled-by-space",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "async-cancelled-by-space",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "async-generation-supersedes",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "async-generation-supersedes",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "async-history-recall-closes",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "async-history-recall-closes",
+        dimension: "state",
+        path: "completion.items",
+        events: &[4, 5],
+        reason: WHY_CARET_REQUERY,
+    },
+    LedgeredDivergence {
+        trace: "async-history-recall-closes",
+        dimension: "effects",
+        path: "$",
+        events: &[5],
+        reason: WHY_CARET_REQUERY,
+    },
+    LedgeredDivergence {
+        trace: "async-history-recall-closes",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "async-history-recall-closes",
+        dimension: "render",
+        path: "popupRows",
+        events: &[4],
+        reason: WHY_CARET_REQUERY,
+    },
+    LedgeredDivergence {
+        trace: "async-history-recall-closes",
+        dimension: "render",
+        path: "cursorCell[1]",
+        events: &[5],
+        reason: WHY_CARET_REQUERY,
+    },
+    LedgeredDivergence {
+        trace: "commands-excluded",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "commands-excluded",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "commands-full-surface",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "commands-full-surface",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "commands-unknown-alias",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "commands-unknown-alias",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "corpus-dot-query",
+        dimension: "state",
+        path: "completion.items",
+        events: &[5],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "corpus-dot-query",
+        dimension: "render",
+        path: "popupRows",
+        events: &[5],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "corpus-gitignore",
+        dimension: "state",
+        path: "completion.items",
+        events: &[5],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "corpus-gitignore",
+        dimension: "render",
+        path: "popupRows",
+        events: &[5],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "corpus-hidden-files",
+        dimension: "state",
+        path: "completion.items",
+        events: &[5],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "corpus-hidden-files",
+        dimension: "render",
+        path: "popupRows",
+        events: &[5],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "corpus-nested-ranking",
+        dimension: "state",
+        path: "completion.items",
+        events: &[5],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "corpus-nested-ranking",
+        dimension: "render",
+        path: "popupRows",
+        events: &[5],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "dnd-text-path-untouched",
+        dimension: "state",
+        path: "cursor",
+        events: &[0],
+        reason: WHY_PASTED_PATH_MENTION,
+    },
+    LedgeredDivergence {
+        trace: "dnd-text-path-untouched",
+        dimension: "render",
+        path: "visualLines[0]",
+        events: &[0],
+        reason: WHY_PASTED_PATH_MENTION,
+    },
+    LedgeredDivergence {
+        trace: "external-editor-refreshes-completion",
+        dimension: "state",
+        path: "completion.items",
+        events: &[5],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "history-down-restores-draft",
+        dimension: "state",
+        path: "history.loadedEntry",
+        events: &[9],
+        reason: WHY_DRAFT_LOAD_MARKER,
+    },
+    LedgeredDivergence {
+        trace: "mention-directory-submission",
+        dimension: "state",
+        path: "completion.items",
+        events: &[7],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "mention-directory-submission",
+        dimension: "render",
+        path: "popupRows",
+        events: &[7],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "mention-external-path-submission",
+        dimension: "state",
+        path: "completion.items",
+        events: &[8],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "mention-external-path-submission",
+        dimension: "state",
+        path: "completion.items[1].label",
+        events: &[10],
+        reason: WHY_PATH_RANKING,
+    },
+    LedgeredDivergence {
+        trace: "mention-external-path-submission",
+        dimension: "render",
+        path: "popupRows",
+        events: &[8],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "mention-external-path-submission",
+        dimension: "render",
+        path: "popupRows[1]",
+        events: &[10],
+        reason: WHY_PATH_RANKING,
+    },
+    LedgeredDivergence {
+        trace: "mention-image-payload-submission",
+        dimension: "submission",
+        path: "input",
+        events: &[1],
+        reason: WHY_TURN_MESSAGE,
+    },
+    LedgeredDivergence {
+        trace: "mention-missing-path-submission",
+        dimension: "state",
+        path: "completion.items",
+        events: &[5],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "mention-missing-path-submission",
+        dimension: "render",
+        path: "popupRows",
+        events: &[5],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "mention-text-file-submission",
+        dimension: "state",
+        path: "completion.items",
+        events: &[10],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "mention-text-file-submission",
+        dimension: "render",
+        path: "popupRows",
+        events: &[10],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "mode-backspace-keeps-text",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0, 1, 3, 4],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "mode-backspace-resets",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "modes-slash-prefix",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0, 1],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "modes-slash-prefix",
+        dimension: "state",
+        path: "completion.items[0].description.digest",
+        events: &[2],
+        reason: WHY_CLEAR_DESCRIPTION,
+    },
+    LedgeredDivergence {
+        trace: "modes-teleport-available",
+        dimension: "state",
+        path: "mode",
+        events: &[0, 1, 2, 3, 4, 5, 6],
+        reason: WHY_TELEPORT_MODE,
+    },
+    LedgeredDivergence {
+        trace: "modes-teleport-available",
+        dimension: "effects",
+        path: "[0].mode",
+        events: &[0],
+        reason: WHY_TELEPORT_MODE,
+    },
+    LedgeredDivergence {
+        trace: "modes-teleport-available",
+        dimension: "render",
+        path: "cursorCell[1]",
+        events: &[0, 1, 2, 3, 4, 5, 6],
+        reason: WHY_TELEPORT_MODE,
+    },
+    LedgeredDivergence {
+        trace: "paste-mode-characters",
+        dimension: "state",
+        path: "completion.items[0].description.digest",
+        events: &[0],
+        reason: WHY_CLEAR_DESCRIPTION,
+    },
+    LedgeredDivergence {
+        trace: "path-accept-directory",
+        dimension: "state",
+        path: "completion.items",
+        events: &[8],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "path-accept-directory",
+        dimension: "render",
+        path: "popupRows",
+        events: &[8],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "path-accept-inserts-space",
+        dimension: "state",
+        path: "completion.items",
+        events: &[8],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "path-accept-inserts-space",
+        dimension: "render",
+        path: "popupRows",
+        events: &[8],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "path-mid-token-completion",
+        dimension: "state",
+        path: "completion.items",
+        events: &[8],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "path-mid-token-completion",
+        dimension: "state",
+        path: "completion.items",
+        events: &[16, 17],
+        reason: WHY_CARET_REQUERY,
+    },
+    LedgeredDivergence {
+        trace: "path-mid-token-completion",
+        dimension: "state",
+        path: "cursor",
+        events: &[18],
+        reason: WHY_CARET_REQUERY,
+    },
+    LedgeredDivergence {
+        trace: "path-mid-token-completion",
+        dimension: "render",
+        path: "popupRows",
+        events: &[8],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "path-mid-token-completion",
+        dimension: "render",
+        path: "popupRows",
+        events: &[16, 17],
+        reason: WHY_CARET_REQUERY,
+    },
+    LedgeredDivergence {
+        trace: "path-mid-token-completion",
+        dimension: "render",
+        path: "cursorCell[1]",
+        events: &[18],
+        reason: WHY_CARET_REQUERY,
+    },
+    LedgeredDivergence {
+        trace: "path-trigger-after-punctuation",
+        dimension: "state",
+        path: "completion.items",
+        events: &[4],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "path-trigger-after-punctuation",
+        dimension: "render",
+        path: "popupRows",
+        events: &[4],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "path-trigger-bare-at",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "path-trigger-bare-at",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "path-trigger-basic",
+        dimension: "state",
+        path: "completion.items",
+        events: &[8],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "path-trigger-basic",
+        dimension: "render",
+        path: "popupRows",
+        events: &[8],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "path-trigger-nested",
+        dimension: "state",
+        path: "completion.items",
+        events: &[5],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "path-trigger-nested",
+        dimension: "render",
+        path: "popupRows",
+        events: &[5],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "path-trigger-space-closes",
+        dimension: "state",
+        path: "completion.items",
+        events: &[5],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "path-trigger-space-closes",
+        dimension: "render",
+        path: "popupRows",
+        events: &[5],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "popup-render-120",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0, 1],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "popup-render-120",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0, 1],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "popup-render-40",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0, 1],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "popup-render-40",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0, 1],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "popup-render-80",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0, 1],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "popup-render-80",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0, 1],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "popup-render-path-bound",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "popup-render-path-bound",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0],
+        reason: WHY_BARE_AT_LISTING,
+    },
+    LedgeredDivergence {
+        trace: "slash-double-marker",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-double-marker",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-no-match",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-no-match",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-arrows",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0, 1, 2, 3, 4],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-arrows",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0, 1, 2, 3, 4],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-caret-at-line-start",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0, 1],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-caret-at-line-start",
+        dimension: "state",
+        path: "completion.items[0].description.digest",
+        events: &[2],
+        reason: WHY_CLEAR_DESCRIPTION,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-caret-at-line-start",
+        dimension: "state",
+        path: "completion.items",
+        events: &[3],
+        reason: WHY_CARET_REQUERY,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-caret-at-line-start",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0, 1],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-caret-at-line-start",
+        dimension: "render",
+        path: "popupRows",
+        events: &[3],
+        reason: WHY_CARET_REQUERY,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-enter-submits",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0, 1],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-enter-submits",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0, 1],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-escape",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0, 1, 2],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-escape",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0, 1, 2],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-mid-token-cursor",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0, 1, 16],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-mid-token-cursor",
+        dimension: "state",
+        path: "completion.items",
+        events: &[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+        reason: WHY_REGISTRY_AND_SLASH_RANKING,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-mid-token-cursor",
+        dimension: "state",
+        path: "completion.items",
+        events: &[15],
+        reason: WHY_CARET_REQUERY,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-mid-token-cursor",
+        dimension: "state",
+        path: "cursor",
+        events: &[17],
+        reason: WHY_WHOLE_WORD_REPLACEMENT,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-mid-token-cursor",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0, 1, 16],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-mid-token-cursor",
+        dimension: "render",
+        path: "popupRows",
+        events: &[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+        reason: WHY_REGISTRY_AND_SLASH_RANKING,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-mid-token-cursor",
+        dimension: "render",
+        path: "popupRows",
+        events: &[15],
+        reason: WHY_CARET_REQUERY,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-mid-token-cursor",
+        dimension: "render",
+        path: "cursorCell[1]",
+        events: &[17],
+        reason: WHY_WHOLE_WORD_REPLACEMENT,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-right",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0, 1, 3],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-right",
+        dimension: "state",
+        path: "completion.items",
+        events: &[2],
+        reason: WHY_CARET_REQUERY,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-right",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0, 1, 3],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-right",
+        dimension: "render",
+        path: "popupRows",
+        events: &[2],
+        reason: WHY_CARET_REQUERY,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-tab-applies",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0, 1],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-tab-applies",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0, 1],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-wraps-selection",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0, 1, 2],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-popup-wraps-selection",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0, 1, 2],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-ranking-c",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0, 1],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-ranking-c",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0, 1],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-ranking-empty-boosts",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-ranking-empty-boosts",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-ranking-fuzzy",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0, 1],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-ranking-fuzzy",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0, 1],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-skill-entries",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0, 1, 2],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-skill-entries",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0, 1, 2],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-uppercase-alias",
+        dimension: "state",
+        path: "completion.items",
+        events: &[0, 1],
+        reason: WHY_REGISTRY,
+    },
+    LedgeredDivergence {
+        trace: "slash-uppercase-alias",
+        dimension: "state",
+        path: "completion.items[0].description.digest",
+        events: &[2],
+        reason: WHY_CLEAR_DESCRIPTION,
+    },
+    LedgeredDivergence {
+        trace: "slash-uppercase-alias",
+        dimension: "render",
+        path: "popupRows",
+        events: &[0, 1],
+        reason: WHY_REGISTRY,
+    },
+];
 const OBSERVABLE_EFFECTS: &[&str] = &[
     "submitRequested",
     "submit",
@@ -291,6 +1210,52 @@ fn corpus_declares_every_gap_trace_and_expectation() -> Result<(), String> {
             "expectations.json declares traces missing from the manifest: {expected_ids:?}"
         ));
     }
+    // The ledger and the declared gaps must name each other: a `gap` without a
+    // ledgered pointer is a blanket, and an entry outside a `gap` is dead.
+    let mut ledgered = BTreeSet::new();
+    for entry in DIVERGENCES {
+        if entry.reason.trim().is_empty()
+            || entry.path.is_empty()
+            || entry.path.contains('*')
+            || entry.events.is_empty()
+        {
+            return Err(format!(
+                "DIVERGENCES entry `{}` / `{}` / `{}` needs a concrete pointer, its events and a reason",
+                entry.trace, entry.dimension, entry.path
+            ));
+        }
+        for event in entry.events {
+            if !ledgered.insert((entry.trace, entry.dimension, entry.path, *event)) {
+                return Err(format!(
+                    "DIVERGENCES ledgers `{}` / `{}` / `{}` at event {event} twice",
+                    entry.trace, entry.dimension, entry.path
+                ));
+            }
+        }
+        let status = expectations
+            .traces
+            .get(entry.trace)
+            .and_then(|dimensions| dimensions.get(entry.dimension));
+        if status.map(String::as_str) != Some("gap") {
+            return Err(format!(
+                "DIVERGENCES ledgers `{}` / `{}`, which expectations.json declares {status:?} rather than `gap`",
+                entry.trace, entry.dimension
+            ));
+        }
+    }
+    for (trace, dimensions) in &expectations.traces {
+        for (dimension, status) in dimensions {
+            if status == "gap"
+                && !DIVERGENCES
+                    .iter()
+                    .any(|entry| entry.trace == trace && entry.dimension == dimension)
+            {
+                return Err(format!(
+                    "trace `{trace}` declares `gap` on `{dimension}` without a DIVERGENCES entry"
+                ));
+            }
+        }
+    }
     if !manifest.workspaces.contains_key("empty") {
         return Err("the manifest must describe the `empty` workspace fixture".to_owned());
     }
@@ -331,6 +1296,14 @@ struct Divergence {
 }
 
 impl Divergence {
+    /// The differing field without its leading separator, `$` for the root.
+    fn pointer(&self) -> &str {
+        match self.path.strip_prefix('.').unwrap_or(&self.path) {
+            "" => "$",
+            pointer => pointer,
+        }
+    }
+
     fn describe(&self, trace: &str, commit: &str) -> String {
         let position = match self.event_index {
             Some(index) => format!("event {index}"),
@@ -605,6 +1578,33 @@ fn rename_event(raw: &Value, kind: &str) -> Value {
     Value::Object(object)
 }
 
+/// Reduces every completion description to the `{length, digest}` fingerprint
+/// the oracle records (`digest` in `scripts/parity/harness.py`): the length in
+/// Unicode scalar values, as Python's `len`, and the SHA-256 of the UTF-8 bytes.
+fn digest_descriptions(state: &mut Value) {
+    let Some(items) = state
+        .pointer_mut("/completion/items")
+        .and_then(Value::as_array_mut)
+    else {
+        return;
+    };
+    for item in items {
+        let Some(description) = item.get_mut("description") else {
+            continue;
+        };
+        let Some(text) = description.as_str() else {
+            continue;
+        };
+        let digest = Sha256::digest(text.as_bytes())
+            .iter()
+            .fold(String::new(), |mut hex, byte| {
+                let _ = write!(hex, "{byte:02x}");
+                hex
+            });
+        *description = json!({"length": text.chars().count(), "digest": digest});
+    }
+}
+
 /// Drops the state fields Rust does not model yet from an expected observation.
 fn strip_unmodeled_state(state: &mut Value) {
     for (path, _story) in UNMODELED_STATE_PATHS {
@@ -794,6 +1794,46 @@ fn compare(
     })
 }
 
+/// Reports every divergent event and pointer of a `gap` dimension that
+/// `DIVERGENCES` does not ledger, and every ledgered one that no longer
+/// diverges.
+fn unledgered_divergences(
+    trace: &str,
+    dimension: &str,
+    divergences: &[Divergence],
+    commit: &str,
+) -> Vec<String> {
+    let ledgered = DIVERGENCES
+        .iter()
+        .filter(|entry| entry.trace == trace && entry.dimension == dimension)
+        .flat_map(|entry| entry.events.iter().map(|event| (*event, entry.path)))
+        .collect::<BTreeSet<_>>();
+    let observed = divergences
+        .iter()
+        .filter_map(|divergence| Some((divergence.event_index?, divergence.pointer())))
+        .collect::<BTreeSet<_>>();
+    let mut failures = Vec::new();
+    for divergence in divergences {
+        let pointer = divergence.pointer();
+        let ledgered_here = divergence
+            .event_index
+            .is_some_and(|event| ledgered.contains(&(event, pointer)));
+        if !ledgered_here {
+            failures.push(format!(
+                "{}\n  not ledgered: add event {:?} to `{trace}` / `{dimension}` / `{pointer}` in DIVERGENCES",
+                divergence.describe(trace, commit),
+                divergence.event_index
+            ));
+        }
+    }
+    for (event, path) in ledgered.difference(&observed) {
+        failures.push(format!(
+            "trace `{trace}` no longer diverges on {dimension} at `{path}` for event {event}; remove it from DIVERGENCES"
+        ));
+    }
+    failures
+}
+
 fn materialize_workspace(
     root: &Path,
     files: &BTreeMap<String, String>,
@@ -892,7 +1932,10 @@ fn canonical_traces_replay_with_their_declared_parity() -> Result<(), String> {
             .ok_or_else(|| format!("trace `{}` has no expectation entry", entry.id))?;
 
         let mut replay = Replay::new(workspace, setup)?;
-        let mut observed: BTreeMap<&'static str, Option<Divergence>> = BTreeMap::new();
+        // Every event is compared on every dimension, so a `gap` dimension is
+        // held to the exact set of pointers `DIVERGENCES` ledgers for it rather
+        // than to its first divergence alone.
+        let mut observed: BTreeMap<&'static str, Vec<Divergence>> = BTreeMap::new();
 
         let events = object
             .get("events")
@@ -914,55 +1957,50 @@ fn canonical_traces_replay_with_their_declared_parity() -> Result<(), String> {
         for (index, (raw_event, observation)) in events.iter().zip(observations).enumerate() {
             let event = decode_event(raw_event)?;
             let step = replay.step(event)?;
-            let state = serde_json::to_value(replay.state.observe())
+            let mut state = serde_json::to_value(replay.state.observe())
                 .map_err(|error| format!("state does not serialize: {error}"))?;
+            digest_descriptions(&mut state);
 
             let mut expected_state = observation.get("state").cloned().unwrap_or(Value::Null);
             strip_unmodeled_state(&mut expected_state);
-            if observed.get("state").is_none_or(Option::is_none)
-                && let Some(divergence) = compare("state", Some(index), &expected_state, &state)
-            {
-                observed.insert("state", Some(divergence));
+            if let Some(divergence) = compare("state", Some(index), &expected_state, &state) {
+                observed.entry("state").or_default().push(divergence);
             }
 
             let expected_effects = observation
                 .get("effects")
                 .cloned()
                 .unwrap_or_else(|| json!([]));
-            if observed.get("effects").is_none_or(Option::is_none)
-                && let Some(divergence) = compare(
-                    "effects",
-                    Some(index),
-                    &expected_effects,
-                    &Value::Array(step.effects),
-                )
-            {
-                observed.insert("effects", Some(divergence));
+            if let Some(divergence) = compare(
+                "effects",
+                Some(index),
+                &expected_effects,
+                &Value::Array(step.effects),
+            ) {
+                observed.entry("effects").or_default().push(divergence);
             }
 
-            if observation.get("history").is_some()
-                && observed.get("history").is_none_or(Option::is_none)
-                && let Some(divergence) = compare(
+            if let Some(expected_history) = observation.get("history") {
+                let recorded = observed.entry("history").or_default();
+                if let Some(divergence) = compare(
                     "history",
                     Some(index),
-                    observation.get("history").unwrap_or(&Value::Null),
+                    expected_history,
                     &json!(replay.state.history_entries()),
-                )
-            {
-                observed.insert("history", Some(divergence));
+                ) {
+                    recorded.push(divergence);
+                }
             }
 
             if let Some(expected_submission) = observation.get("submission") {
-                observed.entry("submission").or_insert(None);
-                if observed.get("submission").is_none_or(Option::is_none)
-                    && let Some(divergence) = compare(
-                        "submission",
-                        Some(index),
-                        expected_submission,
-                        step.submission.as_ref().unwrap_or(&Value::Null),
-                    )
-                {
-                    observed.insert("submission", Some(divergence));
+                let recorded = observed.entry("submission").or_default();
+                if let Some(divergence) = compare(
+                    "submission",
+                    Some(index),
+                    expected_submission,
+                    step.submission.as_ref().unwrap_or(&Value::Null),
+                ) {
+                    recorded.push(divergence);
                 }
             }
 
@@ -977,12 +2015,11 @@ fn canonical_traces_replay_with_their_declared_parity() -> Result<(), String> {
                 };
                 normalize_workspace_render(&mut expected_render, &replay.workspace);
                 normalize_workspace_render(&mut actual_render, &replay.workspace);
-                observed.entry("render").or_insert(None);
-                if observed.get("render").is_none_or(Option::is_none)
-                    && let Some(divergence) =
-                        compare("render", Some(index), &expected_render, &actual_render)
+                let recorded = observed.entry("render").or_default();
+                if let Some(divergence) =
+                    compare("render", Some(index), &expected_render, &actual_render)
                 {
-                    observed.insert("render", Some(divergence));
+                    recorded.push(divergence);
                 }
             }
         }
@@ -1002,7 +2039,10 @@ fn canonical_traces_replay_with_their_declared_parity() -> Result<(), String> {
                 if !declared.contains_key(*dimension) {
                     continue;
                 }
-                let status = if observed.get(dimension).and_then(Option::as_ref).is_some() {
+                let status = if observed
+                    .get(dimension)
+                    .is_some_and(|found| !found.is_empty())
+                {
                     "gap"
                 } else {
                     "parity"
@@ -1017,15 +2057,26 @@ fn canonical_traces_replay_with_their_declared_parity() -> Result<(), String> {
             let Some(expectation) = declared.get(*dimension) else {
                 continue;
             };
-            let divergence = observed.get(dimension).and_then(Option::as_ref);
-            match (expectation.as_str(), divergence) {
+            let divergences = observed
+                .get(dimension)
+                .map(Vec::as_slice)
+                .unwrap_or_default();
+            match (expectation.as_str(), divergences.first()) {
                 ("deferred", _) => deferred = deferred.saturating_add(1),
                 ("parity", Some(divergence)) => {
                     diverged = diverged.saturating_add(1);
                     failures.push(divergence.describe(&entry.id, &manifest.reference.commit));
                 }
                 ("parity", None) => matched = matched.saturating_add(1),
-                ("gap", Some(_)) => diverged = diverged.saturating_add(1),
+                ("gap", Some(_)) => {
+                    diverged = diverged.saturating_add(1);
+                    failures.extend(unledgered_divergences(
+                        &entry.id,
+                        dimension,
+                        divergences,
+                        &manifest.reference.commit,
+                    ));
+                }
                 ("gap", None) => {
                     matched = matched.saturating_add(1);
                     failures.push(format!(
@@ -1175,6 +2226,51 @@ fn every_compared_state_field_is_modeled() {
              remove it from UNMODELED_STATE_PATHS so it becomes a real assertion"
         );
     }
+}
+
+#[test]
+fn gap_divergences_are_held_to_their_ledgered_events_and_pointers() {
+    let divergence = compare(
+        "state",
+        Some(2),
+        &json!({"cursor": 1}),
+        &json!({"cursor": 2}),
+    )
+    .expect("a divergence");
+    let unledgered = unledgered_divergences("unledgered-trace", "state", &[divergence], "abc123");
+    assert_eq!(unledgered.len(), 1, "{unledgered:?}");
+    assert!(unledgered[0].contains("not ledgered"), "{unledgered:?}");
+    assert!(unledgered[0].contains("`cursor`"), "{unledgered:?}");
+
+    let stale = unledgered_divergences("history-down-restores-draft", "state", &[], "abc123");
+    assert_eq!(stale.len(), 1, "{stale:?}");
+    assert!(stale[0].contains("no longer diverges"), "{stale:?}");
+
+    let root = compare("effects", Some(0), &json!([{"type": "submit"}]), &json!([]))
+        .expect("a divergence");
+    assert_eq!(root.pointer(), "$");
+}
+
+#[test]
+fn completion_descriptions_are_compared_by_their_fingerprint() {
+    let mut state = json!({"completion": {"items": [
+        {"label": "/resume", "description": "Résumé"},
+        {"label": "@notes.txt", "description": ""},
+    ]}});
+    digest_descriptions(&mut state);
+    assert_eq!(
+        state,
+        json!({"completion": {"items": [
+            {"label": "/resume", "description": {
+                "length": 6,
+                "digest": "9d750fae748681ca14e2c3fe0c1ed0a2b56984cf12747e281cf815833de21c9c",
+            }},
+            {"label": "@notes.txt", "description": {
+                "length": 0,
+                "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            }},
+        ]}})
+    );
 }
 
 #[test]

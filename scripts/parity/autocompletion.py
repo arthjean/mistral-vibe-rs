@@ -8,7 +8,9 @@ arguments. ``FileIndexStore`` receives its ignore rules and its stats object,
 is compiled, and ``PathCompleter._score_matches`` takes a list of entries and a
 search context. A capture therefore drives the real reference objects over
 scratch trees this script writes itself, with no watcher thread, no network and
-no editor.
+no editor. The store now lists a git work tree through `git ls-files` and walks
+the tree only outside one, so the scratch trees must sit outside any work tree:
+this script fails rather than record the git-backed index under these names.
 
 Five families come out, and are what the Rust replay compares:
 
@@ -718,10 +720,9 @@ def _entries(snapshot: list[Any]) -> list[dict[str, Any]]:
 
 
 def capture_constants() -> dict[str, Any]:
-    from vibe.cli.autocompletion.completers import (
-        DEFAULT_MAX_ENTRIES_TO_PROCESS,
-        DEFAULT_TARGET_MATCHES,
-    )
+    import inspect
+
+    from vibe.cli.autocompletion.completers import DEFAULT_TARGET_MATCHES, PathCompleter
     from vibe.cli.autocompletion.file_indexer.ignore_rules import (
         DEFAULT_IGNORE_PATTERNS,
         WALK_SKIP_DIR_NAMES,
@@ -729,10 +730,14 @@ def capture_constants() -> dict[str, Any]:
     )
     from vibe.cli.autocompletion.file_indexer.indexer import FileIndexer
     from vibe.cli.autocompletion.file_indexer.store import ASCII_CODEPOINT_LIMIT
-    from vibe.cli.autocompletion.fuzzy import (
-        CONSECUTIVE_MULTIPLIER,
-        PREFIX_MULTIPLIER,
-        WORD_BOUNDARY_MULTIPLIER,
+
+    # The processing cap is no longer a module constant: it is the default of
+    # the completer's own parameter, which is `None` (uncapped) at the pin
+    # (vibe/cli/autocompletion/completers.py:117-125) and serializes as null.
+    max_entries = (
+        inspect.signature(PathCompleter.__init__)
+        .parameters["max_entries_to_process"]
+        .default
     )
 
     indexer = FileIndexer()
@@ -755,16 +760,11 @@ def capture_constants() -> dict[str, Any]:
         raise OracleError("the compiled default patterns lost an entry")
 
     return {
-        "maxEntriesToProcess": DEFAULT_MAX_ENTRIES_TO_PROCESS,
+        "maxEntriesToProcess": max_entries,
         "targetMatches": DEFAULT_TARGET_MATCHES,
         "massChangeThreshold": threshold,
         "asciiCodepointLimit": ASCII_CODEPOINT_LIMIT,
         "scoreScale": SCORE_SCALE,
-        "fuzzyMultipliers": {
-            "prefix": _centis(PREFIX_MULTIPLIER),
-            "wordBoundary": _centis(WORD_BOUNDARY_MULTIPLIER),
-            "consecutive": _centis(CONSECUTIVE_MULTIPLIER),
-        },
         "defaultIgnorePatterns": [
             {"raw": raw, "isExclude": is_exclude}
             for raw, is_exclude in DEFAULT_IGNORE_PATTERNS
@@ -815,7 +815,7 @@ def capture_walk(scratch: Path) -> list[dict[str, Any]]:
     for fixture_id, root in _roots(scratch).items():
         stats = FileIndexStats()
         store = FileIndexStore(IgnoreRules(), stats)
-        store.rebuild(root)
+        _rebuild_walked(store, root)
         records.append(
             {
                 "case": fixture_id,
@@ -833,7 +833,10 @@ def capture_walk(scratch: Path) -> list[dict[str, Any]]:
 def capture_changes() -> list[dict[str, Any]]:
     from vibe.cli.autocompletion.file_indexer.ignore_rules import IgnoreRules
     from vibe.cli.autocompletion.file_indexer.store import FileIndexStats, FileIndexStore
-    from vibe.cli.autocompletion.file_indexer.watcher import Change
+    # The watcher binds `Change` only for type checking at the pin
+    # (vibe/cli/autocompletion/file_indexer/watcher.py:6-9); the store compares
+    # against watchfiles' own members by identity (store.py:127,146).
+    from watchfiles import Change
 
     kinds = {
         "added": Change.added,
@@ -850,7 +853,7 @@ def capture_changes() -> list[dict[str, Any]]:
             materialize(root, FIXTURES[sequence["fixture"]])
             stats = FileIndexStats()
             store = FileIndexStore(IgnoreRules(), stats)
-            store.rebuild(root)
+            _rebuild_walked(store, root)
             steps: list[dict[str, Any]] = []
             for index, step in enumerate(sequence["steps"]):
                 for mutation in step["mutations"]:
@@ -887,7 +890,7 @@ def capture_ranking(scratch: Path) -> list[dict[str, Any]]:
     indexes: dict[str, list[Any]] = {}
     for fixture_id, root in roots.items():
         store = FileIndexStore(IgnoreRules(), FileIndexStats())
-        store.rebuild(root)
+        _rebuild_walked(store, root)
         indexes[fixture_id] = sorted(store.snapshot(), key=lambda entry: entry.rel)
 
     completer = PathCompleter()
@@ -909,6 +912,25 @@ def capture_ranking(scratch: Path) -> list[dict[str, Any]]:
         return records
     finally:
         completer._indexer.shutdown()
+
+
+def _rebuild_walked(store: Any, root: Path) -> None:
+    """Rebuild through the ignore-rule walk this corpus measures.
+
+    A rebuild tries `git ls-files` first and walks the tree only when that
+    fails (vibe/cli/autocompletion/file_indexer/store.py:80-103). Inside a work
+    tree the defaults and the rules compiler are bypassed and a change only
+    marks the store dirty (store.py:116-124), which would record a different
+    contract under the same case names, so a git-backed rebuild fails the run.
+    """
+
+    if not store.rebuild(root):
+        raise OracleError(f"the rebuild of {root.name} was canceled")
+    if store.is_git_backed:
+        raise OracleError(
+            f"{root.name} sits inside a git work tree, so the index came from "
+            "`git ls-files` instead of the ignore-rule walk; move TMPDIR outside it"
+        )
 
 
 def _rank(rank: Any) -> dict[str, Any]:

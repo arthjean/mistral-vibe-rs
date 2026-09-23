@@ -2,10 +2,12 @@
   "availability": [
     {
       "clipboardSupported": false,
-      "count": 25,
+      "count": 29,
       "excluded": [],
+      "experimentalHarness": false,
       "id": "baseline",
       "keys": [
+        "branch",
         "clear",
         "compact",
         "config",
@@ -16,30 +18,35 @@
         "help",
         "leanstall",
         "log",
+        "log-level",
         "loop",
         "mcp",
         "model",
         "proxy-setup",
         "reload",
+        "remote-project",
         "rename",
         "resume",
         "retry",
         "rewind",
         "status",
+        "teleport",
         "theme",
         "thinking",
         "unleanstall",
         "voice",
         "whoami"
       ],
-      "vibeCodeEnabled": false
+      "registrySkillsEnabled": false
     },
     {
       "clipboardSupported": true,
-      "count": 26,
+      "count": 30,
       "excluded": [],
+      "experimentalHarness": false,
       "id": "clipboard",
       "keys": [
+        "branch",
         "clear",
         "compact",
         "config",
@@ -50,31 +57,36 @@
         "help",
         "leanstall",
         "log",
+        "log-level",
         "loop",
         "mcp",
         "model",
         "paste-image",
         "proxy-setup",
         "reload",
+        "remote-project",
         "rename",
         "resume",
         "retry",
         "rewind",
         "status",
+        "teleport",
         "theme",
         "thinking",
         "unleanstall",
         "voice",
         "whoami"
       ],
-      "vibeCodeEnabled": false
+      "registrySkillsEnabled": false
     },
     {
       "clipboardSupported": false,
-      "count": 27,
+      "count": 30,
       "excluded": [],
-      "id": "vibeCode",
+      "experimentalHarness": false,
+      "id": "registrySkills",
       "keys": [
+        "branch",
         "clear",
         "compact",
         "config",
@@ -85,6 +97,7 @@
         "help",
         "leanstall",
         "log",
+        "log-level",
         "loop",
         "mcp",
         "model",
@@ -95,6 +108,7 @@
         "resume",
         "retry",
         "rewind",
+        "skills",
         "status",
         "teleport",
         "theme",
@@ -103,14 +117,16 @@
         "voice",
         "whoami"
       ],
-      "vibeCodeEnabled": true
+      "registrySkillsEnabled": true
     },
     {
-      "clipboardSupported": true,
-      "count": 28,
+      "clipboardSupported": false,
+      "count": 32,
       "excluded": [],
-      "id": "full",
+      "experimentalHarness": true,
+      "id": "experimentalHarness",
       "keys": [
+        "branch",
         "clear",
         "compact",
         "config",
@@ -121,37 +137,86 @@
         "help",
         "leanstall",
         "log",
+        "log-level",
+        "loop",
+        "mcp",
+        "model",
+        "plugins",
+        "proxy-setup",
+        "reload",
+        "reload-plugins",
+        "remote-project",
+        "rename",
+        "resume",
+        "retry",
+        "rewind",
+        "status",
+        "teleport",
+        "theme",
+        "thinking",
+        "todo",
+        "unleanstall",
+        "voice",
+        "whoami"
+      ],
+      "registrySkillsEnabled": false
+    },
+    {
+      "clipboardSupported": true,
+      "count": 34,
+      "excluded": [],
+      "experimentalHarness": true,
+      "id": "full",
+      "keys": [
+        "branch",
+        "clear",
+        "compact",
+        "config",
+        "copy",
+        "data-retention",
+        "debug",
+        "exit",
+        "help",
+        "leanstall",
+        "log",
+        "log-level",
         "loop",
         "mcp",
         "model",
         "paste-image",
+        "plugins",
         "proxy-setup",
         "reload",
+        "reload-plugins",
         "remote-project",
         "rename",
         "resume",
         "retry",
         "rewind",
+        "skills",
         "status",
         "teleport",
         "theme",
         "thinking",
+        "todo",
         "unleanstall",
         "voice",
         "whoami"
       ],
-      "vibeCodeEnabled": true
+      "registrySkillsEnabled": true
     },
     {
       "clipboardSupported": true,
-      "count": 25,
+      "count": 31,
       "excluded": [
         "help",
         "mcp",
         "theme"
       ],
+      "experimentalHarness": true,
       "id": "excluded",
       "keys": [
+        "branch",
         "clear",
         "compact",
         "config",
@@ -161,37 +226,42 @@
         "exit",
         "leanstall",
         "log",
+        "log-level",
         "loop",
         "model",
         "paste-image",
+        "plugins",
         "proxy-setup",
         "reload",
+        "reload-plugins",
         "remote-project",
         "rename",
         "resume",
         "retry",
         "rewind",
+        "skills",
         "status",
         "teleport",
         "thinking",
+        "todo",
         "unleanstall",
         "voice",
         "whoami"
       ],
-      "vibeCodeEnabled": true
+      "registrySkillsEnabled": true
     }
   ],
   "counts": [
     {
-      "count": 28,
+      "count": 34,
       "id": "keys"
     },
     {
-      "count": 35,
+      "count": 41,
       "id": "aliases"
     },
     {
-      "count": 31,
+      "count": 37,
       "id": "slashAliases"
     },
     {
@@ -202,52 +272,60 @@
   "helpCommands": [
     {
       "aliases": [
+        "/branch"
+      ],
+      "id": "branch",
+      "index": 0,
+      "line": 18
+    },
+    {
+      "aliases": [
         "/clear",
         "/new"
       ],
       "id": "clear",
-      "index": 0,
-      "line": 18
+      "index": 1,
+      "line": 19
     },
     {
       "aliases": [
         "/compact"
       ],
       "id": "compact",
-      "index": 1,
-      "line": 19
+      "index": 2,
+      "line": 20
     },
     {
       "aliases": [
         "/config"
       ],
       "id": "config",
-      "index": 2,
-      "line": 20
+      "index": 3,
+      "line": 21
     },
     {
       "aliases": [
         "/copy"
       ],
       "id": "copy",
-      "index": 3,
-      "line": 21
+      "index": 4,
+      "line": 22
     },
     {
       "aliases": [
         "/data-retention"
       ],
       "id": "data-retention",
-      "index": 4,
-      "line": 22
+      "index": 5,
+      "line": 23
     },
     {
       "aliases": [
         "/debug"
       ],
       "id": "debug",
-      "index": 5,
-      "line": 23
+      "index": 6,
+      "line": 24
     },
     {
       "aliases": [
@@ -258,40 +336,48 @@
         "quit"
       ],
       "id": "exit",
-      "index": 6,
-      "line": 24
+      "index": 7,
+      "line": 25
     },
     {
       "aliases": [
         "/help"
       ],
       "id": "help",
-      "index": 7,
-      "line": 25
+      "index": 8,
+      "line": 26
     },
     {
       "aliases": [
         "/leanstall"
       ],
       "id": "leanstall",
-      "index": 8,
-      "line": 26
+      "index": 9,
+      "line": 27
     },
     {
       "aliases": [
         "/log"
       ],
       "id": "log",
-      "index": 9,
-      "line": 27
+      "index": 10,
+      "line": 28
+    },
+    {
+      "aliases": [
+        "/log-level"
+      ],
+      "id": "log-level",
+      "index": 11,
+      "line": 29
     },
     {
       "aliases": [
         "/loop"
       ],
       "id": "loop",
-      "index": 10,
-      "line": 28
+      "index": 12,
+      "line": 30
     },
     {
       "aliases": [
@@ -299,56 +385,72 @@
         "/connectors"
       ],
       "id": "mcp",
-      "index": 11,
-      "line": 29
+      "index": 13,
+      "line": 31
     },
     {
       "aliases": [
         "/model"
       ],
       "id": "model",
-      "index": 12,
-      "line": 30
+      "index": 14,
+      "line": 32
     },
     {
       "aliases": [
         "/paste-image"
       ],
       "id": "paste-image",
-      "index": 13,
-      "line": 31
+      "index": 15,
+      "line": 33
+    },
+    {
+      "aliases": [
+        "/plugins"
+      ],
+      "id": "plugins",
+      "index": 16,
+      "line": 34
     },
     {
       "aliases": [
         "/proxy-setup"
       ],
       "id": "proxy-setup",
-      "index": 14,
-      "line": 32
+      "index": 17,
+      "line": 35
     },
     {
       "aliases": [
         "/reload"
       ],
       "id": "reload",
-      "index": 15,
-      "line": 33
+      "index": 18,
+      "line": 36
+    },
+    {
+      "aliases": [
+        "/reload-plugins"
+      ],
+      "id": "reload-plugins",
+      "index": 19,
+      "line": 37
     },
     {
       "aliases": [
         "/remote-project"
       ],
       "id": "remote-project",
-      "index": 16,
-      "line": 34
+      "index": 20,
+      "line": 38
     },
     {
       "aliases": [
         "/rename"
       ],
       "id": "rename",
-      "index": 17,
-      "line": 35
+      "index": 21,
+      "line": 39
     },
     {
       "aliases": [
@@ -356,85 +458,101 @@
         "/continue"
       ],
       "id": "resume",
-      "index": 18,
-      "line": 36
+      "index": 22,
+      "line": 40
     },
     {
       "aliases": [
         "/retry"
       ],
       "id": "retry",
-      "index": 19,
-      "line": 37
+      "index": 23,
+      "line": 41
     },
     {
       "aliases": [
         "/rewind"
       ],
       "id": "rewind",
-      "index": 20,
-      "line": 38
+      "index": 24,
+      "line": 42
+    },
+    {
+      "aliases": [
+        "/skills"
+      ],
+      "id": "skills",
+      "index": 25,
+      "line": 43
     },
     {
       "aliases": [
         "/status"
       ],
       "id": "status",
-      "index": 21,
-      "line": 39
+      "index": 26,
+      "line": 44
     },
     {
       "aliases": [
         "/teleport"
       ],
       "id": "teleport",
-      "index": 22,
-      "line": 40
+      "index": 27,
+      "line": 45
     },
     {
       "aliases": [
         "/theme"
       ],
       "id": "theme",
-      "index": 23,
-      "line": 41
+      "index": 28,
+      "line": 46
     },
     {
       "aliases": [
         "/thinking"
       ],
       "id": "thinking",
-      "index": 24,
-      "line": 42
+      "index": 29,
+      "line": 47
+    },
+    {
+      "aliases": [
+        "/todo"
+      ],
+      "id": "todo",
+      "index": 30,
+      "line": 48
     },
     {
       "aliases": [
         "/unleanstall"
       ],
       "id": "unleanstall",
-      "index": 25,
-      "line": 43
+      "index": 31,
+      "line": 49
     },
     {
       "aliases": [
         "/voice"
       ],
       "id": "voice",
-      "index": 26,
-      "line": 44
+      "index": 32,
+      "line": 50
     },
     {
       "aliases": [
         "/whoami"
       ],
       "id": "whoami",
-      "index": 27,
-      "line": 45
+      "index": 33,
+      "line": 51
     }
   ],
   "helpDocument": [
     {
-      "count": 46,
+      "count": 52,
       "id": "lineCount"
     },
     {
@@ -446,7 +564,7 @@
       "id": "sectionCount"
     },
     {
-      "count": 28,
+      "count": 34,
       "id": "commandLineCount"
     }
   ],
@@ -487,9 +605,9 @@
       "length": 34
     },
     {
-      "digest": "4adfe1967dd85e7127ff3a32ded03e3a3ac5205a6ccbad0f7671af325d7199cc",
+      "digest": "cf74b9168eacd31fecbd7539c159720d0209c534e07d61d221ceb4911a3dd1b2",
       "id": "line-08",
-      "length": 55
+      "length": 51
     },
     {
       "digest": "4563071d0c010fff5771722588ef46f758852f2676ed658d8889aca8be51a5de",
@@ -517,143 +635,173 @@
       "length": 12
     },
     {
-      "digest": "767094e24bc57696d20ffdd3619cdffa82b362974370f4e126ed8ba0500aaff2",
+      "digest": "60c1cd03f39843d680d46c041d6f7604813acb44a821a98b7f616e5393ca9c8f",
       "id": "line-18",
-      "length": 46
+      "length": 147
+    },
+    {
+      "digest": "09a36df7084c4c2da044a47a8c2afbb9ef2273aaf7919a8fd6efc208618433f9",
+      "id": "line-19",
+      "length": 82
     },
     {
       "digest": "f032eefd5bb2e520a9bc892bfd6eab885c7a970c6be49a1c99afead22719d773",
-      "id": "line-19",
+      "id": "line-20",
       "length": 108
     },
     {
       "digest": "213a2e12d6c9d05557aa600937feb766403cb7ccaa4a46b179472e65257ff012",
-      "id": "line-20",
+      "id": "line-21",
       "length": 33
     },
     {
       "digest": "39664bf190d44c9728d75d05b4117147771a84f7436b90fd9e789a8970d7e5bf",
-      "id": "line-21",
+      "id": "line-22",
       "length": 55
     },
     {
       "digest": "254afb6cb30a31a5edcaa6e8a355acc773da31fbb39fdcd8b378fb2d33dc88a9",
-      "id": "line-22",
+      "id": "line-23",
       "length": 52
     },
     {
       "digest": "45c8c5ad0f0b4d84969dfd2711af86fa209732efcb6580fe269e33ccdbfd5c0d",
-      "id": "line-23",
+      "id": "line-24",
       "length": 32
     },
     {
       "digest": "c566d93e0cf1a7f7f45ccfef237f330eccb128965d3f19999a76676dbfa9fd6d",
-      "id": "line-24",
+      "id": "line-25",
       "length": 62
     },
     {
       "digest": "dab64f4edbbc0079c1e256b53a472b7a83eb2aca6d532fb7bb35b52b6a031e4b",
-      "id": "line-25",
+      "id": "line-26",
       "length": 28
     },
     {
       "digest": "77a26b7f6b69e76c345a10df3086d48f41c291eeae721319cf6cbc73edc4cd96",
-      "id": "line-26",
+      "id": "line-27",
       "length": 52
     },
     {
       "digest": "2d0a4f22b2be11139b3cbaf9ebb40430abc639e3bb61d1d5f0ae5e92de6e801f",
-      "id": "line-27",
+      "id": "line-28",
       "length": 51
     },
     {
+      "digest": "eed4b70790b9dc431efa27395d9b5cecf2f560856a5c54f620c0cfd0ae2a2881",
+      "id": "line-29",
+      "length": 83
+    },
+    {
       "digest": "e2bb1b3c3ac51d0e549bab6ae541b7ca8c5a1691827db275bea75492c56935d4",
-      "id": "line-28",
+      "id": "line-30",
       "length": 113
     },
     {
       "digest": "bc476a5a57f6b90c8572cd056629354bd7bf2a7bfa853d4cf1d99ae40f6621f8",
-      "id": "line-29",
+      "id": "line-31",
       "length": 194
     },
     {
       "digest": "0b6f9dbd7d2c7a8ba800f6459fbe4c1d0ce6ca9f6509736e8da5c71d1abe9555",
-      "id": "line-30",
+      "id": "line-32",
       "length": 31
     },
     {
       "digest": "0b9794e4860857880cf348642149334a7a28891f72331f06f57696b53a8df1bb",
-      "id": "line-31",
+      "id": "line-33",
       "length": 70
     },
     {
+      "digest": "cffd7e7e05ca4ed79bc76f5aa1e7881b91ec7072ace702a52756d1275a6127d2",
+      "id": "line-34",
+      "length": 57
+    },
+    {
       "digest": "518bdf8178a1eec44f961a00a3eab24a04f60ab412b5063036c87398f3eb1d13",
-      "id": "line-32",
+      "id": "line-35",
       "length": 62
     },
     {
       "digest": "e67479e3ba55a3f385ee73d66d3598a995a1a2233f618735517eb7d3547425ad",
-      "id": "line-33",
+      "id": "line-36",
       "length": 75
     },
     {
+      "digest": "cc3a34ee844bc79fc04f987798891de67ab01945b386056303223ef7b0220b28",
+      "id": "line-37",
+      "length": 74
+    },
+    {
       "digest": "609b9fb679eeb3113d4329e59e3081d5ba5d996290743d10a39728a0cb7da8ad",
-      "id": "line-34",
+      "id": "line-38",
       "length": 73
     },
     {
       "digest": "d2f3ba625bb4d116ee6c3847658340650ac56ed5e8e8cac50928a6ae8032ff5a",
-      "id": "line-35",
+      "id": "line-39",
       "length": 39
     },
     {
       "digest": "8286663f78340889e92b08a505c32cdd3f3cf7cbcd55d17c6cf6efd6c4a3e963",
-      "id": "line-36",
+      "id": "line-40",
       "length": 66
     },
     {
       "digest": "c90f0c5b2cde138cbefb20bc27b3fa45cb8a731c3340c2779b301238a29932b1",
-      "id": "line-37",
+      "id": "line-41",
       "length": 91
     },
     {
       "digest": "f9c0a616004f4a8b9acaa1003454d41335d65f9fca11ca1d6bb6ce525746679c",
-      "id": "line-38",
+      "id": "line-42",
       "length": 62
     },
     {
+      "digest": "79855dcac9de1cd83c424d976a6064491d17dc217b76e63eb93384d091be5b96",
+      "id": "line-43",
+      "length": 46
+    },
+    {
       "digest": "73e773d89345a95af0210f872c2eb05938303aa21e20d486f6479bbdb087d55b",
-      "id": "line-39",
+      "id": "line-44",
       "length": 37
     },
     {
       "digest": "0652ed627c379ee1e473c621e72d0c975c69d670840e4aa48fef2caeb8dde460",
-      "id": "line-40",
+      "id": "line-45",
       "length": 48
     },
     {
       "digest": "a815788b2275eae8b8c84561c928e1935b61fa27a8bc1a6e8896804d09eab007",
-      "id": "line-41",
+      "id": "line-46",
       "length": 24
     },
     {
       "digest": "a04ca041b4d6ad7a517f87a04fe841b702ae1e4e9cdd5647ea871696d233c73d",
-      "id": "line-42",
+      "id": "line-47",
       "length": 36
     },
     {
+      "digest": "b1615f5c390dfa506f1a56ab6bdf407ad75ab3edd496268d0b8f274e8b14d425",
+      "id": "line-48",
+      "length": 37
+    },
+    {
       "digest": "884a3db236e545c457c7010aa0e2cdd3267e132999d5af86672fa2af3027a6d8",
-      "id": "line-43",
+      "id": "line-49",
       "length": 44
     },
     {
       "digest": "2046bc4384a7ceb402cb4eb5697deb4c756db9c5a62ecf664381448a2cb9b011",
-      "id": "line-44",
+      "id": "line-50",
       "length": 36
     },
     {
       "digest": "b7dfd7fe469c0562ff5ebe506e1b8cedc0ccf8bef8e2897ed1c6bf4751336745",
-      "id": "line-45",
+      "id": "line-51",
       "length": 68
     }
   ],
@@ -677,10 +825,16 @@
       "id": "commands",
       "index": 2,
       "level": 3,
-      "lineCount": 28
+      "lineCount": 34
     }
   ],
   "inventory": [
+    {
+      "aliases": [
+        "/branch"
+      ],
+      "id": "branch"
+    },
     {
       "aliases": [
         "/clear",
@@ -748,6 +902,12 @@
     },
     {
       "aliases": [
+        "/log-level"
+      ],
+      "id": "log-level"
+    },
+    {
+      "aliases": [
         "/loop"
       ],
       "id": "loop"
@@ -773,6 +933,12 @@
     },
     {
       "aliases": [
+        "/plugins"
+      ],
+      "id": "plugins"
+    },
+    {
+      "aliases": [
         "/proxy-setup"
       ],
       "id": "proxy-setup"
@@ -782,6 +948,12 @@
         "/reload"
       ],
       "id": "reload"
+    },
+    {
+      "aliases": [
+        "/reload-plugins"
+      ],
+      "id": "reload-plugins"
     },
     {
       "aliases": [
@@ -816,6 +988,12 @@
     },
     {
       "aliases": [
+        "/skills"
+      ],
+      "id": "skills"
+    },
+    {
+      "aliases": [
         "/status"
       ],
       "id": "status"
@@ -837,6 +1015,12 @@
         "/thinking"
       ],
       "id": "thinking"
+    },
+    {
+      "aliases": [
+        "/todo"
+      ],
+      "id": "todo"
     },
     {
       "aliases": [
@@ -1230,8 +1414,8 @@
     {
       "alias": null,
       "arguments": null,
-      "context": "vibeCode",
-      "id": "paste-image-vibe-code",
+      "context": "experimentalHarness",
+      "id": "paste-image-experimental-harness",
       "input": "/paste-image",
       "key": null
     },
@@ -1252,28 +1436,28 @@
       "key": "teleport"
     },
     {
-      "alias": null,
-      "arguments": null,
-      "context": "baseline",
-      "id": "teleport-baseline",
-      "input": "/teleport",
-      "key": null
-    },
-    {
       "alias": "/teleport",
       "arguments": "",
-      "context": "vibeCode",
-      "id": "teleport-vibe-code",
+      "context": "baseline",
+      "id": "teleport-baseline",
       "input": "/teleport",
       "key": "teleport"
     },
     {
-      "alias": null,
-      "arguments": null,
+      "alias": "/teleport",
+      "arguments": "",
+      "context": "experimentalHarness",
+      "id": "teleport-experimental-harness",
+      "input": "/teleport",
+      "key": "teleport"
+    },
+    {
+      "alias": "/remote-project",
+      "arguments": "",
       "context": "baseline",
       "id": "remote-project-baseline",
       "input": "/remote-project",
-      "key": null
+      "key": "remote-project"
     },
     {
       "alias": "/status",
@@ -1282,6 +1466,38 @@
       "id": "status-baseline",
       "input": "/status",
       "key": "status"
+    },
+    {
+      "alias": null,
+      "arguments": null,
+      "context": "baseline",
+      "id": "skills-baseline",
+      "input": "/skills",
+      "key": null
+    },
+    {
+      "alias": "/skills",
+      "arguments": "",
+      "context": "registrySkills",
+      "id": "skills-registry-skills",
+      "input": "/skills",
+      "key": "skills"
+    },
+    {
+      "alias": null,
+      "arguments": null,
+      "context": "baseline",
+      "id": "todo-baseline",
+      "input": "/todo",
+      "key": null
+    },
+    {
+      "alias": "/todo",
+      "arguments": "",
+      "context": "experimentalHarness",
+      "id": "todo-experimental-harness",
+      "input": "/todo",
+      "key": "todo"
     },
     {
       "alias": null,
@@ -1317,8 +1533,8 @@
     }
   ],
   "reference": {
-    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
-    "version": "2.24.0"
+    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd",
+    "version": "2.25.7"
   },
-  "schemaVersion": 1
+  "schemaVersion": 2
 }

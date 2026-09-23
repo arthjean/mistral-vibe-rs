@@ -48,12 +48,12 @@ const CAPTURE_SCRIPT: &str = "scripts/parity/app_server_surface.py";
 const CORPUS_RELATIVE: &str = "tests/app-server-surface/corpus.json";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 1;
+const CORPUS_SCHEMA_VERSION: u32 = 2;
 /// The session the probe opens; every session-scoped method is asked about it.
 ///
 /// The store resolves a selector by id prefix too, and a real session id is
 /// `session-<epoch-ms>-<n>`, so a probe id like `session-1` starts matching the
-/// operator's own sessions the moment one exists and flips `history/list` from
+/// operator's own sessions the moment one exists and flips a session-scoped read from
 /// unreachable to answering. This spelling can never prefix a timestamp-shaped
 /// id, which keeps the probe blind to the operator's store.
 const PROBE_SESSION: &str = "session-parity-probe";
@@ -70,12 +70,296 @@ const PROBE_SESSION: &str = "session-parity-probe";
 const UNROUTED_METHODS: &[(&str, &str)] =
     &[("identity/read", "US-142: declared at the v2.24.0 re-pin")];
 
+/// Reference methods `SERVER_METHODS` does not declare, each with the reference
+/// declaration and dispatcher it was measured from.
+///
+/// The v2.25.7 re-pin grew the reference inventory from 91 to 136 names
+/// (`vibe/app_server/protocol.py:105-242` at 4a96003). An undeclared method is
+/// unrouted too, so these entries also account for it in the unrouted backlog.
+/// A method declared while listed here fails the replay as a stale entry.
+const UNDECLARED_METHODS: &[(&str, &str)] = &[
+    (
+        "callback/result",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:110 and routes it at vibe/app_server/_handler.py:788; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "config/model/write",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:114 and routes it at vibe/app_server/_resources.py:348; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "config/write",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:118 and routes it at vibe/app_server/_resources.py:348; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "connector_catalog/auth/request",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:122 and routes it at vibe/app_server/connector_catalog.py:531; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "connector_catalog/read",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:123 and routes it at vibe/app_server/connector_catalog.py:518; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "connector_catalog/refresh",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:124 and routes it at vibe/app_server/connector_catalog.py:523; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "connector_catalog/toggle",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:125 and routes it at vibe/app_server/connector_catalog.py:527; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "events/read",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:128 and routes it at vibe/app_server/server.py:718; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "mcp_catalog/add",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:143 and routes it at vibe/app_server/mcp_catalog.py:297; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "mcp_catalog/login",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:144 and routes it at vibe/app_server/mcp_catalog.py:303; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "mcp_catalog/logout",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:145 and routes it at vibe/app_server/mcp_catalog.py:306; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "mcp_catalog/read",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:146 and routes it at vibe/app_server/mcp_catalog.py:266; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "mcp_catalog/refresh",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:147 and routes it at vibe/app_server/mcp_catalog.py:274; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "mcp_catalog/remove",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:148 and routes it at vibe/app_server/mcp_catalog.py:300; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "mcp_catalog/toggle",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:149 and routes it at vibe/app_server/mcp_catalog.py:294; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "plugin/info",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:151 and routes it at vibe/app_server/_unified_harness_backend_adapter.py:3827; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "plugin/reload",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:152 and routes it at vibe/app_server/_unified_harness_backend_adapter.py:3831; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "plugins/read",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:153 and routes it at vibe/app_server/plugin_catalog.py:50; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "plugin_catalog/read",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:154 and routes it at vibe/app_server/plugin_catalog.py:72; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "session/history/get",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:131 and routes it at vibe/app_server/_host.py:288; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "session/compact",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:172 and routes it at vibe/app_server/_handler.py:530; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "session/history/list",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:178 and routes it at vibe/app_server/_handler.py:541; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "session/pin",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:181 and routes it at vibe/app_server/server.py:878; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "session/relocate",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:185 and routes it at vibe/app_server/_handler.py:491; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "session/rename",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:186 and routes it at vibe/app_server/_handler.py:524; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "session/shellCommand",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:191 and routes it at vibe/app_server/_shell_requests.py:54; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "session/stop",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:193 and routes it at vibe/app_server/_handler.py:637; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "session/turns/list",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:195 and routes it at vibe/app_server/_handler.py:547; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "skills/catalog",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:198 and routes it at vibe/app_server/_skills_service.py:141; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "skills/convertLocal",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:199 and routes it at vibe/app_server/_skills_service.py:186; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "skills/detail",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:200 and routes it at vibe/app_server/_skills_service.py:156; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "skills/import",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:201 and routes it at vibe/app_server/_skills_service.py:161; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "skills/installed",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:202 and routes it at vibe/app_server/_skills_service.py:136; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "skills/remove",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:204 and routes it at vibe/app_server/_skills_service.py:181; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "skills/setAlias",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:205 and routes it at vibe/app_server/_skills_service.py:176; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "skills/setEnabled",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:206 and routes it at vibe/app_server/_skills_service.py:191; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "skills/setLatest",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:207 and routes it at vibe/app_server/_skills_service.py:171; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "skills/setVersion",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:208 and routes it at vibe/app_server/_skills_service.py:166; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "skills/updates",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:209 and routes it at vibe/app_server/_skills_service.py:151; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "skills/versions",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:210 and routes it at vibe/app_server/_skills_service.py:146; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "session/turn/enqueue",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:214 and routes it at vibe/app_server/_handler.py:668; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "session/turn/queue/read",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:215 and routes it at vibe/app_server/_handler.py:678; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "session/turn/queue/remove",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:216 and routes it at vibe/app_server/_handler.py:682; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "session/turn/queue/replace",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:217 and routes it at vibe/app_server/_handler.py:687; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "session/turn/queue/steer",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:218 and routes it at vibe/app_server/server.py:1138; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "session/turn/queue/resume",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:219 and routes it at vibe/app_server/_handler.py:699; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "workspace/git/checkouts",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:233 and routes it at vibe/app_server/_host.py:471; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "workspace/git/worktrees/limit/update",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:234 and routes it at vibe/app_server/_host.py:452; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "workspace/git/worktrees/list",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:235 and routes it at vibe/app_server/_host.py:445; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "workspace/git/worktrees/prune",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:236 and routes it at vibe/app_server/_host.py:464; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "workspace/git/worktrees/remove",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:237 and routes it at vibe/app_server/_host.py:478; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "workspace/trust/untrustedConfig",
+        "v2.25.7 declares it at vibe/app_server/protocol.py:240 and routes it at vibe/app_server/_host.py:438; SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+];
+
+/// Methods `SERVER_METHODS` declares and routes that the reference retired,
+/// each with what the reference did instead.
+///
+/// All seven were in the v2.24.0 inventory and are absent from the v2.25.7 one
+/// (`vibe/app_server/protocol.py:105-242` at 4a96003). A method this build stops
+/// declaring while listed here fails the replay as a stale entry.
+const RETIRED_METHODS: &[(&str, &str)] = &[
+    (
+        "callback/respond",
+        "v2.25.7 retired it from the inventory (v2.24.0 protocol.py:87) and answers callbacks through callback/result (vibe/app_server/_handler.py:788), though CallbackRespondParams stays declared (vibe/app_server/protocol.py:1991); this port still declares and routes callback/respond",
+    ),
+    (
+        "config/patch",
+        "v2.25.7 retired it from the inventory (v2.24.0 protocol.py:89) and deleted ConfigPatchParams and ConfigPatchResponse; the reference writes configuration through config/write (vibe/app_server/_resources.py:348); this port still declares and routes config/patch",
+    ),
+    (
+        "config/thinking/write",
+        "v2.25.7 retired it from the inventory (v2.24.0 protocol.py:95) and deleted ConfigThinkingWriteParams; this port still declares and routes config/thinking/write",
+    ),
+    (
+        "history/list",
+        "v2.25.7 retired it from the inventory (v2.24.0 protocol.py:103) and deleted HistoryListParams and HistoryListResponse; the reference pages history through session/history/list (vibe/app_server/_handler.py:541); this port still declares and routes history/list",
+    ),
+    (
+        "session/close",
+        "v2.25.7 retired it from the inventory (v2.24.0 protocol.py:133) though SessionCloseParams stays declared (vibe/app_server/protocol.py:475); the reference ends a session with session/stop (vibe/app_server/_handler.py:637); this port still declares and routes session/close",
+    ),
+    (
+        "session/compact/start",
+        "v2.25.7 retired it from the inventory (v2.24.0 protocol.py:134); the reference compacts through session/compact with the same SessionCompactParams (vibe/app_server/_handler.py:530); this port still declares and routes session/compact/start",
+    ),
+    (
+        "workspace/worktrees/list",
+        "v2.25.7 retired it from the inventory (v2.24.0 protocol.py:173) and lists worktrees through workspace/git/worktrees/list with the same WorkspaceWorktreeListParams (vibe/app_server/_host.py:445); this port still declares and routes workspace/worktrees/list",
+    ),
+];
+
 /// Reference notifications this build does not emit yet.
 ///
-/// US-085 emitted the last of them, so the list is empty and a notification
-/// that stops being emitted has to earn an entry here before the replay
-/// accepts it.
-const UNEMITTED_NOTIFICATIONS: &[(&str, &str)] = &[];
+/// US-085 emptied the list; the v2.25.7 re-pin added the seven notifications
+/// below, which this port does not emit. A notification that stops being
+/// emitted has to earn an entry here before the replay accepts it.
+const UNEMITTED_NOTIFICATIONS: &[(&str, &str)] = &[
+    (
+        "turn/queueUpdated",
+        "v2.25.7 sequences it (vibe/app_server/events.py:658) and emits it from the turn queue (vibe/app_server/_turns.py:824); this port emits nothing under this name",
+    ),
+    (
+        "session/childSessionUpdated",
+        "v2.25.7 sequences it (vibe/app_server/events.py:662) and emits it for child sessions (vibe/app_server/_unified_harness_backend_adapter.py:6496); this port emits nothing under this name",
+    ),
+    (
+        "mcp_catalog/authUrl",
+        "v2.25.7 publishes the MCP login URL under this name beside mcp/authUrl (vibe/app_server/mcp_catalog.py:469-470); this port emits only mcp/authUrl",
+    ),
+    (
+        "mcp_catalog/authRequired",
+        "v2.25.7 announces an MCP server that needs authorization (vibe/app_server/server.py:375, vibe/app_server/events.py:291); this port emits nothing under this name",
+    ),
+    (
+        "connector_catalog/authRequired",
+        "v2.25.7 announces a connector that needs authorization (vibe/app_server/connector_catalog.py:883, vibe/app_server/events.py:295); this port emits nothing under this name",
+    ),
+    (
+        "connector_catalog/authUrl",
+        "v2.25.7 publishes a connector login URL (vibe/app_server/connector_catalog.py:931); this port emits nothing under this name",
+    ),
+    (
+        "connector_catalog/authFailed",
+        "v2.25.7 reports a failed connector authorization (vibe/app_server/connector_catalog.py:896); this port emits nothing under this name",
+    ),
+];
 
 /// Notification names this build emits that the reference does not declare.
 ///
@@ -94,25 +378,105 @@ const UNMODELED_ENUMS: &[(&str, &str)] = &[
         "PublicRetryCategory",
         "US-142: reachable from v2.24.0, unmodeled here",
     ),
+    (
+        "RuntimeMutationStatus",
+        "v2.25.7 declares it (vibe/app_server/protocol.py:849) as the vocabulary of the status field RuntimeMutationResponse gained; this port models no such vocabulary",
+    ),
+    (
+        "SessionKind",
+        "v2.25.7 declares it (vibe/app_server/protocol.py:385) as a session lifecycle role; this port models no session kind",
+    ),
+];
+
+/// Values a vocabulary this port declares is missing, each with the reference
+/// declaration that added it. The comparison below still fails on any other
+/// difference, on order, and on an entry whose value this port now spells.
+const DIVERGENT_ENUM_VALUES: &[(&str, &str, &str)] = &[
+    (
+        "AgentSafety",
+        "smart",
+        "v2.25.7 adds it before yolo (vibe/agents.py:12); crate::vocabulary::AgentSafety has no such value",
+    ),
+    (
+        "ToolEffectKind",
+        "worktree",
+        "v2.25.7 adds it (vibe/utils/tool_presentation.py:31) with WorktreeEffectDetail; vibe_core::events::ToolEffectKind has no such kind",
+    ),
+    (
+        "ToolEffectKind",
+        "process",
+        "v2.25.7 adds it (vibe/utils/tool_presentation.py:32) with ProcessEffectDetail; vibe_core::events::ToolEffectKind has no such kind",
+    ),
+    (
+        "TurnErrorCode",
+        "incomplete_stream",
+        "v2.25.7 adds it after compaction_failed (vibe/app_server/models.py:386); vibe_core::events::TurnErrorCode has no such code",
+    ),
+    (
+        "TurnErrorCode",
+        "invalid_model",
+        "v2.25.7 adds it after backend_error (vibe/app_server/models.py:388); vibe_core::events::TurnErrorCode has no such code",
+    ),
+    (
+        "TurnErrorCode",
+        "invalid_api_key",
+        "v2.25.7 adds it after invalid_model (vibe/app_server/models.py:389); vibe_core::events::TurnErrorCode has no such code",
+    ),
+];
+
+/// Protocol error codes the reference declares that this port does not speak.
+const UNSPOKEN_ERROR_CODES: &[(&str, &str)] = &[
+    (
+        "callback_closed",
+        "v2.25.7 adds it (vibe/app_server/protocol.py:2127); vibe_protocol::ProtocolErrorCode has no such code",
+    ),
+    (
+        "not_implemented",
+        "v2.25.7 adds it (vibe/app_server/protocol.py:2132); vibe_protocol::ProtocolErrorCode has no such code",
+    ),
+    (
+        "stale_cursor",
+        "v2.25.7 adds it (vibe/app_server/protocol.py:2133); vibe_protocol::ProtocolErrorCode has no such code",
+    ),
+];
+
+/// Pointers at which this port's handshake answer diverges from the census.
+const DIVERGENT_HANDSHAKE: &[(&str, &str)] = &[
+    (
+        "/capabilities",
+        "v2.25.7 reduced InitializeResponse to serverInfo (vibe/app_server/_connection_protocol.py:98-99) and deleted ServerCapabilities; this port still answers its advertised capabilities",
+    ),
+    (
+        "/protocolVersion",
+        "v2.25.7 reduced InitializeResponse to serverInfo (vibe/app_server/_connection_protocol.py:98-99); this port still answers a protocol version",
+    ),
 ];
 
 /// Methods whose probed response does not validate against the census yet, each
-/// with the story that fixes it. A method that starts validating while listed
-/// here fails the replay as a stale entry.
-/// US-093 closed the last one. The two that remain arrived with the v2.24.0
-/// re-pin (US-142), which gave `ConfigView` the three fields the unpinned
-/// active-model feature publishes: `activeModelPinned`, `defaultModelAlias` and
-/// `showGreeting`. Producing them means porting that feature, which is
-/// configuration parity work. Any other response that stops validating has to
-/// earn an entry here before the replay accepts it.
+/// with the pointers it diverges at and the reference change behind them. A
+/// method that starts validating while listed here fails the replay as a stale
+/// entry.
+/// US-093 closed the last one. The v2.24.0 re-pin (US-142) opened `config/read`
+/// and `runtime/read` with the three unpinned active-model fields of
+/// `ConfigView`; the v2.25.7 re-pin widened both and opened the two session
+/// reads. Any other response that stops validating has to earn an entry here
+/// before the replay accepts it.
 const DIVERGENT_RESPONSES: &[(&str, &str)] = &[
     (
         "config/read",
-        "US-142: ConfigView gained three unpinned-model fields at v2.24.0",
+        "US-142 and v2.25.7: /config lacks activeModelPinned, defaultModelAlias and showGreeting (v2.24.0) and logLevel, showSubagentStatusList, worktreeLimit and experimentalEnableTabStatus (vibe/app_server/config.py:59-82), and still carries vibeCodeEnabled, which v2.25.7 removed from ConfigView; every /config model lacks displayName (vibe/app_server/config.py:18); /baseConfig is no longer declared by ConfigReadResponse (vibe/app_server/protocol.py:970)",
     ),
     (
         "runtime/read",
-        "US-142: ConfigView gained three unpinned-model fields at v2.24.0",
+        "US-142 and v2.25.7: /runtime/config diverges exactly as config/read's /config does (vibe/app_server/config.py:18,59-82); /runtime/baseConfig is no longer declared by RuntimeSnapshot (vibe/app_server/protocol.py:799)",
+    ),
+    (
+        "session/list",
+        "v2.25.7: SessionListResponse answers items, nextCursor, previousCursor and continueSessionId (vibe/app_server/protocol.py:496-503); this port still answers /sessions",
+    ),
+    (
+        "session/read",
+        "v2.25.7: PublicSessionState.history is a list of entries and latestTurn is no longer a field but a property over turns (vibe/app_server/models.py:1198,1206-1210); this port answers /state/history as a page object and still carries /state/latestTurn (crates/vibe-app-server/src/server/projection.rs:101,111)",
     ),
 ];
 
@@ -130,7 +494,6 @@ fn probe_requests() -> Vec<(&'static str, Value)> {
         ("connectors/auth/read", session.clone()),
         ("connectors/read", session.clone()),
         ("diagnostics/list", session.clone()),
-        ("history/list", session.clone()),
         ("mcp/read", session.clone()),
         // The session-less surface takes no session, and a path that resolves
         // to no repository is answered rather than refused, which is what makes
@@ -187,7 +550,9 @@ fn probe_requests() -> Vec<(&'static str, Value)> {
         ),
         // A path that is no repository answers an empty listing rather than
         // refusing, which is what makes the worktree listing probeable without
-        // scripting a checkout.
+        // scripting a checkout. The reference retired this name at v2.25.7 for
+        // `workspace/git/worktrees/list` over the same models, so the answer is
+        // validated against the successor's (see `corpus_method`).
         ("workspace/worktrees/list", json!({"cwd": "/workspace"})),
     ]
 }
@@ -197,16 +562,22 @@ fn probe_requests() -> Vec<(&'static str, Value)> {
 /// A method that starts answering while listed here fails the replay as a stale
 /// entry, and one that stops answering has to earn a line here rather than
 /// leaving the conforming count quietly counting fewer methods than it names.
-const UNREACHABLE_PROBES: &[(&str, &str)] = &[
-    (
-        "connectors/auth/read",
-        "no connector is configured in a bare probe session, so there is no name to authorize",
-    ),
-    (
-        "history/list",
-        "the probe session is never written to the store, and the transcript is read from it",
-    ),
-];
+const UNREACHABLE_PROBES: &[(&str, &str)] = &[(
+    "connectors/auth/read",
+    "no connector is configured in a bare probe session, so there is no name to authorize",
+)];
+
+/// The corpus method whose response model a probed method is validated against.
+///
+/// A method the reference retired for a successor over the same models is
+/// measured against that successor, which keeps its answer measured by the
+/// census rather than by nothing. Every other method is its own.
+fn corpus_method(method: &str) -> &str {
+    match method {
+        "workspace/worktrees/list" => "workspace/git/worktrees/list",
+        other => other,
+    }
+}
 
 // --------------------------------------------------------------------------
 // Corpus
@@ -241,8 +612,10 @@ struct Reference {
 #[serde(deny_unknown_fields)]
 struct MethodEntry {
     name: String,
-    params: String,
-    response: String,
+    /// `None` for a method the reference declares with no model, as
+    /// `shell/interrupt` is since v2.25.7 deleted its models.
+    params: Option<String>,
+    response: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -343,20 +716,45 @@ fn the_inventory_is_exactly_the_reference_inventory() {
         .iter()
         .map(|entry| entry.name.as_str())
         .collect::<BTreeSet<_>>();
+    let undeclared_backlog = ledger(UNDECLARED_METHODS);
+    let retired_backlog = ledger(RETIRED_METHODS);
+    let undeclared = reference.difference(&declared).copied().collect::<Vec<_>>();
+    let retired = declared.difference(&reference).copied().collect::<Vec<_>>();
     assert_eq!(
-        reference.difference(&declared).copied().collect::<Vec<_>>(),
-        Vec::<&str>::new(),
+        undeclared
+            .iter()
+            .filter(|method| !undeclared_backlog.contains_key(**method))
+            .collect::<Vec<_>>(),
+        Vec::<&&str>::new(),
         "the reference declares these methods and SERVER_METHODS does not"
     );
     assert_eq!(
-        declared.difference(&reference).copied().collect::<Vec<_>>(),
-        Vec::<&str>::new(),
+        retired
+            .iter()
+            .filter(|method| !retired_backlog.contains_key(**method))
+            .collect::<Vec<_>>(),
+        Vec::<&&str>::new(),
         "SERVER_METHODS invents these methods"
     );
+    let stale = undeclared_backlog
+        .keys()
+        .filter(|method| !undeclared.contains(&method.as_str()))
+        .chain(
+            retired_backlog
+                .keys()
+                .filter(|method| !retired.contains(&method.as_str())),
+        )
+        .collect::<Vec<_>>();
+    assert!(
+        stale.is_empty(),
+        "these inventory entries no longer name a divergence and are stale: {stale:?}"
+    );
     eprintln!(
-        "app-server surface: methods {}/{} declared",
-        declared.len(),
-        reference.len()
+        "app-server surface: methods {}/{} declared, {} undeclared and {} retired awaiting a story",
+        reference.len() - undeclared.len(),
+        reference.len(),
+        undeclared.len(),
+        retired.len()
     );
 }
 
@@ -372,14 +770,19 @@ fn every_routed_method_is_in_the_reference_inventory_or_a_local_extension() {
         .iter()
         .copied()
         .collect::<BTreeSet<_>>();
+    let retired = ledger(RETIRED_METHODS);
     let invented = routed_methods()
         .into_iter()
-        .filter(|method| !reference.contains(method) && !extensions.contains(method))
+        .filter(|method| {
+            !reference.contains(method)
+                && !extensions.contains(method)
+                && !retired.contains_key(*method)
+        })
         .collect::<Vec<_>>();
     assert_eq!(
         invented,
         Vec::<&str>::new(),
-        "routed but absent from both the corpus and LOCAL_EXTENSION_METHODS"
+        "routed but absent from the corpus, LOCAL_EXTENSION_METHODS and RETIRED_METHODS"
     );
     for method in &extensions {
         assert!(
@@ -394,6 +797,9 @@ fn the_unrouted_reference_methods_are_exactly_the_recorded_backlog() {
     let corpus = corpus();
     let routed = routed_methods();
     let backlog = ledger(UNROUTED_METHODS);
+    // An undeclared method is unrouted for the same reason, and its entry there
+    // goes stale on its own once the method is declared.
+    let undeclared = ledger(UNDECLARED_METHODS);
     let unrouted = corpus
         .methods
         .iter()
@@ -402,7 +808,7 @@ fn the_unrouted_reference_methods_are_exactly_the_recorded_backlog() {
         .collect::<BTreeSet<_>>();
     let missing = unrouted
         .iter()
-        .filter(|method| !backlog.contains_key(*method))
+        .filter(|method| !backlog.contains_key(*method) && !undeclared.contains_key(*method))
         .collect::<Vec<_>>();
     assert!(
         missing.is_empty(),
@@ -437,14 +843,29 @@ fn the_handshake_answer_validates_against_the_census() {
 
     let mut issues = Vec::new();
     census.validate("", "InitializeResponse", &response, &mut issues);
+    let backlog = ledger(DIVERGENT_HANDSHAKE);
+    let pointer_of = |issue: &String| issue.split(':').next().unwrap_or_default().to_owned();
+    let unrecorded = issues
+        .iter()
+        .filter(|issue| !backlog.contains_key(&pointer_of(issue)))
+        .collect::<Vec<_>>();
     assert!(
-        issues.is_empty(),
-        "the handshake answer diverges from the census: {issues:?}"
+        unrecorded.is_empty(),
+        "the handshake answer diverges from the census: {unrecorded:?}"
+    );
+    let stale = backlog
+        .keys()
+        .filter(|pointer| !issues.iter().any(|issue| pointer_of(issue) == **pointer))
+        .collect::<Vec<_>>();
+    assert!(
+        stale.is_empty(),
+        "these handshake entries no longer name a divergence and are stale: {stale:?}"
     );
 
-    // `validate` walks the nested models the response carries, so reaching
-    // `ServerCapabilities` here is what proves the census entry was exercised
-    // rather than merely present.
+    // The census no longer declares `ServerCapabilities` (v2.25.7), so this
+    // list is the divergence `DIVERGENT_HANDSHAKE` records rather than a census
+    // entry exercised; it is still asserted because the advertised-surface test
+    // below reads it.
     assert!(
         response["capabilities"]["methods"].is_array(),
         "the handshake carries no advertised method list: {response}"
@@ -565,7 +986,10 @@ fn the_unemitted_reference_notifications_are_exactly_the_recorded_backlog() {
         .iter()
         .filter(|entry| entry.sequenced)
         .count();
-    assert_eq!(sequenced, 9, "the reference sequences nine notifications");
+    assert_eq!(
+        sequenced, 11,
+        "the reference sequences eleven notifications"
+    );
 }
 
 #[test]
@@ -594,11 +1018,26 @@ fn every_error_code_the_reference_declares_is_spoken_here() {
             .unwrap_or_default()
     })
     .collect::<BTreeSet<_>>();
-    assert_eq!(declared, spoken, "the error vocabulary diverged");
+    let backlog = ledger(UNSPOKEN_ERROR_CODES);
+    let expected = declared
+        .iter()
+        .filter(|code| !backlog.contains_key(*code))
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    assert_eq!(expected, spoken, "the error vocabulary diverged");
+    let stale = backlog
+        .keys()
+        .filter(|code| !declared.contains(*code) || spoken.contains(*code))
+        .collect::<Vec<_>>();
+    assert!(
+        stale.is_empty(),
+        "these error codes are spoken now or no longer declared, and their entry is stale: {stale:?}"
+    );
     eprintln!(
-        "app-server surface: error codes {}/{}",
+        "app-server surface: error codes {}/{}, {} awaiting a story",
         spoken.len(),
-        declared.len()
+        declared.len(),
+        backlog.len()
     );
 }
 
@@ -741,10 +1180,27 @@ fn the_enum_vocabularies_this_port_declares_match_the_reference() {
         ),
     ];
     for (name, values) in &declared {
-        let expected = reference
+        let reference_values = reference
             .get(name)
             .unwrap_or_else(|| unreachable!("{name} is not in the corpus"));
-        assert_eq!(&values, expected, "the {name} vocabulary diverged");
+        let missing = DIVERGENT_ENUM_VALUES
+            .iter()
+            .filter(|(vocabulary, _, _)| vocabulary == name)
+            .map(|(_, value, _)| *value)
+            .collect::<Vec<_>>();
+        for value in &missing {
+            assert!(
+                reference_values.iter().any(|known| known == value)
+                    && !values.iter().any(|known| known == value),
+                "{name}/{value} no longer names a divergence and its entry is stale"
+            );
+        }
+        let expected = reference_values
+            .iter()
+            .filter(|value| !missing.contains(&value.as_str()))
+            .cloned()
+            .collect::<Vec<_>>();
+        assert_eq!(values, &expected, "the {name} vocabulary diverged");
         assert!(
             !backlog.contains_key(*name),
             "{name} is modeled now and its backlog entry is stale"
@@ -771,11 +1227,18 @@ fn the_enum_vocabularies_this_port_declares_match_the_reference() {
         [] as [String; 0],
         "the pinned reference declares a vocabulary this corpus recorded as absent"
     );
+    for (vocabulary, value, _) in DIVERGENT_ENUM_VALUES {
+        assert!(
+            declared.iter().any(|(known, _)| known == vocabulary),
+            "{vocabulary}/{value} names a vocabulary this replay does not compare"
+        );
+    }
     eprintln!(
-        "app-server surface: enums {}/{} compared, {} awaiting a story",
+        "app-server surface: enums {}/{} compared, {} awaiting a story, {} values missing",
         declared.len(),
         reference.len(),
-        backlog.len()
+        backlog.len(),
+        DIVERGENT_ENUM_VALUES.len()
     );
 }
 
@@ -952,7 +1415,8 @@ pub(crate) fn census_issues(method: &str, response: &Value) -> Vec<String> {
         .find(|entry| entry.name == method)
         .unwrap_or_else(|| unreachable!("{method} is not a corpus method"))
         .response
-        .clone();
+        .clone()
+        .unwrap_or_else(|| unreachable!("the reference declares no response model for {method}"));
     let mut issues = Vec::new();
     Census::new(&corpus).validate("", &model, response, &mut issues);
     issues
@@ -978,7 +1442,7 @@ fn every_model_the_census_references_has_an_entry() {
         .chain(&corpus.client_tool_methods)
         .chain(&corpus.server_requests)
     {
-        for referenced in [&entry.params, &entry.response] {
+        for referenced in [&entry.params, &entry.response].into_iter().flatten() {
             if !census.models.contains_key(referenced.as_str()) {
                 missing.insert(format!("{}: {referenced}", entry.name));
             }
@@ -1015,7 +1479,7 @@ fn every_probed_response_validates_against_the_census() {
     let responses = corpus
         .methods
         .iter()
-        .map(|entry| (entry.name.as_str(), entry.response.as_str()))
+        .filter_map(|entry| Some((entry.name.as_str(), entry.response.as_deref()?)))
         .collect::<BTreeMap<_, _>>();
     let backlog = ledger(DIVERGENT_RESPONSES);
 
@@ -1031,7 +1495,7 @@ fn every_probed_response_validates_against_the_census() {
         };
         probed.push(method);
         let model = responses
-            .get(method)
+            .get(corpus_method(method))
             .unwrap_or_else(|| unreachable!("{method} is not a corpus method"));
         let mut issues = Vec::new();
         census.validate("", model, &result, &mut issues);
@@ -1970,7 +2434,7 @@ fn every_issued_client_tool_request_validates_against_the_census() {
     let params_models = corpus
         .client_tool_methods
         .iter()
-        .map(|entry| (entry.name.as_str(), entry.params.as_str()))
+        .filter_map(|entry| Some((entry.name.as_str(), entry.params.as_deref()?)))
         .collect::<BTreeMap<_, _>>();
     let mut issues = Vec::new();
     for request in &issued {

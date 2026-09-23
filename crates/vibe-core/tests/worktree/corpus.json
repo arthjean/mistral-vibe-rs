@@ -663,7 +663,7 @@
         "twice": false
       },
       "observed": {
-        "errorClass": "WorktreeNotFoundError",
+        "errorClass": "GitRepositoryNotFoundError",
         "message": {
           "described": "sha256:5b250b4a30e89b18ff2e1e9cdade1cd8",
           "length": 36
@@ -709,10 +709,10 @@
         "twice": false
       },
       "observed": {
-        "errorClass": "WorktreeError",
+        "errorClass": "GitError",
         "message": {
-          "described": "sha256:0c8ca9990f6b9717a7142c4414d02413",
-          "length": 35
+          "described": "sha256:01671177770247ee8603b8a5564538c2",
+          "length": 26
         },
         "outcome": "error",
         "residue": {
@@ -857,7 +857,7 @@
         "twice": false
       },
       "observed": {
-        "errorClass": "WorktreeError",
+        "errorClass": "GitError",
         "message": {
           "described": "sha256:efc84bba89a2d317c7fafab02c80acb1",
           "length": 92
@@ -1115,7 +1115,7 @@
         "base": "."
       },
       "observed": {
-        "errorClass": "WorktreeNotFoundError",
+        "errorClass": "GitRepositoryNotFoundError",
         "message": {
           "described": "sha256:5b250b4a30e89b18ff2e1e9cdade1cd8",
           "length": 36
@@ -1222,8 +1222,12 @@
         "root": "tree"
       },
       "observed": {
-        "outcome": "resolved",
-        "path": "tree/sub"
+        "errorClass": "WorktreeError",
+        "message": {
+          "described": "sha256:872b3da96f9c6ba7a75dff59bd5b7ad4",
+          "length": 88
+        },
+        "outcome": "error"
       },
       "setup": "target-tree"
     },
@@ -1247,7 +1251,7 @@
   ],
   "note": "Worktree corpus: what the pinned reference's own worktree functions answer over repositories this capture scripts under a hermetic git environment. Paths are relative to the case root, the managed directory's hashed segment is {repoDir} and the scripted head commit is {headCommit}, so the corpus is machine-independent. A reference sentence is committed as a {described, length} marker carrying a SHA-256 digest, so no reference prose ships while any change still fails the replay. Regenerate with scripts/parity/worktree.py --corpus when the pinned reference moves.",
   "platform": "linux",
-  "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+  "referenceCommit": "4a96003186b166d55b9f06895c45bb136eef61cd",
   "schemaVersion": 1,
   "setups": [
     "plain",

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "reference": {
-    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7"
+    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
   },
   "note": "VS Code promo corpus: the ceiling, the start instant, the predicate, and what the pinned reference's filesystem repository reads back out of each cache.toml document. The two reference sentences are committed as a byte length and a SHA-256 because NOTICE forbids shipping reference-authored prose; the replay asserts this port's own sentences never match either digest. Regenerate with scripts/parity/experiments.py --corpus when the pinned reference moves.",
   "promoConstants": [

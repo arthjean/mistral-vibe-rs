@@ -10,8 +10,8 @@
         "hasPath": false,
         "name": "skill-creator",
         "prompt": {
-          "digest": "110717a952efd6ede24dc38468e4292e5b2f19634962d68dd65ff9ea363dd3c7",
-          "length": 4500
+          "digest": "1afef6b624de5c05f356e0b94b64406e55dc06d9e7e1c02dc25adcca75377ac7",
+          "length": 4678
         },
         "scope": "global",
         "source": "builtin",
@@ -19,14 +19,14 @@
       },
       {
         "description": {
-          "digest": "14fb2f5715571fb7ae3577a38a8233e71fe66949f8fcd7c0acd408234e9bbf42",
-          "length": 833
+          "digest": "050ebe851d36b47c8fe6d0ab3539436916ab5bed7d86678cf13dc3b45312146a",
+          "length": 842
         },
         "hasPath": false,
         "name": "vibe",
         "prompt": {
-          "digest": "4e3771ef93a833011413db827418ba6e7653c94ba095aa26b6b1af952181db69",
-          "length": 39666
+          "digest": "c5de2ffaca06255d20dd0c050f969e4d09141503fd77ef47e54458dde136eeb6",
+          "length": 59337
         },
         "scope": "global",
         "source": "builtin",
@@ -133,8 +133,8 @@
         "prompt": "/skill-creator",
         "result": {
           "content": {
-            "digest": "110717a952efd6ede24dc38468e4292e5b2f19634962d68dd65ff9ea363dd3c7",
-            "length": 4500
+            "digest": "1afef6b624de5c05f356e0b94b64406e55dc06d9e7e1c02dc25adcca75377ac7",
+            "length": 4678
           },
           "extraInstructions": null,
           "name": "skill-creator"
@@ -212,7 +212,7 @@
           "name": "alpha",
           "relPath": ".vibe/skills/alpha/SKILL.md",
           "root": "project",
-          "scope": "global",
+          "scope": "project",
           "source": "local",
           "userInvocable": true
         },
@@ -262,7 +262,7 @@
           "name": "beta",
           "relPath": ".agents/skills/beta/SKILL.md",
           "root": "project",
-          "scope": "global",
+          "scope": "project",
           "source": "local",
           "userInvocable": true
         },
@@ -312,7 +312,7 @@
           "name": "alpha",
           "relPath": ".vibe/skills/alpha/SKILL.md",
           "root": "project",
-          "scope": "global",
+          "scope": "project",
           "source": "local",
           "userInvocable": true
         },
@@ -321,7 +321,7 @@
           "name": "beta",
           "relPath": ".agents/skills/beta/SKILL.md",
           "root": "project",
-          "scope": "global",
+          "scope": "project",
           "source": "local",
           "userInvocable": true
         },
@@ -376,7 +376,7 @@
           "name": "shared",
           "relPath": ".vibe/skills/shared/SKILL.md",
           "root": "project",
-          "scope": "global",
+          "scope": "project",
           "source": "local",
           "userInvocable": true
         },
@@ -740,7 +740,7 @@
           "name": "shared",
           "relPath": ".vibe/skills/shared/SKILL.md",
           "root": "project",
-          "scope": "global",
+          "scope": "project",
           "source": "local",
           "userInvocable": true
         },
@@ -867,7 +867,7 @@
           "name": "alpha",
           "relPath": ".vibe/skills/alpha/SKILL.md",
           "root": "project",
-          "scope": "global",
+          "scope": "project",
           "source": "local",
           "userInvocable": true
         },
@@ -919,7 +919,7 @@
           "name": "alpha",
           "relPath": ".vibe/skills/alpha/SKILL.md",
           "root": "project",
-          "scope": "global",
+          "scope": "project",
           "source": "local",
           "userInvocable": true
         },
@@ -1145,7 +1145,7 @@
           "name": "twin",
           "relPath": null,
           "root": null,
-          "scope": "global",
+          "scope": "project",
           "source": "local",
           "userInvocable": true
         },
@@ -1187,7 +1187,7 @@
           "name": "alpha",
           "relPath": ".vibe/skills/alpha/SKILL.md",
           "root": "project",
-          "scope": "global",
+          "scope": "project",
           "source": "local",
           "userInvocable": true
         },
@@ -1244,7 +1244,7 @@
           "name": "alpha",
           "relPath": ".vibe/skills/alpha/SKILL.md",
           "root": "project",
-          "scope": "global",
+          "scope": "project",
           "source": "local",
           "userInvocable": true
         },
@@ -1438,7 +1438,7 @@
           "name": "real-name",
           "relPath": ".vibe/skills/folder-name/SKILL.md",
           "root": "project",
-          "scope": "global",
+          "scope": "project",
           "source": "local",
           "userInvocable": true
         },
@@ -2157,6 +2157,7 @@
         "allowed_tools": [],
         "compatibility": null,
         "description": "A probe",
+        "disable_model_invocation": false,
         "license": null,
         "metadata": {},
         "name": "probe",
@@ -2177,6 +2178,7 @@
         ],
         "compatibility": "none needed",
         "description": "Everything set",
+        "disable_model_invocation": false,
         "license": "MIT",
         "metadata": {
           "display-name": "Full Probe"
@@ -2210,6 +2212,7 @@
         ],
         "compatibility": null,
         "description": "d",
+        "disable_model_invocation": false,
         "license": null,
         "metadata": {},
         "name": "p",
@@ -2231,6 +2234,7 @@
         ],
         "compatibility": null,
         "description": "d",
+        "disable_model_invocation": false,
         "license": null,
         "metadata": {},
         "name": "p",
@@ -2252,6 +2256,7 @@
         "allowed_tools": [],
         "compatibility": null,
         "description": "d",
+        "disable_model_invocation": false,
         "license": null,
         "metadata": {},
         "name": "p",
@@ -2270,6 +2275,7 @@
         "allowed_tools": [],
         "compatibility": null,
         "description": "d",
+        "disable_model_invocation": false,
         "license": null,
         "metadata": {},
         "name": "p",
@@ -2290,6 +2296,7 @@
         ],
         "compatibility": null,
         "description": "d",
+        "disable_model_invocation": false,
         "license": null,
         "metadata": {},
         "name": "p",
@@ -2310,6 +2317,7 @@
         ],
         "compatibility": null,
         "description": "d",
+        "disable_model_invocation": false,
         "license": null,
         "metadata": {},
         "name": "p",
@@ -2329,6 +2337,7 @@
         "allowed_tools": [],
         "compatibility": null,
         "description": "d",
+        "disable_model_invocation": false,
         "license": null,
         "metadata": {},
         "name": "p",
@@ -2347,6 +2356,7 @@
         "allowed_tools": [],
         "compatibility": null,
         "description": "d",
+        "disable_model_invocation": false,
         "license": null,
         "metadata": {},
         "name": "p",
@@ -2365,6 +2375,7 @@
         "allowed_tools": [],
         "compatibility": null,
         "description": "d",
+        "disable_model_invocation": false,
         "license": null,
         "metadata": {},
         "name": "p",
@@ -2384,6 +2395,7 @@
         "allowed_tools": [],
         "compatibility": null,
         "description": "d",
+        "disable_model_invocation": false,
         "license": null,
         "metadata": {},
         "name": "p",
@@ -2402,6 +2414,7 @@
         "allowed_tools": [],
         "compatibility": null,
         "description": "d",
+        "disable_model_invocation": false,
         "license": null,
         "metadata": {},
         "name": "p",
@@ -2429,6 +2442,7 @@
         "allowed_tools": [],
         "compatibility": null,
         "description": "d",
+        "disable_model_invocation": false,
         "license": null,
         "metadata": {
           "count": "42",
@@ -2457,6 +2471,7 @@
         "allowed_tools": [],
         "compatibility": null,
         "description": "d",
+        "disable_model_invocation": false,
         "license": null,
         "metadata": {},
         "name": "p",
@@ -2475,6 +2490,7 @@
         "allowed_tools": [],
         "compatibility": null,
         "description": "d",
+        "disable_model_invocation": false,
         "license": null,
         "metadata": {
           "1": "one"
@@ -2497,6 +2513,7 @@
         "allowed_tools": [],
         "compatibility": null,
         "description": "d",
+        "disable_model_invocation": false,
         "license": null,
         "metadata": {},
         "name": "p",
@@ -2515,6 +2532,7 @@
         "allowed_tools": [],
         "compatibility": null,
         "description": "d",
+        "disable_model_invocation": false,
         "license": null,
         "metadata": {},
         "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -2532,6 +2550,7 @@
         "allowed_tools": [],
         "compatibility": null,
         "description": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "disable_model_invocation": false,
         "license": null,
         "metadata": {},
         "name": "p",
@@ -2549,6 +2568,7 @@
         "allowed_tools": [],
         "compatibility": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
         "description": "d",
+        "disable_model_invocation": false,
         "license": null,
         "metadata": {},
         "name": "p",
@@ -2567,6 +2587,7 @@
         "allowed_tools": [],
         "compatibility": null,
         "description": "d",
+        "disable_model_invocation": false,
         "license": null,
         "metadata": {},
         "name": "p",
@@ -2724,8 +2745,12 @@
       },
       "summary": {
         "description": "A probe",
+        "enabled": true,
+        "locked": false,
         "name": "probe",
         "prompt": "Body.",
+        "registry": null,
+        "scope": "global",
         "source": "local",
         "userInvocable": true
       }
@@ -2740,8 +2765,12 @@
       },
       "summary": {
         "description": "Model only",
+        "enabled": true,
+        "locked": false,
         "name": "hidden",
         "prompt": "Body.",
+        "registry": null,
+        "scope": "global",
         "source": "local",
         "userInvocable": false
       }
@@ -2757,8 +2786,12 @@
       },
       "summary": {
         "description": "Builtin shape",
+        "enabled": true,
+        "locked": false,
         "name": "inline",
         "prompt": "Inline prompt.",
+        "registry": null,
+        "scope": "global",
         "source": "builtin",
         "userInvocable": false
       }
@@ -2773,8 +2806,12 @@
       },
       "summary": {
         "description": "From the registry",
+        "enabled": true,
+        "locked": false,
         "name": "remote",
         "prompt": "Body.",
+        "registry": null,
+        "scope": "global",
         "source": "registry",
         "userInvocable": true
       }
@@ -2788,8 +2825,12 @@
       },
       "summary": {
         "description": "Précis à jour",
+        "enabled": true,
+        "locked": false,
         "name": "accents",
         "prompt": "Corps du texte.",
+        "registry": null,
+        "scope": "global",
         "source": "local",
         "userInvocable": true
       }
@@ -2803,8 +2844,12 @@
       },
       "summary": {
         "description": "No body",
+        "enabled": true,
+        "locked": false,
         "name": "empty",
         "prompt": "",
+        "registry": null,
+        "scope": "global",
         "source": "local",
         "userInvocable": true
       }
@@ -2826,8 +2871,12 @@
       },
       "summary": {
         "description": "Carries every model field",
+        "enabled": true,
+        "locked": false,
         "name": "rich",
         "prompt": "Body.",
+        "registry": null,
+        "scope": "global",
         "source": "local",
         "userInvocable": true
       }
@@ -2841,15 +2890,19 @@
       },
       "summary": {
         "description": "d",
+        "enabled": true,
+        "locked": false,
         "name": "long",
         "prompt": "line one\nline two\n",
+        "registry": null,
+        "scope": "global",
         "source": "local",
         "userInvocable": true
       }
     }
   ],
   "reference": {
-    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7"
+    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
   },
   "schemaVersion": 1,
   "store": {
@@ -3345,13 +3398,14 @@
           }
         ],
         "surviving": [
-          "a/2/SKILL.md"
+          "a/2/SKILL.md",
+          "b/1/SKILL.md"
         ]
       }
     ],
     "fallbackDescription": {
-      "digest": "c0c0500ca576afd46f21fb0aff5cb6a6c2c2966d9e7950cffcbf952eae7a4cbd",
-      "length": 48
+      "digest": "0e92a2a1265eb0161f8f592bc8ec4dc840881be880c0e6528edb700c1a6c45d1",
+      "length": 34
     }
   }
 }

@@ -18,7 +18,9 @@ use clap::{Arg, ArgAction, Command, CommandFactory};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use vibe_core::parity::{REFERENCE_COMMIT, off_pin_reason, pinned_interpreter, reference_root};
+use vibe_core::parity::{
+    REFERENCE_COMMIT, REFERENCE_VERSION, off_pin_reason, pinned_interpreter, reference_root,
+};
 
 use crate::{Arguments, OutputMode, mcp_command};
 
@@ -717,8 +719,10 @@ struct Outcome {
     stderr_last_line: Option<String>,
 }
 
-/// The 19 dest names the reference's namespace carries, read off this port's
-/// parsed arguments.
+/// The 19 dest names of the reference's namespace this port also parses, read
+/// off this port's parsed arguments. The reference namespace carries 22 at the
+/// pin: `experimental_harness`, `legacy_harness` and `smart_approve` have no
+/// argument here, which the ledger records once per flag as `/present`.
 ///
 /// The two surfaces name three fields differently, which is a difference in
 /// spelling and not in surface: `add_dir` is `add_directories` here, and both
@@ -1109,7 +1113,7 @@ fn the_committed_corpus_carries_the_surface_the_replay_needs() {
         corpus.schema_version
     );
     assert_eq!(corpus.reference.commit, REFERENCE_COMMIT);
-    assert_eq!(corpus.reference.version, "2.24.0");
+    assert_eq!(corpus.reference.version, REFERENCE_VERSION);
     assert!(
         corpus
             .reference
@@ -1264,10 +1268,17 @@ fn the_committed_corpus_carries_the_surface_the_replay_needs() {
     assert!(root.has_description && root.has_epilog);
     assert_eq!(
         root.mutually_exclusive_groups.len(),
-        1,
-        "the continuation group is the only exclusion the root parser declares"
+        2,
+        "the harness group and the continuation group are the only exclusions the root \
+         parser declares"
     );
-    let group = &root.mutually_exclusive_groups[0];
+    let harness = &root.mutually_exclusive_groups[0];
+    assert!(!harness.required);
+    assert_eq!(
+        harness.dests,
+        vec!["experimental_harness", "legacy_harness"]
+    );
+    let group = &root.mutually_exclusive_groups[1];
     assert!(!group.required);
     assert_eq!(group.dests, vec!["continue_session", "resume"]);
     assert_eq!(
@@ -2099,7 +2110,167 @@ const LEDGER: &[Divergence] = &[
         pointer: "/help/prose",
         closed_by: "ACCEPTED",
         row: "7",
-        why: "NOTICE forbids reproducing the reference's own sentences, so every option description and every epilog sentence here is written for this repository: the two renders carry the same arguments in the same order and the same epilog names, and never the same text",
+        why: "NOTICE forbids reproducing the reference's own sentences, so every option description and every epilog sentence here is written for this repository and the two renders never carry the same text; the arguments and epilog names the two renders do not share are recorded by their own entries",
+    },
+    Divergence {
+        parser: "root",
+        case: "experimental_harness",
+        pointer: "/present",
+        closed_by: "RECORDED",
+        row: "7",
+        why: "--experimental-harness arrived in v2.24.2 (vibe/_experimental_harness.py:29-45, declared at vibe/cli/entrypoint.py:131-132 in a mutually exclusive group with --legacy-harness) and selects the Unified Harness, a native backend this port does not ship; Arguments (crates/vibe-cli/src/lib.rs) declares no such flag",
+    },
+    Divergence {
+        parser: "root",
+        case: "legacy_harness",
+        pointer: "/present",
+        closed_by: "RECORDED",
+        row: "7",
+        why: "--legacy-harness arrived in v2.25.1 (vibe/cli/entrypoint.py:131-138, forwarded to LocalHarnessOptions at vibe/cli/cli.py:174-175) and forces the legacy harness over the rollout; Arguments (crates/vibe-cli/src/lib.rs) declares no such flag",
+    },
+    Divergence {
+        parser: "root",
+        case: "smart_approve",
+        pointer: "/present",
+        closed_by: "RECORDED",
+        row: "7",
+        why: "--smart-approve arrived in v2.25.1 (vibe/_experimental_harness.py:48-59, vibe/cli/entrypoint.py:139 and 210-217) and turns on the Unified Harness while selecting the smart-approve agent unless --agent names one; Arguments (crates/vibe-cli/src/lib.rs) declares no such flag and no crate here defines a smart-approve agent",
+    },
+    Divergence {
+        parser: "root",
+        case: "worktree",
+        pointer: "/valueCount",
+        closed_by: "RECORDED",
+        row: "7",
+        why: "v2.24.1 made the worktree name optional (vibe/cli/entrypoint.py:158-169, nargs `?` with const True): a bare --worktree names the worktree after the prompt or a random slug; this port still declares --worktree as an Option<String> taking exactly one NAME (crates/vibe-cli/src/lib.rs:158-165)",
+    },
+    Divergence {
+        parser: "root",
+        case: "help",
+        pointer: "/help/epilogEntries",
+        closed_by: "RECORDED",
+        row: "1",
+        why: "v2.25.0 added `vibe update`, a first argument the parser rewrites to --check-upgrade (vibe/cli/entrypoint.py:206-208), and lists it before `mcp` under the epilog's Commands heading (vibe/cli/entrypoint.py:44); this port's EPILOG lists only `mcp` (crates/vibe-cli/src/lib.rs:223-231) and main intercepts only `mcp` (crates/vibe-cli/src/main.rs:17), so `update` falls to the positional prompt (crates/vibe-cli/src/lib.rs:76-80)",
+    },
+    Divergence {
+        parser: "mcp-add",
+        case: "allow_insecure_http",
+        pointer: "/present",
+        closed_by: "RECORDED",
+        row: "7",
+        why: "v2.25.5 added `vibe mcp add --allow-insecure-http` (vibe/cli/mcp_command.py:141-148 and 214-217), which lets a plaintext http:// URL to a non-loopback host persist; this port's add declaration carries no such option (crates/vibe-cli/src/mcp_command.rs:101-192) and still refuses every non-loopback http:// URL (crates/vibe-core/src/config/mcp.rs:184)",
+    },
+    Divergence {
+        parser: "root",
+        case: "alone--experimental-harness",
+        pointer: "/exit",
+        closed_by: "RECORDED",
+        row: "7",
+        why: "the reference parses a bare --experimental-harness and exits 0 with no output, and this port refuses it as an unknown argument with exit 2 on stderr: --experimental-harness arrived in v2.24.2 (vibe/_experimental_harness.py:29-45, declared at vibe/cli/entrypoint.py:131-132 in a mutually exclusive group with --legacy-harness) and selects the Unified Harness, a native backend this port does not ship; Arguments (crates/vibe-cli/src/lib.rs) declares no such flag",
+    },
+    Divergence {
+        parser: "root",
+        case: "alone--experimental-harness",
+        pointer: "/streams",
+        closed_by: "RECORDED",
+        row: "7",
+        why: "the reference parses a bare --experimental-harness and exits 0 with no output, and this port refuses it as an unknown argument with exit 2 on stderr: --experimental-harness arrived in v2.24.2 (vibe/_experimental_harness.py:29-45, declared at vibe/cli/entrypoint.py:131-132 in a mutually exclusive group with --legacy-harness) and selects the Unified Harness, a native backend this port does not ship; Arguments (crates/vibe-cli/src/lib.rs) declares no such flag",
+    },
+    Divergence {
+        parser: "root",
+        case: "alone--legacy-harness",
+        pointer: "/exit",
+        closed_by: "RECORDED",
+        row: "7",
+        why: "the reference parses a bare --legacy-harness and exits 0 with no output, and this port refuses it as an unknown argument with exit 2 on stderr: --legacy-harness arrived in v2.25.1 (vibe/cli/entrypoint.py:131-138, forwarded to LocalHarnessOptions at vibe/cli/cli.py:174-175) and forces the legacy harness over the rollout; Arguments (crates/vibe-cli/src/lib.rs) declares no such flag",
+    },
+    Divergence {
+        parser: "root",
+        case: "alone--legacy-harness",
+        pointer: "/streams",
+        closed_by: "RECORDED",
+        row: "7",
+        why: "the reference parses a bare --legacy-harness and exits 0 with no output, and this port refuses it as an unknown argument with exit 2 on stderr: --legacy-harness arrived in v2.25.1 (vibe/cli/entrypoint.py:131-138, forwarded to LocalHarnessOptions at vibe/cli/cli.py:174-175) and forces the legacy harness over the rollout; Arguments (crates/vibe-cli/src/lib.rs) declares no such flag",
+    },
+    Divergence {
+        parser: "root",
+        case: "alone--smart-approve",
+        pointer: "/exit",
+        closed_by: "RECORDED",
+        row: "7",
+        why: "the reference parses a bare --smart-approve and exits 0 with no output, and this port refuses it as an unknown argument with exit 2 on stderr: --smart-approve arrived in v2.25.1 (vibe/_experimental_harness.py:48-59, vibe/cli/entrypoint.py:139 and 210-217) and turns on the Unified Harness while selecting the smart-approve agent unless --agent names one; Arguments (crates/vibe-cli/src/lib.rs) declares no such flag and no crate here defines a smart-approve agent",
+    },
+    Divergence {
+        parser: "root",
+        case: "alone--smart-approve",
+        pointer: "/streams",
+        closed_by: "RECORDED",
+        row: "7",
+        why: "the reference parses a bare --smart-approve and exits 0 with no output, and this port refuses it as an unknown argument with exit 2 on stderr: --smart-approve arrived in v2.25.1 (vibe/_experimental_harness.py:48-59, vibe/cli/entrypoint.py:139 and 210-217) and turns on the Unified Harness while selecting the smart-approve agent unless --agent names one; Arguments (crates/vibe-cli/src/lib.rs) declares no such flag and no crate here defines a smart-approve agent",
+    },
+    Divergence {
+        parser: "root",
+        case: "prefix--experimental-harness",
+        pointer: "/exit",
+        closed_by: "RECORDED",
+        row: "7",
+        why: "the reference resolves `--ex` to --experimental-harness by argparse's prefix inference and exits 0, and this port, which has neither the flag nor `infer_long_args` (US-322), refuses it with exit 2 on stderr: --experimental-harness arrived in v2.24.2 (vibe/_experimental_harness.py:29-45, declared at vibe/cli/entrypoint.py:131-132 in a mutually exclusive group with --legacy-harness) and selects the Unified Harness, a native backend this port does not ship; Arguments (crates/vibe-cli/src/lib.rs) declares no such flag",
+    },
+    Divergence {
+        parser: "root",
+        case: "prefix--experimental-harness",
+        pointer: "/streams",
+        closed_by: "RECORDED",
+        row: "7",
+        why: "the reference resolves `--ex` to --experimental-harness by argparse's prefix inference and exits 0, and this port, which has neither the flag nor `infer_long_args` (US-322), refuses it with exit 2 on stderr: --experimental-harness arrived in v2.24.2 (vibe/_experimental_harness.py:29-45, declared at vibe/cli/entrypoint.py:131-132 in a mutually exclusive group with --legacy-harness) and selects the Unified Harness, a native backend this port does not ship; Arguments (crates/vibe-cli/src/lib.rs) declares no such flag",
+    },
+    Divergence {
+        parser: "root",
+        case: "prefix--legacy-harness",
+        pointer: "/exit",
+        closed_by: "RECORDED",
+        row: "7",
+        why: "the reference resolves `--l` to --legacy-harness by argparse's prefix inference and exits 0, and this port, which has neither the flag nor `infer_long_args` (US-322), refuses it with exit 2 on stderr: --legacy-harness arrived in v2.25.1 (vibe/cli/entrypoint.py:131-138, forwarded to LocalHarnessOptions at vibe/cli/cli.py:174-175) and forces the legacy harness over the rollout; Arguments (crates/vibe-cli/src/lib.rs) declares no such flag",
+    },
+    Divergence {
+        parser: "root",
+        case: "prefix--legacy-harness",
+        pointer: "/streams",
+        closed_by: "RECORDED",
+        row: "7",
+        why: "the reference resolves `--l` to --legacy-harness by argparse's prefix inference and exits 0, and this port, which has neither the flag nor `infer_long_args` (US-322), refuses it with exit 2 on stderr: --legacy-harness arrived in v2.25.1 (vibe/cli/entrypoint.py:131-138, forwarded to LocalHarnessOptions at vibe/cli/cli.py:174-175) and forces the legacy harness over the rollout; Arguments (crates/vibe-cli/src/lib.rs) declares no such flag",
+    },
+    Divergence {
+        parser: "root",
+        case: "prefix--smart-approve",
+        pointer: "/exit",
+        closed_by: "RECORDED",
+        row: "7",
+        why: "the reference resolves `--sm` to --smart-approve by argparse's prefix inference and exits 0, and this port, which has neither the flag nor `infer_long_args` (US-322), refuses it with exit 2 on stderr: --smart-approve arrived in v2.25.1 (vibe/_experimental_harness.py:48-59, vibe/cli/entrypoint.py:139 and 210-217) and turns on the Unified Harness while selecting the smart-approve agent unless --agent names one; Arguments (crates/vibe-cli/src/lib.rs) declares no such flag and no crate here defines a smart-approve agent",
+    },
+    Divergence {
+        parser: "root",
+        case: "prefix--smart-approve",
+        pointer: "/streams",
+        closed_by: "RECORDED",
+        row: "7",
+        why: "the reference resolves `--sm` to --smart-approve by argparse's prefix inference and exits 0, and this port, which has neither the flag nor `infer_long_args` (US-322), refuses it with exit 2 on stderr: --smart-approve arrived in v2.25.1 (vibe/_experimental_harness.py:48-59, vibe/cli/entrypoint.py:139 and 210-217) and turns on the Unified Harness while selecting the smart-approve agent unless --agent names one; Arguments (crates/vibe-cli/src/lib.rs) declares no such flag and no crate here defines a smart-approve agent",
+    },
+    Divergence {
+        parser: "root",
+        case: "no-value--worktree",
+        pointer: "/exit",
+        closed_by: "RECORDED",
+        row: "7",
+        why: "since v2.24.1 the reference accepts a bare --worktree and stores its const True (vibe/cli/entrypoint.py:158-169), exiting 0 with no output, and this port, whose --worktree takes exactly one NAME (crates/vibe-cli/src/lib.rs:158-165), refuses it with exit 2 on stderr",
+    },
+    Divergence {
+        parser: "root",
+        case: "no-value--worktree",
+        pointer: "/streams",
+        closed_by: "RECORDED",
+        row: "7",
+        why: "since v2.24.1 the reference accepts a bare --worktree and stores its const True (vibe/cli/entrypoint.py:158-169), exiting 0 with no output, and this port, whose --worktree takes exactly one NAME (crates/vibe-cli/src/lib.rs:158-165), refuses it with exit 2 on stderr",
     },
     Divergence {
         parser: "mcp",

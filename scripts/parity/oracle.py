@@ -8,7 +8,7 @@ corpus consumed by the Rust differential runner.
 
 Usage::
 
-    scripts/parity/oracle.py --python /path/to/reference/.venv/bin/python
+    python3 scripts/parity/oracle.py [--python=/path/to/reference/.venv/bin/python]
 
 ``VIBE_REFERENCE`` sets the checkout for machines that do not hold it at the
 default path; ``--reference`` wins over it.
@@ -33,7 +33,9 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 
-SCHEMA_VERSION = 1
+#: Version 2 records completion descriptions as ``{length, digest}`` instead of
+#: their text.
+SCHEMA_VERSION = 2
 DEFAULT_OUTPUT = Path("crates/vibe-cli/tests/parity")
 
 

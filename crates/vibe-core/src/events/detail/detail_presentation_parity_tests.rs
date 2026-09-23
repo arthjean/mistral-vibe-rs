@@ -4,7 +4,7 @@
 //! `scripts/parity/tool_presentation.py` drives the reference's
 //! `ToolUIDataAdapter` over every tool the Linux surface publishes plus a stub
 //! MCP tool and a stub connector tool, and records both presentation entry
-//! points: the eight call-display fields with the effect kind, and the five
+//! points: the eight call-display fields with the effect kind, and the six
 //! result-display fields with the projected output. This module rebuilds the
 //! same displays from [`EffectDetail::for_call`], [`EffectDetail::for_encoded_call`]
 //! and the three [`EffectResultDisplay`] constructors, then compares them field
@@ -98,6 +98,8 @@ const KIND_SETTLEMENT_ROW: &str =
 const CALL_CONTENT_ROW: &str = "No call display carries a content preview";
 const INVALID_LABEL_ROW: &str = "The label an argument of the wrong class is answered with";
 const AUTHORED_CALL_TEXT_ROW: &str = "Authored call-display text in the plan and fetch tools";
+const APPROVAL_NOTE_ROW: &str = "No result display carries an approval note";
+const FILE_PATH_ROW: &str = "A file display names the file, not its cwd-relative path";
 
 /// The story range `tasks/prd-tool-infrastructure-parity.md` numbers its work
 /// in, US-254 through US-268. A closer is checked against it rather than
@@ -151,6 +153,18 @@ const ERROR_VERB: &str = "the reference's adapter publishes no verb on an errore
      port keeps the settled verb of the call";
 const SKIP_LABEL: &str = "the reference's adapter reports the default skip label; this port \
      writes its own";
+const APPROVAL_NOTE: &str = "since v2.25.4 the reference's `EffectResultDisplay` declares \
+     `approval_note` (`vibe/utils/tool_presentation.py:53` at 4a96003186b1), serialized by alias \
+     with no `exclude_none` (:9-15), and `get_result_presentation` passes the tool's display \
+     through (`vibe/core/tools/ui.py:187-194`), so every result display carries `approvalNote`, \
+     null on every captured case; this port's `EffectResultDisplay` has no such field and omits \
+     the key";
+const FILE_PATH: &str = "since v2.24.2 the reference renders these fields through \
+     `display_file_path` (`vibe/core/tools/utils.py:116-133` at 4a96003186b1; `edit.py:106-114`, \
+     `:126`, `read_file.py:258`, `write_file.py:88`), which answers the path relative to the \
+     session cwd, or the normalized absolute path when the file sits outside it, where the \
+     previous pin published `Path(...).name`; this port still renders the file name alone \
+     through `file_name` in `events/detail.rs`";
 
 /// The twelve tools the Linux surface publishes, as `get_name()` names them.
 /// The list is spelled out rather than derived from the corpus so a tool that
@@ -197,6 +211,21 @@ const CONTENT_TOOLS: [&str; 2] = ["edit", "write_file"];
 
 /// The three call cases every tool is driven through.
 const CALL_CASES: [&str; 3] = ["valid-arguments", "absent-arguments", "wrong-argument-type"];
+
+/// The three result cases every tool is driven through.
+const RESULT_CASES: [&str; 3] = ["successful-result", "error-result", "skipped-result"];
+
+/// The fields whose file path the reference renders through
+/// `display_file_path`, measured by the capture: the edit call's three header
+/// fields and the settled message of the three file tools.
+const FILE_PATH_FIELDS: [(&str, &str, &str); 6] = [
+    ("edit", "valid-arguments", "/display/summary"),
+    ("edit", "valid-arguments", "/display/message"),
+    ("edit", "valid-arguments", "/display/settledMessage"),
+    ("edit", "successful-result", "/display/message"),
+    ("read_file", "successful-result", "/display/message"),
+    ("write_file", "successful-result", "/display/message"),
+];
 
 const PLAN_TOOL: &str = "exit_plan_mode";
 const FETCH_TOOL: &str = "web_fetch";
@@ -444,6 +473,21 @@ fn ledger() -> Vec<Divergence> {
             ERROR_VERB,
             KIND_SETTLEMENT_ROW,
         );
+    }
+    for tool in BUILTIN_TOOLS.into_iter().chain(REMOTE_TOOLS) {
+        for case in RESULT_CASES {
+            add(
+                tool,
+                case,
+                "/display/approvalNote",
+                RECORDED,
+                APPROVAL_NOTE,
+                APPROVAL_NOTE_ROW,
+            );
+        }
+    }
+    for (tool, case, pointer) in FILE_PATH_FIELDS {
+        add(tool, case, pointer, RECORDED, FILE_PATH, FILE_PATH_ROW);
     }
     entries
 }

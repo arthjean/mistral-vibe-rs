@@ -623,12 +623,23 @@ fn rewind_read_and_restore_use_live_target_specific_checkpoints() {
             "state".to_owned()
         ]
     );
-    assert!(
+    // The two divergences the v2.25.7 census records for every
+    // `PublicSessionState` this port answers, and nothing else: the reference
+    // made `history` a list of entries and turned `latestTurn` into a property
+    // over `turns` (vibe/app_server/models.py:1198,1206-1210), while this port
+    // still answers a history page and a `latestTurn` field
+    // (crates/vibe-app-server/src/server/projection.rs:101,111). The same pair
+    // is recorded for `session/read` in `DIVERGENT_RESPONSES`, and this
+    // assertion fails once either converges.
+    assert_eq!(
         crate::app_server_surface_parity_tests::census_issues(
             "session/rewind",
             &Value::Object(result.clone().into_iter().collect()),
-        )
-        .is_empty(),
+        ),
+        [
+            "/state/history: expected an array",
+            "/state/latestTurn: PublicSessionState does not declare this field",
+        ],
         "the rewind diverges from the reference census: {result:?}"
     );
     let child_id = result["state"]["session"]["id"]

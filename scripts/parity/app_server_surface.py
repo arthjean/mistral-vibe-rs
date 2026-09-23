@@ -44,7 +44,9 @@ from typing import Annotated, Any, Literal, Union, get_args, get_origin
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 
-SCHEMA_VERSION = 1
+#: 2 since v2.25.7: a declared method may carry no model (``null`` params and
+#: response), which ``shell/interrupt`` does once its models were deleted.
+SCHEMA_VERSION = 2
 DEFAULT_OUTPUT = Path("crates/vibe-app-server/tests/app-server-surface/corpus.json")
 INTERPRETER_VARIABLE = "VIBE_PARITY_PYTHON"
 #: Longest string the corpus may carry. A name, alias, pointer or enum value is
@@ -139,24 +141,41 @@ def reexecute_with_reference_interpreter(
 # The surface this capture asserts
 # --------------------------------------------------------------------------
 
-#: Which wire model each routed method takes and answers with. The names are
-#: read from the reference dispatchers; the capture resolves every one of them
+#: Which wire model each declared method takes and answers with. The names are
+#: read from the reference dispatchers, except for the three declared methods no
+#: dispatcher routes (see ``shell/interrupt`` below); the capture resolves every one of them
 #: against the pinned module and fails when a name no longer exists, so a rename
 #: upstream surfaces here rather than in a silently thinner corpus.
-METHOD_MODELS: dict[str, tuple[str, str]] = {
+METHOD_MODELS: dict[str, tuple[str | None, str | None]] = {
     "account/read": ("AccountReadParams", "AccountReadResponse"),
     "agents/install": ("AgentInstallParams", "AgentsListResponse"),
     "agents/list": ("AgentsListParams", "AgentsListResponse"),
     "agents/uninstall": ("AgentInstallParams", "AgentsListResponse"),
-    "callback/respond": ("CallbackRespondParams", "CallbackRespondResponse"),
+    "callback/result": ("CallbackResultParams", "CallbackResultResponse"),
     "config/fields/read": ("ConfigFieldsReadParams", "ConfigFieldsReadResponse"),
-    "config/patch": ("ConfigPatchParams", "ConfigPatchResponse"),
+    "config/model/write": ("ModelConfigWriteParams", "ConfigWriteResponse"),
     "config/proxy/read": ("ConfigProxyReadParams", "ConfigProxyReadResponse"),
     "config/proxy/write": ("ConfigProxyWriteParams", "EmptyResponse"),
     "config/read": ("ConfigReadParams", "ConfigReadResponse"),
     "config/reload": ("ConfigReloadParams", "ConfigMutationResponse"),
     "config/schema": ("ConfigSchemaReadParams", "ConfigSchemaReadResponse"),
-    "config/thinking/write": ("ConfigThinkingWriteParams", "ConfigMutationResponse"),
+    "config/write": ("ConfigWriteParams", "ConfigWriteResponse"),
+    "connector_catalog/auth/request": (
+        "ConnectorCatalogAuthRequestParams",
+        "ConnectorCatalogAuthRequestResponse",
+    ),
+    "connector_catalog/read": (
+        "ConnectorCatalogReadParams",
+        "ConnectorCatalogReadResponse",
+    ),
+    "connector_catalog/refresh": (
+        "ConnectorCatalogRefreshParams",
+        "ConnectorCatalogMutationResponse",
+    ),
+    "connector_catalog/toggle": (
+        "ConnectorCatalogToggleParams",
+        "ConnectorCatalogMutationResponse",
+    ),
     "connectors/auth/read": ("ConnectorAuthReadParams", "ConnectorAuthReadResponse"),
     "connectors/read": ("ConnectorsReadParams", "ConnectorsReadResponse"),
     "connectors/refresh": ("ConnectorRefreshParams", "ConnectorRefreshResponse"),
@@ -165,21 +184,32 @@ METHOD_MODELS: dict[str, tuple[str, str]] = {
         "DiagnosticsLogsReadParams",
         "DiagnosticsLogsReadResponse",
     ),
+    "events/read": ("EventsReadParams", "EventBatch"),
     "feedback/record": ("FeedbackRecordParams", "EmptyResponse"),
     "feedback/shouldShow": ("FeedbackShouldShowParams", "FeedbackShouldShowResponse"),
-    "history/list": ("HistoryListParams", "HistoryListResponse"),
     "identity/read": ("IdentityReadParams", "IdentityReadResponse"),
     "loops/clear": ("LoopsClearParams", "LoopsClearResponse"),
     "loops/create": ("LoopsCreateParams", "LoopsCreateResponse"),
     "loops/delete": ("LoopsDeleteParams", "LoopsDeleteResponse"),
     "loops/list": ("LoopsListParams", "LoopsListResponse"),
     "mcp/add": ("MCPAddParams", "MCPAddResponse"),
-    "mcp/login": ("MCPLoginParams", "RuntimeMutationResponse"),
-    "mcp/logout": ("MCPLogoutParams", "RuntimeMutationResponse"),
+    "mcp/login": ("MCPLoginParams", "MCPCatalogMutationResponse"),
+    "mcp/logout": ("MCPLogoutParams", "MCPCatalogMutationResponse"),
     "mcp/read": ("MCPReadParams", "MCPReadResponse"),
-    "mcp/refresh": ("MCPRefreshParams", "RuntimeMutationResponse"),
-    "mcp/toggle": ("MCPToggleParams", "RuntimeMutationResponse"),
+    "mcp/refresh": ("MCPRefreshParams", "MCPCatalogMutationResponse"),
+    "mcp/toggle": ("MCPToggleParams", "MCPCatalogMutationResponse"),
+    "mcp_catalog/add": ("MCPAddParams", "MCPAddResponse"),
+    "mcp_catalog/login": ("MCPLoginParams", "MCPCatalogMutationResponse"),
+    "mcp_catalog/logout": ("MCPLogoutParams", "MCPCatalogMutationResponse"),
+    "mcp_catalog/read": ("MCPReadParams", "MCPReadResponse"),
+    "mcp_catalog/refresh": ("MCPRefreshParams", "MCPCatalogMutationResponse"),
+    "mcp_catalog/remove": ("MCPRemoveParams", "MCPRemoveResponse"),
+    "mcp_catalog/toggle": ("MCPToggleParams", "MCPCatalogMutationResponse"),
     "narration/summarize": ("NarrationSummarizeParams", "NarrationSummarizeResponse"),
+    "plugin/info": ("PluginInfoParams", "PluginInfoResponse"),
+    "plugin/reload": ("PluginReloadParams", "PluginReloadResponse"),
+    "plugin_catalog/read": ("PluginCatalogReadParams", "PluginCatalogReadResponse"),
+    "plugins/read": ("PluginCatalogReadParams", "PluginCatalogReadResponse"),
     "projectLinks/create": ("ProjectLinksCreateParams", "ProjectLinkMutationResponse"),
     "projectLinks/inspectRoot": (
         "ProjectLinksInspectRootParams",
@@ -209,8 +239,7 @@ METHOD_MODELS: dict[str, tuple[str, str]] = {
     "review/turnDiff": ("ReviewTurnDiffParams", "ReviewTurnDiffResponse"),
     "runtime/read": ("RuntimeReadParams", "RuntimeReadResponse"),
     "session/agent/update": ("AgentSwitchParams", "RuntimeMutationResponse"),
-    "session/close": ("SessionCloseParams", "SessionCloseResponse"),
-    "session/compact/start": ("SessionCompactParams", "SessionCompactResponse"),
+    "session/compact": ("SessionCompactParams", "SessionCompactResponse"),
     "session/context/inject": ("ContextInjectParams", "ContextInjectResponse"),
     "session/continue": ("SessionContinueParams", "SessionContinueResponse"),
     "session/delete": ("SessionDeleteParams", "EmptyResponse"),
@@ -219,20 +248,61 @@ METHOD_MODELS: dict[str, tuple[str, str]] = {
         "SessionHistoryClearParams",
         "SessionHistoryClearResponse",
     ),
+    "session/history/get": ("SessionHistoryGetParams", "SessionHistoryGetResponse"),
+    "session/history/list": ("SessionHistoryListParams", "SessionHistoryListResponse"),
     "session/list": ("SessionListParams", "SessionListResponse"),
     "session/log/read": ("SessionLogReadParams", "SessionLogReadResponse"),
+    "session/pin": ("SessionPinParams", "SessionPinResponse"),
     "session/read": ("SessionReadParams", "SessionReadResponse"),
     "session/ready/read": ("SessionReadyReadParams", "SessionReadyReadResponse"),
     "session/ready/wait": ("SessionReadyWaitParams", "SessionReadyWaitResponse"),
+    "session/relocate": ("SessionRelocateParams", "SessionRelocateResponse"),
+    "session/rename": ("SessionTitleUpdateParams", "SessionTitleUpdateResponse"),
     "session/resume": ("SessionResumeParams", "SessionResumeResponse"),
     "session/rewind": ("SessionRewindParams", "SessionRewindResponse"),
     "session/rewind/read": ("SessionRewindReadParams", "SessionRewindReadResponse"),
     "session/settings/update": ("SessionSettingsUpdateParams", "EmptyResponse"),
+    "session/shellCommand": (
+        "SessionShellCommandParams",
+        "SessionShellCommandResponse",
+    ),
     "session/start": ("SessionStartParams", "SessionStartResponse"),
+    "session/stop": ("SessionStopParams", "SessionStopResponse"),
     "session/title/update": ("SessionTitleUpdateParams", "SessionTitleUpdateResponse"),
-    "shell/interrupt": ("ShellInterruptParams", "ShellInterruptResponse"),
+    "session/turn/enqueue": ("TurnEnqueueParams", "TurnEnqueueResponse"),
+    "session/turn/queue/read": ("TurnQueueReadParams", "TurnQueueReadResponse"),
+    "session/turn/queue/remove": ("TurnQueueRemoveParams", "TurnQueueRemoveResponse"),
+    "session/turn/queue/replace": (
+        "TurnQueueReplaceParams",
+        "TurnQueueReplaceResponse",
+    ),
+    "session/turn/queue/resume": ("TurnQueueResumeParams", "TurnQueueResumeResponse"),
+    "session/turn/queue/steer": ("TurnQueueSteerParams", "TurnQueueSteerResponse"),
+    "session/turns/list": ("SessionTurnsListParams", "SessionTurnsListResponse"),
+    # The reference still declares `shell/interrupt` (vibe/app_server/protocol.py:196)
+    # but deleted its models and routes it nowhere: interrupting a shell is now an
+    # action of `session/shellCommand` (vibe/app_server/_shell_requests.py:54-60).
+    # The method is recorded with no model rather than one invented here.
+    # `shell/run` and `session/title/update` (protocol.py:197,194) are likewise
+    # declared with no dispatcher reading them under those names; they keep their
+    # models because the classes survive: `session/shellCommand` builds a
+    # ShellRunParams internally (_shell_requests.py:76) and `session/rename`
+    # validates SessionTitleUpdateParams (_host.py:263-264).
+    "shell/interrupt": (None, None),
     "shell/run": ("ShellRunParams", "ShellRunResponse"),
+    "skills/catalog": ("SkillsCatalogParams", "SkillsCatalogResponse"),
+    "skills/convertLocal": ("SkillsConvertLocalParams", "SkillsConvertResponse"),
+    "skills/detail": ("SkillsDetailParams", "SkillsDetailResponse"),
+    "skills/import": ("SkillsImportParams", "RuntimeMutationResponse"),
+    "skills/installed": ("SkillsInstalledParams", "SkillsInstalledResponse"),
     "skills/list": ("SkillsListParams", "SkillsListResponse"),
+    "skills/remove": ("SkillsRemoveParams", "RuntimeMutationResponse"),
+    "skills/setAlias": ("SkillsSetAliasParams", "RuntimeMutationResponse"),
+    "skills/setEnabled": ("SkillsSetEnabledParams", "RuntimeMutationResponse"),
+    "skills/setLatest": ("SkillsSetLatestParams", "RuntimeMutationResponse"),
+    "skills/setVersion": ("SkillsSetVersionParams", "RuntimeMutationResponse"),
+    "skills/updates": ("SkillsUpdatesParams", "SkillsUpdatesResponse"),
+    "skills/versions": ("SkillsVersionsParams", "SkillsVersionsResponse"),
     "stats/read": ("StatsReadParams", "StatsReadResponse"),
     "telemetry/record": ("TelemetryRecordParams", "EmptyResponse"),
     "tools/list": ("ToolsListParams", "ToolsListResponse"),
@@ -267,6 +337,26 @@ METHOD_MODELS: dict[str, tuple[str, str]] = {
     "vibeCode/teleport/cancel": ("TeleportCancelParams", "TeleportCancelResponse"),
     "vibeCode/teleport/push/respond": ("TeleportPushRespondParams", "EmptyResponse"),
     "vibeCode/teleport/start": ("TeleportStartParams", "TeleportStartResponse"),
+    "workspace/git/checkouts": (
+        "WorkspaceGitCheckoutsParams",
+        "WorkspaceGitCheckoutsResponse",
+    ),
+    "workspace/git/worktrees/limit/update": (
+        "WorkspaceWorktreeLimitUpdateParams",
+        "WorkspaceWorktreeLimitUpdateResponse",
+    ),
+    "workspace/git/worktrees/list": (
+        "WorkspaceWorktreeListParams",
+        "WorkspaceWorktreeListResponse",
+    ),
+    "workspace/git/worktrees/prune": (
+        "WorkspaceWorktreePruneParams",
+        "WorkspaceWorktreePruneResponse",
+    ),
+    "workspace/git/worktrees/remove": (
+        "WorkspaceWorktreeRemoveParams",
+        "WorkspaceWorktreeRemoveResponse",
+    ),
     "workspace/prompt/prepare": (
         "WorkspacePromptPrepareParams",
         "WorkspacePromptPrepareResponse",
@@ -279,9 +369,9 @@ METHOD_MODELS: dict[str, tuple[str, str]] = {
         "WorkspaceTrustStatusParams",
         "WorkspaceTrustStatusResponse",
     ),
-    "workspace/worktrees/list": (
-        "WorkspaceWorktreeListParams",
-        "WorkspaceWorktreeListResponse",
+    "workspace/trust/untrustedConfig": (
+        "WorkspaceUntrustedConfigParams",
+        "WorkspaceUntrustedConfigResponse",
     ),
 }
 
@@ -333,6 +423,17 @@ NOTIFICATION_MODELS: dict[str, str] = {
     "runtime/updated": "RuntimeUpdatedParams",
     "mcp/authUrl": "MCPAuthUrlParams",
     "vibeCode/teleport/event": "TeleportEventParams",
+    # v2.25.7: the turn queue and child sessions are sequenced
+    # (vibe/app_server/events.py:658-663); the catalog services announce
+    # authorization under their own names (vibe/app_server/mcp_catalog.py:469,
+    # vibe/app_server/connector_catalog.py:883-931, vibe/app_server/events.py:291-297).
+    "turn/queueUpdated": "TurnQueueUpdatedParams",
+    "session/childSessionUpdated": "ChildSessionUpdatedParams",
+    "mcp_catalog/authUrl": "MCPAuthUrlParams",
+    "mcp_catalog/authRequired": "MCPAuthRequiredParams",
+    "connector_catalog/authRequired": "ConnectorAuthRequiredParams",
+    "connector_catalog/authUrl": "ConnectorAuthUrlParams",
+    "connector_catalog/authFailed": "ConnectorAuthFailedParams",
 }
 
 #: Discriminated unions the projection publishes. Each is resolved from the
@@ -357,9 +458,22 @@ UNION_ROOTS: tuple[tuple[str, str], ...] = (
 #: `CompactionDetails` is declared by the pinned reference and referenced by
 #: nothing in it; it is rooted here so the completeness check below stays a
 #: statement about the whole declared surface rather than the reachable part.
+#: The same holds since v2.25.7 for the models of the retired `callback/respond`
+#: and `session/close` methods, for `PublicHistoryPage`, which v2.24.0 reached
+#: from `PublicSessionState.history` and `history/list`, and for
+#: `SavedSessionSummary`, which v2.24.0 reached from `session/list`: all still
+#: declared (vibe/app_server/protocol.py:475-479,1991-1997,
+#: vibe/app_server/models.py:803,1088) and reached by no root. The
+#: `EventWatermarkResponse` base (vibe/app_server/protocol.py:249) is only
+#: inherited.
+#: `SessionOptions` is an alias of `AgentConfig` since v2.25.7
+#: (vibe/app_server/protocol.py:373), so it is recorded under that name.
 EXTRA_MODEL_ROOTS: tuple[str, ...] = (
+    "CallbackRespondParams",
+    "CallbackRespondResponse",
     "CompactionDetails",
     "EventNotificationParams",
+    "EventWatermarkResponse",
     "FileEditEffectOutput",
     "FileReadEffectOutput",
     "FileSearchEffectOutput",
@@ -370,7 +484,11 @@ EXTRA_MODEL_ROOTS: tuple[str, ...] = (
     "JsonRpcSuccessResponse",
     "Notification",
     "ProtocolError",
+    "PublicHistoryPage",
+    "SavedSessionSummary",
     "ServerRequest",
+    "SessionCloseParams",
+    "SessionCloseResponse",
     "SessionHandoffParams",
     "SessionOpenParams",
     "SessionOptions",
@@ -635,8 +753,9 @@ def capture(commit: str) -> dict[str, Any]:
     methods = []
     for name in declared:
         params_name, response_name = METHOD_MODELS[name]
-        census.record(census.model(params_name))
-        census.record(census.model(response_name))
+        for model_name in (params_name, response_name):
+            if model_name is not None:
+                census.record(census.model(model_name))
         methods.append({
             "name": name,
             "params": params_name,

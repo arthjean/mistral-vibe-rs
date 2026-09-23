@@ -30,7 +30,7 @@
   ],
   "note": "Captured from the pinned reference by scripts/parity/tool_config.py. Tool names, configuration key names and default values are observations; no reference-authored description text is recorded here.",
   "reference": {
-    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7"
+    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
   },
   "schemaVersion": 1,
   "shellBranch": "posix",
@@ -274,7 +274,11 @@
       "permission": "ask",
       "sensitive_patterns": [
         "**/.env",
-        "**/.env.*"
+        "**/.env.*",
+        "**/.env~",
+        "**/.envrc",
+        "**/.envrc.*",
+        "**/.envrc~"
       ]
     },
     "exit_plan_mode": {
@@ -431,7 +435,11 @@
       "permission": "always",
       "sensitive_patterns": [
         "**/.env",
-        "**/.env.*"
+        "**/.env.*",
+        "**/.env~",
+        "**/.envrc",
+        "**/.envrc.*",
+        "**/.envrc~"
       ]
     },
     "powershell": {
@@ -554,7 +562,11 @@
       "permission": "always",
       "sensitive_patterns": [
         "**/.env",
-        "**/.env.*"
+        "**/.env.*",
+        "**/.env~",
+        "**/.envrc",
+        "**/.envrc.*",
+        "**/.envrc~"
       ]
     },
     "skill": {
@@ -604,7 +616,11 @@
       "permission": "ask",
       "sensitive_patterns": [
         "**/.env",
-        "**/.env.*"
+        "**/.env.*",
+        "**/.env~",
+        "**/.envrc",
+        "**/.envrc.*",
+        "**/.envrc~"
       ]
     }
   }

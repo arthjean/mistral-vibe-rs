@@ -2,19 +2,19 @@
   "traces": {
     "async-cancelled-by-space": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "async-generation-supersedes": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "async-history-recall-closes": {
-      "effects": "parity",
+      "effects": "gap",
       "history": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "clipboard-explicit-ctrl-v": {
       "state": "unavailable"
@@ -34,43 +34,38 @@
     },
     "commands-excluded": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "commands-full-surface": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "commands-unknown-alias": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
-    },
-    "commands-vibe-code-enabled": {
-      "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "corpus-dot-query": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "corpus-gitignore": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "corpus-hidden-files": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "corpus-nested-ranking": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "dnd-absolute-image": {
       "effects": "parity",
@@ -84,13 +79,13 @@
     },
     "dnd-text-path-untouched": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "external-editor-refreshes-completion": {
       "effects": "parity",
       "render": "parity",
-      "state": "parity"
+      "state": "gap"
     },
     "external-editor-replaces-text": {
       "effects": "parity",
@@ -121,7 +116,7 @@
       "effects": "parity",
       "history": "parity",
       "render": "parity",
-      "state": "parity"
+      "state": "gap"
     },
     "history-edit-after-recall": {
       "effects": "parity",
@@ -193,39 +188,39 @@
     },
     "mention-directory-submission": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "mention-external-path-submission": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "mention-image-payload-submission": {
       "effects": "parity",
       "render": "parity",
       "state": "parity",
-      "submission": "parity"
+      "submission": "gap"
     },
     "mention-missing-path-submission": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "mention-text-file-submission": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "mode-backspace-keeps-text": {
       "effects": "parity",
       "render": "parity",
-      "state": "parity"
+      "state": "gap"
     },
     "mode-backspace-resets": {
       "effects": "parity",
       "render": "parity",
-      "state": "parity"
+      "state": "gap"
     },
     "mode-teleport-unavailable": {
       "effects": "parity",
@@ -245,12 +240,12 @@
     "modes-slash-prefix": {
       "effects": "parity",
       "render": "parity",
-      "state": "parity"
+      "state": "gap"
     },
     "modes-teleport-available": {
-      "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "effects": "gap",
+      "render": "gap",
+      "state": "gap"
     },
     "mouse-click-wide-character": {
       "effects": "parity",
@@ -285,7 +280,7 @@
     "paste-mode-characters": {
       "effects": "parity",
       "render": "parity",
-      "state": "parity"
+      "state": "gap"
     },
     "paste-multiline-atomic": {
       "effects": "parity",
@@ -294,63 +289,63 @@
     },
     "path-accept-directory": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "path-accept-inserts-space": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "path-mid-token-completion": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "path-trigger-after-punctuation": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "path-trigger-bare-at": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "path-trigger-basic": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "path-trigger-nested": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "path-trigger-space-closes": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "popup-render-120": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "popup-render-40": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "popup-render-80": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "popup-render-path-bound": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "safety-destructive-chrome": {
       "effects": "parity",
@@ -364,78 +359,78 @@
     },
     "slash-double-marker": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "slash-no-match": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "slash-popup-arrows": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "slash-popup-caret-at-line-start": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "slash-popup-enter-submits": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "slash-popup-escape": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "slash-popup-mid-token-cursor": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "slash-popup-right": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "slash-popup-tab-applies": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "slash-popup-wraps-selection": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "slash-ranking-c": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "slash-ranking-empty-boosts": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "slash-ranking-fuzzy": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "slash-skill-entries": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "slash-uppercase-alias": {
       "effects": "parity",
-      "render": "parity",
-      "state": "parity"
+      "render": "gap",
+      "state": "gap"
     },
     "submit-empty-composer": {
       "effects": "parity",
@@ -528,5 +523,5 @@
       "state": "parity"
     }
   },
-  "version": 1
+  "version": 2
 }

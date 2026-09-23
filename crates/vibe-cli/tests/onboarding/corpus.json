@@ -210,13 +210,14 @@
   ],
   "note": "Onboarding corpus: the reference's screen graph, transitions, focus targets, validation classes, persisted effects and terminating values, observed by driving the real OnboardingApp through Textual's headless pilot with the sign-in service, the credential persistence and the config orchestrator replaced by recorders. No rendered cell, SVG or styled text appears here, and every reference-authored message and screen sentence is committed as a SHA-256 digest and a length. Regenerate with scripts/parity/onboarding.py --corpus when the pinned reference moves.",
   "reference": {
-    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7"
+    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
   },
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "screenGraph": [
     {
       "case": "graph-browser-provider-installs-seven-screens",
       "effects": {
+        "baseUrlWrites": [],
         "factoryCalls": 0,
         "persistCalls": [],
         "providerWrites": [],
@@ -253,6 +254,7 @@
     {
       "case": "graph-manual-provider-installs-three-screens",
       "effects": {
+        "baseUrlWrites": [],
         "persistCalls": [],
         "providerWrites": [],
         "serviceCloses": 0
@@ -299,6 +301,7 @@
     {
       "case": "welcome-advance-is-inert-until-typing-finishes",
       "effects": {
+        "baseUrlWrites": [],
         "factoryCalls": 0,
         "persistCalls": [],
         "providerWrites": [],
@@ -343,6 +346,7 @@
     {
       "case": "theme-selection-applies-live-and-leads-on",
       "effects": {
+        "baseUrlWrites": [],
         "factoryCalls": 0,
         "persistCalls": [],
         "providerWrites": [],
@@ -415,6 +419,7 @@
     {
       "case": "auth-method-browser-leads-to-target",
       "effects": {
+        "baseUrlWrites": [],
         "factoryCalls": 0,
         "persistCalls": [],
         "providerWrites": [],
@@ -469,6 +474,7 @@
     {
       "case": "auth-method-manual-leads-to-api-key",
       "effects": {
+        "baseUrlWrites": [],
         "factoryCalls": 0,
         "persistCalls": [],
         "providerWrites": [],
@@ -526,6 +532,7 @@
     {
       "case": "auth-method-selection-wraps",
       "effects": {
+        "baseUrlWrites": [],
         "factoryCalls": 0,
         "persistCalls": [],
         "providerWrites": [],
@@ -580,6 +587,7 @@
     {
       "case": "target-default-applies-mistral-and-signs-in",
       "effects": {
+        "baseUrlWrites": [],
         "factoryCalls": 1,
         "persistCalls": [],
         "providerWrites": [],
@@ -640,6 +648,7 @@
     {
       "case": "target-other-leads-to-custom-domain",
       "effects": {
+        "baseUrlWrites": [],
         "factoryCalls": 0,
         "persistCalls": [],
         "providerWrites": [],
@@ -703,6 +712,7 @@
     {
       "case": "target-back-returns-to-method",
       "effects": {
+        "baseUrlWrites": [],
         "factoryCalls": 0,
         "persistCalls": [],
         "providerWrites": [],
@@ -762,6 +772,7 @@
     {
       "case": "target-overwrite-arms-then-proceeds",
       "effects": {
+        "baseUrlWrites": [],
         "factoryCalls": 1,
         "persistCalls": [],
         "providerWrites": [],
@@ -823,6 +834,7 @@
     {
       "case": "target-overwrite-disarms-on-move",
       "effects": {
+        "baseUrlWrites": [],
         "factoryCalls": 0,
         "persistCalls": [],
         "providerWrites": [],
@@ -886,6 +898,7 @@
     {
       "case": "custom-domain-validation-classes",
       "effects": {
+        "baseUrlWrites": [],
         "factoryCalls": 0,
         "persistCalls": [],
         "providerWrites": [],
@@ -991,6 +1004,7 @@
     {
       "case": "custom-domain-submit-derives-urls-and-signs-in",
       "effects": {
+        "baseUrlWrites": [],
         "factoryCalls": 1,
         "persistCalls": [],
         "providerWrites": [],
@@ -1060,6 +1074,12 @@
     {
       "case": "custom-domain-sign-in-upserts-the-provider",
       "effects": {
+        "baseUrlWrites": [
+          {
+            "field": "console_base_url",
+            "value": "https://console.internal.example"
+          }
+        ],
         "factoryCalls": 1,
         "persistCalls": [
           {
@@ -1141,6 +1161,7 @@
     {
       "case": "custom-domain-invalid-submission-stays",
       "effects": {
+        "baseUrlWrites": [],
         "factoryCalls": 0,
         "persistCalls": [],
         "providerWrites": [],
@@ -1215,6 +1236,7 @@
     {
       "case": "custom-domain-back-returns-to-target",
       "effects": {
+        "baseUrlWrites": [],
         "factoryCalls": 0,
         "persistCalls": [],
         "providerWrites": [],
@@ -1288,6 +1310,7 @@
     {
       "case": "browser-sign-in-success-exits-completed",
       "effects": {
+        "baseUrlWrites": [],
         "factoryCalls": 1,
         "persistCalls": [
           {
@@ -1354,6 +1377,7 @@
     {
       "case": "browser-sign-in-error-then-retry-succeeds",
       "effects": {
+        "baseUrlWrites": [],
         "factoryCalls": 2,
         "persistCalls": [
           {
@@ -1427,6 +1451,7 @@
     {
       "case": "browser-sign-in-retry-refused-while-running",
       "effects": {
+        "baseUrlWrites": [],
         "factoryCalls": 1,
         "persistCalls": [],
         "providerWrites": [],
@@ -1487,6 +1512,7 @@
     {
       "case": "browser-sign-in-manual-fallback",
       "effects": {
+        "baseUrlWrites": [],
         "factoryCalls": 1,
         "persistCalls": [],
         "providerWrites": [],
@@ -1556,6 +1582,7 @@
     {
       "case": "browser-sign-in-persist-failure-exits-immediately",
       "effects": {
+        "baseUrlWrites": [],
         "factoryCalls": 1,
         "persistCalls": [
           {
@@ -1622,6 +1649,7 @@
     {
       "case": "browser-sign-in-cancel-closes-the-service",
       "effects": {
+        "baseUrlWrites": [],
         "factoryCalls": 1,
         "persistCalls": [],
         "providerWrites": [],
@@ -1682,6 +1710,7 @@
     {
       "case": "api-key-submit-terminates-with-the-persist-outcome",
       "effects": {
+        "baseUrlWrites": [],
         "persistCalls": [
           {
             "apiKey": "oracle-key",
@@ -1736,6 +1765,7 @@
     {
       "case": "api-key-empty-submission-stays",
       "effects": {
+        "baseUrlWrites": [],
         "persistCalls": [],
         "providerWrites": [],
         "serviceCloses": 0
@@ -1783,6 +1813,7 @@
     {
       "case": "cancel-from-theme-exits-with-nothing",
       "effects": {
+        "baseUrlWrites": [],
         "factoryCalls": 0,
         "persistCalls": [],
         "providerWrites": [],
@@ -1875,6 +1906,10 @@
         {
           "digest": "75c8a006ba8aa68b1ff42666f8442667c4ca4c530f1a18d5d3ff3bcbb9f8a625",
           "length": 12
+        },
+        {
+          "digest": "b07e28523ea8f1aea07b9638af1314c2a1c8a65764193fe1a88bc1d421c9e513",
+          "length": 111
         },
         {
           "digest": "fe6bda7211ecdcdb407d448f0de4be79cf07c56024a8808c431dbefcaf26b985",
@@ -2077,12 +2112,20 @@
           "length": 38
         },
         {
+          "digest": "65b2db5a8377a3b215e17c83c1e5e90debca48a43460d4a84ef6599eb3073ef2",
+          "length": 27
+        },
+        {
           "digest": "69cb0fe0591cda38551dbbc79790d0ee48292a530312750128655b7a752cb4e0",
           "length": 46
         },
         {
           "digest": "bb8acfcbd71aa119aedb67cb5b37c39a78c5a6190882fd2fbde773ce95fcf452",
           "length": 19
+        },
+        {
+          "digest": "d64204696d06b27b2617d77a85387fe4e958668b68a258b077ab98fc8163d0d5",
+          "length": 32
         },
         {
           "digest": "d7d4c1e416bc676929d69b864fa2217888960abc2bef557b8833a64297219545",

@@ -344,7 +344,9 @@
           "/continue",
           "/copy",
           "/mcp",
-          "/voice"
+          "/voice",
+          "/branch",
+          "/remote-project"
         ],
         "popupVisible": true,
         "prompt": ">",
@@ -357,36 +359,74 @@
         "completion": {
           "items": [
             {
-              "description": "Edit config settings",
+              "description": {
+                "digest": "ce0bf4f565f3c50f44e26030e1dc7d4d72a587d70d97b820646300353ab6f67d",
+                "length": 20
+              },
               "label": "/config"
             },
             {
-              "description": "Clear conversation history",
+              "description": {
+                "digest": "10699ae98ae8d9d9b4c45276563b5ccec50113279ccfa47020a7505ec7490d08",
+                "length": 62
+              },
               "label": "/clear"
             },
             {
-              "description": "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+              "description": {
+                "digest": "cb99aa7bc0a9c46ea80a2280ddca7ba7d5a431a92e81cd697eb9b8f607433141",
+                "length": 94
+              },
               "label": "/compact"
             },
             {
-              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "description": {
+                "digest": "5e301f59237bb812ffc04c4779d2fc4dc3744436d0d8cecb7e03f5a008a1c125",
+                "length": 169
+              },
               "label": "/connectors"
             },
             {
-              "description": "Browse, resume, or delete saved sessions",
+              "description": {
+                "digest": "36aedc4fc05d38aa4f82596c534de21a9c916cad2ae140d0b0b1af5e33de07b9",
+                "length": 40
+              },
               "label": "/continue"
             },
             {
-              "description": "Copy the last agent message to the clipboard",
+              "description": {
+                "digest": "ae2482ae463f24accc6529cabd0c5a5d1f4f84acd8e3d16b0fc95a1aec32324a",
+                "length": 44
+              },
               "label": "/copy"
             },
             {
-              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "description": {
+                "digest": "5e301f59237bb812ffc04c4779d2fc4dc3744436d0d8cecb7e03f5a008a1c125",
+                "length": 169
+              },
               "label": "/mcp"
             },
             {
-              "description": "Configure voice settings",
+              "description": {
+                "digest": "73c9598a41ab2ec2784e2478e8dd65a787405ae187db403afa4d34b91afdfacc",
+                "length": 24
+              },
               "label": "/voice"
+            },
+            {
+              "description": {
+                "digest": "7117c044f728b995ab5924356bd3e801f90dd425370189e98dd06786910c1372",
+                "length": 134
+              },
+              "label": "/branch"
+            },
+            {
+              "description": {
+                "digest": "2e63dd307720ec6cf5467e9b8ae6dd023fb0c3e646db709e4f700257daba2190",
+                "length": 52
+              },
+              "label": "/remote-project"
             }
           ],
           "kind": "slash",
@@ -408,10 +448,10 @@
     }
   ],
   "reference": {
-    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
-    "version": "2.24.0"
+    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd",
+    "version": "2.25.7"
   },
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "setup": {
     "agentName": "",
     "commands": {},

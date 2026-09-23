@@ -42,9 +42,12 @@ from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 
 SCHEMA_VERSION = 4
 DEFAULT_OUTPUT = Path("crates/vibe-core/tests/config-surface/corpus.json")
-#: The strategies the reference vocabulary declares but no field adopts, so the
-#: Rust port implements neither. The census asserts this stays true.
-UNREACHABLE_STRATEGIES = ("merge", "conflict")
+#: The strategies the reference vocabulary declares but no field adopts. The
+#: census asserts this stays true. v2.25.5 gave four fields ``WithShallowMerge``
+#: (``merge``) and v2.25.7 a fifth, so only ``conflict`` is left
+#: (``vibe/core/config/vibe_schema.py:346``, ``:347``, ``:618``, ``:621``,
+#: ``:624``).
+UNREACHABLE_STRATEGIES = ("conflict",)
 INTERPRETER_VARIABLE = "VIBE_PARITY_PYTHON"
 #: Stands in for the machine-dependent vibe home in the captured default
 #: document, so the corpus stays identical on every workstation.
@@ -1061,9 +1064,12 @@ async def validated_models(
     from vibe.core.config.layers.overrides import OverridesLayer
     from vibe.core.config.vibe_schema import VibeConfigSchema
 
-    builder = ConfigBuilder(
-        VibeConfigSchema, validation_context={"require_api_key": False}
-    )
+    # No validation context: the builder stopped taking one, and the API-key
+    # check it used to turn off is no longer a validator. It is a method that
+    # callers invoke after the build (``vibe/core/config/builder.py:46``,
+    # ``vibe/core/config/vibe_schema.py:724``, ``vibe/cli/cli.py:102``,
+    # ``vibe/core/agent_loop/_loop.py:625``, ``vibe/app_server/_runtime.py:1449``).
+    builder = ConfigBuilder(VibeConfigSchema)
     builder.add_layer(DefaultConfigLayer(schema=VibeConfigSchema))
     for name, document in layers:
         builder.add_layer(OverridesLayer(data=tomllib.loads(document), name=name))

@@ -6,8 +6,8 @@
       },
       "case": "foreground-exit-zero",
       "modelText": {
-        "described": "sha256:ffd5c77110b7c6485befa179f6b35f80",
-        "length": 317
+        "described": "sha256:9fc9f49c0b63f2d84758a8cb7c18caf1",
+        "length": 294
       },
       "outcome": "returned",
       "scenario": "foreground",
@@ -48,14 +48,15 @@
         "command": "printf 'hello\n'",
         "exit_code": 0,
         "next_cursor": 7,
-        "output": "hello\n",
+        "output": {
+          "described": "sha256:cd2eca3535741f27a8ae40c31b0c41d4",
+          "length": 7
+        },
         "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
         "returncode": 0,
         "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
         "shell": "/bin/bash",
         "status": "completed",
-        "stderr": "",
-        "stdout": "hello\n",
         "truncated": false
       }
     },
@@ -65,8 +66,8 @@
       },
       "case": "foreground-reads-fixture",
       "modelText": {
-        "described": "sha256:3a2f10bdc116b608ca71b6e3c3ce0b9f",
-        "length": 332
+        "described": "sha256:ab4533692edfa037548026cffd7f2722",
+        "length": 301
       },
       "outcome": "returned",
       "scenario": "foreground",
@@ -107,14 +108,15 @@
         "command": "cat notes.txt",
         "exit_code": 0,
         "next_cursor": 15,
-        "output": "notes fixture\n",
+        "output": {
+          "described": "sha256:d34afac74fd8e3ecbe32029e9b3c4797",
+          "length": 15
+        },
         "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1.log",
         "returncode": 0,
         "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
         "shell": "/bin/bash",
         "status": "completed",
-        "stderr": "",
-        "stdout": "notes fixture\n",
         "truncated": false
       }
     },
@@ -124,8 +126,8 @@
       },
       "case": "foreground-no-output",
       "modelText": {
-        "described": "sha256:89a7cb71c03b9811b47b04f78260406a",
-        "length": 294
+        "described": "sha256:d231fcbec5106728a1fca4503ef62df6",
+        "length": 276
       },
       "outcome": "returned",
       "scenario": "foreground",
@@ -172,8 +174,6 @@
         "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s2",
         "shell": "/bin/bash",
         "status": "completed",
-        "stderr": "",
-        "stdout": "",
         "truncated": false
       }
     },
@@ -183,8 +183,8 @@
       },
       "case": "foreground-stderr-only",
       "modelText": {
-        "described": "sha256:1f42c444abbe579d65a419c96a73e9be",
-        "length": 318
+        "described": "sha256:b24eec57aba25f1092b01777e3edbd62",
+        "length": 296
       },
       "outcome": "returned",
       "scenario": "foreground",
@@ -225,14 +225,15 @@
         "command": "printf 'oops\n' >&2",
         "exit_code": 0,
         "next_cursor": 6,
-        "output": "oops\n",
+        "output": {
+          "described": "sha256:4b2eed2cfd84a1548133a203c0e7896f",
+          "length": 6
+        },
         "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s3.log",
         "returncode": 0,
         "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s3",
         "shell": "/bin/bash",
         "status": "completed",
-        "stderr": "",
-        "stdout": "oops\n",
         "truncated": false
       }
     },
@@ -242,8 +243,8 @@
       },
       "case": "foreground-multiline-output",
       "modelText": {
-        "described": "sha256:f3c0a510762db7d76165ed3baaa50d02",
-        "length": 317
+        "described": "sha256:0eb95d1602d44c788196fbcc45e503b2",
+        "length": 296
       },
       "outcome": "returned",
       "scenario": "foreground",
@@ -284,14 +285,15 @@
         "command": "printf 'a\nb\nc\n'",
         "exit_code": 0,
         "next_cursor": 9,
-        "output": "a\nb\nc\n",
+        "output": {
+          "described": "sha256:a21249681e0ce22432ba07ba61791651",
+          "length": 9
+        },
         "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s4.log",
         "returncode": 0,
         "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s4",
         "shell": "/bin/bash",
         "status": "completed",
-        "stderr": "",
-        "stdout": "a\nb\nc\n",
         "truncated": false
       }
     },
@@ -301,8 +303,8 @@
       },
       "case": "foreground-multibyte-output",
       "modelText": {
-        "described": "sha256:213a85afab16e79fcae9fde635df3581",
-        "length": 324
+        "described": "sha256:6feac0197a97de245e61da128f37b1fe",
+        "length": 299
       },
       "outcome": "returned",
       "scenario": "foreground",
@@ -343,14 +345,15 @@
         "command": "printf 'héllo ✓\n'",
         "exit_code": 0,
         "next_cursor": 12,
-        "output": "héllo ✓\n",
+        "output": {
+          "described": "sha256:a21e9f789491df43950f369b5cc2c1eb",
+          "length": 9
+        },
         "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s5.log",
         "returncode": 0,
         "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s5",
         "shell": "/bin/bash",
         "status": "completed",
-        "stderr": "",
-        "stdout": "héllo ✓\n",
         "truncated": false
       }
     },
@@ -360,8 +363,8 @@
       },
       "case": "foreground-output-exceeds-window",
       "modelText": {
-        "described": "sha256:7e81486d81d1bcc35fda4a1c30106daf",
-        "length": 26601
+        "described": "sha256:7d6ccef79a4eb1f323b7bd9e26358a18",
+        "length": 16285
       },
       "outcome": "returned",
       "scenario": "foreground",
@@ -403,19 +406,14 @@
         "exit_code": 0,
         "next_cursor": 16000,
         "output": {
-          "described": "sha256:f1b6950282f002358c0e4933325cb89e",
-          "length": 13149
+          "described": "sha256:28abe1a1dc4ef3261b63a95580efd5c2",
+          "length": 16000
         },
         "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s6.log",
         "returncode": 0,
         "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s6",
         "shell": "/bin/bash",
         "status": "completed",
-        "stderr": "",
-        "stdout": {
-          "described": "sha256:f1b6950282f002358c0e4933325cb89e",
-          "length": 13149
-        },
         "truncated": true
       }
     },
@@ -473,8 +471,8 @@
       },
       "case": "foreground-cwd-override",
       "modelText": {
-        "described": "sha256:0ababcef5742f15e67877e3dff4f620c",
-        "length": 332
+        "described": "sha256:0bf7876920bf4ff2b34d9236e62da22a",
+        "length": 301
       },
       "outcome": "returned",
       "scenario": "foreground",
@@ -515,14 +513,15 @@
         "command": "cat inner.txt",
         "exit_code": 0,
         "next_cursor": 15,
-        "output": "inner fixture\n",
+        "output": {
+          "described": "sha256:0f2d6fdb46b1328ab979e91db02a85f3",
+          "length": 15
+        },
         "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s8.log",
         "returncode": 0,
         "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s8",
         "shell": "/bin/bash",
         "status": "completed",
-        "stderr": "",
-        "stdout": "inner fixture\n",
         "truncated": false
       }
     },
@@ -552,8 +551,8 @@
       },
       "case": "foreground-env-override",
       "modelText": {
-        "described": "sha256:5b2cf14850630411fb97b0c0c4b034fe",
-        "length": 350
+        "described": "sha256:588508c353767c52c05d0bed86ed96c8",
+        "length": 320
       },
       "outcome": "returned",
       "scenario": "foreground",
@@ -594,14 +593,15 @@
         "command": "printf '%s\n' \"$VIBE_PARITY_TOKEN\"",
         "exit_code": 0,
         "next_cursor": 14,
-        "output": "parity-token\n",
+        "output": {
+          "described": "sha256:e652fe4bd3beaa823414728df60882c8",
+          "length": 14
+        },
         "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s9.log",
         "returncode": 0,
         "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s9",
         "shell": "/bin/bash",
         "status": "completed",
-        "stderr": "",
-        "stdout": "parity-token\n",
         "truncated": false
       }
     },
@@ -612,8 +612,8 @@
       },
       "case": "foreground-shell-override",
       "modelText": {
-        "described": "sha256:139cc65c3400b64920301f97ae3c1d15",
-        "length": 345
+        "described": "sha256:def3117302c2d0ad95a763cb834bdc02",
+        "length": 313
       },
       "outcome": "returned",
       "scenario": "foreground",
@@ -654,14 +654,15 @@
         "command": "printf 'shell-override\n'",
         "exit_code": 0,
         "next_cursor": 16,
-        "output": "shell-override\n",
+        "output": {
+          "described": "sha256:d98e6827d0a3bd9d3a3c3e1a5bdcf9b6",
+          "length": 16
+        },
         "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s10.log",
         "returncode": 0,
         "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s10",
         "shell": "/bin/sh",
         "status": "completed",
-        "stderr": "",
-        "stdout": "shell-override\n",
         "truncated": false
       }
     },
@@ -705,8 +706,8 @@
       },
       "case": "foreground-legacy-timeout-field",
       "modelText": {
-        "described": "sha256:7ab7d839582db9e8c654be2e9bd18e1b",
-        "length": 319
+        "described": "sha256:478d36726dbdd64677105a75cbf567de",
+        "length": 296
       },
       "outcome": "returned",
       "scenario": "foreground",
@@ -747,14 +748,15 @@
         "command": "printf 'timed\n'",
         "exit_code": 0,
         "next_cursor": 7,
-        "output": "timed\n",
+        "output": {
+          "described": "sha256:c8f2f85637259af35300f8de9836502c",
+          "length": 7
+        },
         "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s11.log",
         "returncode": 0,
         "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s11",
         "shell": "/bin/bash",
         "status": "completed",
-        "stderr": "",
-        "stdout": "timed\n",
         "truncated": false
       }
     },
@@ -765,8 +767,8 @@
       },
       "case": "foreground-timeout-clamped-to-maximum",
       "modelText": {
-        "described": "sha256:50d93aa125eeb618215eaaea404e9e33",
-        "length": 325
+        "described": "sha256:8aeab3ed8a26e48976e1173d091917f6",
+        "length": 300
       },
       "outcome": "returned",
       "scenario": "foreground",
@@ -807,14 +809,15 @@
         "command": "printf 'clamped\n'",
         "exit_code": 0,
         "next_cursor": 9,
-        "output": "clamped\n",
+        "output": {
+          "described": "sha256:f6192c8698d9bb882d0cc6b6b5741fd6",
+          "length": 9
+        },
         "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s12.log",
         "returncode": 0,
         "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s12",
         "shell": "/bin/bash",
         "status": "completed",
-        "stderr": "",
-        "stdout": "clamped\n",
         "truncated": false
       }
     },
@@ -825,8 +828,8 @@
       },
       "case": "background-returns-immediately",
       "modelText": {
-        "described": "sha256:a6f04855320ce1bb0d3cae9194c34add",
-        "length": 299
+        "described": "sha256:253f98a94a19b6d611a6c3815522363c",
+        "length": 281
       },
       "outcome": "returned",
       "scenario": "foreground",
@@ -873,8 +876,6 @@
         "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s13",
         "shell": "/bin/bash",
         "status": "running",
-        "stderr": "",
-        "stdout": "",
         "truncated": false
       }
     },
@@ -885,8 +886,8 @@
       },
       "case": "soft-timeout-backgrounds-the-session",
       "modelText": {
-        "described": "sha256:48dab2b26abb2d88dde18e4ff33532e2",
-        "length": 299
+        "described": "sha256:0a2a09d713eedddb9acb0b9d02bc5b5e",
+        "length": 281
       },
       "outcome": "returned",
       "scenario": "foreground",
@@ -933,8 +934,6 @@
         "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s14",
         "shell": "/bin/bash",
         "status": "running",
-        "stderr": "",
-        "stdout": "",
         "truncated": false
       }
     },
@@ -947,8 +946,8 @@
       "case": "hard-timeout-kills-the-session",
       "error": {
         "message": {
-          "described": "sha256:a7477e7198b7653f220817a7ea3cf38c",
-          "length": 210
+          "described": "sha256:0dee42e148b7ca23f60e19f57fa2a360",
+          "length": 201
         },
         "type": "ToolError"
       },
@@ -994,8 +993,8 @@
       },
       "case": "background-poll-source",
       "modelText": {
-        "described": "sha256:850a377ae61ec36d6487249eca1b39e1",
-        "length": 313
+        "described": "sha256:9aa32c42461a80388b04728d2532502c",
+        "length": 295
       },
       "outcome": "returned",
       "scenario": "polling",
@@ -1042,8 +1041,6 @@
         "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
         "shell": "/bin/bash",
         "status": "running",
-        "stderr": "",
-        "stdout": "",
         "truncated": false
       }
     },
@@ -1273,8 +1270,8 @@
       },
       "case": "poll-waits-for-the-session-to-exit",
       "modelText": {
-        "described": "sha256:4b63d426f8001a231b72e60eb40b5408",
-        "length": 218
+        "described": "sha256:579263ac1dd6db60796975351af16f24",
+        "length": 219
       },
       "outcome": "returned",
       "scenario": "polling",
@@ -1313,7 +1310,10 @@
       "typedResult": {
         "exit_code": 0,
         "next_cursor": 6,
-        "output": "late\n",
+        "output": {
+          "described": "sha256:1cbb8827fce369b5e2a88428b89c6045",
+          "length": 6
+        },
         "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
         "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
         "status": "completed",
@@ -1334,8 +1334,8 @@
       ],
       "case": "poll-after-completion",
       "modelText": {
-        "described": "sha256:4b63d426f8001a231b72e60eb40b5408",
-        "length": 218
+        "described": "sha256:579263ac1dd6db60796975351af16f24",
+        "length": 219
       },
       "outcome": "returned",
       "scenario": "polling",
@@ -1374,7 +1374,10 @@
       "typedResult": {
         "exit_code": 0,
         "next_cursor": 6,
-        "output": "late\n",
+        "output": {
+          "described": "sha256:1cbb8827fce369b5e2a88428b89c6045",
+          "length": 6
+        },
         "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
         "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
         "status": "completed",
@@ -1388,8 +1391,8 @@
       },
       "case": "poll-from-a-cursor",
       "modelText": {
-        "described": "sha256:d5a7325bf3b889f9820c36b2e9703c89",
-        "length": 215
+        "described": "sha256:8ebace66670839b5b201b1c398889aae",
+        "length": 216
       },
       "outcome": "returned",
       "scenario": "polling",
@@ -1428,7 +1431,10 @@
       "typedResult": {
         "exit_code": 0,
         "next_cursor": 6,
-        "output": "e\n",
+        "output": {
+          "described": "sha256:780b590e823368f04ff6782eee4e506b",
+          "length": 3
+        },
         "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
         "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
         "status": "completed",
@@ -1604,8 +1610,8 @@
       },
       "case": "poll-wait-clamped-to-the-maximum",
       "modelText": {
-        "described": "sha256:4b63d426f8001a231b72e60eb40b5408",
-        "length": 218
+        "described": "sha256:579263ac1dd6db60796975351af16f24",
+        "length": 219
       },
       "outcome": "returned",
       "scenario": "polling",
@@ -1644,7 +1650,10 @@
       "typedResult": {
         "exit_code": 0,
         "next_cursor": 6,
-        "output": "late\n",
+        "output": {
+          "described": "sha256:1cbb8827fce369b5e2a88428b89c6045",
+          "length": 6
+        },
         "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
         "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
         "status": "completed",
@@ -1658,8 +1667,8 @@
       },
       "case": "background-input-target",
       "modelText": {
-        "described": "sha256:b92ffb33dbc21badee13dc46afd1379f",
-        "length": 297
+        "described": "sha256:b764b104d3b7550738ae800ab6891443",
+        "length": 279
       },
       "outcome": "returned",
       "scenario": "stdin",
@@ -1706,8 +1715,6 @@
         "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
         "shell": "/bin/bash",
         "status": "running",
-        "stderr": "",
-        "stdout": "",
         "truncated": false
       }
     },
@@ -2233,8 +2240,8 @@
       },
       "case": "foreground-input-target-exits",
       "modelText": {
-        "described": "sha256:1b5dfa9ada2fd18ddf21d82c4744b119",
-        "length": 294
+        "described": "sha256:d0db2c5ce8542081314fc31313ea5cd3",
+        "length": 276
       },
       "outcome": "returned",
       "scenario": "stdin",
@@ -2281,8 +2288,6 @@
         "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
         "shell": "/bin/bash",
         "status": "completed",
-        "stderr": "",
-        "stdout": "",
         "truncated": false
       }
     },
@@ -2516,8 +2521,8 @@
       },
       "case": "background-first-session",
       "modelText": {
-        "described": "sha256:419043f901d74f0d2ab93543c3669754",
-        "length": 298
+        "described": "sha256:468f14bc2a62af2176725c16be284213",
+        "length": 280
       },
       "outcome": "returned",
       "scenario": "sessions-many",
@@ -2564,8 +2569,6 @@
         "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
         "shell": "/bin/bash",
         "status": "running",
-        "stderr": "",
-        "stdout": "",
         "truncated": false
       }
     },
@@ -2576,8 +2579,8 @@
       },
       "case": "background-second-session",
       "modelText": {
-        "described": "sha256:ec38be16d07330fd82abaae3747eb1b3",
-        "length": 298
+        "described": "sha256:ccccd6a3b401b9ffe3cd4b04b7cf6638",
+        "length": 280
       },
       "outcome": "returned",
       "scenario": "sessions-many",
@@ -2624,8 +2627,6 @@
         "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
         "shell": "/bin/bash",
         "status": "running",
-        "stderr": "",
-        "stdout": "",
         "truncated": false
       }
     },
@@ -3273,8 +3274,8 @@
       },
       "case": "foreground-log-source",
       "modelText": {
-        "described": "sha256:8d438863149112e92033683ae193494f",
-        "length": 327
+        "described": "sha256:5eb9cef49d6b1b70fbe02d4d01bb642e",
+        "length": 301
       },
       "outcome": "returned",
       "scenario": "log-file",
@@ -3315,14 +3316,15 @@
         "command": "printf 'log line\n'",
         "exit_code": 0,
         "next_cursor": 10,
-        "output": "log line\n",
+        "output": {
+          "described": "sha256:c2e9a966c8bb7c7d0c5a4696624bcd28",
+          "length": 10
+        },
         "output_path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
         "returncode": 0,
         "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0",
         "shell": "/bin/bash",
         "status": "completed",
-        "stderr": "",
-        "stdout": "log line\n",
         "truncated": false
       }
     },
@@ -3333,8 +3335,8 @@
       },
       "case": "read-a-session-log-from-the-start",
       "modelText": {
-        "described": "sha256:fb77025fda2415f8bae644a2e4611da0",
-        "length": 169
+        "described": "sha256:8fcdf0e1290eb14969e25fdd2c278c68",
+        "length": 170
       },
       "outcome": "returned",
       "scenario": "log-file",
@@ -3373,7 +3375,10 @@
       "typedResult": {
         "action": "read",
         "bytes_written": null,
-        "content": "log line\n",
+        "content": {
+          "described": "sha256:c2e9a966c8bb7c7d0c5a4696624bcd28",
+          "length": 10
+        },
         "next_cursor": 10,
         "path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
         "truncated": false
@@ -3495,8 +3500,8 @@
       },
       "case": "read-from-an-offset",
       "modelText": {
-        "described": "sha256:f923edf3b4d6afe6798366ac04cba976",
-        "length": 165
+        "described": "sha256:8f1bfc3082843a316695f74fc0c995b0",
+        "length": 166
       },
       "outcome": "returned",
       "scenario": "log-file",
@@ -3535,7 +3540,10 @@
       "typedResult": {
         "action": "read",
         "bytes_written": null,
-        "content": "line\n",
+        "content": {
+          "described": "sha256:893e89e669b5a4f9e5136d565f51e341",
+          "length": 6
+        },
         "next_cursor": 10,
         "path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
         "truncated": false
@@ -3651,8 +3659,8 @@
       },
       "case": "read-by-relative-path",
       "modelText": {
-        "described": "sha256:fb77025fda2415f8bae644a2e4611da0",
-        "length": 169
+        "described": "sha256:8fcdf0e1290eb14969e25fdd2c278c68",
+        "length": 170
       },
       "outcome": "returned",
       "scenario": "log-file",
@@ -3691,7 +3699,10 @@
       "typedResult": {
         "action": "read",
         "bytes_written": null,
-        "content": "log line\n",
+        "content": {
+          "described": "sha256:c2e9a966c8bb7c7d0c5a4696624bcd28",
+          "length": 10
+        },
         "next_cursor": 10,
         "path": "{root}/vibe-home/shell-tool/sessions/bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s0.log",
         "truncated": false
@@ -3856,8 +3867,8 @@
       },
       "case": "background-live-log-source",
       "modelText": {
-        "described": "sha256:ec38be16d07330fd82abaae3747eb1b3",
-        "length": 298
+        "described": "sha256:ccccd6a3b401b9ffe3cd4b04b7cf6638",
+        "length": 280
       },
       "outcome": "returned",
       "scenario": "log-file",
@@ -3904,8 +3915,6 @@
         "session_id": "bash_<stamp:%Y%m%d_%H%M%S>_<hex:8>#s1",
         "shell": "/bin/bash",
         "status": "running",
-        "stderr": "",
-        "stdout": "",
         "truncated": false
       }
     },
@@ -4020,6 +4029,6 @@
   ],
   "note": "Managed shell session corpus: what the pinned reference's five shell handlers return for each scripted case, with the manifest and the session info each case leaves behind. A captured string is committed as it stands only when it is a value these arguments supplied, a normalized path, a shape marker, or an identifier; everything else, including every error message, is committed as a {described, length} pair, so no reference prose ships while any change still fails the replay. Regenerate with scripts/parity/shell_session.py --corpus when the pinned reference moves.",
   "platform": "linux",
-  "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+  "referenceCommit": "4a96003186b166d55b9f06895c45bb136eef61cd",
   "schemaVersion": 1
 }

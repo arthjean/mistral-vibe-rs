@@ -12,8 +12,8 @@ against:
 
 ``constants``        endpoints, timeouts, tracer names, attribute keys, vocabularies
 ``envelope``         the datalake request a scripted configuration produces
-``baseMetadata``     the 12 base fields, the 3 request fields and their omissions
-``eventVocabulary``  the 26 event names and where each is raised
+``baseMetadata``     the 16 base fields, the 4 request fields and their omissions
+``eventVocabulary``  the 27 names raised from ``EMISSION_SITES``, each with its site
 ``eventPayloads``    the property key set each event carries
 ``exporterConfig``   the exporter endpoint and headers per configuration
 ``spans``            the four span families, their attributes and their statuses
@@ -86,6 +86,7 @@ _REEXEC_MARKER = "VIBE_PARITY_PINNED_TREE"
 VERSION_PLACEHOLDER = "{version}"
 PLATFORM_ID_PLACEHOLDER = "{platformId}"
 PLATFORM_VERSION_PLACEHOLDER = "{platformVersion}"
+ARCH_PLACEHOLDER = "{arch}"
 PPID_PLACEHOLDER = "{ppid}"
 PID_PLACEHOLDER = "{pid}"
 TIMESTAMP_PLACEHOLDER = "{timestamp}"
@@ -303,6 +304,12 @@ def scrub(value: Any) -> Any:
     from vibe import __version__
     from vibe.utils.platform import get_platform_id, get_platform_version
 
+    # The metadata builders stamp ``platform.machine().lower()`` as ``arch``
+    # (vibe/core/telemetry/build_metadata.py:41). Only a whole value is masked,
+    # because the machine name also sits inside other host strings, such as a
+    # Linux kernel release, which the platform-version mask already covers.
+    if isinstance(value, str) and value and value == platform.machine().lower():
+        return ARCH_PLACEHOLDER
     replacements = [
         (__version__, VERSION_PLACEHOLDER),
         (get_platform_version() or "", PLATFORM_VERSION_PLACEHOLDER),
@@ -849,6 +856,7 @@ def capture_base_metadata() -> list[dict[str, Any]]:
         build_launch_context,
         build_request_metadata,
     )
+    from vibe.core.telemetry.types import ExperimentAssignment
     from vibe.utils.terminal import TerminalEmulator
 
     records: list[dict[str, Any]] = []
@@ -873,7 +881,22 @@ def capture_base_metadata() -> list[dict[str, Any]]:
             parent_session_id=(
                 "oracle-parent-session" if entry["parentSession"] else None
             ),
-            experiments=entry["experiments"],
+            # The builder takes assignments and derives the ``experiments`` map
+            # from them (vibe/core/telemetry/build_metadata.py:22-53). A case's
+            # map is its experiment identifiers and variations; the experiment
+            # name is authored here from the identifier.
+            experiment_assignments=(
+                [
+                    ExperimentAssignment(
+                        experiment_id=experiment_id,
+                        experiment_name=f"oracle-{experiment_id}",
+                        variation_name=variation,
+                    )
+                    for experiment_id, variation in entry["experiments"].items()
+                ]
+                if entry["experiments"] is not None
+                else None
+            ),
             user_plan=entry["userPlan"],
         )
         for call_type in ("main_call", "secondary_call"):
@@ -945,7 +968,11 @@ def capture_attachment_counts() -> list[dict[str, Any]]:
 # --------------------------------------------------------------------------
 
 #: Where each event is raised, read off the reference tree. A file listed here
-#: is parsed for the literal payloads its call sites pass.
+#: is parsed for the literal payloads its call sites pass. The list is not the
+#: reference's whole vocabulary: at 4a96003186b1, vibe.tool_classification
+#: (vibe/app_server/_unified_harness_backend_adapter.py:6974) and
+#: vibe.multimodal_fallback_switch (vibe/app_server/_vision.py:55) are raised
+#: from files outside it and are not captured.
 EMISSION_SITES = (
     "vibe/cli/textual_ui/app.py",
     "vibe/cli/voice_manager/voice_manager.py",
@@ -957,6 +984,11 @@ EMISSION_SITES = (
 
 #: The methods a call site raises an event through.
 EMISSION_CALLS = ("send_telemetry_event", "record")
+
+#: The event value a call site builds and hands to ``ClientTelemetry.log``
+#: (vibe/app_server/telemetry_port.py:8-16), which carries the name and the
+#: payload as the ``name`` and ``properties`` keywords.
+EMISSION_EVENT_CLASS = "ClientTelemetryEvent"
 
 
 def capture_call_sites(tree: Path) -> dict[str, dict[str, Any]]:
@@ -976,9 +1008,19 @@ def capture_call_sites(tree: Path) -> dict[str, dict[str, Any]]:
             if not isinstance(node, ast.Call):
                 continue
             name = _called_name(node.func)
-            if name not in EMISSION_CALLS or not node.args:
+            if name in EMISSION_CALLS and node.args:
+                event = node.args[0]
+                payload = node.args[1] if len(node.args) > 1 else None
+                keywords = [keyword.arg for keyword in node.keywords]
+            elif name == EMISSION_EVENT_CLASS:
+                named = {keyword.arg: keyword.value for keyword in node.keywords}
+                event = named.get("name")
+                payload = named.get("properties")
+                keywords = [
+                    keyword for keyword in named if keyword not in ("name", "properties")
+                ]
+            else:
                 continue
-            event = node.args[0]
             if not isinstance(event, ast.Constant) or not isinstance(event.value, str):
                 continue
             if not event.value.startswith("vibe."):
@@ -988,12 +1030,12 @@ def capture_call_sites(tree: Path) -> dict[str, dict[str, Any]]:
             )
             if relative not in entry["sites"]:
                 entry["sites"].append(relative)
-            for key in _literal_keys(node.args[1] if len(node.args) > 1 else None):
+            for key in _literal_keys(payload):
                 if key not in entry["payloadKeys"]:
                     entry["payloadKeys"].append(key)
-            for keyword in node.keywords:
-                if keyword.arg and keyword.arg not in entry["keywords"]:
-                    entry["keywords"].append(keyword.arg)
+            for keyword in keywords:
+                if keyword and keyword not in entry["keywords"]:
+                    entry["keywords"].append(keyword)
     for entry in found.values():
         entry["sites"].sort()
         entry["payloadKeys"].sort()
@@ -1095,9 +1137,13 @@ async def _drive_named_senders() -> dict[str, dict[str, Any]]:
         tool_name="write_file",
         args_dict={"file_path": "/oracle/workspace/file.rs", "background": False},
     )
+    # ``approval_source`` is read since the reference started reporting who
+    # approved a call (vibe/core/telemetry/send.py:363-367); a user approval
+    # reaches its non-null branch.
     decision = SimpleNamespace(
         verdict=SimpleNamespace(value="approved"),
         approval_type=SimpleNamespace(value="session"),
+        approval_source=SimpleNamespace(value="user"),
     )
 
     senders: list[tuple[str, Any]] = [
@@ -1267,14 +1313,10 @@ def _drive_audio_managers() -> dict[str, dict[str, Any]]:
         def __init__(self) -> None:
             self.events: list[tuple[str, dict[str, Any]]] = []
 
-        def send_telemetry_event(
-            self,
-            event_name: str,
-            properties: dict[str, Any],
-            *,
-            correlation_id: str | None = None,
-        ) -> None:
-            self.events.append((event_name, properties))
+        # The managers emit through ``ClientTelemetry.log``
+        # (vibe/app_server/telemetry_port.py:15-16).
+        def log(self, event: Any) -> None:
+            self.events.append((event.name, dict(event.properties)))
 
         def __bool__(self) -> bool:
             return True

@@ -71,7 +71,7 @@ from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 #: without one reads first.
 REFERENCE_VARIABLE = "VIBE_REFERENCE"
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 DEFAULT_OUTPUT = Path(".parity/voice-corpus.json")
 DEFAULT_CORPUS = Path("crates/vibe-cli/tests/voice/corpus.json")
 DEFAULT_CACHE = Path(".parity")
@@ -234,27 +234,20 @@ class _Guard:
         """Refuses every device call the audio surface can make.
 
         The module is optional on the reference's own terms: it imports
-        `sounddevice` inside a `try` and degrades when PortAudio is missing, so
-        an absent module here is a guard that has nothing to arm rather than a
-        failure.
+        `miniaudio` inside a `try` and degrades when no audio backend loads
+        (`vibe/cli/audio_player/audio_player.py:17-25`), so an absent module
+        here is a guard that has nothing to arm rather than a failure. The
+        three names are the device entry points the player and the recorder
+        look up on the module at call time.
         """
 
         try:
-            import sounddevice
+            import miniaudio
         except Exception:
             return
-        for name in (
-            "query_devices",
-            "query_hostapis",
-            "check_input_settings",
-            "check_output_settings",
-            "RawInputStream",
-            "RawOutputStream",
-            "InputStream",
-            "OutputStream",
-        ):
-            if hasattr(sounddevice, name):
-                setattr(sounddevice, name, refuse(f"sounddevice.{name}"))
+        for name in ("Devices", "PlaybackDevice", "CaptureDevice"):
+            if hasattr(miniaudio, name):
+                setattr(miniaudio, name, refuse(f"miniaudio.{name}"))
 
     def verify(self) -> None:
         """Proves the guard is armed, on every run rather than once.
@@ -268,13 +261,11 @@ class _Guard:
 
         self._refused("the network guard is not armed", socket.getaddrinfo, "fixture.invalid", 443)
         try:
-            import sounddevice
+            import miniaudio
         except Exception:
             self.attempts.clear()
             return
-        self._refused(
-            "the audio device guard is not armed", sounddevice.query_devices
-        )
+        self._refused("the audio device guard is not armed", miniaudio.Devices)
         self.attempts.clear()
 
     @staticmethod
@@ -723,9 +714,11 @@ async def _build_config(document: str) -> Any:
     from vibe.core.config.layers.overrides import OverridesLayer
     from vibe.core.config.vibe_schema import VibeConfigSchema
 
-    builder = ConfigBuilder(
-        VibeConfigSchema, validation_context={"require_api_key": False}
-    )
+    # The builder takes no validation context: the API-key check is an explicit
+    # method a plain build never calls (`vibe/core/config/builder.py:46`,
+    # `vibe/core/config/vibe_schema.py:724`), so no document is refused for a
+    # missing key.
+    builder = ConfigBuilder(VibeConfigSchema)
     builder.add_layer(DefaultConfigLayer(schema=VibeConfigSchema))
     builder.add_layer(OverridesLayer(data=tomllib.loads(document), name="user"))
     return await builder.build()
@@ -958,9 +951,8 @@ async def _speech_frame(config: Any) -> dict[str, Any]:
 
 def capture_constants() -> dict[str, Any]:
     from vibe.cli.audio_player.audio_player import (
-        DEFAULT_BLOCKSIZE,
+        DEFAULT_BUFFER_MS,
         DEFAULT_SAMPLE_WIDTH,
-        DTYPE,
     )
     from vibe.cli.voice_manager.voice_manager import TRANSCRIPTION_DRAIN_TIMEOUT
     from vibe.core.config.models import (
@@ -1021,9 +1013,11 @@ def capture_constants() -> dict[str, Any]:
             "recordingMode": [mode.value for mode in RecordingMode],
         },
         "transcriptionDrainTimeoutSeconds": TRANSCRIPTION_DRAIN_TIMEOUT,
+        # The output device is sized in milliseconds since the reference moved
+        # playback onto miniaudio; its sample format is an enum member written
+        # at the call site rather than a constant, so it has nothing to capture.
         "playback": {
-            "blockSize": DEFAULT_BLOCKSIZE,
-            "dtype": DTYPE,
+            "bufferMs": DEFAULT_BUFFER_MS,
             "sampleWidth": DEFAULT_SAMPLE_WIDTH,
         },
     }

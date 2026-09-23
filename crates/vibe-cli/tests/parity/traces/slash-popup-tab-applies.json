@@ -86,6 +86,7 @@
         "popupRows": [
           "/help",
           "/config",
+          "/branch",
           "/clear",
           "/compact",
           "/connectors",
@@ -96,17 +97,20 @@
           "/exit",
           "/leanstall",
           "/log",
+          "/log-level",
           "/loop",
           "/mcp",
           "/model",
           "/new",
           "/proxy-setup",
           "/reload",
+          "/remote-project",
           "/rename",
           "/resume",
           "/retry",
           "/rewind",
           "/status",
+          "/teleport",
           "/theme",
           "/thinking",
           "/unleanstall",
@@ -124,115 +128,227 @@
         "completion": {
           "items": [
             {
-              "description": "Show help message",
+              "description": {
+                "digest": "43b457598864da44dd1357f31c7048c4ccf00beec544c52acccd76dc9acf95b1",
+                "length": 17
+              },
               "label": "/help"
             },
             {
-              "description": "Edit config settings",
+              "description": {
+                "digest": "ce0bf4f565f3c50f44e26030e1dc7d4d72a587d70d97b820646300353ab6f67d",
+                "length": 20
+              },
               "label": "/config"
             },
             {
-              "description": "Clear conversation history",
+              "description": {
+                "digest": "7117c044f728b995ab5924356bd3e801f90dd425370189e98dd06786910c1372",
+                "length": 134
+              },
+              "label": "/branch"
+            },
+            {
+              "description": {
+                "digest": "10699ae98ae8d9d9b4c45276563b5ccec50113279ccfa47020a7505ec7490d08",
+                "length": 62
+              },
               "label": "/clear"
             },
             {
-              "description": "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+              "description": {
+                "digest": "cb99aa7bc0a9c46ea80a2280ddca7ba7d5a431a92e81cd697eb9b8f607433141",
+                "length": 94
+              },
               "label": "/compact"
             },
             {
-              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "description": {
+                "digest": "5e301f59237bb812ffc04c4779d2fc4dc3744436d0d8cecb7e03f5a008a1c125",
+                "length": 169
+              },
               "label": "/connectors"
             },
             {
-              "description": "Browse, resume, or delete saved sessions",
+              "description": {
+                "digest": "36aedc4fc05d38aa4f82596c534de21a9c916cad2ae140d0b0b1af5e33de07b9",
+                "length": 40
+              },
               "label": "/continue"
             },
             {
-              "description": "Copy the last agent message to the clipboard",
+              "description": {
+                "digest": "ae2482ae463f24accc6529cabd0c5a5d1f4f84acd8e3d16b0fc95a1aec32324a",
+                "length": 44
+              },
               "label": "/copy"
             },
             {
-              "description": "Show data retention information",
+              "description": {
+                "digest": "f0a6879946d4c76247b6368dcf478e775053712f503f0ddcafd31b19dc3f2e1c",
+                "length": 31
+              },
               "label": "/data-retention"
             },
             {
-              "description": "Toggle debug console",
+              "description": {
+                "digest": "16011d28e9849bbc41f7048e1182aec7a9fe3ae54336d9a9e153ffa3b24b5732",
+                "length": 20
+              },
               "label": "/debug"
             },
             {
-              "description": "Exit the application",
+              "description": {
+                "digest": "477d73f6667a48e0c29ee4ce54b61a88d5e2346e3a292c45ec55e3e7dfae475a",
+                "length": 20
+              },
               "label": "/exit"
             },
             {
-              "description": "Install the Lean 4 agent (leanstral)",
+              "description": {
+                "digest": "fbb6015e086b387a10c1db084922af6b4826b95dc69135f63d29a9e3da10b7fc",
+                "length": 36
+              },
               "label": "/leanstall"
             },
             {
-              "description": "Show path to current interaction log file",
+              "description": {
+                "digest": "6085550d8c915d6de68c3bba4e02d2a8341692ee9bc395270dd4d1af474da04c",
+                "length": 41
+              },
               "label": "/log"
             },
             {
-              "description": "Schedule a recurring prompt. Use `/loop <interval> <prompt>`, `/loop list`, or `/loop cancel <id|all>`",
+              "description": {
+                "digest": "9c06835109470901d4bb3895f89195e962b853c3fe75f8f9e7585872bace0aec",
+                "length": 67
+              },
+              "label": "/log-level"
+            },
+            {
+              "description": {
+                "digest": "9f30744333e924b2c2e5e5ddc6928ac7939b0bb5c6bd8fae7249b64a8ed946ad",
+                "length": 102
+              },
               "label": "/loop"
             },
             {
-              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "description": {
+                "digest": "5e301f59237bb812ffc04c4779d2fc4dc3744436d0d8cecb7e03f5a008a1c125",
+                "length": 169
+              },
               "label": "/mcp"
             },
             {
-              "description": "Select active model",
+              "description": {
+                "digest": "59bf7eeaf0a38ca7092a4237e895ca8d94cd1fdb259a170ef656d08b5c863743",
+                "length": 19
+              },
               "label": "/model"
             },
             {
-              "description": "Clear conversation history",
+              "description": {
+                "digest": "10699ae98ae8d9d9b4c45276563b5ccec50113279ccfa47020a7505ec7490d08",
+                "length": 62
+              },
               "label": "/new"
             },
             {
-              "description": "Configure proxy and SSL certificate settings",
+              "description": {
+                "digest": "fb13a484057b1cb8410d990218bebf72b5d9ffc625c5d0229c1a2e33a657807f",
+                "length": 44
+              },
               "label": "/proxy-setup"
             },
             {
-              "description": "Reload configuration, agent instructions, and skills from disk",
+              "description": {
+                "digest": "3a8f15da69d7e24248d63556fd5217bcca46919e2b9a42bfd8b4c39578d33c4b",
+                "length": 62
+              },
               "label": "/reload"
             },
             {
-              "description": "Rename the current session",
+              "description": {
+                "digest": "2e63dd307720ec6cf5467e9b8ae6dd023fb0c3e646db709e4f700257daba2190",
+                "length": 52
+              },
+              "label": "/remote-project"
+            },
+            {
+              "description": {
+                "digest": "fc19344779a441864275ea634ec994c2ed5e240e729aa2315adb1627f1e7e0d5",
+                "length": 26
+              },
               "label": "/rename"
             },
             {
-              "description": "Browse, resume, or delete saved sessions",
+              "description": {
+                "digest": "36aedc4fc05d38aa4f82596c534de21a9c916cad2ae140d0b0b1af5e33de07b9",
+                "length": 40
+              },
               "label": "/resume"
             },
             {
-              "description": "Continue an interrupted model response; optionally pass additional instructions",
+              "description": {
+                "digest": "0502e1c8a1ca9f7d7326d687cdcb274349ffe7a77bf7c4914fe2db8c9cceaa3b",
+                "length": 79
+              },
               "label": "/retry"
             },
             {
-              "description": "Rewind to a previous message (or press Esc twice)",
+              "description": {
+                "digest": "0af6e7d65163da91ff04a2cbeb5d956d6be1fb336999abd93e25b0ccbda2e9c7",
+                "length": 49
+              },
               "label": "/rewind"
             },
             {
-              "description": "Display agent statistics",
+              "description": {
+                "digest": "6d7c0c79292b13952b81cf91c0f3847c8c4540b1cee373fcfb13ddf6b0cbb36b",
+                "length": 24
+              },
               "label": "/status"
             },
             {
-              "description": "Select theme",
+              "description": {
+                "digest": "b6e336cb43b5c8e271436f624c21de6b73eea5ba9e7b61392c2e788d2944582d",
+                "length": 33
+              },
+              "label": "/teleport"
+            },
+            {
+              "description": {
+                "digest": "ee67d2ab2fbc2dee9c5dacab0245e3e0f5c0fafe1e26f59dce048882dd3dcd18",
+                "length": 12
+              },
               "label": "/theme"
             },
             {
-              "description": "Select thinking level",
+              "description": {
+                "digest": "3159884ba261088b4c7325253dcc9af79bd2e510146342775c415d9c9b9bbefd",
+                "length": 21
+              },
               "label": "/thinking"
             },
             {
-              "description": "Uninstall the Lean 4 agent",
+              "description": {
+                "digest": "5dd2d6668dd9c42c039edc24e3b2c4f18ebc51995766c0e56ee2470cff7994f7",
+                "length": 26
+              },
               "label": "/unleanstall"
             },
             {
-              "description": "Configure voice settings",
+              "description": {
+                "digest": "73c9598a41ab2ec2784e2478e8dd65a787405ae187db403afa4d34b91afdfacc",
+                "length": 24
+              },
               "label": "/voice"
             },
             {
-              "description": "Display the Mistral signed-in user, workspace, and plan",
+              "description": {
+                "digest": "1d134344950c4a87fab50842c60d1c25e29da2d196ed933f77fdb93e82b8bc74",
+                "length": 55
+              },
               "label": "/whoami"
             }
           ],
@@ -281,7 +397,9 @@
           "/continue",
           "/copy",
           "/mcp",
-          "/voice"
+          "/voice",
+          "/branch",
+          "/remote-project"
         ],
         "popupVisible": true,
         "prompt": "/",
@@ -294,36 +412,74 @@
         "completion": {
           "items": [
             {
-              "description": "Edit config settings",
+              "description": {
+                "digest": "ce0bf4f565f3c50f44e26030e1dc7d4d72a587d70d97b820646300353ab6f67d",
+                "length": 20
+              },
               "label": "/config"
             },
             {
-              "description": "Clear conversation history",
+              "description": {
+                "digest": "10699ae98ae8d9d9b4c45276563b5ccec50113279ccfa47020a7505ec7490d08",
+                "length": 62
+              },
               "label": "/clear"
             },
             {
-              "description": "Compact conversation history by summarizing. Optionally pass instructions to guide the summary",
+              "description": {
+                "digest": "cb99aa7bc0a9c46ea80a2280ddca7ba7d5a431a92e81cd697eb9b8f607433141",
+                "length": 94
+              },
               "label": "/compact"
             },
             {
-              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "description": {
+                "digest": "5e301f59237bb812ffc04c4779d2fc4dc3744436d0d8cecb7e03f5a008a1c125",
+                "length": 169
+              },
               "label": "/connectors"
             },
             {
-              "description": "Browse, resume, or delete saved sessions",
+              "description": {
+                "digest": "36aedc4fc05d38aa4f82596c534de21a9c916cad2ae140d0b0b1af5e33de07b9",
+                "length": 40
+              },
               "label": "/continue"
             },
             {
-              "description": "Copy the last agent message to the clipboard",
+              "description": {
+                "digest": "ae2482ae463f24accc6529cabd0c5a5d1f4f84acd8e3d16b0fc95a1aec32324a",
+                "length": 44
+              },
               "label": "/copy"
             },
             {
-              "description": "Display available MCP servers and connectors. Pass a name to list tools; subcommands: add <url> [--transport http|streamable-http], status, login <alias>, logout <alias>",
+              "description": {
+                "digest": "5e301f59237bb812ffc04c4779d2fc4dc3744436d0d8cecb7e03f5a008a1c125",
+                "length": 169
+              },
               "label": "/mcp"
             },
             {
-              "description": "Configure voice settings",
+              "description": {
+                "digest": "73c9598a41ab2ec2784e2478e8dd65a787405ae187db403afa4d34b91afdfacc",
+                "length": 24
+              },
               "label": "/voice"
+            },
+            {
+              "description": {
+                "digest": "7117c044f728b995ab5924356bd3e801f90dd425370189e98dd06786910c1372",
+                "length": 134
+              },
+              "label": "/branch"
+            },
+            {
+              "description": {
+                "digest": "2e63dd307720ec6cf5467e9b8ae6dd023fb0c3e646db709e4f700257daba2190",
+                "length": 52
+              },
+              "label": "/remote-project"
             }
           ],
           "kind": "slash",
@@ -389,10 +545,10 @@
     }
   ],
   "reference": {
-    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
-    "version": "2.24.0"
+    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd",
+    "version": "2.25.7"
   },
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "setup": {
     "agentName": "",
     "commands": {},

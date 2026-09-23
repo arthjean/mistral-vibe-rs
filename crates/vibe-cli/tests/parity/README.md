@@ -16,7 +16,7 @@ input parity as reproducible observations instead of interpretation.
 The reference checkout is read-only; the harness only drives and observes it.
 
 ```console
-scripts/parity/oracle.py
+python3 scripts/parity/oracle.py
 ```
 
 Generation refuses to write anything when the reference checkout is missing,
@@ -32,7 +32,7 @@ images) is never written as an authoritative fixture: it is declared under
 ## Replaying
 
 ```console
-cargo test -p vibe-cli --test chat_input_parity
+cargo test -p vibe-cli --all-features --lib chat_input_parity
 ```
 
 The runner replays every trace through `tui::chat_input`. The oracle records
@@ -40,7 +40,9 @@ five dimensions; the runner compares each dimension as soon as its owning
 story closes:
 
 - `state` (compared): text, mode, cursor, selection, completion candidates,
-  history position.
+  history position. Completion descriptions are reference-authored prose, so
+  schema version 2 records each as `{length, digest}` (SHA-256 of the UTF-8
+  text) and the runner fingerprints this port's descriptions the same way.
 - `effects` (compared): the ordered effects both implementations expose
   (submission, history, mode, completion reset, clipboard, feedback,
   recording, notifications). Effects that exist only as internal plumbing on
@@ -60,7 +62,7 @@ story closes:
 | Status | Meaning |
 |---|---|
 | `parity` | Rust must match the reference; a divergence fails |
-| `gap` | Rust is known to diverge; matching also fails, so closing a gap cannot go unrecorded |
+| `gap` | Rust is known to diverge at the events and pointers `DIVERGENCES` ledgers in the runner, each with its reason; an unledgered divergence, a stale entry, or a full match fails |
 | `deferred` | recorded by the oracle, not compared yet; the runner names the story that will |
 | `unavailable` | the scenario could not be recorded on this host |
 
@@ -80,7 +82,7 @@ the field into a real assertion.
 After a story closes a gap, recalibrate and review the diff:
 
 ```console
-VIBE_PARITY_CALIBRATE=1 cargo test -p vibe-cli --test chat_input_parity
+VIBE_PARITY_CALIBRATE=1 cargo test -p vibe-cli --all-features --lib chat_input_parity
 ```
 
 Calibration always reports a failure so it can never be mistaken for a passing

@@ -10,9 +10,11 @@
 //! reference-authored sentence, which is what `NOTICE` allows. Only the live
 //! recapture probe skips, and it names the pin and the way back when it does.
 //!
-//! The oracle preceded the implementation, and the ledger below has burned
-//! down to its terminal state: every entry is a decided divergence, and the
-//! stale check retires one the moment its case conforms. `frontmatter`,
+//! The oracle preceded the implementation, and the ledger below had burned
+//! down to decided divergences only until the re-pin to v2.25.7 reopened it:
+//! the `OPEN` entries record what the reference changed since v2.24.0 and the
+//! port has not followed, and the stale check retires any entry the moment
+//! its case conforms. `frontmatter`,
 //! `metadata` and `projection` are compared for real since EP-047 landed the
 //! parser, the schema and the whole model. `discovery` and `filtering` are
 //! compared for real since EP-048 landed the five roots, the configured paths
@@ -59,15 +61,43 @@ const CORPUS_SCHEMA_VERSION: u32 = 1;
 /// captured almost nothing fails instead of reporting a clean but empty run.
 const MINIMUM_SCENARIOS: usize = 120;
 
+/// v2.25.5 added `disable_model_invocation` to the reference's `SkillMetadata`
+/// (`vibe/core/skills/models.py:27,80-86` at 4a96003186b1), so every accepted
+/// record's `model_dump()` now carries `disable_model_invocation: false`.
+const METADATA_MODEL_INVOCATION: &str = "OPEN: (row 28) v2.25.5 added the \
+     `disable-model-invocation` frontmatter key to the reference's `SkillMetadata` \
+     (`vibe/core/skills/models.py:27,80-86` at 4a96003186b1), so this accepted record \
+     dumps `disable_model_invocation: false`; the port's `SkillMetadata` \
+     (`crates/vibe-core/src/skills/schema.rs:31-40`) declares no such field, so its record \
+     lacks the key";
+
+/// v2.25.0 scoped each skill root: project harness roots publish `project`.
+const DISCOVERY_PROJECT_SCOPE: &str = "OPEN: (row 28) v2.25.0 made the reference's \
+     `_compute_search_paths` pair every root with a scope \
+     (`vibe/core/skills/manager.py:86-115` at 4a96003186b1), so a skill found under a \
+     project harness root (`.vibe/skills` or `.agents/skills` in the trusted cwd) publishes \
+     `scope: project`; the port's `discover_extensions` still publishes every disk skill as \
+     `global` (`crates/vibe-core/src/extensions.rs:449`)";
+
+/// v2.25.0 and v2.25.5 widened the wire's `SkillSummary`.
+const PROJECTION_SUMMARY_FIELDS: &str = "OPEN: (row 28) the reference's `SkillSummary` gained \
+     `scope` and `registry` in v2.25.0 and `enabled` and `locked` in v2.25.5 \
+     (`vibe/app_server/models.py:593-602` at 4a96003186b1), and `_skill_summary` fills all \
+     four (`vibe/app_server/_projection.py:288-301`), so this summary carries \
+     `scope: global`, `registry: null`, `enabled: true` and `locked: false`; the port's \
+     `skill_summary` (`crates/vibe-core/src/skills.rs:180-188`) still emits only name, \
+     description, prompt, userInvocable and source";
+
 /// Cases where this port answers something other than the reference, each with
 /// the reason. A case that conforms while listed here fails the replay as a
 /// stale entry, and a case that diverges without an entry fails naming the
 /// family, the case and the observed and expected values.
 ///
 /// A `family/*` entry covers every case of its family and goes stale only
-/// when the whole family conforms; none remains, because every entry left is
-/// a decided divergence: the deprecated legacy root and the prose digests
-/// `NOTICE` holds permanently unequal.
+/// when the whole family conforms; none is used. The `ACCEPTED` entries are
+/// decided divergences: the deprecated legacy root and the prose digests
+/// `NOTICE` holds permanently unequal. The `OPEN` entries are reference
+/// changes since v2.24.0 the port has not followed, one per affected case.
 const DIVERGENCES: &[(&str, &str)] = &[
     (
         "discovery/legacy-extensions-root-unread",
@@ -78,10 +108,15 @@ const DIVERGENCES: &[(&str, &str)] = &[
     (
         "builtins/builtinProse-vibe",
         "ACCEPTED: `NOTICE` forbids shipping the reference's builtin prose, so the `vibe` body \
-         is written originally in `crates/vibe-core/src/skills/assets/vibe.md` against the same \
-         directive coverage; this entry keeps the divergence permanent, and the replay fails \
-         the moment the body conforms to the reference digest, so it can never be closed by \
-         copying",
+         is written originally in `crates/vibe-core/src/skills/assets/vibe.md`; this entry \
+         keeps the digest divergence permanent, and the replay fails the moment the body \
+         conforms to the reference digest, so it can never be closed by copying. The body was \
+         written against the v2.24.0 directive coverage: at 4a96003186b1 the reference prompt \
+         (`vibe/core/skills/builtins/vibe.py`) is 59337 characters, up from 39666, and adds \
+         directives on OpenTelemetry tracing (v2.24.1, `vibe.py:213`), session titles \
+         (v2.24.4, `vibe.py:107`) and plugins (v2.25.1, `vibe.py:1019-1111`: manifest, \
+         contents, foreign formats, pinning and reload, example tree), none of which `vibe.md` \
+         covers, so the coverage gap is open beyond the permanent digest divergence",
     ),
     (
         "builtins/builtinProse-vibe-description",
@@ -92,8 +127,14 @@ const DIVERGENCES: &[(&str, &str)] = &[
         "builtins/builtinProse-skill-creator",
         "ACCEPTED: `NOTICE` forbids shipping the reference's builtin prose, so the \
          `skill-creator` body is written originally in \
-         `crates/vibe-core/src/skills/assets/skill_creator.md` against the same directive \
-         coverage; conforming to the reference digest fails the replay",
+         `crates/vibe-core/src/skills/assets/skill_creator.md`, and conforming to the reference \
+         digest fails the replay. The body was written against the v2.24.0 directive \
+         coverage: at 4a96003186b1 the reference prompt \
+         (`vibe/core/skills/builtins/skill_creator.py`) is 4678 characters, up from 4500, and \
+         documents the `disable-model-invocation` frontmatter key (v2.25.5, \
+         `skill_creator.py:80`) with the routing-visibility statement qualified to match, \
+         which `skill_creator.md` does not cover, so the coverage gap is open beyond the \
+         permanent digest divergence",
     ),
     (
         "builtins/builtinProse-skill-creator-description",
@@ -112,6 +153,103 @@ const DIVERGENCES: &[(&str, &str)] = &[
          for the same purpose; the recorded trees mask it as `{fallbackDescription}` on both \
          sides, and this entry holds the two digests permanently unequal, failing the replay \
          the moment the sentence conforms",
+    ),
+    ("metadata/minimal", METADATA_MODEL_INVOCATION),
+    ("metadata/all-fields", METADATA_MODEL_INVOCATION),
+    ("metadata/allowed-tools-string", METADATA_MODEL_INVOCATION),
+    ("metadata/allowed-tools-list", METADATA_MODEL_INVOCATION),
+    ("metadata/allowed-tools-null", METADATA_MODEL_INVOCATION),
+    (
+        "metadata/allowed-tools-empty-string",
+        METADATA_MODEL_INVOCATION,
+    ),
+    (
+        "metadata/allowed-tools-underscore-spelling",
+        METADATA_MODEL_INVOCATION,
+    ),
+    (
+        "metadata/allowed-tools-both-spellings",
+        METADATA_MODEL_INVOCATION,
+    ),
+    ("metadata/user-invocable-hyphen", METADATA_MODEL_INVOCATION),
+    (
+        "metadata/user-invocable-underscore",
+        METADATA_MODEL_INVOCATION,
+    ),
+    (
+        "metadata/user-invocable-both-spellings",
+        METADATA_MODEL_INVOCATION,
+    ),
+    (
+        "metadata/user-invocable-string-false",
+        METADATA_MODEL_INVOCATION,
+    ),
+    (
+        "metadata/user-invocable-string-no",
+        METADATA_MODEL_INVOCATION,
+    ),
+    (
+        "metadata/metadata-non-string-values",
+        METADATA_MODEL_INVOCATION,
+    ),
+    ("metadata/metadata-null", METADATA_MODEL_INVOCATION),
+    ("metadata/metadata-int-keys", METADATA_MODEL_INVOCATION),
+    ("metadata/extra-key-ignored", METADATA_MODEL_INVOCATION),
+    ("metadata/name-64-chars", METADATA_MODEL_INVOCATION),
+    ("metadata/description-1024-chars", METADATA_MODEL_INVOCATION),
+    (
+        "metadata/compatibility-500-chars",
+        METADATA_MODEL_INVOCATION,
+    ),
+    ("metadata/license-null", METADATA_MODEL_INVOCATION),
+    ("discovery/project-vibe-skills", DISCOVERY_PROJECT_SCOPE),
+    ("discovery/project-agents-skills", DISCOVERY_PROJECT_SCOPE),
+    ("discovery/project-both-roots", DISCOVERY_PROJECT_SCOPE),
+    (
+        "discovery/project-vibe-beats-agents",
+        DISCOVERY_PROJECT_SCOPE,
+    ),
+    ("discovery/project-beats-user", DISCOVERY_PROJECT_SCOPE),
+    (
+        "discovery/nonexistent-configured-path",
+        DISCOVERY_PROJECT_SCOPE,
+    ),
+    (
+        "discovery/configured-path-is-a-file",
+        DISCOVERY_PROJECT_SCOPE,
+    ),
+    (
+        "discovery/duplicate-name-within-one-root",
+        DISCOVERY_PROJECT_SCOPE,
+    ),
+    ("discovery/clutter-ignored", DISCOVERY_PROJECT_SCOPE),
+    (
+        "discovery/malformed-skill-becomes-issue",
+        DISCOVERY_PROJECT_SCOPE,
+    ),
+    (
+        "discovery/frontmatter-name-wins-over-directory",
+        DISCOVERY_PROJECT_SCOPE,
+    ),
+    ("projection/local-defaults", PROJECTION_SUMMARY_FIELDS),
+    ("projection/local-not-invocable", PROJECTION_SUMMARY_FIELDS),
+    ("projection/builtin-shape", PROJECTION_SUMMARY_FIELDS),
+    ("projection/registry-source", PROJECTION_SUMMARY_FIELDS),
+    ("projection/unicode-fields", PROJECTION_SUMMARY_FIELDS),
+    ("projection/empty-prompt", PROJECTION_SUMMARY_FIELDS),
+    (
+        "projection/rich-model-fields-do-not-reach-the-summary",
+        PROJECTION_SUMMARY_FIELDS,
+    ),
+    ("projection/multiline-prompt", PROJECTION_SUMMARY_FIELDS),
+    (
+        "store/prune-keeps-active",
+        "OPEN: (row 28) v2.25.0 scoped the reference's `_prune` to the ids named in the \
+         active set (`vibe/core/skills/registry/_store.py:264-267` at 4a96003186b1), so id \
+         `b`, absent from the active set, keeps `b/1/SKILL.md`; the port's \
+         `vibe_core::skills::registry::store::prune` \
+         (`crates/vibe-core/src/skills/registry/store.rs:349-379`) still removes every \
+         inactive version under every id directory, so only `a/2/SKILL.md` survives",
     ),
 ];
 
@@ -226,7 +364,9 @@ struct SymlinkSpec {
 struct PublishedSkill {
     name: String,
     source: String,
-    /// Always `global` at this pin, even for project skills.
+    /// `project` for a skill found under a project harness root and `global`
+    /// for a configured or user root, since v2.25.0
+    /// (`vibe/core/skills/manager.py:86-115`).
     scope: String,
     root: Option<String>,
     rel_path: Option<String>,

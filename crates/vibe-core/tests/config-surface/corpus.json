@@ -5,8 +5,12 @@
       "active_transcribe_model": "voxtral-realtime",
       "active_tts_model": "voxtral-tts",
       "agent_paths": [],
+      "allowed_models": [],
+      "api_connect_timeout": 10.0,
+      "api_pool_timeout": 10.0,
       "api_retry_max_elapsed_time": 300.0,
       "api_timeout": 720.0,
+      "api_write_timeout": 30.0,
       "applied_migrations": [],
       "ask_confirmation_on_exit": true,
       "auto_compact_threshold": 200000,
@@ -16,7 +20,7 @@
       "connectors": [],
       "console_base_url": "https://console.mistral.ai",
       "context_warnings": false,
-      "default_agent": "default",
+      "default_agent": "accept-edits",
       "disable_welcome_banner_animation": false,
       "disabled_agents": [],
       "disabled_skills": [],
@@ -33,12 +37,13 @@
       "enabled_skills": [],
       "enabled_tools": [],
       "experimental_enable_registry_skills": false,
+      "experimental_enable_tab_status": true,
       "experiments": {
         "api_host": "https://experiments.mistral.services/",
         "client_key": "sdk-OE8yJgTXZY6tj",
         "enable": true
       },
-      "file_watcher_for_autocomplete": false,
+      "file_watcher_for_autocomplete": true,
       "include_commit_signature": true,
       "include_model_info": true,
       "include_project_context": true,
@@ -51,6 +56,7 @@
           "alias": "mistral-medium-3.5",
           "auto_compact_threshold": 200000,
           "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
@@ -60,20 +66,9 @@
           "thinking": "high"
         },
         {
-          "alias": "devstral-small",
-          "auto_compact_threshold": 200000,
-          "cached_input_price": 0.01,
-          "input_price": 0.1,
-          "name": "devstral-small-latest",
-          "output_price": 0.3,
-          "provider": "mistral",
-          "supports_images": false,
-          "temperature": 0.2,
-          "thinking": "off"
-        },
-        {
           "alias": "local",
           "auto_compact_threshold": 200000,
+          "display_name": "Devstral (local)",
           "input_price": 0.0,
           "name": "devstral",
           "output_price": 0.0,
@@ -96,8 +91,10 @@
           "api_key_env_var": "MISTRAL_API_KEY",
           "api_style": "openai",
           "backend": "mistral",
+          "browser_auth_allow_origin_rewrite": false,
           "browser_auth_api_base_url": "https://console.mistral.ai/api",
           "browser_auth_base_url": "https://console.mistral.ai",
+          "emits_finish_reason": true,
           "extra_headers": {},
           "name": "mistral",
           "project_id": "",
@@ -109,6 +106,8 @@
           "api_key_env_var": "",
           "api_style": "openai",
           "backend": "generic",
+          "browser_auth_allow_origin_rewrite": false,
+          "emits_finish_reason": true,
           "extra_headers": {},
           "name": "llamacpp",
           "project_id": "",
@@ -118,14 +117,19 @@
       ],
       "raise_on_compaction_failure": false,
       "routed_default_model": "",
+      "routed_extra_models": [],
       "session_logging": {
         "enabled": true,
+        "generate_titles": false,
         "save_dir": "{vibe_home}/logs/session",
         "session_prefix": "session"
       },
       "show_greeting": true,
+      "show_subagent_status_list": true,
       "show_thinking_nodes": false,
       "skill_paths": [],
+      "smart_approve_available": false,
+      "smart_approve_default": false,
       "system_prompt_id": "cli",
       "theme": "auto",
       "tool_paths": [],
@@ -166,10 +170,9 @@
         }
       ],
       "vibe_base_url": "https://chat.mistral.ai",
-      "vibe_code_api_key_env_var": "MISTRAL_API_KEY",
-      "vibe_code_enabled": true,
       "vibe_code_sessions_base_url": "https://chat.mistral.ai",
-      "voice_mode_enabled": false
+      "voice_mode_enabled": false,
+      "worktree_limit": 15
     },
     "toolNames": [
       "ask_user_question",
@@ -228,6 +231,14 @@
     {
       "choices": [],
       "kind": "complex",
+      "mergeKey": null,
+      "name": "routed_extra_models",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "complex",
       "mergeKey": "name",
       "name": "providers",
       "popular": false,
@@ -243,11 +254,27 @@
     },
     {
       "choices": [],
+      "kind": "list",
+      "mergeKey": null,
+      "name": "allowed_models",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
       "kind": "complex",
       "mergeKey": null,
       "name": "compaction_model",
       "popular": false,
-      "strategy": "replace"
+      "strategy": "merge"
+    },
+    {
+      "choices": [],
+      "kind": "complex",
+      "mergeKey": null,
+      "name": "vision_model",
+      "popular": false,
+      "strategy": "merge"
     },
     {
       "choices": [],
@@ -403,6 +430,22 @@
     },
     {
       "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "smart_approve_available",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
+      "name": "smart_approve_default",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
       "kind": "list",
       "mergeKey": null,
       "name": "skill_paths",
@@ -430,22 +473,6 @@
       "kind": "bool",
       "mergeKey": null,
       "name": "experimental_enable_registry_skills",
-      "popular": false,
-      "strategy": "replace"
-    },
-    {
-      "choices": [],
-      "kind": "bool",
-      "mergeKey": null,
-      "name": "vibe_code_enabled",
-      "popular": false,
-      "strategy": "replace"
-    },
-    {
-      "choices": [],
-      "kind": "str",
-      "mergeKey": null,
-      "name": "vibe_code_api_key_env_var",
       "popular": false,
       "strategy": "replace"
     },
@@ -585,6 +612,22 @@
       "choices": [],
       "kind": "bool",
       "mergeKey": null,
+      "name": "show_subagent_status_list",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "int",
+      "mergeKey": null,
+      "name": "worktree_limit",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
       "name": "bypass_tool_permissions",
       "popular": true,
       "strategy": "replace"
@@ -689,6 +732,14 @@
       "choices": [],
       "kind": "bool",
       "mergeKey": null,
+      "name": "experimental_enable_tab_status",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "bool",
+      "mergeKey": null,
       "name": "enable_system_trust_store",
       "popular": false,
       "strategy": "replace"
@@ -711,6 +762,30 @@
     },
     {
       "choices": [],
+      "kind": "float",
+      "mergeKey": null,
+      "name": "api_connect_timeout",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "float",
+      "mergeKey": null,
+      "name": "api_write_timeout",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
+      "kind": "float",
+      "mergeKey": null,
+      "name": "api_pool_timeout",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
       "kind": "str",
       "mergeKey": null,
       "name": "vibe_base_url",
@@ -727,11 +802,19 @@
     },
     {
       "choices": [],
+      "kind": "str",
+      "mergeKey": null,
+      "name": "log_level",
+      "popular": false,
+      "strategy": "replace"
+    },
+    {
+      "choices": [],
       "kind": "complex",
       "mergeKey": null,
       "name": "project_context",
       "popular": false,
-      "strategy": "replace"
+      "strategy": "merge"
     },
     {
       "choices": [],
@@ -739,7 +822,7 @@
       "mergeKey": null,
       "name": "session_logging",
       "popular": false,
-      "strategy": "replace"
+      "strategy": "merge"
     },
     {
       "choices": [],
@@ -747,7 +830,7 @@
       "mergeKey": null,
       "name": "experiments",
       "popular": false,
-      "strategy": "replace"
+      "strategy": "merge"
     }
   ],
   "mcp": {
@@ -1312,22 +1395,11 @@
       "compactionModel": null,
       "layers": [],
       "models": {
-        "devstral-small": {
-          "alias": "devstral-small",
-          "auto_compact_threshold": 200000,
-          "cached_input_price": 0.01,
-          "input_price": 0.1,
-          "name": "devstral-small-latest",
-          "output_price": 0.3,
-          "provider": "mistral",
-          "supports_images": false,
-          "temperature": 0.2,
-          "thinking": "off"
-        },
         "local": {
           "alias": "local",
           "auto_compact_threshold": 200000,
           "cached_input_price": null,
+          "display_name": "Devstral (local)",
           "input_price": 0.0,
           "name": "devstral",
           "output_price": 0.0,
@@ -1340,6 +1412,7 @@
           "alias": "mistral-medium-3.5",
           "auto_compact_threshold": 200000,
           "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
@@ -1362,22 +1435,11 @@
         }
       ],
       "models": {
-        "devstral-small": {
-          "alias": "devstral-small",
-          "auto_compact_threshold": 200000,
-          "cached_input_price": 0.01,
-          "input_price": 0.1,
-          "name": "devstral-small-latest",
-          "output_price": 0.3,
-          "provider": "mistral",
-          "supports_images": false,
-          "temperature": 0.2,
-          "thinking": "off"
-        },
         "local": {
           "alias": "local",
           "auto_compact_threshold": 200000,
           "cached_input_price": null,
+          "display_name": "Devstral (local)",
           "input_price": 0.0,
           "name": "devstral",
           "output_price": 0.0,
@@ -1390,6 +1452,7 @@
           "alias": "mistral-medium-3.5",
           "auto_compact_threshold": 200000,
           "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
@@ -1412,22 +1475,11 @@
         }
       ],
       "models": {
-        "devstral-small": {
-          "alias": "devstral-small",
-          "auto_compact_threshold": 200000,
-          "cached_input_price": 0.01,
-          "input_price": 0.1,
-          "name": "devstral-small-latest",
-          "output_price": 0.3,
-          "provider": "mistral",
-          "supports_images": false,
-          "temperature": 0.2,
-          "thinking": "off"
-        },
         "local": {
           "alias": "local",
           "auto_compact_threshold": 200000,
           "cached_input_price": null,
+          "display_name": "Devstral (local)",
           "input_price": 0.0,
           "name": "devstral",
           "output_price": 0.0,
@@ -1440,6 +1492,7 @@
           "alias": "mistral-medium-3.5",
           "auto_compact_threshold": 200000,
           "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
@@ -1462,22 +1515,11 @@
         }
       ],
       "models": {
-        "devstral-small": {
-          "alias": "devstral-small",
-          "auto_compact_threshold": 200000,
-          "cached_input_price": 0.01,
-          "input_price": 0.1,
-          "name": "devstral-small-latest",
-          "output_price": 0.3,
-          "provider": "mistral",
-          "supports_images": false,
-          "temperature": 0.2,
-          "thinking": "off"
-        },
         "local": {
           "alias": "local",
           "auto_compact_threshold": 200000,
           "cached_input_price": null,
+          "display_name": "Devstral (local)",
           "input_price": 0.0,
           "name": "devstral",
           "output_price": 0.0,
@@ -1490,6 +1532,7 @@
           "alias": "mistral-medium-3.5",
           "auto_compact_threshold": 200000,
           "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
@@ -1502,6 +1545,7 @@
           "alias": "scratch",
           "auto_compact_threshold": 50000,
           "cached_input_price": null,
+          "display_name": null,
           "input_price": 0.0,
           "name": "scratch",
           "output_price": 0.0,
@@ -1524,22 +1568,11 @@
         }
       ],
       "models": {
-        "devstral-small": {
-          "alias": "devstral-small",
-          "auto_compact_threshold": 200000,
-          "cached_input_price": 0.01,
-          "input_price": 0.1,
-          "name": "devstral-small-latest",
-          "output_price": 0.3,
-          "provider": "mistral",
-          "supports_images": false,
-          "temperature": 0.2,
-          "thinking": "off"
-        },
         "local": {
           "alias": "local",
           "auto_compact_threshold": 200000,
           "cached_input_price": null,
+          "display_name": "Devstral (local)",
           "input_price": 0.0,
           "name": "devstral",
           "output_price": 0.0,
@@ -1552,6 +1585,7 @@
           "alias": "mistral-medium-3.5",
           "auto_compact_threshold": 200000,
           "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
@@ -1564,6 +1598,7 @@
           "alias": "scratch",
           "auto_compact_threshold": 4096,
           "cached_input_price": null,
+          "display_name": null,
           "input_price": 0.0,
           "name": "scratch",
           "output_price": 0.0,
@@ -1577,7 +1612,7 @@
       "validationWarnings": 0
     },
     {
-      "activeModel": "mistral-medium-3.5",
+      "activeModel": "",
       "compactionModel": null,
       "layers": [
         {
@@ -1586,22 +1621,11 @@
         }
       ],
       "models": {
-        "devstral-small": {
-          "alias": "devstral-small",
-          "auto_compact_threshold": 200000,
-          "cached_input_price": 0.01,
-          "input_price": 0.1,
-          "name": "devstral-small-latest",
-          "output_price": 0.3,
-          "provider": "mistral",
-          "supports_images": false,
-          "temperature": 0.2,
-          "thinking": "off"
-        },
         "local": {
           "alias": "local",
           "auto_compact_threshold": 200000,
           "cached_input_price": null,
+          "display_name": "Devstral (local)",
           "input_price": 0.0,
           "name": "devstral",
           "output_price": 0.0,
@@ -1614,6 +1638,7 @@
           "alias": "mistral-medium-3.5",
           "auto_compact_threshold": 200000,
           "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
@@ -1636,22 +1661,11 @@
         }
       ],
       "models": {
-        "devstral-small": {
-          "alias": "devstral-small",
-          "auto_compact_threshold": 200000,
-          "cached_input_price": 0.01,
-          "input_price": 0.1,
-          "name": "devstral-small-latest",
-          "output_price": 0.3,
-          "provider": "mistral",
-          "supports_images": false,
-          "temperature": 0.2,
-          "thinking": "off"
-        },
         "local": {
           "alias": "local",
           "auto_compact_threshold": 200000,
           "cached_input_price": null,
+          "display_name": "Devstral (local)",
           "input_price": 0.0,
           "name": "devstral",
           "output_price": 0.0,
@@ -1664,6 +1678,7 @@
           "alias": "mistral-medium-3.5",
           "auto_compact_threshold": 200000,
           "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
@@ -1676,6 +1691,7 @@
           "alias": "scratch",
           "auto_compact_threshold": 200000,
           "cached_input_price": null,
+          "display_name": null,
           "input_price": 0.0,
           "name": "scratch-latest",
           "output_price": 0.0,
@@ -1702,22 +1718,11 @@
         }
       ],
       "models": {
-        "devstral-small": {
-          "alias": "devstral-small",
-          "auto_compact_threshold": 200000,
-          "cached_input_price": 0.01,
-          "input_price": 0.1,
-          "name": "devstral-small-latest",
-          "output_price": 0.3,
-          "provider": "mistral",
-          "supports_images": false,
-          "temperature": 0.2,
-          "thinking": "off"
-        },
         "local": {
           "alias": "local",
           "auto_compact_threshold": 200000,
           "cached_input_price": null,
+          "display_name": "Devstral (local)",
           "input_price": 0.0,
           "name": "devstral",
           "output_price": 0.0,
@@ -1730,6 +1735,7 @@
           "alias": "mistral-medium-3.5",
           "auto_compact_threshold": 200000,
           "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
@@ -1752,22 +1758,11 @@
         }
       ],
       "models": {
-        "devstral-small": {
-          "alias": "devstral-small",
-          "auto_compact_threshold": 200000,
-          "cached_input_price": 0.01,
-          "input_price": 0.1,
-          "name": "devstral-small-latest",
-          "output_price": 0.3,
-          "provider": "mistral",
-          "supports_images": false,
-          "temperature": 0.2,
-          "thinking": "off"
-        },
         "local": {
           "alias": "local",
           "auto_compact_threshold": 200000,
           "cached_input_price": null,
+          "display_name": "Devstral (local)",
           "input_price": 0.0,
           "name": "devstral",
           "output_price": 0.0,
@@ -1780,6 +1775,7 @@
           "alias": "mistral-medium-3.5",
           "auto_compact_threshold": 200000,
           "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
@@ -1792,6 +1788,7 @@
           "alias": "scratch",
           "auto_compact_threshold": 200000,
           "cached_input_price": null,
+          "display_name": null,
           "input_price": 0.0,
           "name": "scratch",
           "output_price": 0.0,
@@ -1810,6 +1807,7 @@
         "alias": "devstral-small-latest",
         "auto_compact_threshold": 200000,
         "cached_input_price": null,
+        "display_name": null,
         "input_price": 0.0,
         "name": "devstral-small-latest",
         "output_price": 0.0,
@@ -1825,22 +1823,11 @@
         }
       ],
       "models": {
-        "devstral-small": {
-          "alias": "devstral-small",
-          "auto_compact_threshold": 200000,
-          "cached_input_price": 0.01,
-          "input_price": 0.1,
-          "name": "devstral-small-latest",
-          "output_price": 0.3,
-          "provider": "mistral",
-          "supports_images": false,
-          "temperature": 0.2,
-          "thinking": "off"
-        },
         "local": {
           "alias": "local",
           "auto_compact_threshold": 200000,
           "cached_input_price": null,
+          "display_name": "Devstral (local)",
           "input_price": 0.0,
           "name": "devstral",
           "output_price": 0.0,
@@ -1853,6 +1840,7 @@
           "alias": "mistral-medium-3.5",
           "auto_compact_threshold": 200000,
           "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
@@ -1871,6 +1859,7 @@
         "alias": "compactor",
         "auto_compact_threshold": 200000,
         "cached_input_price": null,
+        "display_name": null,
         "input_price": 0.0,
         "name": "devstral-small-latest",
         "output_price": 0.0,
@@ -1886,22 +1875,11 @@
         }
       ],
       "models": {
-        "devstral-small": {
-          "alias": "devstral-small",
-          "auto_compact_threshold": 200000,
-          "cached_input_price": 0.01,
-          "input_price": 0.1,
-          "name": "devstral-small-latest",
-          "output_price": 0.3,
-          "provider": "mistral",
-          "supports_images": false,
-          "temperature": 0.2,
-          "thinking": "off"
-        },
         "local": {
           "alias": "local",
           "auto_compact_threshold": 200000,
           "cached_input_price": null,
+          "display_name": "Devstral (local)",
           "input_price": 0.0,
           "name": "devstral",
           "output_price": 0.0,
@@ -1914,6 +1892,7 @@
           "alias": "mistral-medium-3.5",
           "auto_compact_threshold": 200000,
           "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
@@ -1929,7 +1908,7 @@
   ],
   "note": "Captured from the pinned reference by scripts/parity/config_surface.py. Field names, merge strategies, merge keys, editor kinds and merged documents are observations; no reference-authored description text is recorded here.",
   "reference": {
-    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7"
+    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
   },
   "scenarios": [
     {
@@ -2221,7 +2200,8 @@
       ],
       "merged": {
         "project_context": {
-          "enabled": false
+          "enabled": false,
+          "max_files": 40
         }
       },
       "name": "replace-nested-table-wholesale"
@@ -2667,12 +2647,12 @@
       "union"
     ],
     "unused": [
-      "conflict",
-      "merge"
+      "conflict"
     ],
     "used": [
       "concat",
       "deep_merge",
+      "merge",
       "replace",
       "union"
     ]

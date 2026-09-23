@@ -9,6 +9,7 @@ source tree.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -130,9 +131,12 @@ class HarnessApp(App[None]):
         self.effects: list[dict[str, Any]] = []
         self.voice: FakeVoiceManager | None = None
         registry_options = scenario.get("commands", {})
+        # Since v2.24.5 the registry takes only exclusions and a
+        # `CommandContext` (vibe/cli/commands.py:30-39), and v2.25.7 removed
+        # the Vibe Code gate that used to hide /teleport and /remote-project,
+        # so both are always registered.
         self.registry = CommandRegistry(
             excluded_commands=registry_options.get("excluded"),
-            vibe_code_enabled=registry_options.get("vibeCodeEnabled", False),
         )
         if scenario.get("voice") is not None:
             self.voice = FakeVoiceManager(
@@ -507,7 +511,7 @@ def capture_state(
         end = location_to_offset(widget, selection.end) + prefix
         selection_offsets = [min(start, end), max(start, end)]
     manager = container._completion_manager
-    active = manager._active
+    active = manager._active_controller
     completion: dict[str, Any] = {"open": False, "kind": None, "selected": 0, "items": []}
     if active is not None and getattr(active, "_suggestions", None):
         kind = "slash" if type(active).__name__.startswith("SlashCommand") else "path"
@@ -516,7 +520,7 @@ def capture_state(
             "kind": kind,
             "selected": active._selected_index,
             "items": [
-                {"label": label, "description": description}
+                {"label": label, "description": digest(description)}
                 for label, description in active._suggestions
             ],
         }
@@ -533,6 +537,19 @@ def capture_state(
         },
         "feedbackActive": widget.feedback_active,
         "switching": container.switching_mode,
+    }
+
+
+def digest(value: str) -> dict[str, Any]:
+    """A string recorded by its length and its SHA-256, never by its content.
+
+    Completion descriptions are prose the reference authors (command help lines
+    in vibe/cli/commands.py), so the corpus keeps only this fingerprint of them.
+    """
+
+    return {
+        "length": len(value),
+        "digest": hashlib.sha256(value.encode("utf-8")).hexdigest(),
     }
 
 
@@ -636,7 +653,7 @@ def capture_submission(message: str, workspace: Path) -> dict[str, Any]:
     prepared = prepare_prompt(agent_loop, message)
     request = TurnStartParams(
         session_id="oracle-session",
-        input=_content_blocks(prepared.prompt_text, prepared.images),
+        message=_content_blocks(prepared.prompt_text, prepared.images),
         client_user_message_id=None,
         auto_title=prepared.auto_title,
         user_display_content=None,

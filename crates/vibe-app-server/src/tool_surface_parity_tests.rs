@@ -72,7 +72,7 @@ const FIXTURES_RELATIVE: &str = "crates/vibe-app-server/tests/tool-surface/fixtu
 const FIXTURES_SCHEMA_VERSION: u32 = 2;
 /// The floor the fixture set commits to, so a regeneration that captured almost
 /// nothing fails instead of reporting a clean but empty run.
-const MINIMUM_FIXTURES: usize = 92;
+const MINIMUM_FIXTURES: usize = 93;
 /// The committed filter gates: the names the reference publishes for each
 /// `enabled_tools` and `disabled_tools` pair. Replayed unconditionally for the
 /// same reason as the fixtures, since a gate case carries no prose either.
@@ -898,6 +898,7 @@ async fn the_managed_shell_surface_matches_the_reference_under_its_rollout() {
     let mut report = Vec::new();
     let mut missing = BTreeSet::new();
     let mut conformant = 0;
+    let mut schema_divergence: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for tool in &corpus.managed_tools {
         let Some(spec) = published.get(&tool.name) else {
             missing.insert(tool.name.clone());
@@ -920,6 +921,13 @@ async fn the_managed_shell_surface_matches_the_reference_under_its_rollout() {
                 tool.name, divergence.pointer, divergence.expected, divergence.actual
             ));
         }
+        schema_divergence.insert(
+            tool.name.clone(),
+            found
+                .into_iter()
+                .map(|divergence| divergence.pointer)
+                .collect(),
+        );
     }
     println!(
         "managed shell surface: {}/{} names, {conformant}/{} schemas",
@@ -949,7 +957,29 @@ async fn the_managed_shell_surface_matches_the_reference_under_its_rollout() {
         "the managed rollout does not publish: {}",
         missing.into_iter().collect::<Vec<_>>().join(", ")
     );
-    assert!(report.is_empty(), "{}", report.join("\n"));
+    let managed_names = corpus
+        .managed_tools
+        .iter()
+        .map(|tool| tool.name.clone())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        schema_divergence,
+        recorded_schema_divergence(&managed_names),
+        "the managed shell schemas moved away from the gap {BASELINE_RELATIVE} records:\n{}",
+        report.join("\n")
+    );
+}
+
+/// The schema divergence `baseline.json` records for the tools a surface
+/// publishes. The ledger is written once per tool rather than once per surface,
+/// so a schema shared by the default and the managed surface is recorded once
+/// and every surface that publishes the tool is held to the same pointers.
+fn recorded_schema_divergence(names: &BTreeSet<String>) -> BTreeMap<String, BTreeSet<String>> {
+    baseline()
+        .schema_divergence
+        .into_iter()
+        .filter(|(tool, _)| names.contains(tool))
+        .collect()
 }
 
 /// The two Windows-only families, which no Linux surface can carry.
@@ -1231,7 +1261,7 @@ fn audit_rejection(
 /// first.
 ///
 /// The fixture set breaks one argument per payload, so it cannot answer this:
-/// a validator that stopped at the first violation would replay all 92 of them
+/// a validator that stopped at the first violation would replay all 93 of them
 /// cleanly. These probes are the measurement that separates the two, and the
 /// reference's answer to each is a pointer set with more than one entry.
 #[test]
@@ -1411,7 +1441,7 @@ fn reference_class_priority(class: &str) -> Option<i32> {
 ///
 /// The two flags are independent: the rollout is configured
 /// (`managed_shell_tools_enabled`) and the gate is a property of the connected
-/// client, which reference `vibe/app_server/_runtime.py:212-214` computes as
+/// client, which reference `vibe/app_server/_runtime.py:618-620` computes as
 /// "the client hosts no terminal". The gap is still recorded per quadrant,
 /// because the four surfaces are four different answers and a regression in
 /// one of them must not be absorbed by the other three.
@@ -1638,13 +1668,15 @@ fn digest() -> Digest {
 }
 
 /// Diffs one published surface against its canonical expectation, returning the
-/// number of conformant schemas and every divergence as a reportable line.
+/// number of conformant schemas, every name that is not published as a
+/// reportable line, and the pointers each divergent schema differs at.
 fn diff_surface(
     label: &str,
     expected: &BTreeMap<String, Value>,
     published: &BTreeMap<String, ToolSpec>,
-) -> (usize, Vec<String>) {
+) -> (usize, Vec<String>, BTreeMap<String, Vec<Divergence>>) {
     let mut report = Vec::new();
+    let mut divergent = BTreeMap::new();
     let mut conformant = 0_usize;
     for (name, parameters) in expected {
         let Some(spec) = published.get(name) else {
@@ -1664,14 +1696,51 @@ fn diff_surface(
             conformant = conformant.saturating_add(1);
             continue;
         }
+        divergent.insert(name.clone(), found);
+    }
+    (conformant, report, divergent)
+}
+
+/// Holds the divergent schemas of one digest surface to the pointers
+/// `baseline.json` records for its tools, returning how many schemas differ
+/// only where the ledger says they do. Anything else becomes a report line:
+/// an unrecorded pointer is a new divergence, and a recorded pointer the
+/// surface no longer shows is a closed gap whose entry must go.
+fn hold_to_the_ledger(
+    label: &str,
+    expected: &BTreeMap<String, Value>,
+    divergent: BTreeMap<String, Vec<Divergence>>,
+    report: &mut Vec<String>,
+) -> usize {
+    let names = expected.keys().cloned().collect::<BTreeSet<_>>();
+    let recorded = recorded_schema_divergence(&names);
+    let mut ledgered = 0_usize;
+    for name in &names {
+        let found = divergent.get(name).map(Vec::as_slice).unwrap_or_default();
+        let pointers = found
+            .iter()
+            .map(|divergence| divergence.pointer.clone())
+            .collect::<BTreeSet<_>>();
+        let allowed = recorded.get(name).cloned().unwrap_or_default();
         for divergence in found {
+            if !allowed.contains(&divergence.pointer) {
+                report.push(format!(
+                    "{label}: tool `{name}` diverges at {}: expected {}, got {}",
+                    divergence.pointer, divergence.expected, divergence.actual
+                ));
+            }
+        }
+        for pointer in allowed.difference(&pointers) {
             report.push(format!(
-                "{label}: tool `{name}` diverges at {}: expected {}, got {}",
-                divergence.pointer, divergence.expected, divergence.actual
+                "{label}: tool `{name}` no longer diverges at {pointer}; remove it from \
+                 {BASELINE_RELATIVE}"
             ));
         }
+        if !found.is_empty() && pointers == allowed {
+            ledgered = ledgered.saturating_add(1);
+        }
     }
-    (conformant, report)
+    ledgered
 }
 
 async fn published_by_name(
@@ -1699,6 +1768,7 @@ async fn the_published_surface_matches_the_committed_digest() {
     let web_search = digest.tools.contains_key("web_search");
     let mut report = Vec::new();
     let mut conformant = 0;
+    let mut ledgered = 0;
     let mut expected = digest.tools.len() + digest.managed_tools.len();
 
     for (label, canonical, published) in [
@@ -1713,8 +1783,9 @@ async fn the_published_surface_matches_the_committed_digest() {
             published_by_name(web_search, ShellRollout::Managed, posix_host()).await,
         ),
     ] {
-        let (matched, mut lines) = diff_surface(label, canonical, &published);
+        let (matched, mut lines, divergent) = diff_surface(label, canonical, &published);
         conformant += matched;
+        ledgered += hold_to_the_ledger(label, canonical, divergent, &mut lines);
         for name in published.keys() {
             if !canonical.contains_key(name) {
                 lines.push(format!(
@@ -1735,8 +1806,9 @@ async fn the_published_surface_matches_the_committed_digest() {
         };
         expected += canonical.len();
         let published = published_by_name(false, ShellRollout::Managed, host).await;
-        let (matched, mut lines) = diff_surface(family, canonical, &published);
+        let (matched, mut lines, divergent) = diff_surface(family, canonical, &published);
         conformant += matched;
+        ledgered += hold_to_the_ledger(family, canonical, divergent, &mut lines);
         // A Windows-only name is invisible to the two surfaces above, so the
         // "published and not in the digest" half is checked here too: without
         // it a sixth family tool would merge with no corpus entry at all.
@@ -1755,13 +1827,14 @@ async fn the_published_surface_matches_the_committed_digest() {
 
     println!(
         "tool-surface conformance: {conformant}/{expected} schemas match the committed digest at \
-         {}",
+         {}, {ledgered} differ only at the pointers {BASELINE_RELATIVE} records",
         &digest.reference_commit[..12]
     );
     assert!(report.is_empty(), "{}", report.join("\n"));
     assert_eq!(
-        conformant, expected,
-        "every digest entry must be published and conformant"
+        conformant + ledgered,
+        expected,
+        "every digest entry must be published and conformant or recorded"
     );
 }
 

@@ -12,8 +12,8 @@ The engine corpus records thirteen families the Rust replay in
 ``crates/vibe-core/src/experiments_parity_tests.rs`` compares this build
 against::
 
-    constants           the three names, their defaults, the paths and timeouts
-    bucketingKey        the anonymous hash attribute derived from an API key
+    constants           the experiment names, their defaults, the paths and timeouts
+    bucketingKey        the anonymous digest derived from an API key
     evalUrl             the URL one api_host and client_key pair resolves to
     evalRequest         the request the client would have issued, one call early
     evalFailures        what each of the five failure branches leaves behind
@@ -24,7 +24,7 @@ against::
     configMapping       the field set the GrowthBook layer writes per variant
     layerPrecedence     the effective value when a layer and a variant collide
     sessionGates        which gate stops an initialization and what it attempted
-    attributes          the nine attributes a launch context produces
+    attributes          the attributes a launch context and an identity produce
 
 The promo corpus records four more, replayed from
 ``crates/vibe-cli/src/tui/promo_parity_tests.rs``::
@@ -99,6 +99,12 @@ PLATFORM_ID_PLACEHOLDER = "{platformId}"
 #: Stands in for the reference package version, so a release does not rewrite
 #: the corpus.
 VERSION_PLACEHOLDER = "{version}"
+#: Stands in for the host's machine architecture, which the reference posts as
+#: the ``arch`` attribute (``vibe/core/experiments/models.py:32`` defaults it to
+#: ``platform.machine().lower()``) and which differs per workstation. Replaced on
+#: an exact match only, since the machine string is short enough to occur inside
+#: an unrelated value.
+ARCH_PLACEHOLDER = "{arch}"
 
 #: Every environment variable this capture names, with the sentinel it is set to
 #: first. A value here never reaches a corpus: what is recorded is the variable
@@ -362,7 +368,12 @@ def scrub(value: Any) -> Any:
                 value = value.replace(original, placeholder)
         return value
     if isinstance(value, dict):
-        return {key: scrub(item) for key, item in value.items()}
+        return {
+            key: ARCH_PLACEHOLDER
+            if key == "arch" and item == platform.machine().lower()
+            else scrub(item)
+            for key, item in value.items()
+        }
     if isinstance(value, list):
         return [scrub(item) for item in value]
     return value
@@ -388,8 +399,8 @@ def sentinel_variable(value: str | None) -> str | None:
     """The variable a value is the sentinel of, or [`None`] when it is not one.
 
     Used where the answer must be that nothing carries a credential: an eval
-    payload names a bucketing digest, and a variable appearing here would mean
-    the key itself had leaked into the request.
+    payload carries an authored userId that must never be a key, and a variable
+    appearing here would mean the key itself had leaked into the request.
     """
 
     if value is None:
@@ -411,7 +422,14 @@ def sentinel_variable(value: str | None) -> str | None:
 ORACLE_API_HOST = "https://experiments.example.test"
 ORACLE_CLIENT_KEY = "sdk-oracle-client-key"
 
-#: The three reference experiment keys, spelled here so a rename on either side
+#: The surface every attribute set names. The reference requires it with no
+#: default (``vibe/core/experiments/models.py:27``); ``legacy`` is the surface of
+#: the reference's own ``AgentLoop`` and the rollout's default variant
+#: (``vibe/core/experiments/active.py:38``), and the one this port's single
+#: backend corresponds to.
+ORACLE_HARNESS = "legacy"
+
+#: The three original reference experiment keys, spelled here so a rename on either side
 #: fails the replay rather than moving the question and the answer together.
 SYSTEM_PROMPT = "vibe_cli_system_prompt"
 MANAGED_SHELL = "vibe_cli_managed_shell_tools"
@@ -606,9 +624,7 @@ def build_config(document: str) -> Any:
 
     from vibe.core.config.vibe_schema import VibeConfigSchema
 
-    return VibeConfigSchema.model_validate(
-        tomllib.loads(document), context={"require_api_key": False}
-    )
+    return VibeConfigSchema.model_validate(tomllib.loads(document))
 
 
 # --------------------------------------------------------------------------
@@ -703,6 +719,19 @@ def manager_with(response: dict[str, Any] | None) -> Any:
     return manager
 
 
+def assignment_records(manager: Any) -> list[dict[str, Any]]:
+    """The manager's exposures as JSON records.
+
+    ``assignments()`` answers ``ExperimentAssignment`` models, one per
+    experiment (``vibe/core/experiments/resolve.py:59-86``), so each is dumped
+    to the object the reference's telemetry serializes.
+    """
+
+    return [
+        assignment.model_dump(mode="json") for assignment in manager.assignments()
+    ]
+
+
 def oracle_attributes(**overrides: Any) -> Any:
     """The attributes every request scenario posts, before any override."""
 
@@ -711,6 +740,7 @@ def oracle_attributes(**overrides: Any) -> Any:
     values: dict[str, Any] = {
         "userId": "0123456789abcdef0123456789abcdef",
         "entrypoint": "cli",
+        "harness": ORACLE_HARNESS,
         "agent_version": "9.9.9",
         "client_name": "oracle-client",
         "client_version": "1.2.3",
@@ -1052,7 +1082,7 @@ def capture_eval_failures() -> list[dict[str, Any]]:
                     name.value: manager.get_variant(name) for name in ExperimentName
                 }
                 == resolved,
-                "assignments": manager.assignments(),
+                "assignments": assignment_records(manager),
                 "configVariants": manager.config_variants(),
                 "logs": log_summary(records),
             }
@@ -1289,7 +1319,7 @@ def capture_config_variants() -> list[dict[str, Any]]:
             {
                 "id": identifier,
                 "response": response,
-                "assignments": manager.assignments(),
+                "assignments": assignment_records(manager),
                 "configVariants": manager.config_variants(),
             }
         )
@@ -1355,8 +1385,11 @@ def capture_variant_labels() -> list[dict[str, Any]]:
             {
                 "id": identifier,
                 "definition": definition,
-                "assignments": manager.assignments(),
-                "reported": SYSTEM_PROMPT in manager.assignments(),
+                "assignments": assignment_records(manager),
+                "reported": any(
+                    assignment.experiment_id == SYSTEM_PROMPT
+                    for assignment in manager.assignments()
+                ),
             }
         )
     return cases
@@ -1633,7 +1666,7 @@ async def _precedence_answer(
     from vibe.core.config import build_default_orchestrator
 
     orchestrator = await build_default_orchestrator(
-        case["overrides"] or None, harness_files=manager, require_api_key=False
+        case["overrides"] or None, harness_files=manager
     )
     layer = orchestrator.get_layer(layer_name)
     layer.set_variants(case["variants"])
@@ -1693,7 +1726,22 @@ class _RecordingSessionLogger:
         self.persisted.append(response)
 
 
+async def no_whoami(
+    *, base_url: str, api_key: str, timeout: float | None = None
+) -> Any:
+    """Stands where the reference's ``/api/vibe/whoami`` lookup stands.
+
+    ``initialize_experiments`` fetches the plan concurrently with the identity
+    and falls back to ``fetch_whoami`` when no resolver is passed
+    (``vibe/core/experiments/session.py:74-86``), which would open a socket. The
+    lookup answers nothing, which is the reference's own fail-open state.
+    """
+
+    return None
+
+
 def capture_session_gates(scratch: Path) -> list[dict[str, Any]]:
+    from vibe.core.experiments.active import ExperimentSurface
     from vibe.core.experiments.models import EvalResponse
     from vibe.core.experiments.session import (
         hydrate_experiments_from_session,
@@ -1747,7 +1795,9 @@ def capture_session_gates(scratch: Path) -> list[dict[str, Any]]:
                             manager=manager,
                             session_logger=logger_stub,
                             launch_context=None,
+                            harness=ExperimentSurface(ORACLE_HARNESS),
                             resolve_identity=resolve_identity,
+                            resolve_whoami=no_whoami,
                         )
                     )
             cases.append(
@@ -1800,7 +1850,9 @@ def capture_session_gates(scratch: Path) -> list[dict[str, Any]]:
                         manager=manager,
                         session_logger=logger_stub,
                         launch_context=None,
+                        harness=ExperimentSurface(ORACLE_HARNESS),
                         resolve_identity=no_identity,
+                        resolve_whoami=no_whoami,
                     )
                 )
         cases.append(
@@ -1871,7 +1923,9 @@ class _Metadata:
 
 
 def capture_attributes(scratch: Path) -> list[dict[str, Any]]:
+    from vibe.core.experiments.active import ExperimentSurface
     from vibe.core.experiments.session import _build_attributes
+    from vibe.core.identity import IdentityResult
     from vibe.core.telemetry.types import LaunchContext
 
     contexts: list[tuple[str, Any]] = [
@@ -1927,13 +1981,26 @@ def capture_attributes(scratch: Path) -> list[dict[str, Any]]:
         for document_id, document in documents:
             config = build_config(document)
             for identifier, context in contexts:
+                # The organization now arrives on the identity rather than as
+                # its own argument (vibe/core/experiments/session.py:215-257),
+                # so the case without a launch context keeps its identity and
+                # drops only the organization, as it did before.
+                identity = IdentityResult.model_validate(
+                    {
+                        "id": "oracle-user",
+                        **(
+                            {"organization": {"id": "oracle-organization", "name": "Oracle"}}
+                            if identifier != "no-launch-context"
+                            else {}
+                        ),
+                    }
+                )
                 attributes = _build_attributes(
                     config,
                     SENTINELS["ORACLE_MISTRAL_KEY"],
                     context,
-                    organization_id=(
-                        "oracle-organization" if identifier != "no-launch-context" else None
-                    ),
+                    harness=ExperimentSurface(ORACLE_HARNESS),
+                    identity=identity,
                 )
                 payload = attributes.model_dump(exclude_none=True)
                 cases.append(
@@ -1943,7 +2010,7 @@ def capture_attributes(scratch: Path) -> list[dict[str, Any]]:
                         "context": identifier,
                         "attributes": scrub(attributes.model_dump()),
                         "payloadKeys": sorted(payload),
-                        "credentialVariable": sentinel_variable(payload["userId"]),
+                        "credentialVariable": sentinel_variable(payload.get("userId")),
                     }
                 )
     return cases
@@ -2154,7 +2221,7 @@ ENGINE_NOTE = (
     "connection attempt, so no scenario depends on a live rollout: in remote evaluation mode the "
     "proxy resolves the bucketing and the client only applies the answer. A credential is recorded "
     "as the environment variable it came from and never as a value, and the only key derivative "
-    "committed is the 32-character bucketing digest. Regenerate with scripts/parity/experiments.py "
+    "committed is the 32-character API-key digest. Regenerate with scripts/parity/experiments.py "
     "--corpus when the pinned reference moves."
 )
 
@@ -2226,12 +2293,13 @@ def parse_arguments() -> argparse.Namespace:
 def write_json(path: Path, document: dict[str, Any]) -> None:
     """Write one corpus, keeping every key in the order it was authored in.
 
-    Key order is load-bearing here rather than cosmetic. An object-valued
-    variant is answered as ``json.dumps`` of the value the eval response
-    carried, which is the wire order, so a writer that sorted the recorded
-    response would hand a replay an input that cannot produce the recorded
-    answer. Every dict this capture builds is built deterministically, so
-    insertion order is as stable as a sort would be.
+    Key order is load-bearing here rather than cosmetic. An assignment label
+    for an object value is ``json.dumps`` of the value the eval response
+    carried (``vibe/core/experiments/resolve.py:89-100``), which is the wire
+    order, so a writer that sorted the recorded response would hand a replay an
+    input that cannot produce the recorded answer. Every dict this capture
+    builds is built deterministically, so insertion order is as stable as a
+    sort would be.
     """
 
     path.parent.mkdir(parents=True, exist_ok=True)

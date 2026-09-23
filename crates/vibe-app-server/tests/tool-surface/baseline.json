@@ -1,7 +1,7 @@
 {
-  "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+  "referenceCommit": "4a96003186b166d55b9f06895c45bb136eef61cd",
   "platform": "linux",
-  "note": "The divergence left on the Linux surface, recorded per surface quadrant because the managed-shell rollout and the runtime gate publish four different surfaces. All four are clean: EP-013 emptied the invented-name and schema-divergence sets, EP-014 the universal-tool half of the missing-name set, EP-015 the shell half, and EP-095 the fourth quadrant, where the gate now withholds the managed variant and its four session tools from a client that hosts its own terminal. The managed shell rollout also has its own schema diff, and EP-016 adds the Windows families. Names and JSON pointers only, because the corpus that carries reference description text stays gitignored.",
+  "note": "The divergence left on the Linux surface, recorded per surface quadrant because the managed-shell rollout and the runtime gate publish four different surfaces. All four name sets are clean: EP-013 emptied the invented-name set, EP-014 the universal-tool half of the missing-name set, EP-015 the shell half, and EP-095 the fourth quadrant, where the gate now withholds the managed variant and its four session tools from a client that hosts its own terminal. schemaDivergence is the schema ledger for every Linux surface: the default census, the managed shell rollout and the committed digest each hold their divergence equal to the entries naming their tools, and EP-016 adds the Windows families, which carry none. It holds one entry. todo /properties/action/enum: reference v2.25.5 narrowed TodoArgs.action from str to Literal['read', 'write'] (vibe/core/tools/builtins/todo.py:51 at 4a96003186b1), which Pydantic publishes as an enum and enforces at argument validation; this port still publishes action as a plain string (crates/vibe-core/src/tools/builtins/todo.rs:71) and refuses any other value only when the call runs (todo.rs:135-137). Names and JSON pointers only, because the corpus that carries reference description text stays gitignored.",
   "quadrants": {
     "rollout-off-gate-on": {
       "missingNames": [],
@@ -20,5 +20,9 @@
       "extraNames": []
     }
   },
-  "schemaDivergence": {}
+  "schemaDivergence": {
+    "todo": [
+      "/properties/action/enum"
+    ]
+  }
 }

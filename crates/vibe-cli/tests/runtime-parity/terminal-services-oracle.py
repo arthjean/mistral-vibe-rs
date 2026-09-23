@@ -21,6 +21,7 @@ import re
 import sys
 import tempfile
 import tomllib
+from types import SimpleNamespace
 from contextlib import redirect_stdout
 
 import httpx
@@ -498,8 +499,19 @@ def observe_theme_catalog() -> dict:
 
 def observe_quit_prompt(event: dict) -> str:
     class _StubQueue:
+        """Only the state `QueueController.__bool__` and `__len__` read.
+
+        `quit_warning_extra` counts through those dunders
+        (vibe/cli/textual_ui/message_queue.py:191-196, 206-211), so the stub
+        borrows them and holds queued prompts as one merged turn.
+        """
+
+        __bool__ = QueueController.__bool__
+        __len__ = QueueController.__len__
+
         def __init__(self, queued: int) -> None:
-            self._queue = [None] * queued
+            self._optimistic: dict = {}
+            self._merged = SimpleNamespace(entries=[None] * queued) if queued else None
 
     extra = QueueController.quit_warning_extra(_StubQueue(event["queued"]))
     prompt = f"Press {event['key']} again to quit"

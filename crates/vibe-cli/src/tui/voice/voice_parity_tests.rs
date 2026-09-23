@@ -34,7 +34,7 @@ use vibe_core::config::registry::default_document;
 use vibe_core::config::{ConfigPaths, ConfigSnapshot, LayeredConfig};
 use vibe_core::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 
-use super::player::{PLAYBACK_BLOCK_SIZE, PLAYBACK_SAMPLE_FORMAT, PLAYBACK_SAMPLE_WIDTH};
+use super::player::PLAYBACK_SAMPLE_WIDTH;
 use super::realtime::{DRAIN_TIMEOUT, VoiceConfig, session_update};
 use super::settings::{SpeechSettings, TranscriptionSettings};
 use super::speech::SpeechRequest;
@@ -43,7 +43,7 @@ const CORPUS_RELATIVE: &str = "crates/vibe-cli/tests/voice/corpus.json";
 const CAPTURE_SCRIPT: &str = "scripts/parity/voice.py";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 1;
+const CORPUS_SCHEMA_VERSION: u32 = 2;
 /// The comparison floor this replay commits to, so a regeneration that
 /// captured almost nothing fails instead of reporting a clean but empty run.
 const MINIMUM_SCENARIOS: usize = 200;
@@ -92,6 +92,16 @@ const DIVERGENCES: &[(&str, &str)] = &[
          docs/parity.md records the streaming-only surface",
     ),
     (
+        "constants/playback/bufferMs",
+        "ACCEPTED: since v2.25.5 the reference plays through miniaudio and opens the output device \
+         with a 200 ms buffer (`DEFAULT_BUFFER_MS`, `vibe/cli/audio_player/audio_player.py:27`, \
+         passed as `buffersize_msec` at :101-106 at 4a96003), \
+         replacing the 4096-frame `DEFAULT_BLOCKSIZE` it had at 2.24.0; this port still opens \
+         cpal with a fixed 4096-frame buffer (`PLAYBACK_BLOCK_SIZE`, \
+         `crates/vibe-cli/src/tui/voice/player.rs:237`) and declares no millisecond buffer, a \
+         device-latency difference with no user-visible output",
+    ),
+    (
         "transcriptionResolution/cause/*",
         "ACCEPTED: the reference raises on a document whose active alias or provider resolves to \
          nothing and loses its whole configuration with it, while this port's view falls back to \
@@ -115,10 +125,14 @@ const DIVERGENCES: &[(&str, &str)] = &[
     ),
     (
         "wireFrames/speech.body.metadata/*",
-        "ACCEPTED: the reference's audio clients attach the request metadata their telemetry \
-         client builds, on both directions; this port attaches none, which is the same choice its \
-         realtime request already makes and which `docs/parity.md` records for the telemetry \
-         envelope as a whole",
+        "ACCEPTED: the reference's audio clients attach the request metadata their metadata \
+         getter returns, on both directions: an empty mapping when none is passed, which is what \
+         the corpus records, and since v2.24.4 the mapping \
+         `vibe/cli/audio_request_metadata.py:11-25` builds when the TUI supplies one \
+         (`vibe/cli/textual_ui/app.py:4995` at 4a96003), where \
+         2.24.0 took it from the telemetry client; this port attaches none, which is the same \
+         choice its realtime request already makes and which `docs/parity.md` records for the \
+         telemetry envelope as a whole",
     ),
 ];
 
@@ -190,8 +204,9 @@ struct Vocabularies {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Playback {
-    block_size: u32,
-    dtype: String,
+    /// The output device buffer, in milliseconds, the reference opens playback
+    /// with since it moved onto miniaudio.
+    buffer_ms: u32,
     sample_width: u32,
 }
 
@@ -852,19 +867,15 @@ fn run_constants(constants: &Constants, report: &mut Report) {
         &integer_default("target_streaming_delay_ms"),
         &port_frame.target_streaming_delay_ms,
     );
+    // This port sizes its output buffer in frames rather than milliseconds, so
+    // it declares no millisecond buffer and answers nothing here; the ledger
+    // names the frame count it opens with instead.
     report.check(
         "constants",
         "playback",
-        "blockSize",
-        &i64::from(constants.playback.block_size),
-        &i64::from(PLAYBACK_BLOCK_SIZE),
-    );
-    report.check(
-        "constants",
-        "playback",
-        "dtype",
-        &constants.playback.dtype,
-        &PLAYBACK_SAMPLE_FORMAT.to_owned(),
+        "bufferMs",
+        &Some(i64::from(constants.playback.buffer_ms)),
+        &None,
     );
     report.check(
         "constants",

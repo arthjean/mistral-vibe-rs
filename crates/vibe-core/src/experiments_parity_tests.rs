@@ -183,15 +183,341 @@ const FAMILIES: &[Family] = &[
     },
 ];
 
-/// Cases where this build answers something other than the reference, each with
-/// the reason and the story that closes it.
+/// Cases where this build answers something other than the reference, each
+/// with the reason: the reference change, where it lives at the pin, and what
+/// this build does instead.
 ///
-/// Empty, and that is the measurement: every family of this corpus replays
-/// conforming. Each entry was open work rather than an accepted divergence, and
-/// the staleness check is what forced the rows out as their surfaces landed:
-/// EP-003 took the fifteen engine rows, EP-004 the layer rows and EP-005 the
-/// four the identity gateway and the session helpers answered.
-const DIVERGENCES: &[(&str, &str)] = &[];
+/// Every entry was recorded when the pin moved from b78b451 (v2.24.0) to
+/// 4a96003 (v2.25.7): the families all replayed conforming at the old pin, and
+/// what these rows measure is what the reference changed since. One entry per
+/// case and field, so a row goes stale on its own the moment this build
+/// answers it.
+const DIVERGENCES: &[(&str, &str)] = &[
+    ("constants/value/experimentNames", EXPERIMENT_NAMES),
+    ("constants/value/defaultVariants", TYPED_DEFAULTS),
+    ("constants/value/identityTimeoutSeconds", IDENTITY_TIMEOUT),
+    ("constants/value/configuredFields", CONFIGURED_FIELDS),
+    (
+        "evalRequest/attributeKeys/every-attribute",
+        POSTED_ATTRIBUTES,
+    ),
+    ("evalRequest/attributes/every-attribute", POSTED_ATTRIBUTES),
+    (
+        "evalRequest/attributeKeys/optional-attributes-absent",
+        POSTED_ATTRIBUTES,
+    ),
+    (
+        "evalRequest/attributes/optional-attributes-absent",
+        POSTED_ATTRIBUTES,
+    ),
+    (
+        "evalRequest/attributeKeys/custom-system-prompt",
+        POSTED_ATTRIBUTES,
+    ),
+    (
+        "evalRequest/attributes/custom-system-prompt",
+        POSTED_ATTRIBUTES,
+    ),
+    ("evalFailures/variants/connection-error", TYPED_VARIANTS),
+    ("evalFailures/variants/timeout", TYPED_VARIANTS),
+    ("evalFailures/variants/status-400", TYPED_VARIANTS),
+    ("evalFailures/variants/status-404", TYPED_VARIANTS),
+    ("evalFailures/variants/status-500", TYPED_VARIANTS),
+    ("evalFailures/variants/status-503", TYPED_VARIANTS),
+    ("evalFailures/variants/non-json-body", TYPED_VARIANTS),
+    (
+        "evalFailures/variants/body-fails-validation",
+        TYPED_VARIANTS,
+    ),
+    ("evalFailures/variants/url-unset", TYPED_VARIANTS),
+    ("variantResolution/variants/uninitialized", TYPED_VARIANTS),
+    (
+        "variantResolution/variantsOrNone/uninitialized",
+        TYPED_VARIANTS,
+    ),
+    ("variantResolution/variants/empty-features", TYPED_VARIANTS),
+    (
+        "variantResolution/variantsOrNone/empty-features",
+        TYPED_VARIANTS,
+    ),
+    ("variantResolution/variants/string-value", TYPED_VARIANTS),
+    (
+        "variantResolution/variantsOrNone/string-value",
+        TYPED_VARIANTS,
+    ),
+    ("variantResolution/variants/object-value", TYPED_VARIANTS),
+    (
+        "variantResolution/variantsOrNone/object-value",
+        TYPED_VARIANTS,
+    ),
+    ("variantResolution/variants/array-value", TYPED_VARIANTS),
+    (
+        "variantResolution/variantsOrNone/array-value",
+        TYPED_VARIANTS,
+    ),
+    ("variantResolution/variants/numeric-value", TYPED_VARIANTS),
+    (
+        "variantResolution/variantsOrNone/numeric-value",
+        TYPED_VARIANTS,
+    ),
+    ("variantResolution/variants/boolean-value", TYPED_VARIANTS),
+    (
+        "variantResolution/variantsOrNone/boolean-value",
+        TYPED_VARIANTS,
+    ),
+    ("variantResolution/variants/resolved-null", TYPED_VARIANTS),
+    (
+        "variantResolution/variantsOrNone/resolved-null",
+        TYPED_VARIANTS,
+    ),
+    (
+        "variantResolution/variants/default-value-without-a-force",
+        TYPED_VARIANTS,
+    ),
+    (
+        "variantResolution/variantsOrNone/default-value-without-a-force",
+        TYPED_VARIANTS,
+    ),
+    (
+        "variantResolution/variants/unknown-feature-key",
+        TYPED_VARIANTS,
+    ),
+    (
+        "variantResolution/variantsOrNone/unknown-feature-key",
+        TYPED_VARIANTS,
+    ),
+    (
+        "variantResolution/variants/every-known-feature",
+        TYPED_VARIANTS,
+    ),
+    (
+        "variantResolution/variantsOrNone/every-known-feature",
+        TYPED_VARIANTS,
+    ),
+    (
+        "configVariants/assignments/confirmed-exposure",
+        ASSIGNMENT_RECORDS,
+    ),
+    (
+        "configVariants/assignments/default-value-without-a-force",
+        ASSIGNMENT_RECORDS,
+    ),
+    (
+        "configVariants/configVariants/default-value-without-a-force",
+        CONFIG_VARIANTS_DROP_DEFAULT,
+    ),
+    (
+        "configVariants/configVariants/forced-object-without-tracks",
+        CONFIG_VARIANTS_TYPED,
+    ),
+    (
+        "configVariants/assignments/experiment-key-differs-from-the-feature-key",
+        ASSIGNMENT_RECORDS,
+    ),
+    (
+        "configVariants/assignments/mixed-confirmed-and-forced",
+        ASSIGNMENT_RECORDS,
+    ),
+    (
+        "configVariants/configVariants/mixed-confirmed-and-forced",
+        CONFIG_VARIANTS_EVERY_RESOLVED,
+    ),
+    (
+        "variantLabels/assignments/track-value-string",
+        ASSIGNMENT_RECORDS,
+    ),
+    (
+        "variantLabels/assignments/track-value-object",
+        ASSIGNMENT_RECORDS,
+    ),
+    (
+        "variantLabels/assignments/falls-back-to-the-resolved-value",
+        ASSIGNMENT_RECORDS,
+    ),
+    (
+        "variantLabels/assignments/falls-back-to-the-default-value",
+        ASSIGNMENT_RECORDS,
+    ),
+    (
+        "variantLabels/assignments/falls-back-to-the-result-key",
+        ASSIGNMENT_RECORDS,
+    ),
+    (
+        "variantLabels/assignments/falls-back-to-the-variation-id",
+        ASSIGNMENT_RECORDS,
+    ),
+    (
+        "variantLabels/assignments/variation-id-zero",
+        ASSIGNMENT_RECORDS,
+    ),
+    (
+        "variantLabels/assignments/last-confirmed-track-wins",
+        ASSIGNMENT_RECORDS,
+    ),
+    (
+        "configMapping/data/routing-with-model-config",
+        ROUTED_MODELS_MAP,
+    ),
+    ("configMapping/data/every-experiment", ROUTED_MODELS_MAP),
+    (
+        "layerPrecedence/effective/routing-variant-loses-to-a-pinned-model",
+        PINNED_ROUTING,
+    ),
+    (
+        "sessionGates/identityTimeout/initialize/mistral-active/identity",
+        IDENTITY_TIMEOUT,
+    ),
+    (
+        "sessionGates/identityTimeout/initialize/mistral-active/no-identity",
+        IDENTITY_TIMEOUT,
+    ),
+    (
+        "sessionGates/identityRequests/initialize/experiments-disabled/identity",
+        IDENTITY_BEFORE_EXPERIMENTS_GATE,
+    ),
+    (
+        "sessionGates/identityTimeout/initialize/experiments-disabled/identity",
+        IDENTITY_BEFORE_EXPERIMENTS_GATE,
+    ),
+    (
+        "sessionGates/identityRequests/initialize/experiments-disabled/no-identity",
+        IDENTITY_BEFORE_EXPERIMENTS_GATE,
+    ),
+    (
+        "sessionGates/identityTimeout/initialize/experiments-disabled/no-identity",
+        IDENTITY_BEFORE_EXPERIMENTS_GATE,
+    ),
+    (
+        "sessionGates/returned/initialize/third-party-only/identity",
+        NO_PLAN_SENTINEL,
+    ),
+    (
+        "sessionGates/returned/initialize/third-party-only/no-identity",
+        NO_PLAN_SENTINEL,
+    ),
+    (
+        "sessionGates/identityTimeout/initialize/custom-system-prompt/identity",
+        IDENTITY_TIMEOUT,
+    ),
+    (
+        "sessionGates/identityTimeout/initialize/custom-system-prompt/no-identity",
+        IDENTITY_TIMEOUT,
+    ),
+    (
+        "sessionGates/identityTimeout/initialize/eval-fails",
+        IDENTITY_TIMEOUT,
+    ),
+    (
+        "sessionGates/identityTimeout/initialize/eval-returns-nothing",
+        IDENTITY_TIMEOUT,
+    ),
+    (
+        "attributes/attributes/default-prompt/no-launch-context",
+        BUILT_ATTRIBUTES,
+    ),
+    (
+        "attributes/payloadKeys/default-prompt/no-launch-context",
+        POSTED_ATTRIBUTE_KEYS,
+    ),
+    ("attributes/attributes/default-prompt/cli", BUILT_ATTRIBUTES),
+    (
+        "attributes/payloadKeys/default-prompt/cli",
+        POSTED_ATTRIBUTE_KEYS,
+    ),
+    (
+        "attributes/attributes/default-prompt/cli-in-vscode",
+        BUILT_ATTRIBUTES,
+    ),
+    (
+        "attributes/payloadKeys/default-prompt/cli-in-vscode",
+        POSTED_ATTRIBUTE_KEYS,
+    ),
+    (
+        "attributes/attributes/default-prompt/acp-in-cursor",
+        BUILT_ATTRIBUTES,
+    ),
+    (
+        "attributes/payloadKeys/default-prompt/acp-in-cursor",
+        POSTED_ATTRIBUTE_KEYS,
+    ),
+    (
+        "attributes/attributes/default-prompt/programmatic",
+        BUILT_ATTRIBUTES,
+    ),
+    (
+        "attributes/payloadKeys/default-prompt/programmatic",
+        POSTED_ATTRIBUTE_KEYS,
+    ),
+    (
+        "attributes/attributes/custom-prompt/no-launch-context",
+        BUILT_ATTRIBUTES,
+    ),
+    (
+        "attributes/payloadKeys/custom-prompt/no-launch-context",
+        POSTED_ATTRIBUTE_KEYS,
+    ),
+    ("attributes/attributes/custom-prompt/cli", BUILT_ATTRIBUTES),
+    (
+        "attributes/payloadKeys/custom-prompt/cli",
+        POSTED_ATTRIBUTE_KEYS,
+    ),
+    (
+        "attributes/attributes/custom-prompt/cli-in-vscode",
+        BUILT_ATTRIBUTES,
+    ),
+    (
+        "attributes/payloadKeys/custom-prompt/cli-in-vscode",
+        POSTED_ATTRIBUTE_KEYS,
+    ),
+    (
+        "attributes/attributes/custom-prompt/acp-in-cursor",
+        BUILT_ATTRIBUTES,
+    ),
+    (
+        "attributes/payloadKeys/custom-prompt/acp-in-cursor",
+        POSTED_ATTRIBUTE_KEYS,
+    ),
+    (
+        "attributes/attributes/custom-prompt/programmatic",
+        BUILT_ATTRIBUTES,
+    ),
+    (
+        "attributes/payloadKeys/custom-prompt/programmatic",
+        POSTED_ATTRIBUTE_KEYS,
+    ),
+];
+
+const EXPERIMENT_NAMES: &str = "v2.24.5, v2.25.0 and v2.25.1 added five experiment names (vibe/core/experiments/active.py:14-27 at 4a96003): vibe_cli_extra_models, vibe_cli_registry_skills, vibe_cli_smart_approve, vibe_cli_smart_approve_default and vibe_cli_unified_harness_rollout. This build's ExperimentName::ALL still declares the three names of v2.24.0 (crates/vibe-core/src/experiments.rs:94).";
+
+const TYPED_DEFAULTS: &str = "v2.25.1 typed DEFAULT_VARIANTS (vibe/core/experiments/active.py:30-39 at 4a96003): the routing default is the object {} rather than the text \"{}\", and the five names added since v2.24.5 default to false, {} or \"legacy\". This build's default_variant answers text for its three names only (crates/vibe-core/src/experiments.rs:119-127).";
+
+const IDENTITY_TIMEOUT: &str = "v2.24.4 raised EXPERIMENT_IDENTITY_TIMEOUT_S from 4.0 to 10.0 seconds (vibe/core/experiments/session.py:28 at 4a96003). This build still bounds the identity lookup at 4 seconds (crates/vibe-core/src/experiments/session.rs:37).";
+
+const CONFIGURED_FIELDS: &str = "v2.24.5, v2.25.0 and v2.25.1 added four GrowthBook mappings (vibe/core/config/layers/growthbook.py:88-116 at 4a96003): vibe_cli_extra_models to routed_extra_models, vibe_cli_smart_approve to smart_approve_available, vibe_cli_smart_approve_default to smart_approve_default, and vibe_cli_registry_skills to experimental_enable_registry_skills. This build maps its three experiments only (crates/vibe-core/src/config/experiments_layer.rs:41-47).";
+
+const POSTED_ATTRIBUTES: &str = "v2.25.0 added the required harness attribute and the arch attribute, which defaults to the host's lowercased machine name (vibe/core/experiments/models.py:27,32 at 4a96003); the capture posts the legacy surface and records arch as a placeholder. This build's ExperimentAttributes carries neither and posts only its nine v2.24.0 keys (crates/vibe-core/src/experiments/models.rs:36-59).";
+
+const TYPED_VARIANTS: &str = "v2.25.1 made variant resolution typed (vibe/core/experiments/resolve.py:27-39 at 4a96003) and v2.24.5 to v2.25.1 added five names (vibe/core/experiments/active.py:14-39): get_variant and get_variant_or_none answer the JSON value itself for eight names. This build answers text, JSON-encoding a non-string value, for its three names (crates/vibe-core/src/experiments/manager.rs:106-123).";
+
+const ASSIGNMENT_RECORDS: &str = "v2.24.3 turned assignments() into ExperimentAssignment records (vibe/core/experiments/resolve.py:59-86 and vibe/core/telemetry/types.py:49-60 at 4a96003) that carry experiment_name, variation_id, in_experiment, hash_attribute, hash_value and feature_id beside the feature key and the label. This build answers a map from feature key to label (crates/vibe-core/src/experiments/manager.rs:158), so only experiment_id and variation_name have a counterpart.";
+
+const CONFIG_VARIANTS_DROP_DEFAULT: &str = "v2.25.1 rewrote config_variants (vibe/core/experiments/resolve.py:42-56 at 4a96003): it keeps each known name's resolved value unless it equals the typed default, and no longer adds the confirmed assignment labels, so a defaultValue of \"cli\" reaches no layer. This build still unions the assignment labels in (crates/vibe-core/src/experiments/manager.rs:125-148) and passes the label \"cli\" on.";
+
+const CONFIG_VARIANTS_TYPED: &str = "v2.25.1 made config_variants typed (vibe/core/experiments/resolve.py:42-56 at 4a96003): a forced object reaches the layer as that object. This build passes its JSON text on (crates/vibe-core/src/experiments/manager.rs:125-148).";
+
+const CONFIG_VARIANTS_EVERY_RESOLVED: &str = "Under the v2.25.1 rule (vibe/core/experiments/resolve.py:42-56 at 4a96003) every known name whose resolved value differs from its typed default reaches the layer: the routing feature's defaultValue, the text \"{}\", differs from the default object {} (vibe/core/experiments/active.py:33), so the reference passes it on. This build lets only a confirmed label or a forced value through (crates/vibe-core/src/experiments/manager.rs:125-148) and drops the unforced routing feature.";
+
+const ROUTED_MODELS_MAP: &str = "v2.25.0 made the GrowthBook layer also write a models table keyed by alias for every routed model definition that validates (vibe/core/config/layers/growthbook.py:147-153,166-183 at 4a96003). This build's ExperimentsLayer writes only the mapped fields (crates/vibe-core/src/config/experiments_layer.rs:79-99).";
+
+const PINNED_ROUTING: &str = "v2.24.1 relaxed the unpinned-only guard in _inject_routed_model to also inject when active_model equals the routed alias, and v2.24.2 removed the guard entirely (vibe/core/config/vibe_schema.py:836-855 at 4a96003, against vibe/core/config/vibe_schema.py:604-617 at b78b451), and v2.25.0 also routes the definition through the layer's models table (vibe/core/config/layers/growthbook.py:147-153), so a pinned installation declares the routed alias and resolves it as the default. This build still skips the injection when active_model is pinned (crates/vibe-core/src/config/effective.rs:255-268) and resolves mistral-medium-3.5.";
+
+const IDENTITY_BEFORE_EXPERIMENTS_GATE: &str = "v2.24.4 reordered initialize_experiments (vibe/core/experiments/session.py:103-130 at 4a96003): only enable_telemetry precedes the identity and whoami lookups, and experiments.enable = false now skips the eval alone, so the identity is still requested once with the 10 second budget. This build checks both gates before any lookup (crates/vibe-core/src/experiments/session.rs:72-74,121-133) and requests nothing.";
+
+const NO_PLAN_SENTINEL: &str = "v2.24.4 made initialize_experiments return (refreshed, user_plan) and answer the NO_PLAN_DATA plan when no Mistral provider is configured (vibe/core/experiments/session.py:64-71,111-131 at 4a96003; vibe/setup/auth/whoami.py:42). This build resolves no plan (crates/vibe-core/src/experiments/session.rs:64-92), which the replay reads as a false refresh beside an absent plan.";
+
+const BUILT_ATTRIBUTES: &str = "v2.24.2 to v2.25.0 reshaped _build_attributes (vibe/core/experiments/session.py:215-257 at 4a96003): userId is the identity's id rather than hash_api_key of the key, harness and arch are set, and organizationKind, workspaceId, customerId, planType and planName are declared (vibe/core/experiments/models.py:23-40). This build still derives userId from the key digest and declares nine fields (crates/vibe-core/src/experiments/session.rs:173-196, crates/vibe-core/src/experiments/models.rs:36-59).";
+
+const POSTED_ATTRIBUTE_KEYS: &str = "v2.25.0 added harness and arch to the posted attributes (vibe/core/experiments/models.py:27,32 at 4a96003), and neither is None for a built attribute set. This build posts neither (crates/vibe-core/src/experiments/models.rs:36-59).";
 
 /// One family's shape: which case fields the capture authored and which ones
 /// both sides answer.
@@ -368,8 +694,8 @@ fn settle(report: &Report, family: &str) -> usize {
 const ORACLE_API_HOST: &str = "https://experiments.example.test";
 const ORACLE_CLIENT_KEY: &str = "sdk-oracle-client-key";
 
-/// The bucketing digest every request scenario posts, authored rather than
-/// derived so no scenario needs a credential to build a request.
+/// The userId every request scenario posts, authored rather than resolved
+/// from an identity so no scenario needs a credential to build a request.
 const ORACLE_USER_ID: &str = "0123456789abcdef0123456789abcdef";
 
 /// What the capture writes in place of the machine's own platform.
@@ -381,7 +707,7 @@ const VERSION_PLACEHOLDER: &str = "{version}";
 
 /// The credential sentinels the capture exports, mirroring `SENTINELS` in
 /// `scripts/parity/experiments.py`. They are authored strings that stand where
-/// an API key would, which is what lets the bucketing family be measured
+/// an API key would, which is what lets the API-key digest family be measured
 /// without one.
 const SENTINELS: [(&str, &str); 4] = [
     ("MISTRAL_API_KEY", "oracle-default-sentinel"),
@@ -869,7 +1195,7 @@ fn eval_failures_answer(case: &Case<'_>, runtime: &Runtime) -> Map<String, Value
     answers.insert("variants".to_owned(), variants);
     answers.insert(
         "assignments".to_owned(),
-        serde_json::to_value(manager.assignments()).unwrap_or(Value::Null),
+        assignment_records(&manager.assignments()),
     );
     answers.insert(
         "configVariants".to_owned(),
@@ -943,6 +1269,32 @@ fn manager_over(response: Option<&str>) -> ExperimentManager {
     manager
 }
 
+/// This build's exposures in the shape the corpus records them.
+///
+/// The reference answers one `ExperimentAssignment` record per experiment
+/// (`vibe/core/experiments/resolve.py:59-86` at the pin), where this build
+/// answers a map from the feature key to its label. The map carries the
+/// record's `experiment_id` and `variation_name` and nothing else, so those are
+/// the only two keys written: the rest of the record is not something this
+/// build answers, and filling it with nulls would claim answers it never gave.
+fn assignment_records(assignments: &BTreeMap<String, String>) -> Value {
+    Value::Array(
+        assignments
+            .iter()
+            .map(|(feature, label)| {
+                Value::Object(
+                    [
+                        ("experiment_id".to_owned(), Value::String(feature.clone())),
+                        ("variation_name".to_owned(), Value::String(label.clone())),
+                    ]
+                    .into_iter()
+                    .collect(),
+                )
+            })
+            .collect(),
+    )
+}
+
 fn variant_resolution_answer(case: &Case<'_>) -> Map<String, Value> {
     let manager = manager_over(case.input_text("response").as_deref());
     let mut answers = Map::new();
@@ -974,7 +1326,7 @@ fn config_variants_answer(case: &Case<'_>) -> Map<String, Value> {
     let mut answers = Map::new();
     answers.insert(
         "assignments".to_owned(),
-        serde_json::to_value(manager.assignments()).unwrap_or(Value::Null),
+        assignment_records(&manager.assignments()),
     );
     answers.insert(
         "configVariants".to_owned(),
@@ -998,10 +1350,7 @@ fn variant_labels_answer(case: &Case<'_>) -> Map<String, Value> {
         "reported".to_owned(),
         Value::Bool(assignments.contains_key(ExperimentName::SystemPrompt.key())),
     );
-    answers.insert(
-        "assignments".to_owned(),
-        serde_json::to_value(assignments).unwrap_or(Value::Null),
-    );
+    answers.insert("assignments".to_owned(), assignment_records(&assignments));
     answers
 }
 
@@ -1494,7 +1843,15 @@ fn session_gates_answer(case: &Case<'_>, runtime: &Runtime) -> Map<String, Value
                 &sink,
             ));
             let calls = resolver.calls();
-            answers.insert("returned".to_owned(), Value::Bool(refreshed));
+            // The reference returns `(refreshed, user_plan)`
+            // (`vibe/core/experiments/session.py:103-152` at the pin). This
+            // build's helper resolves no plan, so its answer is the refresh
+            // flag beside an absent plan, which is what the reference answers
+            // too wherever its plan lookup comes back empty.
+            answers.insert(
+                "returned".to_owned(),
+                Value::Array(vec![Value::Bool(refreshed), Value::Null]),
+            );
             answers.insert(
                 "evalRequests".to_owned(),
                 Value::from(transport.request_count()),

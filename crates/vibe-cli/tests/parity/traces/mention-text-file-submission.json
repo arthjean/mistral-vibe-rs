@@ -695,10 +695,12 @@
           11
         ],
         "popupRows": [
-          "@README.md",
+          "@build.log",
           "@docs/",
+          "@ignored/",
           "@image one.png",
           "@notes.txt",
+          "@README.md",
           "@src/"
         ],
         "popupVisible": true,
@@ -712,23 +714,52 @@
         "completion": {
           "items": [
             {
-              "description": "",
-              "label": "@README.md"
+              "description": {
+                "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "length": 0
+              },
+              "label": "@build.log"
             },
             {
-              "description": "",
+              "description": {
+                "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "length": 0
+              },
               "label": "@docs/"
             },
             {
-              "description": "",
+              "description": {
+                "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "length": 0
+              },
+              "label": "@ignored/"
+            },
+            {
+              "description": {
+                "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "length": 0
+              },
               "label": "@image one.png"
             },
             {
-              "description": "",
+              "description": {
+                "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "length": 0
+              },
               "label": "@notes.txt"
             },
             {
-              "description": "",
+              "description": {
+                "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "length": 0
+              },
+              "label": "@README.md"
+            },
+            {
+              "description": {
+                "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "length": 0
+              },
               "label": "@src/"
             }
           ],
@@ -787,23 +818,38 @@
         "completion": {
           "items": [
             {
-              "description": "",
+              "description": {
+                "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "length": 0
+              },
               "label": "@notes.txt"
             },
             {
-              "description": "",
+              "description": {
+                "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "length": 0
+              },
               "label": "@src/inner/"
             },
             {
-              "description": "",
+              "description": {
+                "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "length": 0
+              },
               "label": "@src/inner/deep.rs"
             },
             {
-              "description": "",
+              "description": {
+                "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "length": 0
+              },
               "label": "@image one.png"
             },
             {
-              "description": "",
+              "description": {
+                "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "length": 0
+              },
               "label": "@src/main.rs"
             }
           ],
@@ -858,7 +904,10 @@
         "completion": {
           "items": [
             {
-              "description": "",
+              "description": {
+                "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "length": 0
+              },
               "label": "@notes.txt"
             }
           ],
@@ -913,7 +962,10 @@
         "completion": {
           "items": [
             {
-              "description": "",
+              "description": {
+                "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "length": 0
+              },
               "label": "@notes.txt"
             }
           ],
@@ -968,7 +1020,10 @@
         "completion": {
           "items": [
             {
-              "description": "",
+              "description": {
+                "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "length": 0
+              },
               "label": "@notes.txt"
             }
           ],
@@ -1023,7 +1078,10 @@
         "completion": {
           "items": [
             {
-              "description": "",
+              "description": {
+                "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "length": 0
+              },
               "label": "@notes.txt"
             }
           ],
@@ -1078,7 +1136,10 @@
         "completion": {
           "items": [
             {
-              "description": "",
+              "description": {
+                "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "length": 0
+              },
               "label": "@notes.txt"
             }
           ],
@@ -1133,7 +1194,10 @@
         "completion": {
           "items": [
             {
-              "description": "",
+              "description": {
+                "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "length": 0
+              },
               "label": "@notes.txt"
             }
           ],
@@ -1188,7 +1252,10 @@
         "completion": {
           "items": [
             {
-              "description": "",
+              "description": {
+                "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "length": 0
+              },
               "label": "@notes.txt"
             }
           ],
@@ -1243,7 +1310,10 @@
         "completion": {
           "items": [
             {
-              "description": "",
+              "description": {
+                "digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "length": 0
+              },
               "label": "@notes.txt"
             }
           ],
@@ -1514,10 +1584,10 @@
     }
   ],
   "reference": {
-    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
-    "version": "2.24.0"
+    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd",
+    "version": "2.25.7"
   },
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "setup": {
     "agentName": "",
     "commands": {},

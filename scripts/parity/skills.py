@@ -656,7 +656,7 @@ def _build_manager(scenario: dict[str, Any], roots: dict[str, Path], case_root: 
     try:
         # The config is built under the scenario's working directory, not the
         # capture's. `skill_paths` carries a before-validator that resolves
-        # every entry at validation time (vibe_schema.py:213), so a relative
+        # every entry at validation time (vibe/core/config/vibe_schema.py:225), so a relative
         # entry anchors to whatever the cwd was when the document was
         # validated. Production validates and discovers in one process at one
         # cwd; building the config out here would record the launcher's
@@ -706,9 +706,12 @@ def capture_discovery(scratch: Path) -> list[dict[str, Any]]:
             (_label_path(issue.file, roots) or ("unknown", str(issue.file)))
             for issue in manager.config_issues
         )
+        # Each search path is a (root, scope) pair since the reference began
+        # scoping roots (vibe/core/skills/manager.py:86-115); the scope already
+        # travels on every published skill, so only the root is labeled here.
         search_paths = [
             list(_label_path(path, roots) or ("unknown", str(path)))
-            for path in manager._search_paths
+            for path, _scope in manager._search_paths
         ]
         captured.append({
             "case": case,
@@ -884,14 +887,19 @@ def capture_projection(scratch: Path) -> list[dict[str, Any]]:
     captured: list[dict[str, Any]] = []
     for case, fields in PROJECTION_CASES:
         info = SkillInfo.model_validate(fields)
-        # The same dict _projection.project_skills builds at
-        # vibe/app_server/_projection.py:231, driven without an agent loop.
+        # The same dict _projection._skill_summary builds for
+        # project_skill_summaries at vibe/app_server/_projection.py:288-301,
+        # with its enabled and locked defaults, driven without an agent loop.
         summary = SkillSummary.model_validate({
             "name": info.name,
             "description": info.description,
             "prompt": info.prompt,
             "user_invocable": info.user_invocable,
             "source": info.source.value,
+            "scope": info.scope.value,
+            "registry": info.registry.model_dump() if info.registry else None,
+            "enabled": True,
+            "locked": False,
         })
         captured.append({
             "case": case,

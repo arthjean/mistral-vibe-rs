@@ -1359,7 +1359,7 @@
       "case": "unknown-action",
       "error": {
         "message": {
-          "digest": "sha256:40225dc4ef62c878c41f529bcef9b8bf",
+          "digest": "sha256:f19af3524483e0f982bd1d7c8de53366",
           "present": true
         },
         "type": "ToolError"
@@ -2119,14 +2119,14 @@
       "arguments": {},
       "case": "manual-approval",
       "modelText": {
-        "digest": "sha256:bb5f0bc241fb6c1fee2d6b8e8b03df89",
-        "length": 89
+        "digest": "sha256:80f1eacab794f1ca6f77b18933d4ddf8",
+        "length": 79
       },
       "outcome": "returned",
       "projectedResult": {
         "message": {
-          "digest": "sha256:aec0c92bf7f1bb1bf4cea4aba407870d",
-          "length": 65
+          "digest": "sha256:efa6ca4289e05e91778c115f27f01fc6",
+          "length": 55
         },
         "switched": true
       },
@@ -2142,8 +2142,8 @@
       "tool": "exit_plan_mode",
       "typedResult": {
         "message": {
-          "digest": "sha256:aec0c92bf7f1bb1bf4cea4aba407870d",
-          "length": 65
+          "digest": "sha256:efa6ca4289e05e91778c115f27f01fc6",
+          "length": 55
         },
         "switched": true
       }
@@ -2287,7 +2287,7 @@
       },
       "outcome": "raised",
       "script": {
-        "agent": "default",
+        "agent": "ask",
         "answers": [
           {
             "option": 0
@@ -2343,7 +2343,7 @@
         "turns_used": 1
       },
       "script": {
-        "agent": "default",
+        "agent": "ask",
         "runner": {
           "completed": true,
           "response": "A fixture finding.",
@@ -2374,7 +2374,7 @@
         "turns_used": 3
       },
       "script": {
-        "agent": "default",
+        "agent": "ask",
         "runner": {
           "completed": true,
           "response": "A fixture finding.",
@@ -2405,7 +2405,7 @@
         "turns_used": 2
       },
       "script": {
-        "agent": "default",
+        "agent": "ask",
         "runner": {
           "completed": false,
           "response": "A partial finding.",
@@ -2436,7 +2436,7 @@
         "turns_used": 1
       },
       "script": {
-        "agent": "default",
+        "agent": "ask",
         "runner": {
           "completed": true,
           "response": "",
@@ -2467,7 +2467,7 @@
         "turns_used": 2
       },
       "script": {
-        "agent": "default",
+        "agent": "ask",
         "runner": {
           "completed": true,
           "response": "A fixture finding.",
@@ -2500,7 +2500,7 @@
         "turns_used": 1
       },
       "script": {
-        "agent": "default",
+        "agent": "ask",
         "runner": {
           "completed": true,
           "response": "A fixture finding.",
@@ -2529,7 +2529,7 @@
       },
       "outcome": "raised",
       "script": {
-        "agent": "default",
+        "agent": "ask",
         "runner": {
           "completed": true,
           "response": "A fixture finding.",
@@ -2553,7 +2553,7 @@
       },
       "outcome": "raised",
       "script": {
-        "agent": "default",
+        "agent": "ask",
         "runner": {
           "completed": true,
           "response": "A fixture finding.",
@@ -2577,7 +2577,7 @@
       },
       "outcome": "raised",
       "script": {
-        "agent": "default"
+        "agent": "ask"
       },
       "tool": "task"
     },
@@ -2967,14 +2967,17 @@
       },
       "case": "a-redirect-chain",
       "modelText": {
-        "digest": "sha256:fccb7d4b5b4fe6c2526058d3c42aad9b",
+        "digest": "sha256:15c663ff63e35760eb719f5d433db297",
         "length": 121
       },
       "outcome": "returned",
       "projectedResult": {
         "content": "The fixture destination.",
         "content_type": "text/plain; charset=utf-8",
-        "url": "http://{server}/first",
+        "url": {
+          "digest": "sha256:cfb0000ceb35131835d2c1d23c09fdf0",
+          "length": 21
+        },
         "was_truncated": false
       },
       "requests": [
@@ -3134,7 +3137,10 @@
       "typedResult": {
         "content": "The fixture destination.",
         "content_type": "text/plain; charset=utf-8",
-        "url": "http://{server}/first",
+        "url": {
+          "digest": "sha256:cfb0000ceb35131835d2c1d23c09fdf0",
+          "length": 21
+        },
         "was_truncated": false
       }
     },
@@ -4257,6 +4263,6 @@
   ],
   "note": "Tool execution corpus: what the pinned reference's tools return for each case over the checked-in fixture tree. A captured string is committed as it stands only when it is a value these arguments supplied, a normalized path, or an identifier-shaped token; everything else, including every error message, is committed as a SHA-256 digest and its length, so no reference prose ships while any change still fails the replay. Regenerate with scripts/parity/tool_execution.py --corpus when the pinned reference moves.",
   "platform": "linux",
-  "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+  "referenceCommit": "4a96003186b166d55b9f06895c45bb136eef61cd",
   "schemaVersion": 2
 }

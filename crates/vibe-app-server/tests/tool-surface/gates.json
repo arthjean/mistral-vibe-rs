@@ -145,6 +145,6 @@
   ],
   "note": "Published tool names per `enabled_tools` and `disabled_tools` pair, captured from the pinned reference by scripts/parity/tool_surface.py. The lists are authored here; the names are the reference's answer. Regenerate with scripts/parity/tool_surface.py --gates when the pinned reference moves.",
   "platform": "linux",
-  "referenceCommit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+  "referenceCommit": "4a96003186b166d55b9f06895c45bb136eef61cd",
   "schemaVersion": 1
 }

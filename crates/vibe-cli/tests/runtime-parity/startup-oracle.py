@@ -115,7 +115,10 @@ def capture_route_and_startup(case: dict[str, Any]) -> tuple[str, Any]:
         patch = stack.enter_context
         patch(mock.patch.object(sys, "argv", ["vibe", *argv]))
         patch(mock.patch.object(cli, "load_dotenv_values", lambda: None))
-        patch(mock.patch.object(cli, "bootstrap_config_files", lambda: None))
+        # `bootstrap_vibe_home` replaced `bootstrap_config_files` at v2.25.5
+        # (vibe/cli/cli.py:30,420); patching it keeps the capture from creating
+        # or chmodding the operator's VIBE_HOME.
+        patch(mock.patch.object(cli, "bootstrap_vibe_home", lambda: None))
         patch(
             mock.patch.object(
                 cli, "load_config_orchestrator_or_exit", lambda **_: orchestrator
@@ -155,8 +158,10 @@ def capture_post_mount_action(startup: Any) -> dict[str, Any] | None:
 
     class Commands:
         def has_command(self, name: str) -> bool:
-            # The corpus captures a session where teleport is available; the
-            # reference also gates it on `vibe_code_enabled`, recorded below.
+            # The corpus captures a session where teleport is available. At
+            # v2.25.7 the reference registers it with no availability gate
+            # (vibe/cli/commands.py:140-144), so only an excluded command would
+            # hide it.
             return name == "teleport"
 
     class StateDouble:

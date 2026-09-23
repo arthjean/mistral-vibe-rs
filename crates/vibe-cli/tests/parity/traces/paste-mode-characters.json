@@ -80,7 +80,10 @@
         "completion": {
           "items": [
             {
-              "description": "Clear conversation history",
+              "description": {
+                "digest": "10699ae98ae8d9d9b4c45276563b5ccec50113279ccfa47020a7505ec7490d08",
+                "length": 62
+              },
               "label": "/clear"
             }
           ],
@@ -103,10 +106,10 @@
     }
   ],
   "reference": {
-    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
-    "version": "2.24.0"
+    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd",
+    "version": "2.25.7"
   },
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "setup": {
     "agentName": "",
     "commands": {},

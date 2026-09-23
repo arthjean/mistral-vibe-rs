@@ -23,7 +23,7 @@
         "described": {
           "chars": 11,
           "marker": "<described>",
-          "sha256": "0af9964494c5990b20c800034e446f146029d13a3b6f97b2d43013b334d39ac4"
+          "sha256": "5ae6c6b56af3e3bc25ae8dd12b56f2d0f88e30c8d6a6b51f5c90960357ef9737"
         }
       },
       "streams": {
@@ -46,7 +46,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -54,6 +56,7 @@
         "prompt": "headless request",
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -82,7 +85,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": 3,
@@ -90,6 +95,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -118,7 +124,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": 1.5,
         "max_tokens": null,
         "max_turns": null,
@@ -126,6 +134,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -154,7 +163,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": 2048,
         "max_turns": null,
@@ -162,6 +173,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -192,7 +204,9 @@
         "enabled_tools": [
           "bash"
         ],
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -200,6 +214,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -230,7 +245,9 @@
           "web_search"
         ],
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -238,6 +255,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -266,7 +284,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -274,6 +294,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -302,7 +323,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -310,6 +333,121 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--experimental-harness"
+      ],
+      "case": "alone--experimental-harness",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": true,
+        "initial_prompt": null,
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--legacy-harness"
+      ],
+      "case": "alone--legacy-harness",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": null,
+        "legacy_harness": true,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--smart-approve"
+      ],
+      "case": "alone--smart-approve",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": "smart-approve",
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": true,
+        "initial_prompt": null,
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": true,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -337,7 +475,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -345,6 +485,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -372,7 +513,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -380,6 +523,7 @@
         "prompt": null,
         "resume": null,
         "setup": true,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -407,7 +551,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -415,6 +561,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -443,7 +590,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -451,6 +600,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": "sub/dir",
@@ -479,7 +629,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -487,6 +639,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -517,7 +670,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -525,6 +680,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -552,7 +708,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -560,6 +718,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": true,
         "workdir": null,
@@ -587,7 +746,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -595,6 +756,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": true,
         "trust": false,
         "workdir": null,
@@ -622,7 +784,9 @@
         "continue_session": true,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -630,6 +794,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -658,7 +823,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -666,6 +833,7 @@
         "prompt": null,
         "resume": "session-123",
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -693,7 +861,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -701,6 +871,7 @@
         "prompt": "",
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -863,16 +1034,36 @@
         "--worktree"
       ],
       "case": "no-value--worktree",
-      "exit": 2,
-      "namespace": null,
-      "parser": "root",
-      "stderrLastLine": {
-        "cleartext": "vibe: error: argument --worktree: expected one argument",
-        "described": null
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": null,
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": true
       },
+      "parser": "root",
+      "stderrLastLine": null,
       "stdoutLastLine": null,
       "streams": {
-        "stderr": true,
+        "stderr": false,
         "stdout": false
       }
     },
@@ -908,7 +1099,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -916,6 +1109,7 @@
         "prompt": null,
         "resume": true,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -943,7 +1137,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -951,6 +1147,7 @@
         "prompt": "headless request",
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -978,7 +1175,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": 3,
@@ -986,6 +1185,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -1013,7 +1213,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": 1.5,
         "max_tokens": null,
         "max_turns": null,
@@ -1021,6 +1223,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -1048,7 +1251,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": 2048,
         "max_turns": null,
@@ -1056,6 +1261,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -1085,7 +1291,9 @@
         "enabled_tools": [
           "bash"
         ],
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -1093,6 +1301,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -1122,7 +1331,9 @@
           "web_search"
         ],
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -1130,6 +1341,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -1157,7 +1369,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -1165,6 +1379,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -1192,7 +1407,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -1200,6 +1417,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -1227,7 +1445,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -1235,6 +1455,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": "sub/dir",
@@ -1262,7 +1483,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -1270,6 +1493,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -1299,7 +1523,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -1307,6 +1533,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -1334,7 +1561,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -1342,6 +1571,7 @@
         "prompt": null,
         "resume": "session-123",
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -1369,7 +1599,7 @@
         "described": {
           "chars": 11,
           "marker": "<described>",
-          "sha256": "0af9964494c5990b20c800034e446f146029d13a3b6f97b2d43013b334d39ac4"
+          "sha256": "5ae6c6b56af3e3bc25ae8dd12b56f2d0f88e30c8d6a6b51f5c90960357ef9737"
         }
       },
       "streams": {
@@ -1392,7 +1622,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -1400,6 +1632,7 @@
         "prompt": "headless request",
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -1428,7 +1661,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": 3,
@@ -1436,6 +1671,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -1464,7 +1700,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": 1.5,
         "max_tokens": null,
         "max_turns": null,
@@ -1472,6 +1710,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -1500,7 +1739,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": 2048,
         "max_turns": null,
@@ -1508,6 +1749,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -1523,7 +1765,7 @@
     },
     {
       "argv": [
-        "--e",
+        "--en",
         "bash"
       ],
       "case": "prefix--enabled-tools",
@@ -1538,7 +1780,9 @@
         "enabled_tools": [
           "bash"
         ],
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -1546,6 +1790,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -1576,7 +1821,9 @@
           "web_search"
         ],
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -1584,6 +1831,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -1612,7 +1860,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -1620,6 +1870,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -1648,7 +1899,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -1656,6 +1909,121 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--ex"
+      ],
+      "case": "prefix--experimental-harness",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": true,
+        "initial_prompt": null,
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--l"
+      ],
+      "case": "prefix--legacy-harness",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": null,
+        "legacy_harness": true,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--sm"
+      ],
+      "case": "prefix--smart-approve",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": "smart-approve",
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": true,
+        "initial_prompt": null,
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": true,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -1683,7 +2051,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -1691,6 +2061,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -1706,7 +2077,7 @@
     },
     {
       "argv": [
-        "--s"
+        "--se"
       ],
       "case": "prefix--setup",
       "exit": 0,
@@ -1718,7 +2089,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -1726,6 +2099,7 @@
         "prompt": null,
         "resume": null,
         "setup": true,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -1753,7 +2127,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -1761,6 +2137,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -1789,7 +2166,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -1797,6 +2176,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": "sub/dir",
@@ -1825,7 +2205,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -1833,6 +2215,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -1863,7 +2246,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -1871,6 +2256,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -1898,7 +2284,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -1906,6 +2294,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": true,
         "workdir": null,
@@ -1933,7 +2322,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -1941,6 +2332,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": true,
         "trust": false,
         "workdir": null,
@@ -1968,7 +2360,9 @@
         "continue_session": true,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -1976,6 +2370,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -2004,7 +2399,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -2012,6 +2409,7 @@
         "prompt": null,
         "resume": "session-123",
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -2040,7 +2438,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -2048,6 +2448,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -2076,7 +2477,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -2084,6 +2487,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -2133,7 +2537,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -2141,6 +2547,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -2213,7 +2620,9 @@
           "bash",
           "read_file"
         ],
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -2221,6 +2630,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -2254,7 +2664,9 @@
           "web_search"
         ],
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -2262,6 +2674,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -2295,7 +2708,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -2303,6 +2718,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -2422,7 +2838,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": -5,
@@ -2430,6 +2848,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -2458,7 +2877,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": -1,
         "max_turns": null,
@@ -2466,6 +2887,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -2494,7 +2916,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": -2.5,
         "max_tokens": null,
         "max_turns": null,
@@ -2502,6 +2926,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -2606,7 +3031,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": 0,
@@ -2614,6 +3041,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -2642,7 +3070,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": 2.0,
         "max_tokens": null,
         "max_turns": null,
@@ -2650,6 +3080,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -2678,7 +3109,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -2686,6 +3119,7 @@
         "prompt": "",
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -2714,7 +3148,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -2722,6 +3158,7 @@
         "prompt": "   ",
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -2750,7 +3187,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -2758,6 +3197,7 @@
         "prompt": "headless request",
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -2785,7 +3225,9 @@
         "continue_session": true,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -2793,6 +3235,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -2864,7 +3307,7 @@
         "described": {
           "chars": 11,
           "marker": "<described>",
-          "sha256": "0af9964494c5990b20c800034e446f146029d13a3b6f97b2d43013b334d39ac4"
+          "sha256": "5ae6c6b56af3e3bc25ae8dd12b56f2d0f88e30c8d6a6b51f5c90960357ef9737"
         }
       },
       "streams": {
@@ -2884,7 +3327,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -2892,6 +3337,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -2919,7 +3365,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": "review this repository",
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -2927,6 +3375,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -2973,7 +3422,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -2981,6 +3432,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -3009,7 +3461,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": "--not-a-flag",
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -3017,6 +3471,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -3066,7 +3521,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -3074,6 +3531,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -3101,7 +3559,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -3109,6 +3569,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -3137,7 +3598,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -3145,6 +3608,7 @@
         "prompt": null,
         "resume": "",
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -3175,7 +3639,9 @@
         "enabled_tools": [
           "web_*"
         ],
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -3183,6 +3649,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -3211,7 +3678,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -3219,6 +3688,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": ".",
@@ -3249,7 +3719,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -3257,6 +3729,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -3287,7 +3760,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": "review this repository",
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -3295,6 +3770,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": true,
         "workdir": null,
@@ -3327,7 +3803,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": 2,
@@ -3335,6 +3813,7 @@
         "prompt": "headless request",
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -3372,7 +3851,9 @@
           "bash",
           "read_file"
         ],
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -3380,6 +3861,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -3415,7 +3897,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -3423,6 +3907,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": "sub/dir",
@@ -3453,7 +3938,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -3461,6 +3948,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": true,
         "workdir": null,
@@ -3490,7 +3978,9 @@
         "continue_session": true,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -3498,6 +3988,7 @@
         "prompt": null,
         "resume": null,
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -3528,7 +4019,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": 0.5,
         "max_tokens": null,
         "max_turns": null,
@@ -3536,6 +4029,7 @@
         "prompt": null,
         "resume": "session-123",
         "setup": false,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -3564,7 +4058,9 @@
         "continue_session": false,
         "disabled_tools": null,
         "enabled_tools": null,
+        "experimental_harness": false,
         "initial_prompt": null,
+        "legacy_harness": false,
         "max_price": null,
         "max_tokens": null,
         "max_turns": null,
@@ -3572,6 +4068,7 @@
         "prompt": null,
         "resume": null,
         "setup": true,
+        "smart_approve": false,
         "teleport": false,
         "trust": false,
         "workdir": null,
@@ -3824,6 +4321,7 @@
       "case": "mcp-add-stdio-with-remote-flag",
       "exit": 2,
       "namespace": {
+        "allow_insecure_http": false,
         "api_key_env": null,
         "api_key_format": null,
         "api_key_header": null,
@@ -3862,6 +4360,7 @@
       "case": "mcp-add-remote-without-url",
       "exit": 2,
       "namespace": {
+        "allow_insecure_http": false,
         "api_key_env": null,
         "api_key_format": null,
         "api_key_header": null,
@@ -3905,6 +4404,7 @@
       "case": "mcp-add-http-oauth-no-login",
       "exit": 0,
       "namespace": {
+        "allow_insecure_http": false,
         "api_key_env": null,
         "api_key_format": null,
         "api_key_header": null,
@@ -3949,6 +4449,7 @@
       "case": "mcp-add-streamable-http-static-auth",
       "exit": 0,
       "namespace": {
+        "allow_insecure_http": false,
         "api_key_env": "PARITY_TOKEN_VARIABLE",
         "api_key_format": null,
         "api_key_header": null,
@@ -3993,6 +4494,7 @@
       "case": "mcp-add-stdio-command",
       "exit": 0,
       "namespace": {
+        "allow_insecure_http": false,
         "api_key_env": null,
         "api_key_format": null,
         "api_key_header": null,
@@ -4039,6 +4541,7 @@
       "case": "mcp-add-stdio-again",
       "exit": 0,
       "namespace": {
+        "allow_insecure_http": false,
         "api_key_env": null,
         "api_key_format": null,
         "api_key_header": null,
@@ -4084,6 +4587,7 @@
       "case": "mcp-add-duplicate-url",
       "exit": 2,
       "namespace": {
+        "allow_insecure_http": false,
         "api_key_env": null,
         "api_key_format": null,
         "api_key_header": null,
@@ -4136,6 +4640,7 @@
       "case": "mcp-add-remote-static-carrier",
       "exit": 0,
       "namespace": {
+        "allow_insecure_http": false,
         "api_key_env": "PARITY_REPORTS_TOKEN",
         "api_key_format": "Token {token}",
         "api_key_header": "X-Parity-Key",
@@ -4184,6 +4689,7 @@
       "case": "mcp-add-stdio-environment",
       "exit": 0,
       "namespace": {
+        "allow_insecure_http": false,
         "api_key_env": null,
         "api_key_format": null,
         "api_key_header": null,
@@ -4366,6 +4872,9 @@
             "disabled_tools",
             "output",
             "agent",
+            "experimental_harness",
+            "legacy_harness",
+            "smart_approve",
             "auto_approve",
             "setup",
             "check_upgrade",
@@ -4603,9 +5112,9 @@
           "default": null,
           "dest": "agent",
           "help": {
-            "chars": 211,
+            "chars": 222,
             "marker": "<described>",
-            "sha256": "ff0be3679d1685070dd5d31bb776fed058def6f4a7317b7a7945878d5e4c7f92"
+            "sha256": "3e3fe18f0f1bff2e6bc7f731843840c88375fc4a7841e3e5b0704eb70c25b119"
           },
           "helpSuppressed": false,
           "invocation": "--agent NAME",
@@ -4613,6 +5122,69 @@
           "nargs": null,
           "optionStrings": [
             "--agent"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_StoreTrueAction",
+          "const": true,
+          "default": false,
+          "dest": "experimental_harness",
+          "help": {
+            "chars": 83,
+            "marker": "<described>",
+            "sha256": "b7d2539e67212a0a6ea1a59c8b21ca332fe554a019eff814f698d9afc8b7a8c7"
+          },
+          "helpSuppressed": false,
+          "invocation": "--experimental-harness",
+          "metavar": null,
+          "nargs": 0,
+          "optionStrings": [
+            "--experimental-harness"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_StoreTrueAction",
+          "const": true,
+          "default": false,
+          "dest": "legacy_harness",
+          "help": {
+            "chars": 67,
+            "marker": "<described>",
+            "sha256": "8569c3784d93e00384e3aed375c6ce6f8384d963e62b0f36dc021a88ebd1a19d"
+          },
+          "helpSuppressed": false,
+          "invocation": "--legacy-harness",
+          "metavar": null,
+          "nargs": 0,
+          "optionStrings": [
+            "--legacy-harness"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
+          "class": "_StoreTrueAction",
+          "const": true,
+          "default": false,
+          "dest": "smart_approve",
+          "help": {
+            "chars": 112,
+            "marker": "<described>",
+            "sha256": "e6594ffff0c83dce344a12a698806acf6f84744aee72fdf31df93c61c8170f86"
+          },
+          "helpSuppressed": false,
+          "invocation": "--smart-approve",
+          "metavar": null,
+          "nargs": 0,
+          "optionStrings": [
+            "--smart-approve"
           ],
           "required": false,
           "type": null
@@ -4705,18 +5277,18 @@
         {
           "choices": null,
           "class": "_StoreAction",
-          "const": null,
+          "const": true,
           "default": null,
           "dest": "worktree",
           "help": {
-            "chars": 179,
+            "chars": 292,
             "marker": "<described>",
-            "sha256": "f599812fb07b025c50778342e82e0d2bdbb8852bce9c9d1b472965f1e5cb99c1"
+            "sha256": "04111cc189d623ce04b89dea7dfb5f442ec814f1abd27c777bf958f993f729a1"
           },
           "helpSuppressed": false,
-          "invocation": "--worktree NAME",
+          "invocation": "--worktree [NAME]",
           "metavar": "NAME",
-          "nargs": null,
+          "nargs": "?",
           "optionStrings": [
             "--worktree"
           ],
@@ -4832,7 +5404,7 @@
       "hasEpilog": true,
       "help": {
         "columns": 80,
-        "lineCount": 80,
+        "lineCount": 94,
         "lines": [
           {
             "chars": 71,
@@ -4849,22 +5421,36 @@
             "kind": "usage"
           },
           {
-            "chars": 76,
-            "cleartext": "            [--output {text,json,streaming}] [--agent NAME] [--auto-approve]",
+            "chars": 59,
+            "cleartext": "            [--output {text,json,streaming}] [--agent NAME]",
             "described": null,
             "indent": 12,
             "kind": "usage"
           },
           {
             "chars": 73,
-            "cleartext": "            [--setup] [--check-upgrade] [--workdir DIR] [--worktree NAME]",
+            "cleartext": "            [--experimental-harness | --legacy-harness] [--smart-approve]",
             "described": null,
             "indent": 12,
             "kind": "usage"
           },
           {
-            "chars": 66,
-            "cleartext": "            [--add-dir DIR] [--trust] [-c | --resume [SESSION_ID]]",
+            "chars": 72,
+            "cleartext": "            [--auto-approve] [--setup] [--check-upgrade] [--workdir DIR]",
+            "described": null,
+            "indent": 12,
+            "kind": "usage"
+          },
+          {
+            "chars": 57,
+            "cleartext": "            [--worktree [NAME]] [--add-dir DIR] [--trust]",
+            "described": null,
+            "indent": 12,
+            "kind": "usage"
+          },
+          {
+            "chars": 40,
+            "cleartext": "            [-c | --resume [SESSION_ID]]",
             "described": null,
             "indent": 12,
             "kind": "usage"
@@ -5252,23 +5838,23 @@
             "kind": "continuation"
           },
           {
-            "chars": 75,
+            "chars": 78,
             "cleartext": "--agent NAME",
             "described": {
-              "chars": 51,
+              "chars": 54,
               "marker": "<described>",
-              "sha256": "c076d03a1b67b1ead9b7d816dd2bc3bc415c3b47f08e12dac241293f2582bf11"
+              "sha256": "d98cc08fe45eecb7e831a723abe5af6bb4d25f95053f5de59dcc6b4aeda9f877"
             },
             "indent": 2,
             "kind": "invocation"
           },
           {
-            "chars": 52,
+            "chars": 61,
             "cleartext": null,
             "described": {
-              "chars": 28,
+              "chars": 37,
               "marker": "<described>",
-              "sha256": "e5f2547b7f3dd09b4781d90141f96a240b49962a49043be55e42688b10fd3887"
+              "sha256": "885815bcfda851f9d12c1e6f899b7262860f8914233df78cc2d71c940d98eeef"
             },
             "indent": 24,
             "kind": "continuation"
@@ -5302,6 +5888,90 @@
               "chars": 32,
               "marker": "<described>",
               "sha256": "b73a8d6c8c2362aed818f423c5e51485b736a349f44d903e61dd2defc1c1c4c2"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 24,
+            "cleartext": "--experimental-harness",
+            "described": null,
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 77,
+            "cleartext": null,
+            "described": {
+              "chars": 53,
+              "marker": "<described>",
+              "sha256": "01b4ab78d825b1835b51630d8b2371c838cc90f6158fb534ef8b59bdbe3e129f"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 53,
+            "cleartext": null,
+            "described": {
+              "chars": 29,
+              "marker": "<described>",
+              "sha256": "3f4d0925ea772c5ad9a7d2ad4b5607afce87caf4426ef08a219dcc565178afac"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 71,
+            "cleartext": "--legacy-harness",
+            "described": {
+              "chars": 47,
+              "marker": "<described>",
+              "sha256": "3651b7b2830a147d75441499043a7b908f60e34ea8eebef9d24ab571634b0b5e"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 43,
+            "cleartext": null,
+            "described": {
+              "chars": 19,
+              "marker": "<described>",
+              "sha256": "8a63aa17df509ee497668481296afdf5854499ae03da2c4bd2a1ae359bc637ca"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 75,
+            "cleartext": "--smart-approve",
+            "described": {
+              "chars": 51,
+              "marker": "<described>",
+              "sha256": "297b18895218e4b11acdf1a08fa51f37fe10a640b4234a42d830901fb01416ef"
+            },
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 75,
+            "cleartext": null,
+            "described": {
+              "chars": 51,
+              "marker": "<described>",
+              "sha256": "d61bd18741a79334cc8cec74151f630df8306d101f88f294f3a8a86dd2108d54"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 32,
+            "cleartext": null,
+            "described": {
+              "chars": 8,
+              "marker": "<described>",
+              "sha256": "4c324e5a748e5090baf9e144497ab13647fc00e6405312c202154173ca3a1cef"
             },
             "indent": 24,
             "kind": "continuation"
@@ -5380,23 +6050,23 @@
             "kind": "invocation"
           },
           {
-            "chars": 62,
-            "cleartext": "--worktree NAME",
+            "chars": 77,
+            "cleartext": "--worktree [NAME]",
             "described": {
-              "chars": 38,
+              "chars": 53,
               "marker": "<described>",
-              "sha256": "070ccd3f019b0805c1a1563810d27c65d02f984c6cc8f4d032855d5ff7523277"
+              "sha256": "4fcec8d46034fe8ec11942c456ad994bcae0086c9eb319ac3f851a80d731667b"
             },
             "indent": 2,
             "kind": "invocation"
           },
           {
-            "chars": 75,
+            "chars": 74,
             "cleartext": null,
             "described": {
-              "chars": 51,
+              "chars": 50,
               "marker": "<described>",
-              "sha256": "b20330911c0775a47a762031c0d4bb99e2faacbd1118c721993f4bb7c42669a3"
+              "sha256": "9f239a26aef199ee78b6c913ace1a45f34e5be6202485ac501ebcc8cb9e3abff"
             },
             "indent": 24,
             "kind": "continuation"
@@ -5407,18 +6077,40 @@
             "described": {
               "chars": 54,
               "marker": "<described>",
-              "sha256": "0eabf083dcce75afd7cb3633d4e2faa28d322ef81ded8af7b904559b750779cb"
+              "sha256": "735ed02a0c60b5bb6249798ee015eda3770d4b03a3ff531c5c34fe9dc51ae166"
             },
             "indent": 24,
             "kind": "continuation"
           },
           {
-            "chars": 57,
+            "chars": 78,
             "cleartext": null,
             "described": {
-              "chars": 33,
+              "chars": 54,
               "marker": "<described>",
-              "sha256": "d9588bc481015f27ed5c8af03d3e09958ff04b32fcc3487d080ad71193dea20f"
+              "sha256": "5e5eef3b576f9809e97fbb17883215618929c0de032249e4d45a44421c376261"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 72,
+            "cleartext": null,
+            "described": {
+              "chars": 48,
+              "marker": "<described>",
+              "sha256": "3508457c700ea5d1a0e9b42b2d08e0859fcba683d7e0b9bac1242d3cf01491a8"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 52,
+            "cleartext": null,
+            "described": {
+              "chars": 28,
+              "marker": "<described>",
+              "sha256": "df9bab61c6471e080918df2d5c834f1bc23157799ac285b8ae605a5046f27e7b"
             },
             "indent": 24,
             "kind": "continuation"
@@ -5555,6 +6247,17 @@
             "kind": "epilogHeading"
           },
           {
+            "chars": 71,
+            "cleartext": "update",
+            "described": {
+              "chars": 54,
+              "marker": "<described>",
+              "sha256": "7eb32dfe71b60c4b04db475d6687a3786970f32a4d2ce2437327506e5288a500"
+            },
+            "indent": 2,
+            "kind": "epilogEntry"
+          },
+          {
             "chars": 67,
             "cleartext": "mcp",
             "described": {
@@ -5602,6 +6305,17 @@
             "kind": "epilogEntry"
           },
           {
+            "chars": 81,
+            "cleartext": null,
+            "described": {
+              "chars": 63,
+              "marker": "<described>",
+              "sha256": "7b59ec22ac0c0c7e7bdcae6ebfc9d87fd5373da526d1180e1dedbb090189beea"
+            },
+            "indent": 18,
+            "kind": "epilogContinuation"
+          },
+          {
             "chars": 63,
             "cleartext": null,
             "described": {
@@ -5635,9 +6349,16 @@
             "kind": "epilogEntry"
           }
         ],
-        "sha256": "88806b6374ce8064fa16dea50a7336d923590d3d254d4791a4204ff8f2a8d539"
+        "sha256": "f81c215ebff49369b97b54b9376390f0eb5ca610555b55d28db740da8d39d99a"
       },
       "mutuallyExclusiveGroups": [
+        {
+          "dests": [
+            "experimental_harness",
+            "legacy_harness"
+          ],
+          "required": false
+        },
         {
           "dests": [
             "continue_session",
@@ -5835,6 +6556,7 @@
             "api_key_header",
             "api_key_format",
             "no_login",
+            "allow_insecure_http",
             "startup_timeout_sec",
             "tool_timeout_sec"
           ],
@@ -6100,6 +6822,27 @@
         },
         {
           "choices": null,
+          "class": "_StoreTrueAction",
+          "const": true,
+          "default": false,
+          "dest": "allow_insecure_http",
+          "help": {
+            "chars": 127,
+            "marker": "<described>",
+            "sha256": "393232782bbbea0545100f6b312f52b60d9ff1caadba27e7e640e962b3f6b257"
+          },
+          "helpSuppressed": false,
+          "invocation": "--allow-insecure-http",
+          "metavar": null,
+          "nargs": 0,
+          "optionStrings": [
+            "--allow-insecure-http"
+          ],
+          "required": false,
+          "type": null
+        },
+        {
+          "choices": null,
           "class": "_StoreAction",
           "const": null,
           "default": null,
@@ -6147,7 +6890,7 @@
       "hasEpilog": false,
       "help": {
         "columns": 80,
-        "lineCount": 40,
+        "lineCount": 44,
         "lines": [
           {
             "chars": 67,
@@ -6185,8 +6928,8 @@
             "kind": "usage"
           },
           {
-            "chars": 51,
-            "cleartext": "                    [--startup-timeout-sec SECONDS]",
+            "chars": 75,
+            "cleartext": "                    [--allow-insecure-http] [--startup-timeout-sec SECONDS]",
             "described": null,
             "indent": 20,
             "kind": "usage"
@@ -6482,6 +7225,46 @@
             "kind": "continuation"
           },
           {
+            "chars": 23,
+            "cleartext": "--allow-insecure-http",
+            "described": null,
+            "indent": 2,
+            "kind": "invocation"
+          },
+          {
+            "chars": 77,
+            "cleartext": null,
+            "described": {
+              "chars": 53,
+              "marker": "<described>",
+              "sha256": "9205ff426d008ea31733609ccf6d41789c22bd04e91bdeb0c0b3ec4a57284922"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 75,
+            "cleartext": null,
+            "described": {
+              "chars": 51,
+              "marker": "<described>",
+              "sha256": "3b83be10e34ed173d286c19b058f0b630f9176a7369a45333e33e764224873d8"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 45,
+            "cleartext": null,
+            "described": {
+              "chars": 21,
+              "marker": "<described>",
+              "sha256": "49e92d629cc695aa77e0167d0a534f9f67c8f44acf7dba4fec09953599663b0e"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
             "chars": 31,
             "cleartext": "--startup-timeout-sec SECONDS",
             "described": null,
@@ -6518,7 +7301,7 @@
             "kind": "continuation"
           }
         ],
-        "sha256": "c46d72df10a030ace7a95c6ed2e0087086eef5bfb3d3d97b64219484bc1bc6cc"
+        "sha256": "d25d19517eb6f703f9ddfcfc88fa9be6f0440c38d21003300566193491406bae"
       },
       "mutuallyExclusiveGroups": [],
       "parser": "mcp-add",
@@ -6656,24 +7439,25 @@
     }
   ],
   "reference": {
-    "commit": "b78b451c39eab9213393ad2f45908e8562a5c5e7",
+    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd",
     "sourceFiles": [
       "vibe/cli/entrypoint.py",
-      "vibe/cli/mcp_command.py"
+      "vibe/cli/mcp_command.py",
+      "vibe/_experimental_harness.py"
     ],
-    "version": "2.24.0"
+    "version": "2.25.7"
   },
   "schemaVersion": 1,
   "unavailable": [
     {
       "argv": "mcp remove docs",
       "id": "mcp-remove-oauth-server",
-      "reason": "removing a persisted OAuth server deletes its keyring credentials before the config entry (vibe/core/tools/mcp/management.py:36-49), and this capture drives no keyring"
+      "reason": "removing a persisted OAuth server deletes its keyring credentials before the config entry (vibe/app_server/mcp_catalog.py:866-881 and 1092-1103, vibe/app_server/_mcp_auth.py:263-280), and this capture drives no keyring"
     },
     {
       "argv": "mcp add docs --transport http --url https://example.invalid/mcp",
       "id": "mcp-add-http-oauth-with-login",
-      "reason": "an OAuth add without --no-login starts a browser login against a live authorization server (vibe/cli/mcp_command.py:211-249)"
+      "reason": "an OAuth add without --no-login starts a browser login against a live authorization server (vibe/cli/mcp_command.py:221-259)"
     },
     {
       "argv": "vibe --check-upgrade",

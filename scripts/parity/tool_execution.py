@@ -442,6 +442,14 @@ class ScriptedSkills:
     def get_skill(self, name: str) -> Any:
         return self.available_skills.get(name)
 
+    def get_model_invocable_skill(self, name: str) -> Any:
+        """The lookup ``skill`` makes since v2.25.5 (``vibe/core/skills/manager.py``)."""
+
+        skill = self.get_skill(name)
+        if skill is None or not skill.model_invocable:
+            return None
+        return skill
+
 
 class ScriptedAnswers:
     """A user who answers by option index, never by reading a label.
@@ -1032,7 +1040,7 @@ def _context_cases() -> list[dict[str, Any]]:
             "tool": "exit_plan_mode",
             "case": "not-in-plan-mode",
             "args": {},
-            "script": {"agent": "default", "answers": [{"option": 0}]},
+            "script": {"agent": "ask", "answers": [{"option": 0}]},
         },
         {
             "tool": "exit_plan_mode",
@@ -1047,7 +1055,7 @@ def _context_cases() -> list[dict[str, Any]]:
             "case": "completed-in-one-turn",
             "args": {"task": "Inspect the fixture tree.", "agent": "explore"},
             "script": {
-                "agent": "default",
+                "agent": "ask",
                 "runner": {"response": "A fixture finding.", "turns": 1, "completed": True},
             },
         },
@@ -1056,7 +1064,7 @@ def _context_cases() -> list[dict[str, Any]]:
             "case": "completed-in-several-turns",
             "args": {"task": "Inspect the fixture tree.", "agent": "explore"},
             "script": {
-                "agent": "default",
+                "agent": "ask",
                 "runner": {"response": "A fixture finding.", "turns": 3, "completed": True},
             },
         },
@@ -1065,7 +1073,7 @@ def _context_cases() -> list[dict[str, Any]]:
             "case": "ended-incomplete",
             "args": {"task": "Inspect the fixture tree.", "agent": "explore"},
             "script": {
-                "agent": "default",
+                "agent": "ask",
                 "runner": {"response": "A partial finding.", "turns": 2, "completed": False},
             },
         },
@@ -1074,7 +1082,7 @@ def _context_cases() -> list[dict[str, Any]]:
             "case": "empty-response",
             "args": {"task": "Inspect the fixture tree.", "agent": "explore"},
             "script": {
-                "agent": "default",
+                "agent": "ask",
                 "runner": {"response": "", "turns": 1, "completed": True},
             },
         },
@@ -1083,7 +1091,7 @@ def _context_cases() -> list[dict[str, Any]]:
             "case": "streamed-progress",
             "args": {"task": "Inspect the fixture tree.", "agent": "explore"},
             "script": {
-                "agent": "default",
+                "agent": "ask",
                 "runner": {
                     "response": "A fixture finding.",
                     "turns": 2,
@@ -1097,7 +1105,7 @@ def _context_cases() -> list[dict[str, Any]]:
             "case": "default-agent-name",
             "args": {"task": "Inspect the fixture tree."},
             "script": {
-                "agent": "default",
+                "agent": "ask",
                 "runner": {"response": "A fixture finding.", "turns": 1, "completed": True},
             },
         },
@@ -1106,7 +1114,7 @@ def _context_cases() -> list[dict[str, Any]]:
             "case": "unknown-agent",
             "args": {"task": "Inspect the fixture tree.", "agent": "absent"},
             "script": {
-                "agent": "default",
+                "agent": "ask",
                 "runner": {"response": "A fixture finding.", "turns": 1, "completed": True},
             },
         },
@@ -1115,7 +1123,7 @@ def _context_cases() -> list[dict[str, Any]]:
             "case": "not-a-subagent",
             "args": {"task": "Inspect the fixture tree.", "agent": "plan"},
             "script": {
-                "agent": "default",
+                "agent": "ask",
                 "runner": {"response": "A fixture finding.", "turns": 1, "completed": True},
             },
         },
@@ -1123,7 +1131,7 @@ def _context_cases() -> list[dict[str, Any]]:
             "tool": "task",
             "case": "no-subagent-runner",
             "args": {"task": "Inspect the fixture tree.", "agent": "explore"},
-            "script": {"agent": "default"},
+            "script": {"agent": "ask"},
         },
         {
             "tool": "task",

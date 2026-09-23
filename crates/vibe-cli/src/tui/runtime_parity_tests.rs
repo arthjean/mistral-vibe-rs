@@ -714,14 +714,41 @@ async fn active_turn_corpus_replays_every_event_against_runtime_reducers() {
     assert_eq!(corpus.reference.commit, REFERENCE_COMMIT);
     assert!(!corpus.reference.version.is_empty());
     assert_eq!(corpus.reference.source_files.len(), 5);
-    assert!(corpus.unavailable.is_empty());
+    // US-027 left the replayable set when the reference replaced its typed
+    // queue with one merged app-server item at v2.25.0, measured by
+    // `tests/runtime-parity/active-turn-oracle.py`. Every story stays accounted
+    // for: a dropped trace names its story and why no expectation is replayed.
+    let mut unavailable = BTreeSet::new();
+    for entry in &corpus.unavailable {
+        for field in ["id", "story", "reason"] {
+            assert!(
+                entry
+                    .get(field)
+                    .and_then(Value::as_str)
+                    .is_some_and(|value| !value.trim().is_empty()),
+                "unavailable trace is missing `{field}`: {entry}"
+            );
+        }
+        let id = entry.get("id").and_then(Value::as_str).unwrap_or_default();
+        assert!(
+            corpus.traces.iter().all(|trace| trace.id != id),
+            "trace {id} is both replayed and unavailable"
+        );
+        unavailable.insert(
+            entry
+                .get("story")
+                .and_then(Value::as_str)
+                .unwrap_or_default(),
+        );
+    }
+    assert_eq!(unavailable, BTreeSet::from(["US-027"]));
     assert_eq!(
         corpus
             .traces
             .iter()
             .map(|trace| trace.story.as_str())
             .collect::<BTreeSet<_>>(),
-        BTreeSet::from(["US-024", "US-025", "US-026", "US-027", "US-028"])
+        BTreeSet::from(["US-024", "US-025", "US-026", "US-028"])
     );
 
     for trace in corpus.traces {

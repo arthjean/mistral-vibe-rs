@@ -7,8 +7,9 @@ headless pilot and records what the chat-input harness calls observations:
 the installed screen set, the ordered transitions taken, the focus target per
 screen, the validation class per input state, the effects persisted and the
 terminating value. The sign-in service, the credential persistence and the
-config orchestrator are injected or patched to recorders, so a run touches no
-network, no keyring and no real ``VIBE_HOME``.
+config orchestrator are injected or patched to recorders, and the ``/whoami``
+tenant discovery to its no-data branch, so a run touches no network, no
+keyring and no real ``VIBE_HOME``.
 
 Four families come out, and are what the Rust replay compares:
 
@@ -63,7 +64,7 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 DEFAULT_OUTPUT = Path(".parity/onboarding-corpus.json")
 DEFAULT_CORPUS = Path("crates/vibe-cli/tests/onboarding/corpus.json")
 DEFAULT_CACHE = Path(".parity")
@@ -328,6 +329,7 @@ class PersistRecorder:
         self.provider_write_ok = provider_write_ok
         self.persist_calls: list[dict[str, Any]] = []
         self.provider_writes: list[dict[str, Any]] = []
+        self.base_url_writes: list[dict[str, Any]] = []
 
     def persist_api_key(
         self,
@@ -347,7 +349,21 @@ class PersistRecorder:
         )
         return self.outcome
 
-    def persist_provider_to_config(self, provider: Any) -> bool:
+    async def persist_provider_credentials(self, request: Any) -> Any:
+        """Stand-in for the batched provider persist the app awaits.
+
+        The provider half is recorded as ``providerWrites`` and each non-None
+        base URL half as ``baseUrlWrites``, in the order the reference writes
+        them (``vibe/setup/auth/api_key_persistence.py:162-187``). The base URL
+        halves always report success, so only the provider write can fail
+        (``ProviderCredentialsPersistResult.first_failure``, ``:142-149``).
+        """
+
+        from vibe.setup.auth.api_key_persistence import (
+            ProviderCredentialsPersistResult,
+        )
+
+        provider = request.provider
         self.provider_writes.append(
             {
                 "provider": provider.name,
@@ -355,7 +371,30 @@ class PersistRecorder:
                 "browserAuthApiBaseUrl": provider.browser_auth_api_base_url,
             }
         )
-        return self.provider_write_ok
+        for field in ("console_base_url", "vibe_base_url"):
+            value = getattr(request, field)
+            if value is not None:
+                self.base_url_writes.append({"field": field, "value": value})
+        return ProviderCredentialsPersistResult(
+            provider=self.provider_write_ok,
+            console_base_url=True if request.console_base_url is not None else None,
+            vibe_base_url=True if request.vibe_base_url is not None else None,
+        )
+
+
+async def resolve_tenant_domains_without_whoami(
+    provider: Any, console_base_url: str, api_key: str, current_vibe_base_url: str
+) -> tuple[Any, str]:
+    """The reference's own no-data branch of tenant discovery.
+
+    ``persist_credentials`` fetches ``/whoami`` whenever the console is not the
+    public one (``vibe/setup/onboarding/__init__.py:214-219``); the capture
+    runs offline, so the stand-in returns the inputs unchanged exactly as
+    ``vibe/setup/auth/whoami.py:388-389`` does when ``fetch_whoami`` yields
+    nothing.
+    """
+
+    return provider, current_vibe_base_url
 
 
 # --------------------------------------------------------------------------
@@ -479,8 +518,13 @@ async def run_scenario(scenario: dict[str, Any]) -> dict[str, Any]:
         patched(onboarding_module, "persist_api_key", recorder.persist_api_key),
         patched(
             onboarding_module,
-            "persist_provider_to_config",
-            recorder.persist_provider_to_config,
+            "persist_provider_credentials",
+            recorder.persist_provider_credentials,
+        ),
+        patched(
+            onboarding_module,
+            "resolve_tenant_domains",
+            resolve_tenant_domains_without_whoami,
         ),
     ):
         async with app.run_test(size=VIEWPORT) as pilot:
@@ -507,6 +551,7 @@ async def run_scenario(scenario: dict[str, Any]) -> dict[str, Any]:
             **effects,
             "persistCalls": recorder.persist_calls,
             "providerWrites": recorder.provider_writes,
+            "baseUrlWrites": recorder.base_url_writes,
         },
         "result": result,
         "selectedTheme": app.selected_theme,
@@ -1096,6 +1141,9 @@ def capture_terminating() -> list[dict[str, Any]]:
             raise SystemExit(code)
 
         class _Orchestrator:
+            async def reload(self) -> None:
+                return None
+
             async def set_field(self, pointer: str, value: Any, reason: str) -> None:
                 theme_writes.append({"pointer": pointer, "value": value, "reason": reason})
 
