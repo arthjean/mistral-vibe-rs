@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Show a file tool's path relative to the session directory, as the reference
+  does, and mark a scratchpad file as such. A `read_file` header no longer
+  repeats the default line limit.
+
+- Let a tool reach the session's working directory and every added directory
+  whatever trust the folder carries. A declined or revoked folder outside the
+  session is asked about like any other outside path instead of refused.
+
+- Cover a whole-command approval only by a grant of that exact text, so a
+  broader pattern saved for the session no longer answers for it.
+
+- Publish `isCustom` in `tool/list`, `approvalNote` in every result display,
+  and the `worktree` and `process` effect kinds.
+
+- Read an MCP server's `disabled_tools` entry as a remote tool name first, so
+  it disables the tool the reference would when it also matches another
+  tool's published name.
+
 - Convert a fetched HTML page to Markdown as the reference does, keeping
   headings, lists, links, tables and code blocks, instead of stripping it to
   prose. A page the reference cannot convert fails the call the same way.
