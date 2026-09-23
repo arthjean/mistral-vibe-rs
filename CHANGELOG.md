@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- Convert a fetched HTML page to Markdown as the reference does, keeping
+  headings, lists, links, tables and code blocks, instead of stripping it to
+  prose. A page the reference cannot convert fails the call the same way.
+
+- Follow `web_fetch` redirects within the approved origin only, report the URL
+  the last hop answered from, send the reference's request headers, decode
+  gzip, deflate and zstd bodies, and ask for approval per origin rather than
+  per host.
+
+- Read a file tool's path argument as the reference does: surrounding
+  whitespace is dropped, `~` is expanded, and on Windows a Git Bash path such
+  as `/c/work` is accepted while a drive or root alone is refused. A path
+  outside the workspace is reachable once approved.
+
+- Scope a sensitive-file approval to that one file, match the six default
+  sensitive patterns (`.env` and `.envrc` with their variants), and leave
+  sensitive files out of `grep` results.
+
+- Honor `disable-model-invocation` and the `agents/openai.yaml` policy for
+  skills, and list a skill's files recursively, skipping tooling directories.
+
+- Report every assistant message of a `task` subagent in its response, not
+  only the last one.
+
 - Add the slash commands the reference gained since 2.24.0: `/branch` copies
   the session to a new resumable one, `/log-level` sets the session and
   `config.toml` log levels from a picker (`log_level` is now a configuration
