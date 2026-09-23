@@ -228,6 +228,17 @@ pub(crate) fn public_stats(session: Option<&SessionRuntime>) -> Value {
     })
 }
 
+/// Writes the active model's prices over a published snapshot, whose own
+/// accounting knows the counters and not what they cost.
+pub(crate) fn priced(mut stats: Value, (input, output, cached): (f64, f64, Option<f64>)) -> Value {
+    if let Some(fields) = stats.as_object_mut() {
+        fields.insert("inputPricePerMillion".to_owned(), json!(input));
+        fields.insert("outputPricePerMillion".to_owned(), json!(output));
+        fields.insert("cachedInputPricePerMillion".to_owned(), json!(cached));
+    }
+    stats
+}
+
 /// Widens a counter for the float fields the wire declares, saturating rather
 /// than losing precision silently on a value no session reaches.
 pub(crate) fn as_f64(value: u64) -> f64 {

@@ -288,6 +288,7 @@ impl AppServer {
             }
             Err(_) => (None, public_stats(None), 0),
         };
+        let stats = priced(stats, self.workspace.active_model_pricing());
         let projection = self.workspace.runtime_projection(active_agent.as_deref());
         // Discovery issues and configuration diagnostics are the same fact to a
         // client: a file the session could not read cleanly.

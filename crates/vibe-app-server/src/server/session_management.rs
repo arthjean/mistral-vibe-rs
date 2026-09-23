@@ -37,8 +37,8 @@ enum After {
     RewindRead,
     /// The agent the runtime now runs under, written back to the saved session.
     PersistAgent,
-    /// The checkpoint log, emptied because the message list it is numbered
-    /// against was replaced.
+    /// The checkpoint log of the session a clear continues under, which starts
+    /// with no message for a turn to be numbered against.
     ClearCheckpointLog,
     /// The runtime and the stripped-image count a configuration answer carries.
     ConfigContext,
@@ -139,6 +139,9 @@ pub(super) fn dispatch(connection: &mut ServerConnection, request: ServerRequest
             // which a compaction may have renamed; everything else is about the
             // session the request named.
             After::RewindResponse => result_session_id.as_deref(),
+            // A clear continues under a new identifier, whose log starts empty;
+            // the session it replaced keeps the log its turns are numbered by.
+            After::ClearCheckpointLog => result_session_id.as_deref(),
             _ => target_session_id.as_deref(),
         };
         let Some(session_id) = session_id else {
@@ -244,10 +247,10 @@ fn apply_after(
             update_runtime_agent(connection, request);
             Ok(())
         }
-        // Clearing the history renumbers every turn the log holds, since a turn
-        // is numbered by a position in the list that just emptied. The rewind
-        // path does not come through here: its own truncation owns the log, and
-        // clearing it would throw away the turns it kept.
+        // The session a clear continues under starts with an empty list, so
+        // its log starts empty too. The rewind path does not come through here:
+        // its own truncation owns the log, and clearing it would throw away the
+        // turns it kept.
         After::ClearCheckpointLog => reset_checkpoint_log(connection, session_id, 0),
         After::ConfigContext => {
             enrich_config_response(connection, session_id, &request.method, dispatch);

@@ -710,6 +710,7 @@ impl ServerConnection {
                         return Some(internal_error_batch(request.id.clone(), &error));
                     }
                 };
+                let stats = priced(stats, self.server.workspace.active_model_pricing());
                 result_map([("stats", stats), ("contextWindow", json!(context_window))])
             }
             "account/read" => result_map([("account", self.server.workspace.account_view())]),

@@ -509,19 +509,29 @@ impl WorkspaceService {
         ]))
     }
 
+    /// Reference `_history_clear`: the conversation continues under a rotated
+    /// identifier with nothing said yet, and the session it replaces is left on
+    /// disk untouched, so `vibe --resume` can still reach it. The new session
+    /// records no parent, because what it continues was discarded.
     pub(super) fn history_clear(
         &self,
         params: &BTreeMap<String, Value>,
     ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
-        let hydrated = self
+        let source = self
             .store
-            .rewind(
-                required_string(params, "sessionId")?,
-                0,
-                BTreeMap::new(),
-                now_millis(),
-            )
+            .load(required_string(params, "sessionId")?)
             .map_err(storage_error)?;
+        let new_id = vibe_core::session_id::rotate_session_id(&source.metadata.id);
+        let now = now_millis();
+        let mut metadata = self
+            .store
+            .handoff_messages(&source.metadata, &new_id, &[], now, false)
+            .map_err(storage_error)?;
+        metadata.statistics = BTreeMap::new();
+        self.store
+            .update_metadata(&metadata)
+            .map_err(storage_error)?;
+        let hydrated = self.store.load(&new_id).map_err(storage_error)?;
         self.continuity
             .refresh(hydrated.clone())
             .map_err(|error| WorkspaceServiceError::Storage(error.to_string()))?;

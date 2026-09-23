@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use serde_json::Value;
 use url::Url;
-use vibe_core::config::mcp::{normalize_mcp_server_name, normalize_mcp_server_url};
+use vibe_core::config::mcp::{normalize_mcp_server_name, normalize_mcp_server_url_with};
 
 use super::ResourceError;
 
@@ -208,6 +208,7 @@ fn parse_mcp_add(params: &BTreeMap<String, Value>) -> Result<McpAddCommand, Reso
             "disabled",
             "url",
             "scopes",
+            "allowInsecureHttp",
         ],
         _ => {
             return Err(ResourceError::InvalidParams(
@@ -233,13 +234,23 @@ fn parse_mcp_add(params: &BTreeMap<String, Value>) -> Result<McpAddCommand, Reso
         legacy_or_streamable => {
             // Every rejection an MCP URL can earn lives in the store, so the
             // same spelling is refused here and by a file written by hand.
+            let allow_insecure_http = match params.get("allowInsecureHttp") {
+                None | Some(Value::Null) => false,
+                Some(Value::Bool(allowed)) => *allowed,
+                Some(_) => {
+                    return Err(ResourceError::InvalidParams(
+                        "allowInsecureHttp must be a boolean".to_owned(),
+                    ));
+                }
+            };
             let normalized =
-                normalize_mcp_server_url(required_string(params, "url")?).map_err(|error| {
-                    ResourceError::InvalidParams(match error {
-                        vibe_core::config::ConfigError::InvalidMcp(message) => message,
-                        error => error.to_string(),
-                    })
-                })?;
+                normalize_mcp_server_url_with(required_string(params, "url")?, allow_insecure_http)
+                    .map_err(|error| {
+                        ResourceError::InvalidParams(match error {
+                            vibe_core::config::ConfigError::InvalidMcp(message) => message,
+                            error => error.to_string(),
+                        })
+                    })?;
             let url = Url::parse(&normalized).map_err(|_| {
                 ResourceError::InvalidParams("url must be a valid HTTP(S) URL".to_owned())
             })?;

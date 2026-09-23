@@ -564,6 +564,17 @@ impl WorkspaceService {
         })
     }
 
+    /// The active model's prices, which `stats/read` publishes beside the
+    /// counters a client prices them against. A configuration that will not
+    /// load prices nothing.
+    #[must_use]
+    pub fn active_model_pricing(&self) -> (f64, f64, Option<f64>) {
+        self.config
+            .load()
+            .map(|snapshot| snapshot.active_model_pricing())
+            .unwrap_or((0.0, 0.0, None))
+    }
+
     /// Whether the model new turns run on reads images.
     ///
     /// A configuration that will not load is read as reading them, so a broken
