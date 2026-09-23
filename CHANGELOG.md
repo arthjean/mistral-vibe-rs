@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+- Accept `vibe update` as the reference does: a first argument of `update` runs
+  the same forced release check as `--check-upgrade`. Both now validate
+  `--workdir` and `--add-dir` and load the configuration before asking the
+  network, exit 1 with the cause on a directory or configuration a session
+  could not use, and paint the update prompt in the configured theme.
+
+- Compare release versions with the full PEP 440 grammar and ordering
+  (epochs, pre, post and dev releases, local segments), report the normalized
+  version, and read PyPI artifact filenames as the reference does.
+
+- Keep the update cache the way the reference keeps it: the file is read once
+  per process and whole, whatever its size, and a failed write no longer
+  surfaces an error: the new value is remembered for the session and a debug
+  line records the failure.
+
+- Trust the certificates `SSL_CERT_FILE` and `SSL_CERT_DIR` name in addition to
+  the operating system store on every platform, instead of in place of it on
+  Linux and not at all on macOS and Windows.
+
+- Build the Linux release binaries in the manylinux_2_28 images the reference
+  builds in, and fail the release when either binary needs a glibc newer than
+  2.28 or a shared library beyond the C runtime and, for `vibe`, `libasound`.
+
+- **Breaking**, composite action: the inputs now carry the reference's names
+  and defaults. `mistral_api_key` became `MISTRAL_API_KEY`, `install_python`
+  and `python_version` install Python under the reference's condition, and the
+  agent runs in text mode, so the `result` output is the text it printed.
+
 - Ask before a shell command the policy cannot read faithfully. An allowlisted
   `find` now asks when it deletes or writes files (`-delete`, `-fls`,
   `-fprint`, `-fprint0`, `-fprintf`, `-files0-from`), not only when it runs a
