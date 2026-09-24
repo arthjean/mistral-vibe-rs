@@ -103,11 +103,20 @@ pub enum AgentSafety {
     Safe,
     Neutral,
     Destructive,
+    /// The smart-approve profile's: a classifier decides which calls run
+    /// unasked (`vibe/agents.py:12`).
+    Smart,
     Yolo,
 }
 
 impl AgentSafety {
-    pub const ALL: [Self; 4] = [Self::Safe, Self::Neutral, Self::Destructive, Self::Yolo];
+    pub const ALL: [Self; 5] = [
+        Self::Safe,
+        Self::Neutral,
+        Self::Destructive,
+        Self::Smart,
+        Self::Yolo,
+    ];
 
     /// The safety a profile declares, or `Neutral` when it declares a word this
     /// vocabulary does not carry.
@@ -120,6 +129,7 @@ impl AgentSafety {
         match declared {
             "safe" => Self::Safe,
             "destructive" => Self::Destructive,
+            "smart" => Self::Smart,
             "yolo" => Self::Yolo,
             _ => Self::Neutral,
         }

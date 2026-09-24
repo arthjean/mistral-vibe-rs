@@ -98,18 +98,93 @@ fn the_help_and_the_version_exit_zero_on_standard_output() {
     }
 }
 
+/// A budget the reference parses and finds already spent stops the run before
+/// its first request, with the limit answer and exit 1: a turn budget of zero
+/// or less, or a token or price budget below zero
+/// (`vibe/core/middleware.py:48-96`, `vibe/cli/cli.py:214-216`). The provider
+/// address is a closed port, so a run that did reach the model would fail on
+/// the connection instead.
+#[test]
+fn a_budget_already_spent_stops_the_run_before_its_first_request() {
+    for budget in [
+        ["--max-turns", "-5"],
+        ["--max-turns", "0"],
+        ["--max-tokens", "-1"],
+        ["--max-price", "-2.5"],
+    ] {
+        let mut argv = vec!["-p", "hello", "--trust", "--api-base", "http://127.0.0.1:9"];
+        argv.extend(budget);
+        let output = launch_with_key(&argv);
+        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+        assert_eq!(output.status.code(), Some(1), "{budget:?} stderr: {stderr}");
+        assert_eq!(
+            stderr.lines().next_back(),
+            Some("The configured conversation limit was reached"),
+            "{budget:?} stderr: {stderr}"
+        );
+    }
+}
+
+/// `--smart-approve` and both harness flags start a programmatic run: the
+/// Unified Harness is not here, so each lands on the legacy one.
+#[test]
+fn the_harness_flags_start_a_programmatic_run() {
+    for flags in [
+        ["--smart-approve"].as_slice(),
+        ["--experimental-harness"].as_slice(),
+        ["--legacy-harness"].as_slice(),
+        ["--smart-approve", "--legacy-harness"].as_slice(),
+    ] {
+        let mut argv = vec![
+            "-p",
+            "hello",
+            "--trust",
+            "--api-base",
+            "http://127.0.0.1:9",
+            "--max-turns",
+            "0",
+        ];
+        argv.extend(flags);
+        let output = launch_with_key(&argv);
+        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+        assert_eq!(output.status.code(), Some(1), "{flags:?} stderr: {stderr}");
+        assert_eq!(
+            stderr.lines().next_back(),
+            Some("The configured conversation limit was reached"),
+            "{flags:?} stderr: {stderr}"
+        );
+    }
+}
+
 /// One launch, with the environment reduced to what startup reads and no
 /// provider credential in reach, so a refusal is never a credential failure.
 fn launch(argv: &[&str]) -> Output {
+    launch_in(argv, None)
+}
+
+/// One launch with a placeholder credential, for a run that gets as far as
+/// the session.
+fn launch_with_key(argv: &[&str]) -> Output {
+    launch_in(argv, Some("fixture"))
+}
+
+fn launch_in(argv: &[&str], credential: Option<&str>) -> Output {
     let root = tempfile::tempdir().expect("fixture root");
     let home = root.path().join("home");
     fs::create_dir_all(&home).expect("home directory");
-    Command::new(env!("CARGO_BIN_EXE_vibe"))
+    let mut command = Command::new(env!("CARGO_BIN_EXE_vibe"));
+    command
         .env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap_or_default())
         .env("HOME", &home)
         .env("VIBE_HOME", home.join(".vibe"))
         .env("TERM", "dumb")
+        // No keyring either: a credential comes from the environment or not at all.
+        .env("DBUS_SESSION_BUS_ADDRESS", "unix:path=/nonexistent");
+    if let Some(credential) = credential {
+        command.env("MISTRAL_API_KEY", credential);
+    }
+    command
         .current_dir(canonical(root.path()))
         .args(argv)
         .stdin(Stdio::null())

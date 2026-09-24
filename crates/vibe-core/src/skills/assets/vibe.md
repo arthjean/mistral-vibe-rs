@@ -121,8 +121,15 @@ existed beforehand are kept unless the answer says otherwise, a `-p` run is
 never asked, and `--setup` and `--check-upgrade` ignore the flag.
 Trust and permissions: `--trust`, `--auto-approve`/`--yolo`,
 `--enabled-tools`, `--disabled-tools`. Budgets: `--max-turns`, `--max-tokens`,
-`--max-price`. Others: `--agent <name>`, `--setup`, `--check-upgrade`,
-`-v/--version`. Telemetry is decided by `enable_telemetry` in the
+`--max-price`, read only by `-p` runs; a turn budget of 0 or less, or a
+token or price budget below 0, ends the run before its first request.
+Harness: `--legacy-harness` keeps the legacy harness, which is the only one
+this build runs; `--experimental-harness` asks for the Unified Harness and
+falls back to the legacy one with a startup notice; `--smart-approve` does the
+same and starts under the `smart-approve` agent unless `--agent` names another.
+Others: `--agent <name>`, `--setup`, `--check-upgrade`, `-v/--version`. Long
+flags can be shortened to any prefix that names only one of them, as in `--tr`
+for `--trust`. Telemetry is decided by `enable_telemetry` in the
 configuration, which defaults to on, and by no flag.
 
 ## Hooks
@@ -139,7 +146,10 @@ configuration document, each with a `name`, a `transport`
 (`streamable-http` among others) and a `url`. In a session, `/mcp` lists
 servers and their tools, `/mcp add <url>` registers one, `/mcp login <alias>`
 and `/mcp logout <alias>` manage authentication, and `/mcp status` reports
-health. `vibe mcp remove <name>` edits the user file from outside a session.
+health. `vibe mcp add <name>` and `vibe mcp remove <name>` edit the user file
+from outside a session. A plain `http://` URL is refused unless it points at
+this machine; `--allow-insecure-http`, on either add, stores one for another
+host, and nothing sent to it is encrypted.
 
 ## Connectors
 

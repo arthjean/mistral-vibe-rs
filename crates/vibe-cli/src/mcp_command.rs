@@ -33,7 +33,7 @@ use vibe_app_server::resources::{McpAuthBackend, production_mcp_adapters};
 use vibe_core::auth::{
     KeyringBackend, NativeKeyringBackend, delete_mcp_oauth_credential, open_system_browser,
 };
-use vibe_core::config::mcp::normalize_mcp_server_url;
+use vibe_core::config::mcp::normalize_mcp_server_url_with;
 use vibe_core::config::{ConfigError, ConfigPaths, ConfigSource, LayeredConfig};
 use vibe_core::mcp::{
     DEFAULT_MCP_API_KEY_FORMAT, DEFAULT_MCP_API_KEY_HEADER, DEFAULT_MCP_STARTUP_TIMEOUT_MS,
@@ -79,6 +79,8 @@ pub(crate) fn declaration() -> Command {
         // again as its own description.
         .long_about("Configure the MCP servers a session may reach.")
         .disable_help_subcommand(true)
+        // argparse keeps the last occurrence of an option given twice.
+        .args_override_self(true)
         .subcommand(add_declaration())
         .subcommand(remove_declaration());
     command.build();
@@ -176,17 +178,26 @@ fn add_declaration() -> Command {
                 .help("Store the server without an OAuth login."),
         )
         .arg(
+            Arg::new("allow_insecure_http")
+                .long("allow-insecure-http")
+                .action(ArgAction::SetTrue)
+                .help(
+                    "Accept a plain http:// URL on a host other than this machine. Nothing \
+                     sent to it, credentials included, is encrypted.",
+                ),
+        )
+        .arg(
             Arg::new("startup_timeout_sec")
                 .long("startup-timeout-sec")
                 .value_name("SECONDS")
-                .value_parser(clap::value_parser!(f64))
+                .value_parser(crate::argv::python_float)
                 .help("Seconds allowed for the server to start."),
         )
         .arg(
             Arg::new("tool_timeout_sec")
                 .long("tool-timeout-sec")
                 .value_name("SECONDS")
-                .value_parser(clap::value_parser!(f64))
+                .value_parser(crate::argv::python_float)
                 .help("Seconds allowed for one tool call."),
         )
 }
@@ -386,7 +397,13 @@ pub async fn run(
     let root = declaration();
     match arguments.split_first() {
         None => print_help(&root, stdout),
-        Some((first, _)) if first == "-h" || first == "--help" => print_help(&root, stdout),
+        // argparse resolves an abbreviated `--help` too, and the root parser
+        // declares no other long option for a prefix to be ambiguous with.
+        Some((first, _))
+            if first == "-h" || (first.len() > 2 && "--help".starts_with(first.as_str())) =>
+        {
+            print_help(&root, stdout)
+        }
         Some((first, rest)) if root.find_subcommand(first.as_str()).is_some() => {
             let Some(sub) = root.find_subcommand(first.as_str()).cloned() else {
                 return USAGE_EXIT;
@@ -418,8 +435,18 @@ async fn dispatch(
     stderr: &mut dyn Write,
 ) -> u8 {
     let prog = format!("{PROG} {name}");
-    let argv = std::iter::once(prog.clone()).chain(rest.iter().cloned());
-    let matches = match sub.clone().try_get_matches_from(argv) {
+    let argv = std::iter::once(prog.clone())
+        .chain(rest.iter().cloned())
+        .map(std::ffi::OsString::from)
+        .collect();
+    // The sub-command reads its tokens the way argparse does, abbreviations
+    // and hyphen-led values included, before clap sees them.
+    let reading = crate::argv::reading::read(&sub, argv, &[]);
+    let parsed = sub.clone().try_get_matches_from(reading.argv);
+    if let (Ok(_), Some(message)) = (&parsed, &reading.refusal) {
+        return fail(&sub, &prog, message, stderr);
+    }
+    let matches = match parsed {
         Ok(matches) => matches,
         Err(error) if error.kind() == ErrorKind::DisplayHelp => {
             return print_help(&sub, stdout);
@@ -570,6 +597,10 @@ fn stdio_add(matches: &ArgMatches, alias: String) -> Result<McpServerConfig, Str
             text(matches, "api_key_format").is_some(),
         ),
         ("--no-login", matches.get_flag("no_login")),
+        (
+            "--allow-insecure-http",
+            matches.get_flag("allow_insecure_http"),
+        ),
     ]);
     if !remote_only.is_empty() {
         return Err(format!("--transport stdio does not accept {remote_only}."));
@@ -634,7 +665,12 @@ fn remote_add(matches: &ArgMatches, alias: String, transport: &str) -> Result<Ad
     } else {
         McpAuthConfig::Oauth(McpOAuthConfig::default())
     };
-    let url = Url::parse(&normalize_mcp_server_url(requested).map_err(mcp_failure)?)
+    // Reference `_parse_mcp_server_url`: the flag lifts only the plaintext
+    // refusal, and only for the URL this invocation stores.
+    let normalized =
+        normalize_mcp_server_url_with(requested, matches.get_flag("allow_insecure_http"))
+            .map_err(mcp_failure)?;
+    let url = Url::parse(&normalized)
         .map_err(|_| "--url is not an address a server can be reached at.".to_owned())?;
     let transport = if transport == "http" {
         McpTransportConfig::Http { url, headers }
@@ -841,7 +877,8 @@ fn translate(error: &clap::Error) -> (Scope, String) {
             (
                 Scope::Sub,
                 format!(
-                    "argument {flag}: invalid choice: '{value}' (choose from {})",
+                    "argument {flag}: invalid choice: {} (choose from {})",
+                    crate::argv::reading::python_repr(&value),
                     context(error, ContextKind::ValidValue).join(", ")
                 ),
             )
@@ -851,9 +888,11 @@ fn translate(error: &clap::Error) -> (Scope, String) {
         ErrorKind::ValueValidation => (
             Scope::Sub,
             format!(
-                "argument {}: invalid float value: '{}'",
+                "argument {}: invalid float value: {}",
                 flag(error),
-                context(error, ContextKind::InvalidValue).join(", ")
+                crate::argv::reading::python_repr(
+                    &context(error, ContextKind::InvalidValue).join(", ")
+                )
             ),
         ),
         // argparse places what no parser could consume on the root parser,

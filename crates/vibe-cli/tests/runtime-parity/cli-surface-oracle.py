@@ -107,7 +107,7 @@ DESCRIBED = "<described>"
 #: The floors the capture refuses to fall below. They are the same numbers the
 #: Rust replay asserts, stated here so a capture that lost coverage fails at the
 #: point that produced the loss.
-CASE_FLOOR = 120
+CASE_FLOOR = 185
 ACTION_FLOOR = 34
 PARSER_FLOOR = 3
 
@@ -766,6 +766,47 @@ def root_vectors(parser: argparse.ArgumentParser) -> list[tuple[str, list[str]]]
         ("combined-continue-streaming", ["-c", "--output", "streaming"]),
         ("combined-resume-with-budget", ["--resume", "session-123", "--max-price", "0.5"]),
         ("combined-setup-and-check-upgrade", ["--setup", "--check-upgrade"]),
+        # The harness flags: one exclusive pair, and a smart-approve rewrite
+        # that runs after the parse and so never meets that exclusion.
+        ("harness-flags-together", ["--experimental-harness", "--legacy-harness"]),
+        (
+            "harness-flags-together-reversed",
+            ["--legacy-harness", "--experimental-harness"],
+        ),
+        ("smart-approve-with-agent", ["--smart-approve", "--agent", "plan"]),
+        ("smart-approve-with-legacy-harness", ["--smart-approve", "--legacy-harness"]),
+        (
+            "smart-approve-with-experimental-harness",
+            ["--smart-approve", "--experimental-harness"],
+        ),
+        ("smart-approve-programmatic", ["-p", "headless request", "--smart-approve"]),
+        # A repeated option keeps its last occurrence, a flag included.
+        ("repeated-trust", ["--trust", "--trust"]),
+        ("repeated-prompt", ["-p", "first", "-p", "second"]),
+        ("repeated-worktree", ["--worktree", "one", "--worktree"]),
+        # Tokens argparse reads as values although they open with a hyphen.
+        ("negative-shaped-agent", ["--agent", "-5"]),
+        ("negative-shaped-prompt", ["-p", "-1"]),
+        ("negative-shaped-positional", ["-5"]),
+        ("fraction-shaped-positional", ["-.5"]),
+        ("spaced-dash-positional", ["-x y"]),
+        ("positional-before-flag", ["review", "--trust"]),
+        # What `int()` and `float()` accept beyond plain digits.
+        ("wide-max-turns", ["--max-turns", "4294967296"]),
+        ("grouped-max-turns", ["--max-turns", "1_000"]),
+        ("padded-max-turns", ["--max-turns", " 3 "]),
+        ("signed-max-turns", ["--max-turns", "+3"]),
+        ("bad-grouping-max-turns", ["--max-turns", "1__0"]),
+        ("exponent-max-price", ["--max-price", "1e2"]),
+        ("grouped-max-price", ["--max-price", "1_000.5"]),
+        # Abbreviations beyond the shortest one per option.
+        ("prefix-with-equals", ["--max-tu=3"]),
+        ("ambiguous-prefix-with-equals", ["--max-t=3"]),
+        ("ambiguous-prefix-c", ["--c"]),
+        ("prefix-of-alias", ["--yo"]),
+        ("flag-with-explicit-value", ["--trust=yes"]),
+        ("refusal-before-ambiguous-prefix", ["--output", "bogus", "--a"]),
+        ("help-before-ambiguous-prefix", ["--help", "--a"]),
     ]
     return vectors
 
@@ -867,6 +908,49 @@ MCP_VECTORS: list[tuple[str, list[str]]] = [
             "7.5",
         ],
     ),
+    (
+        "mcp-add-insecure-http-refused",
+        [
+            "add",
+            "lan",
+            "--transport",
+            "streamable-http",
+            "--url",
+            "http://lan.example.invalid/mcp",
+            "--no-login",
+        ],
+    ),
+    (
+        "mcp-add-insecure-http-allowed",
+        [
+            "add",
+            "lan",
+            "--transport",
+            "streamable-http",
+            "--url",
+            "http://lan.example.invalid/mcp",
+            "--no-login",
+            "--allow-insecure-http",
+        ],
+    ),
+    (
+        "mcp-add-stdio-with-insecure-flag",
+        [
+            "add",
+            "plain",
+            "--transport",
+            "stdio",
+            "--command",
+            "/bin/true",
+            "--allow-insecure-http",
+        ],
+    ),
+    (
+        "mcp-add-abbreviated-options",
+        ["add", "short", "--tr", "stdio", "--com", "/bin/true", "--ar", "-5"],
+    ),
+    ("mcp-add-ambiguous-prefix", ["add", "vague", "--api", "PARITY_TOKEN"]),
+    ("mcp-help-prefix", ["--he"]),
     ("mcp-remove-absent", ["remove", "absent-server"]),
     ("mcp-remove-stdio-server", ["remove", "local"]),
 ]

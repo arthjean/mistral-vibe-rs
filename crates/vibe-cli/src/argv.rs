@@ -15,8 +15,29 @@ use clap::{Arg, Command, CommandFactory, Error, FromArgMatches};
 
 use crate::Arguments;
 
+pub(crate) mod reading;
+
 /// The first argument the reference reads as `--check-upgrade`.
 const UPDATE_COMMAND: &str = "update";
+
+/// The arguments only this port declares. Each answers to its exact spelling
+/// alone, so none of them can capture an abbreviation the reference resolves
+/// to one of its own options (`--p` is `--prompt` there, not
+/// `--provider-style`).
+pub(crate) const PORT_ONLY_ARGUMENTS: &[&str] = &[
+    "tool_filters",
+    "provider_style",
+    "model",
+    "input_price",
+    "output_price",
+    "api_base",
+    "credential_environment",
+    "session_root",
+    "fake_response",
+];
+
+/// The agent `--smart-approve` selects when `--agent` names none.
+pub const SMART_APPROVE_AGENT: &str = "smart-approve";
 
 /// A refusal, already rendered, with where it goes and what it exits.
 pub struct ParseFailure {
@@ -49,10 +70,44 @@ where
         *first = OsString::from("--check-upgrade");
     }
     let command = Arguments::command();
-    match command.try_get_matches_from(argv) {
-        Ok(matches) => Arguments::from_arg_matches(&matches).map_err(|error| failure(&error)),
-        Err(error) => Err(failure(&error)),
+    let reading = reading::read(&command, argv, PORT_ONLY_ARGUMENTS);
+    let matches = command
+        .try_get_matches_from(reading.argv)
+        .map_err(|error| failure(&error))?;
+    if let Some(message) = reading.refusal {
+        return Err(refusal(&message));
     }
+    let mut arguments = Arguments::from_arg_matches(&matches).map_err(|error| failure(&error))?;
+    // Reference `parse_arguments`: smart approve is a Unified Harness gate, so
+    // the flag also asks for that harness, and it names the agent only when
+    // `--agent` did not (`vibe/cli/entrypoint.py:210-217`). The rewrite
+    // follows the parse, which is why `--smart-approve --legacy-harness` is
+    // accepted there with both harness flags set.
+    if arguments.smart_approve {
+        arguments.experimental_harness = true;
+        if arguments.agent.is_none() {
+            arguments.agent = Some(SMART_APPROVE_AGENT.to_owned());
+        }
+    }
+    Ok(arguments)
+}
+
+/// A refusal argparse raises and clap has no kind for, in the same shape as
+/// the ones [`render`] rebuilds.
+fn refusal(message: &str) -> ParseFailure {
+    ParseFailure {
+        rendered: format!("{}\nvibe: error: {message}\n", usage()),
+        exit: 2,
+        use_stderr: true,
+    }
+}
+
+/// argparse's usage block: clap's, with the word in lower case.
+fn usage() -> String {
+    let usage = Arguments::command().render_usage().to_string();
+    usage
+        .strip_prefix("Usage: ")
+        .map_or(usage.clone(), |rest| format!("usage: {rest}"))
 }
 
 fn failure(error: &Error) -> ParseFailure {
@@ -72,14 +127,9 @@ fn render(error: &Error) -> String {
     let Some(message) = argparse_message(error) else {
         return error.render().to_string();
     };
-    let command = Arguments::command();
-    let usage = command.clone().render_usage().to_string();
-    // argparse spells the word in lower case, and prints the block before the
-    // one line that names what went wrong.
-    let usage = usage
-        .strip_prefix("Usage: ")
-        .map_or(usage.clone(), |rest| format!("usage: {rest}"));
-    format!("{usage}\nvibe: error: {message}\n")
+    // argparse prints the usage block before the one line that names what
+    // went wrong.
+    format!("{}\nvibe: error: {message}\n", usage())
 }
 
 /// The sentence CPython's `argparse` renders for this refusal, where this port
@@ -101,7 +151,8 @@ fn argparse_message(error: &Error) -> Option<String> {
             }
             let choices = values(error, ContextKind::ValidValue)?.join(", ");
             Some(format!(
-                "argument {argument}: invalid choice: '{value}' (choose from {choices})"
+                "argument {argument}: invalid choice: {} (choose from {choices})",
+                reading::python_repr(&value)
             ))
         }
         ErrorKind::ValueValidation => {
@@ -110,7 +161,8 @@ fn argparse_message(error: &Error) -> Option<String> {
             let value = context(error, ContextKind::InvalidValue)?;
             let kind = argparse_type(&command, &raw)?;
             Some(format!(
-                "argument {argument}: invalid {kind} value: '{value}'"
+                "argument {argument}: invalid {kind} value: {}",
+                reading::python_repr(&value)
             ))
         }
         ErrorKind::ArgumentConflict => {
@@ -205,6 +257,80 @@ fn argparse_type(command: &Command, reported: &str) -> Option<&'static str> {
         "max_price" | "input_price" | "output_price" => Some("float"),
         _ => None,
     }
+}
+
+/// Python's `int()` over one argument, which is the `type=int` the reference
+/// declares for `--max-turns` and `--max-tokens`.
+///
+/// Surrounding whitespace, a sign and single underscores between digits are
+/// accepted, as there. Python's integers are unbounded and this one is not: a
+/// value past the range of `i64` saturates, which keeps the budget it sets
+/// (none reached, or spent already) and loses only the digits.
+///
+/// # Errors
+///
+/// Returns an error for anything `int()` would refuse, which clap reports as a
+/// failed conversion and [`render`] as argparse's `invalid int value`.
+pub fn python_int(value: &str) -> Result<i64, String> {
+    let trimmed = value.trim_matches(is_python_whitespace);
+    let (negative, digits) = match trimmed.as_bytes().first() {
+        Some(b'-') => (true, &trimmed[1..]),
+        Some(b'+') => (false, &trimmed[1..]),
+        _ => (false, trimmed),
+    };
+    if !has_python_digit_grouping(digits) {
+        return Err(format!("invalid int value: {value:?}"));
+    }
+    let magnitude = digits
+        .bytes()
+        .filter(u8::is_ascii_digit)
+        .fold(0_i128, |total, digit| {
+            total
+                .saturating_mul(10)
+                .saturating_add(i128::from(digit - b'0'))
+        });
+    let signed = if negative { -magnitude } else { magnitude };
+    Ok(i64::try_from(signed).unwrap_or(if negative { i64::MIN } else { i64::MAX }))
+}
+
+/// Python's `float()` over one argument, the `type=float` of `--max-price`.
+///
+/// # Errors
+///
+/// Returns an error for anything `float()` would refuse.
+pub fn python_float(value: &str) -> Result<f64, String> {
+    let trimmed = value.trim_matches(is_python_whitespace);
+    let characters: Vec<char> = trimmed.chars().collect();
+    // An underscore only ever separates two digits.
+    let grouped = characters.iter().enumerate().all(|(index, character)| {
+        *character != '_'
+            || (index > 0
+                && characters[index - 1].is_ascii_digit()
+                && characters.get(index + 1).is_some_and(char::is_ascii_digit))
+    });
+    let plain: String = characters.iter().filter(|c| **c != '_').collect();
+    match plain.parse::<f64>() {
+        Ok(parsed) if grouped && !plain.is_empty() => Ok(parsed),
+        _ => Err(format!("invalid float value: {value:?}")),
+    }
+}
+
+/// Digits, optionally grouped by single underscores, as Python's integer
+/// literal grammar allows them.
+fn has_python_digit_grouping(digits: &str) -> bool {
+    !digits.is_empty()
+        && !digits.starts_with('_')
+        && !digits.ends_with('_')
+        && !digits.contains("__")
+        && digits
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || byte == b'_')
+}
+
+/// `str.strip()`'s notion of whitespace, which adds the four ASCII separator
+/// controls to Unicode's.
+fn is_python_whitespace(character: char) -> bool {
+    character.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&character)
 }
 
 #[cfg(test)]

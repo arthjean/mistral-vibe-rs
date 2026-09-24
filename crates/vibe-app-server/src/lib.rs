@@ -6,6 +6,7 @@ mod builtin_agents;
 pub mod client;
 pub mod client_tools;
 pub mod experiments;
+pub mod harness;
 mod host;
 mod images;
 mod live_projection;

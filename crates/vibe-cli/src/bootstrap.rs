@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use vibe_app_server::client::{DriverError, LiveDriverConfig, SessionOptions};
+use vibe_app_server::harness::HarnessSelection;
 use vibe_app_server::projects::{ProjectsService, VibeCodeCloudConfig};
 use vibe_app_server::resources::{
     CoreResourceBackend, MistralConnectorClient, production_mcp_adapters,
@@ -102,6 +103,10 @@ pub(crate) fn resource_server(
         .using_web_search_access(Some(web_search_access(arguments, credential)))
         .using_utility_provider(vibe_core::worktree::naming_model::utility_provider(
             crate::tui::startup::utility_model(arguments),
+        ))
+        .using_harness_selection(HarnessSelection::resolve(
+            arguments.experimental_harness,
+            arguments.legacy_harness,
         )))
 }
 
@@ -157,6 +162,13 @@ pub(crate) fn session_options(
     launch: Launch,
 ) -> SessionOptions {
     let headless = launch == Launch::Programmatic;
+    // Only a programmatic launch carries the budgets: the reference's
+    // interactive session options name none of them (`vibe/cli/cli.py:271-279`).
+    let budgets = if headless {
+        Budgets::of(arguments)
+    } else {
+        Budgets::default()
+    };
     SessionOptions {
         working_directory: working_directory.to_string_lossy().into_owned(),
         session_id: arguments.resume.clone(),
@@ -172,11 +184,9 @@ pub(crate) fn session_options(
         disabled_tools: disabled_tools(&arguments.disabled_tools, headless),
         mcp_servers: Vec::new(),
         model: Some(model),
-        max_turns: arguments.max_turns,
-        max_tokens: arguments.max_tokens,
-        max_price_micros: arguments
-            .max_price
-            .map(|price| (price * 1_000_000.0).round() as u64),
+        max_turns: budgets.max_turns,
+        max_tokens: budgets.max_tokens,
+        max_price_micros: budgets.max_price_micros,
         mode,
         thinking: reasoning_effort.is_some(),
         reasoning_effort,
@@ -184,6 +194,49 @@ pub(crate) fn session_options(
         headless,
         resume: arguments.resume.clone(),
         continue_session: arguments.continue_session,
+    }
+}
+
+/// The three programmatic budgets, in the unsigned units the engine counts in.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Budgets {
+    pub(crate) max_turns: Option<u32>,
+    pub(crate) max_tokens: Option<u64>,
+    pub(crate) max_price_micros: Option<u64>,
+}
+
+impl Budgets {
+    /// Reads the flags the way the reference's middleware compares them
+    /// (`vibe/core/middleware.py:48-96`).
+    ///
+    /// A turn budget of zero or less stops the session before its first turn,
+    /// which a zero turn budget does here as well. A token or price budget
+    /// below zero is already exceeded before anything is spent, because the
+    /// reference stops once the spend is strictly greater than the budget; the
+    /// unsigned units here cannot hold that budget, so it is expressed as the
+    /// turn budget that stops the session at the same point, with the same
+    /// "limit reached" answer. A price that is not a number never compares
+    /// greater, so it sets no budget, and an infinite one saturates into the
+    /// value that means none.
+    pub(crate) fn of(arguments: &Arguments) -> Self {
+        let mut budgets = Self {
+            max_turns: arguments
+                .max_turns
+                .map(|turns| u32::try_from(turns.max(0)).unwrap_or(u32::MAX)),
+            max_tokens: arguments
+                .max_tokens
+                .and_then(|tokens| u64::try_from(tokens).ok()),
+            max_price_micros: arguments
+                .max_price
+                .filter(|price| !price.is_nan() && *price >= 0.0)
+                .map(|price| (price * 1_000_000.0).round() as u64),
+        };
+        let spent_already = arguments.max_tokens.is_some_and(|tokens| tokens < 0)
+            || arguments.max_price.is_some_and(|price| price < 0.0);
+        if spent_already {
+            budgets.max_turns = Some(0);
+        }
+        budgets
     }
 }
 

@@ -20,7 +20,7 @@ use crate::policy::{ApprovalAgent, PermissionContext, PermissionStore, PolicyGua
 use crate::remote_tools::{
     ProviderReach, public_tool_name, sanitize_mcp_name, set_all, tool_availability,
 };
-use crate::text::{canonical_url, is_secure_transport};
+use crate::text::canonical_url;
 
 use crate::tools::{
     OwnedToolHandlerFuture, ToolAvailability, ToolError, ToolExecutionOutput, ToolHandler,
@@ -944,7 +944,12 @@ pub fn validate_config(config: &McpServerConfig) -> Result<(), McpError> {
     match &config.transport {
         McpTransportConfig::Http { url, headers }
         | McpTransportConfig::StreamableHttp { url, headers } => {
-            require_secure_url(url, "server")?;
+            // A plaintext URL on another host is the operator's decision, taken
+            // when the entry was written: `vibe mcp add --allow-insecure-http`
+            // and `/mcp add` refuse it unless told otherwise, and the reference
+            // connects to whatever the configuration names
+            // (`vibe/core/config/models.py:367-369`).
+            require_web_url(url, "server")?;
             validate_headers(headers)?;
         }
         McpTransportConfig::Stdio {
@@ -1047,17 +1052,17 @@ fn is_header_name(name: &str) -> bool {
         })
 }
 
-fn require_secure_url(url: &Url, field: &str) -> Result<(), McpError> {
+fn require_web_url(url: &Url, field: &str) -> Result<(), McpError> {
     if url.fragment().is_some() {
         return Err(McpError::InvalidConfig(format!(
             "{field} URL must not contain a fragment"
         )));
     }
-    if is_secure_transport(url) {
+    if matches!(url.scheme(), "http" | "https") {
         Ok(())
     } else {
         Err(McpError::InvalidConfig(format!(
-            "{field} URL must use HTTPS or loopback HTTP"
+            "{field} URL must use HTTP or HTTPS"
         )))
     }
 }
@@ -1280,6 +1285,23 @@ mod tests {
             prompt: None,
             sampling_enabled: true,
         }
+    }
+
+    /// The add commands decide whether a plaintext URL on another host may be
+    /// stored; once it is, the session connects to it as the reference does.
+    #[test]
+    fn a_configured_plaintext_server_url_is_accepted_on_any_host() {
+        let mut lan = config("lan");
+        lan.transport = McpTransportConfig::StreamableHttp {
+            url: Url::parse("http://lan.example/mcp").expect("url"),
+            headers: BTreeMap::new(),
+        };
+        assert!(validate_config(&lan).is_ok());
+        lan.transport = McpTransportConfig::StreamableHttp {
+            url: Url::parse("http://lan.example/mcp#fragment").expect("url"),
+            headers: BTreeMap::new(),
+        };
+        assert!(validate_config(&lan).is_err());
     }
 
     fn remote_tool() -> RemoteTool {

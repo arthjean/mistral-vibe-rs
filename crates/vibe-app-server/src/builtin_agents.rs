@@ -3,6 +3,27 @@ use std::path::Path;
 use toml::{Table, Value as TomlValue};
 use vibe_core::extensions::{AgentKind, AgentProfile, ExtensionSource};
 
+/// The builtin profile that stays out of the picker unless a session was
+/// started under it (`vibe/core/agents/manager.py:37-56` and `:96-107`).
+pub(crate) const SMART_APPROVE: &str = "smart-approve";
+
+/// Whether a builtin profile is offered to a session running `active`.
+///
+/// `lean` needs installing first. Smart approve ships dark upstream, offered
+/// only to a rollout cohort this port has no configuration for, so it is
+/// offered only to the session that selected it explicitly.
+pub(crate) fn offered(
+    name: &str,
+    installed: &std::collections::BTreeSet<String>,
+    active: Option<&str>,
+) -> bool {
+    match name {
+        "lean" => installed.contains("lean"),
+        SMART_APPROVE => active == Some(SMART_APPROVE),
+        _ => true,
+    }
+}
+
 pub(crate) fn default_profile() -> AgentProfile {
     builtin_agent(
         "default",
@@ -87,6 +108,18 @@ pub(crate) fn profiles(vibe_home: &Path) -> Vec<AgentProfile> {
                 ("disabled_tools", string_array(["exit_plan_mode"])),
                 ("tools", edit_permissions),
             ]),
+        ),
+        // Reference `SMART_APPROVE` (`vibe/core/agents/models.py:100-108`):
+        // no permission override, because the classifier that gates each call
+        // belongs to the Unified Harness. On the legacy harness, which is the
+        // only one this port runs, its calls are approved the ordinary way.
+        builtin_agent(
+            SMART_APPROVE,
+            "Smart Approve",
+            "Classifies each tool call and auto-runs the safe ones, prompting only for risky ones",
+            AgentKind::Agent,
+            "smart",
+            toml_table([("disabled_tools", string_array(["exit_plan_mode"]))]),
         ),
         builtin_agent(
             "auto-approve",

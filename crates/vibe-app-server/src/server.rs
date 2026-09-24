@@ -34,6 +34,7 @@ use registry::SessionRegistry;
 
 use crate::client::{TurnReservation, public_turn_failure};
 use crate::client_tools::ClientToolBridge;
+use crate::harness::HarnessSelection;
 use crate::host::{now_millis, vibe_home};
 use crate::projects::{
     LoopFire, PROJECTS_METHODS, ProjectsDispatch, ProjectsService, ProjectsServiceError,
@@ -421,6 +422,8 @@ pub struct AppServer {
     /// name comes from the prompt alone, as it does upstream when no key
     /// resolves (`vibe/core/llm/utility_completion.py:22-76`).
     utility_provider: Option<Arc<dyn CompletionProvider>>,
+    /// The harness this process resolved, which `config/read` reports.
+    harness: Arc<HarnessSelection>,
     next_session: Arc<AtomicU64>,
     next_turn: Arc<AtomicU64>,
     next_callback: Arc<AtomicU64>,
@@ -462,6 +465,7 @@ impl Default for AppServer {
             client_tools: Arc::new(ClientToolBridge::default()),
             client_telemetry: Arc::new(NoClientTelemetry),
             utility_provider: None,
+            harness: Arc::new(HarnessSelection::default()),
             next_session: Arc::new(AtomicU64::new(1)),
             next_turn: Arc::new(AtomicU64::new(1)),
             next_callback: Arc::new(AtomicU64::new(1)),
@@ -536,6 +540,19 @@ impl AppServer {
     pub fn using_client_telemetry(mut self, telemetry: Arc<dyn ClientTelemetry>) -> Self {
         self.client_telemetry = telemetry;
         self
+    }
+
+    /// Installs the harness decision the launch resolved from its flags.
+    #[must_use]
+    pub fn using_harness_selection(mut self, harness: HarnessSelection) -> Self {
+        self.harness = Arc::new(harness);
+        self
+    }
+
+    /// The harness decision `config/read` reports.
+    #[must_use]
+    pub fn harness_selection(&self) -> &HarnessSelection {
+        &self.harness
     }
 
     /// Installs the model utility completions run on, which names the

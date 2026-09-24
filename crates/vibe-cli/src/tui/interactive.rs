@@ -240,7 +240,7 @@ impl Session {
         let thinking = runtime.map_or("off", |runtime| runtime.thinking.as_str());
         let tokens = runtime.map_or(
             TokenState {
-                max_tokens: self.arguments.max_tokens.unwrap_or(DEFAULT_CONTEXT_WINDOW),
+                max_tokens: DEFAULT_CONTEXT_WINDOW,
                 current_tokens: 0,
             },
             |runtime| TokenState {
@@ -458,6 +458,17 @@ pub async fn run_interactive(
             .is_some_and(super::runtime::registry_skills_enabled);
     }
     announce_release_notes(&update_cache, &mut state);
+    // Reference `on_mount`: the issue the harness selection raised is shown as
+    // the TUI comes up, as a notice naming the input and what became of it
+    // (`vibe/cli/textual_ui/app.py:1223-1224` and `:1593-1599`).
+    if let Some(issue) = vibe_app_server::harness::HarnessSelection::resolve(
+        arguments.experimental_harness,
+        arguments.legacy_harness,
+    )
+    .startup_issue
+    {
+        state.push_diagnostic(format!("{}\n{}", issue.file, issue.message));
+    }
     // Reference `_schedule_update_notification`: refresh the cache for the next
     // startup without rendering anything or blocking input.
     let update_check = startup::scheduled_update_gateway(update_checks_enabled).map(|gateway| {

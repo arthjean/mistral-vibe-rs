@@ -546,8 +546,37 @@ fn a_session_carries_the_compaction_policy_its_configuration_declares() {
     assert!(session.compaction.raise_on_compaction_failure);
 }
 
-/// US-091: the configuration answers carry the two views and the runtime the
-/// reference declares, and nothing else.
+/// A launch that asked for the Unified Harness reads, on `config/read`, that
+/// it got the legacy one and why (`vibe/app_server/_runtime.py:1155-1167`).
+#[test]
+fn config_read_reports_the_harness_fallback_a_launch_resolved() {
+    let temporary = tempfile::tempdir().expect("temporary home");
+    let workspace_service = WorkspaceService::new(
+        crate::workspace::WorkspacePaths {
+            vibe_home: temporary.path().join("home"),
+            working_directory: temporary.path().join("workspace"),
+            session_root: temporary.path().join("sessions"),
+        },
+        false,
+    )
+    .expect("workspace service");
+    let server = AppServer::with_workspace_service(workspace_service)
+        .using_harness_selection(crate::harness::HarnessSelection::resolve(true, false));
+    let mut connection = server.connect(TransportKind::InProcess);
+    initialize(&mut connection);
+    start_session(&mut connection);
+
+    let read = call(&mut connection, 10, "config/read");
+    assert_eq!(read["harnessSelectionSource"], json!("flag"));
+    assert_eq!(
+        read["startupIssue"]["file"],
+        json!("--experimental-harness")
+    );
+    assert!(read["startupIssue"]["message"].is_string());
+}
+
+/// US-091: the configuration answers carry the two views, the harness
+/// decision and the runtime the reference declares, and nothing else.
 ///
 /// The server runs against a temporary home: the patch below writes a file,
 /// and a test must never write the operator's own configuration.
@@ -571,9 +600,19 @@ fn the_configuration_envelopes_are_the_reference_shapes() {
     let read = call(&mut connection, 10, "config/read");
     assert_eq!(
         read.keys().map(String::as_str).collect::<Vec<_>>(),
-        ["baseConfig", "config", "strippedHistoryImages"]
+        [
+            "baseConfig",
+            "config",
+            "harnessSelectionSource",
+            "startupIssue",
+            "strippedHistoryImages"
+        ]
     );
     assert_eq!(read["config"], read["baseConfig"]);
+    // A server built without a harness decision runs the default legacy
+    // harness, which raises no issue (`vibe/app_server/protocol.py:970-978`).
+    assert_eq!(read["harnessSelectionSource"], json!("default"));
+    assert!(read["startupIssue"].is_null());
     assert_eq!(
         read["config"]
             .as_object()

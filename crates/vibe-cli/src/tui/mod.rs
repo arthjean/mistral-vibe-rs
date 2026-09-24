@@ -343,7 +343,9 @@ fn active_agent_safety(
 fn parse_safety(value: &str) -> Safety {
     match value {
         "safe" | "read_only" => Safety::Safe,
-        "destructive" | "approval_required" => Safety::Destructive,
+        // Smart approve borders the composer as a destructive profile does
+        // (`vibe/cli/textual_ui/widgets/chat_input/container.py:29-34`).
+        "destructive" | "smart" | "approval_required" => Safety::Destructive,
         "yolo" | "unsafe" => Safety::Yolo,
         _ => Safety::Neutral,
     }

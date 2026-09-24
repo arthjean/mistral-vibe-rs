@@ -128,7 +128,7 @@ impl WorkspaceService {
             .catalog()
             .agents
             .into_values()
-            .filter(|profile| profile.name != "lean" || installed.contains("lean"))
+            .filter(|profile| builtin_agents::offered(&profile.name, &installed, None))
             .collect())
     }
 
@@ -147,7 +147,7 @@ impl WorkspaceService {
         let profiles = catalog
             .agents
             .values()
-            .filter(|profile| profile.name != "lean" || installed.contains("lean"))
+            .filter(|profile| builtin_agents::offered(&profile.name, &installed, active_agent))
             .cloned()
             .collect::<Vec<_>>();
         let active = active_agent

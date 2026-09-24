@@ -48,6 +48,9 @@ use vibe_core::{engine::EventObserver, events::EventEnvelope};
     version,
     disable_help_flag = true,
     disable_version_flag = true,
+    // argparse keeps the last occurrence of an option given twice, flags
+    // included, where clap refuses the second one.
+    args_override_self = true,
     about = "Run the Mistral Vibe interactive CLI",
     after_help = EPILOG
 )]
@@ -86,24 +89,29 @@ pub struct Arguments {
                 is read from standard input."
     )]
     pub prompt: Option<String>,
+    /// Read as Python's `int()` reads it, sign included, because the
+    /// reference declares `type=int` (`vibe/cli/entrypoint.py:74-80`).
     #[arg(
         long,
         value_name = "N",
+        value_parser = argv::python_int,
         help = "Stop the session after N assistant turns"
     )]
-    pub max_turns: Option<u32>,
+    pub max_turns: Option<i64>,
     #[arg(
         long,
         value_name = "DOLLARS",
+        value_parser = argv::python_float,
         help = "Stop the session once its accumulated cost reaches DOLLARS"
     )]
     pub max_price: Option<f64>,
     #[arg(
         long,
         value_name = "N",
+        value_parser = argv::python_int,
         help = "Stop the session once it has spent N tokens"
     )]
-    pub max_tokens: Option<u64>,
+    pub max_tokens: Option<i64>,
     #[arg(
         long = "enabled-tools",
         action = ArgAction::Append,
@@ -133,6 +141,28 @@ pub struct Arguments {
         help = "Start the session under the agent called NAME"
     )]
     pub agent: Option<String>,
+    /// The Unified Harness is a backend this port does not ship, so asking for
+    /// it lands on the legacy harness with a startup notice, which is what the
+    /// reference does when its own backend cannot be loaded
+    /// (`vibe/app_server/_runtime.py:1149-1167`).
+    #[arg(
+        long,
+        conflicts_with = "legacy_harness",
+        help = "Ask for the Unified Harness backend. This build carries none, so the session \
+                runs on the legacy harness and reports the fallback when it starts."
+    )]
+    pub experimental_harness: bool,
+    #[arg(
+        long,
+        help = "Keep the session on the legacy harness whatever the rollout selects"
+    )]
+    pub legacy_harness: bool,
+    #[arg(
+        long,
+        help = "Start in the smart-approve mode, which also asks for the Unified Harness. On \
+                the legacy harness, tool calls are approved the ordinary way."
+    )]
+    pub smart_approve: bool,
     #[arg(
         long,
         visible_alias = "yolo",
@@ -614,14 +644,6 @@ fn validate_arguments(arguments: &Arguments) -> Result<(), CliError> {
             "--resume requires a session ID in programmatic mode".to_owned(),
         ));
     }
-    if arguments
-        .max_price
-        .is_some_and(|price| !price.is_finite() || price < 0.0)
-    {
-        return Err(CliError::InvalidArguments(
-            "max-price must be a finite non-negative number".to_owned(),
-        ));
-    }
     for (name, price) in [
         ("input-price", arguments.input_price),
         ("output-price", arguments.output_price),
@@ -799,6 +821,9 @@ pub(crate) fn arguments_for_test() -> Arguments {
         max_turns: None,
         max_tokens: None,
         max_price: None,
+        experimental_harness: false,
+        legacy_harness: false,
+        smart_approve: false,
         auto_approve: false,
         setup: false,
         check_upgrade: false,
@@ -1161,6 +1186,9 @@ mod tests {
             max_turns: Some(4),
             max_tokens: Some(1000),
             max_price: Some(0.01),
+            experimental_harness: false,
+            legacy_harness: false,
+            smart_approve: false,
             auto_approve: true,
             setup: false,
             check_upgrade: true,
@@ -1521,14 +1549,14 @@ mod tests {
         );
     }
 
+    /// The reference types `--max-price` as a plain float and compares it, so
+    /// a negative budget is a budget already spent rather than a refusal.
     #[test]
-    fn invalid_limits_are_typed_before_runtime_creation() {
+    fn a_negative_price_budget_is_accepted_and_spent_before_the_first_turn() {
         let mut arguments = arguments(OutputMode::Text);
         arguments.max_price = Some(-1.0);
-        assert!(matches!(
-            validate_arguments(&arguments),
-            Err(CliError::InvalidArguments(_))
-        ));
+        assert!(validate_arguments(&arguments).is_ok());
+        assert_eq!(bootstrap::Budgets::of(&arguments).max_turns, Some(0));
     }
 }
 

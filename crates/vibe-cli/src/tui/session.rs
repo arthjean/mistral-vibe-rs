@@ -123,7 +123,10 @@ pub(super) fn start_runtime(
         safety,
         banner,
         context_tokens: 0,
-        context_window: arguments.max_tokens.unwrap_or(DEFAULT_CONTEXT_WINDOW),
+        // The budgets are programmatic-mode options: an interactive session
+        // carries none of them (`vibe/cli/cli.py:271-279`), so `--max-tokens`
+        // does not size the meter either.
+        context_window: DEFAULT_CONTEXT_WINDOW,
         auto_approve: session.intent.auto_approve,
         vibe_code_enabled: preferences.vibe_code_enabled,
         registry_skills_enabled: preferences.registry_skills_enabled,

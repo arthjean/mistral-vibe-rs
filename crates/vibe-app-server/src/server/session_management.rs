@@ -384,6 +384,11 @@ fn enrich_config_response(
     // A read reports the configuration as it stands; a write also reports the
     // runtime the write produced.
     let runtime = method != "config/read";
+    if !runtime {
+        for (field, value) in connection.server.harness_selection().config_read_fields() {
+            dispatch.result.insert(field.to_owned(), value);
+        }
+    }
     if runtime && let Some(snapshot) = connection.server.runtime_snapshot(session_id) {
         dispatch.result.insert("runtime".to_owned(), snapshot);
     }

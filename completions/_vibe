@@ -11,6 +11,9 @@ _arguments \
   '--disabled-tools[disable a tool]:tool:' \
   '--output[select output mode]:mode:(text json streaming)' \
   '--agent[select agent]:agent:' \
+  '(--legacy-harness)--experimental-harness[ask for the Unified Harness]' \
+  '(--experimental-harness)--legacy-harness[stay on the legacy harness]' \
+  '--smart-approve[start in smart-approve mode]' \
   '--auto-approve[approve tool requests]' \
   '--yolo[approve tool requests]' \
   '--setup[run setup]' \

@@ -785,6 +785,41 @@ fn config_read_composes_the_shipped_defaults_without_a_configuration_file() {
     );
 }
 
+/// Smart approve ships dark upstream: explicitly selecting it works, and only
+/// the session running it is offered it (`vibe/core/agents/manager.py:37-56`).
+#[test]
+fn smart_approve_is_selectable_but_offered_only_to_the_session_running_it() {
+    let (_temporary, service) = service();
+    let listed = service
+        .dispatch("agents/list", &BTreeMap::new())
+        .expect("agents list");
+    assert!(
+        listed.result["agents"]
+            .as_array()
+            .is_some_and(|agents| agents.iter().all(|agent| agent["name"] != "smart-approve"))
+    );
+    let profile = service
+        .agent_profile("smart-approve")
+        .expect("an explicit selection resolves");
+    assert_eq!(profile.safety, "smart");
+    let running = service.runtime_projection(Some("smart-approve"));
+    assert_eq!(running.active_agent["name"], json!("smart-approve"));
+    assert_eq!(running.active_agent["safety"], json!("smart"));
+    assert!(
+        running
+            .agents
+            .iter()
+            .any(|agent| agent["name"] == "smart-approve")
+    );
+    let other = service.runtime_projection(Some("plan"));
+    assert!(
+        other
+            .agents
+            .iter()
+            .all(|agent| agent["name"] != "smart-approve")
+    );
+}
+
 #[test]
 fn builtin_lean_agent_installation_is_persisted_and_reflected_in_agent_listing() {
     let (_temporary, service) = service();

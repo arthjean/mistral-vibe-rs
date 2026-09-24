@@ -373,11 +373,6 @@ const UNMODELED_ENUMS: &[(&str, &str)] = &[
 /// difference, on order, and on an entry whose value this port now spells.
 const DIVERGENT_ENUM_VALUES: &[(&str, &str, &str)] = &[
     (
-        "AgentSafety",
-        "smart",
-        "v2.25.7 adds it before yolo (vibe/agents.py:12); crate::vocabulary::AgentSafety has no such value",
-    ),
-    (
         "TurnErrorCode",
         "incomplete_stream",
         "v2.25.7 adds it after compaction_failed (vibe/app_server/models.py:386); vibe_core::events::TurnErrorCode has no such code",

@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Accept `--experimental-harness`, `--legacy-harness` and `--smart-approve`.
+  This build runs the legacy harness only, so a request for the Unified
+  Harness falls back to it and says so at startup and on `config/read`, which
+  now reports `startupIssue` and `harnessSelectionSource`. `--smart-approve`
+  starts under a new `smart-approve` agent unless `--agent` names another.
+
+- Read the command line as the reference does: a long flag may be shortened to
+  any prefix that names only one flag, a value or prompt starting with a
+  hyphen (`--agent -5`, `vibe -5`) is kept as one, a repeated option keeps its
+  last value instead of being refused, and `--max-turns`, `--max-tokens` and
+  `--max-price` accept what Python's `int()` and `float()` accept, negative
+  numbers included. A budget that is already spent ends a `-p` run before its
+  first request, and interactive sessions no longer read the three budgets.
+
+- Add `vibe mcp add --allow-insecure-http`, which stores a plain `http://`
+  URL on a host other than this machine. A session now connects to such a
+  server when the configuration names one.
+
 - Start a managed shell session in the shell the reference resolves (the
   requested one, then the `shell` setting, then zsh, bash and sh), report a
   signaled process as the negated signal number, and keep answering for a

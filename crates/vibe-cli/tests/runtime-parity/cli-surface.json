@@ -4315,6 +4315,979 @@
       }
     },
     {
+      "argv": [
+        "--experimental-harness",
+        "--legacy-harness"
+      ],
+      "case": "harness-flags-together",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: argument --legacy-harness: not allowed with argument --experimental-harness",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--legacy-harness",
+        "--experimental-harness"
+      ],
+      "case": "harness-flags-together-reversed",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: argument --experimental-harness: not allowed with argument --legacy-harness",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--smart-approve",
+        "--agent",
+        "plan"
+      ],
+      "case": "smart-approve-with-agent",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": "plan",
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": true,
+        "initial_prompt": null,
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": true,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--smart-approve",
+        "--legacy-harness"
+      ],
+      "case": "smart-approve-with-legacy-harness",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": "smart-approve",
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": true,
+        "initial_prompt": null,
+        "legacy_harness": true,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": true,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--smart-approve",
+        "--experimental-harness"
+      ],
+      "case": "smart-approve-with-experimental-harness",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": "smart-approve",
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": true,
+        "initial_prompt": null,
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": true,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "-p",
+        "headless request",
+        "--smart-approve"
+      ],
+      "case": "smart-approve-programmatic",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": "smart-approve",
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": true,
+        "initial_prompt": null,
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": "headless request",
+        "resume": null,
+        "setup": false,
+        "smart_approve": true,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--trust",
+        "--trust"
+      ],
+      "case": "repeated-trust",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": null,
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": true,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "-p",
+        "first",
+        "-p",
+        "second"
+      ],
+      "case": "repeated-prompt",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": null,
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": "second",
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--worktree",
+        "one",
+        "--worktree"
+      ],
+      "case": "repeated-worktree",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": null,
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": true
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--agent",
+        "-5"
+      ],
+      "case": "negative-shaped-agent",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": "-5",
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": null,
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "-p",
+        "-1"
+      ],
+      "case": "negative-shaped-prompt",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": null,
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": "-1",
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "-5"
+      ],
+      "case": "negative-shaped-positional",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": "-5",
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "-.5"
+      ],
+      "case": "fraction-shaped-positional",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": "-.5",
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "-x y"
+      ],
+      "case": "spaced-dash-positional",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": "-x y",
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "review",
+        "--trust"
+      ],
+      "case": "positional-before-flag",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": "review",
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": true,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-turns",
+        "4294967296"
+      ],
+      "case": "wide-max-turns",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": null,
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": 4294967296,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-turns",
+        "1_000"
+      ],
+      "case": "grouped-max-turns",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": null,
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": 1000,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-turns",
+        " 3 "
+      ],
+      "case": "padded-max-turns",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": null,
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": 3,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-turns",
+        "+3"
+      ],
+      "case": "signed-max-turns",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": null,
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": 3,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-turns",
+        "1__0"
+      ],
+      "case": "bad-grouping-max-turns",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: argument --max-turns: invalid int value: '1__0'",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-price",
+        "1e2"
+      ],
+      "case": "exponent-max-price",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": null,
+        "legacy_harness": false,
+        "max_price": 100.0,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-price",
+        "1_000.5"
+      ],
+      "case": "grouped-max-price",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": null,
+        "legacy_harness": false,
+        "max_price": 1000.5,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-tu=3"
+      ],
+      "case": "prefix-with-equals",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": false,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": null,
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": 3,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--max-t=3"
+      ],
+      "case": "ambiguous-prefix-with-equals",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: ambiguous option: --max-t=3 could match --max-turns, --max-tokens",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--c"
+      ],
+      "case": "ambiguous-prefix-c",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: ambiguous option: --c could match --check-upgrade, --continue",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--yo"
+      ],
+      "case": "prefix-of-alias",
+      "exit": 0,
+      "namespace": {
+        "add_dir": [],
+        "agent": null,
+        "auto_approve": true,
+        "check_upgrade": false,
+        "continue_session": false,
+        "disabled_tools": null,
+        "enabled_tools": null,
+        "experimental_harness": false,
+        "initial_prompt": null,
+        "legacy_harness": false,
+        "max_price": null,
+        "max_tokens": null,
+        "max_turns": null,
+        "output": "text",
+        "prompt": null,
+        "resume": null,
+        "setup": false,
+        "smart_approve": false,
+        "teleport": false,
+        "trust": false,
+        "workdir": null,
+        "worktree": null
+      },
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": false,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--trust=yes"
+      ],
+      "case": "flag-with-explicit-value",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: argument --trust: ignored explicit argument 'yes'",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--output",
+        "bogus",
+        "--a"
+      ],
+      "case": "refusal-before-ambiguous-prefix",
+      "exit": 2,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": {
+        "cleartext": "vibe: error: argument --output: invalid choice: 'bogus' (choose from text, json, streaming)",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--help",
+        "--a"
+      ],
+      "case": "help-before-ambiguous-prefix",
+      "exit": 0,
+      "namespace": null,
+      "parser": "root",
+      "stderrLastLine": null,
+      "stdoutLastLine": {
+        "cleartext": null,
+        "described": {
+          "chars": 75,
+          "marker": "<described>",
+          "sha256": "58efa8efd4ebb0873f7c1ce3dfbd9f04b93b78e5d3c291da5ee884798705b54a"
+        }
+      },
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
       "argv": [],
       "case": "mcp-bare",
       "exit": 0,
@@ -4947,6 +5920,229 @@
           "chars": 25,
           "marker": "<described>",
           "sha256": "762c294691879b433a514ef1065279731480501b4107b0076e95d34ff9a82895"
+        }
+      },
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
+      "argv": [
+        "add",
+        "lan",
+        "--transport",
+        "streamable-http",
+        "--url",
+        "http://lan.example.invalid/mcp",
+        "--no-login"
+      ],
+      "case": "mcp-add-insecure-http-refused",
+      "exit": 2,
+      "namespace": {
+        "allow_insecure_http": false,
+        "api_key_env": null,
+        "api_key_format": null,
+        "api_key_header": null,
+        "arg": [],
+        "command": null,
+        "env": [],
+        "header": [],
+        "mcp_command": "add",
+        "name": "lan",
+        "no_login": true,
+        "startup_timeout_sec": null,
+        "tool_timeout_sec": null,
+        "transport": "streamable-http",
+        "url": "http://lan.example.invalid/mcp"
+      },
+      "parser": "mcp",
+      "stderrLastLine": {
+        "cleartext": "vibe mcp: error: ",
+        "described": {
+          "chars": 126,
+          "marker": "<described>",
+          "sha256": "fb124a47440905e8c4f5e8943e9e5c9d7d6ff84395aaa3723a7a4f09feffb9e5"
+        }
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "add",
+        "lan",
+        "--transport",
+        "streamable-http",
+        "--url",
+        "http://lan.example.invalid/mcp",
+        "--no-login",
+        "--allow-insecure-http"
+      ],
+      "case": "mcp-add-insecure-http-allowed",
+      "exit": 0,
+      "namespace": {
+        "allow_insecure_http": true,
+        "api_key_env": null,
+        "api_key_format": null,
+        "api_key_header": null,
+        "arg": [],
+        "command": null,
+        "env": [],
+        "header": [],
+        "mcp_command": "add",
+        "name": "lan",
+        "no_login": true,
+        "startup_timeout_sec": null,
+        "tool_timeout_sec": null,
+        "transport": "streamable-http",
+        "url": "http://lan.example.invalid/mcp"
+      },
+      "parser": "mcp",
+      "stderrLastLine": null,
+      "stdoutLastLine": {
+        "cleartext": null,
+        "described": {
+          "chars": 37,
+          "marker": "<described>",
+          "sha256": "10bbea3df3145a2fa63115e98cbec65e53acf55e8d8c70744a02224db2fd0329"
+        }
+      },
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
+      "argv": [
+        "add",
+        "plain",
+        "--transport",
+        "stdio",
+        "--command",
+        "/bin/true",
+        "--allow-insecure-http"
+      ],
+      "case": "mcp-add-stdio-with-insecure-flag",
+      "exit": 2,
+      "namespace": {
+        "allow_insecure_http": true,
+        "api_key_env": null,
+        "api_key_format": null,
+        "api_key_header": null,
+        "arg": [],
+        "command": "/bin/true",
+        "env": [],
+        "header": [],
+        "mcp_command": "add",
+        "name": "plain",
+        "no_login": false,
+        "startup_timeout_sec": null,
+        "tool_timeout_sec": null,
+        "transport": "stdio",
+        "url": null
+      },
+      "parser": "mcp",
+      "stderrLastLine": {
+        "cleartext": "vibe mcp: error: ",
+        "described": {
+          "chars": 60,
+          "marker": "<described>",
+          "sha256": "35e6cadb31a59fe014425b4670ea57a8b18aa9dcb39b01f11c5a899701c16258"
+        }
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "add",
+        "short",
+        "--tr",
+        "stdio",
+        "--com",
+        "/bin/true",
+        "--ar",
+        "-5"
+      ],
+      "case": "mcp-add-abbreviated-options",
+      "exit": 0,
+      "namespace": {
+        "allow_insecure_http": false,
+        "api_key_env": null,
+        "api_key_format": null,
+        "api_key_header": null,
+        "arg": [
+          "-5"
+        ],
+        "command": "/bin/true",
+        "env": [],
+        "header": [],
+        "mcp_command": "add",
+        "name": "short",
+        "no_login": false,
+        "startup_timeout_sec": null,
+        "tool_timeout_sec": null,
+        "transport": "stdio",
+        "url": null
+      },
+      "parser": "mcp",
+      "stderrLastLine": null,
+      "stdoutLastLine": {
+        "cleartext": null,
+        "described": {
+          "chars": 25,
+          "marker": "<described>",
+          "sha256": "de312719814a4ccca7113755d3013eebf857d19fe88720f0ac4eb776132a9053"
+        }
+      },
+      "streams": {
+        "stderr": false,
+        "stdout": true
+      }
+    },
+    {
+      "argv": [
+        "add",
+        "vague",
+        "--api",
+        "PARITY_TOKEN"
+      ],
+      "case": "mcp-add-ambiguous-prefix",
+      "exit": 2,
+      "namespace": null,
+      "parser": "mcp",
+      "stderrLastLine": {
+        "cleartext": "vibe mcp add: error: ambiguous option: --api could match --api-key-env, --api-key-header, --api-key-format",
+        "described": null
+      },
+      "stdoutLastLine": null,
+      "streams": {
+        "stderr": true,
+        "stdout": false
+      }
+    },
+    {
+      "argv": [
+        "--he"
+      ],
+      "case": "mcp-help-prefix",
+      "exit": 0,
+      "namespace": null,
+      "parser": "mcp",
+      "stderrLastLine": null,
+      "stdoutLastLine": {
+        "cleartext": null,
+        "described": {
+          "chars": 47,
+          "marker": "<described>",
+          "sha256": "a293f4823bc6523fc9f8cbc7ce85f275c15058b3e7e0f37cd131ec660a5d78ce"
         }
       },
       "streams": {
