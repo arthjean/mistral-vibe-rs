@@ -28,7 +28,7 @@ use crate::provider::{
 
 use super::context::{
     COMPACT_USER_MESSAGE_MAX_TOKENS, collect_prior_user_messages, drop_oldest_round,
-    extract_summary, render_compaction_context,
+    extract_summary, render_compaction_context, select_model_context,
 };
 use super::{CompactionFailure, CompactionFailureReason};
 
@@ -208,8 +208,8 @@ pub struct SummarizedCompaction {
     /// The summary the envelope carries, which is the placeholder when both
     /// calls failed outside strict mode.
     pub summary: String,
-    /// The transcript that replaces the conversation: its first message,
-    /// followed by the envelope.
+    /// The conversation as it continues: every message it held, followed by
+    /// the envelope, which is where the model's context now starts.
     pub messages: Vec<ModelMessage>,
     /// Every call this compaction made, so the turn's ceilings cover them.
     pub usage: Usage,
@@ -221,8 +221,9 @@ pub struct SummarizedCompaction {
 /// Summarizes `messages` into an envelope, or reports why it could not.
 ///
 /// The live transcript is never touched: the calls are made on a copy, and the
-/// replacement is returned rather than applied, so a failure leaves the
-/// conversation exactly as it was.
+/// continued conversation is returned rather than applied, so a failure leaves
+/// it exactly as it was. Reference `CompactionManager.compact`, which appends
+/// the envelope and keeps every earlier message.
 ///
 /// # Errors
 ///
@@ -237,12 +238,18 @@ pub async fn compact(
     extra_instructions: &str,
 ) -> Result<SummarizedCompaction, CompactionFailure> {
     let prompts = plan.prompts()?;
-    let preserved =
-        collect_prior_user_messages(messages, &prompts.summary_prefix, plan.max_preserved_tokens);
+    // Only what the model still reads is summarized: an earlier envelope
+    // already stands for everything before it.
+    let snapshot = select_model_context(messages);
+    let preserved = collect_prior_user_messages(
+        &snapshot,
+        &prompts.summary_prefix,
+        plan.max_preserved_tokens,
+    );
     let request = CompactionPlan::request_with(prompts, extra_instructions);
     let mut usage = Usage::default();
 
-    let summarized = summarize(provider, plan, prompts, messages, &request, &mut usage).await;
+    let summarized = summarize(provider, plan, prompts, &snapshot, &request, &mut usage).await;
     let (summary, failure) = match summarized {
         Ok(outcome) => outcome,
         Err(mut failure) => {
@@ -251,9 +258,7 @@ pub async fn compact(
         }
     };
 
-    // The reference keeps `snapshot[0]` whatever it is, which is the system
-    // prompt for every transcript a session builds.
-    let mut compacted: Vec<ModelMessage> = messages.first().cloned().into_iter().collect();
+    let mut compacted = messages.to_vec();
     compacted.push(ModelMessage::injected_user(render_compaction_context(
         &preserved, &summary,
     )));

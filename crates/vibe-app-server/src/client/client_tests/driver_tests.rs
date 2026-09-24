@@ -376,7 +376,7 @@ async fn an_empty_summary_is_reported_as_the_classified_failure() {
 }
 
 #[tokio::test]
-async fn manual_compaction_uses_provider_summary_and_durable_handoff() {
+async fn manual_compaction_uses_provider_summary_and_appends_a_boundary() {
     /// Answers with the summary element the summarizer reads, which is what
     /// a model that followed the compaction request returns.
     struct SummarizingProvider {
@@ -441,32 +441,31 @@ async fn manual_compaction_uses_provider_summary_and_durable_handoff() {
         .await
         .expect("compaction");
     assert_eq!(result["summary"], "resumed answer");
-    let new_session_id = result["state"]["session"]["id"]
-        .as_str()
-        .expect("new session id");
-    assert_ne!(new_session_id, session_id);
+    // Reference `_handler._compact`: the session keeps its identifier, the
+    // conversation stays on disk, and the envelope is written after it.
+    assert_eq!(result["state"]["session"]["id"], session_id.as_str());
     let compacted = SessionStore::new(temporary.path())
-        .load(new_session_id)
+        .load(&session_id)
         .expect("durable compacted session");
+    assert!(compacted.messages.iter().any(|message| matches!(
+        message,
+        ModelMessage::User { content, injected: false, .. } if content == "retain this decision"
+    )));
+    assert!(matches!(
+        compacted.messages.last(),
+        Some(ModelMessage::User { content, injected: true, .. })
+            if content.contains("<compaction_summary>")
+                && content.contains("resumed answer")
+                && content.contains("retain this decision")
+    ));
+    let history = result["state"]["history"]
+        .as_array()
+        .expect("public history");
+    let checkpoint = history.last().expect("a closing checkpoint");
+    assert_eq!(checkpoint["kind"], "compaction");
     assert_eq!(
-        compacted.metadata.parent_session_id.as_deref(),
-        Some(session_id.as_str())
-    );
-    // US-152, US-156: the manual method's response shape is unchanged, and
-    // what it now leaves on disk is the envelope, which carries the
-    // operator's own turn instead of discarding it.
-    assert!(compacted.messages.iter().any(|message| {
-        matches!(
-            message,
-            ModelMessage::User { content, injected: true, .. }
-                if content.contains("<compaction_summary>")
-                    && content.contains("resumed answer")
-                    && content.contains("retain this decision")
-        )
-    }));
-    assert_eq!(
-        service.session(&session_id).expect("old alias resolves").id,
-        new_session_id
+        checkpoint["details"]["summaryLength"],
+        "resumed answer".chars().count()
     );
     assert!(seen.lock().expect("provider input").iter().any(|message| {
         matches!(
@@ -476,19 +475,29 @@ async fn manual_compaction_uses_provider_summary_and_durable_handoff() {
     }));
 }
 
-/// US-158: a compaction mints the reference's identity, a UUID shape whose
-/// trailing segment is the one it replaces, and the sessions it leaves
-/// behind keep resolving under the identifiers they were written with.
+/// A compaction keeps the session it ran in, as upstream does since the
+/// envelope is appended: every compaction adds one, and the next one
+/// summarizes only from the latest on.
 #[tokio::test]
-async fn a_compacted_session_keeps_its_stable_identity_suffix() {
-    struct SummarizingProvider;
+async fn compacting_twice_keeps_the_identity_and_appends_two_boundaries() {
+    struct SummarizingProvider {
+        seen: Arc<Mutex<Vec<Vec<ModelMessage>>>>,
+    }
 
     impl CompletionProvider for SummarizingProvider {
         fn complete<'a>(
             &'a self,
-            _input: &'a ProviderInput,
+            input: &'a ProviderInput,
         ) -> vibe_core::engine::ProviderFuture<'a> {
             Box::pin(async move {
+                self.seen
+                    .lock()
+                    .map_err(|_| {
+                        vibe_core::provider::ProviderError::MalformedStream(
+                            "test lock poisoned".to_owned(),
+                        )
+                    })?
+                    .push(input.messages.clone());
                 Ok(AssistantMessage {
                     text: "<summary>the state so far</summary>".to_owned(),
                     reasoning: None,
@@ -508,74 +517,52 @@ async fn a_compacted_session_keeps_its_stable_identity_suffix() {
     }
 
     let temporary = tempfile::tempdir().expect("temporary session root");
-    let driver = LiveTurnDriver::from_provider_for_tests(Arc::new(SummarizingProvider), "sys")
-        .with_session_root_for_tests(Some(temporary.path().to_path_buf()));
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let driver = LiveTurnDriver::from_provider_for_tests(
+        Arc::new(SummarizingProvider {
+            seen: Arc::clone(&seen),
+        }),
+        "sys",
+    )
+    .with_session_root_for_tests(Some(temporary.path().to_path_buf()));
     let mut service = HeadlessService::new(driver).expect("service");
-    let original = "11111111-2222-3333-4444-abcdefabcdef";
     let mut compact_options = options();
     compact_options.working_directory = temporary.path().to_string_lossy().into_owned();
-    compact_options.session_id = Some(original.to_owned());
+    compact_options.session_id = Some("11111111-2222-3333-4444-abcdefabcdef".to_owned());
     compact_options.add_directories.clear();
     compact_options.tool_filters.clear();
     compact_options.enabled_tools.clear();
     compact_options.disabled_tools.clear();
     compact_options.agent = None;
     let session_id = service.start_session(&compact_options).expect("session");
-    assert_eq!(session_id, original);
 
-    let mut minted: Vec<String> = Vec::new();
-    for _ in 0..2 {
-        let current = minted.last().cloned().unwrap_or_else(|| session_id.clone());
-        service.prompt(&current, "a decision").await.expect("turn");
-        let result = service.compact(&current, "").await.expect("compaction");
-        minted.push(
-            result["state"]["session"]["id"]
-                .as_str()
-                .expect("new session id")
-                .to_owned(),
-        );
+    for prompt in ["the first decision", "the second decision"] {
+        service.prompt(&session_id, prompt).await.expect("turn");
+        let result = service.compact(&session_id, "").await.expect("compaction");
+        assert_eq!(result["state"]["session"]["id"], session_id.as_str());
     }
 
-    let store = SessionStore::new(temporary.path());
-    for identifier in &minted {
-        let segments: Vec<usize> = identifier.split('-').map(str::len).collect();
-        assert_eq!(segments, vec![8, 4, 4, 4, 12], "{identifier}");
-        assert!(
-            identifier.ends_with("-abcdefabcdef"),
-            "the stable suffix survives: {identifier}"
-        );
-    }
-    assert_ne!(minted[0], minted[1], "each compaction mints a fresh head");
-    assert_eq!(
-        store
-            .load(&minted[0])
-            .expect("first compacted session")
-            .metadata
-            .parent_session_id
-            .as_deref(),
-        Some(original),
-    );
-    assert_eq!(
-        store
-            .load(&minted[1])
-            .expect("second compacted session")
-            .metadata
-            .parent_session_id
-            .as_deref(),
-        Some(minted[0].as_str()),
-    );
-    // Nothing on disk was renamed: every identifier this session ever wore
-    // still reads, and the client's original handle still resolves.
-    for identifier in std::iter::once(original.to_owned()).chain(minted.iter().cloned()) {
-        assert_eq!(
-            store.load(&identifier).expect("session loads").metadata.id,
-            identifier
-        );
-    }
-    assert_eq!(
-        service.session(original).expect("old alias resolves").id,
-        minted[1]
-    );
+    let stored = SessionStore::new(temporary.path())
+        .load(&session_id)
+        .expect("the session is still the one written");
+    let envelopes = stored
+        .messages
+        .iter()
+        .filter(|message| vibe_core::compaction::context::is_compaction_context_message(message))
+        .count();
+    assert_eq!(envelopes, 2);
+    // The second summary reads from the first envelope on, so the turn the
+    // first one already summarized is not sent again.
+    let second_summary = seen
+        .lock()
+        .expect("provider input")
+        .last()
+        .cloned()
+        .expect("the second compaction called the provider");
+    assert!(!second_summary.iter().any(|message| matches!(
+        message,
+        ModelMessage::User { content, injected: false, .. } if content == "the first decision"
+    )));
 }
 
 #[tokio::test]

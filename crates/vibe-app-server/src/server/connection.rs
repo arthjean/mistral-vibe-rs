@@ -5,6 +5,7 @@
 //! server-to-client requests are still outstanding. Every routed method is
 //! answered here, against the server above.
 
+mod rewind;
 mod session;
 mod turn;
 
@@ -373,6 +374,8 @@ impl ServerConnection {
             "session/compact/start" => self.session_compact_start(request),
             "session/settings/update" => self.session_settings_update(request),
             "session/overrides/write" => self.session_overrides_write(request),
+            "session/rewind/read" => self.session_rewind_read(request),
+            "session/rewind" => self.session_rewind(request),
             "turn/start" => self.turn_start(request),
             "turn/steer" => self.turn_steer(request),
             "turn/interrupt" => self.turn_interrupt(request),

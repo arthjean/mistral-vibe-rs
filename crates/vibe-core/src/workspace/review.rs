@@ -609,24 +609,22 @@ impl ReviewManager {
         })
     }
 
-    pub fn fork_at(&self, message_index: usize) -> Result<Self, WorkspaceError> {
-        let state = self.lock_state()?;
-        let forked_log = self.with_log(|log| {
-            let mut forked = log.clone();
+    /// Forgets every turn from the one numbered `message_index` on, which is
+    /// what a rewind does to the log it keeps.
+    ///
+    /// Reference `RewindManager._truncate` drops those turns from the shared
+    /// checkpointer rather than clearing it, so a later rewind can still reach
+    /// an earlier turn and restore its files.
+    ///
+    /// # Errors
+    ///
+    /// Fails when another thread poisoned the log or the review state.
+    pub fn drop_turns_from(&self, message_index: usize) -> Result<(), WorkspaceError> {
+        self.lock_state()?.active_turn = None;
+        self.with_log(|log| {
             if let Ok(turn) = u64::try_from(message_index) {
-                forked.drop_turns_from(turn);
+                log.drop_turns_from(turn);
             }
-            forked
-        })?;
-        Ok(Self {
-            workspace: self.workspace.clone(),
-            state: Mutex::new(SnapshotState {
-                active_turn: None,
-                baseline: state.baseline.clone(),
-                retention_notice: None,
-            }),
-            log: Mutex::new(forked_log),
-            recorder: self.recorder.clone(),
         })
     }
 
@@ -1280,10 +1278,10 @@ mod tests {
         assert_eq!(restorable, vec!["wired.txt"]);
     }
 
-    /// Forking drops the turns at and after the fork point from the log, the
-    /// way it already drops their snapshots.
+    /// A rewind drops the turns at and after its point from the log and keeps
+    /// the ones before, so a later rewind can still reach them.
     #[test]
-    fn forking_truncates_the_engine_log_at_the_fork_point() {
+    fn a_rewind_truncates_the_engine_log_at_its_point() {
         let root = tempdir().expect("workspace");
         std::fs::write(root.path().join("forked.txt"), "one\n").expect("seed file");
         let review = ReviewManager::new(Arc::new(Workspace::open(root.path()).expect("open")));
@@ -1304,9 +1302,9 @@ mod tests {
             review.seal_turn().expect("seal turn");
         }
 
-        let forked = review.fork_at(2).expect("fork");
+        review.drop_turns_from(2).expect("truncate");
 
-        let turns = forked
+        let turns = review
             .with_log(|log| {
                 let history = log.history();
                 (1..=3)

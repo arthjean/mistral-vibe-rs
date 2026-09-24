@@ -378,7 +378,6 @@ where
                     Ok(compaction) => server.complete_manual_compaction(
                         request_id,
                         &session_id,
-                        &compaction.new_session_id,
                         &compaction.summary,
                         compaction.hydrated,
                     ),

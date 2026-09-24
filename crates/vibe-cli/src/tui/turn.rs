@@ -720,7 +720,7 @@ mod tests {
         );
         assert_eq!(
             canonical["state"]
-                .pointer("/latestTurn/status")
+                .pointer("/turns/0/status")
                 .and_then(Value::as_str),
             Some("interrupted")
         );

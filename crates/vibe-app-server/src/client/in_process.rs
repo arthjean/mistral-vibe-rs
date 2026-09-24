@@ -712,7 +712,6 @@ impl InProcessClient {
             Ok(compaction) => self.server.complete_manual_compaction(
                 request_id.clone(),
                 session_id,
-                &compaction.new_session_id,
                 &compaction.summary,
                 compaction.hydrated,
             ),

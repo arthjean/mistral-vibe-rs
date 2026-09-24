@@ -39,6 +39,18 @@ pub(crate) struct SessionRuntime {
     pub(crate) created_at: u64,
     pub(crate) updated_at: u64,
     pub(crate) latest_turn: Option<PublicTurn>,
+    /// Every turn since the conversation was last replaced, oldest first, which
+    /// is what `PublicSessionState.turns` publishes. Reference
+    /// `SessionTurns.completed_turns` plus the active one; a rewind, a
+    /// compaction and a clearing all start it over.
+    pub(crate) turns: Vec<PublicTurn>,
+    /// When a turn last started in this session. Reference
+    /// `SessionMetadata.bumped_at`, which a new session has none of.
+    pub(crate) bumped_at: Option<u64>,
+    /// The alias of the model the configuration makes active when the session
+    /// opens, which `PublicSession.model` falls back to when the intent names
+    /// none.
+    pub(crate) active_model_alias: Option<String>,
     /// The agent profile this session runs, projected as `AgentSummary`.
     ///
     /// The intent carries the name; a client renders the profile, so the
@@ -98,6 +110,9 @@ impl SessionRuntime {
             created_at,
             updated_at: created_at,
             latest_turn: None,
+            turns: Vec::new(),
+            bumped_at: None,
+            active_model_alias: None,
             event_watermark: 0,
             stats: SessionStats::default(),
             context_window: 0,
@@ -107,6 +122,26 @@ impl SessionRuntime {
             persisted: None,
             review,
             created_worktree: None,
+        }
+    }
+}
+
+impl SessionRuntime {
+    /// Records a turn's latest state: the one `latestTurn` reads and the entry
+    /// of `turns` carrying the same identifier, appended the first time.
+    pub(crate) fn record_turn(&mut self, turn: PublicTurn) {
+        match self.turns.iter_mut().find(|known| known.id == turn.id) {
+            Some(known) => known.clone_from(&turn),
+            None => self.turns.push(turn.clone()),
+        }
+        self.latest_turn = Some(turn);
+    }
+
+    /// Moves every turn this session holds onto `session_id`, which is what a
+    /// handoff does to the identity they are reported under.
+    pub(crate) fn rebind_turns(&mut self, session_id: &str) {
+        for turn in self.turns.iter_mut().chain(self.latest_turn.as_mut()) {
+            session_id.clone_into(&mut turn.session_id);
         }
     }
 }

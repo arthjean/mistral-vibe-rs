@@ -181,11 +181,18 @@ impl SessionManagementReplay {
                 self.reduce_rewind(KeyCode::Down);
                 self.observe_rewind("action")
             }
+            // Enter on the action step advances to the persistence step, and
+            // only Enter there dispatches.
             SessionManagementEvent::RewindAccept => match self.reduce_rewind(KeyCode::Enter) {
+                RewindEffect::None => self.observe_rewind("step"),
                 RewindEffect::Accept {
                     entry_id,
                     restore_files,
-                } => format!("rewind:dispatch:{entry_id}:{restore_files}"),
+                    inplace,
+                } => format!(
+                    "rewind:dispatch:{}:{restore_files}:inplace={inplace}",
+                    message_index(&entry_id)
+                ),
                 effect => panic!("unexpected rewind effect: {effect:?}"),
             },
             SessionManagementEvent::RewindFailure => {
@@ -308,7 +315,7 @@ impl SessionManagementReplay {
         let rewind = self.rewind.as_ref().expect("rewind is open");
         format!(
             "rewind:{prefix}:target={}:actions={}:selected={:?}",
-            rewind.target().entry_id,
+            message_index(&rewind.target().entry_id),
             rewind.actions().len(),
             rewind.selected_action()
         )
@@ -762,6 +769,15 @@ async fn active_turn_corpus_replays_every_event_against_runtime_reducers() {
     }
 }
 
+/// The position a replayed target was seeded from, which is what the
+/// reference's trace names a rewind point by.
+fn message_index(entry_id: &str) -> &str {
+    entry_id
+        .strip_prefix("history:")
+        .and_then(|rest| rest.strip_suffix(":user"))
+        .unwrap_or(entry_id)
+}
+
 #[test]
 fn session_management_corpus_replays_rewind_and_delete_state_machines() {
     let corpus: SessionManagementCorpus = serde_json::from_str(include_str!(
@@ -771,19 +787,19 @@ fn session_management_corpus_replays_rewind_and_delete_state_machines() {
     assert_eq!(corpus.schema_version, 2);
     assert_eq!(corpus.reference.commit, REFERENCE_COMMIT);
     assert!(!corpus.reference.version.is_empty());
-    assert_eq!(corpus.reference.source_files.len(), 3);
+    assert_eq!(corpus.reference.source_files.len(), 4);
     assert_eq!(
         corpus
             .traces
             .iter()
             .map(|trace| trace.story.as_str())
             .collect::<BTreeSet<_>>(),
-        BTreeSet::from(["US-030"])
+        BTreeSet::from(["US-029", "US-030"])
     );
-    // US-029 left the replayable set when the reference moved to a two-step
-    // rewind at v2.23.3, measured by `tests/runtime-parity/session-management-oracle.py`.
-    // A dropped trace stays visible: it names the story it covered and why the
-    // corpus carries no expectation for it.
+    // US-029 replays the two-step rewind the reference moved to at v2.23.3,
+    // as `tests/runtime-parity/session-management-oracle.py` measures it. A
+    // trace dropped later stays visible: it names the story it covered and why
+    // the corpus carries no expectation for it.
     for entry in &corpus.unavailable {
         for field in ["id", "story", "reason"] {
             assert!(

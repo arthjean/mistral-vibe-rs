@@ -19,7 +19,7 @@ use super::chat_input::{InputMode, Safety, VoicePhase};
 use super::completion::CompletionEngine;
 use super::composer_layout::{CHROME_HEIGHT, ComposerLayout, PROMPT_WIDTH};
 use super::input::{PromptEditor, VisualLayout};
-use super::rewind::{RewindAction, RewindState};
+use super::rewind::{RewindChoice, RewindState};
 use super::setup::ResolvedTheme;
 use super::state::{TranscriptKind, TuiState};
 use super::transcript;

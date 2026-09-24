@@ -631,7 +631,9 @@ where
                 }
                 MiddlewareAction::Continue => {}
             }
-            input.messages.clone_from(&messages);
+            // The model reads from the latest compaction envelope on; the
+            // transcript keeps what came before it.
+            input.messages = crate::compaction::context::select_model_context(&messages);
             self.record_request(&mut recorder, &input, &prompt, message_id.clone())?;
             let call_started = Instant::now();
             let completion = match self
@@ -1266,11 +1268,15 @@ where
             old_session_id: old_session_id.clone(),
             new_session_id: new_session_id.clone(),
         })?;
-        recorder.emit(EngineEvent::SessionHandoff {
-            from_session_id: old_session_id,
-            to_session_id: new_session_id,
-            cause: SessionHandoffCause::Compaction,
-        })?;
+        // A compactor that keeps the identifier, which is what the reference
+        // does since it stopped rotating on compaction, hands nothing off.
+        if new_session_id != old_session_id {
+            recorder.emit(EngineEvent::SessionHandoff {
+                from_session_id: old_session_id,
+                to_session_id: new_session_id,
+                cause: SessionHandoffCause::Compaction,
+            })?;
+        }
         // A compaction that degraded to the placeholder still succeeded: the
         // conversation is compacted. It reports the reason it degraded from, so
         // the failure record the reference sends alongside the success is

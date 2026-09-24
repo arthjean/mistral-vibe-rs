@@ -97,6 +97,13 @@ impl AppServer {
                 .map_err(|error| ServerError::Projects(error.to_string()))?;
             return Ok(None);
         }
+        if let Some(published) = self
+            .workspace
+            .publish_draft(&session.id)
+            .map_err(|error| ServerError::Resource(error.to_string()))?
+        {
+            session.persisted = Some(published);
+        }
         let turn_sequence = self.next_turn.fetch_add(1, Ordering::Relaxed);
         let turn_id = format!("turn-{turn_sequence}");
         if let Some(review) = &session.review {
@@ -110,7 +117,7 @@ impl AppServer {
         session.active_turn_started_at = Some(started_at);
         session.active_scheduled_loop = Some(loop_id.clone());
         session.status = SessionStatus::Running;
-        session.latest_turn = Some(PublicTurn {
+        session.record_turn(PublicTurn {
             id: turn_id.clone(),
             session_id: canonical_session_id.clone(),
             status: PublicTurnStatus::InProgress,
@@ -119,6 +126,7 @@ impl AppServer {
             error: None,
             stop_reason: None,
         });
+        session.bumped_at = Some(started_at);
         session.updated_at = started_at;
         let event_id = next_event_id(session);
         fire.notice
@@ -283,7 +291,7 @@ impl AppServer {
             session.snapshot.as_ref(),
             snapshot.clone(),
         ));
-        session.latest_turn = Some(turn.clone());
+        session.record_turn(turn.clone());
         session.updated_at = completed_at;
         session.stats.finish_turn();
         let stats = stats_updated_frame(session);
@@ -346,7 +354,7 @@ impl AppServer {
             error: Some(public_turn_failure(code, message)),
             stop_reason: None,
         };
-        session.latest_turn = Some(turn.clone());
+        session.record_turn(turn.clone());
         session.updated_at = turn.completed_at.unwrap_or(started_at);
         session.stats.abandon_turn();
         let stats = stats_updated_frame(session);
@@ -443,9 +451,7 @@ impl AppServer {
         session.snapshot = Some(snapshot);
         session.updated_at = now_millis();
         session.event_watermark = 0;
-        if let Some(turn) = session.latest_turn.as_mut() {
-            turn.session_id = new_session_id.to_owned();
-        }
+        session.rebind_turns(new_session_id);
         if let Some(callback) = session.pending_callback.as_mut() {
             callback.entry.rebind_session(new_session_id);
         }

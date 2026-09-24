@@ -17,6 +17,13 @@ required-features = ["test-fixtures"]
 test = false
 bench = false
 
+[[bin]]
+name = "vibe-app-server-stdio-fixture"
+path = "tests/fixtures/app_server_stdio_fixture.rs"
+required-features = ["test-fixtures"]
+test = false
+bench = false
+
 [dependencies]
 base64.workspace = true
 command-group.workspace = true

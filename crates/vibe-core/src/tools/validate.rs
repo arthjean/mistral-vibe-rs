@@ -253,6 +253,17 @@ fn to_camel(name: &str) -> String {
     camel
 }
 
+/// The boolean a pydantic `bool` field reads `value` as, in its default lax
+/// mode: a boolean itself, or one of the booleanish forms below. [`None`] when
+/// the value cannot become one.
+#[must_use]
+pub fn python_bool(value: &Value) -> Option<bool> {
+    match value {
+        Value::Bool(flag) => Some(*flag),
+        value => coerce_boolean(value).and_then(|value| value.as_bool()),
+    }
+}
+
 /// The booleanish forms the reference accepts, or [`None`] when the value is
 /// already a boolean or cannot become one.
 ///

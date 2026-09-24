@@ -55,6 +55,77 @@ impl SessionStore {
         .map(|hydrated| hydrated.metadata)
     }
 
+    /// The session a rewind forks onto, composed without writing anything.
+    ///
+    /// Reference `RewindManager.rewind_to_message` resets the session to a new
+    /// identifier and leaves it unpersisted until its next save
+    /// (`vibe/core/session/session_logger.py:735-748`), so a fork nobody types
+    /// into never reaches disk. The draft carries everything
+    /// [`SessionStore::publish_draft`] needs to write it later: the kept
+    /// messages, the parent it continues, and what a handoff inherits.
+    #[must_use]
+    pub fn draft_handoff(
+        &self,
+        parent: &HydratedSession,
+        new_id: &str,
+        keep_messages: usize,
+        statistics: BTreeMap<String, serde_json::Value>,
+        now_ms: u64,
+    ) -> HydratedSession {
+        let mut messages = parent.messages.clone();
+        messages.truncate(keep_messages);
+        let mut metadata = parent.metadata.clone();
+        new_id.clone_into(&mut metadata.id);
+        metadata.directory = String::new();
+        metadata.start_time = super::format_iso_timestamp(now_ms);
+        metadata.end_time = None;
+        metadata.child_sessions = Vec::new();
+        metadata.loops = Vec::new();
+        metadata.title = None;
+        metadata.title_source = super::default_title_source();
+        metadata.message_count = 0;
+        metadata.last_message_fingerprint = None;
+        metadata.statistics = statistics;
+        metadata.created_at_ms = now_ms;
+        metadata.updated_at_ms = now_ms;
+        metadata.parent_session_id = Some(parent.metadata.id.clone());
+        HydratedSession {
+            metadata,
+            messages,
+            current_config: parent.current_config.clone(),
+        }
+    }
+
+    /// Writes a draft [`SessionStore::draft_handoff`] composed, under its own
+    /// identifier and continuing the parent it names.
+    ///
+    /// # Errors
+    ///
+    /// Fails as a handoff fails: the draft's identifier is invalid, or the
+    /// directory, the messages or the pointer cannot be written.
+    pub fn publish_draft(
+        &self,
+        draft: &HydratedSession,
+        now_ms: u64,
+    ) -> Result<HydratedSession, StorageError> {
+        // A handoff copies what the new session inherits from the one it
+        // continues; the draft already holds those values, so it stands in for
+        // its parent under the parent's identifier.
+        let mut template = draft.metadata.clone();
+        template.id = draft.metadata.parent_session_id.clone().unwrap_or_default();
+        self.publish_handoff(
+            &template,
+            &draft.metadata.id,
+            draft.messages.clone(),
+            HandoffPlan {
+                current_config: draft.current_config.clone(),
+                config_overlay: BTreeMap::new(),
+                retain_parent: draft.metadata.parent_session_id.is_some(),
+            },
+            now_ms,
+        )
+    }
+
     pub(super) fn publish_handoff(
         &self,
         parent: &SessionMetadata,

@@ -511,8 +511,7 @@ pub(crate) fn display_title(session: &Value) -> Option<String> {
 /// The entries of a public session state.
 pub(crate) fn history_entries(state: &Value) -> Vec<Value> {
     state
-        .pointer("/history/entries")
-        .or_else(|| state.get("history"))
+        .get("history")
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default()

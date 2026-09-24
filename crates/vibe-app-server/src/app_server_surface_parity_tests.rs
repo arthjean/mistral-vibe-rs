@@ -424,8 +424,9 @@ const DIVERGENT_HANDSHAKE: &[(&str, &str)] = &[
 /// US-093 closed the last one. The v2.24.0 re-pin (US-142) opened `config/read`
 /// and `runtime/read` with the three unpinned active-model fields of
 /// `ConfigView`; the v2.25.7 re-pin widened both and opened the two session
-/// reads. Any other response that stops validating has to earn an entry here
-/// before the replay accepts it.
+/// reads, and the rewind pass closed `session/read` by publishing the
+/// reshaped `PublicSessionState`. Any other response that stops validating has
+/// to earn an entry here before the replay accepts it.
 const DIVERGENT_RESPONSES: &[(&str, &str)] = &[
     (
         "config/read",
@@ -438,10 +439,6 @@ const DIVERGENT_RESPONSES: &[(&str, &str)] = &[
     (
         "session/list",
         "v2.25.7: SessionListResponse answers items, nextCursor, previousCursor and continueSessionId (vibe/app_server/protocol.py:496-503); this port still answers /sessions",
-    ),
-    (
-        "session/read",
-        "v2.25.7: PublicSessionState.history is a list of entries and latestTurn is no longer a field but a property over turns (vibe/app_server/models.py:1198,1206-1210); this port answers /state/history as a page object and still carries /state/latestTurn (crates/vibe-app-server/src/server/projection.rs:101,111)",
     ),
 ];
 

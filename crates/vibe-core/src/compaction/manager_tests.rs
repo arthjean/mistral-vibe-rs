@@ -257,16 +257,16 @@ async fn the_primary_call_rides_the_live_transcript_and_carries_the_tool_choice(
         conversation(),
         "the live transcript is not mutated by a compaction"
     );
+    let (envelope, kept) = compacted
+        .messages
+        .split_last()
+        .expect("the compaction appends its envelope");
     assert_eq!(
-        compacted.messages.first(),
-        messages.first(),
-        "the transcript keeps its first message"
+        kept,
+        messages.as_slice(),
+        "the transcript keeps every message before the envelope"
     );
-    assert!(
-        compacted.messages[1].is_injected(),
-        "the envelope is injected"
-    );
-    assert_eq!(compacted.messages.len(), 2);
+    assert!(envelope.is_injected(), "the envelope is injected");
     assert!(compacted.failure.is_none());
 }
 
@@ -419,7 +419,7 @@ async fn both_calls_failing_degrades_to_the_placeholder_with_the_primary_reason(
         Some(CompactionFailureReason::ToolCall),
         "the fallback can only fail as an empty summary, so the primary's reason is reported"
     );
-    assert_eq!(compacted.messages.len(), 2);
+    assert_eq!(compacted.messages.len(), conversation().len() + 1);
 }
 
 /// US-154: an overflow sheds the oldest round and retries, at most three times.
@@ -623,16 +623,17 @@ async fn the_envelope_the_compaction_writes_carries_the_preserved_turns() {
     let compacted = run(&provider, &plan(), &conversation())
         .await
         .expect("the compaction succeeds");
-    let envelope = compacted.messages[1].content();
+    let envelope = compacted
+        .messages
+        .last()
+        .expect("the compaction appends its envelope");
     assert_eq!(
-        super::context::parse_previous_user_messages(envelope),
+        super::context::parse_previous_user_messages(envelope.content()),
         vec!["first".to_owned(), "second".to_owned()]
     );
     assert_eq!(
         extract_summary(&format!("<summary>{}</summary>", "kept")),
         Some("kept".to_owned())
     );
-    assert!(super::context::is_compaction_context_message(
-        &compacted.messages[1]
-    ));
+    assert!(super::context::is_compaction_context_message(envelope));
 }

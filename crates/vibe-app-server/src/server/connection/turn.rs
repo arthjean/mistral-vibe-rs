@@ -56,6 +56,11 @@ impl ServerConnection {
             session.active_scheduled_loop = Some(loop_id);
             loop_notice = Some((fire.notice, fired_at));
         }
+        // A fork a rewind left unwritten is written by its first turn, which
+        // reads its transcript back from the store.
+        if let Some(published) = self.server.workspace.publish_draft(&session.id)? {
+            session.persisted = Some(published);
+        }
         let turn_sequence = self.server.next_turn.fetch_add(1, Ordering::Relaxed);
         let turn_id = format!("turn-{turn_sequence}");
         if let Some(review) = &session.review {
@@ -79,7 +84,8 @@ impl ServerConnection {
             error: None,
             stop_reason: None,
         };
-        session.latest_turn = Some(turn.clone());
+        session.record_turn(turn.clone());
+        session.bumped_at = Some(started_at);
         session.updated_at = started_at;
         let mut outbound = vec![success_bytes(
             request.id,
@@ -261,7 +267,7 @@ impl ServerConnection {
         session.active_turn_started_at = None;
         session.active_scheduled_loop = None;
         session.status = SessionStatus::Cancelled;
-        session.latest_turn = Some(PublicTurn {
+        session.record_turn(PublicTurn {
             id: params.expected_turn_id.clone(),
             session_id: canonical_session_id,
             status: PublicTurnStatus::Interrupted,

@@ -19,7 +19,7 @@ use crate::text::truncate_utf8;
 
 mod validate;
 
-pub use validate::{SchemaViolation, apply_defaults, coerce_and_validate};
+pub use validate::{SchemaViolation, apply_defaults, coerce_and_validate, python_bool};
 use validate::{render_violations, validate_at};
 
 pub mod builtins;

@@ -45,10 +45,10 @@ pub type DriverFuture<'a> =
 pub type CompactionDriverFuture<'a> =
     Pin<Box<dyn Future<Output = Result<SessionCompaction, DriverError>> + Send + 'a>>;
 
+/// A manual compaction that landed: the summary, and the session it was
+/// appended to as it now stands.
 #[derive(Debug, Clone)]
 pub struct SessionCompaction {
-    pub old_session_id: String,
-    pub new_session_id: String,
     pub summary: String,
     pub hydrated: HydratedSession,
 }

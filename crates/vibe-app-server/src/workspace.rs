@@ -20,6 +20,7 @@ mod account;
 mod agents;
 mod config;
 mod sessions;
+pub(crate) use sessions::{history_entry_id, reference_message_index, rewind_entry_index};
 mod worktrees;
 
 use crate::builtin_agents;
@@ -94,8 +95,6 @@ pub const WORKSPACE_METHODS: &[&str] = &[
     "session/list",
     "session/log/read",
     "session/resume",
-    "session/rewind",
-    "session/rewind/read",
     "session/title/update",
     "skills/list",
     "workspace/git/worktrees/limit/update",
@@ -190,6 +189,8 @@ pub struct WorkspaceService {
     agents: Arc<Mutex<AgentRegistry>>,
     next_session: Arc<AtomicU64>,
     persist_runtime_sessions: bool,
+    /// Forks a rewind composed and no turn has written yet, by identifier.
+    drafts: Arc<Mutex<BTreeMap<String, HydratedSession>>>,
 }
 
 /// The `VIBE_*` variables the environment layer composes: the process
@@ -338,6 +339,7 @@ impl WorkspaceService {
             agents: Arc::new(Mutex::new(registry)),
             next_session: Arc::new(AtomicU64::new(1)),
             persist_runtime_sessions: false,
+            drafts: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 
@@ -524,6 +526,18 @@ impl WorkspaceService {
             .unwrap_or((0.0, 0.0, None))
     }
 
+    /// The alias of the model the configuration makes active, which is what
+    /// `PublicSession.model` names (reference `get_active_model().alias`). A
+    /// configuration that will not load names none.
+    #[must_use]
+    pub fn active_model_alias(&self) -> Option<String> {
+        self.config.load().ok().and_then(|snapshot| {
+            snapshot.config_view()["activeModel"]["alias"]
+                .as_str()
+                .map(ToOwned::to_owned)
+        })
+    }
+
     /// Whether the model new turns run on reads images.
     ///
     /// A configuration that will not load is read as reading them, so a broken
@@ -656,8 +670,6 @@ impl WorkspaceService {
             "session/fork" => self.fork(params),
             "session/title/update" => self.title_update(params),
             "session/delete" => self.delete(params),
-            "session/rewind" => self.rewind(params),
-            "session/rewind/read" => self.rewind_read(params),
             "session/history/clear" => self.history_clear(params),
             "agents/list" => self.agents_list(),
             "agents/install" => self.agent_install(params),

@@ -22,9 +22,11 @@ pub(super) fn draw_rewind(frame: &mut Frame<'_>, rewind: &RewindState, theme: Re
     for (index, action) in rewind.actions().iter().enumerate() {
         let selected = *action == rewind.selected_action();
         let label = match action {
-            RewindAction::RestoreAndEdit => "Edit & restore files to this point",
-            RewindAction::EditOnly if target.has_file_changes => "Edit without restoring files",
-            RewindAction::EditOnly => "Edit message from here",
+            RewindChoice::EditAndRestore => "Edit & restore files to this point",
+            RewindChoice::EditOnly if target.has_file_changes => "Edit without restoring files",
+            RewindChoice::EditOnly => "Edit message from here",
+            RewindChoice::InPlace => "Stay in this session",
+            RewindChoice::Fork => "Fork into a new session",
         };
         let style = if selected {
             theme.secondary().add_modifier(Modifier::BOLD)
@@ -40,7 +42,7 @@ pub(super) fn draw_rewind(frame: &mut Frame<'_>, rewind: &RewindState, theme: Re
             style,
         ));
     }
-    if !target.has_file_changes {
+    if !target.has_file_changes && !rewind.choosing_persistence() {
         lines.push(Line::styled(
             "No file changes need restoration at this point.",
             theme.muted(),
@@ -52,7 +54,11 @@ pub(super) fn draw_rewind(frame: &mut Frame<'_>, rewind: &RewindState, theme: Re
     }
     lines.push(Line::default());
     lines.push(Line::styled(
-        "←/Esc previous  → next  Shift+↑↓ scroll  ↑↓ choose  Enter accept  q cancel",
+        if rewind.choosing_persistence() {
+            "↑↓/jk choose  Enter confirm  Esc back  q cancel"
+        } else {
+            "←/Esc previous  → next  Shift+↑↓ scroll  ↑↓/jk choose  Enter accept  q cancel"
+        },
         theme.muted(),
     ));
     let visual_rows = lines

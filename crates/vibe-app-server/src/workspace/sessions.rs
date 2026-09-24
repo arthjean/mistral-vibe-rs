@@ -13,82 +13,161 @@ impl WorkspaceService {
         &self,
         session_id: &str,
     ) -> Result<Option<usize>, WorkspaceServiceError> {
-        match self.store.load(session_id) {
+        match self.load_session(session_id) {
             Ok(hydrated) => Ok(Some(hydrated.messages.len())),
-            Err(StorageError::SessionNotFound(_)) => Ok(None),
-            Err(error) => Err(storage_error(error)),
+            Err(WorkspaceServiceError::NotFound(_)) => Ok(None),
+            Err(error) => Err(error),
         }
     }
 
-    pub(crate) fn snapshot_session(
-        &self,
-        session_id: &str,
-    ) -> Result<HydratedSession, WorkspaceServiceError> {
-        self.store.load(session_id).map_err(storage_error)
+    /// Where the store writes a session it names `directory`.
+    pub(crate) fn session_path(&self, directory: &str) -> PathBuf {
+        self.paths.session_root.join(directory)
     }
 
-    /// Where `entry_id` sits in the stored message list.
+    /// The transcript `session_id` holds now: the fork a rewind left unwritten
+    /// when there is one, and the stored session otherwise.
     ///
     /// # Errors
     ///
-    /// Reports the session storage failure, and answers `NotFound` when no
-    /// rewindable user entry carries the identifier.
-    pub(crate) fn rewind_entry_index(
+    /// Answers `NotFound` for a session neither holds, and reports any other
+    /// storage failure.
+    pub(crate) fn load_session(
         &self,
         session_id: &str,
-        entry_id: &str,
-    ) -> Result<usize, WorkspaceServiceError> {
-        let hydrated = self.store.load(session_id).map_err(storage_error)?;
-        rewind_entry_index(&hydrated.messages, entry_id)
+    ) -> Result<HydratedSession, WorkspaceServiceError> {
+        if let Some(draft) = self.lock_drafts()?.get(session_id) {
+            return Ok(draft.clone());
+        }
+        self.store.load(session_id).map_err(|error| match error {
+            StorageError::SessionNotFound(_) => {
+                WorkspaceServiceError::NotFound(format!("Session not found: {session_id}"))
+            }
+            error => storage_error(error),
+        })
     }
 
-    pub(crate) fn rollback_rewind(
+    /// Whether `session_id` is a fork no turn has written to disk yet.
+    #[must_use]
+    pub(crate) fn is_draft(&self, session_id: &str) -> bool {
+        self.lock_drafts()
+            .is_ok_and(|drafts| drafts.contains_key(session_id))
+    }
+
+    /// Forks `source` before the message at `keep_messages` without writing
+    /// the fork, which stays in memory until [`Self::publish_draft`].
+    ///
+    /// Reference `AgentLoop._reset_session`: the fork keeps the stable suffix
+    /// of the identifier it continues (`vibe/core/session/session_id.py`) and
+    /// names that session its parent.
+    pub(crate) fn fork_draft(
         &self,
-        source: HydratedSession,
-        result_session_id: &str,
-    ) -> Result<(), WorkspaceServiceError> {
-        let mut failures = Vec::new();
-        if result_session_id == source.metadata.id {
-            let mut metadata = source.metadata.clone();
-            match self.store.replace_messages(
-                &mut metadata,
-                &source.messages,
-                source.metadata.updated_at_ms,
-            ) {
-                Ok(()) => {
-                    if let Err(error) = self.store.update_metadata(&source.metadata) {
-                        failures.push(error.to_string());
-                    }
-                }
-                Err(error) => failures.push(error.to_string()),
+        source: &HydratedSession,
+        keep_messages: usize,
+    ) -> Result<HydratedSession, WorkspaceServiceError> {
+        let new_id = vibe_core::session_id::rotate_session_id(&source.metadata.id);
+        let draft = self.store.draft_handoff(
+            source,
+            &new_id,
+            keep_messages,
+            source.metadata.statistics.clone(),
+            now_millis(),
+        );
+        self.continuity
+            .refresh(draft.clone())
+            .map_err(|error| WorkspaceServiceError::Storage(error.to_string()))?;
+        self.lock_drafts()?.insert(new_id, draft.clone());
+        Ok(draft)
+    }
+
+    /// Writes the draft fork `session_id` names, which is what its first save
+    /// does upstream. Answers `None` when the session is not a draft.
+    ///
+    /// # Errors
+    ///
+    /// Reports the storage failure, leaving the draft in place so a later save
+    /// can try again.
+    pub(crate) fn publish_draft(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<HydratedSession>, WorkspaceServiceError> {
+        let mut drafts = self.lock_drafts()?;
+        let Some(draft) = drafts.get(session_id) else {
+            return Ok(None);
+        };
+        let published = self
+            .store
+            .publish_draft(draft, now_millis())
+            .map_err(storage_error)?;
+        drafts.remove(session_id);
+        drop(drafts);
+        self.continuity
+            .refresh(published.clone())
+            .map_err(|error| WorkspaceServiceError::Storage(error.to_string()))?;
+        Ok(Some(published))
+    }
+
+    /// Keeps the messages before `keep_messages` under the same identifier and
+    /// writes them, even when none are left.
+    ///
+    /// Reference `RewindManager.rewind_to_message` with `inplace`: the
+    /// truncated history is saved with `allow_empty`, so a draft fork rewound
+    /// in place is written here for the first time.
+    ///
+    /// # Errors
+    ///
+    /// Reports the storage failure.
+    pub(crate) fn truncate_session(
+        &self,
+        session_id: &str,
+        keep_messages: usize,
+    ) -> Result<HydratedSession, WorkspaceServiceError> {
+        let draft = self.lock_drafts()?.get(session_id).cloned();
+        let hydrated = match draft {
+            Some(mut draft) => {
+                draft.messages.truncate(keep_messages);
+                self.lock_drafts()?.insert(session_id.to_owned(), draft);
+                self.publish_draft(session_id)?.ok_or_else(|| {
+                    WorkspaceServiceError::Storage(format!(
+                        "the rewound draft `{session_id}` disappeared before it was saved"
+                    ))
+                })?
             }
-        } else {
-            match self.store.delete(result_session_id) {
-                Ok(()) | Err(StorageError::SessionNotFound(_)) => {}
-                Err(error) => failures.push(error.to_string()),
+            None => {
+                let statistics = self
+                    .store
+                    .load(session_id)
+                    .map_err(storage_error)?
+                    .metadata
+                    .statistics;
+                self.store
+                    .rewind(session_id, keep_messages, statistics, now_millis())
+                    .map_err(storage_error)?
             }
-            if let Err(error) = self.continuity.remove(result_session_id) {
-                failures.push(error.to_string());
-            }
-        }
-        if let Err(error) = self.store.select_for_continue(&source.metadata.id) {
-            failures.push(error.to_string());
-        }
-        if let Err(error) = self.continuity.refresh(source) {
-            failures.push(error.to_string());
-        }
-        if failures.is_empty() {
-            Ok(())
-        } else {
-            Err(WorkspaceServiceError::Storage(failures.join("; ")))
+        };
+        self.continuity
+            .refresh(hydrated.clone())
+            .map_err(|error| WorkspaceServiceError::Storage(error.to_string()))?;
+        Ok(hydrated)
+    }
+
+    /// Forgets a draft fork, which is what closing a session nobody typed into
+    /// leaves of it upstream: nothing.
+    pub(crate) fn discard_draft(&self, session_id: &str) {
+        if let Ok(mut drafts) = self.lock_drafts()
+            && drafts.remove(session_id).is_some()
+        {
+            let _ = self.continuity.remove(session_id);
         }
     }
 
-    pub(crate) fn rewind_after_workspace_restore(
+    fn lock_drafts(
         &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
-        self.rewind_impl(params, true)
+    ) -> Result<std::sync::MutexGuard<'_, BTreeMap<String, HydratedSession>>, WorkspaceServiceError>
+    {
+        self.drafts
+            .lock()
+            .map_err(|_| WorkspaceServiceError::StatePoisoned)
     }
 
     pub fn update_runtime_settings(
@@ -154,6 +233,7 @@ impl WorkspaceService {
         session_id: &str,
         now_ms: u64,
     ) -> Result<(), WorkspaceServiceError> {
+        self.discard_draft(session_id);
         match self.store.close(session_id, now_ms) {
             Ok(_) | Err(StorageError::SessionNotFound(_)) => Ok(()),
             Err(error) => Err(storage_error(error)),
@@ -183,14 +263,25 @@ impl WorkspaceService {
         params: &BTreeMap<String, Value>,
     ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let session_id = required_string(params, "sessionId")?;
-        let history = self
-            .store
-            .history(
-                session_id,
-                usize_param(params, "offset", 0, 0, usize::MAX)?,
-                usize_param(params, "limit", 100, SESSION_PAGE_MIN, SESSION_PAGE_MAX)?,
-            )
-            .map_err(storage_error)?;
+        let offset = usize_param(params, "offset", 0, 0, usize::MAX)?;
+        let limit = usize_param(params, "limit", 100, SESSION_PAGE_MIN, SESSION_PAGE_MAX)?;
+        // A fork a rewind left unwritten is read where it is held.
+        let draft = self.lock_drafts()?.get(session_id).map(|draft| {
+            draft
+                .messages
+                .iter()
+                .skip(offset)
+                .take(limit)
+                .cloned()
+                .collect::<Vec<_>>()
+        });
+        let history = match draft {
+            Some(history) => history,
+            None => self
+                .store
+                .history(session_id, offset, limit)
+                .map_err(storage_error)?,
+        };
         Ok(WorkspaceDispatch::result([(
             "history",
             serde_json::to_value(history)?,
@@ -201,10 +292,12 @@ impl WorkspaceService {
         &self,
         params: &BTreeMap<String, Value>,
     ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
-        let hydrated = self
-            .store
-            .load(required_string(params, "sessionId")?)
-            .map_err(storage_error)?;
+        let session_id = required_string(params, "sessionId")?;
+        let draft = self.lock_drafts()?.get(session_id).cloned();
+        let hydrated = match draft {
+            Some(draft) => draft,
+            None => self.store.load(session_id).map_err(storage_error)?,
+        };
         Ok(hydrated_result(&hydrated, None))
     }
 
@@ -401,126 +494,6 @@ impl WorkspaceService {
         Ok(WorkspaceDispatch::result([("deleted", json!(true))]))
     }
 
-    pub(super) fn rewind(
-        &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
-        self.rewind_impl(params, false)
-    }
-
-    pub(super) fn rewind_impl(
-        &self,
-        params: &BTreeMap<String, Value>,
-        workspace_restore_handled: bool,
-    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
-        let session_id = required_string(params, "sessionId")?;
-        let entry_id = required_string(params, "entryId")?;
-        let restore_files = params
-            .get("restoreFiles")
-            .map(|value| {
-                value.as_bool().ok_or_else(|| {
-                    WorkspaceServiceError::InvalidParams(
-                        "restoreFiles must be a boolean".to_owned(),
-                    )
-                })
-            })
-            .transpose()?
-            .unwrap_or(false);
-        if restore_files && !workspace_restore_handled {
-            return Err(WorkspaceServiceError::InvalidParams(
-                "this session has no restorable file checkpoint".to_owned(),
-            ));
-        }
-        let inplace = params
-            .get("inplace")
-            .map(|value| {
-                value.as_bool().ok_or_else(|| {
-                    WorkspaceServiceError::InvalidParams("inplace must be a boolean".to_owned())
-                })
-            })
-            .transpose()?
-            .unwrap_or(false);
-        let source = self.store.load(session_id).map_err(storage_error)?;
-        let keep_messages = rewind_entry_index(&source.messages, entry_id)?;
-        let message = source
-            .messages
-            .get(keep_messages)
-            .and_then(|message| match message {
-                ModelMessage::User { content, .. } => Some(content.clone()),
-                _ => None,
-            })
-            .unwrap_or_default();
-        let requested_statistics = statistics_map(params.get("statistics"))?;
-        let rewind_statistics = if requested_statistics.is_empty() {
-            source.metadata.statistics.clone()
-        } else {
-            requested_statistics
-        };
-        let timestamp = now_millis();
-        let hydrated = if inplace {
-            self.store
-                .rewind(session_id, keep_messages, rewind_statistics, timestamp)
-                .map_err(storage_error)?
-        } else {
-            let new_id = format!(
-                "session-{}-{}",
-                timestamp,
-                self.next_session.fetch_add(1, Ordering::Relaxed)
-            );
-            self.store
-                .fork_rewound(
-                    session_id,
-                    &new_id,
-                    keep_messages,
-                    rewind_statistics,
-                    timestamp,
-                )
-                .map_err(storage_error)?
-        };
-        if let Err(error) = self.continuity.refresh(hydrated.clone()) {
-            if let Err(rollback) = self.rollback_rewind(source, &hydrated.metadata.id) {
-                return Err(WorkspaceServiceError::Storage(format!(
-                    "continuity refresh failed ({error}); rewind rollback failed ({rollback})"
-                )));
-            }
-            return Err(WorkspaceServiceError::Storage(error.to_string()));
-        }
-        // `SessionRewindResponse` declares five fields and this service can
-        // answer three of them: `state` and `sessionLog` are composed from the
-        // live session the attachment below rebinds, which only the server
-        // holds. The two lists are placeholders the workspace restore replaces.
-        Ok(WorkspaceDispatch {
-            result: [
-                ("message".to_owned(), json!(message)),
-                ("restoreErrors".to_owned(), json!([])),
-                ("restoredPaths".to_owned(), json!([])),
-            ]
-            .into_iter()
-            .collect(),
-            attachment: Some(runtime_attachment(&hydrated)),
-        })
-    }
-
-    /// Whether rewinding to one history entry would change files, and which.
-    ///
-    /// The entry is resolved here so an identifier no rewindable message
-    /// carries is refused before anything reads a workspace. The two fields are
-    /// answered empty: the paths come from the session's checkpoint log, which
-    /// the server holds and fills in.
-    pub(super) fn rewind_read(
-        &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
-        let session_id = required_string(params, "sessionId")?;
-        let entry_id = required_string(params, "entryId")?;
-        let hydrated = self.store.load(session_id).map_err(storage_error)?;
-        rewind_entry_index(&hydrated.messages, entry_id)?;
-        Ok(WorkspaceDispatch::result([
-            ("hasFileChanges", json!(false)),
-            ("paths", json!([])),
-        ]))
-    }
-
     /// Reference `_history_clear`: the conversation continues under a rotated
     /// identifier with nothing said yet, and the session it replaces is left on
     /// disk untouched, so `vibe --resume` can still reach it. The new session
@@ -647,42 +620,48 @@ pub(super) fn fork_keep_messages(
     }
 }
 
-/// The identity a stored message is addressed by on the wire.
-///
-/// A stored message carries no identifier of its own here, so the identity is
-/// the one the reference falls back to when a message has none: its position in
-/// the list and its role. Mirrors `history_message_id`
-/// (`vibe/app_server/_projection.py:607`).
+/// The identity the reference gives a message that carries none of its own:
+/// its position in the list and its role. Mirrors the fallback of
+/// `history_message_id` (`vibe/app_server/_projection.py:830-831`).
 pub(crate) fn history_entry_id(index: usize, role: &str) -> String {
     format!("history:{index}:{role}")
 }
 
+/// The position the reference numbers `index` by.
+///
+/// The reference's message list always opens with the system prompt, which a
+/// stored transcript here leaves out, so a position read from one counts one
+/// further. A list that does open with the prompt is already numbered alike.
+pub(crate) fn reference_message_index(messages: &[ModelMessage], index: usize) -> usize {
+    if matches!(messages.first(), Some(ModelMessage::System { .. })) {
+        index
+    } else {
+        index.saturating_add(1)
+    }
+}
+
 /// Which stored message `entry_id` names, among the ones a rewind may target.
 ///
-/// Only a user message is rewindable, which is what makes the position the
-/// rewind cuts at the position of the message the operator is about to edit.
-/// Mirrors `history_user_message_index`
-/// (`vibe/app_server/_projection.py:611`).
-pub(super) fn rewind_entry_index(
-    messages: &[ModelMessage],
-    entry_id: &str,
-) -> Result<usize, WorkspaceServiceError> {
+/// Reference `history_user_message_index` (`vibe/app_server/_projection.py:834`):
+/// only a user message the operator wrote is rewindable, and it is named by its
+/// own identity, or by its position when it carries none.
+pub(crate) fn rewind_entry_index(messages: &[ModelMessage], entry_id: &str) -> Option<usize> {
     messages
         .iter()
         .enumerate()
         .find(|(index, message)| match message {
-            ModelMessage::User { message_id, .. } => {
-                message_id.as_deref() == Some(entry_id)
-                    || history_entry_id(*index, "user") == entry_id
+            ModelMessage::User {
+                message_id,
+                injected: false,
+                ..
+            } => {
+                message_id.clone().unwrap_or_else(|| {
+                    history_entry_id(reference_message_index(messages, *index), "user")
+                }) == entry_id
             }
             _ => false,
         })
         .map(|(index, _message)| index)
-        .ok_or_else(|| {
-            WorkspaceServiceError::NotFound(format!(
-                "Rewindable history entry not found: {entry_id}"
-            ))
-        })
 }
 
 pub(super) fn hydrated_result(
@@ -726,10 +705,4 @@ pub(super) fn runtime_attachment(hydrated: &HydratedSession) -> RuntimeAttachmen
         agent_profile,
         hydrated: hydrated.clone(),
     }
-}
-
-pub(super) fn statistics_map(
-    value: Option<&Value>,
-) -> Result<BTreeMap<String, Value>, WorkspaceServiceError> {
-    config_map(value)
 }

@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Rewind as the reference does. The rewind panel asks what to do with the
+  files and then whether to stay in the session or fork it, and `Esc` steps
+  back between the two. A fork is written by its first turn, a rewind reports
+  absolute restored paths, and `session/rewind` validates its parameters the
+  way the reference does, `inplace` included.
+
+- Compaction appends its summary to the conversation instead of replacing
+  it: the session keeps its identifier, its history and its file checkpoints,
+  so a rewind can still reach a message from before the compaction, while the
+  model is sent only what follows the latest summary. `session/compact/start`
+  answers with the same session and no longer raises `session/compacted`.
+
+- Answer `session/read` and every other session state in the reference's
+  `PublicSessionState` shape: `history` is a list, `turns` replaces
+  `latestTurn`, and the session carries its root, workspace roots, model and
+  queue.
+
 - Serve editors over ACP the way the reference agent does. `vibe-acp`
   answers every standard method, including `session/resume`, forking at a
   message and `session/close`, with the reference's validation errors, streams

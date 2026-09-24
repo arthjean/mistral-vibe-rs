@@ -266,6 +266,7 @@ impl ServerConnection {
         session.persisted = persisted;
         session.agent_summary = Some(crate::workspace::agent_summary(&agent_profile));
         session.context_window = self.server.workspace.context_window();
+        session.active_model_alias = self.server.workspace.active_model_alias();
         session.compaction = self.server.workspace.compaction_settings();
         session.created_worktree = resolution.created().cloned();
         sessions.insert(session);
@@ -746,19 +747,10 @@ impl ServerConnection {
 /// (`vibe/app_server/_root_session.py`): a reopened session's history ends on
 /// a checkpoint that marks where the earlier conversation stops.
 fn resume_checkpoint(session_id: &str) -> vibe_core::events::PublicHistoryEntry {
-    let timestamp = now_millis();
-    vibe_core::events::PublicHistoryEntry::Checkpoint {
-        metadata: vibe_core::events::PublicEntryMetadata {
-            id: format!("checkpoint:resume:{}", vibe_core::session_id::uuid_v4()),
-            session_id: session_id.to_owned(),
-            turn_id: None,
-            created_at: timestamp,
-            updated_at: timestamp,
-            generation_status: vibe_core::events::PublicEntryGenerationStatus::Completed,
-            related_entry_id: None,
-        },
-        kind: "resume".to_owned(),
-        message: Some("Picked up where the session left off".to_owned()),
-        details: Value::Null,
-    }
+    checkpoint_entry(
+        session_id,
+        "resume",
+        "Picked up where the session left off",
+        Value::Null,
+    )
 }

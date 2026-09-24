@@ -9,7 +9,7 @@ use crate::events::ModelMessage;
 use super::context::{
     COMPACT_USER_MESSAGE_MAX_TOKENS, collect_prior_user_messages, drop_oldest_round,
     extract_summary, is_compaction_context_message, parse_previous_user_messages,
-    render_compaction_context,
+    render_compaction_context, select_model_context,
 };
 
 const PREFIX: &str = "[conversation summary]";
@@ -282,4 +282,32 @@ fn a_second_compaction_merges_what_the_first_preserved() {
     ];
     let selected = collect_prior_user_messages(&messages, PREFIX, COMPACT_USER_MESSAGE_MAX_TOKENS);
     assert_eq!(contents(&selected), ["first", "second", "third"]);
+}
+
+/// The model reads from the latest envelope on, after the system messages that
+/// precede it, while the conversation before it stays in the transcript.
+#[test]
+fn the_model_context_starts_at_the_latest_envelope() {
+    let first = ModelMessage::injected_user(render_compaction_context(&[], "one"));
+    let second = ModelMessage::injected_user(render_compaction_context(&[], "two"));
+    let messages = vec![
+        system("prompt"),
+        ModelMessage::user("before"),
+        first,
+        assistant("between"),
+        system("a later directive"),
+        second.clone(),
+        ModelMessage::user("after"),
+    ];
+    assert_eq!(
+        select_model_context(&messages),
+        vec![
+            system("prompt"),
+            system("a later directive"),
+            second,
+            ModelMessage::user("after"),
+        ]
+    );
+    let plain = vec![system("prompt"), ModelMessage::user("only")];
+    assert_eq!(select_model_context(&plain), plain);
 }

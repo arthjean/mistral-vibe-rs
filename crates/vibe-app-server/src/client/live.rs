@@ -114,8 +114,9 @@ pub struct LiveTurnDriver {
     event_observer: Arc<dyn EventObserver>,
 }
 
-/// The provider-bound half of compaction: it mints the identifier the compacted
-/// session continues under and hands everything else to the core manager.
+/// The provider-bound half of compaction: it binds the core manager to this
+/// session's provider and plan. A compacted session keeps its identifier, as
+/// it does upstream since the envelope is appended rather than substituted.
 ///
 /// The summarization itself lives one layer down, in
 /// [`vibe_core::compaction::manager`], because it is provider-neutral: the call
@@ -160,7 +161,7 @@ impl ProviderSessionCompactor {
         )
         .await?;
         Ok(CompactionResult {
-            new_session_id: rotate_session_id(current_session_id),
+            new_session_id: current_session_id.to_owned(),
             summary: summarized.summary,
             messages: summarized.messages,
             usage: summarized.usage,
@@ -866,23 +867,21 @@ impl TurnDriver for LiveTurnDriver {
                 )
                 .await
                 .map_err(|failure| DriverError::Compaction(failure.message))?;
+            // The conversation is kept and the envelope written after it,
+            // under the same session.
+            let mut metadata = hydrated.metadata.clone();
             store
-                .handoff_messages(
-                    &hydrated.metadata,
-                    &compaction.new_session_id,
-                    &compaction.messages,
+                .append_messages(
+                    &mut metadata,
+                    compaction
+                        .messages
+                        .get(hydrated.messages.len()..)
+                        .unwrap_or_default(),
                     crate::host::now_millis(),
-                    // A manual compaction is still a compaction, so the session
-                    // it came from stays its parent.
-                    true,
                 )
                 .map_err(DriverError::Storage)?;
-            let compacted = store
-                .load(&compaction.new_session_id)
-                .map_err(DriverError::Storage)?;
+            let compacted = store.load(&metadata.id).map_err(DriverError::Storage)?;
             Ok(SessionCompaction {
-                old_session_id: hydrated.metadata.id,
-                new_session_id: compaction.new_session_id,
                 summary: compaction.summary,
                 hydrated: compacted,
             })

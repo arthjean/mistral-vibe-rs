@@ -56,12 +56,10 @@ const MINIMUM_SCENARIOS: usize = 60;
 /// The first three entries are reference-authored prose, which `NOTICE` forbids
 /// shipping: this port writes its own sentences covering the same directives,
 /// and the structure around them is held to the reference byte for byte. The
-/// fourth is the telemetry call type no census carries here. The
-/// `managerTranscript` entries are the history a successful compaction keeps
-/// before its envelope, one per scenario that returns, since the reference
-/// stopped replacing the conversation; the envelope itself is still compared in
-/// `managerScenarios`. Every other captured answer is reproduced, so any further
-/// divergence is a regression rather than a known gap.
+/// fourth is the telemetry call type no census carries here. Every other
+/// captured answer is reproduced, including the history a compaction keeps
+/// before the envelope it appends, so any further divergence is a regression
+/// rather than a known gap.
 const DIVERGENCES: &[(&str, &str)] = &[
     (
         "envelopeProse/preamble",
@@ -81,38 +79,7 @@ const DIVERGENCES: &[(&str, &str)] = &[
          census reads back; no model call here is routed through a census yet, so this port marks \
          the same request through the provider metadata instead",
     ),
-    ("managerTranscript/primary-succeeds", APPENDED_BOUNDARY),
-    (
-        "managerTranscript/primary-answers-with-a-tool-call",
-        APPENDED_BOUNDARY,
-    ),
-    (
-        "managerTranscript/primary-answers-an-empty-summary",
-        APPENDED_BOUNDARY,
-    ),
-    ("managerTranscript/both-calls-fail", APPENDED_BOUNDARY),
-    ("managerTranscript/strict-mode-succeeds", APPENDED_BOUNDARY),
-    (
-        "managerTranscript/one-overflow-then-success",
-        APPENDED_BOUNDARY,
-    ),
-    (
-        "managerTranscript/three-overflows-then-success",
-        APPENDED_BOUNDARY,
-    ),
-    ("managerTranscript/extra-instructions", APPENDED_BOUNDARY),
 ];
-
-/// Why a successful compaction's transcript diverges, for every scenario that
-/// returns.
-const APPENDED_BOUNDARY: &str = "Since 2.24.1 the reference appends the envelope, tagged \
-     `context_boundary=\"compaction\"`, to the live history and keeps every earlier message \
-     (vibe/core/compaction/manager.py:99-105 at 4a96003186b1, where 2.24.0 reset the list to \
-     its first message and the envelope), so the history messagesAfter records before the \
-     envelope is the whole conversation; this port still returns its first message followed by \
-     the envelope as the replacement transcript (crates/vibe-core/src/compaction/manager.rs:256-259), \
-     so its history is that first message alone. The envelope itself conforms and is compared \
-     in managerScenarios";
 
 // --------------------------------------------------------------------------
 // The corpus
@@ -750,17 +717,11 @@ async fn the_committed_corpus_replays_every_family_the_reference_answered() {
 /// the transcript left behind. Two axes cannot be compared as recorded and are
 /// named in the ledger instead: the reference's telemetry call type, which this
 /// port marks through the provider metadata, and the placeholder summary, which
-/// is reference-authored prose this port writes its own wording for. The
-/// history a returned compaction keeps before its envelope is settled as its own
-/// family, `managerTranscript`, so its ledger entries name that one field
-/// rather than every field of a scenario; the envelope itself, and the whole
-/// transcript of a compaction that raised or overflowed, stay in
-/// `managerScenarios`.
+/// is reference-authored prose this port writes its own wording for.
 async fn replay_manager(corpus: &Corpus) -> Tally {
     let mut report = Report::default();
     let mut call_type = Report::default();
     let mut placeholder = Report::default();
-    let mut transcript = Report::default();
 
     for scenario in &corpus.manager_scenarios {
         let messages: Vec<ModelMessage> = scenario
@@ -931,44 +892,13 @@ async fn replay_manager(corpus: &Corpus) -> Tally {
             .iter()
             .map(|entry| (entry.role.clone(), entry.content.clone(), entry.injected))
             .collect();
-        // A compaction that returned leaves the envelope last on both sides,
-        // and that envelope is held to the reference like any other field. Only
-        // the history kept before it diverges, so only that part is settled in
-        // `managerTranscript`, whose ledger entries then cannot hide a
-        // regression in the envelope itself.
-        match (
-            observed_outcome,
-            expected_messages.split_last(),
-            observed_messages.split_last(),
-        ) {
-            (
-                "returned",
-                Some((expected_envelope, expected_history)),
-                Some((observed_envelope, observed_history)),
-            ) => {
-                report.check(
-                    "managerScenarios",
-                    &scenario.case,
-                    "messagesAfter.envelope",
-                    expected_envelope,
-                    observed_envelope,
-                );
-                transcript.check(
-                    "managerTranscript",
-                    &scenario.case,
-                    "messagesAfter.history",
-                    &expected_history,
-                    &observed_history,
-                );
-            }
-            _ => report.check(
-                "managerScenarios",
-                &scenario.case,
-                "messagesAfter",
-                &expected_messages,
-                &observed_messages,
-            ),
-        }
+        report.check(
+            "managerScenarios",
+            &scenario.case,
+            "messagesAfter",
+            &expected_messages,
+            &observed_messages,
+        );
 
         if placeholder.total == 0 && scenario.summary.as_deref() == Some(PLACEHOLDER_MARK) {
             placeholder.check(
@@ -982,11 +912,10 @@ async fn replay_manager(corpus: &Corpus) -> Tally {
     }
 
     // Both recorded divergences are settled against the ledger without joining
-    // the conformance count, the way the envelope's prose already is. The
-    // transcript is a compared field like any other and joins the count.
+    // the conformance count, the way the envelope's prose already is.
     settle(&call_type, "managerCallType");
     settle(&placeholder, "placeholderSummary");
-    settle(&report, "managerScenarios") + settle(&transcript, "managerTranscript")
+    settle(&report, "managerScenarios")
 }
 
 /// The label the corpus records for a tool choice, which is the string the

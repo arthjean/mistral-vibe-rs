@@ -971,58 +971,81 @@ fn rewind_resolves_an_entry_identity_and_forks_before_the_selected_message() {
             .expect("append message");
     }
 
-    // A rewindable point is addressed by the identity a stored user
-    // message carries, and this service answers the two fields only the
-    // transcript decides; the paths come from the session's engine.
-    let preview = service
-        .dispatch(
-            "session/rewind/read",
-            &BTreeMap::from([
-                ("sessionId".to_owned(), json!(session_id)),
-                ("entryId".to_owned(), json!("history:2:user")),
-            ]),
-        )
-        .expect("rewind preview");
-    assert_eq!(preview.result["hasFileChanges"], json!(false));
-    assert_eq!(preview.result["paths"], json!([]));
-    assert!(
-        matches!(
-            service.dispatch(
-                "session/rewind/read",
-                &BTreeMap::from([
-                    ("sessionId".to_owned(), json!(session_id)),
-                    ("entryId".to_owned(), json!("history:1:user")),
-                ]),
-            ),
-            Err(WorkspaceServiceError::NotFound(_))
-        ),
-        "an assistant message is not a rewindable entry"
+    // A rewindable point is named the way the reference names a message with
+    // no identity of its own: its position in a list the system prompt opens,
+    // which the stored transcript leaves out. Only an operator's turn is one.
+    let stored = service.load_session(session_id).expect("stored session");
+    assert_eq!(
+        rewind_entry_index(&stored.messages, "history:3:user"),
+        Some(2)
+    );
+    assert_eq!(rewind_entry_index(&stored.messages, "history:2:user"), None);
+    assert_eq!(
+        rewind_entry_index(&stored.messages, "history:2:assistant"),
+        None
     );
 
-    let rewind = service
-        .dispatch(
-            "session/rewind",
-            &BTreeMap::from([
-                ("sessionId".to_owned(), json!(session_id)),
-                ("entryId".to_owned(), json!("history:2:user")),
-                ("restoreFiles".to_owned(), json!(false)),
-                ("statistics".to_owned(), json!({"tokens": 17})),
-            ]),
-        )
-        .expect("rewind");
-    let child = rewind.attachment.expect("child attachment");
-    assert_eq!(child.parent_session_id.as_deref(), Some(session_id));
-    assert_eq!(rewind.result["message"], json!("edit this question"));
-    assert_eq!(child.hydrated.messages.len(), 2);
-    assert_eq!(child.hydrated.metadata.statistics["tokens"], 17);
+    // A fork is composed in memory, named with the stable suffix of the
+    // session it continues, and read back from there until it is written.
+    let fork = service.fork_draft(&stored, 2).expect("fork");
+    let fork_id = fork.metadata.id.clone();
+    assert_ne!(fork_id, session_id);
+    assert_eq!(fork.metadata.parent_session_id.as_deref(), Some(session_id));
+    assert_eq!(fork.messages.len(), 2);
+    assert!(service.is_draft(&fork_id));
+    assert!(
+        service.store.load(&fork_id).is_err(),
+        "nothing is written yet"
+    );
+    assert_eq!(
+        service
+            .load_session(&fork_id)
+            .expect("draft")
+            .messages
+            .len(),
+        2
+    );
+    assert_eq!(
+        service
+            .load_session(session_id)
+            .expect("source")
+            .messages
+            .len(),
+        4,
+        "the session left behind keeps every message"
+    );
+
+    // Its first save writes it under its own name, as the source's child.
+    let published = service
+        .publish_draft(&fork_id)
+        .expect("publish")
+        .expect("the fork was a draft");
+    assert!(!service.is_draft(&fork_id));
+    assert_eq!(published.messages.len(), 2);
+    assert_eq!(
+        service
+            .store
+            .load(&fork_id)
+            .expect("written fork")
+            .metadata
+            .parent_session_id
+            .as_deref(),
+        Some(session_id)
+    );
+
+    // In place, the same session keeps what came before the point.
+    let truncated = service
+        .truncate_session(session_id, 2)
+        .expect("in-place rewind");
+    assert_eq!(truncated.metadata.id, session_id);
     assert_eq!(
         service
             .store
             .load(session_id)
-            .expect("source remains")
+            .expect("source")
             .messages
             .len(),
-        4
+        2
     );
 }
 

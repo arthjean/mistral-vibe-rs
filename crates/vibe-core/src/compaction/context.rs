@@ -172,6 +172,29 @@ pub fn is_compaction_context_message(message: &ModelMessage) -> bool {
         && content.contains(COMPACTION_SUMMARY_CLOSE)
 }
 
+/// The part of `messages` a model is sent: everything from the latest
+/// compaction envelope on, after the system messages that precede it.
+///
+/// A compaction appends its envelope and keeps every earlier message, so the
+/// stored conversation stays whole for a rewind while the model reads only
+/// what the envelope summarizes forward. Without an envelope the whole list is
+/// the context.
+///
+/// Reference `select_model_context` (`vibe/core/compaction/context.py`).
+#[must_use]
+pub fn select_model_context(messages: &[ModelMessage]) -> Vec<ModelMessage> {
+    let Some(boundary) = messages.iter().rposition(is_compaction_context_message) else {
+        return messages.to_vec();
+    };
+    messages
+        .iter()
+        .take(boundary)
+        .filter(|message| matches!(message, ModelMessage::System { .. }))
+        .chain(messages.iter().skip(boundary))
+        .cloned()
+        .collect()
+}
+
 /// The user messages a compaction preserves, newest first within `max_tokens`
 /// and returned in transcript order.
 ///

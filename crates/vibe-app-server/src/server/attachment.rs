@@ -384,13 +384,17 @@ impl AppServer {
                     .and_then(|snapshot| snapshot.title.clone())
             })
             .or_else(|| persisted.and_then(|hydrated| hydrated.metadata.title.clone()));
+        // A fork a rewind composed is named but not written until its first
+        // turn, which is what the reference's unsaved logger reports.
+        let written = persisted.filter(|hydrated| !self.workspace.is_draft(&hydrated.metadata.id));
         json!({
             "enabled": enabled,
             "sessionId": persisted.map(|hydrated| hydrated.metadata.id.clone()),
-            "persisted": persisted.is_some(),
-            "path": persisted
-                .map(|hydrated| hydrated.metadata.directory.clone())
-                .filter(|directory| !directory.is_empty()),
+            "persisted": written.is_some(),
+            "path": written
+                .map(|hydrated| hydrated.metadata.directory.as_str())
+                .filter(|directory| !directory.is_empty())
+                .map(|directory| self.workspace.session_path(directory)),
             "title": title,
             // A persisted session whose title is still the one the store
             // generated is waiting for its first real one.
@@ -498,6 +502,7 @@ impl AppServer {
             .as_ref()
             .map(crate::workspace::agent_summary);
         session.context_window = self.workspace.context_window();
+        session.active_model_alias = self.workspace.active_model_alias();
         session.compaction = self.workspace.compaction_settings();
         sessions.insert(session);
         self.open_session_resources(

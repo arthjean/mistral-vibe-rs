@@ -209,6 +209,8 @@ const IMPLEMENTED_METHODS: &[&str] = &[
     "session/read",
     "session/ready/read",
     "session/ready/wait",
+    "session/rewind",
+    "session/rewind/read",
     "session/settings/update",
     "session/start",
     "shell/interrupt",
@@ -702,6 +704,15 @@ impl ParamsRejection {
     /// The detail is still structured: a client reads `errorCount` and `issues`
     /// on every `invalid_params`, and an empty path says the failure is about
     /// the object rather than about a value inside it.
+    /// A rejection reporting every violation the reference's model reports,
+    /// under the message its request validation raises.
+    fn with_issues(issues: Vec<InvalidParamsIssue>) -> Self {
+        Self {
+            message: "Invalid request parameters".to_owned(),
+            issues,
+        }
+    }
+
     fn at_root(message: String) -> Self {
         Self {
             issues: vec![InvalidParamsIssue {

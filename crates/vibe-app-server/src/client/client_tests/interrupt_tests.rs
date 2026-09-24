@@ -97,7 +97,7 @@ async fn complete_interrupt_releases_the_canonical_turn_reservation() {
         .expect("public state remains readable");
     assert_eq!(
         state["state"]
-            .pointer("/latestTurn/status")
+            .pointer("/turns/0/status")
             .and_then(Value::as_str),
         Some("interrupted")
     );

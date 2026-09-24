@@ -1397,7 +1397,7 @@ mod tests {
     }
 
     #[test]
-    fn rewind_restoration_is_target_specific_transactional_and_forkable() {
+    fn rewind_restoration_is_target_specific_transactional_and_truncates_the_log() {
         let directory = tempdir().expect("tempdir");
         std::fs::write(directory.path().join("main.txt"), "zero\n").expect("main fixture");
         std::fs::create_dir(directory.path().join("generated")).expect("generated directory");
@@ -1453,15 +1453,6 @@ mod tests {
         );
         assert!(directory.path().join("generated/later.txt").exists());
 
-        let fork = review.fork_at(4).expect("checkpoint fork");
-        assert_eq!(
-            fork.with_log(|log| (1..=4)
-                .filter(|turn| log.history().has_turn(*turn))
-                .collect::<Vec<_>>())
-                .expect("forked log"),
-            vec![2],
-            "the fork keeps the turns before the cut and drops the rest"
-        );
         let restored = review
             .stage_restore_to_message(2)
             .expect("earlier restoration")
@@ -1477,6 +1468,17 @@ mod tests {
         );
         assert!(!directory.path().join("generated/first.txt").exists());
         assert!(!directory.path().join("generated/later.txt").exists());
+
+        review.drop_turns_from(4).expect("rewind truncation");
+        assert_eq!(
+            review
+                .with_log(|log| (1..=4)
+                    .filter(|turn| log.history().has_turn(*turn))
+                    .collect::<Vec<_>>())
+                .expect("truncated log"),
+            vec![2],
+            "a rewind keeps the turns before its point and drops the rest"
+        );
     }
 
     #[tokio::test]

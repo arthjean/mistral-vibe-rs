@@ -426,7 +426,7 @@ fn session_start_hydrates_bounded_public_resume_history() {
     let Envelope::Success(SuccessResponse { result, .. }) = decoded else {
         return;
     };
-    let entries = result["state"]["history"]["entries"]
+    let entries = result["state"]["history"]
         .as_array()
         .expect("public history");
     // The resume checkpoint is the newest entry and counts toward the limit.

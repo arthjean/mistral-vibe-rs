@@ -15,7 +15,7 @@ use crate::tui::pickers::{
     remote_projects_overlay, rewind_targets, sessions_overlay,
 };
 use crate::tui::render::{BannerContext, TokenState, UiContext, draw};
-use crate::tui::rewind::{RewindAction, RewindState};
+use crate::tui::rewind::{RewindChoice, RewindState};
 use crate::tui::setup::{DetectedTheme, Theme, resolve_theme};
 use crate::tui::state::TuiState;
 use crate::tui::state::{EntrySource, EntryStatus, TranscriptEntry, TranscriptKind};
@@ -770,11 +770,13 @@ fn public_server_payloads_build_searchable_config_session_and_mcp_pickers() {
     assert_eq!(targets.len(), 2, "only user messages are rewindable");
     targets[1].has_file_changes = true;
     let rewind = RewindState::new(targets).expect("rewind targets");
-    assert_eq!(rewind.target().entry_id, "history:3:user");
+    // The stored list leaves the system prompt out, so a position counts one
+    // further, as the reference numbers the list that opens with it.
+    assert_eq!(rewind.target().entry_id, "history:4:user");
     assert!(rewind.target().message.contains("prompt to edit"));
     assert_eq!(
         rewind.actions(),
-        &[RewindAction::RestoreAndEdit, RewindAction::EditOnly]
+        &[RewindChoice::EditAndRestore, RewindChoice::EditOnly]
     );
 }
 

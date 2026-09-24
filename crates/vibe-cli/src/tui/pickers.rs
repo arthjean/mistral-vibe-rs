@@ -273,19 +273,40 @@ fn config_origin(snapshot: &Value, path: &str, configured: bool) -> String {
 /// files is filled in by the caller, which is the only one that can ask.
 #[must_use]
 pub fn rewind_targets(history: &Value, offset: usize) -> Vec<RewindTarget> {
-    history
+    let messages = history
         .get("history")
         .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+    // Reference `history_message_id`: a message without an identity of its
+    // own is named by its position in a list the system prompt opens, which
+    // a stored transcript leaves out.
+    let base = usize::from(
+        offset > 0
+            || messages.first().and_then(|message| message.get("role"))
+                != Some(&Value::from("system")),
+    );
+    messages
+        .iter()
         .enumerate()
         .filter_map(|(position, message)| {
-            if message.get("role").and_then(Value::as_str) != Some("user") {
+            // Reference `history_user_message_index`: only a message the
+            // operator wrote is a rewind point.
+            if message.get("role").and_then(Value::as_str) != Some("user")
+                || message.get("injected").and_then(Value::as_bool) == Some(true)
+            {
                 return None;
             }
             let content = message.get("content").and_then(Value::as_str)?.to_owned();
+            let entry_id = message
+                .get("message_id")
+                .and_then(Value::as_str)
+                .map_or_else(
+                    || format!("history:{}:user", offset + position + base),
+                    ToOwned::to_owned,
+                );
             Some(RewindTarget {
-                entry_id: format!("history:{}:user", offset.saturating_add(position)),
+                entry_id,
                 message: content,
                 has_file_changes: false,
             })

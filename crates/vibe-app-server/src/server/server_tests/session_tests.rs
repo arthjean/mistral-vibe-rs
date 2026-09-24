@@ -532,7 +532,7 @@ fn rewind_read_and_restore_use_live_target_specific_checkpoints() {
     let read = connection.dispatch(&request(
         5,
         "session/rewind/read",
-        json!({"sessionId": "source-session", "entryId": "history:5:user"}),
+        json!({"sessionId": "source-session", "entryId": "history:6:user"}),
     ));
     let decoded = decode_frame(&read.outbound[0]).expect("rewind read response");
     assert!(matches!(decoded, Envelope::Success(_)));
@@ -540,9 +540,14 @@ fn rewind_read_and_restore_use_live_target_specific_checkpoints() {
         return;
     };
     // The read answers the entry it was asked about and nothing else, and
-    // the paths come from the session's own checkpoint log.
+    // the paths come from the session's own checkpoint log, resolved as the
+    // reference reports them.
+    let main = working_directory
+        .join("main.txt")
+        .to_string_lossy()
+        .into_owned();
     assert_eq!(result["hasFileChanges"], json!(true));
-    assert_eq!(result["paths"], json!(["main.txt"]));
+    assert_eq!(result["paths"], json!([main]));
     assert!(
         crate::app_server_surface_parity_tests::census_issues(
             "session/rewind/read",
@@ -557,7 +562,7 @@ fn rewind_read_and_restore_use_live_target_specific_checkpoints() {
     let untouched = connection.dispatch(&request(
         52,
         "session/rewind/read",
-        json!({"sessionId": "source-session", "entryId": "history:0:user"}),
+        json!({"sessionId": "source-session", "entryId": "history:1:user"}),
     ));
     let Envelope::Success(SuccessResponse { result: quiet, .. }) =
         decode_frame(&untouched.outbound[0]).expect("untouched read")
@@ -570,14 +575,14 @@ fn rewind_read_and_restore_use_live_target_specific_checkpoints() {
     let unknown = connection.dispatch(&request(
         51,
         "session/rewind/read",
-        json!({"sessionId": "source-session", "entryId": "history:4:user"}),
+        json!({"sessionId": "source-session", "entryId": "history:5:user"}),
     ));
     assert!(
         matches!(
             decode_frame(&unknown.outbound[0]).expect("unknown entry"),
             Envelope::Error(_)
         ),
-        "an identifier no rewindable entry carries is refused"
+        "an identifier that names an answer rather than a prompt is refused"
     );
 
     let rejected = connection.dispatch(&request(
@@ -585,7 +590,7 @@ fn rewind_read_and_restore_use_live_target_specific_checkpoints() {
         "session/rewind",
         json!({
             "sessionId": "source-session",
-            "entryId": "history:5:user",
+            "entryId": "history:6:user",
             "restoreFiles": true,
             "inplace": "invalid"
         }),
@@ -604,7 +609,7 @@ fn rewind_read_and_restore_use_live_target_specific_checkpoints() {
         "session/rewind",
         json!({
             "sessionId": "source-session",
-            "entryId": "history:5:user",
+            "entryId": "history:6:user",
             "restoreFiles": true
         }),
     ));
@@ -626,23 +631,12 @@ fn rewind_read_and_restore_use_live_target_specific_checkpoints() {
             "state".to_owned()
         ]
     );
-    // The two divergences the v2.25.7 census records for every
-    // `PublicSessionState` this port answers, and nothing else: the reference
-    // made `history` a list of entries and turned `latestTurn` into a property
-    // over `turns` (vibe/app_server/models.py:1198,1206-1210), while this port
-    // still answers a history page and a `latestTurn` field
-    // (crates/vibe-app-server/src/server/projection.rs:101,111). The same pair
-    // is recorded for `session/read` in `DIVERGENT_RESPONSES`, and this
-    // assertion fails once either converges.
-    assert_eq!(
+    assert!(
         crate::app_server_surface_parity_tests::census_issues(
             "session/rewind",
             &Value::Object(result.clone().into_iter().collect()),
-        ),
-        [
-            "/state/history: expected an array",
-            "/state/latestTurn: PublicSessionState does not declare this field",
-        ],
+        )
+        .is_empty(),
         "the rewind diverges from the reference census: {result:?}"
     );
     let child_id = result["state"]["session"]["id"]
@@ -650,14 +644,24 @@ fn rewind_read_and_restore_use_live_target_specific_checkpoints() {
         .expect("branch id");
     assert_ne!(child_id, "source-session");
     assert_eq!(result["message"], json!("restore live target"));
-    assert_eq!(result["restoredPaths"], json!(["main.txt"]));
+    assert_eq!(result["restoredPaths"], json!([main]));
     assert_eq!(result["restoreErrors"], json!([]));
     assert_eq!(
         fs::read_to_string(working_directory.join("main.txt")).expect("restored workspace"),
         "before\n"
     );
-    assert!(store.load("source-session").is_ok());
-    assert!(server.session("source-session").is_ok());
+    // The fork is not written until its first turn, and the session it left
+    // keeps every message.
+    assert_eq!(result["sessionLog"]["persisted"], json!(false));
+    assert!(store.load(child_id).is_err());
+    assert_eq!(
+        store
+            .load("source-session")
+            .expect("source remains")
+            .messages
+            .len(),
+        6
+    );
     assert!(server.session(child_id).is_ok());
 }
 
@@ -762,7 +766,7 @@ fn rewind_refuses_an_unknown_entry_and_honors_inplace_and_untouched_files() {
         "session/rewind",
         json!({
             "sessionId": "source-session",
-            "entryId": "history:1:user",
+            "entryId": "history:2:user",
             "inplace": true,
             "restoreFiles": false
         }),
@@ -801,94 +805,6 @@ fn rewind_refuses_an_unknown_entry_and_honors_inplace_and_untouched_files() {
             .len(),
         1
     );
-}
-
-#[test]
-fn failed_rewind_attachment_rolls_back_session_and_workspace() {
-    let temporary = tempfile::tempdir().expect("rewind rollback stores");
-    let session_root = temporary.path().join("sessions");
-    let working_directory = temporary.path().join("workspace");
-    fs::create_dir_all(&working_directory).expect("workspace");
-    fs::write(working_directory.join("main.txt"), "before\n").expect("workspace fixture");
-    let store = vibe_core::storage::SessionStore::new(&session_root);
-    let mut metadata = store
-        .create(
-            "source-session",
-            &working_directory.to_string_lossy(),
-            None,
-            1,
-        )
-        .expect("source session");
-    store
-        .append_message(
-            &mut metadata,
-            &ModelMessage::user("restore target".to_owned()),
-            2,
-        )
-        .expect("user message");
-    let workspace =
-        WorkspaceService::for_runtime_session_root(session_root.clone(), working_directory.clone());
-    let server = AppServer::with_workspace_service(workspace)
-        .using_session_tool_factory(Arc::new(RejectForkTools));
-    let mut connection = server.connect(TransportKind::InProcess);
-    initialize(&mut connection);
-    connection.dispatch(&request(
-        2,
-        "session/start",
-        json!({"sessionId": "source-session", "resume": "source-session"}),
-    ));
-    let review = server
-        .lock_sessions()
-        .expect("runtime sessions")
-        .get("source-session")
-        .and_then(|session| session.review.clone())
-        .expect("review manager");
-    review.begin_turn_at("checkpoint", 0).expect("begin turn");
-    review
-        .edit(
-            "main.txt",
-            &[vibe_core::workspace::EditOperation {
-                old_text: "before".to_owned(),
-                new_text: "after".to_owned(),
-                replace_all: false,
-            }],
-        )
-        .expect("edit");
-    review.seal_turn().expect("seal turn");
-
-    let rewound = connection.dispatch(&request(
-        3,
-        "session/rewind",
-        json!({
-            "sessionId": "source-session",
-            "entryId": "history:0:user",
-            "restoreFiles": true
-        }),
-    ));
-
-    assert!(matches!(
-        decode_frame(&rewound.outbound[0]).expect("rewind failure"),
-        Envelope::Error(ErrorResponse {
-            error: ProtocolError {
-                code: ProtocolErrorCode::InternalError,
-                ..
-            },
-            ..
-        })
-    ));
-    assert_eq!(
-        fs::read_to_string(working_directory.join("main.txt")).expect("rolled back workspace"),
-        "after\n"
-    );
-    let saved = store.list(None, 0, 100).expect("saved sessions").sessions;
-    assert_eq!(
-        saved
-            .iter()
-            .map(|session| session.id.as_str())
-            .collect::<Vec<_>>(),
-        vec!["source-session"]
-    );
-    assert!(server.session("source-session").is_ok());
 }
 
 /// The six review methods, end to end over a real connection, against the

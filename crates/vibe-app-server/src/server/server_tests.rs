@@ -59,18 +59,6 @@ impl SessionToolFactory for UnavailablePrerequisiteTools {
     }
 }
 
-struct RejectForkTools;
-
-impl SessionToolFactory for RejectForkTools {
-    fn register(&self, session_id: &str, _tools: &ToolRegistry) -> Result<(), String> {
-        if session_id == "source-session" {
-            Ok(())
-        } else {
-            Err("injected fork attachment failure".to_owned())
-        }
-    }
-}
-
 #[derive(Default)]
 struct RecordingResourceBackend {
     opened_with_tools: Mutex<Option<usize>>,

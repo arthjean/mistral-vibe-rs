@@ -311,7 +311,7 @@ pub(super) fn tui_state_from_public_session(
     }
     let mut entries = serde_json::from_value::<Vec<PublicHistoryEntry>>(
         public_state
-            .pointer("/history/entries")
+            .get("history")
             .cloned()
             .unwrap_or_else(|| json!([])),
     )
@@ -337,14 +337,6 @@ pub(super) fn tui_state_from_public_session(
             entries.push(callback);
         }
     }
-    let cursor_before = public_state
-        .pointer("/history/cursor/before")
-        .and_then(Value::as_str)
-        .map(str::to_owned);
-    let cursor_after = public_state
-        .pointer("/history/cursor/after")
-        .and_then(Value::as_str)
-        .map(str::to_owned);
     let waiting = matches!(
         public_state
             .pointer("/session/status/type")
@@ -360,8 +352,10 @@ pub(super) fn tui_state_from_public_session(
                 .and_then(Value::as_u64)
                 .unwrap_or_default(),
             entries,
-            cursor_before,
-            cursor_after,
+            // Older saved history is paged through `history/list` offsets,
+            // which a public state's entry cursor does not name.
+            cursor_before: None,
+            cursor_after: None,
             waiting,
         }))
         .map_err(|error| CliError::Terminal(error.to_string()))?;
@@ -547,19 +541,17 @@ mod tests {
                     "id": "session",
                     "status": {"type": "running"}
                 },
-                "history": {
-                    "entries": [{
-                        "type": "message",
-                        "id": "restored-user",
-                        "sessionId": "session",
-                        "createdAt": 1,
-                        "updatedAt": 2,
-                        "generationStatus": "completed",
-                        "role": "user",
-                        "content": [{"type": "text", "text": "restored prompt"}]
-                    }],
-                    "cursor": {"before": "older", "after": null}
-                }
+                "history": [{
+                    "type": "message",
+                    "id": "restored-user",
+                    "sessionId": "session",
+                    "createdAt": 1,
+                    "updatedAt": 2,
+                    "generationStatus": "completed",
+                    "role": "user",
+                    "content": [{"type": "text", "text": "restored prompt"}]
+                }],
+                "historyBeforeCursor": "restored-user"
             }),
         )
         .expect("public session state hydrates");
@@ -567,7 +559,7 @@ mod tests {
         assert_eq!(state.watermark, 9);
         assert_eq!(state.entries.len(), 1);
         assert_eq!(state.entries[0].text, "restored prompt");
-        assert_eq!(state.cursor_before.as_deref(), Some("older"));
+        assert_eq!(state.cursor_before, None);
         assert!(state.waiting);
         assert!(state.ready);
     }
@@ -608,7 +600,7 @@ mod tests {
                     "id": "session",
                     "status": {"type": "blocked"}
                 },
-                "history": {"entries": [], "cursor": {"before": null, "after": null}},
+                "history": [],
                 "activeCallbacks": [{
                     "type": "callback",
                     "id": "callback-entry",
