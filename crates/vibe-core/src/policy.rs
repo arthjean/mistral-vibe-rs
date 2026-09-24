@@ -12,7 +12,9 @@ use tokio::sync::{Mutex, RwLock};
 use crate::matching::pattern_matches;
 use crate::scratchpad::is_scratchpad_path;
 use crate::tools::config::{SharedToolConfig, ToolConfigResolver, permission_label};
-use crate::tools::{ToolError, ToolHandler, ToolInvocation, ToolOutputSink};
+use crate::tools::{
+    ToolError, ToolExecutionOutput, ToolHandler, ToolInvocation, ToolOutputSink, ToolSkip,
+};
 
 pub mod arity;
 
@@ -226,6 +228,9 @@ pub struct PermissionContext {
     /// Paths the call touches, positioned against the trust roots.
     pub paths: Vec<PathBuf>,
     pub reason: Option<String>,
+    /// The tool call the decision is for, which an approval names so a
+    /// client can attach the question to the call it gates.
+    pub call_id: Option<String>,
 }
 
 impl PermissionContext {
@@ -380,14 +385,18 @@ pub struct ApprovalRequest {
     pub input: Value,
     pub requirements: Vec<PermissionRequirement>,
     pub rationale: String,
+    /// The tool call being gated, when the caller knows it.
+    pub call_id: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ApprovalDecision {
     ApproveOnce,
     ApproveForSession,
     ApprovePermanently,
     Deny,
+    /// Refused with the reason the model is told instead of the result.
+    Reject(String),
     CancelTurn,
 }
 
@@ -476,8 +485,9 @@ impl ToolHandler for PolicyGuardedTool {
         let requirements = self.requirements.clone();
         let inner = self.inner.clone();
         Box::pin(async move {
-            let context = requirements(&invocation)?;
-            let lease = store
+            let mut context = requirements(&invocation)?;
+            context.call_id = Some(invocation.call_id.clone()).filter(|id| !id.is_empty());
+            let lease = match store
                 .authorize(
                     &name,
                     invocation.arguments.clone(),
@@ -485,7 +495,16 @@ impl ToolHandler for PolicyGuardedTool {
                     approval.as_ref(),
                 )
                 .await
-                .map_err(|error| ToolError::Execution(error.to_string()))?;
+            {
+                Ok(lease) => lease,
+                Err(PolicyError::Skipped { reason, cancelled }) => {
+                    let mut output = ToolExecutionOutput::text(reason);
+                    output.typed_result = Value::Null;
+                    output.skip = Some(ToolSkip { cancelled });
+                    return Ok(output);
+                }
+                Err(error) => return Err(ToolError::Execution(error.to_string())),
+            };
             // The read guard is held across the side effect on purpose: it is
             // what makes revocation atomic. `revoke_trust` needs the write lock,
             // so it cannot land between this revalidation and the effect it
@@ -861,6 +880,7 @@ impl PermissionStore {
                         input,
                         requirements: uncovered.clone(),
                         rationale: resolution.rationale,
+                        call_id: context.call_id.clone(),
                     })
                     .await?;
                 match decision {
@@ -903,9 +923,17 @@ impl PermissionStore {
                         state.revision = state.revision.saturating_add(1);
                         Ok(self.lease(state.revision, tool, context, settings))
                     }
-                    ApprovalDecision::Deny => {
-                        Err(PolicyError::Denied("approval denied".to_owned()))
-                    }
+                    // Reference `get_user_cancellation_message(TOOL_SKIPPED)`.
+                    ApprovalDecision::Deny => Err(PolicyError::Skipped {
+                        reason: format!("<user_cancellation>{tool}</user_cancellation>"),
+                        cancelled: true,
+                    }),
+                    // Reference `agent_loop_hooks`: a reason carrying the
+                    // cancellation tag counts as the user cancelling.
+                    ApprovalDecision::Reject(feedback) => Err(PolicyError::Skipped {
+                        cancelled: feedback.contains("<user_cancellation>"),
+                        reason: feedback,
+                    }),
                     ApprovalDecision::CancelTurn => Err(PolicyError::TurnCancelled),
                 }
             }
@@ -1016,6 +1044,10 @@ pub enum PolicyError {
     },
     #[error("approval failed: {0}")]
     Approval(String),
+    /// Reference `_handle_tool_skip`: the user declined the call, which the
+    /// model reads as `reason`; a decline without a reason cancels the turn.
+    #[error("{reason}")]
+    Skipped { reason: String, cancelled: bool },
     #[error("permission state is busy with an active side effect")]
     Busy,
 }

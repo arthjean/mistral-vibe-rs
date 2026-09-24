@@ -50,6 +50,7 @@ impl ConversationMiddleware for Scripted {
 
 fn stats(steps: u32, input_tokens: u64, output_tokens: u64, context_tokens: u64) -> SessionStats {
     SessionStats {
+        last_call: None,
         usage: Usage {
             input_tokens,
             output_tokens,

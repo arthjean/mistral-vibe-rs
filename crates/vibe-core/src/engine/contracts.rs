@@ -195,6 +195,13 @@ pub trait ToolExecutor: Send + Sync {
         None
     }
 
+    /// Whether a call to `name` reaches a tool this executor publishes. The
+    /// reference announces a streamed call only once it resolves the name to
+    /// an available tool, so an unknown name is never announced.
+    fn publishes(&self, _name: &str) -> bool {
+        true
+    }
+
     fn execute<'a>(&'a self, name: &'a str, arguments: &'a str) -> ToolFuture<'a>;
 
     fn execute_stream<'a>(
@@ -204,6 +211,18 @@ pub trait ToolExecutor: Send + Sync {
         _output: ToolStreamSink,
     ) -> ToolFuture<'a> {
         self.execute(name, arguments)
+    }
+
+    /// Runs the call the model identified as `call_id`, which a tool that
+    /// delegates or asks for approval names to the client.
+    fn execute_call<'a>(
+        &'a self,
+        _call_id: &'a str,
+        name: &'a str,
+        arguments: &'a str,
+        output: ToolStreamSink,
+    ) -> ToolFuture<'a> {
+        self.execute_stream(name, arguments, output)
     }
 }
 
@@ -427,6 +446,29 @@ impl TranscriptSink for SessionTranscriptSink {
             metadata
                 .statistics
                 .insert("steps".to_owned(), serde_json::Value::from(stats.steps));
+            // Reference `AgentStats.last_turn_*` and `tokens_per_second`: the
+            // last model call, which a reopened session reports until its
+            // next call replaces it.
+            if let Some(call) = &stats.last_call {
+                #[allow(clippy::cast_precision_loss)]
+                let seconds = call.duration_ms as f64 / 1_000.0;
+                #[allow(clippy::cast_precision_loss)]
+                let tokens_per_second = call.completion_tokens as f64 / seconds;
+                for (key, value) in [
+                    (
+                        "last_turn_prompt_tokens",
+                        serde_json::json!(call.prompt_tokens),
+                    ),
+                    (
+                        "last_turn_completion_tokens",
+                        serde_json::json!(call.completion_tokens),
+                    ),
+                    ("last_turn_duration", serde_json::json!(seconds)),
+                    ("tokens_per_second", serde_json::json!(tokens_per_second)),
+                ] {
+                    metadata.statistics.insert(key.to_owned(), value);
+                }
+            }
             self.store
                 .update_metadata(&metadata)
                 .map_err(|error| error.to_string())

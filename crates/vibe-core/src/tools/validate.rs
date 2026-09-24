@@ -205,6 +205,7 @@ fn coerce_declared(
             if let Some(fields) = value.as_object_mut()
                 && let Some(properties) = schema.get("properties").and_then(Value::as_object)
             {
+                populate_by_name(fields, properties);
                 for (name, field_schema) in properties {
                     if let Some(field) = fields.get_mut(name) {
                         coerce_at(field, field_schema, root, depth + 1);
@@ -214,6 +215,42 @@ fn coerce_declared(
         }
         _ => {}
     }
+}
+
+/// Reference `populate_by_name` on a model whose aliases are camelCase
+/// (`vibe/questions.py`): a field may also be passed under its snake_case
+/// name, which is renamed to the declared property unless that is present.
+fn populate_by_name(fields: &mut Map<String, Value>, properties: &Map<String, Value>) {
+    let renames = fields
+        .keys()
+        .filter(|key| key.contains('_') && !properties.contains_key(*key))
+        .filter_map(|key| {
+            let camel = to_camel(key);
+            (properties.contains_key(&camel) && !fields.contains_key(&camel))
+                .then(|| (key.clone(), camel))
+        })
+        .collect::<Vec<_>>();
+    for (snake, camel) in renames {
+        if let Some(field) = fields.remove(&snake) {
+            fields.insert(camel, field);
+        }
+    }
+}
+
+/// Pydantic's `to_camel` for a snake_case name.
+fn to_camel(name: &str) -> String {
+    let mut camel = String::with_capacity(name.len());
+    for (index, part) in name.split('_').enumerate() {
+        let mut chars = part.chars();
+        match chars.next() {
+            Some(first) if index > 0 => {
+                camel.extend(first.to_uppercase());
+                camel.push_str(chars.as_str());
+            }
+            _ => camel.push_str(part),
+        }
+    }
+    camel
 }
 
 /// The booleanish forms the reference accepts, or [`None`] when the value is

@@ -461,7 +461,9 @@ async fn run_turn<D>(
                 let Some(update) = update else { continue };
                 match app_server_notification(&server, update) {
                     Ok(bytes) => {
-                        let _ = events.send(ServeEvent::Frame(bytes));
+                        if let Some(bytes) = bytes {
+                            let _ = events.send(ServeEvent::Frame(bytes));
+                        }
                     }
                     Err(error) => {
                         let _ = events.send(settle(Err(error)));
@@ -473,9 +475,10 @@ async fn run_turn<D>(
     };
     while let Ok(update) = updates.try_recv() {
         match app_server_notification(&server, update) {
-            Ok(bytes) => {
+            Ok(Some(bytes)) => {
                 let _ = events.send(ServeEvent::Frame(bytes));
             }
+            Ok(None) => {}
             Err(error) => {
                 let _ = events.send(settle(Err(error)));
                 return;

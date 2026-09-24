@@ -99,23 +99,32 @@ fn the_handshake_accepts_the_reference_capability_set() {
 /// client's own projection reads as a fault.
 #[test]
 fn a_muted_notification_is_dropped_and_a_sequenced_event_is_not() {
-    let workspace = tempfile::tempdir().expect("workspace");
-    let open_session = |connection: &mut ServerConnection| {
+    // Each client decides about a workspace of its own: a granted decision is
+    // written to the trust file, after which the same directory has nothing
+    // left to decide. Each holds a file trust would unlock.
+    let workspaces = [
+        tempfile::tempdir().expect("workspace"),
+        tempfile::tempdir().expect("workspace"),
+    ];
+    for workspace in &workspaces {
+        std::fs::write(workspace.path().join("AGENTS.md"), "guidance\n").expect("fixture");
+    }
+    let open_session = |connection: &mut ServerConnection, workspace: &std::path::Path| {
         let started = connection.dispatch(&request(
             2,
             "session/start",
-            json!({"sessionId": "session-1", "workingDirectory": workspace.path()}),
+            json!({"sessionId": "session-1", "workingDirectory": workspace}),
         ));
         // The answer, then the snapshot the attachment publishes.
         assert_eq!(started.outbound.len(), 2);
     };
-    let trust = |connection: &mut ServerConnection| {
+    let trust = |connection: &mut ServerConnection, workspace: &std::path::Path| {
         connection.dispatch(&request(
             3,
             "workspace/trust/decision",
             json!({
                 "sessionId": "session-1",
-                "cwd": workspace.path(),
+                "cwd": workspace,
                 "decision": "trust_cwd"
             }),
         ))
@@ -124,9 +133,9 @@ fn a_muted_notification_is_dropped_and_a_sequenced_event_is_not() {
     let server = AppServer::default();
     let mut listening = server.connect(TransportKind::InProcess);
     initialize_with(&mut listening, json!({"callbackKinds": ["approval"]}));
-    open_session(&mut listening);
+    open_session(&mut listening, workspaces[0].path());
     assert_eq!(
-        trust(&mut listening).outbound.len(),
+        trust(&mut listening, workspaces[0].path()).outbound.len(),
         2,
         "an unmuted client receives the response and the notification"
     );
@@ -140,8 +149,8 @@ fn a_muted_notification_is_dropped_and_a_sequenced_event_is_not() {
             "disabledNotifications": ["runtime/updated"]
         }),
     );
-    open_session(&mut muted);
-    let batch = trust(&mut muted);
+    open_session(&mut muted, workspaces[1].path());
+    let batch = trust(&mut muted, workspaces[1].path());
     assert_eq!(
         batch.outbound.len(),
         1,
@@ -276,7 +285,8 @@ fn stats_updated_carries_the_whole_snapshot_and_the_session_token_usage() {
         .expect("the turn starts");
     let frame = server
         .record_turn_stats("session-1", "turn-1", 1_200, 900, 300)
-        .expect("the usage is recorded");
+        .expect("the usage is recorded")
+        .expect("a new context size publishes");
     let Envelope::Notification(Notification { method, params, .. }) =
         decode_frame(&frame).expect("stats notification")
     else {
@@ -317,8 +327,15 @@ fn stats_updated_carries_the_whole_snapshot_and_the_session_token_usage() {
     );
     assert_eq!(params["stats"]["contextTokens"], json!(1_200));
     assert_eq!(params["stats"]["sessionPromptTokens"], json!(900));
-    // A session with no completed turn reports zeroes rather than absences.
-    assert_eq!(params["stats"]["lastTurnDuration"], json!(0.0));
+    // The observed round trip is the last model call, whose duration is
+    // measured rather than left at zero, as the reference times each call.
+    assert!(
+        params["stats"]["lastTurnDuration"]
+            .as_f64()
+            .is_some_and(|seconds| seconds > 0.0),
+        "{}",
+        params["stats"]
+    );
 
     let read = connection.dispatch(&request(
         4,
@@ -691,30 +708,60 @@ fn runtime_read_reports_the_session_log_summary() {
 /// under, so a configured key is never reported as missing.
 #[test]
 fn account_read_classifies_the_configured_credential() {
-    let server = AppServer::default();
+    // The provider reads its key from a variable nothing sets, so the answer
+    // is decided locally, without the console the reference asks once a key
+    // resolves, and without whatever key this machine holds.
+    let temporary = tempfile::tempdir().expect("temporary");
+    let vibe_home = temporary.path().join("vibe-home");
+    std::fs::create_dir_all(&vibe_home).expect("vibe home");
+    std::fs::write(
+        vibe_home.join("config.toml"),
+        "[[providers]]\nname = \"mistral\"\napi_base = \"https://api.mistral.ai/v1\"\n\
+         api_key_env_var = \"VIBE_ACCOUNT_READ_TEST_UNSET_KEY\"\nbackend = \"mistral\"\n",
+    )
+    .expect("config");
+    let working_directory = temporary.path().join("workspace");
+    std::fs::create_dir_all(&working_directory).expect("workspace");
+    let workspace = WorkspaceService::new(
+        crate::workspace::WorkspacePaths {
+            vibe_home,
+            working_directory,
+            session_root: temporary.path().join("sessions"),
+        },
+        false,
+    )
+    .expect("workspace service");
+    let server = AppServer::with_workspace_service(workspace);
     let mut connection = server.connect(TransportKind::InProcess);
     initialize(&mut connection);
     start_session(&mut connection);
-    let account = call(&mut connection, 10, "account/read")["account"].clone();
-    let status = account["status"].as_str().expect("a status is published");
-    assert!(
-        ["ready", "missing_key", "unauthorized", "unavailable"].contains(&status),
-        "{status} is outside the account vocabulary"
-    );
-    // The default configuration serves a Mistral model, so the answer turns
-    // on whether a key resolves rather than being fixed. The classification
-    // reads the environment and then the OS keyring, as the reference's
-    // `resolve_api_key` does, so the expectation mirrors both sources.
-    let ambient = std::env::var("MISTRAL_API_KEY")
-        .ok()
-        .filter(|key| !key.is_empty())
-        .or_else(|| vibe_core::auth::KeyringStore::native().get_api_key("MISTRAL_API_KEY"));
-    let expected = if ambient.is_some_and(|key| !key.is_empty()) {
-        "ready"
-    } else {
-        "missing_key"
+    let batch = connection.dispatch(&request(
+        10,
+        "account/read",
+        json!({"sessionId": "session-1"}),
+    ));
+    // The plan comes from the console, so the answer is deferred work.
+    assert!(batch.outbound.is_empty());
+    let Some(DeferredWork::CloudRequest {
+        request_id,
+        method,
+        params,
+    }) = batch.deferred.into_iter().next()
+    else {
+        unreachable!("account/read defers to the cloud");
     };
-    assert_eq!(status, expected);
+    let answered = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("runtime")
+        .block_on(server.execute_cloud_request(request_id, method, params));
+    let Envelope::Success(SuccessResponse { result, .. }) =
+        decode_frame(&answered.outbound[0]).expect("an answer")
+    else {
+        unreachable!("account/read answers");
+    };
+    let account = &result["account"];
+    assert_eq!(account["status"], json!("missing_key"));
     assert_eq!(account["teleportAction"]["kind"], json!("upgrade_to_pro"));
 }
 

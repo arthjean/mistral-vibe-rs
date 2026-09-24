@@ -322,6 +322,7 @@ pub enum DeferredWork {
         turn_id: String,
         prompt: String,
         input: Vec<PublicContentBlock>,
+        injected: bool,
         client_user_message_id: Option<String>,
         auto_title: Option<String>,
         user_display_content: Option<Value>,
@@ -412,7 +413,7 @@ pub struct AppServer {
     /// The `clientTool/*` delegation this server's connection offers. Empty
     /// until a client declares a capability, which is what keeps a client that
     /// hosts nothing on the server's own filesystem and terminals.
-    client_tools: Arc<ClientToolBridge>,
+    pub(crate) client_tools: Arc<ClientToolBridge>,
     /// Where a client-authored event reaches the datalake. The reference hands
     /// it to the agent loop's own telemetry client; the adapter that owns one
     /// installs it here, and a server built without one keeps the event on

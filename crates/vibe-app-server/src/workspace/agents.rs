@@ -88,7 +88,7 @@ impl WorkspaceService {
             .effective
             .get("default_agent")
             .and_then(TomlValue::as_str)
-            .unwrap_or("default")
+            .unwrap_or("accept-edits")
             .to_owned())
     }
 
@@ -124,12 +124,17 @@ impl WorkspaceService {
     /// filtered out.
     pub(super) fn available_agents(&self) -> Result<Vec<AgentProfile>, WorkspaceServiceError> {
         let installed = self.installed_agent_names()?;
-        Ok(self
+        let mut profiles = self
             .catalog()
             .agents
             .into_values()
             .filter(|profile| builtin_agents::offered(&profile.name, &installed, None))
-            .collect())
+            .collect::<Vec<_>>();
+        // Reference `AgentRegistry._discover` seeds its dictionary with the
+        // builtins in declaration order, so they lead and keep that order even
+        // when a custom file overrides one; the custom agents follow.
+        profiles.sort_by_key(|profile| builtin_agents::declaration_rank(&profile.name));
+        Ok(profiles)
     }
 
     /// The configuration, catalogs and diagnostics `RuntimeSnapshot` carries.
@@ -144,12 +149,15 @@ impl WorkspaceService {
             .map_or_else(|| Value::Object(Map::new()), ConfigSnapshot::config_view);
         let catalog = self.catalog();
         let installed = self.installed_agent_names().unwrap_or_default();
-        let profiles = catalog
+        let mut profiles = catalog
             .agents
             .values()
             .filter(|profile| builtin_agents::offered(&profile.name, &installed, active_agent))
             .cloned()
             .collect::<Vec<_>>();
+        // The order `agents/list` publishes, since the reference projects both
+        // through `project_agents`.
+        profiles.sort_by_key(|profile| builtin_agents::declaration_rank(&profile.name));
         let active = active_agent
             .and_then(|name| {
                 profiles
@@ -228,7 +236,7 @@ impl WorkspaceService {
             {
                 // The session was running the agent that just went away, so it
                 // falls back to the default and the answer names it as active.
-                let (profile, hydrated) = self.set_session_agent(session_id, "default")?;
+                let (profile, hydrated) = self.set_session_agent(session_id, "ask")?;
                 dispatch
                     .result
                     .insert("active".to_owned(), agent_summary(&profile));

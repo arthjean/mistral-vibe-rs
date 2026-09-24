@@ -466,13 +466,14 @@ const DEFAULT_PROVIDERS: &str = r#"[
     }
 ]"#;
 
-/// The three models the reference ships, in the persisted array form. A field
+/// The two models the reference ships, in the persisted array form. A field
 /// the reference leaves unset is absent rather than null: TOML has no null.
 const DEFAULT_MODELS: &str = r#"[
     {
         "name": "mistral-vibe-cli-latest",
         "provider": "mistral",
         "alias": "mistral-medium-3.5",
+        "display_name": "Mistral Medium 3.5",
         "temperature": 1.0,
         "input_price": 1.5,
         "output_price": 7.5,
@@ -482,21 +483,10 @@ const DEFAULT_MODELS: &str = r#"[
         "auto_compact_threshold": 200000
     },
     {
-        "name": "devstral-small-latest",
-        "provider": "mistral",
-        "alias": "devstral-small",
-        "temperature": 0.2,
-        "input_price": 0.1,
-        "output_price": 0.3,
-        "cached_input_price": 0.01,
-        "thinking": "off",
-        "supports_images": false,
-        "auto_compact_threshold": 200000
-    },
-    {
         "name": "devstral",
         "provider": "llamacpp",
         "alias": "local",
+        "display_name": "Devstral (local)",
         "temperature": 0.2,
         "input_price": 0.0,
         "output_price": 0.0,
@@ -781,7 +771,7 @@ pub static FIELDS: &[FieldSpec] = &[
     FieldSpec::declared("default_agent", FieldKind::Str, REPLACE)
         .popular()
         .published(
-            FieldDefault::Str("default"),
+            FieldDefault::Str("accept-edits"),
             "Agent profile used when none is requested on the command line.",
             "",
         ),

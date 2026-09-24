@@ -4232,6 +4232,7 @@ name = "vibe-acp"
 version = "2.24.0"
 dependencies = [
  "base64 0.23.0",
+ "getrandom 0.4.3",
  "hex",
  "serde",
  "serde_json",
@@ -4259,6 +4260,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_path_to_error",
+ "sha1",
  "sha2 0.11.0",
  "tempfile",
  "thiserror 2.0.19",

@@ -126,6 +126,12 @@ pub trait ClientTelemetry: Send + Sync {
         session_id: Option<&str>,
         correlate_last_request: bool,
     );
+
+    /// Reference `TelemetryClient.is_active`: whether an event recorded now
+    /// would be delivered.
+    fn is_active(&self) -> bool {
+        false
+    }
 }
 
 /// The sink a server with no telemetry client installed answers with, which
@@ -306,6 +312,7 @@ where
                 content,
                 typed_result,
                 is_error,
+                skipped,
                 ..
             } => {
                 let Some(call) = turn.calls.remove(call_id) else {
@@ -316,7 +323,8 @@ where
                 // rather than a failure. The refusal crosses the tool boundary
                 // as the message the policy denied with, which is the only
                 // thing that tells it from a tool that failed on its own.
-                let declined = *is_error && content.starts_with(crate::policy::DENIAL_PREFIX);
+                let declined =
+                    *skipped || (*is_error && content.starts_with(crate::policy::DENIAL_PREFIX));
                 let status = match (declined, *is_error) {
                     (true, _) => records::TelemetryToolStatus::Skipped,
                     (false, true) => records::TelemetryToolStatus::Failure,
@@ -382,6 +390,10 @@ impl<T> ClientTelemetry for TelemetryEventObserver<T>
 where
     T: TelemetryTransport + 'static,
 {
+    fn is_active(&self) -> bool {
+        self.client.is_active()
+    }
+
     /// Reference `TelemetryClient.send_telemetry_event`: the census first, the
     /// client's own properties second, and a correlation id only when the
     /// caller asked for one and a request has already been made.

@@ -64,6 +64,7 @@ fn turn_is_reserved_before_deferred_work_is_exposed() {
             input: vec![PublicContentBlock::Text {
                 text: "hello".to_owned(),
             }],
+            injected: false,
             client_user_message_id: None,
             auto_title: None,
             user_display_content: None,
@@ -466,6 +467,8 @@ fn rewind_read_and_restore_use_live_target_specific_checkpoints() {
         .append_message(
             &mut metadata,
             &ModelMessage::Assistant {
+                message_id: None,
+                reasoning_message_id: None,
                 content: "prior answer".to_owned(),
                 reasoning: None,
                 reasoning_signature: None,

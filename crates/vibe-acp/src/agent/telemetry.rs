@@ -15,7 +15,7 @@ const USER_RATING_FEEDBACK_EVENT: &str = "vibe.user_rating_feedback";
 
 impl<D> AcpAgent<D>
 where
-    D: TurnDriver,
+    D: TurnDriver + 'static,
 {
     /// Serves the `telemetry/send` extension notification.
     ///
@@ -30,7 +30,7 @@ where
             .map_err(|error| {
                 AcpError::InvalidParams(format!("invalid ACP telemetry notification: {error}"))
             })?;
-        let Some(harness) = self.lock_state()?.active(&notification.session_id) else {
+        let Some(harness) = self.find_live_session(&notification.session_id)? else {
             return Ok(());
         };
         let (properties, correlate) = match notification.event.as_str() {
@@ -41,9 +41,7 @@ where
                     .get("rating")
                     .cloned()
                     .unwrap_or_else(|| json!(0));
-                let model = self
-                    .active_model_alias(&harness, &notification.session_id)
-                    .await;
+                let model = self.active_model_alias(&harness).await;
                 (
                     [
                         ("rating".to_owned(), rating),
@@ -65,7 +63,7 @@ where
         harness.service.lock().await.public_call(
             "telemetry/record",
             json!({
-                "sessionId": notification.session_id,
+                "sessionId": harness.canonical_id(),
                 "name": notification.event,
                 "properties": properties,
                 "correlateLastRequest": correlate,
@@ -78,12 +76,12 @@ where
     /// would run on, which is what the reference reads as
     /// `config.current.active_model.alias`. A configuration that answers none
     /// reports the same `unknown` an absent label reports elsewhere.
-    async fn active_model_alias(&self, harness: &AcpHarness<D>, session_id: &str) -> String {
+    async fn active_model_alias(&self, harness: &AcpHarness<D>) -> String {
         harness
             .service
             .lock()
             .await
-            .public_call("config/read", json!({"sessionId": session_id}))
+            .public_call("config/read", json!({"sessionId": harness.canonical_id()}))
             .ok()
             .and_then(|result| {
                 result
@@ -95,5 +93,24 @@ where
             })
             .filter(|alias| !alias.is_empty())
             .unwrap_or_else(|| "unknown".to_owned())
+    }
+}
+
+impl<D> AcpAgent<D>
+where
+    D: TurnDriver + 'static,
+{
+    /// Records a telemetry event against `harness`, the way the reference
+    /// calls `resources.telemetry.record`. A failure to record is not the
+    /// client's concern.
+    pub(crate) async fn record(&self, harness: &AcpHarness<D>, name: &str, properties: Value) {
+        let _ = harness.service.lock().await.public_call(
+            "telemetry/record",
+            json!({
+                "sessionId": harness.canonical_id(),
+                "name": name,
+                "properties": properties,
+            }),
+        );
     }
 }

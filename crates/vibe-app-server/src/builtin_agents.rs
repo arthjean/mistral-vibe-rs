@@ -24,10 +24,29 @@ pub(crate) fn offered(
     }
 }
 
+/// Where a builtin sits in reference `BUILTIN_AGENTS`, and after every
+/// builtin for any other name. The sort that uses it is stable, so agents of
+/// equal rank keep the order they arrive in.
+pub(crate) fn declaration_rank(name: &str) -> usize {
+    const ORDER: [&str; 7] = [
+        "ask",
+        "plan",
+        "accept-edits",
+        SMART_APPROVE,
+        "auto-approve",
+        "explore",
+        "lean",
+    ];
+    ORDER
+        .iter()
+        .position(|builtin| *builtin == name)
+        .unwrap_or(ORDER.len())
+}
+
 pub(crate) fn default_profile() -> AgentProfile {
     builtin_agent(
-        "default",
-        "Default",
+        "ask",
+        "Ask",
         "Requires approval for tool executions",
         AgentKind::Agent,
         "neutral",

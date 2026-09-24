@@ -199,15 +199,6 @@ const UNIMPLEMENTED_STRATEGIES: &[(&str, &str)] = &[(
      `MergeStrategy` in registry.rs has no shallow merge, and the fields it declares replace",
 )];
 
-/// v2.24.3 gave `ModelConfig` a display name, which this port's model entries
-/// do not carry.
-const DISPLAY_NAME: &str = "v2.24.3 adds `display_name` to ModelConfig (models.py:442) and gives both \
-     default models one (vibe_schema.py:132, :146); the port's model entries carry no such key";
-
-/// v2.25.0 withdrew a default model this port still ships.
-const DEVSTRAL_SMALL: &str = "v2.25.0 drops `devstral-small` from the default models (vibe_schema.py:125-127 \
-     in v2.24.0, absent at 4a96003); registry.rs still ships it";
-
 /// v2.25.0 changed what an unknown `active_model` validates to.
 const ACTIVE_MODEL_FALLBACK: &str = "v2.25.0 resets an unknown `active_model` to the unpinned sentinel \"\" \
      (vibe_schema.py:916) and still records one warning; the port pins the default alias \
@@ -225,18 +216,10 @@ const FINISH_REASON: &str = "v2.24.1 adds `emits_finish_reason` to ProviderConfi
 /// default document, as `(pointer, reason)`.
 const DEFAULT_DIVERGENCES: &[(&str, &str)] = &[
     (
-        "/default_agent",
-        "v2.24.1 changes the default agent to `accept-edits` (vibe_schema.py:464); registry.rs \
-         ships `default`",
-    ),
-    (
         "/file_watcher_for_autocomplete",
         "v2.25.3 turns the autocomplete file watcher on by default (vibe_schema.py:561); \
          registry.rs ships false",
     ),
-    ("/models/local/display_name", DISPLAY_NAME),
-    ("/models/mistral-medium-3.5/display_name", DISPLAY_NAME),
-    ("/models/devstral-small", DEVSTRAL_SMALL),
     (
         "/providers/0/browser_auth_allow_origin_rewrite",
         ORIGIN_REWRITE,
@@ -267,178 +250,11 @@ const SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[(
 /// reason)`. `/active_model` and `/validation_warnings` name the validated alias
 /// and the warning count; every other pointer lies under `/models` or
 /// `/compaction_model`.
-const MODEL_SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[
-    (
-        "models-defaults-only",
-        "/models/local/display_name",
-        DISPLAY_NAME,
-    ),
-    (
-        "models-defaults-only",
-        "/models/mistral-medium-3.5/display_name",
-        DISPLAY_NAME,
-    ),
-    (
-        "models-defaults-only",
-        "/models/devstral-small",
-        DEVSTRAL_SMALL,
-    ),
-    (
-        "models-sparse-override-of-a-default-model",
-        "/models/local/display_name",
-        DISPLAY_NAME,
-    ),
-    (
-        "models-sparse-override-of-a-default-model",
-        "/models/mistral-medium-3.5/display_name",
-        DISPLAY_NAME,
-    ),
-    (
-        "models-sparse-override-of-a-default-model",
-        "/models/devstral-small",
-        DEVSTRAL_SMALL,
-    ),
-    (
-        "models-alias-map-form",
-        "/models/local/display_name",
-        DISPLAY_NAME,
-    ),
-    (
-        "models-alias-map-form",
-        "/models/mistral-medium-3.5/display_name",
-        DISPLAY_NAME,
-    ),
-    (
-        "models-alias-map-form",
-        "/models/devstral-small",
-        DEVSTRAL_SMALL,
-    ),
-    (
-        "models-added-entry-inherits-the-global-threshold",
-        "/models/local/display_name",
-        DISPLAY_NAME,
-    ),
-    (
-        "models-added-entry-inherits-the-global-threshold",
-        "/models/mistral-medium-3.5/display_name",
-        DISPLAY_NAME,
-    ),
-    (
-        "models-added-entry-inherits-the-global-threshold",
-        "/models/devstral-small",
-        DEVSTRAL_SMALL,
-    ),
-    (
-        "models-entry-keeps-its-own-threshold",
-        "/models/local/display_name",
-        DISPLAY_NAME,
-    ),
-    (
-        "models-entry-keeps-its-own-threshold",
-        "/models/mistral-medium-3.5/display_name",
-        DISPLAY_NAME,
-    ),
-    (
-        "models-entry-keeps-its-own-threshold",
-        "/models/devstral-small",
-        DEVSTRAL_SMALL,
-    ),
-    (
-        "models-unknown-active-model-falls-back",
-        "/active_model",
-        ACTIVE_MODEL_FALLBACK,
-    ),
-    (
-        "models-unknown-active-model-falls-back",
-        "/models/local/display_name",
-        DISPLAY_NAME,
-    ),
-    (
-        "models-unknown-active-model-falls-back",
-        "/models/mistral-medium-3.5/display_name",
-        DISPLAY_NAME,
-    ),
-    (
-        "models-unknown-active-model-falls-back",
-        "/models/devstral-small",
-        DEVSTRAL_SMALL,
-    ),
-    (
-        "models-active-model-selects-an-added-entry",
-        "/models/local/display_name",
-        DISPLAY_NAME,
-    ),
-    (
-        "models-active-model-selects-an-added-entry",
-        "/models/mistral-medium-3.5/display_name",
-        DISPLAY_NAME,
-    ),
-    (
-        "models-active-model-selects-an-added-entry",
-        "/models/devstral-small",
-        DEVSTRAL_SMALL,
-    ),
-    (
-        "models-two-layers-deep-merge-one-entry",
-        "/models/local/display_name",
-        DISPLAY_NAME,
-    ),
-    (
-        "models-two-layers-deep-merge-one-entry",
-        "/models/mistral-medium-3.5/display_name",
-        DISPLAY_NAME,
-    ),
-    (
-        "models-two-layers-deep-merge-one-entry",
-        "/models/devstral-small",
-        DEVSTRAL_SMALL,
-    ),
-    (
-        "models-entry-without-an-alias-borrows-its-name",
-        "/models/local/display_name",
-        DISPLAY_NAME,
-    ),
-    (
-        "models-entry-without-an-alias-borrows-its-name",
-        "/models/mistral-medium-3.5/display_name",
-        DISPLAY_NAME,
-    ),
-    (
-        "models-entry-without-an-alias-borrows-its-name",
-        "/models/devstral-small",
-        DEVSTRAL_SMALL,
-    ),
-    (
-        "models-compaction-model-without-an-alias-borrows-its-name",
-        "/models/local/display_name",
-        DISPLAY_NAME,
-    ),
-    (
-        "models-compaction-model-without-an-alias-borrows-its-name",
-        "/models/mistral-medium-3.5/display_name",
-        DISPLAY_NAME,
-    ),
-    (
-        "models-compaction-model-without-an-alias-borrows-its-name",
-        "/models/devstral-small",
-        DEVSTRAL_SMALL,
-    ),
-    (
-        "models-compaction-model-keeps-the-alias-it-declares",
-        "/models/local/display_name",
-        DISPLAY_NAME,
-    ),
-    (
-        "models-compaction-model-keeps-the-alias-it-declares",
-        "/models/mistral-medium-3.5/display_name",
-        DISPLAY_NAME,
-    ),
-    (
-        "models-compaction-model-keeps-the-alias-it-declares",
-        "/models/devstral-small",
-        DEVSTRAL_SMALL,
-    ),
-];
+const MODEL_SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[(
+    "models-unknown-active-model-falls-back",
+    "/active_model",
+    ACTIVE_MODEL_FALLBACK,
+)];
 
 /// One divergence a replay observed: the case, the pointer, and both values
 /// rendered with sensitive values redacted.

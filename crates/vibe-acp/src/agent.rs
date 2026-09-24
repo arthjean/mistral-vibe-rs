@@ -1,12 +1,17 @@
-//! The ACP agent: what an editor session is opened with, and the operations
-//! that do not belong to one of the surfaces beside this file.
+//! The ACP agent: what an editor connection is opened with, the handshake,
+//! and the operations that do not belong to one of the surfaces beside this
+//! file.
+//!
+//! Reference `VibeAcpAgent` (`vibe/acp/agent.py`). It is a client of the app
+//! server: every session is one canonical session, and this adapter projects
+//! what the app server publishes onto the editor protocol.
 
-pub(crate) mod lifecycle;
-pub(crate) mod listing;
+pub(crate) mod extensions;
 pub(crate) mod services;
+pub(crate) mod sessions;
 pub(crate) mod state;
+pub(crate) mod surface;
 pub(crate) mod telemetry;
-pub(crate) mod transcript;
 pub(crate) mod turn;
 
 use std::path::PathBuf;
@@ -16,6 +21,7 @@ use std::time::Duration;
 use serde_json::{Value, json};
 use vibe_app_server::client::TurnDriver;
 use vibe_app_server::experiments::Credentials;
+use vibe_app_server::harness::HarnessSelection;
 use vibe_app_server::projects::ProjectsService;
 use vibe_core::telemetry::{
     ClientTelemetry, ExperimentExposures, LaunchContext, NoClientTelemetry,
@@ -27,15 +33,11 @@ use crate::auth::{
     terminal_method,
 };
 use crate::client_tools::{AcpClientPort, DEFAULT_CLIENT_TOOL_TIMEOUT};
-use crate::commands;
 use crate::protocol::{
     ACP_PROTOCOL_VERSION, AcpAgentCapabilities, AcpError, AcpImplementation, AcpInitializeRequest,
     AcpInitializeResponse, AcpPromptCapabilities,
 };
-use crate::session::{AcpHarness, Mode, Thinking, thinking_config_options};
-
-pub(in crate::agent) const MAX_ADDITIONAL_DIRECTORIES: usize = 128;
-pub(crate) const SESSION_LIST_PAGE_SIZE: usize = 50;
+use crate::session::AcpHarness;
 
 pub struct AcpAgent<D>
 where
@@ -43,10 +45,10 @@ where
 {
     pub(in crate::agent) driver: Arc<D>,
     state: Mutex<AgentState<D>>,
-    pub(in crate::agent) client: Option<Arc<dyn AcpClientPort>>,
-    pub(in crate::agent) client_tool_timeout: Duration,
+    pub(crate) client: Option<Arc<dyn AcpClientPort>>,
+    pub(crate) client_tool_timeout: Duration,
     pub(in crate::agent) session_root: Option<PathBuf>,
-    auth: AuthController,
+    pub(crate) auth: AuthController,
     pub(in crate::agent) credential_environment: String,
     pub(in crate::agent) production_cloud: bool,
     pub(in crate::agent) projects: Mutex<Option<ProjectsService>>,
@@ -58,6 +60,9 @@ where
     /// [`None`] for an adapter that publishes no telemetry and therefore has no
     /// census to fill.
     pub(in crate::agent) experiments: Option<AcpExperiments>,
+    /// The harness the launch flags picked, which every session's app server
+    /// reports.
+    pub(in crate::agent) harness: HarnessSelection,
 }
 
 /// The three things a session's enrollment is built from, installed once for
@@ -88,6 +93,7 @@ where
             projects: Mutex::new(None),
             telemetry: Arc::new(NoClientTelemetry),
             experiments: None,
+            harness: HarnessSelection::default(),
         })
     }
 
@@ -141,6 +147,12 @@ where
     }
 
     #[must_use]
+    pub fn with_harness_selection(mut self, harness: HarnessSelection) -> Self {
+        self.harness = harness;
+        self
+    }
+
+    #[must_use]
     pub fn with_production_cloud(mut self) -> Self {
         self.production_cloud = true;
         self
@@ -153,29 +165,18 @@ where
         self
     }
 
-    pub(crate) const fn vibe_code_enabled(&self) -> bool {
-        self.production_cloud
-    }
-
-    #[must_use]
-    pub fn advertised_commands(&self) -> Vec<Value> {
-        commands::advertised(self.production_cloud)
-    }
-
-    pub fn initialize(&self) -> Result<AcpInitializeResponse, AcpError> {
-        self.initialize_with(AcpInitializeRequest::default())
-    }
-
+    /// Reference `initialize`: any protocol version is accepted and the
+    /// handshake may be repeated, each one replacing what the client declared.
     pub fn initialize_with(
         &self,
         request: AcpInitializeRequest,
     ) -> Result<AcpInitializeResponse, AcpError> {
-        if request.protocol_version != ACP_PROTOCOL_VERSION {
-            return Err(AcpError::UnsupportedProtocol(request.protocol_version));
-        }
         let auth_methods = self.advertised_auth_methods(&request)?;
-        self.lock_state()?
-            .initialize(request.client_capabilities, request.client_info)?;
+        {
+            let mut state = self.lock_state()?;
+            state.client_capabilities = request.client_capabilities;
+            state.client_info = request.client_info;
+        }
         Ok(AcpInitializeResponse {
             protocol_version: ACP_PROTOCOL_VERSION,
             agent_capabilities: AcpAgentCapabilities {
@@ -186,9 +187,9 @@ where
                     image: true,
                 },
                 session_capabilities: json!({
+                    "close": {},
                     "list": {},
                     "fork": {},
-                    "close": {},
                 }),
             },
             auth_methods,
@@ -211,8 +212,8 @@ where
         let capability = |name: &str| {
             request
                 .client_capabilities
-                .meta
                 .as_ref()
+                .and_then(|capabilities| capabilities.meta.as_ref())
                 .and_then(|meta| meta.get(name))
                 == Some(&Value::Bool(true))
         };
@@ -240,106 +241,44 @@ where
         method_id: &str,
         arguments: &Value,
     ) -> Result<Value, AcpError> {
-        self.require_initialized()?;
         self.auth.authenticate(method_id, arguments).await
     }
 
-    /// The `auth/status` extension payload.
-    pub fn auth_status(&self) -> Result<Value, AcpError> {
-        self.auth.status_payload()
-    }
-
-    /// The `auth/signOut` extension method: the product's only credential
-    /// removal path.
-    pub fn auth_sign_out(&self) -> Result<Value, AcpError> {
-        self.auth.sign_out()?;
-        Ok(json!({}))
-    }
-
-    pub async fn set_mode(&self, session_id: &str, mode_id: &str) -> Result<(), AcpError> {
-        let mode = Mode::parse(mode_id)
-            .ok_or_else(|| AcpError::InvalidParams(format!("unknown session mode `{mode_id}`")))?;
-        let harness = self.session_harness(session_id)?;
-        harness.service.lock().await.public_call(
-            "session/overrides/write",
-            json!({"sessionId": session_id, "mode": mode.as_str()}),
-        )?;
-        harness.update_settings(|settings| settings.mode = mode)
-    }
-
-    pub async fn set_config_option(
-        &self,
-        session_id: &str,
-        option_id: &str,
-        value: &str,
-    ) -> Result<Vec<Value>, AcpError> {
-        if option_id != "thinking" {
-            return Err(AcpError::InvalidParams(
-                "unknown config option; expected `thinking`".to_owned(),
-            ));
-        }
-        let thinking = Thinking::parse(value).ok_or_else(|| {
-            AcpError::InvalidParams("thinking must be off, low, medium, high, or max".to_owned())
+    /// Sends a request to the client and waits for its answer.
+    pub(crate) async fn call_client(&self, method: &str, params: Value) -> Result<Value, AcpError> {
+        let client = self.client.as_ref().ok_or_else(|| {
+            AcpError::Internal(format!("no client is connected to answer `{method}`"))
         })?;
-        let harness = self.session_harness(session_id)?;
-        let mut params = json!({
-            "sessionId": session_id,
-            "thinking": thinking.enabled(),
-        });
-        if thinking.enabled() {
-            params["reasoningEffort"] = json!(thinking.as_str());
-        }
-        harness
-            .service
-            .lock()
+        client
+            .request(method, params)
             .await
-            .public_call("session/overrides/write", params)?;
-        harness.update_settings(|settings| settings.thinking = thinking)?;
-        Ok(thinking_config_options(thinking))
-    }
-
-    pub async fn request_permission(
-        &self,
-        session_id: &str,
-        tool_call: Value,
-        options: Vec<Value>,
-    ) -> Result<Value, AcpError> {
-        self.session_harness(session_id)?;
-        self.call_client(
-            "session/request_permission",
-            json!({
-                "sessionId": session_id,
-                "toolCall": tool_call,
-                "options": options,
-            }),
-        )
-        .await
-    }
-
-    async fn call_client(&self, method: &str, params: Value) -> Result<Value, AcpError> {
-        let client = self
-            .client
-            .as_ref()
-            .ok_or_else(|| AcpError::UnsupportedClientFlow(method.to_owned()))?;
-        tokio::time::timeout(self.client_tool_timeout, client.request(method, params))
-            .await
-            .map_err(|_| AcpError::ClientToolTimeout(method.to_owned()))?
             .map_err(AcpError::ClientTool)
     }
 
+    /// The live session the client names, or the reference's
+    /// `SessionNotFoundError`.
     pub(crate) fn session_harness(&self, session_id: &str) -> Result<Arc<AcpHarness<D>>, AcpError> {
-        self.require_initialized()?;
         self.lock_state()?
-            .active(session_id)
+            .sessions
+            .get(session_id)
+            .cloned()
             .ok_or_else(|| AcpError::SessionNotFound(session_id.to_owned()))
     }
 
-    pub(crate) fn require_initialized(&self) -> Result<(), AcpError> {
-        if self.lock_state()?.initialized {
-            Ok(())
-        } else {
-            Err(AcpError::NotInitialized)
-        }
+    /// A live session addressed either by its ACP identity or by the canonical
+    /// identity it runs under. Reference `_find_live_session`.
+    pub(crate) fn find_live_session(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<Arc<AcpHarness<D>>>, AcpError> {
+        let state = self.lock_state()?;
+        Ok(state.sessions.get(session_id).cloned().or_else(|| {
+            state
+                .sessions
+                .values()
+                .find(|harness| harness.canonical_id() == session_id)
+                .cloned()
+        }))
     }
 
     pub(crate) fn lock_state(&self) -> Result<MutexGuard<'_, AgentState<D>>, AcpError> {

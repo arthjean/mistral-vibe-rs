@@ -277,7 +277,7 @@ fn an_attached_runtime_session_carries_the_configured_tool_filters() {
     connection.dispatch(&request(
         2,
         "session/agent/update",
-        json!({"sessionId": "attached", "name": "default"}),
+        json!({"sessionId": "attached", "name": "ask"}),
     ));
 
     let intent = server
@@ -287,7 +287,7 @@ fn an_attached_runtime_session_carries_the_configured_tool_filters() {
         .get("attached")
         .map(|session| session.intent.clone())
         .expect("the session attached");
-    // The default agent adds its own entry, and the configured one survives
+    // The `ask` agent adds its own entry, and the configured one survives
     // the agent overlay rather than being replaced by it.
     assert_eq!(intent.disabled_tools, ["exit_plan_mode", "serena_*"]);
 }
@@ -372,6 +372,8 @@ fn session_start_hydrates_bounded_public_resume_history() {
         (
             13,
             ModelMessage::Assistant {
+                message_id: None,
+                reasoning_message_id: None,
                 content: "older answer".to_owned(),
                 reasoning: None,
                 reasoning_signature: None,
@@ -383,6 +385,8 @@ fn session_start_hydrates_bounded_public_resume_history() {
         (
             15,
             ModelMessage::Assistant {
+                message_id: None,
+                reasoning_message_id: None,
                 content: "latest answer".to_owned(),
                 reasoning: None,
                 reasoning_signature: None,
@@ -425,9 +429,10 @@ fn session_start_hydrates_bounded_public_resume_history() {
     let entries = result["state"]["history"]["entries"]
         .as_array()
         .expect("public history");
+    // The resume checkpoint is the newest entry and counts toward the limit.
     assert_eq!(entries.len(), 2);
-    assert_eq!(entries[0]["content"][0]["text"], "latest question");
-    assert_eq!(entries[1]["content"][0]["text"], "latest answer");
+    assert_eq!(entries[0]["content"][0]["text"], "latest answer");
+    assert_eq!(entries[1]["kind"], "resume");
     assert!(
         entries
             .iter()

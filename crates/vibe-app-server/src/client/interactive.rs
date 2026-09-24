@@ -129,9 +129,10 @@ impl SessionToolFactory for InteractiveSessionToolFactory {
                 let sender = question_sender.clone();
                 let session_id = question_session_id.clone();
                 let arguments = invocation.arguments.clone();
-                Box::pin(
-                    async move { run_interactive_questions(sender, session_id, arguments).await },
-                )
+                let call_id = invocation.call_id.clone();
+                Box::pin(async move {
+                    run_interactive_questions(sender, session_id, call_id, arguments).await
+                })
             },
         );
         tools
@@ -145,15 +146,14 @@ impl SessionToolFactory for InteractiveSessionToolFactory {
         let plan_session_id = session_id.to_owned();
         let plan_path = plan_file_path(plan_directory, session_id);
         let plan_handler: Arc<dyn ToolHandler> = Arc::new(
-            move |_invocation: &ToolInvocation,
-                  _output: ToolOutputSink|
-                  -> OwnedToolHandlerFuture {
+            move |invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {
                 let sender = plan_sender.clone();
                 let session_id = plan_session_id.clone();
                 let plan_path = plan_path.clone();
-                Box::pin(
-                    async move { run_interactive_plan_review(sender, session_id, plan_path).await },
-                )
+                let call_id = invocation.call_id.clone();
+                Box::pin(async move {
+                    run_interactive_plan_review(sender, session_id, call_id, plan_path).await
+                })
             },
         );
         tools
@@ -215,9 +215,17 @@ pub(super) fn approval_callback_detail(
             "deny",
             "cancel_turn",
         ],
-        "relatedEntryId": null,
+        // Reference `ApprovalCallbackDetail.related_entry_id`: the effect the
+        // approval gates, which is keyed on its tool call.
+        "relatedEntryId": request.call_id,
     })
 }
+
+/// Reference `get_user_cancellation_message(OPERATION_CANCELLED)`: the tag
+/// is the contract, which marks the refusal as the user canceling, and the
+/// sentence inside it is this port's own.
+const OPERATION_CANCELLED: &str =
+    "<user_cancellation>The user declined this call.</user_cancellation>";
 
 pub(super) fn approval_decision_from_output(
     output: &Value,
@@ -231,7 +239,15 @@ pub(super) fn approval_decision_from_output(
         Some("approve") => Ok(ApprovalDecision::ApproveOnce),
         Some("approve_for_session") => Ok(ApprovalDecision::ApproveForSession),
         Some("approve_permanently") => Ok(ApprovalDecision::ApprovePermanently),
-        Some("deny") => Ok(ApprovalDecision::Deny),
+        // Reference `_resolve_approval`: a refusal skips the call with the
+        // user's reason, or with the tagged operation-cancelled notice when
+        // they gave none, which ends the turn.
+        Some("deny") => Ok(ApprovalDecision::Reject(
+            output
+                .get("feedback")
+                .and_then(Value::as_str)
+                .map_or_else(|| OPERATION_CANCELLED.to_owned(), str::to_owned),
+        )),
         Some("cancel_turn") => Ok(ApprovalDecision::CancelTurn),
         Some(decision) => Err(ClientError::InvalidResponse(format!(
             "unknown approval decision `{decision}`"
@@ -298,6 +314,7 @@ pub(super) fn fail_interactive_response(response: InteractiveCallbackResponse, m
 pub(super) async fn run_interactive_questions(
     sender: tokio::sync::mpsc::Sender<InteractiveCallbackRequest>,
     session_id: String,
+    call_id: String,
     arguments: Value,
 ) -> Result<ToolExecutionOutput, ToolError> {
     let request_bytes = serde_json::to_vec(&arguments)
@@ -331,10 +348,20 @@ pub(super) async fn run_interactive_questions(
             "questions": questions,
             "footerNote": request.footer_note.clone(),
         },
-        "relatedEntryId": null,
+        "relatedEntryId": related_entry_id(call_id),
     });
     let output = request_interactive_tool_callback(sender, session_id, title, detail).await?;
     question_tool_output(&output, &request.questions)
+}
+
+/// Reference `UserInputCallbackDetail.related_entry_id`: the effect the
+/// question was raised from, when the call carried an identifier.
+fn related_entry_id(call_id: String) -> Value {
+    if call_id.is_empty() {
+        Value::Null
+    } else {
+        Value::String(call_id)
+    }
 }
 
 pub(super) fn validate_interactive_question_request(
@@ -396,7 +423,7 @@ pub(super) async fn request_interactive_tool_callback(
     receiver
         .await
         .map_err(|_| ToolError::Execution("interactive callback was abandoned".to_owned()))?
-        .map_err(ToolError::Execution)
+        .map_err(ToolError::TurnFailed)
 }
 
 /// Asks the surface driving the turn to clear the transcript and rotate the
@@ -438,6 +465,8 @@ pub(super) fn question_tool_output(
             ));
         }
         return Ok(ToolExecutionOutput {
+            skip: None,
+            turn_failure: None,
             typed_result: json!({"answers": [], "cancelled": true}),
             model_text: answer_model_text(&[], true),
             display: json!({"kind": "user_question"}),
@@ -473,6 +502,8 @@ pub(super) fn question_tool_output(
         });
     }
     Ok(ToolExecutionOutput {
+        skip: None,
+        turn_failure: None,
         typed_result: json!({
             "answers": published
                 .iter()
@@ -564,6 +595,7 @@ pub(super) fn validate_interactive_answer(
 pub(super) async fn run_interactive_plan_review(
     sender: tokio::sync::mpsc::Sender<InteractiveCallbackRequest>,
     session_id: String,
+    call_id: String,
     plan_path: PathBuf,
 ) -> Result<ToolExecutionOutput, ToolError> {
     const QUESTION: &str = "Plan is complete. Switch to code mode and start implementing?";
@@ -581,7 +613,7 @@ pub(super) async fn run_interactive_plan_review(
         },
         "planReview": true,
         "filePath": plan_path,
-        "relatedEntryId": null,
+        "relatedEntryId": related_entry_id(call_id),
     });
     let output = request_interactive_tool_callback(
         sender.clone(),
@@ -678,6 +710,8 @@ pub(super) async fn run_interactive_plan_review(
         ("message", message.clone()),
     ]);
     Ok(ToolExecutionOutput {
+        skip: None,
+        turn_failure: None,
         typed_result: json!({"switched": switched, "message": message}),
         model_text,
         display: json!({"kind": "plan_review", "switched": switched}),

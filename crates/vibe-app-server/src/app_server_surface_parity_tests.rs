@@ -1794,6 +1794,8 @@ fn a_compaction_publishes_one_entry_whose_details_validate_against_the_census() 
 
     let started = projected_history(&[
         EngineEvent::UserMessage {
+            attachments: Vec::new(),
+            message_id: None,
             content: "go".to_owned(),
         },
         EngineEvent::CompactionStarted {
@@ -1814,6 +1816,8 @@ fn a_compaction_publishes_one_entry_whose_details_validate_against_the_census() 
 
     let completed = projected_history(&[
         EngineEvent::UserMessage {
+            attachments: Vec::new(),
+            message_id: None,
             content: "go".to_owned(),
         },
         EngineEvent::CompactionStarted {
@@ -1848,6 +1852,8 @@ fn a_compaction_publishes_one_entry_whose_details_validate_against_the_census() 
     // A late subscriber that never saw the start still gets a coherent entry.
     let orphaned = projected_history(&[
         EngineEvent::UserMessage {
+            attachments: Vec::new(),
+            message_id: None,
             content: "go".to_owned(),
         },
         EngineEvent::CompactionCompleted {
@@ -1890,6 +1896,8 @@ async fn every_effect_kind_publishes_an_entry_that_validates_against_the_census(
         } = probe;
         let history = projected_history(&[
             EngineEvent::UserMessage {
+                attachments: Vec::new(),
+                message_id: None,
                 content: "go".to_owned(),
             },
             EngineEvent::ToolCall {
@@ -1907,6 +1915,7 @@ async fn every_effect_kind_publishes_an_entry_that_validates_against_the_census(
                 duration_ms: 1,
                 is_error: false,
                 cancelled: false,
+                skipped: false,
             },
         ]);
         let entry = history
@@ -1988,8 +1997,11 @@ fn every_settled_effect_state_carries_the_display_its_variant_declares() {
         duration_ms: 1,
         is_error,
         cancelled,
+        skipped: false,
     };
     let start = EngineEvent::UserMessage {
+        attachments: Vec::new(),
+        message_id: None,
         content: "go".to_owned(),
     };
     let mut issues = Vec::new();

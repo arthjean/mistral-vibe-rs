@@ -197,6 +197,14 @@ where
         self.interactive_backlog = retained;
     }
 
+    /// The delegation this service's server sends `clientTool/*` requests
+    /// through. Attaching a write side to it is what lets an adapter answer
+    /// them for its own client.
+    #[must_use]
+    pub fn client_tools(&self) -> Arc<crate::client_tools::ClientToolBridge> {
+        self.client.server.client_tools.clone()
+    }
+
     #[must_use]
     pub fn driver(&self) -> Arc<D> {
         self.driver.clone()
@@ -246,6 +254,9 @@ where
             .client
             .server
             .live_projection_seed(session_id, turn_id)?;
+        // The turn is starting: its user message is a step of the session's
+        // accounting, which the transport records when it announces the turn.
+        self.client.server.turn_started(session_id, turn_id)?;
         let mut reducer = ProjectionReducer::for_turn(session_id, turn_id);
         reducer
             .restore(seed.clone(), 0)
@@ -483,6 +494,26 @@ where
         &mut self,
         params: Value,
     ) -> Result<BTreeMap<String, Value>, ClientError> {
+        self.settle_callback(params, None)
+    }
+
+    /// Settles a callback with `params` like [`Self::respond_callback`], but
+    /// fails the tool that raised it with `message`. Reference
+    /// `TurnController.reject_callback`: an answer the client gave that does
+    /// not fit the question.
+    pub fn reject_callback(
+        &mut self,
+        params: Value,
+        message: &str,
+    ) -> Result<BTreeMap<String, Value>, ClientError> {
+        self.settle_callback(params, Some(message))
+    }
+
+    fn settle_callback(
+        &mut self,
+        params: Value,
+        rejection: Option<&str>,
+    ) -> Result<BTreeMap<String, Value>, ClientError> {
         let callback_id = params
             .get("callbackId")
             .and_then(Value::as_str)
@@ -550,7 +581,8 @@ where
                     let _ = response.send(decision);
                 }
                 InteractiveCallbackResponse::Tool(response) => {
-                    let _ = response.send(Ok(output));
+                    let _ = response
+                        .send(rejection.map_or(Ok(output), |message| Err(message.to_owned())));
                 }
             }
         }

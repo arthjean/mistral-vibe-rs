@@ -602,6 +602,8 @@ fn seed_session(vibe_home: &Path, workspace: &Path, id: &str, marker: &str, time
         .append_message(
             &mut metadata,
             &ModelMessage::Assistant {
+                message_id: None,
+                reasoning_message_id: None,
                 content: "saved answer".to_owned(),
                 reasoning: None,
                 reasoning_signature: None,
@@ -802,7 +804,7 @@ fn sigint_after_mount_restores_terminal() {
     std::fs::create_dir_all(&workspace).expect("workspace");
     std::fs::create_dir_all(&home).expect("home");
     let mut process = PtyProcess::spawn(&workspace, &home, &["--trust"]);
-    process.wait_for(b"default", STEP);
+    process.wait_for(b"accept-edits", STEP);
     process.interrupt();
     let (status, transcript) = process.wait(STEP);
 
@@ -982,7 +984,7 @@ fn bare_resume_deletes_only_after_confirmation_and_final_delete_starts_new() {
     assert!(store.load("saved-session").is_ok());
 
     process.write(b"d");
-    process.wait_for(b"default", STEP);
+    process.wait_for(b"accept-edits", STEP);
     assert!(store.load("saved-session").is_err());
     let transcript = process.kill();
     assert!(

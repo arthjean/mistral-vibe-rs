@@ -545,6 +545,41 @@ impl ServerConnection {
         &mut self,
         mut request: ServerRequest,
     ) -> Result<DispatchBatch, ProtocolFault> {
+        // Reference routes `workspace/trust/status` to its host handler, which
+        // answers without a session about the directory it names or the one
+        // the host runs in.
+        if request.method == "workspace/trust/status" && !request.params.contains_key("sessionId") {
+            let cwd = match request.params.get("cwd") {
+                Some(Value::String(cwd)) => std::path::PathBuf::from(cwd),
+                _ => self.server.workspace.working_directory().to_path_buf(),
+            };
+            return Ok(
+                match crate::startup::read_workspace_trust(self.server.workspace.vibe_home(), &cwd)
+                {
+                    Ok(answer) => DispatchBatch {
+                        outbound: vec![success_bytes(
+                            request.id,
+                            answer
+                                .as_object()
+                                .map(|answer| {
+                                    answer
+                                        .iter()
+                                        .map(|(key, value)| (key.clone(), value.clone()))
+                                        .collect()
+                                })
+                                .unwrap_or_default(),
+                        )],
+                        deferred: Vec::new(),
+                        close_after_flush: false,
+                    },
+                    Err(error) => error_batch(
+                        request.id,
+                        ProtocolErrorCode::InvalidParams,
+                        &error.to_string(),
+                    ),
+                },
+            );
+        }
         let session_id = request
             .params
             .get("sessionId")
@@ -568,6 +603,9 @@ impl ServerConnection {
         }
         if request.method == "telemetry/record" {
             return self.record_telemetry(request);
+        }
+        if request.method.starts_with("feedback/") {
+            return Ok(self.feedback_request(request, &session_id));
         }
         let (session_active, review) = {
             let sessions = self.server.lock_sessions()?;
@@ -614,12 +652,65 @@ impl ServerConnection {
                 close_after_flush: false,
             });
         }
-        let result = self
+        // Reference `read_workspace_trust` and `decide_workspace_trust` answer
+        // from the trust file; the resource service keeps the session's own
+        // permission store in step with the decision.
+        let trust = if request.method.starts_with("workspace/trust/") {
+            let cwd = request
+                .params
+                .get("cwd")
+                .and_then(Value::as_str)
+                .map(std::path::PathBuf::from)
+                .unwrap_or_default();
+            let vibe_home = self.server.workspace.vibe_home().to_path_buf();
+            let answer = if request.method == "workspace/trust/decision" {
+                let decision = request
+                    .params
+                    .get("decision")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+                crate::startup::decide_workspace_trust(&vibe_home, &cwd, decision)
+            } else {
+                crate::startup::read_workspace_trust(&vibe_home, &cwd)
+            };
+            match answer {
+                Ok(answer) => Some(answer),
+                Err(error) => {
+                    return Ok(error_batch(
+                        request.id,
+                        ProtocolErrorCode::InvalidParams,
+                        &error.to_string(),
+                    ));
+                }
+            }
+        } else {
+            None
+        };
+        let mut result = self
             .server
             .resources
             .lock()
             .map_err(|_| ProtocolFault::internal("Resource state lock is poisoned"))?
             .dispatch(&request.method, &request.params, session_active);
+        if let (Some(answer), Ok(dispatch)) = (trust, result.as_mut()) {
+            let session_trusted =
+                dispatch.result.get("status").and_then(Value::as_str) == Some("session");
+            dispatch.result = answer
+                .as_object()
+                .map(|answer| {
+                    answer
+                        .iter()
+                        .map(|(key, value)| (key.clone(), value.clone()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            if session_trusted {
+                dispatch
+                    .result
+                    .insert("status".to_owned(), json!("session"));
+                dispatch.result.insert("details".to_owned(), Value::Null);
+            }
+        }
         // A granted trust decision reaches the live session too: the resource
         // service records it on disk, and the intent the running session reads
         // is the server's.
@@ -688,7 +779,18 @@ impl ServerConnection {
                 let stats = priced(stats, self.server.workspace.active_model_pricing());
                 result_map([("stats", stats), ("contextWindow", json!(context_window))])
             }
-            "account/read" => result_map([("account", self.server.workspace.account_view())]),
+            // The plan comes from the console, so the answer waits on I/O.
+            "account/read" => {
+                return Some(DispatchBatch {
+                    outbound: Vec::new(),
+                    deferred: vec![DeferredWork::CloudRequest {
+                        request_id: request.id.clone(),
+                        method: request.method.clone(),
+                        params: request.params.clone(),
+                    }],
+                    close_after_flush: false,
+                });
+            }
             _ => return None,
         };
         Some(success_batch(request.id.clone(), result))
@@ -737,6 +839,73 @@ impl ServerConnection {
     /// The request may omit `cwd`, in which case the session root is filled in;
     /// naming any other directory is refused, so a connection cannot grant trust
     /// outside the workspace it is attached to.
+    /// Reference `_dispatch_feedback`: whether to ask for a rating, from the
+    /// session's conversation and the timestamps in the shared cache, and the
+    /// record of what the user did with the prompt.
+    fn feedback_request(&self, request: ServerRequest, session_id: &str) -> DispatchBatch {
+        let cache = vibe_core::feedback::FeedbackCache::new(self.server.workspace.vibe_home());
+        let now = i64::try_from(now_millis() / 1_000).unwrap_or(i64::MAX);
+        if request.method == "feedback/record" {
+            let action = request
+                .params
+                .get("action")
+                .and_then(Value::as_str)
+                .and_then(vibe_core::feedback::FeedbackAction::parse);
+            let Some(action) = action else {
+                return error_batch(
+                    request.id,
+                    ProtocolErrorCode::InvalidParams,
+                    "action must be asked, given, or snoozed",
+                );
+            };
+            cache.record(action, now);
+            return DispatchBatch {
+                outbound: vec![success_bytes(request.id, BTreeMap::new())],
+                deferred: Vec::new(),
+                close_after_flush: false,
+            };
+        }
+        let pending = request
+            .params
+            .get("pendingUserMessages")
+            .and_then(Value::as_u64)
+            .and_then(|pending| usize::try_from(pending).ok())
+            .unwrap_or(0);
+        let user_messages = match self.server.lock_sessions() {
+            Ok(sessions) => sessions.get(session_id).map_or(0, count_user_messages),
+            Err(error) => return internal_error_batch(request.id, &error),
+        };
+        let is_mistral = self
+            .server
+            .workspace
+            .layered_config()
+            .load()
+            .is_ok_and(|snapshot| {
+                vibe_core::telemetry::is_active_model_mistral(&snapshot.effective)
+            });
+        let show = cache.should_show(
+            self.server.client_telemetry.is_active(),
+            is_mistral,
+            user_messages.saturating_add(pending),
+            now,
+            vibe_core::feedback::uniform_roll(),
+        );
+        DispatchBatch {
+            outbound: vec![success_bytes(
+                request.id,
+                result_map([
+                    ("show", json!(show)),
+                    (
+                        "snoozeDurationSeconds",
+                        json!(vibe_core::feedback::FEEDBACK_SNOOZED_COOLDOWN_SECONDS),
+                    ),
+                ]),
+            )],
+            deferred: Vec::new(),
+            close_after_flush: false,
+        }
+    }
+
     fn confine_trust_request(
         &self,
         request: &mut ServerRequest,
@@ -804,4 +973,41 @@ impl Drop for ServerConnection {
     fn drop(&mut self) {
         self.close();
     }
+}
+
+/// Reference counts `agent_loop.messages` from the user that were not
+/// injected; the live history holds them once a turn has run, the saved
+/// transcript before that.
+fn count_user_messages(session: &super::SessionRuntime) -> usize {
+    if let Some(snapshot) = &session.snapshot {
+        return snapshot
+            .history
+            .iter()
+            .filter(|entry| {
+                matches!(
+                    entry,
+                    PublicHistoryEntry::Message {
+                        role: PublicMessageRole::User,
+                        source,
+                        ..
+                    } if *source != Some(PublicMessageSource::Harness)
+                )
+            })
+            .count();
+    }
+    session.persisted.as_ref().map_or(0, |persisted| {
+        persisted
+            .messages
+            .iter()
+            .filter(|message| {
+                matches!(
+                    message,
+                    vibe_core::events::ModelMessage::User {
+                        injected: false,
+                        ..
+                    }
+                )
+            })
+            .count()
+    })
 }

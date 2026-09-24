@@ -147,6 +147,7 @@ impl AppServer {
                 turn_id,
                 prompt: prompt.clone(),
                 input: vec![PublicContentBlock::Text { text: prompt }],
+                injected: false,
                 client_user_message_id: None,
                 auto_title: None,
                 user_display_content: Some(json!({
@@ -284,7 +285,7 @@ impl AppServer {
         ));
         session.latest_turn = Some(turn.clone());
         session.updated_at = completed_at;
-        session.stats.last_turn_duration_ms = completed_at.saturating_sub(started_at);
+        session.stats.finish_turn();
         let stats = stats_updated_frame(session);
         let status = session_updated_frame(session);
         let event_id = next_event_id(session);
@@ -347,10 +348,7 @@ impl AppServer {
         };
         session.latest_turn = Some(turn.clone());
         session.updated_at = turn.completed_at.unwrap_or(started_at);
-        session.stats.last_turn_duration_ms = turn
-            .completed_at
-            .unwrap_or(started_at)
-            .saturating_sub(started_at);
+        session.stats.abandon_turn();
         let stats = stats_updated_frame(session);
         let status = session_updated_frame(session);
         let event_id = next_event_id(session);
@@ -366,10 +364,14 @@ impl AppServer {
         Ok(vec![stats, status, completed])
     }
 
-    /// Records the usage one provider round trip reported and publishes it.
+    /// Records the usage one provider round trip reported, and publishes it
+    /// when the context size moved.
     ///
     /// The engine reports usage while the turn runs, which is what lets a client
-    /// show context pressure before the turn settles rather than after.
+    /// show context pressure before the turn settles rather than after. The
+    /// reference turn loop (`vibe/app_server/_turns.py`) emits
+    /// `session/statsUpdated` only when `context_tokens` differs from the last
+    /// value it published, so a round trip that leaves it unchanged is silent.
     pub fn record_turn_stats(
         &self,
         session_id: &str,
@@ -377,7 +379,7 @@ impl AppServer {
         context_tokens: u64,
         input_tokens: u64,
         output_tokens: u64,
-    ) -> Result<Vec<u8>, ServerError> {
+    ) -> Result<Option<Vec<u8>>, ServerError> {
         let mut sessions = self.lock_sessions()?;
         let session = sessions
             .get_mut(session_id)
@@ -385,10 +387,11 @@ impl AppServer {
         if session.active_turn.as_deref() != Some(turn_id) {
             return Err(ServerError::StaleTurn(turn_id.to_owned()));
         }
+        let published = session.stats.context_tokens;
         session
             .stats
             .observe(context_tokens, input_tokens, output_tokens);
-        Ok(stats_updated_frame(session))
+        Ok((session.stats.context_tokens != published).then(|| stats_updated_frame(session)))
     }
 
     /// Publishes the handoff of a session running a turn, under the name its
@@ -489,6 +492,7 @@ impl AppServer {
             turn_id,
             prompt,
             input,
+            injected,
             client_user_message_id,
             auto_title,
             user_display_content,
@@ -511,6 +515,7 @@ impl AppServer {
             prompt,
             input,
             prepared_images: None,
+            injected,
             client_user_message_id,
             auto_title,
             user_display_content,

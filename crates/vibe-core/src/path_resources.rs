@@ -2,10 +2,10 @@ use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::images::ImageFormat;
 use serde::{Deserialize, Serialize};
-use vibe_core::images::ImageFormat;
 
-use super::path_mentions::{mention_values, resolve_candidate};
+use crate::path_mentions::{mention_values, resolve_candidate};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -16,7 +16,7 @@ pub struct MentionStats {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum PathResourceKind {
+pub enum PathResourceKind {
     File,
     Folder,
     Image,
@@ -33,19 +33,19 @@ impl PathResourceKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct PathResource {
-    pub(super) alias: String,
-    pub(super) path: PathBuf,
-    pub(super) kind: PathResourceKind,
+pub struct PathResource {
+    pub alias: String,
+    pub path: PathBuf,
+    pub kind: PathResourceKind,
 }
 
-pub(super) struct PathPromptPayload {
-    pub(super) resources: Vec<PathResource>,
+pub struct PathPromptPayload {
+    pub resources: Vec<PathResource>,
     all_resources: Vec<PathResource>,
 }
 
 impl PathPromptPayload {
-    pub(super) fn mention_stats(&self) -> MentionStats {
+    pub fn mention_stats(&self) -> MentionStats {
         let mut stats = MentionStats {
             count: self.all_resources.len(),
             ..MentionStats::default()
@@ -69,7 +69,7 @@ impl PathPromptPayload {
     }
 }
 
-pub(super) fn build_path_prompt_payload(workspace: &Path, message: &str) -> PathPromptPayload {
+pub fn build_path_prompt_payload(workspace: &Path, message: &str) -> PathPromptPayload {
     let all_resources = mention_values(message)
         .into_iter()
         .filter_map(|alias| path_resource(workspace, &alias))

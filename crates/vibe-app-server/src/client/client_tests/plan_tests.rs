@@ -26,6 +26,7 @@ async fn plan_review_callback_exposes_the_live_driver_path() {
     let task = tokio::spawn(run_interactive_plan_review(
         sender,
         "session".to_owned(),
+        String::new(),
         plan_path.clone(),
     ));
     let request = receiver.recv().await.expect("plan review request");
@@ -60,6 +61,7 @@ async fn accepting_a_plan_with_clearing_raises_it_before_the_tool_answers() {
     let task = tokio::spawn(run_interactive_plan_review(
         sender,
         "session".to_owned(),
+        String::new(),
         plan_path.clone(),
     ));
     let request = receiver.recv().await.expect("plan review request");
@@ -118,6 +120,7 @@ async fn accepting_a_plan_without_clearing_raises_no_clearing() {
     let task = tokio::spawn(run_interactive_plan_review(
         sender,
         "session".to_owned(),
+        String::new(),
         PathBuf::from("/runtime/plans/session.md"),
     ));
     let request = receiver.recv().await.expect("plan review request");

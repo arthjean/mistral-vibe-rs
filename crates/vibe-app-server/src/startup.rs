@@ -59,7 +59,11 @@ impl StartupHost {
     pub fn inspect_workspace_trust(&self) -> Result<WorkspaceTrustInspection, StartupHostError> {
         let settings_path = self.paths.vibe_home.join("trusted_folders.toml");
         let settings = TrustSettings::load(&settings_path)?;
-        let cwd = canonical_directory(&self.paths.working_directory)?;
+        // Reference `Path.resolve()`, which answers for a directory that does
+        // not exist too: nothing there can be trusted or detected.
+        let cwd = fs::canonicalize(&self.paths.working_directory)
+            .or_else(|_| std::path::absolute(&self.paths.working_directory))
+            .map_err(|source| startup_io(&self.paths.working_directory, source))?;
         if settings.closest(&cwd) == Some(true) {
             return Ok(WorkspaceTrustInspection {
                 trusted: true,
@@ -155,6 +159,83 @@ impl StartupHost {
             .map_err(StartupHostError::Workspace)?;
         Ok(service)
     }
+}
+
+impl WorkspaceTrustDecision {
+    /// The wire name of a decision. Reference `WorkspaceTrustDecision`.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::TrustRepository => "trust_repo",
+            Self::TrustDirectory => "trust_cwd",
+            Self::Decline => "decline",
+        }
+    }
+
+    #[must_use]
+    pub fn parse(value: &str) -> Option<Self> {
+        [Self::TrustRepository, Self::TrustDirectory, Self::Decline]
+            .into_iter()
+            .find(|decision| decision.as_str() == value)
+    }
+}
+
+fn trust_host(vibe_home: &Path, cwd: &Path) -> StartupHost {
+    StartupHost::new(WorkspacePaths {
+        vibe_home: vibe_home.to_path_buf(),
+        working_directory: cwd.to_path_buf(),
+        session_root: vibe_home.join("sessions"),
+    })
+}
+
+/// Reference `read_workspace_trust`: the trust `cwd` resolves to, and the
+/// prompt a client would show about it while it is untrusted. The details
+/// are `None` when there is nothing to ask, which is a workspace that holds
+/// no file a trust decision would unlock.
+pub fn read_workspace_trust(
+    vibe_home: &Path,
+    cwd: &Path,
+) -> Result<serde_json::Value, StartupHostError> {
+    let inspection = trust_host(vibe_home, cwd).inspect_workspace_trust()?;
+    if inspection.trusted {
+        return Ok(serde_json::json!({"status": "trusted", "details": null}));
+    }
+    let details = inspection.prompt.map_or(serde_json::Value::Null, |prompt| {
+        serde_json::json!({
+            "cwd": prompt.cwd,
+            "repoRoot": prompt.repo_root,
+            "detectedFiles": prompt.detected_files,
+            "repoDetectedFiles": prompt.repo_detected_files,
+            "repoExplicitlyUntrusted": prompt.repo_explicitly_untrusted,
+            "settingsPath": prompt.settings_path,
+            "availableDecisions": prompt
+                .decisions
+                .iter()
+                .map(|decision| decision.as_str())
+                .collect::<Vec<_>>(),
+        })
+    });
+    Ok(serde_json::json!({"status": "untrusted", "details": details}))
+}
+
+/// Reference `decide_workspace_trust`: a decision the current prompt offers
+/// is written to the trust file, and the trust it leaves is read back.
+pub fn decide_workspace_trust(
+    vibe_home: &Path,
+    cwd: &Path,
+    decision: &str,
+) -> Result<serde_json::Value, StartupHostError> {
+    let host = trust_host(vibe_home, cwd);
+    let prompt = host.inspect_workspace_trust()?.prompt.ok_or_else(|| {
+        StartupHostError::InvalidTrustDecision(
+            "this workspace has no trust decision to make".to_owned(),
+        )
+    })?;
+    let decision = WorkspaceTrustDecision::parse(decision).ok_or_else(|| {
+        StartupHostError::InvalidTrustDecision(format!("`{decision}` is not a trust decision"))
+    })?;
+    host.decide_workspace_trust(&prompt, decision)?;
+    read_workspace_trust(vibe_home, cwd)
 }
 
 #[derive(Debug, Error)]
@@ -345,6 +426,26 @@ fn find_repository_root(cwd: &Path, home: Option<&Path>) -> Option<PathBuf> {
         .map(Path::to_path_buf)
 }
 
+/// Reference `message_preview` over a saved session: its first user message
+/// that was not injected, cut at 160 characters, or `None` for a session that
+/// holds none.
+#[must_use]
+pub fn saved_session_preview(session_root: &Path, session_id: &str) -> Option<String> {
+    SessionStore::new(session_root)
+        .load(session_id)
+        .ok()?
+        .messages
+        .into_iter()
+        .find_map(|message| match message {
+            ModelMessage::User {
+                content,
+                injected: false,
+                ..
+            } if !content.is_empty() => Some(content.chars().take(160).collect()),
+            _ => None,
+        })
+}
+
 fn session_preview(store: &SessionStore, session_id: &str) -> String {
     store
         .load(session_id)
@@ -361,21 +462,6 @@ fn session_preview(store: &SessionStore, session_id: &str) -> String {
                 })
         })
         .unwrap_or_else(|| "(empty session)".to_owned())
-}
-
-fn canonical_directory(path: &Path) -> Result<PathBuf, StartupHostError> {
-    let canonical = fs::canonicalize(path).map_err(|source| startup_io(path, source))?;
-    if canonical.is_dir() {
-        Ok(canonical)
-    } else {
-        Err(StartupHostError::Io {
-            path: path.to_path_buf(),
-            source: std::io::Error::new(
-                std::io::ErrorKind::NotADirectory,
-                "path is not a directory",
-            ),
-        })
-    }
 }
 
 fn startup_io(path: &Path, source: std::io::Error) -> StartupHostError {
@@ -513,6 +599,8 @@ mod tests {
             .append_message(
                 &mut metadata,
                 &ModelMessage::Assistant {
+                    message_id: None,
+                    reasoning_message_id: None,
                     content: "assistant preface".to_owned(),
                     reasoning: None,
                     reasoning_signature: None,

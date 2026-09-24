@@ -155,7 +155,7 @@ fn a_stack_that_configures_no_model_fails_the_load() {
     let composed = shipped("models = []\n").expect("the shipped models survive an empty list");
     assert_eq!(
         composed.effective["models"].as_table().map(Table::len),
-        Some(3)
+        Some(2)
     );
 }
 

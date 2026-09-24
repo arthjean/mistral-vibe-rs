@@ -201,6 +201,10 @@ impl AppServer {
         method: String,
         params: BTreeMap<String, Value>,
     ) -> DispatchBatch {
+        if method == "account/read" {
+            let account = self.workspace.read_account().await;
+            return success_batch(request_id, result_map([("account", account)]));
+        }
         match self.projects.dispatch_deferred(&method, &params).await {
             Ok(dispatch) => projects_dispatch_batch(request_id, dispatch),
             Err(error) => projects_error_batch(request_id, error),

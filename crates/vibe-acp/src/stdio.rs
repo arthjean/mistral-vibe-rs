@@ -2,9 +2,7 @@
 //! JSON-RPC frames and answered on a single writer.
 
 pub(crate) mod client;
-pub(crate) mod dispatch;
 pub(crate) mod driver;
-pub(crate) mod wire;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -15,22 +13,11 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinSet;
 use vibe_acp::{AcpAgent, AcpAuthEnvironment, AcpExperiments};
 use vibe_app_server::client::TurnDriver;
+use vibe_app_server::harness::HarnessSelection;
 use vibe_app_server::transport::read_bounded_frame;
-use vibe_core::observability::{LogLevel, log};
 use vibe_core::telemetry::{ReqwestTelemetryTransport, TelemetryEventObserver};
 
-use crate::stdio::client::{
-    StdioClientPort, WRITER_QUEUE_CAPACITY, WriterMessage, send_value_wait, writer_loop,
-};
-use crate::stdio::dispatch::handle_request;
-use crate::stdio::wire::{WireRequest, acp_error_response, error_response, success_response};
-
-/// The extension notification an editor records telemetry through. The wire
-/// name carries the underscore ACP requires on an extension method, which the
-/// reference's router strips before dispatching it.
-const TELEMETRY_SEND_METHOD: &str = "_telemetry/send";
-
-const MAX_CONCURRENT_REQUESTS: usize = 128;
+use crate::stdio::client::{StdioClientPort, WriterMessage, writer_loop};
 
 /// What one editor session is opened with, beyond its transport and its driver.
 pub(crate) struct StdioOptions {
@@ -40,8 +27,16 @@ pub(crate) struct StdioOptions {
     pub(crate) production_cloud: bool,
     pub(crate) telemetry: Option<Arc<TelemetryEventObserver<ReqwestTelemetryTransport>>>,
     pub(crate) experiments: Option<AcpExperiments>,
+    pub(crate) harness: HarnessSelection,
 }
 
+/// Serves one editor connection until its input ends.
+///
+/// The reference's connection reads one JSON message per line: a line that is
+/// not JSON is skipped, a message without a method answers one of the agent's
+/// own requests, a message carrying an `id` member is a request, and any other
+/// message is a notification. Each request runs on its own task, so a prompt
+/// never holds up the cancellation sent after it.
 pub(crate) async fn run_stdio<R, W, D>(
     mut reader: R,
     writer: W,
@@ -53,105 +48,48 @@ where
     W: AsyncWrite + Unpin + Send + 'static,
     D: TurnDriver + 'static,
 {
-    let (writer_tx, writer_rx) = mpsc::channel(WRITER_QUEUE_CAPACITY);
+    let (writer_tx, writer_rx) = mpsc::unbounded_channel();
     let writer_task = tokio::spawn(writer_loop(writer, writer_rx));
     let client = Arc::new(StdioClientPort::new(writer_tx.clone()));
     let telemetry = options.telemetry.clone();
     let agent = Arc::new(build_agent(driver, options, &client)?);
-    let mut requests = JoinSet::new();
+    let mut tasks = JoinSet::new();
 
     while let Some(frame) = read_bounded_frame(&mut reader).await? {
-        while requests.try_join_next().is_some() {}
-        let value = match serde_json::from_slice::<Value>(&frame) {
-            Ok(value) => value,
-            Err(error) => {
-                send_value_wait(
-                    &writer_tx,
-                    error_response(Value::Null, -32700, format!("invalid ACP JSON: {error}")),
-                )
-                .await?;
-                continue;
-            }
+        while tasks.try_join_next().is_some() {}
+        let Ok(Value::Object(message)) = serde_json::from_slice::<Value>(&frame) else {
+            continue;
         };
-        if value.get("method").is_none() {
-            if !client.resolve(&value) {
-                send_value_wait(
-                    &writer_tx,
-                    error_response(
-                        value.get("id").cloned().unwrap_or(Value::Null),
-                        -32600,
-                        "unmatched ACP response".to_owned(),
-                    ),
-                )
-                .await?;
-            }
+        let Some(method) = message.get("method").cloned() else {
+            client.resolve(&Value::Object(message));
             continue;
-        }
-        let request = match serde_json::from_value::<WireRequest>(value) {
-            Ok(request) => request,
-            Err(error) => {
-                send_value_wait(
-                    &writer_tx,
-                    error_response(Value::Null, -32600, format!("invalid ACP request: {error}")),
-                )
-                .await?;
-                continue;
-            }
         };
-        if request.method == "session/cancel" && request.id.is_null() {
-            if let Some(session_id) = request.params.get("sessionId").and_then(Value::as_str) {
-                let _ = agent.cancel(session_id).await;
-            }
-            continue;
+        let params = message.get("params").cloned().unwrap_or(Value::Null);
+        let agent = Arc::clone(&agent);
+        if let Some(id) = message.get("id").cloned() {
+            let client = Arc::clone(&client);
+            tasks.spawn(async move {
+                let (outcome, followups) =
+                    agent.handle_request_with_followups(&method, params).await;
+                let response = match outcome {
+                    Ok(result) => json!({"jsonrpc": "2.0", "id": id, "result": result}),
+                    Err(error) => {
+                        json!({"jsonrpc": "2.0", "id": id, "error": error.json_rpc_error()})
+                    }
+                };
+                client.send(response);
+                followups.deliver(client.as_ref());
+            });
+        } else {
+            tasks.spawn(async move {
+                agent.handle_notification(&method, params).await;
+            });
         }
-        // Extension notifications reach the wire under a leading underscore and
-        // carry no id. The reference's router hands every one to
-        // `ext_notification`, which serves `telemetry/send` and returns on any
-        // other name, and its connection swallows what the handler raises
-        // because a notification is answered with nothing.
-        if request.id.is_null() && request.method.starts_with('_') {
-            if request.method == TELEMETRY_SEND_METHOD
-                && let Err(error) = agent.telemetry_notification(&request.params).await
-            {
-                log(
-                    LogLevel::Warning,
-                    &format!("Dropping an ACP telemetry notification: {error}"),
-                );
-            }
-            continue;
-        }
-        if request.method == "shutdown" {
-            let response = match agent.disconnect().await {
-                Ok(()) => success_response(request.id, json!({})),
-                Err(error) => acp_error_response(request.id, error),
-            };
-            send_value_wait(&writer_tx, response).await?;
-            break;
-        }
-        if requests.len() >= MAX_CONCURRENT_REQUESTS {
-            send_value_wait(
-                &writer_tx,
-                error_response(
-                    request.id,
-                    -32002,
-                    format!(
-                        "ACP request concurrency exceeds the {MAX_CONCURRENT_REQUESTS}-request limit"
-                    ),
-                ),
-            )
-            .await?;
-            continue;
-        }
-        let agent = agent.clone();
-        let writer = writer_tx.clone();
-        requests.spawn(async move {
-            handle_request(agent, request, writer).await;
-        });
     }
 
     client.disconnect();
-    requests.abort_all();
-    while requests.join_next().await.is_some() {}
+    tasks.abort_all();
+    while tasks.join_next().await.is_some() {}
     agent.disconnect().await?;
     // Reference `TelemetryClient.aclose`: a delivery already in flight is
     // awaited before the process leaves, so a last event is not lost to the
@@ -162,8 +100,7 @@ where
     let (shutdown_tx, shutdown_rx) = oneshot::channel();
     writer_tx
         .send(WriterMessage::Shutdown(shutdown_tx))
-        .await
-        .map_err(|_| "ACP writer stopped before shutdown")?;
+        .map_err(|_| "the ACP writer stopped before shutdown")?;
     let _ = shutdown_rx.await;
     writer_task.await??;
     Ok(())
@@ -184,8 +121,9 @@ where
         production_cloud,
         telemetry,
         experiments,
+        harness,
     } = options;
-    let mut agent = AcpAgent::new(driver)?;
+    let mut agent = AcpAgent::new(driver)?.with_harness_selection(harness);
     if let Some(telemetry) = telemetry {
         agent = agent.with_client_telemetry(telemetry);
     }

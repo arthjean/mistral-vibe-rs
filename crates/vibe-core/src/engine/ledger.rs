@@ -18,7 +18,8 @@ use crate::events::{
 use crate::provider::Usage;
 
 use super::{
-    EngineError, EngineLimits, EventObserver, SessionStats, TranscriptSink, TurnStopReason,
+    EngineError, EngineLimits, EventObserver, ModelCallStats, SessionStats, TranscriptSink,
+    TurnStopReason,
 };
 
 /// Accumulates everything a turn spends against [`EngineLimits`].
@@ -27,6 +28,7 @@ pub(super) struct TurnLedger {
     pub(super) context_tokens: u64,
     pub(super) price_micros: u64,
     pub(super) steps: u32,
+    pub(super) last_call: Option<ModelCallStats>,
 }
 
 impl TurnLedger {
@@ -36,6 +38,7 @@ impl TurnLedger {
             usage: baseline.usage.clone(),
             context_tokens: baseline.context_tokens,
             steps: baseline.steps,
+            last_call: baseline.last_call.clone(),
         }
     }
 
@@ -45,6 +48,7 @@ impl TurnLedger {
             usage: self.usage.clone(),
             context_tokens: self.context_tokens,
             steps: self.steps,
+            last_call: self.last_call.clone(),
         }
     }
 
@@ -91,6 +95,9 @@ pub(super) struct TurnRecorder<'a> {
     /// Where the session sits, stamped on every envelope so each reducer
     /// displays a file path against the same directory.
     working_directory: Option<PathBuf>,
+    /// The identities the model call in flight gives its text and its
+    /// reasoning, minted when the call opens.
+    model_call_ids: (String, String),
 }
 
 impl<'a> TurnRecorder<'a> {
@@ -110,7 +117,42 @@ impl<'a> TurnRecorder<'a> {
             events: Vec::new(),
             next_event_id: 1,
             working_directory,
+            model_call_ids: (String::new(), String::new()),
         }
+    }
+
+    /// Mints the identities of a model call about to open. Reference
+    /// `LLMMessage` gives every assistant message a fresh `message_id`, and
+    /// its reasoning a `reasoning_message_id`.
+    pub(super) fn open_model_call(&mut self) -> (String, String) {
+        self.model_call_ids = (crate::session_id::uuid_v4(), crate::session_id::uuid_v4());
+        self.model_call_ids.clone()
+    }
+
+    /// The identities of the last model call's text and reasoning entries,
+    /// each only when the call published one under it.
+    pub(super) fn model_call_entries(&self) -> (Option<String>, Option<String>) {
+        let published = |id: &str| {
+            (!id.is_empty()
+                && self
+                    .state()
+                    .history
+                    .iter()
+                    .any(|entry| entry.metadata().id == id))
+            .then(|| id.to_owned())
+        };
+        (
+            published(&self.model_call_ids.0),
+            published(&self.model_call_ids.1),
+        )
+    }
+
+    /// The identity of the entry last added to the transcript.
+    pub(super) fn last_history_entry_id(&self) -> Option<String> {
+        self.state()
+            .history
+            .last()
+            .map(|entry| entry.metadata().id.clone())
     }
 
     pub(super) fn state(&self) -> &ProjectionSnapshot {
@@ -239,24 +281,6 @@ pub(super) fn new_compaction_id() -> String {
         .map(|byte| format!("{byte:02x}"))
         .collect::<String>();
     format!("compaction-{hexadecimal}")
-}
-
-pub(super) fn title_from_messages(messages: &[ModelMessage]) -> String {
-    messages
-        .iter()
-        .rev()
-        .find_map(|message| match message {
-            ModelMessage::User { content, .. } => Some(content),
-            _ => None,
-        })
-        .map(|content| {
-            let mut title = content.chars().take(60).collect::<String>();
-            if content.chars().count() > 60 {
-                title.push('…');
-            }
-            title
-        })
-        .unwrap_or_else(|| "New session".to_owned())
 }
 
 pub(super) fn stop_message(reason: &TurnStopReason) -> &'static str {

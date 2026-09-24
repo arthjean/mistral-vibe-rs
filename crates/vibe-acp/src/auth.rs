@@ -124,7 +124,8 @@ fn browser_method(method_id: &str) -> Value {
 /// flow ships in the `vibe` binary, so the method names the sibling installed
 /// beside this one and falls back to the bare name for a `PATH` lookup. An
 /// editor that runs it gets the setup flow, which is what the method promises.
-fn setup_command() -> String {
+#[must_use]
+pub fn setup_command() -> String {
     let binary = if cfg!(windows) { "vibe.exe" } else { "vibe" };
     std::env::current_exe()
         .ok()
@@ -134,11 +135,15 @@ fn setup_command() -> String {
         .unwrap_or_else(|| binary.to_owned())
 }
 
-/// The terminal method a `terminal-auth` client receives: the command and
-/// arguments that relaunch this build in setup mode. Reference
-/// `TerminalAuthMethod` with id `vibe-setup`.
+/// The terminal method a `terminal-auth` client receives: this executable
+/// relaunched in setup mode, which hands the terminal to `vibe --setup`.
+/// Reference `TerminalAuthMethod` with id `vibe-setup`, on the branch where
+/// `sys.executable` is the agent itself rather than a Python interpreter.
 pub(crate) fn terminal_method() -> Value {
-    let command = setup_command();
+    let command = std::env::current_exe().map_or_else(
+        |_| "vibe-acp".to_owned(),
+        |path| path.to_string_lossy().into_owned(),
+    );
     let args = json!(["--setup"]);
     json!({
         "type": "terminal",

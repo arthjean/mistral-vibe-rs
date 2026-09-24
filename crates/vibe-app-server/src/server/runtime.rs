@@ -118,46 +118,127 @@ impl SessionRuntime {
 /// a driver the server does not own. The tool counters are derived from the
 /// projected history rather than counted twice, so a replayed snapshot and a
 /// live turn report the same numbers.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct SessionStats {
+    /// Reference `AgentStats.steps`: one per user message a turn appends and
+    /// one per provider round trip, counted once the round trip's work is
+    /// done, which is why the one in flight is held apart.
+    pub(crate) steps: u64,
+    pending_step: bool,
+    /// Whether the turn about to begin was started by the harness, whose
+    /// prompt the reference appends without counting a step.
+    pub(crate) injected_turn: bool,
     pub(crate) session_prompt_tokens: u64,
     pub(crate) session_completion_tokens: u64,
     pub(crate) session_cached_tokens: u64,
     pub(crate) context_tokens: u64,
+    /// The last provider round trip's usage and duration, which is what the
+    /// reference means by the last turn (`AgentLoop._update_stats`).
     pub(crate) last_turn_prompt_tokens: u64,
     pub(crate) last_turn_completion_tokens: u64,
     pub(crate) last_turn_cached_tokens: u64,
     pub(crate) last_turn_duration_ms: u64,
-    /// Where the running turn started from, so its own usage is the difference.
-    pub(crate) turn_baseline_prompt_tokens: u64,
-    pub(crate) turn_baseline_completion_tokens: u64,
-    pub(crate) turn_baseline_cached_tokens: u64,
+    pub(crate) tokens_per_second: f64,
+    /// When the round trip being measured started.
+    round_trip_started_at: u64,
 }
 
 impl SessionStats {
-    /// Records the usage one provider round trip reported.
+    /// Records the usage one provider round trip reported, as the running
+    /// session totals.
     pub(crate) fn observe(&mut self, context_tokens: u64, input_tokens: u64, output_tokens: u64) {
-        self.context_tokens = context_tokens;
+        let _ = context_tokens;
+        if self.pending_step {
+            self.steps = self.steps.saturating_add(1);
+        }
+        self.pending_step = true;
+        let now = now_millis();
+        self.last_turn_prompt_tokens = input_tokens.saturating_sub(self.session_prompt_tokens);
+        self.last_turn_completion_tokens =
+            output_tokens.saturating_sub(self.session_completion_tokens);
+        self.last_turn_cached_tokens = 0;
+        self.last_turn_duration_ms = now.saturating_sub(self.round_trip_started_at).max(1);
+        self.round_trip_started_at = now;
         self.session_prompt_tokens = input_tokens;
         self.session_completion_tokens = output_tokens;
-        self.last_turn_prompt_tokens =
-            input_tokens.saturating_sub(self.turn_baseline_prompt_tokens);
-        self.last_turn_completion_tokens =
-            output_tokens.saturating_sub(self.turn_baseline_completion_tokens);
-        self.last_turn_cached_tokens = self
-            .session_cached_tokens
-            .saturating_sub(self.turn_baseline_cached_tokens);
+        self.context_tokens = self
+            .last_turn_prompt_tokens
+            .saturating_add(self.last_turn_completion_tokens);
+        let seconds = as_f64(self.last_turn_duration_ms) / 1_000.0;
+        if seconds > 0.0 && self.last_turn_completion_tokens > 0 {
+            self.tokens_per_second = as_f64(self.last_turn_completion_tokens) / seconds;
+        }
     }
 
-    /// Opens a turn: what follows counts against it rather than the session.
+    /// Opens a turn, whose user message is a step of its own.
     pub(crate) fn begin_turn(&mut self) {
-        self.turn_baseline_prompt_tokens = self.session_prompt_tokens;
-        self.turn_baseline_completion_tokens = self.session_completion_tokens;
-        self.turn_baseline_cached_tokens = self.session_cached_tokens;
-        self.last_turn_prompt_tokens = 0;
-        self.last_turn_completion_tokens = 0;
-        self.last_turn_cached_tokens = 0;
-        self.last_turn_duration_ms = 0;
+        if !std::mem::take(&mut self.injected_turn) {
+            self.steps = self.steps.saturating_add(1);
+        }
+        self.round_trip_started_at = now_millis();
+    }
+
+    /// Settles a turn: the round trip still in flight is counted.
+    pub(crate) fn finish_turn(&mut self) {
+        if self.pending_step {
+            self.steps = self.steps.saturating_add(1);
+            self.pending_step = false;
+        }
+    }
+
+    /// The accounting a reopened session resumes with. Reference
+    /// `_apply_stored_stats` (`vibe/app_server/_runtime.py`) restores the
+    /// `stats` its metadata saved. The step count is the one thing stored
+    /// under another meaning here, the engine's model calls, so it is counted
+    /// again from the transcript: one step per message the operator sent and
+    /// one per model reply.
+    pub(crate) fn restored(hydrated: &vibe_core::storage::HydratedSession) -> Self {
+        // A session that saved no accounting, such as a fork, starts from zero
+        // however long its transcript is.
+        if hydrated.metadata.statistics.is_empty() {
+            return Self::default();
+        }
+        let stored = |key: &str| hydrated.metadata.statistics.get(key);
+        let count = |key: &str| stored(key).and_then(Value::as_u64).unwrap_or_default();
+        let real = |key: &str| stored(key).and_then(Value::as_f64).unwrap_or_default();
+        let steps = hydrated
+            .messages
+            .iter()
+            .filter(|message| {
+                matches!(
+                    message,
+                    vibe_core::events::ModelMessage::User {
+                        injected: false,
+                        ..
+                    } | vibe_core::events::ModelMessage::Assistant { .. }
+                )
+            })
+            .count();
+        let duration_ms = (real("last_turn_duration") * 1_000.0).round();
+        Self {
+            steps: u64::try_from(steps).unwrap_or(u64::MAX),
+            session_prompt_tokens: count("session_prompt_tokens"),
+            session_completion_tokens: count("session_completion_tokens"),
+            session_cached_tokens: count("session_cached_tokens"),
+            context_tokens: count("context_tokens"),
+            last_turn_prompt_tokens: count("last_turn_prompt_tokens"),
+            last_turn_completion_tokens: count("last_turn_completion_tokens"),
+            last_turn_cached_tokens: count("last_turn_cached_tokens"),
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            last_turn_duration_ms: if duration_ms.is_finite() && duration_ms > 0.0 {
+                duration_ms as u64
+            } else {
+                0
+            },
+            tokens_per_second: real("tokens_per_second"),
+            ..Self::default()
+        }
+    }
+
+    /// Settles a failed turn: the round trip it failed in never completed, so
+    /// the reference loop (`vibe/core/agent_loop/_loop.py`) never counts it.
+    pub(crate) fn abandon_turn(&mut self) {
+        self.pending_step = false;
     }
 }
 
@@ -171,17 +252,12 @@ pub(crate) fn public_stats(session: Option<&SessionRuntime>) -> Value {
         .and_then(|session| session.snapshot.as_ref())
         .map(|snapshot| snapshot.history.as_slice())
         .unwrap_or_default();
-    let mut steps = 0_u64;
     let mut succeeded = 0_u64;
     let mut failed = 0_u64;
     let mut agreed = 0_u64;
     let mut rejected = 0_u64;
     for entry in history {
         match entry {
-            PublicHistoryEntry::Message {
-                role: PublicMessageRole::Assistant,
-                ..
-            } => steps = steps.saturating_add(1),
             PublicHistoryEntry::Effect { state, .. } => match state {
                 PublicEffectState::Completed { .. } => succeeded = succeeded.saturating_add(1),
                 PublicEffectState::Failed { .. } => failed = failed.saturating_add(1),
@@ -206,13 +282,9 @@ pub(crate) fn public_stats(session: Option<&SessionRuntime>) -> Value {
         }
     };
     let seconds = as_f64(stats.last_turn_duration_ms) / 1_000.0;
-    let tokens_per_second = if seconds > 0.0 {
-        as_f64(stats.last_turn_completion_tokens) / seconds
-    } else {
-        0.0
-    };
+    let tokens_per_second = stats.tokens_per_second;
     json!({
-        "steps": steps,
+        "steps": stats.steps,
         "sessionPromptTokens": stats.session_prompt_tokens,
         "sessionCompletionTokens": stats.session_completion_tokens,
         "sessionCachedTokens": stats.session_cached_tokens,

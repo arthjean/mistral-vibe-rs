@@ -22,6 +22,8 @@ fn system(content: &str) -> ModelMessage {
 
 fn assistant(content: &str) -> ModelMessage {
     ModelMessage::Assistant {
+        message_id: None,
+        reasoning_message_id: None,
         content: content.to_owned(),
         reasoning: None,
         reasoning_signature: None,

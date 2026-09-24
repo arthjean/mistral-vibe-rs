@@ -10,10 +10,10 @@ use vibe_app_server::client::{PreparedImages, PublicContentBlock, TurnRequest};
 use vibe_core::images::{ImageDigest, ImageReadError, MAX_IMAGES_PER_MESSAGE, read_image};
 use vibe_core::provider::ImageInput;
 
-pub use super::path_mentions::normalize_pasted_text;
-use super::path_mentions::{mention_values, resolve_owned_candidate};
-pub use super::path_resources::MentionStats;
-use super::path_resources::{PathResourceKind, build_path_prompt_payload};
+pub use vibe_core::path_mentions::normalize_pasted_text;
+use vibe_core::path_mentions::{mention_values, resolve_owned_candidate};
+pub use vibe_core::path_resources::MentionStats;
+use vibe_core::path_resources::{PathResourceKind, build_path_prompt_payload};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PromptDraft {

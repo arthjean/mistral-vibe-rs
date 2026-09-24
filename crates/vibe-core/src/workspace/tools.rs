@@ -368,6 +368,9 @@ fn edit_handler(
                         "edit file_path cannot be empty".to_owned(),
                     ));
                 }
+                review
+                    .capture_before_mutation(&path)
+                    .map_err(|error| ToolError::Execution(error.to_string()))?;
                 if old_text.is_empty() {
                     return Err(ToolError::Execution(
                         "edit old_string cannot be empty; write_file creates a new file".to_owned(),
@@ -470,6 +473,9 @@ fn write_handler(
                         "write_file file_path cannot be empty".to_owned(),
                     ));
                 }
+                review
+                    .capture_before_mutation(&path)
+                    .map_err(|error| ToolError::Execution(error.to_string()))?;
                 // Every check runs before anything touches the filesystem,
                 // so a refused write leaves no directory behind. The
                 // existence check runs again inside the write itself, which
@@ -657,13 +663,9 @@ async fn delegated_read(
         .map(|line| (*line).to_owned())
         .collect::<Vec<_>>();
     let was_truncated = byte_truncated || all_lines.len() > line_limit;
-    let total_lines = if was_truncated {
-        None
-    } else if selected.is_empty() && start == 1 {
-        Some(0)
-    } else {
-        Some(start.saturating_sub(1).saturating_add(selected.len()))
-    };
+    // Reference `ClientToolIO.read_lines`: the client answers a window, so
+    // the total is only known for a file it reports empty from the top.
+    let total_lines = (content.is_empty() && start == 1).then_some(0);
     Ok(Some(build_read_result(
         display,
         BoundedRead {

@@ -22,7 +22,7 @@ struct FixedApproval(ApprovalDecision);
 
 impl ApprovalAgent for FixedApproval {
     fn request<'a>(&'a self, _request: ApprovalRequest) -> ApprovalFuture<'a> {
-        Box::pin(async move { Ok(self.0) })
+        Box::pin(async move { Ok(self.0.clone()) })
     }
 }
 
@@ -49,7 +49,7 @@ impl RecordingApproval {
 impl ApprovalAgent for RecordingApproval {
     fn request<'a>(&'a self, request: ApprovalRequest) -> ApprovalFuture<'a> {
         self.seen.write().expect("record").push(request);
-        let decision = self.decision.unwrap_or(ApprovalDecision::Deny);
+        let decision = self.decision.clone().unwrap_or(ApprovalDecision::Deny);
         Box::pin(async move { Ok(decision) })
     }
 }
@@ -1054,7 +1054,15 @@ async fn revocation_is_atomic_with_guarded_side_effects() {
     release.notify_one();
     first.await.expect("first join").expect("first completes");
     revoke.await.expect("revoke join").expect("revoke");
-    assert!(second.await.expect("second join").is_err());
+    let second = second
+        .await
+        .expect("second join")
+        .expect("the revoked call settles as a refusal");
+    assert_eq!(
+        second.skip,
+        Some(crate::tools::ToolSkip { cancelled: true }),
+        "{second:?}"
+    );
     assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
 

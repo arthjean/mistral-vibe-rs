@@ -61,6 +61,8 @@ async fn a_configuration_change_between_turns_reaches_the_published_tools() {
 async fn workspace_trust_never_gates_a_read_in_the_session_directory() {
     let workspace = tempfile::tempdir().expect("workspace");
     std::fs::write(workspace.path().join("visible.txt"), "safe\n").expect("fixture");
+    // A file trust would unlock, without which there is no decision to make.
+    std::fs::write(workspace.path().join("AGENTS.md"), "guidance\n").expect("fixture");
     let server = AppServer::default();
     let mut connection = server.connect(TransportKind::InProcess);
     initialize(&mut connection);
@@ -90,7 +92,20 @@ async fn workspace_trust_never_gates_a_read_in_the_session_directory() {
                     "decision": decision
                 }),
             ));
-            assert_eq!(answered.outbound.len(), 2, "{decision}");
+            // A trusted directory leaves nothing to decide, so the decline
+            // that follows the grant is refused, as reference
+            // `decide_workspace_trust` refuses it; the read answers either way.
+            let expected = if decision == "decline" { 1 } else { 2 };
+            assert_eq!(
+                answered.outbound.len(),
+                expected,
+                "{decision}: {:?}",
+                answered
+                    .outbound
+                    .iter()
+                    .map(|frame| String::from_utf8_lossy(frame).into_owned())
+                    .collect::<Vec<_>>()
+            );
         }
         let content = server
             .invoke_tool("session-1", "read_file", invocation())
@@ -254,6 +269,8 @@ fn closing_an_active_session_retains_ownership_until_terminal_cleanup() {
             working_directory: None,
             event_id: 1,
             event: vibe_core::events::EngineEvent::UserMessage {
+                attachments: Vec::new(),
+                message_id: None,
                 content: "hello".to_owned(),
             },
         },
@@ -336,6 +353,8 @@ fn conversation_limits_complete_with_the_public_limit_reason() {
             working_directory: None,
             event_id: 1,
             event: vibe_core::events::EngineEvent::UserMessage {
+                attachments: Vec::new(),
+                message_id: None,
                 content: "bounded".to_owned(),
             },
         },
@@ -393,6 +412,8 @@ fn provider_terminal_failures_preserve_their_public_error() {
             working_directory: None,
             event_id: 1,
             event: vibe_core::events::EngineEvent::UserMessage {
+                attachments: Vec::new(),
+                message_id: None,
                 content: "bounded".to_owned(),
             },
         },
@@ -458,6 +479,8 @@ fn a_handoff_onto_the_same_session_is_refused() {
             working_directory: None,
             event_id: 1,
             event: vibe_core::events::EngineEvent::UserMessage {
+                attachments: Vec::new(),
+                message_id: None,
                 content: "clear".to_owned(),
             },
         })
@@ -554,6 +577,8 @@ fn handoff_atomically_migrates_the_runtime_to_the_projected_id() {
             working_directory: None,
             event_id: 1,
             event: vibe_core::events::EngineEvent::UserMessage {
+                attachments: Vec::new(),
+                message_id: None,
                 content: "compact".to_owned(),
             },
         },

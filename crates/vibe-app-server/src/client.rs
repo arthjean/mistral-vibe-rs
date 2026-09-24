@@ -25,7 +25,7 @@ use vibe_protocol::{
 };
 
 pub use crate::images::PreparedImages;
-use crate::images::{provider_images, validate_prepared_images};
+use crate::images::{provider_images, snapshot_attachments, validate_prepared_images};
 use crate::server::{
     AppServer, DeferredWork, ServerConnection, ServerError, SessionIntent, SessionView,
 };
@@ -194,6 +194,9 @@ pub struct TurnReservation {
     /// Stable, provider-ready image snapshots. `None` means the driver must
     /// materialize and validate the public attachment blocks before use.
     pub prepared_images: Option<PreparedImages>,
+    /// Reference `TurnStartParams.injected`: the harness, not the operator,
+    /// wrote this prompt, so it reaches the model without a user entry.
+    pub injected: bool,
     pub client_user_message_id: Option<String>,
     pub auto_title: Option<String>,
     pub user_display_content: Option<Value>,
@@ -221,8 +224,7 @@ pub struct TurnRequest {
     /// Whether the harness is starting this turn rather than the operator,
     /// which v2.24.0 added to `TurnStartParams`
     /// (`vibe/app_server/protocol.py:1112`). It is carried on the wire and
-    /// defaults false; no path in this port starts an injected turn yet, and the
-    /// first one is the compaction envelope EP-043 writes.
+    /// defaults false. `/retry` in the ACP adapter starts one.
     #[serde(default)]
     pub injected: bool,
     #[serde(default)]
@@ -485,9 +487,12 @@ impl TurnDriver for EchoTurnDriver {
             let mut events = Vec::new();
             for (event_id, event) in [
                 vibe_core::events::EngineEvent::UserMessage {
+                    attachments: Vec::new(),
+                    message_id: None,
                     content: reservation.prompt.clone(),
                 },
                 vibe_core::events::EngineEvent::ModelText {
+                    message_id: None,
                     text: self.response.clone(),
                 },
                 vibe_core::events::EngineEvent::Lifecycle {
@@ -519,6 +524,8 @@ impl TurnDriver for EchoTurnDriver {
                 messages: vec![
                     ModelMessage::user(reservation.prompt.clone()),
                     ModelMessage::Assistant {
+                        message_id: None,
+                        reasoning_message_id: None,
                         content: self.response.clone(),
                         reasoning: None,
                         reasoning_signature: None,
@@ -654,6 +661,7 @@ fn session_stats(metadata: &vibe_core::storage::SessionMetadata) -> SessionStats
             .unwrap_or_default()
     };
     SessionStats {
+        last_call: None,
         usage: Usage {
             input_tokens: value("session_prompt_tokens"),
             output_tokens: value("session_completion_tokens"),

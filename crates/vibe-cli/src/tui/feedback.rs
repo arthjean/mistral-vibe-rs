@@ -127,12 +127,22 @@ mod tests {
         let mut input = ChatInputState::default();
         let mut state = TuiState::new("feedback-session");
 
+        // A session without three user messages is never asked (reference
+        // `MIN_USER_MESSAGES_FOR_FEEDBACK`), and the check itself succeeds.
         maybe_activate(&mut runtime, &mut input, &mut state).await;
         assert!(
-            input.feedback_active(),
+            !input.feedback_active(),
+            "a fresh session is not asked for feedback"
+        );
+        assert_eq!(
+            state.diagnostics().count(),
+            0,
             "feedback diagnostics: {:?}",
             state.diagnostics().collect::<Vec<_>>()
         );
+
+        // A prompt that is showing records its answer through the service.
+        let _ = input.apply(InputEvent::Feedback { active: true });
         let effects = input.apply(InputEvent::Key {
             key: chat_input::KeyName::Char,
             char: Some('2'),

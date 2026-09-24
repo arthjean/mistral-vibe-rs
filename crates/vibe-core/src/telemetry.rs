@@ -202,6 +202,14 @@ fn active_provider(effective: &Table, providers: &[Table]) -> Option<Table> {
         .cloned()
 }
 
+/// Reference `VibeConfigSchema.is_active_model_mistral`: the provider the
+/// active model runs on has the Mistral backend.
+#[must_use]
+pub fn is_active_model_mistral(effective: &Table) -> bool {
+    active_provider(effective, &provider_entries(effective))
+        .is_some_and(|provider| is_mistral(&provider))
+}
+
 fn is_mistral(provider: &Table) -> bool {
     provider.get("backend").and_then(toml::Value::as_str) == Some(MISTRAL_BACKEND)
 }

@@ -524,7 +524,9 @@ fn trust_mutation_returns_a_canonical_notification_after_the_response() {
         policy
             .try_trust_decision(workspace.path())
             .expect("canonical policy"),
-        Some(TrustDecision::SessionTrusted)
+        Some(TrustDecision::Trusted),
+        "reference `trust_cwd` records the directory in the trust file, so the session \
+         holds it as trusted rather than trusted for itself alone"
     );
 }
 

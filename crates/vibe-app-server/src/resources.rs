@@ -658,7 +658,7 @@ impl ResourceService {
         let decision = required_string(params, "decision")?;
         let (trust, kind) = match decision {
             "trust_repo" => (TrustDecision::Trusted, TrustRootKind::Workspace),
-            "trust_cwd" => (TrustDecision::SessionTrusted, TrustRootKind::Workspace),
+            "trust_cwd" => (TrustDecision::Trusted, TrustRootKind::Workspace),
             "decline" => (TrustDecision::Untrusted, TrustRootKind::Workspace),
             _ => {
                 return Err(ResourceError::InvalidParams(

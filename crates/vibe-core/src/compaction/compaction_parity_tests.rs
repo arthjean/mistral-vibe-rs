@@ -527,6 +527,8 @@ fn build(entry: &MessageEntry, envelopes: &BTreeMap<String, String>) -> ModelMes
             }
         }
         "assistant" => ModelMessage::Assistant {
+            message_id: None,
+            reasoning_message_id: None,
             content,
             reasoning: None,
             reasoning_signature: None,

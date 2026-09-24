@@ -1,375 +1,304 @@
-//! `/teleport`: hand the session over to Vibe Code Web.
-
-use std::future::Future;
+//! `/teleport`: hand the session to Vibe Code on the web.
+//!
+//! Reference `AcpCommandController._teleport` and
+//! `vibe/acp/commands/teleport.py`: a tool call follows the operation, a push
+//! the workflow needs is put to the client as a permission request, and the
+//! prompt response carries the outcome under `_meta.teleport`.
 
 use serde_json::{Value, json};
-use vibe_app_server::client::{
-    HeadlessService, ProgrammaticTeleportEvent, PublicNotification, TurnDriver,
-};
+use vibe_app_server::client::{ProgrammaticTeleportEvent, PublicNotification, TurnDriver};
 
+use super::{app_server_message, end_turn, text_content};
 use crate::agent::AcpAgent;
-use crate::commands::CommandSink;
-use crate::history::all_history_entries;
+use crate::agent::turn::uuid;
 use crate::protocol::AcpError;
-use crate::session::now_millis;
+use crate::session::AcpHarness;
 
-const MAX_SUMMARY_CHARS: usize = 32 * 1024;
-const MAX_SUMMARY_ENTRIES: usize = 32;
-const MAX_FAILURE_CHARS: usize = 4_096;
+const PUSH_OPTION_ID: &str = "teleport_push_and_continue";
+const CANCEL_OPTION_ID: &str = "teleport_cancel";
 
-pub(crate) async fn execute<D>(
-    agent: &AcpAgent<D>,
-    sink: &CommandSink<'_, D>,
-) -> Result<(), AcpError>
-where
-    D: TurnDriver,
-{
-    let call_id = sink.harness.next_local_id("teleport");
-    // The cloud operation ID is an idempotency key across processes, so it
-    // carries the wall clock and PID on top of the process-unique call ID.
-    let operation_id = format!("{call_id}-{}-{}", std::process::id(), now_millis());
-    let mut service = sink.harness.service.lock().await;
-    let history = match all_history_entries(&mut service, sink.session_id()) {
-        Ok(history) if !history.is_empty() => history,
-        Ok(_) => return sink.reply("No conversation history to teleport."),
-        Err(error) => {
-            return sink.reply(&format!(
-                "Teleport could not read conversation history: {error}"
-            ));
-        }
-    };
-    let summary = summarize(&history);
-    sink.tool_update(announce(&call_id))?;
-
-    let opened = service.public_call_async(
-        "vibeCode/projects/open",
-        json!({
-            "sessionId": sink.session_id(),
-            "workingDirectory": sink.harness.cwd,
-            "purpose": "teleport",
-        }),
-    );
-    let Some(opened) = until_cancelled(sink, opened).await else {
-        return cancelled(sink, &call_id);
-    };
-    let opened = match opened {
-        Ok(opened) => opened,
-        Err(error) => return failed(sink, &call_id, &error.to_string()),
-    };
-    let Some(picker_id) = opened.result.get("pickerId").and_then(Value::as_str) else {
-        return failed(
-            sink,
-            &call_id,
-            "Vibe Code project discovery omitted its picker ID",
-        );
-    };
-    let Some(project_id) = opened
-        .result
-        .get("resolvedProjectId")
-        .and_then(Value::as_str)
-    else {
-        return failed(
-            sink,
-            &call_id,
-            "No Vibe Code project is linked to this repository.",
-        );
-    };
-
-    let started = service.public_call_async(
-        "vibeCode/teleport/start",
-        json!({
-            "sessionId": sink.session_id(),
-            "pickerId": picker_id.to_owned(),
-            "projectId": project_id.to_owned(),
-            "operationId": operation_id,
-            "workingDirectory": sink.harness.cwd,
-            "prompt": summary,
-        }),
-    );
-    let Some(started) = until_cancelled(sink, started).await else {
-        return abort(sink, &mut service, &operation_id, &call_id);
-    };
-    let started = match started {
-        Ok(started) => started,
-        Err(error) => return failed(sink, &call_id, &error.to_string()),
-    };
-    let events = events_from(&started.notifications)?;
-    emit(sink, &call_id, &events)?;
-    if !events
-        .iter()
-        .any(|event| matches!(event, ProgrammaticTeleportEvent::PushRequired { .. }))
-    {
-        return Ok(());
+/// Reference `teleport_field_meta`.
+fn field_meta(
+    status: &str,
+    url: Option<&str>,
+    unpushed_count: Option<u64>,
+    branch_not_pushed: Option<bool>,
+) -> Value {
+    let mut teleport = json!({"status": status});
+    if let Some(url) = url {
+        teleport["url"] = json!(url);
     }
-
-    drop(service);
-    let permission = agent.request_permission(
-        sink.session_id(),
-        json!({
-            "toolCallId": call_id,
-            "title": "Push local commits before Teleport?",
-            "kind": "execute",
-            "rawInput": {"operationId": operation_id},
-            "_meta": {"tool_name": "teleport", "teleport": {"status": "push_required"}},
-        }),
-        vec![
-            json!({
-                "optionId": "teleport_push_and_continue",
-                "name": "Push and continue",
-                "kind": "allow_once",
-            }),
-            json!({
-                "optionId": "teleport_cancel",
-                "name": "Cancel Teleport",
-                "kind": "reject_once",
-            }),
-        ],
-    );
-    let approved = match until_cancelled(sink, permission).await {
-        Some(permission) => selected_option(permission.ok().as_ref())
-            .is_some_and(|option| option == "teleport_push_and_continue"),
-        None => {
-            let mut service = sink.harness.service.lock().await;
-            return abort(sink, &mut service, &operation_id, &call_id);
-        }
-    };
-
-    let mut service = sink.harness.service.lock().await;
-    let responded = service.public_call_async(
-        "vibeCode/teleport/push/respond",
-        json!({
-            "sessionId": sink.session_id(),
-            "operationId": operation_id,
-            "approved": approved,
-        }),
-    );
-    let Some(responded) = until_cancelled(sink, responded).await else {
-        return abort(sink, &mut service, &operation_id, &call_id);
-    };
-    match responded {
-        Ok(responded) => emit(sink, &call_id, &events_from(&responded.notifications)?),
-        Err(error) => failed(sink, &call_id, &error.to_string()),
+    if let Some(count) = unpushed_count {
+        teleport["unpushedCount"] = json!(count);
     }
-}
-
-/// Runs cloud work while `/cancel` stays observable. `None` means the session
-/// was cancelled before the work finished.
-async fn until_cancelled<D, T>(
-    sink: &CommandSink<'_, D>,
-    work: impl Future<Output = T>,
-) -> Option<T>
-where
-    D: TurnDriver,
-{
-    tokio::select! {
-        result = work => Some(result),
-        () = sink.harness.cancelled() => None,
+    if let Some(branch) = branch_not_pushed {
+        teleport["branchNotPushed"] = json!(branch);
     }
+    json!({"tool_name": "teleport", "teleport": teleport})
 }
 
-fn selected_option(response: Option<&Value>) -> Option<&str> {
-    response
-        .filter(|response| {
-            response.pointer("/outcome/outcome").and_then(Value::as_str) == Some("selected")
-        })?
-        .pointer("/outcome/optionId")?
-        .as_str()
+fn status_meta(status: &str) -> Value {
+    field_meta(status, None, None, None)
 }
 
-/// Opening tool call every later update revises.
-fn announce(call_id: &str) -> Value {
-    json!({
-        "sessionUpdate": "tool_call",
-        "toolCallId": call_id,
-        "title": "Teleporting session to Vibe Code",
-        "kind": "other",
-        "status": "in_progress",
-        "_meta": {"tool_name": "teleport", "teleport": {"status": "starting"}},
-    })
-}
-
-fn update(
+/// Reference `_progress`.
+fn progress(
     call_id: &str,
     title: &str,
     status: &str,
-    teleport_status: &str,
-    raw_output: Value,
+    text: Option<&str>,
+    raw_output: Option<&str>,
+    meta: Value,
 ) -> Value {
-    json!({
+    let mut update = json!({
         "sessionUpdate": "tool_call_update",
         "toolCallId": call_id,
         "title": title,
         "kind": "other",
         "status": status,
-        "rawOutput": raw_output,
-        "_meta": {
-            "tool_name": "teleport",
-            "teleport": {"status": teleport_status},
-        },
-    })
+        "_meta": meta,
+    });
+    if let Some(text) = text {
+        update["content"] = json!([text_content(text)]);
+    }
+    if let Some(raw_output) = raw_output {
+        update["rawOutput"] = json!(raw_output);
+    }
+    update
 }
 
-fn failed<D>(sink: &CommandSink<'_, D>, call_id: &str, message: &str) -> Result<(), AcpError>
-where
-    D: TurnDriver,
-{
-    let message = message.chars().take(MAX_FAILURE_CHARS).collect::<String>();
-    sink.tool_update(update(
+fn failed_update(call_id: &str, message: &str) -> Value {
+    progress(
         call_id,
         "Teleport failed",
         "failed",
-        "failed",
-        json!({"message": message}),
-    ))
+        Some(message),
+        Some(message),
+        status_meta("failed"),
+    )
 }
 
-fn cancelled<D>(sink: &CommandSink<'_, D>, call_id: &str) -> Result<(), AcpError>
-where
-    D: TurnDriver,
-{
-    sink.tool_update(update(
-        call_id,
-        "Teleport cancelled",
-        "failed",
-        "failed",
-        json!({"message": "Teleport was cancelled; the local session remains available."}),
-    ))
-}
-
-/// Cancels the cloud operation before reporting the cancellation locally.
-fn abort<D>(
-    sink: &CommandSink<'_, D>,
-    service: &mut HeadlessService<D>,
-    operation_id: &str,
-    call_id: &str,
-) -> Result<(), AcpError>
-where
-    D: TurnDriver,
-{
-    let _ = service.public_call(
-        "vibeCode/teleport/cancel",
-        json!({"sessionId": sink.session_id(), "operationId": operation_id}),
-    );
-    cancelled(sink, call_id)
-}
-
-fn emit<D>(
-    sink: &CommandSink<'_, D>,
-    call_id: &str,
-    events: &[ProgrammaticTeleportEvent],
-) -> Result<(), AcpError>
-where
-    D: TurnDriver,
-{
-    for event in events {
-        let (title, status, teleport_status, raw_output) = match event {
-            ProgrammaticTeleportEvent::SummarizingContext { .. } => (
-                "Summarizing session context",
-                "in_progress",
-                "summarizing_context",
-                Value::Null,
-            ),
-            ProgrammaticTeleportEvent::CheckingGit { .. } => (
-                "Checking Git repository",
-                "in_progress",
-                "preparing_workspace",
-                Value::Null,
-            ),
-            ProgrammaticTeleportEvent::PushRequired {
-                unpushed_count,
-                branch_not_pushed,
-                ..
-            } => (
-                "Git push approval required",
-                "in_progress",
-                "push_required",
-                json!({
-                    "unpushedCount": unpushed_count,
-                    "branchNotPushed": branch_not_pushed,
-                }),
-            ),
-            ProgrammaticTeleportEvent::Pushing { .. } => (
-                "Pushing Git changes",
-                "in_progress",
-                "syncing_remote",
-                Value::Null,
-            ),
-            ProgrammaticTeleportEvent::StartingWorkflow { .. } => (
-                "Starting Vibe Code workflow",
-                "in_progress",
-                "starting_workflow",
-                Value::Null,
-            ),
-            ProgrammaticTeleportEvent::Complete { url, .. } => (
-                "Session teleported to Vibe Code",
-                "completed",
-                "completed",
-                json!({"url": url}),
-            ),
-            ProgrammaticTeleportEvent::Failed { error, .. } => (
-                "Teleport failed",
-                "failed",
-                "failed",
-                json!({"message": error.message, "code": error.code}),
-            ),
-        };
-        sink.tool_update(update(call_id, title, status, teleport_status, raw_output))?;
+/// Reference `teleport_push_question`.
+fn push_question(unpushed_count: u64, branch_not_pushed: bool) -> String {
+    if branch_not_pushed {
+        return "This branch is not on the remote yet. Push it and continue?".to_owned();
     }
-    Ok(())
+    let plural = if unpushed_count == 1 { "" } else { "s" };
+    format!("{unpushed_count} local commit{plural} are not pushed. Push them and continue?")
 }
 
-fn events_from(
-    notifications: &[PublicNotification],
-) -> Result<Vec<ProgrammaticTeleportEvent>, AcpError> {
+/// Reference `teleport_event_update`.
+fn event_update(call_id: &str, event: &ProgrammaticTeleportEvent) -> Value {
+    let step = |title: &str, status: &str| {
+        progress(
+            call_id,
+            title,
+            "in_progress",
+            Some(title),
+            None,
+            status_meta(status),
+        )
+    };
+    match event {
+        ProgrammaticTeleportEvent::SummarizingContext { .. } => {
+            step("Summarizing the context...", "summarizing_context")
+        }
+        ProgrammaticTeleportEvent::CheckingGit { .. } => {
+            step("Getting the workspace ready...", "preparing_workspace")
+        }
+        ProgrammaticTeleportEvent::PushRequired {
+            unpushed_count,
+            branch_not_pushed,
+            ..
+        } => progress(
+            call_id,
+            "A push is needed",
+            "in_progress",
+            Some(&push_question(*unpushed_count, *branch_not_pushed)),
+            None,
+            field_meta(
+                "push_required",
+                None,
+                Some(*unpushed_count),
+                Some(*branch_not_pushed),
+            ),
+        ),
+        ProgrammaticTeleportEvent::Pushing { .. } => {
+            step("Syncing with the remote...", "syncing_remote")
+        }
+        ProgrammaticTeleportEvent::StartingWorkflow { .. } => {
+            step("Opening the Vibe Code web session...", "starting_workflow")
+        }
+        ProgrammaticTeleportEvent::Complete { url, .. } => progress(
+            call_id,
+            "Session moved to Vibe Code on the web",
+            "completed",
+            Some(&format!(
+                "The session continues on Vibe Code on the web: {url}"
+            )),
+            Some(url),
+            field_meta("completed", Some(url), None, None),
+        ),
+        ProgrammaticTeleportEvent::Failed { error, .. } => failed_update(call_id, &error.message),
+    }
+}
+
+fn events(notifications: &[PublicNotification]) -> Vec<ProgrammaticTeleportEvent> {
     notifications
         .iter()
         .filter(|notification| notification.method == "vibeCode/teleport/event")
-        .map(|notification| {
-            notification
-                .params
-                .get("event")
-                .cloned()
-                .ok_or_else(|| {
-                    AcpError::InvalidResponse("Teleport notification omitted its event".to_owned())
-                })
-                .and_then(|event| serde_json::from_value(event).map_err(AcpError::Json))
-        })
+        .filter_map(|notification| notification.params.get("event").cloned())
+        .filter_map(|event| serde_json::from_value(event).ok())
         .collect()
 }
 
-/// Trailing conversation excerpt handed to the cloud workflow as its prompt.
-fn summarize(history: &[Value]) -> String {
-    let lines = history
-        .iter()
-        .rev()
-        .filter_map(|entry| {
-            let role = entry.get("role").and_then(Value::as_str)?;
-            if !matches!(role, "user" | "assistant") {
-                return None;
+impl<D> AcpAgent<D>
+where
+    D: TurnDriver + 'static,
+{
+    pub(super) async fn teleport(&self, harness: &AcpHarness<D>) -> Result<Value, AcpError> {
+        let opened = self
+            .call_async(
+                harness,
+                "vibeCode/projects/open",
+                json!({"purpose": "teleport", "workingDirectory": harness.cwd}),
+            )
+            .await;
+        let opened = match opened {
+            Ok(opened) => opened,
+            Err(error) => {
+                return Ok(self.reply(
+                    harness,
+                    &app_server_message(&error),
+                    Some(status_meta("unavailable")),
+                ));
             }
-            let text = match entry.get("content") {
-                Some(Value::String(text)) => text.clone(),
-                Some(Value::Array(blocks)) => blocks
-                    .iter()
-                    .filter_map(|block| block.get("text").and_then(Value::as_str))
-                    .collect(),
-                _ => String::new(),
-            };
-            (!text.trim().is_empty()).then(|| format!("{role}: {text}"))
-        })
-        .take(MAX_SUMMARY_ENTRIES)
-        .collect::<Vec<_>>();
-    let summary = lines
-        .into_iter()
-        .rev()
-        .collect::<Vec<_>>()
-        .join("\n\n")
-        .chars()
-        .take(MAX_SUMMARY_CHARS)
-        .collect::<String>();
-    if summary.is_empty() {
-        "Continue this session in Vibe Code".to_owned()
-    } else {
-        summary
+        };
+        let field = |key: &str| {
+            opened
+                .result
+                .get(key)
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned)
+        };
+        let (Some(project_id), Some(picker_id)) = (field("resolvedProjectId"), field("pickerId"))
+        else {
+            return Ok(self.reply(
+                harness,
+                "This repository is not linked to a Vibe Code project.",
+                Some(status_meta("unavailable")),
+            ));
+        };
+        let call_id = uuid();
+        self.session_update(
+            &harness.session_id,
+            json!({
+                "sessionUpdate": "tool_call",
+                "toolCallId": call_id,
+                "title": "Moving the session to Vibe Code on the web...",
+                "kind": "other",
+                "status": "in_progress",
+                "content": [text_content("Getting the workspace ready...")],
+                "_meta": status_meta("starting"),
+            }),
+        );
+        let operation_id = uuid();
+        let started = self
+            .call_async(
+                harness,
+                "vibeCode/teleport/start",
+                json!({
+                    "pickerId": picker_id,
+                    "operationId": operation_id,
+                    "prompt": null,
+                    "projectId": project_id,
+                    "workingDirectory": harness.cwd,
+                }),
+            )
+            .await;
+        let mut pending = match started {
+            Ok(started) => events(&started.notifications),
+            Err(error) => return Ok(self.teleport_failed(harness, &call_id, &error)),
+        };
+        let mut index = 0;
+        while index < pending.len() {
+            let event = pending[index].clone();
+            index += 1;
+            self.session_update(&harness.session_id, event_update(&call_id, &event));
+            match event {
+                ProgrammaticTeleportEvent::PushRequired {
+                    unpushed_count,
+                    branch_not_pushed,
+                    ..
+                } => {
+                    let permission = self
+                        .call_client(
+                            "session/request_permission",
+                            json!({
+                                "sessionId": harness.session_id,
+                                "toolCall": {
+                                    "toolCallId": call_id,
+                                    "title": push_question(unpushed_count, branch_not_pushed),
+                                    "kind": "execute",
+                                    "status": "pending",
+                                    "_meta": field_meta(
+                                        "push_required",
+                                        None,
+                                        Some(unpushed_count),
+                                        Some(branch_not_pushed),
+                                    ),
+                                },
+                                "options": [
+                                    {"optionId": PUSH_OPTION_ID, "name": "Push, then continue", "kind": "allow_once"},
+                                    {"optionId": CANCEL_OPTION_ID, "name": "Cancel", "kind": "reject_once"},
+                                ],
+                            }),
+                        )
+                        .await?;
+                    let approved = permission
+                        .pointer("/outcome/outcome")
+                        .and_then(Value::as_str)
+                        == Some("selected")
+                        && permission
+                            .pointer("/outcome/optionId")
+                            .and_then(Value::as_str)
+                            == Some(PUSH_OPTION_ID);
+                    let responded = self
+                        .call_async(
+                            harness,
+                            "vibeCode/teleport/push/respond",
+                            json!({"operationId": operation_id, "approved": approved}),
+                        )
+                        .await;
+                    match responded {
+                        Ok(responded) => pending.extend(events(&responded.notifications)),
+                        Err(error) => return Ok(self.teleport_failed(harness, &call_id, &error)),
+                    }
+                }
+                ProgrammaticTeleportEvent::Failed { .. } => {
+                    return Ok(end_turn(Some(status_meta("failed"))));
+                }
+                ProgrammaticTeleportEvent::Complete { url, .. } => {
+                    return Ok(end_turn(Some(field_meta(
+                        "completed",
+                        Some(&url),
+                        None,
+                        None,
+                    ))));
+                }
+                _ => {}
+            }
+        }
+        Err(AcpError::Internal(
+            "the teleport ended without reporting an outcome".to_owned(),
+        ))
+    }
+
+    fn teleport_failed(&self, harness: &AcpHarness<D>, call_id: &str, error: &AcpError) -> Value {
+        self.session_update(
+            &harness.session_id,
+            failed_update(call_id, &app_server_message(error)),
+        );
+        end_turn(Some(status_meta("failed")))
     }
 }

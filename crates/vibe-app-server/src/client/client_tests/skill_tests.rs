@@ -45,6 +45,8 @@ impl vibe_core::skills::InvokedSkillResolver for ProbeSkillResolver {
         (name == "probe").then(|| vibe_core::skills::InvokedSkill {
             name: "probe".to_owned(),
             loaded: ToolExecutionOutput {
+                skip: None,
+                turn_failure: None,
                 model_text: format!(
                     "name: probe\ncontent: {}\nDo the probing.\n</skill_content>\nskill_dir: None",
                     vibe_core::skills::skill_content_marker("probe")
@@ -55,6 +57,8 @@ impl vibe_core::skills::InvokedSkillResolver for ProbeSkillResolver {
                 chunks: Vec::new(),
             },
             already_loaded: ToolExecutionOutput {
+                skip: None,
+                turn_failure: None,
                 model_text: "name: probe\ncontent: already loaded\nskill_dir: None".to_owned(),
                 typed_result: json!({"name": "probe"}),
                 display: json!({"kind": "skill", "name": "probe"}),
@@ -74,6 +78,7 @@ fn probe_reservation(prompt: &str, tools: ToolRegistry) -> TurnReservation {
             text: prompt.to_owned(),
         }],
         prepared_images: None,
+        injected: false,
         client_user_message_id: None,
         auto_title: None,
         user_display_content: None,
@@ -359,6 +364,7 @@ async fn run_task_probe(
                 text: "delegate".to_owned(),
             }],
             prepared_images: None,
+            injected: false,
             client_user_message_id: None,
             auto_title: None,
             user_display_content: None,
@@ -510,7 +516,9 @@ async fn the_task_lists_match_a_subagent_name_as_a_glob() {
 }
 
 /// US-248: an agent in neither list falls to the `ask` default, and a declined
-/// prompt starts no subagent and hands the model the policy's refusal.
+/// prompt starts no subagent. A bare decline is the user cancelling, which ends
+/// the turn (reference `is_user_cancellation_event`), so the model is not asked
+/// again.
 #[tokio::test]
 async fn an_unlisted_subagent_asks_the_operator_and_a_decline_starts_no_child() {
     let temporary = tempfile::tempdir().expect("temporary sessions");
@@ -527,8 +535,8 @@ async fn an_unlisted_subagent_asks_the_operator_and_a_decline_starts_no_child() 
         "a declined call starts no subagent"
     );
     assert!(
-        probe.provider.refusal().is_some(),
-        "the model reads the refusal"
+        probe.provider.refusal().is_none(),
+        "a bare decline ends the turn before the model reads anything"
     );
 }
 
@@ -676,6 +684,7 @@ async fn live_task_tool_runs_a_durable_child_session_through_the_provider() {
                 text: "delegate".to_owned(),
             }],
             prepared_images: None,
+            injected: false,
             client_user_message_id: None,
             auto_title: None,
             user_display_content: None,

@@ -87,6 +87,8 @@ async fn a_sampling_request_reaches_the_provider_as_a_completion() {
             },
             ModelMessage::user("ping".to_owned()),
             ModelMessage::Assistant {
+                message_id: None,
+                reasoning_message_id: None,
                 content: "pong".to_owned(),
                 reasoning: None,
                 reasoning_signature: None,
@@ -165,6 +167,7 @@ async fn plan_mode_states_its_directive_on_every_cycle_of_a_persisted_session() 
             text: "keep planning".to_owned(),
         }],
         prepared_images: None,
+        injected: false,
         client_user_message_id: None,
         auto_title: None,
         user_display_content: None,

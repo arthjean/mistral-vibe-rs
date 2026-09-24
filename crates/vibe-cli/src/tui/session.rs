@@ -343,8 +343,12 @@ pub(super) async fn refresh_server_banner_metrics(
     if let Ok(result) = service.public_call("diagnostics/list", json!({"sessionId": session_id})) {
         banner.hooks_count = json_usize(result.get("hooksCount"));
     }
-    if let Ok(result) = service.public_call("account/read", json!({"sessionId": session_id})) {
-        banner.plan = result
+    if let Ok(dispatch) = service
+        .public_call_async("account/read", json!({"sessionId": session_id}))
+        .await
+    {
+        banner.plan = dispatch
+            .result
             .get("account")
             .and_then(|account| account.get("plan"))
             .and_then(|plan| plan.get("title"))

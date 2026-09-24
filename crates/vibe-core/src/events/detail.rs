@@ -23,6 +23,9 @@ use crate::policy::PermissionRequirement;
 use crate::scratchpad::SCRATCHPAD_PREFIX;
 use crate::workspace::tool_path;
 
+mod output;
+pub use output::{has_output_model, project_output, shell_transcript};
+
 // --------------------------------------------------------------------------
 // Vocabularies
 // --------------------------------------------------------------------------
@@ -574,6 +577,58 @@ impl EffectDetail {
         }
     }
 
+    /// The detail of a call announced before its arguments were read.
+    /// Reference `get_no_args_display`: the header is the tool's name, and the
+    /// input is absent.
+    #[must_use]
+    pub fn announced(tool_name: &str, remote: Option<&RemoteToolOrigin>) -> Self {
+        let kind = if remote.is_some() {
+            ToolEffectKind::Tool
+        } else {
+            ToolEffectKind::from_tool_name(tool_name)
+        };
+        let mut display = EffectCallDisplay {
+            summary: tool_name.to_owned(),
+            status_text: remote.map_or_else(
+                || kind.status_text().to_owned(),
+                |remote| remote.status_text(tool_name),
+            ),
+            ..EffectCallDisplay::default()
+        };
+        display.fill_defaults();
+        Self {
+            kind,
+            tool_name: tool_name.to_owned(),
+            display,
+            input: Value::Null,
+            child_session_id: None,
+            remote: remote.cloned(),
+        }
+    }
+
+    /// The detail of a call that settled without ever resolving to a tool.
+    /// Reference `_result_only_effect` (`vibe/app_server/_projector.py`): a
+    /// generic effect named after the call, with no input.
+    #[must_use]
+    pub fn unresolved(tool_name: &str) -> Self {
+        Self {
+            kind: ToolEffectKind::Tool,
+            tool_name: tool_name.to_owned(),
+            display: EffectCallDisplay {
+                summary: tool_name.to_owned(),
+                verb: "Running".to_owned(),
+                message: Some(tool_name.to_owned()),
+                settled_verb: "Ran".to_owned(),
+                settled_message: Some(tool_name.to_owned()),
+                status_text: format!("Running {tool_name}"),
+                ..EffectCallDisplay::default()
+            },
+            input: Value::Null,
+            child_session_id: None,
+            remote: None,
+        }
+    }
+
     /// The detail for a call this session proxies to `remote`.
     ///
     /// The kind is the generic one whatever the published name reads like: the
@@ -727,6 +782,16 @@ fn project_input(kind: ToolEffectKind, arguments: &Value) -> Value {
             "filePath": string_argument(arguments, FILE_PATH_KEYS),
             "content": string_argument(arguments, &["content", "text"]),
         }),
+        // Reference `UserQuestionEffectDetail.input` is the validated request,
+        // published under its aliases with every default filled in.
+        ToolEffectKind::UserQuestion
+            if let Some(request) =
+                serde_json::from_value::<UserQuestionRequest>(arguments.clone())
+                    .ok()
+                    .and_then(|request| serde_json::to_value(request).ok()) =>
+        {
+            request
+        }
         ToolEffectKind::UserQuestion => json!({
             "questions": arguments
                 .get("questions")
@@ -1441,7 +1506,7 @@ pub enum NoticeDetail {
 // --------------------------------------------------------------------------
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct QuestionChoice {
     pub label: String,
     #[serde(default)]
@@ -1449,23 +1514,23 @@ pub struct QuestionChoice {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct UserQuestion {
     pub question: String,
     #[serde(default)]
     pub header: String,
     pub options: Vec<QuestionChoice>,
-    #[serde(default)]
+    #[serde(default, alias = "multi_select")]
     pub multi_select: bool,
-    #[serde(default)]
+    #[serde(default, alias = "hide_other")]
     pub hide_other: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct UserQuestionRequest {
     pub questions: Vec<UserQuestion>,
-    #[serde(default)]
+    #[serde(default, alias = "footer_note")]
     pub footer_note: Option<String>,
 }
 
@@ -1474,7 +1539,7 @@ pub struct UserQuestionRequest {
 pub struct UserAnswer {
     pub question: String,
     pub answer: String,
-    #[serde(default)]
+    #[serde(default, alias = "is_other")]
     pub is_other: bool,
 }
 

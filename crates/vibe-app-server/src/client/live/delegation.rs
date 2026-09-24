@@ -250,6 +250,8 @@ pub(crate) fn task_handler(
                     ),
                 ]);
                 Ok(ToolExecutionOutput {
+                    skip: None,
+                    turn_failure: None,
                     model_text,
                     typed_result,
                     display: json!({"kind": "subagent", "effect": effect}),
@@ -422,6 +424,8 @@ impl SamplingHandler for ProviderSamplingHandler {
                         },
                         SamplingRole::User => ModelMessage::user(message.content),
                         SamplingRole::Assistant => ModelMessage::Assistant {
+                            message_id: None,
+                            reasoning_message_id: None,
                             content: message.content,
                             reasoning: None,
                             reasoning_signature: None,

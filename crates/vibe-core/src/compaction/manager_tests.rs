@@ -183,6 +183,8 @@ pub(crate) fn conversation() -> Vec<ModelMessage> {
         },
         ModelMessage::user("first"),
         ModelMessage::Assistant {
+            message_id: None,
+            reasoning_message_id: None,
             content: "reply one".to_owned(),
             reasoning: None,
             reasoning_signature: None,
@@ -191,6 +193,8 @@ pub(crate) fn conversation() -> Vec<ModelMessage> {
         },
         ModelMessage::user("second"),
         ModelMessage::Assistant {
+            message_id: None,
+            reasoning_message_id: None,
             content: "reply two".to_owned(),
             reasoning: None,
             reasoning_signature: None,
@@ -427,6 +431,8 @@ async fn the_overflow_ladder_sheds_the_oldest_round_and_stops_after_three_retrie
     for index in 0..8 {
         conversation.push(ModelMessage::user(format!("turn {index}")));
         conversation.push(ModelMessage::Assistant {
+            message_id: None,
+            reasoning_message_id: None,
             content: format!("reply {index}"),
             reasoning: None,
             reasoning_signature: None,
@@ -461,6 +467,8 @@ async fn an_overflow_with_nothing_to_drop_propagates_at_once() {
         },
         ModelMessage::user("only round"),
         ModelMessage::Assistant {
+            message_id: None,
+            reasoning_message_id: None,
             content: "reply".to_owned(),
             reasoning: None,
             reasoning_signature: None,
@@ -485,6 +493,8 @@ async fn the_fallback_renders_the_history_the_ladder_ended_on() {
     for index in 0..4 {
         conversation.push(ModelMessage::user(format!("turn {index}")));
         conversation.push(ModelMessage::Assistant {
+            message_id: None,
+            reasoning_message_id: None,
             content: format!("reply {index}"),
             reasoning: None,
             reasoning_signature: None,
@@ -570,6 +580,8 @@ fn the_rendered_transcript_keeps_actions_and_drops_reasoning() {
         },
         ModelMessage::user("  do the thing  "),
         ModelMessage::Assistant {
+            message_id: None,
+            reasoning_message_id: None,
             content: String::new(),
             reasoning: Some("thinking hard".to_owned()),
             reasoning_signature: None,
@@ -586,6 +598,8 @@ fn the_rendered_transcript_keeps_actions_and_drops_reasoning() {
             is_error: false,
         },
         ModelMessage::Assistant {
+            message_id: None,
+            reasoning_message_id: None,
             content: String::new(),
             reasoning: Some("more thinking".to_owned()),
             reasoning_signature: None,

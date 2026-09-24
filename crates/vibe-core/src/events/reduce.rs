@@ -18,7 +18,7 @@ use serde_json::{Value, json};
 
 use super::detail::{
     CallbackDetail, CallbackOutput, EffectDetail, EffectResultDisplay, NoticeDetail,
-    RemoteSettlement,
+    RemoteSettlement, has_output_model, project_output, shell_transcript,
 };
 use super::*;
 
@@ -73,20 +73,29 @@ pub(super) fn reduce_event(
     event: &EngineEvent,
 ) -> Result<(), ProjectionError> {
     match event {
-        EngineEvent::UserMessage { content } => {
+        EngineEvent::UserMessage {
+            content,
+            message_id,
+            attachments,
+        } => {
             require_lifecycle(
                 state,
                 &[LifecycleState::Idle, LifecycleState::Completed],
                 "user_message",
             )?;
             state.lifecycle = LifecycleState::Running;
-            state.history.push(user_message(
+            let mut entry = user_message(
                 state,
                 event_id,
                 emitted_at,
                 content,
                 PublicMessageSource::TurnStart,
-            ));
+            );
+            claim_identity(state, &mut entry, message_id.as_deref());
+            if let PublicHistoryEntry::Message { content, .. } = &mut entry {
+                content.extend(attachments.iter().cloned());
+            }
+            state.history.push(entry);
         }
         EngineEvent::UserSteer { content } => {
             require_lifecycle(state, &[LifecycleState::Running], "user_steer")?;
@@ -128,7 +137,7 @@ pub(super) fn reduce_event(
             };
             state.history.push(entry);
         }
-        EngineEvent::ModelText { text } => {
+        EngineEvent::ModelText { text, message_id } => {
             require_active(state, "model_text")?;
             let appended = match state.history.last_mut() {
                 Some(PublicHistoryEntry::Message {
@@ -146,7 +155,7 @@ pub(super) fn reduce_event(
                 _ => false,
             };
             if !appended {
-                state.history.push(PublicHistoryEntry::Message {
+                let mut entry = PublicHistoryEntry::Message {
                     metadata: entry_metadata(
                         state,
                         event_id,
@@ -157,10 +166,12 @@ pub(super) fn reduce_event(
                     content: vec![PublicContentBlock::Text { text: text.clone() }],
                     source: None,
                     user_display_content: None,
-                });
+                };
+                claim_identity(state, &mut entry, message_id.as_deref());
+                state.history.push(entry);
             }
         }
-        EngineEvent::ModelReasoning { text, .. } => {
+        EngineEvent::ModelReasoning { text, message_id } => {
             require_active(state, "model_reasoning")?;
             let appended = match state.history.last_mut() {
                 Some(PublicHistoryEntry::Reasoning {
@@ -175,7 +186,7 @@ pub(super) fn reduce_event(
                 _ => false,
             };
             if !appended {
-                state.history.push(PublicHistoryEntry::Reasoning {
+                let mut entry = PublicHistoryEntry::Reasoning {
                     metadata: entry_metadata(
                         state,
                         event_id,
@@ -184,8 +195,40 @@ pub(super) fn reduce_event(
                     ),
                     text: text.clone(),
                     summary: Vec::new(),
-                });
+                };
+                claim_identity(state, &mut entry, message_id.as_deref());
+                state.history.push(entry);
             }
+        }
+        EngineEvent::ToolCallAnnounced {
+            call_id,
+            name,
+            remote,
+        } => {
+            require_active(state, "tool_call")?;
+            complete_streaming_entries(state, emitted_at);
+            state.history.push(PublicHistoryEntry::Effect {
+                metadata: effect_metadata(state, call_id, event_id, emitted_at),
+                title: name.clone(),
+                detail: Box::new(EffectDetail::announced(name, remote.as_ref())),
+                state: PublicEffectState::Running {
+                    output_text: String::new(),
+                },
+                tool_call_id: call_id.clone(),
+            });
+        }
+        EngineEvent::ToolCallUnresolved { call_id, name } => {
+            require_active(state, "tool_call")?;
+            complete_streaming_entries(state, emitted_at);
+            state.history.push(PublicHistoryEntry::Effect {
+                metadata: effect_metadata(state, call_id, event_id, emitted_at),
+                title: name.clone(),
+                detail: Box::new(EffectDetail::unresolved(name)),
+                state: PublicEffectState::Running {
+                    output_text: String::new(),
+                },
+                tool_call_id: call_id.clone(),
+            });
         }
         EngineEvent::ToolCall {
             call_id,
@@ -194,19 +237,25 @@ pub(super) fn reduce_event(
             remote,
         } => {
             require_active(state, "tool_call")?;
+            let resolved = match remote {
+                Some(remote) => EffectDetail::for_proxied_call(name, arguments, remote),
+                None => EffectDetail::for_encoded_call_at(name, arguments, working_directory),
+            };
+            // Reference `start_effect`: an announced call keeps its entry and
+            // only its detail is replaced.
+            if let Ok(PublicHistoryEntry::Effect {
+                metadata, detail, ..
+            }) = effect_entry(state, call_id, "tool_call")
+            {
+                **detail = resolved;
+                metadata.updated_at = emitted_at;
+                return Ok(());
+            }
             complete_streaming_entries(state, emitted_at);
             state.history.push(PublicHistoryEntry::Effect {
-                metadata: entry_metadata(
-                    state,
-                    event_id,
-                    emitted_at,
-                    PublicEntryGenerationStatus::InProgress,
-                ),
+                metadata: effect_metadata(state, call_id, event_id, emitted_at),
                 title: name.clone(),
-                detail: Box::new(match remote {
-                    Some(remote) => EffectDetail::for_proxied_call(name, arguments, remote),
-                    None => EffectDetail::for_encoded_call_at(name, arguments, working_directory),
-                }),
+                detail: Box::new(resolved),
                 state: PublicEffectState::Running {
                     output_text: String::new(),
                 },
@@ -235,6 +284,7 @@ pub(super) fn reduce_event(
             duration_ms,
             is_error,
             cancelled,
+            skipped,
         } => {
             require_active(state, "tool_result")?;
             let entry = effect_entry(state, call_id, "tool_result_without_call")?;
@@ -255,15 +305,53 @@ pub(super) fn reduce_event(
                 } else {
                     typed_result.clone()
                 };
-                let output = if projected_result.is_null() {
+                // Reference `project_effect_output`: the projection the tool
+                // published for the UI, else its typed result, read through
+                // the output model of the effect's kind.
+                let output = if has_output_model(detail.kind) && detail.remote.is_none() {
+                    let result = if projected_result.is_null() {
+                        typed_result
+                    } else {
+                        projected_result
+                    };
+                    project_output(detail.kind, result)
+                } else if projected_result.is_null() {
                     answered.clone()
                 } else {
                     projected_result.clone()
                 };
-                *current_state = if *cancelled {
+                // Reference `_effect_output_text`: only what the call streamed
+                // while it ran is carried over; a shell that streamed nothing
+                // publishes its transcript instead.
+                let streamed = match &*current_state {
+                    PublicEffectState::Running { output_text }
+                    | PublicEffectState::Blocked { output_text, .. } => output_text.clone(),
+                    _ => String::new(),
+                };
+                // Reference `project_effect_state`: a declined call settles as
+                // cancelled when the decline ended the turn and as skipped
+                // otherwise, its header the reason with its tags removed.
+                let declined = || EffectResultDisplay {
+                    success: false,
+                    message: untagged(content),
+                    ..EffectResultDisplay::default()
+                };
+                *current_state = if *skipped && *cancelled {
+                    PublicEffectState::Cancelled {
+                        reason: "Cancelled".to_owned(),
+                        output_text: streamed,
+                        duration_ms: *duration_ms,
+                        display: Some(declined()),
+                    }
+                } else if *skipped {
+                    PublicEffectState::Skipped {
+                        reason: content.clone(),
+                        display: declined(),
+                    }
+                } else if *cancelled {
                     PublicEffectState::Cancelled {
                         reason: content.clone(),
-                        output_text: content.clone(),
+                        output_text: streamed,
                         duration_ms: *duration_ms,
                         display: EffectResultDisplay::cancelled(
                             &detail.tool_name,
@@ -272,13 +360,15 @@ pub(super) fn reduce_event(
                         ),
                     }
                 } else if *is_error {
+                    // Reference `project_effect_state`: the error is the
+                    // result's message with its tags removed, and nothing else.
                     PublicEffectState::Failed {
                         error: PublicError {
-                            message: content.clone(),
-                            code: Some("tool_failed".to_owned()),
-                            details: typed_result.clone(),
+                            message: untagged(content),
+                            code: None,
+                            details: Value::Null,
                         },
-                        output_text: content.clone(),
+                        output_text: streamed,
                         duration_ms: *duration_ms,
                         display: match &detail.remote {
                             // The reference settles an errored call ahead of
@@ -289,12 +379,20 @@ pub(super) fn reduce_event(
                                 &detail.display,
                                 &RemoteSettlement::failed(content, &answered),
                             ),
-                            None => EffectResultDisplay::failed(&detail.display),
+                            // Reference `_result_display`: an error is shown
+                            // as its own message.
+                            None => failure_display(content),
                         },
                     }
                 } else {
+                    let output_text = if streamed.is_empty() && detail.kind == ToolEffectKind::Shell
+                    {
+                        shell_transcript(&output)
+                    } else {
+                        streamed
+                    };
                     PublicEffectState::Completed {
-                        output_text: content.clone(),
+                        output_text,
                         duration_ms: *duration_ms,
                         display: match &detail.remote {
                             Some(remote) => EffectResultDisplay::for_remote(
@@ -563,6 +661,12 @@ pub(super) fn reduce_event(
         } => {
             validate_lifecycle_transition(state.lifecycle, *next)?;
             state.lifecycle = *next;
+            if matches!(
+                next,
+                LifecycleState::Completed | LifecycleState::Failed | LifecycleState::Cancelled
+            ) {
+                settle_unfinished_effects(state, *next == LifecycleState::Cancelled, emitted_at);
+            }
             complete_streaming_entries(state, emitted_at);
             // A failed turn used to append a notice whose `kind` the reference
             // does not declare, which a conforming client rejects. The failure
@@ -603,6 +707,69 @@ fn user_message(
         }],
         source: Some(source),
         user_display_content: None,
+    }
+}
+
+/// Reference `_result_display` for a call that errored.
+fn failure_display(error: &str) -> EffectResultDisplay {
+    EffectResultDisplay {
+        success: false,
+        message: untagged(error),
+        ..EffectResultDisplay::default()
+    }
+}
+
+/// Reference `EventProjector.finalize`: an effect the turn ended under fails,
+/// or is cancelled when the turn was, each with a reason of this port's own.
+fn settle_unfinished_effects(state: &mut ProjectionSnapshot, cancelled: bool, emitted_at: u64) {
+    let reason = if cancelled {
+        "The turn was stopped before this call finished"
+    } else {
+        "The turn closed before this call finished"
+    };
+    for entry in &mut state.history {
+        let PublicHistoryEntry::Effect {
+            metadata,
+            state: effect_state,
+            ..
+        } = entry
+        else {
+            continue;
+        };
+        if metadata.generation_status == PublicEntryGenerationStatus::Completed {
+            continue;
+        }
+        let output_text = match &*effect_state {
+            PublicEffectState::Running { output_text }
+            | PublicEffectState::Blocked { output_text, .. } => output_text.clone(),
+            _ => String::new(),
+        };
+        let display = EffectResultDisplay {
+            success: false,
+            message: reason.to_owned(),
+            ..EffectResultDisplay::default()
+        };
+        *effect_state = if cancelled {
+            PublicEffectState::Cancelled {
+                reason: reason.to_owned(),
+                output_text,
+                duration_ms: 0,
+                display: Some(display),
+            }
+        } else {
+            PublicEffectState::Failed {
+                error: PublicError {
+                    message: reason.to_owned(),
+                    code: None,
+                    details: Value::Null,
+                },
+                output_text,
+                duration_ms: 0,
+                display,
+            }
+        };
+        metadata.generation_status = PublicEntryGenerationStatus::Completed;
+        metadata.updated_at = emitted_at;
     }
 }
 
@@ -725,6 +892,66 @@ fn entry_metadata(
         generation_status,
         related_entry_id: None,
     }
+}
+
+/// Gives `entry` the identity its message carries, unless an entry already
+/// holds it: a model call whose text is interrupted by reasoning opens a
+/// second entry, which keeps the positional identity instead.
+fn claim_identity(state: &ProjectionSnapshot, entry: &mut PublicHistoryEntry, id: Option<&str>) {
+    let Some(id) = id.filter(|id| !id.is_empty()) else {
+        return;
+    };
+    if state
+        .history
+        .iter()
+        .any(|existing| existing.metadata().id == id)
+    {
+        return;
+    }
+    entry.metadata_mut().id = id.to_owned();
+}
+
+/// Reference `TaggedText.from_string(...).message`: the text with every known
+/// tag pair replaced by its content.
+fn untagged(text: &str) -> String {
+    const TAGS: [&str; 4] = [
+        "user_cancellation",
+        "tool_error",
+        "vibe_stop_event",
+        "vibe_warning",
+    ];
+    let mut result = text.to_owned();
+    for tag in TAGS {
+        let (open, close) = (format!("<{tag}>"), format!("</{tag}>"));
+        while let Some(start) = result.find(&open) {
+            let Some(end) = result[start + open.len()..].find(&close) else {
+                break;
+            };
+            let inner = result[start + open.len()..start + open.len() + end].to_owned();
+            result.replace_range(start..start + open.len() + end + close.len(), &inner);
+        }
+    }
+    result.trim().to_owned()
+}
+
+/// The metadata of an effect, which the reference keys on its tool call
+/// (`EventProjector.start_effect`) rather than on the event that raised it.
+fn effect_metadata(
+    state: &ProjectionSnapshot,
+    call_id: &str,
+    event_id: u64,
+    emitted_at: u64,
+) -> PublicEntryMetadata {
+    let mut metadata = entry_metadata(
+        state,
+        event_id,
+        emitted_at,
+        PublicEntryGenerationStatus::InProgress,
+    );
+    if !call_id.is_empty() {
+        call_id.clone_into(&mut metadata.id);
+    }
+    metadata
 }
 
 /// Seals every entry still streaming.

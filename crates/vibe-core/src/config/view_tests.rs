@@ -75,10 +75,11 @@ fn the_worktree_limit_reads_the_configured_value_or_the_default() {
 
 #[test]
 fn the_active_model_is_the_entry_its_alias_names() {
-    let (_temporary, snapshot) = loaded("active_model = \"devstral-small\"\n");
+    let (_temporary, snapshot) = loaded("active_model = \"local\"\n");
     let view = snapshot.config_view();
-    assert_eq!(view["activeModel"]["alias"], "devstral-small");
-    assert_eq!(view["activeModel"]["name"], "devstral-small-latest");
+    assert_eq!(view["activeModel"]["alias"], "local");
+    assert_eq!(view["activeModel"]["name"], "devstral");
+    assert_eq!(view["activeModel"]["displayName"], "Devstral (local)");
     assert_eq!(view["activeModel"]["thinking"], "off");
     assert_eq!(view["activeModel"]["supportsImages"], false);
     // Every configured model is published, so a picker renders from the view
@@ -90,7 +91,7 @@ fn the_active_model_is_the_entry_its_alias_names() {
         .filter_map(|model| model["alias"].as_str())
         .collect::<Vec<_>>();
     assert!(
-        aliases.contains(&"devstral-small") && aliases.contains(&"local"),
+        aliases.contains(&"mistral-medium-3.5") && aliases.contains(&"local"),
         "the shipped models are published: {aliases:?}"
     );
 }
@@ -108,7 +109,13 @@ fn an_unresolvable_active_model_publishes_an_empty_model() {
     let view = snapshot.config_view();
     assert_eq!(
         view["activeModel"],
-        serde_json::json!({"name": "", "alias": "", "thinking": "off", "supportsImages": false})
+        serde_json::json!({
+            "name": "",
+            "alias": "",
+            "displayName": "",
+            "thinking": "off",
+            "supportsImages": false
+        })
     );
 }
 

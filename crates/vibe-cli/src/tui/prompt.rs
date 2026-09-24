@@ -7,12 +7,12 @@ use vibe_core::telemetry::records::{AtMentionInserted, TelemetryCommandKind};
 use super::attachments::{PreparedSubmission, PromptDraft, prepare_submission};
 use super::clipboard_images::ClipboardImageManager;
 use super::controls::ControlState;
-use super::path_resources::MentionStats;
 use super::state::TuiState;
 use super::{
     ActiveTurn, CliError, InteractiveRuntime, RuntimeSkill, settle_unstarted_reservation,
     start_active_turn,
 };
+use vibe_core::path_resources::MentionStats;
 
 pub(super) struct PromptContext<'a> {
     pub working_directory: &'a Path,

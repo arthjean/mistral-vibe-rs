@@ -48,27 +48,38 @@ pub(super) fn public_session_state(session: &SessionRuntime) -> Value {
         .map(|snapshot| snapshot.history.clone())
         .unwrap_or_default();
     let status = public_session_status(session);
-    let preview =
-        history
-            .iter()
-            .rev()
-            .find_map(|entry| match entry {
-                PublicHistoryEntry::Message { content, .. } => Some(content_text(content)),
-                _ => None,
-            })
-            .or_else(|| {
-                session.persisted.as_ref()?.messages.iter().rev().find_map(
-                    |message| match message {
-                        vibe_core::events::ModelMessage::System { .. } => None,
-                        vibe_core::events::ModelMessage::User { content, .. }
-                        | vibe_core::events::ModelMessage::Assistant { content, .. }
-                        | vibe_core::events::ModelMessage::Tool { content, .. } => {
-                            Some(content.clone())
-                        }
-                    },
-                )
-            })
-            .unwrap_or_default();
+    // Reference `message_preview`: the first user message the operator typed,
+    // cut at 160 characters. Harness-written turns never name a session.
+    let preview = history
+        .iter()
+        .find_map(|entry| match entry {
+            PublicHistoryEntry::Message {
+                role: PublicMessageRole::User,
+                content,
+                source,
+                ..
+            } if *source != Some(PublicMessageSource::Harness) => {
+                Some(content_text(content)).filter(|text| !text.is_empty())
+            }
+            _ => None,
+        })
+        .or_else(|| {
+            session
+                .persisted
+                .as_ref()?
+                .messages
+                .iter()
+                .find_map(|message| match message {
+                    vibe_core::events::ModelMessage::User {
+                        content,
+                        injected: false,
+                        ..
+                    } if !content.is_empty() => Some(content.clone()),
+                    _ => None,
+                })
+        })
+        .map(|text| text.chars().take(160).collect::<String>())
+        .unwrap_or_default();
     let parent_session_id = session
         .persisted
         .as_ref()
@@ -127,8 +138,13 @@ pub(super) fn persisted_projection(
     // publishes rather than through a generic fallback.
     let mut tool_calls_by_id = BTreeMap::<String, (String, String, usize)>::new();
     let mut history = Vec::new();
-    let metadata = |index: usize, suffix: &str| PublicEntryMetadata {
-        id: format!("persisted:{index}:{suffix}"),
+    // A message stored with the identity its live entry had keeps it, which
+    // is what lets a client that saw the turn live address it after a reload
+    // (reference `project_message_history` reads `message_id`).
+    let metadata = |index: usize, suffix: &str, id: Option<&String>| PublicEntryMetadata {
+        id: id
+            .cloned()
+            .unwrap_or_else(|| format!("persisted:{index}:{suffix}")),
         session_id: session_id.clone(),
         turn_id: None,
         created_at: base_timestamp.saturating_add(u64::try_from(index).unwrap_or(u64::MAX)),
@@ -139,12 +155,19 @@ pub(super) fn persisted_projection(
     for (index, message) in hydrated.messages.iter().enumerate() {
         match message {
             ModelMessage::System { .. } => {}
-            ModelMessage::User { content, .. } => history.push(PublicHistoryEntry::Message {
-                metadata: metadata(index, "user"),
+            ModelMessage::User {
+                content,
+                message_id,
+                attachments,
+                ..
+            } => history.push(PublicHistoryEntry::Message {
+                metadata: metadata(index, "user", message_id.as_ref()),
                 role: PublicMessageRole::User,
-                content: vec![PublicContentBlock::Text {
+                content: std::iter::once(PublicContentBlock::Text {
                     text: content.clone(),
-                }],
+                })
+                .chain(attachments.iter().cloned())
+                .collect(),
                 source: Some(PublicMessageSource::TurnStart),
                 user_display_content: None,
             }),
@@ -152,18 +175,20 @@ pub(super) fn persisted_projection(
                 content,
                 reasoning,
                 tool_calls,
+                message_id,
+                reasoning_message_id,
                 ..
             } => {
                 if let Some(reasoning) = reasoning.as_ref().filter(|value| !value.is_empty()) {
                     history.push(PublicHistoryEntry::Reasoning {
-                        metadata: metadata(index, "reasoning"),
+                        metadata: metadata(index, "reasoning", reasoning_message_id.as_ref()),
                         text: reasoning.clone(),
                         summary: Vec::new(),
                     });
                 }
                 if !content.is_empty() {
                     history.push(PublicHistoryEntry::Message {
-                        metadata: metadata(index, "assistant"),
+                        metadata: metadata(index, "assistant", message_id.as_ref()),
                         role: PublicMessageRole::Assistant,
                         content: vec![PublicContentBlock::Text {
                             text: content.clone(),
@@ -216,7 +241,7 @@ pub(super) fn persisted_projection(
                     }
                 };
                 history.push(PublicHistoryEntry::Effect {
-                    metadata: metadata(call_index, "effect"),
+                    metadata: metadata(call_index, "effect", None),
                     title,
                     detail: Box::new(detail),
                     state,
@@ -227,7 +252,7 @@ pub(super) fn persisted_projection(
     }
     for (call_id, (title, arguments, index)) in tool_calls_by_id {
         history.push(PublicHistoryEntry::Effect {
-            metadata: metadata(index, "effect"),
+            metadata: metadata(index, "effect", None),
             detail: Box::new(EffectDetail::for_encoded_call_at(
                 &title,
                 &arguments,

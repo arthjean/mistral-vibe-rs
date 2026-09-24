@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
+mod account;
 mod agents;
 mod config;
 mod sessions;
@@ -24,7 +25,7 @@ mod worktrees;
 use crate::builtin_agents;
 use crate::host::now_millis;
 use crate::params::{self, optional_string, required_string, usize_param};
-use crate::vocabulary::{AccountActionKind, AccountStatus, AgentSafety};
+use crate::vocabulary::AgentSafety;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use thiserror::Error;
@@ -276,6 +277,13 @@ impl WorkspaceService {
         &self.paths.vibe_home
     }
 
+    /// The directory this service was opened in, which a host-level request
+    /// that names no directory is about.
+    #[must_use]
+    pub fn working_directory(&self) -> &Path {
+        &self.paths.working_directory
+    }
+
     fn build(paths: WorkspacePaths, project_trusted: bool) -> Self {
         // The Defaults layer is the shipped document at every construction
         // site: a service built without it composes a configuration the
@@ -505,70 +513,6 @@ impl WorkspaceService {
         self.persist_runtime_sessions
     }
 
-    /// The account as `AccountView` declares it, classified from the
-    /// configuration the session runs under.
-    ///
-    /// Three of the four statuses are decidable locally: a model served by a
-    /// backend other than Mistral has no Mistral account behind it
-    /// (`unavailable`), a Mistral model whose key variable resolves to nothing
-    /// is `missing_key`, and one whose key resolves is `ready`. The fourth,
-    /// `unauthorized`, is a console verdict on the key; this port has no client
-    /// for that endpoint, so it never claims it.
-    ///
-    /// The key resolves the way the reference's `resolve_api_key` resolves it:
-    /// the environment the dotenv load leaves behind first, then the OS
-    /// keyring under the shared service names, so a key stored only in the
-    /// keyring reads as `ready` here as it does upstream.
-    pub fn account_view(&self) -> Value {
-        let upgrade = json!({
-            "kind": AccountActionKind::UpgradeToPro,
-            "url": format!("{}/code/extensions?focus=key", self.vibe_base_url().trim_end_matches('/')),
-        });
-        let unavailable = json!({
-            "status": AccountStatus::Unavailable,
-            "plan": null,
-            "planOffer": null,
-            "rateLimitAction": null,
-            "teleportEligible": false,
-            "teleportAction": upgrade,
-        });
-        let Ok(snapshot) = self.config.load() else {
-            return unavailable;
-        };
-        let Some(provider) = snapshot.active_provider() else {
-            return unavailable;
-        };
-        let mistral = provider
-            .get("backend")
-            .and_then(TomlValue::as_str)
-            .unwrap_or("mistral")
-            == "mistral";
-        if !mistral {
-            return unavailable;
-        }
-        let variable = provider
-            .get("api_key_env_var")
-            .and_then(TomlValue::as_str)
-            .unwrap_or(MISTRAL_KEY);
-        // The credential is resolved the way every other reader resolves one:
-        // the process environment with the vibe home's dotenv filling in what it
-        // does not set, then the OS keyring. `vibe_environment` cannot serve
-        // this, because it keeps only the `VIBE_*` keys the configuration layer
-        // is built from.
-        let environ = DotenvValues::global(&self.paths.vibe_home).environment();
-        let store = vibe_core::auth::KeyringStore::native();
-        let configured = vibe_core::auth::resolve_api_key(variable, &environ, &store)
-            .is_some_and(|key| !key.is_empty());
-        json!({
-            "status": if configured { AccountStatus::Ready } else { AccountStatus::MissingKey },
-            "plan": null,
-            "planOffer": null,
-            "rateLimitAction": null,
-            "teleportEligible": false,
-            "teleportAction": upgrade,
-        })
-    }
-
     /// The active model's prices, which `stats/read` publishes beside the
     /// counters a client prices them against. A configuration that will not
     /// load prices nothing.
@@ -749,11 +693,6 @@ impl WorkspaceService {
         project_trusted: bool,
         runtime_servers: &[Value],
     ) -> Result<Vec<McpServerConfig>, WorkspaceServiceError> {
-        if !project_trusted && !runtime_servers.is_empty() {
-            return Err(WorkspaceServiceError::InvalidParams(
-                "runtime MCP servers require a trusted workspace".to_owned(),
-            ));
-        }
         let mut runtime = Table::new();
         if !runtime_servers.is_empty() {
             runtime.insert(

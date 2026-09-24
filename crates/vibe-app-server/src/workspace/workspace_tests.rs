@@ -939,6 +939,8 @@ fn rewind_resolves_an_entry_identity_and_forks_before_the_selected_message() {
     for (offset, message) in [
         ModelMessage::user("first question".to_owned()),
         ModelMessage::Assistant {
+            message_id: None,
+            reasoning_message_id: None,
             content: "first answer".to_owned(),
             reasoning: None,
             reasoning_signature: None,
@@ -947,6 +949,8 @@ fn rewind_resolves_an_entry_identity_and_forks_before_the_selected_message() {
         },
         ModelMessage::user("edit this question".to_owned()),
         ModelMessage::Assistant {
+            message_id: None,
+            reasoning_message_id: None,
             content: "second answer".to_owned(),
             reasoning: None,
             reasoning_signature: None,
@@ -1092,15 +1096,20 @@ tool_timeout_sec = 2
         "transport": "stdio",
         "command": "/must-not-run"
     });
-    assert!(matches!(
-        service.mcp_servers_for_session(
-            &temporary.path().join("workspace"),
-            false,
-            &[runtime]
-        ),
-        Err(WorkspaceServiceError::InvalidParams(message))
-            if message.contains("trusted workspace")
-    ));
+    // Servers the client supplies for the session are its own choice, which
+    // workspace trust does not gate: the reference connects the `mcpServers`
+    // an ACP `session/new` names in an untrusted workspace too. The project
+    // file stays gated.
+    let untrusted = service
+        .mcp_servers_for_session(&temporary.path().join("workspace"), false, &[runtime])
+        .expect("runtime servers in an untrusted workspace");
+    assert_eq!(
+        untrusted
+            .iter()
+            .map(|server| server.alias.as_str())
+            .collect::<Vec<_>>(),
+        ["runtime"]
+    );
 }
 
 #[test]

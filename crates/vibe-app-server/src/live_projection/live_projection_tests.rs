@@ -21,7 +21,9 @@ fn a_retried_request_is_published_as_turn_retrying() {
         })
         .expect("the retry projects");
     let update = updates.try_recv().expect("a retry update is queued");
-    let frame = app_server_notification(&server, update).expect("the retry publishes");
+    let frame = app_server_notification(&server, update)
+        .expect("the retry publishes")
+        .expect("a retry is never silent");
     assert!(matches!(
         decode_frame(&frame).expect("retry notification"),
         Envelope::Notification(Notification { method, params, .. })
@@ -89,6 +91,8 @@ fn a_cleared_context_publishes_session_context_cleared() {
             working_directory: None,
             event_id: 1,
             event: EngineEvent::UserMessage {
+                attachments: Vec::new(),
+                message_id: None,
                 content: "plan".to_owned(),
             },
         },
@@ -110,10 +114,10 @@ fn a_cleared_context_publishes_session_context_cleared() {
         observer.observe(&event).expect("event projects");
     }
     let notifications = std::iter::from_fn(|| updates.try_recv().ok())
-        .map(|update| {
+        .filter_map(|update| {
             app_server_notification(&server, update)
-                .and_then(|bytes| decode_frame(&bytes).map_err(ServerError::from))
                 .expect("notification projects")
+                .map(|bytes| decode_frame(&bytes).expect("notification decodes"))
         })
         .collect::<Vec<_>>();
     assert!(matches!(
@@ -201,6 +205,8 @@ fn compaction_rebinds_history_and_resets_the_new_session_watermark() {
             working_directory: None,
             event_id: 1,
             event: EngineEvent::UserMessage {
+                attachments: Vec::new(),
+                message_id: None,
                 content: "compact".to_owned(),
             },
         },
@@ -245,10 +251,10 @@ fn compaction_rebinds_history_and_resets_the_new_session_watermark() {
         observer.observe(&event).expect("event projects");
     }
     let notifications = std::iter::from_fn(|| updates.try_recv().ok())
-        .map(|update| {
+        .filter_map(|update| {
             app_server_notification(&server, update)
-                .and_then(|bytes| decode_frame(&bytes).map_err(ServerError::from))
                 .expect("notification projects")
+                .map(|bytes| decode_frame(&bytes).expect("notification decodes"))
         })
         .collect::<Vec<_>>();
     assert_eq!(notifications.len(), 4);

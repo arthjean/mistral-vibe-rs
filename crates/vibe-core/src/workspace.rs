@@ -1543,8 +1543,12 @@ mod tests {
                 },
             )
             .await
-            .expect_err("revoked trust");
-        assert!(denied.to_string().contains("permission denied"));
+            .expect("revoked trust settles as a refusal");
+        assert_eq!(
+            denied.skip,
+            Some(crate::tools::ToolSkip { cancelled: true }),
+            "a revoked root reaches the operator, who refuses: {denied:?}"
+        );
     }
 
     /// The three registered names and the argument keys each one reads, which
@@ -1978,11 +1982,11 @@ let old = 2;
                 },
             )
             .await
-            .expect_err("a sensitive name inside the workspace asks");
-        let asked = asked.to_string();
-        assert!(
-            asked.contains("approval denied"),
-            "the same name inside the workspace reaches the operator: {asked}"
+            .expect("a sensitive name inside the workspace asks");
+        assert_eq!(
+            asked.skip,
+            Some(crate::tools::ToolSkip { cancelled: true }),
+            "the same name inside the workspace reaches the operator: {asked:?}"
         );
 
         crate::scratchpad::cleanup_scratchpad(Some(&scratchpad));
@@ -2599,10 +2603,11 @@ let old = 2;
                 },
             )
             .await
-            .expect_err("a path outside the root is refused");
-        assert!(
-            escaped.to_string().contains("permission denied"),
-            "{escaped}"
+            .expect("a path outside the root is asked about and refused");
+        assert_eq!(
+            escaped.skip,
+            Some(crate::tools::ToolSkip { cancelled: true }),
+            "{escaped:?}"
         );
         assert!(!directory.path().join("../outside.txt").exists());
 

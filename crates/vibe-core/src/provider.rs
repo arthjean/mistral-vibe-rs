@@ -1244,6 +1244,8 @@ data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"
         assert_eq!(sanitize_tool_id("call/with spaces"), "call_with_spaces");
         assert_eq!(sanitize_tool_id(""), "tool_call");
         let message = ModelMessage::Assistant {
+            message_id: None,
+            reasoning_message_id: None,
             content: String::new(),
             reasoning: Some("reason".to_owned()),
             reasoning_signature: Some("opaque-signature".to_owned()),

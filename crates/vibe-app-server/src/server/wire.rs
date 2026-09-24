@@ -329,6 +329,8 @@ pub(crate) struct TurnStartParams {
     pub(crate) session_id: String,
     pub(crate) input: Vec<PublicContentBlock>,
     #[serde(default)]
+    pub(crate) injected: bool,
+    #[serde(default)]
     pub(crate) client_user_message_id: Option<String>,
     #[serde(default)]
     pub(crate) auto_title: Option<String>,

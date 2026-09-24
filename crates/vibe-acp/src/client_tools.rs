@@ -1,16 +1,20 @@
-//! Tools the agent executes through the connected ACP editor client.
+//! The editor answering for the filesystem and the terminal.
+//!
+//! The app server delegates a tool to the client that declared it by sending a
+//! `clientTool/*` request. Reference `AcpClientToolHandler`
+//! (`vibe/acp/tool_io.py`) answers each one by making the matching ACP
+//! request of the editor, under the session the client knows, and announces a
+//! terminal it created on the tool call that asked for it.
 
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use serde_json::{Value, json};
-use vibe_app_server::server::{
-    OwnedToolHandlerFuture, SessionToolFactory, ToolAvailability, ToolError, ToolExecutionOutput,
-    ToolInvocation, ToolOutputSink, ToolPresentationKind, ToolRegistry, ToolSource, ToolSpec,
-};
-use vibe_protocol::ClientToolCapability;
+use serde_json::{Map, Value, json};
+use tokio::sync::{mpsc, oneshot};
+use vibe_app_server::client_tools::ClientToolBridge;
+use vibe_protocol::{ClientToolCapability, RequestId};
 
 use crate::protocol::AcpClientCapabilities;
 
@@ -20,255 +24,223 @@ pub type AcpClientFuture<'a> = Pin<Box<dyn Future<Output = Result<Value, String>
 
 pub trait AcpClientPort: Send + Sync {
     fn request<'a>(&'a self, method: &'a str, params: Value) -> AcpClientFuture<'a>;
+
+    /// Sends a notification, queued behind everything already written so it
+    /// reaches the client in the order it was produced.
+    fn notify(&self, method: &str, params: Value);
 }
 
-/// Every capability the handshake can declare, in the order they are reported.
-const CLIENT_TOOL_CAPABILITIES: [ClientToolCapability; 3] = [
-    ClientToolCapability::FilesystemRead,
-    ClientToolCapability::FilesystemWrite,
-    ClientToolCapability::Terminal,
-];
-
-/// Whether the connected editor hosts `capability`.
-///
-/// This is the only place the ACP capability shape is read as a wire
-/// capability, so the vocabulary the app-server gates on stays the vocabulary
-/// the handshake published rather than a local retyping of it.
-pub(crate) const fn capability_enabled(
-    capability: ClientToolCapability,
-    capabilities: &AcpClientCapabilities,
-) -> bool {
-    match capability {
-        ClientToolCapability::FilesystemRead => capabilities.fs.read_text_file,
-        ClientToolCapability::FilesystemWrite => capabilities.fs.write_text_file,
-        ClientToolCapability::Terminal => capabilities.terminal,
-    }
-}
-
-/// One ACP client method exposed as an agent tool. The enum is the single
-/// source of truth for the tool name, the wire method, the capability that
-/// gates it, and the arguments it accepts, so none of the four can be declared
-/// without the other three.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ClientTool {
-    ReadTextFile,
-    WriteTextFile,
-    TerminalCreate,
-    TerminalOutput,
-    TerminalWaitForExit,
-    TerminalKill,
-    TerminalRelease,
-}
-
-impl ClientTool {
-    pub(crate) const ALL: [Self; 7] = [
-        Self::ReadTextFile,
-        Self::WriteTextFile,
-        Self::TerminalCreate,
-        Self::TerminalOutput,
-        Self::TerminalWaitForExit,
-        Self::TerminalKill,
-        Self::TerminalRelease,
-    ];
-
-    pub(crate) const fn tool(self) -> &'static str {
-        match self {
-            Self::ReadTextFile => "acp_read_text_file",
-            Self::WriteTextFile => "acp_write_text_file",
-            Self::TerminalCreate => "acp_terminal_create",
-            Self::TerminalOutput => "acp_terminal_output",
-            Self::TerminalWaitForExit => "acp_terminal_wait_for_exit",
-            Self::TerminalKill => "acp_terminal_kill",
-            Self::TerminalRelease => "acp_terminal_release",
-        }
-    }
-
-    pub(crate) const fn method(self) -> &'static str {
-        match self {
-            Self::ReadTextFile => "fs/read_text_file",
-            Self::WriteTextFile => "fs/write_text_file",
-            Self::TerminalCreate => "terminal/create",
-            Self::TerminalOutput => "terminal/output",
-            Self::TerminalWaitForExit => "terminal/wait_for_exit",
-            Self::TerminalKill => "terminal/kill",
-            Self::TerminalRelease => "terminal/release",
-        }
-    }
-
-    pub(crate) const fn capability(self) -> ClientToolCapability {
-        match self {
-            Self::ReadTextFile => ClientToolCapability::FilesystemRead,
-            Self::WriteTextFile => ClientToolCapability::FilesystemWrite,
-            Self::TerminalCreate
-            | Self::TerminalOutput
-            | Self::TerminalWaitForExit
-            | Self::TerminalKill
-            | Self::TerminalRelease => ClientToolCapability::Terminal,
-        }
-    }
-
-    /// The arguments the ACP client method actually accepts. `sessionId` is
-    /// not declared: the handler fills it in from the session the tool was
-    /// registered for, so the model never supplies it.
-    fn input_schema(self) -> Value {
-        match self {
-            Self::ReadTextFile => object_schema(
-                json!({
-                    "path": {"type": "string", "description": "Absolute path of the file to read"},
-                    "line": {"type": "integer", "minimum": 0, "description": "First line to read, counting from 1"},
-                    "limit": {"type": "integer", "minimum": 0, "description": "How many lines to read at most"},
-                }),
-                &["path"],
-            ),
-            Self::WriteTextFile => object_schema(
-                json!({
-                    "path": {"type": "string", "description": "Absolute path of the file to write"},
-                    "content": {"type": "string", "description": "Full text to write to the file"},
-                }),
-                &["path", "content"],
-            ),
-            Self::TerminalCreate => object_schema(
-                json!({
-                    "command": {"type": "string", "description": "Program to run"},
-                    "args": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Arguments passed to the program",
-                    },
-                    "env": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "name": {"type": "string"},
-                                "value": {"type": "string"},
-                            },
-                            "required": ["name", "value"],
-                        },
-                        "description": "Environment variables set for the program",
-                    },
-                    "cwd": {"type": "string", "description": "Absolute directory to run the program in"},
-                    "outputByteLimit": {
-                        "type": "integer",
-                        "minimum": 1,
-                        "description": "How many output bytes the client retains before truncating from the start",
-                    },
-                }),
-                &["command"],
-            ),
-            Self::TerminalOutput
-            | Self::TerminalWaitForExit
-            | Self::TerminalKill
-            | Self::TerminalRelease => object_schema(
-                json!({
-                    "terminalId": {
-                        "type": "string",
-                        "description": "Identifier a previous terminal creation returned",
-                    },
-                }),
-                &["terminalId"],
-            ),
-        }
-    }
-}
-
-fn object_schema(properties: Value, required: &[&str]) -> Value {
-    json!({
-        "type": "object",
-        "properties": properties,
-        "required": required,
-        "additionalProperties": false,
-    })
-}
-
+/// The tools the editor hosts, in the vocabulary the app server gates on.
+/// Reference `_client_descriptor`.
 pub(crate) fn declared_client_tools(
     capabilities: &AcpClientCapabilities,
 ) -> Vec<ClientToolCapability> {
-    CLIENT_TOOL_CAPABILITIES
-        .into_iter()
-        .filter(|capability| capability_enabled(*capability, capabilities))
-        .collect()
+    [
+        (
+            capabilities.fs.read_text_file,
+            ClientToolCapability::FilesystemRead,
+        ),
+        (
+            capabilities.fs.write_text_file,
+            ClientToolCapability::FilesystemWrite,
+        ),
+        (capabilities.terminal, ClientToolCapability::Terminal),
+    ]
+    .into_iter()
+    .filter_map(|(declared, capability)| declared.then_some(capability))
+    .collect()
 }
 
-pub(crate) struct AcpClientToolFactory {
-    pub(crate) client: Option<Arc<dyn AcpClientPort>>,
-    pub(crate) capabilities: AcpClientCapabilities,
-    pub(crate) timeout: Duration,
-}
+/// Holds a delegated request back until the running turn has forwarded every
+/// update raised before it, so the editor sees the tool call before the tool
+/// reaches for its files: the reference writes both on one connection, in the
+/// order they happen.
+#[derive(Clone, Default)]
+pub(crate) struct UpdateBarrier(Arc<Mutex<Option<mpsc::UnboundedSender<oneshot::Sender<()>>>>>);
 
-impl SessionToolFactory for AcpClientToolFactory {
-    fn register(&self, session_id: &str, tools: &ToolRegistry) -> Result<(), String> {
-        for tool in ClientTool::ALL
-            .into_iter()
-            .filter(|tool| capability_enabled(tool.capability(), &self.capabilities))
-        {
-            tools
-                .register(
-                    ToolSpec {
-                        name: tool.tool().to_owned(),
-                        description: format!(
-                            "Execute `{}` through the connected ACP editor client",
-                            tool.method()
-                        ),
-                        input_schema: tool.input_schema(),
-                        output_schema: None,
-                        config: Value::Null,
-                        state: Value::Null,
-                        availability: ToolAvailability::Available,
-                        presentation: ToolPresentationKind::Generic,
-                        source: ToolSource::BuiltIn,
-                        selection_priority: 30,
-                    },
-                    client_tool_handler(
-                        self.client.clone(),
-                        tool.method(),
-                        session_id.to_owned(),
-                        self.timeout,
-                    ),
-                )
-                .map_err(|error| error.to_string())?;
+impl UpdateBarrier {
+    /// Hands the running turn the requests to flush, until the guard drops.
+    pub(crate) fn install(&self) -> (mpsc::UnboundedReceiver<oneshot::Sender<()>>, BarrierGuard) {
+        let (sender, receiver) = mpsc::unbounded_channel();
+        if let Ok(mut slot) = self.0.lock() {
+            *slot = Some(sender);
         }
-        Ok(())
+        (receiver, BarrierGuard(self.clone()))
+    }
+
+    async fn wait(&self) {
+        let sender = self.0.lock().ok().and_then(|slot| slot.clone());
+        if let Some(sender) = sender {
+            let (acknowledge, flushed) = oneshot::channel();
+            if sender.send(acknowledge).is_ok() {
+                let _ = flushed.await;
+            }
+        }
     }
 }
 
-fn client_tool_handler(
-    client: Option<Arc<dyn AcpClientPort>>,
-    method: &'static str,
+/// Removes the barrier when the turn that installed it ends.
+pub(crate) struct BarrierGuard(UpdateBarrier);
+
+impl Drop for BarrierGuard {
+    fn drop(&mut self) {
+        if let Ok(mut slot) = (self.0).0.lock() {
+            *slot = None;
+        }
+    }
+}
+
+/// Claims the write side of `bridge`, which must happen before the session
+/// registers its tools: a bridge with nowhere to send keeps them local.
+pub(crate) fn attach_client_tools(bridge: &ClientToolBridge) -> mpsc::UnboundedReceiver<Vec<u8>> {
+    let (sender, frames) = mpsc::unbounded_channel::<Vec<u8>>();
+    bridge.attach(sender);
+    frames
+}
+
+/// Answers every `clientTool/*` request `bridge` sends for the session the
+/// client knows as `session_id`, until the bridge lets go.
+pub(crate) fn serve_client_tools(
+    client: Arc<dyn AcpClientPort>,
+    bridge: &Arc<ClientToolBridge>,
+    mut frames: mpsc::UnboundedReceiver<Vec<u8>>,
     session_id: String,
-    timeout: Duration,
-) -> Arc<impl Fn(&ToolInvocation, ToolOutputSink) -> OwnedToolHandlerFuture + Send + Sync> {
-    Arc::new(
-        move |invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {
-            let client = client.clone();
+    barrier: UpdateBarrier,
+) -> tokio::task::JoinHandle<()> {
+    let bridge = Arc::clone(bridge);
+    tokio::spawn(async move {
+        while let Some(frame) = frames.recv().await {
+            let Ok(request) = serde_json::from_slice::<Value>(&frame) else {
+                continue;
+            };
+            let Some(id) = request
+                .get("id")
+                .cloned()
+                .and_then(|id| serde_json::from_value::<RequestId>(id).ok())
+            else {
+                continue;
+            };
+            let client = Arc::clone(&client);
+            let bridge = Arc::clone(&bridge);
             let session_id = session_id.clone();
-            let mut params = invocation.arguments.clone();
-            Box::pin(async move {
-                let Some(client) = client else {
-                    return Err(ToolError::Unavailable(
-                        "ACP client transport is unavailable".to_owned(),
-                    ));
-                };
-                let object = params.as_object_mut().ok_or_else(|| {
-                    ToolError::Execution("ACP client tool input must be an object".to_owned())
-                })?;
-                object.insert("sessionId".to_owned(), json!(session_id));
-                let result = tokio::time::timeout(timeout, client.request(method, params))
-                    .await
-                    .map_err(|_| {
-                        ToolError::Execution(format!("ACP client tool `{method}` timed out"))
-                    })?
-                    .map_err(ToolError::Execution)?;
-                let model_text = serde_json::to_string(&result)
-                    .map_err(|error| ToolError::InvalidResult(error.to_string()))?;
-                Ok(ToolExecutionOutput {
-                    typed_result: result,
-                    model_text,
-                    display: json!({"kind": "client_tool", "method": method}),
-                    projected_result: serde_json::Value::Null,
-                    chunks: Vec::new(),
-                })
-            })
-        },
-    )
+            let barrier = barrier.clone();
+            tokio::spawn(async move {
+                barrier.wait().await;
+                let method = request
+                    .get("method")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+                let params = request.get("params").cloned().unwrap_or(Value::Null);
+                let result = answer(client.as_ref(), &session_id, method, &params).await;
+                bridge.resolve(&id, result);
+            });
+        }
+    })
+}
+
+/// The ACP request one delegated call becomes, and the answer it is read
+/// back as.
+async fn answer(
+    client: &dyn AcpClientPort,
+    session_id: &str,
+    method: &str,
+    params: &Value,
+) -> Result<Value, String> {
+    let field = |key: &str| params.get(key).cloned().unwrap_or(Value::Null);
+    let request = |pairs: &[(&str, Value)]| {
+        let mut request = Map::new();
+        request.insert("sessionId".to_owned(), json!(session_id));
+        for (key, value) in pairs {
+            if !value.is_null() {
+                request.insert((*key).to_owned(), value.clone());
+            }
+        }
+        Value::Object(request)
+    };
+    let terminal = || request(&[("terminalId", field("terminalId"))]);
+    match method {
+        "clientTool/readTextFile" => {
+            let response = client
+                .request(
+                    "fs/read_text_file",
+                    request(&[
+                        ("path", field("path")),
+                        ("line", field("line")),
+                        ("limit", field("limit")),
+                    ]),
+                )
+                .await?;
+            Ok(json!({"content": response.get("content").cloned().unwrap_or(json!(""))}))
+        }
+        "clientTool/writeTextFile" => {
+            client
+                .request(
+                    "fs/write_text_file",
+                    request(&[("path", field("path")), ("content", field("content"))]),
+                )
+                .await?;
+            Ok(json!({}))
+        }
+        "clientTool/terminal/create" => {
+            let env = params.get("env").and_then(Value::as_object).map(|env| {
+                Value::Array(
+                    env.iter()
+                        .map(|(name, value)| json!({"name": name, "value": value}))
+                        .collect(),
+                )
+            });
+            let response = client
+                .request(
+                    "terminal/create",
+                    request(&[
+                        ("command", field("command")),
+                        ("args", field("args")),
+                        ("env", env.unwrap_or(Value::Null)),
+                        ("cwd", field("cwd")),
+                        ("outputByteLimit", field("outputByteLimit")),
+                    ]),
+                )
+                .await?;
+            let terminal_id = response.get("terminalId").cloned().unwrap_or(Value::Null);
+            if let Some(tool_call_id) = params.get("toolCallId").filter(|id| !id.is_null()) {
+                client.notify(
+                    "session/update",
+                    json!({
+                        "sessionId": session_id,
+                        "update": {
+                            "sessionUpdate": "tool_call_update",
+                            "toolCallId": tool_call_id,
+                            "kind": "execute",
+                            "status": "in_progress",
+                            "content": [{"type": "terminal", "terminalId": terminal_id}],
+                        },
+                    }),
+                );
+            }
+            Ok(json!({"terminalId": terminal_id}))
+        }
+        "clientTool/terminal/wait" => {
+            let response = client.request("terminal/wait_for_exit", terminal()).await?;
+            Ok(json!({
+                "exitCode": response.get("exitCode").cloned().unwrap_or(Value::Null),
+                "signal": response.get("signal").cloned().unwrap_or(Value::Null),
+            }))
+        }
+        "clientTool/terminal/output" => {
+            let response = client.request("terminal/output", terminal()).await?;
+            Ok(json!({
+                "output": response.get("output").cloned().unwrap_or(json!("")),
+                "truncated": response.get("truncated").cloned().unwrap_or(json!(false)),
+            }))
+        }
+        "clientTool/terminal/kill" => {
+            client.request("terminal/kill", terminal()).await?;
+            Ok(json!({}))
+        }
+        "clientTool/terminal/release" => {
+            client.request("terminal/release", terminal()).await?;
+            Ok(json!({}))
+        }
+        other => Err(format!("`{other}` is not a delegated tool")),
+    }
 }

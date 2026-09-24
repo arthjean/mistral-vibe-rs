@@ -1324,6 +1324,8 @@ mod tests {
         let pair = [
             user("/probe"),
             ModelMessage::Assistant {
+                message_id: None,
+                reasoning_message_id: None,
                 content: String::new(),
                 reasoning: None,
                 reasoning_signature: None,

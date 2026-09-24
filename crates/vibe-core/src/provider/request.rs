@@ -142,6 +142,7 @@ fn chat_message(message: &ModelMessage) -> Result<Value, ProviderError> {
             reasoning_signature,
             reasoning_state: _,
             tool_calls,
+            ..
         } => {
             let mut value = json!({"role": "assistant", "content": content});
             if let Some(reasoning) = reasoning {
@@ -346,6 +347,7 @@ pub(super) fn build_anthropic_request(
                 reasoning_signature,
                 reasoning_state: _,
                 tool_calls,
+                ..
             } => {
                 let mut blocks = Vec::new();
                 if let (Some(reasoning), Some(signature)) = (reasoning, reasoning_signature) {

@@ -232,6 +232,7 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
                 text: "use the fixture".to_owned(),
             }],
             prepared_images: None,
+            injected: false,
             client_user_message_id: None,
             auto_title: None,
             user_display_content: None,
@@ -282,6 +283,8 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
             working_directory: None,
             event_id: 1,
             event: EngineEvent::UserMessage {
+                attachments: Vec::new(),
+                message_id: None,
                 content: "use the fixture".to_owned(),
             },
         })

@@ -31,9 +31,7 @@ pub mod narrator;
 pub mod onboarding;
 #[cfg(test)]
 mod onboarding_parity_tests;
-mod path_mentions;
 mod path_normalization;
-mod path_resources;
 pub mod pickers;
 mod plan_review;
 #[cfg(test)]

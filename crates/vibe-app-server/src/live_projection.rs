@@ -307,10 +307,12 @@ fn is_append_path(path: &str) -> bool {
     path == "/state/outputText" || path.ends_with("/text")
 }
 
+/// The frame one update publishes, or `None` for an update the reference
+/// keeps silent.
 pub(crate) fn app_server_notification(
     server: &AppServer,
     update: AppServerUpdate,
-) -> Result<Vec<u8>, ServerError> {
+) -> Result<Option<Vec<u8>>, ServerError> {
     let value = match update {
         AppServerUpdate::HistoryAdded {
             session_id,
@@ -384,17 +386,21 @@ pub(crate) fn app_server_notification(
             snapshot,
             notice,
         } => {
-            return server.handoff_active_turn(
-                &old_session_id,
-                &new_session_id,
-                &turn_id,
-                snapshot,
-                &notice,
-                emitted_at,
-            );
+            return server
+                .handoff_active_turn(
+                    &old_session_id,
+                    &new_session_id,
+                    &turn_id,
+                    snapshot,
+                    &notice,
+                    emitted_at,
+                )
+                .map(Some);
         }
     };
-    serde_json::to_vec(&value).map_err(ServerError::Json)
+    serde_json::to_vec(&value)
+        .map(Some)
+        .map_err(ServerError::Json)
 }
 
 #[cfg(test)]

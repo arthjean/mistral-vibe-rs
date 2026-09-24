@@ -527,7 +527,13 @@ impl CommandBackend for LiveBackend<'_> {
     }
 
     async fn account_plan(&mut self) -> Result<Option<String>, String> {
-        let result = self.call("account/read", json!({}))?;
+        let result = Value::Object(
+            self.call_deferred("account/read", json!({}))
+                .await?
+                .result
+                .into_iter()
+                .collect(),
+        );
         Ok(match result.pointer("/account/plan") {
             Some(Value::String(plan)) => Some(plan.clone()),
             Some(plan) => plan

@@ -260,6 +260,9 @@ impl ServerConnection {
         session.updated_at = updated_at;
         session.snapshot = snapshot;
         session.aliases = aliases;
+        if let Some(hydrated) = &persisted {
+            session.stats = crate::server::runtime::SessionStats::restored(hydrated);
+        }
         session.persisted = persisted;
         session.agent_summary = Some(crate::workspace::agent_summary(&agent_profile));
         session.context_window = self.server.workspace.context_window();
@@ -429,11 +432,23 @@ impl ServerConnection {
                 .filter(|timestamp| *timestamp != 0)
                 .unwrap_or(created_at),
             snapshot: attachment.as_ref().map(|attachment| {
-                persisted_projection(
+                let mut snapshot = persisted_projection(
                     &attachment.hydrated,
                     params.history_limit,
                     &working_directory,
-                )
+                );
+                // The checkpoint joins the history before the limit applies,
+                // as reference `_checkpoint_state` builds the whole history
+                // and `public_state` then keeps its tail.
+                snapshot
+                    .history
+                    .push(resume_checkpoint(&snapshot.session_id));
+                let excess = snapshot
+                    .history
+                    .len()
+                    .saturating_sub(usize::from(params.history_limit));
+                snapshot.history.drain(..excess);
+                snapshot
             }),
             persisted: attachment.map(|attachment| attachment.hydrated),
             session_id,
@@ -724,5 +739,26 @@ impl ServerConnection {
             }],
             close_after_flush: false,
         })
+    }
+}
+
+/// Reference `rebind_history_with_checkpoint` with the `resume` kind
+/// (`vibe/app_server/_root_session.py`): a reopened session's history ends on
+/// a checkpoint that marks where the earlier conversation stops.
+fn resume_checkpoint(session_id: &str) -> vibe_core::events::PublicHistoryEntry {
+    let timestamp = now_millis();
+    vibe_core::events::PublicHistoryEntry::Checkpoint {
+        metadata: vibe_core::events::PublicEntryMetadata {
+            id: format!("checkpoint:resume:{}", vibe_core::session_id::uuid_v4()),
+            session_id: session_id.to_owned(),
+            turn_id: None,
+            created_at: timestamp,
+            updated_at: timestamp,
+            generation_status: vibe_core::events::PublicEntryGenerationStatus::Completed,
+            related_entry_id: None,
+        },
+        kind: "resume".to_owned(),
+        message: Some("Picked up where the session left off".to_owned()),
+        details: Value::Null,
     }
 }

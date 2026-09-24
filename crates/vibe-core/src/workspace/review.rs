@@ -294,7 +294,16 @@ impl ReviewManager {
     /// Fails when another thread poisoned the log. The file is not read: the
     /// baseline is the log's answer, not disk's.
     pub fn baseline_text(&self, path: &str) -> Result<String, ReviewError> {
-        self.with_review_log(|log| state_text(&log.history().accepted_baseline(path)))
+        let path = self.review_key(path);
+        self.with_review_log(|log| state_text(&log.history().accepted_baseline(&path)))
+    }
+
+    /// The key the log files `path` under: workspace-relative, as the tools
+    /// record it, whether the client named it relative or absolute.
+    fn review_key(&self, path: &str) -> String {
+        self.workspace
+            .located(Path::new(path), false)
+            .map_or_else(|_| path.to_owned(), |relative| path_display(&relative))
     }
 
     /// One owner's own change to `path`: its kept regions against its kept plus
@@ -304,7 +313,8 @@ impl ReviewManager {
     ///
     /// Fails when another thread poisoned the log.
     pub fn scope_file_diff(&self, path: &str, owner: Owner) -> Result<TurnFileDiff, ReviewError> {
-        self.with_review_log(|log| project_scope_diff(&log.history(), path, owner))
+        let path = self.review_key(path);
+        self.with_review_log(|log| project_scope_diff(&log.history(), &path, owner))
     }
 
     /// Every pending change of `path`, located in a rendered diff.
@@ -322,6 +332,8 @@ impl ReviewManager {
         path: &str,
         owner: Option<Owner>,
     ) -> Result<Vec<AnchoredHunk>, ReviewError> {
+        let path = self.review_key(path);
+        let path = path.as_str();
         let current = self.recorder.files().read(path)?;
         let (hunks, refused) = self.with_review_log(|log| {
             let mut refused = None;
@@ -689,6 +701,27 @@ impl ReviewManager {
             return Ok(Vec::new());
         };
         self.with_log(|log| log.history().restore_plan_to_turn(turn_id))
+    }
+
+    /// Records `path` as it stands before a tool that may change it runs.
+    ///
+    /// The reference snapshots the file ahead of the tool's own checks, so a
+    /// write refused for an existing file, or one a client performs, still
+    /// leaves the file tracked for review. A path outside the workspace, or a
+    /// call outside a turn, has nothing to record. Reference `_invoke_tool`
+    /// (`vibe/core/agent_loop/_loop.py`) through `get_file_snapshot`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the file cannot be read or the log refuses the capture.
+    pub fn capture_before_mutation(&self, path: impl AsRef<Path>) -> Result<(), WorkspaceError> {
+        let Ok(relative) = self.workspace.located(path.as_ref(), false) else {
+            return Ok(());
+        };
+        match self.capture_baseline(&relative) {
+            Err(WorkspaceError::NoActiveTurn) => Ok(()),
+            other => other,
+        }
     }
 
     fn capture_baseline(&self, relative: &Path) -> Result<(), WorkspaceError> {

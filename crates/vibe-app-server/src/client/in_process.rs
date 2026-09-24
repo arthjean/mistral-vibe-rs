@@ -129,7 +129,28 @@ impl EventObserver for ServerProjectionObserver {
             }
             (reducer.state().clone(), changed)
         };
-        forward_stats(&self.sender, event)?;
+        // The session's accounting is kept by the server, as the transport's
+        // live projection keeps it, before the observer hears of the usage.
+        if let vibe_core::events::EngineEvent::Stats {
+            context_tokens,
+            input_tokens,
+            output_tokens,
+        } = event.event
+        {
+            let published = self
+                .server
+                .record_turn_stats(
+                    &self.session_id,
+                    &self.turn_id,
+                    context_tokens,
+                    input_tokens,
+                    output_tokens,
+                )
+                .map_err(|error| error.to_string())?;
+            if published.is_some() {
+                forward_stats(&self.sender, event)?;
+            }
+        }
 
         let mut event_id = self
             .server
@@ -384,6 +405,7 @@ impl InProcessClient {
             json!({
                 "sessionId": session_id,
                 "input": turn.input,
+                "injected": turn.injected,
                 "clientUserMessageId": turn.client_user_message_id,
                 "autoTitle": turn.auto_title,
                 "userDisplayContent": turn.user_display_content,

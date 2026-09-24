@@ -105,7 +105,7 @@ impl ApprovalAgent for ScriptedApproval {
         if let Ok(mut asked) = self.asked.lock() {
             asked.push(request.tool);
         }
-        let decision = self.decision;
+        let decision = self.decision.clone();
         Box::pin(async move { Ok(decision) })
     }
 }

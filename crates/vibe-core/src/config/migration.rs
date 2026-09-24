@@ -99,7 +99,9 @@ pub fn migrate_document(document: &mut Table) -> bool {
     let mut changed = migrate_bash_allowlist(document);
     changed |= migrate_bash_read_only(document, platform);
     changed |= migrate_model_renames(document);
+    changed |= migrate_removed_devstral_small(document);
     changed |= migrate_renamed_tools(document);
+    changed |= migrate_renamed_agents(document);
     changed
 }
 
@@ -311,6 +313,122 @@ fn migrate_renamed_tools(document: &mut Table) -> bool {
         changed |= renamed;
     }
     changed
+}
+
+/// Drops the incomplete `devstral-small` overrides its removal from the
+/// default models left behind: an entry without its own `name` and `provider`
+/// leaned on the default layer and no longer validates. A complete entry is
+/// kept. Reference `_migrate_removed_devstral_small`.
+fn migrate_removed_devstral_small(document: &mut Table) -> bool {
+    const ALIAS: &str = "devstral-small";
+    const NAME: &str = "devstral-small-latest";
+    let sparse = |model: &Table| {
+        let present = |key: &str| {
+            model
+                .get(key)
+                .and_then(Value::as_str)
+                .is_some_and(|value| !value.is_empty())
+        };
+        !(present("name") && present("provider"))
+    };
+    let is_devstral_small = |model: &Table, key: Option<&str>| {
+        let alias = key.or_else(|| model.get("alias").and_then(Value::as_str));
+        alias == Some(ALIAS) || model.get("name").and_then(Value::as_str) == Some(NAME)
+    };
+    let (dropped, empty) = match document.get_mut("models") {
+        Some(Value::Array(models)) => {
+            let before = models.len();
+            models.retain(|model| {
+                !model
+                    .as_table()
+                    .is_some_and(|model| is_devstral_small(model, None) && sparse(model))
+            });
+            (models.len() != before, models.is_empty())
+        }
+        Some(Value::Table(models)) => {
+            let before = models.len();
+            models.retain(|key, model| {
+                !model
+                    .as_table()
+                    .is_some_and(|model| is_devstral_small(model, Some(key)) && sparse(model))
+            });
+            (models.len() != before, models.is_empty())
+        }
+        _ => return false,
+    };
+    if dropped && empty {
+        document.remove("models");
+    }
+    if dropped && document.get("active_model").and_then(Value::as_str) == Some(ALIAS) {
+        document.insert("active_model".to_owned(), Value::String(String::new()));
+    }
+    dropped
+}
+
+/// Builtin agents published under another name since, old name first.
+const RENAMED_AGENTS: [(&str, &str); 1] = [("default", "ask")];
+
+/// The fields that name agents.
+const AGENT_LIST_FIELDS: [&str; 3] = ["enabled_agents", "disabled_agents", "installed_agents"];
+
+/// Rewrites the renamed builtin agents wherever a field names one, and keeps a
+/// configuration whose filters exclude the new default on the renamed agent
+/// it used to fall back to. Reference `_migrate_renamed_agents`.
+fn migrate_renamed_agents(document: &mut Table) -> bool {
+    let renamed = |name: &str| {
+        RENAMED_AGENTS
+            .iter()
+            .find(|(old, _)| *old == name)
+            .map(|(_, new)| *new)
+    };
+    let mut changed = false;
+    if let Some(Value::String(agent)) = document.get_mut("default_agent")
+        && let Some(new) = renamed(agent)
+    {
+        *agent = new.to_owned();
+        changed = true;
+    }
+    for field in AGENT_LIST_FIELDS {
+        let Some(Value::Array(names)) = document.get_mut(field) else {
+            continue;
+        };
+        for name in names.iter_mut() {
+            if let Some(new) = name.as_str().and_then(renamed) {
+                *name = Value::String(new.to_owned());
+                changed = true;
+            }
+        }
+    }
+    if !document.contains_key("default_agent") {
+        let ask = RENAMED_AGENTS[0].1;
+        if agent_filters_exclude(document, "accept-edits") && !agent_filters_exclude(document, ask)
+        {
+            document.insert("default_agent".to_owned(), Value::String(ask.to_owned()));
+            changed = true;
+        }
+    }
+    changed
+}
+
+/// Whether the agent filters leave `agent` out: a non-empty enable list that
+/// does not match it, or else a disable list that does.
+fn agent_filters_exclude(document: &Table, agent: &str) -> bool {
+    let patterns = |field: &str| -> Option<Vec<String>> {
+        match document.get(field) {
+            Some(Value::Array(values)) => Some(
+                values
+                    .iter()
+                    .filter_map(|value| value.as_str().map(ToOwned::to_owned))
+                    .collect(),
+            ),
+            _ => None,
+        }
+    };
+    if let Some(enabled) = patterns("enabled_agents").filter(|enabled| !enabled.is_empty()) {
+        return !crate::matching::NameFilter::new(&enabled).matches(agent);
+    }
+    patterns("disabled_agents")
+        .is_some_and(|disabled| crate::matching::NameFilter::new(&disabled).matches(agent))
 }
 
 fn bash_allowlist_mut(document: &mut Table) -> Option<&mut Vec<Value>> {

@@ -3,6 +3,7 @@
 
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
+mod argv;
 mod stdio;
 
 use std::path::Path;
@@ -10,9 +11,10 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use tokio::io::BufReader;
-use vibe_acp::{ProductionAuthEnvironment, default_vibe_home};
+use vibe_acp::{ProductionAuthEnvironment, default_vibe_home, setup_command};
 use vibe_app_server::client::{LiveDriverConfig, LiveTurnDriver};
 use vibe_app_server::experiments::Credentials;
+use vibe_app_server::harness::HarnessSelection;
 use vibe_app_server::workspace::{WorkspacePaths, WorkspaceService};
 use vibe_core::auth::KeyringStore;
 use vibe_core::compaction::manager::CompactionPromptResolution;
@@ -39,6 +41,25 @@ async fn main() -> ExitCode {
 }
 
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    let arguments = match argv::parse(std::env::args_os()) {
+        Ok(arguments) => arguments,
+        Err(argv::Exit::Print(text)) => {
+            print!("{text}");
+            return Ok(());
+        }
+        Err(argv::Exit::Error(text)) => {
+            eprint!("{text}");
+            std::process::exit(2);
+        }
+    };
+    if arguments.setup {
+        // Reference `run_onboarding`: the setup flow ships in the `vibe`
+        // binary, so this hands the terminal to it and exits with its status.
+        let status = std::process::Command::new(setup_command())
+            .arg("--setup")
+            .status()?;
+        std::process::exit(status.code().unwrap_or(1));
+    }
     let vibe_home = default_vibe_home();
     let session_root = vibe_home.join("sessions");
     // `{vibe_home}/.env` stands in for an unset process variable, which is what
@@ -110,6 +131,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             production_cloud: true,
             telemetry,
             experiments,
+            harness: HarnessSelection::resolve(
+                arguments.experimental_harness,
+                arguments.legacy_harness,
+            ),
         },
     )
     .await
@@ -248,6 +273,3 @@ fn price_from_dotenv(
     }
     Ok((price * 1_000_000.0).round() as u64)
 }
-
-#[cfg(test)]
-mod stdio_tests;

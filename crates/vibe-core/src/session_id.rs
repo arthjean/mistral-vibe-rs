@@ -59,6 +59,35 @@ pub fn rotate_session_id(previous: &str) -> String {
     generate_session_id(Some(extract_suffix(previous)))
 }
 
+/// A fresh random version-4 UUID in its canonical form, which is how the
+/// reference mints message identifiers (`uuid4()` in `vibe/core/types.py`).
+#[must_use]
+pub fn uuid_v4() -> String {
+    let mut bytes = [0_u8; 16];
+    if getrandom::fill(&mut bytes).is_err() {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|since| since.as_nanos())
+            .unwrap_or_default()
+            .to_le_bytes();
+        bytes.copy_from_slice(&stamp);
+    }
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    let hex = bytes
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    format!(
+        "{}-{}-{}-{}-{}",
+        &hex[..8],
+        &hex[8..12],
+        &hex[12..16],
+        &hex[16..20],
+        &hex[20..]
+    )
+}
+
 /// `N` random bytes as lowercase hexadecimal.
 ///
 /// A random source that refuses falls back to the clock, following

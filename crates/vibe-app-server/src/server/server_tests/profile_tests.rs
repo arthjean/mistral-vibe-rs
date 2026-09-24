@@ -13,6 +13,7 @@ async fn accept_edits_profile_auto_approves_only_mutating_file_tools() {
             input: Value::Null,
             requirements: vec![PermissionRequirement::outside_directory("/workspace/*")],
             rationale: "edit file".to_owned(),
+            call_id: None,
         })
         .await
         .expect("edit decision");
@@ -22,6 +23,7 @@ async fn accept_edits_profile_auto_approves_only_mutating_file_tools() {
             input: Value::Null,
             requirements: vec![PermissionRequirement::outside_directory("/workspace/*")],
             rationale: "read file".to_owned(),
+            call_id: None,
         })
         .await
         .expect("read decision");

@@ -367,7 +367,7 @@ fn a_model_is_patched_through_its_alias_and_written_back_as_a_list() {
     assert!(persisted.contains("temperature = 0.7"), "{persisted}");
     // The entry the operator never touched is still the one the defaults ship.
     assert_eq!(
-        outcome.snapshot.effective["models"]["devstral-small"]["provider"].as_str(),
+        outcome.snapshot.effective["models"]["mistral-medium-3.5"]["provider"].as_str(),
         Some("mistral")
     );
 }

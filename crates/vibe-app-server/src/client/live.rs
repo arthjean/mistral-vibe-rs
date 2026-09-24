@@ -56,6 +56,7 @@ use super::interactive::plan_file_path;
 use super::{
     CompactionDriverFuture, DriverError, DriverFuture, PublicContentBlock, SessionCompaction,
     SessionIntent, TurnDriver, TurnReservation, provider_images, session_stats,
+    snapshot_attachments,
 };
 
 #[derive(Debug, Clone)]
@@ -312,6 +313,20 @@ impl ToolExecutor for SessionToolExecutor {
         arguments: &'a str,
         output: ToolStreamSink,
     ) -> ToolFuture<'a> {
+        self.execute_call("", name, arguments, output)
+    }
+
+    fn publishes(&self, name: &str) -> bool {
+        self.permits(name) && ToolExecutor::publishes(&self.tools, name)
+    }
+
+    fn execute_call<'a>(
+        &'a self,
+        call_id: &'a str,
+        name: &'a str,
+        arguments: &'a str,
+        output: ToolStreamSink,
+    ) -> ToolFuture<'a> {
         if !self.permits(name) {
             return Box::pin(
                 async move { Err(format!("tool `{name}` is disabled for this session")) },
@@ -320,7 +335,7 @@ impl ToolExecutor for SessionToolExecutor {
         if let Some(reason) = self.refusal(name) {
             return Box::pin(async move { Err(reason) });
         }
-        self.tools.execute_stream(name, arguments, output)
+        self.tools.execute_call(call_id, name, arguments, output)
     }
 }
 
@@ -509,6 +524,13 @@ impl LiveTurnDriver {
                 .into_iter()
                 .map(ModelMessage::user),
         );
+        let session_dir = self
+            .session_root
+            .as_deref()
+            .zip(transcript.as_ref())
+            .map(|(root, transcript)| root.join(&transcript.metadata.directory));
+        let user_attachments =
+            snapshot_attachments(&reservation.input, session_dir.as_deref()).await?;
         let session_tools =
             SessionToolExecutor::new(reservation.tools.clone(), &reservation.intent);
         let input = ProviderInput {
@@ -580,6 +602,13 @@ impl LiveTurnDriver {
         if let Some(resolver) = reservation.tools.invoked_skills() {
             engine = engine.with_invoked_skills(resolver);
         }
+        if reservation.injected {
+            engine = engine.with_injected_prompt();
+        }
+        if let Some(message_id) = &reservation.client_user_message_id {
+            engine = engine.with_user_message_id(message_id);
+        }
+        engine = engine.with_user_attachments(user_attachments);
         engine
             .run_turn_controlled(
                 engine_session_id,

@@ -130,6 +130,9 @@ async fn public_calls_preserve_notifications_and_execute_resource_work() {
         Some(&json!("complete"))
     );
 
+    // A decision is only offered about a workspace holding a file that trust
+    // would unlock, as reference `decide_workspace_trust` requires.
+    std::fs::write(workspace.path().join("AGENTS.md"), "guidance\n").expect("AGENTS.md");
     let trusted = service
         .public_call_async(
             "workspace/trust/decision",
@@ -141,7 +144,7 @@ async fn public_calls_preserve_notifications_and_execute_resource_work() {
         )
         .await
         .expect("deferred resource response");
-    assert!(trusted.result.is_empty());
+    assert_eq!(trusted.result["status"], json!("trusted"));
     assert_eq!(
         trusted
             .notifications

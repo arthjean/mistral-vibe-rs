@@ -22,7 +22,7 @@ use crate::policy::{
 };
 use crate::process::{ClientToolIo, ClientToolRequest};
 use crate::shell::{ShellCommandLists, ShellFlavor};
-use crate::tools::ToolHandlerFuture;
+use crate::tools::{ToolHandlerFuture, ToolSkip};
 
 /// Answers every approval the same way and records what it was asked to
 /// approve: the tool, and the label of every requirement the call carried.
@@ -55,7 +55,7 @@ impl ApprovalAgent for ScriptedApproval {
                 .join("; ");
             requests.push(format!("{}: {labels}", request.tool));
         }
-        let decision = self.decision;
+        let decision = self.decision.clone();
         Box::pin(async move { Ok(decision) })
     }
 }
@@ -544,8 +544,12 @@ async fn a_command_needing_approval_never_runs_when_it_is_refused() {
             json!({"command": format!("echo hi > {}", marker.display())}),
         )
         .await
-        .expect_err("a redirection is not allowlisted");
-    assert!(refused.to_string().contains("denied"), "{refused}");
+        .expect("a redirection is not allowlisted");
+    assert_eq!(
+        refused.skip,
+        Some(ToolSkip { cancelled: true }),
+        "{refused:?}"
+    );
     assert_eq!(harness.approval_count(), 1);
     assert!(
         !marker.exists(),
@@ -582,8 +586,12 @@ async fn a_previously_denied_command_now_reaches_the_operator() {
             json!({"command": format!("rm -rf {}", marker.display())}),
         )
         .await
-        .expect_err("the operator refused the approval");
-    assert!(refused.to_string().contains("denied"), "{refused}");
+        .expect("the operator refused the approval");
+    assert_eq!(
+        refused.skip,
+        Some(ToolSkip { cancelled: true }),
+        "{refused:?}"
+    );
     assert_eq!(
         harness.approval_count(),
         1,
@@ -613,8 +621,12 @@ async fn a_managed_override_stops_an_allowlisted_command_from_running_outright()
         let refused = harness
             .call("bash", arguments.clone())
             .await
-            .expect_err("an override is not allowlisted");
-        assert!(refused.to_string().contains("denied"), "{refused}");
+            .expect("an override is not allowlisted");
+        assert_eq!(
+            refused.skip,
+            Some(ToolSkip { cancelled: true }),
+            "{refused:?}"
+        );
         assert_eq!(harness.approval_count(), 1, "{arguments}");
         assert!(
             harness.approvals().contains(named),
@@ -1060,8 +1072,12 @@ async fn a_log_read_is_granted_and_a_log_write_asks() {
             json!({"action": "write", "relative_path": "notes.txt", "content": "x"}),
         )
         .await
-        .expect_err("a denied write does not run");
-    assert!(refused.to_string().contains("denied"), "{refused}");
+        .expect("a denied write does not run");
+    assert_eq!(
+        refused.skip,
+        Some(ToolSkip { cancelled: true }),
+        "{refused:?}"
+    );
     assert_eq!(harness.approval_count(), 1);
 
     harness

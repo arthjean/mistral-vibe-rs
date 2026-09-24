@@ -21,13 +21,23 @@ fn project_server(server: &Value) -> Result<Value, AcpError> {
     let object = server
         .as_object()
         .ok_or_else(|| AcpError::InvalidParams("MCP server must be an object".to_owned()))?;
+    // ACP tags every transport but stdio, so an untagged server is stdio.
     let transport = object
         .get("type")
         .and_then(Value::as_str)
-        .ok_or_else(|| AcpError::InvalidParams("MCP server requires a type".to_owned()))?;
-    let name = required_field(object.get("name"), "stdio MCP server requires a name")?;
+        .unwrap_or("stdio");
+    let name = required_field(object.get("name"), "MCP server requires a name")?;
     match transport {
-        "stdio" => Ok(json!({
+        "http" => Ok(json!({
+            "name": name,
+            "transport": "streamable-http",
+            "url": required_field(object.get("url"), "HTTP MCP server requires a URL")?,
+            "headers": named_values(object.get("headers"), "HTTP MCP header")?,
+        })),
+        "sse" | "acp" => Err(AcpError::Configuration(format!(
+            "MCP server `{name}` uses the {transport} transport, which is not supported"
+        ))),
+        _ => Ok(json!({
             "name": name,
             "transport": "stdio",
             "command": required_field(
@@ -37,15 +47,6 @@ fn project_server(server: &Value) -> Result<Value, AcpError> {
             "args": string_array(object.get("args"), "stdio MCP server args must be strings")?,
             "env": named_values(object.get("env"), "stdio MCP environment entry")?,
         })),
-        "http" => Ok(json!({
-            "name": name,
-            "transport": "streamable-http",
-            "url": required_field(object.get("url"), "HTTP MCP server requires a URL")?,
-            "headers": named_values(object.get("headers"), "HTTP MCP header")?,
-        })),
-        unsupported => Err(AcpError::UnsupportedClientFlow(format!(
-            "MCP transport `{unsupported}` is not supported by the public app-server"
-        ))),
     }
 }
 

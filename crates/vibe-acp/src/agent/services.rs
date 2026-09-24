@@ -14,7 +14,7 @@ use vibe_protocol::{
 };
 
 use crate::agent::AcpAgent;
-use crate::client_tools::{AcpClientToolFactory, declared_client_tools};
+use crate::client_tools::declared_client_tools;
 use crate::protocol::AcpError;
 use crate::session::AcpHarness;
 
@@ -53,14 +53,13 @@ where
         working_directory: &str,
         additional_directories: &[String],
     ) -> Result<HeadlessService<D>, AcpError> {
-        let (capabilities, client_info) = self.lock_state()?.client_context();
+        let (capabilities, client_info) = {
+            let state = self.lock_state()?;
+            (state.capabilities(), state.client_info.clone())
+        };
         let mut server = AppServer::default()
-            .using_session_tool_factory(Arc::new(AcpClientToolFactory {
-                client: self.client.clone(),
-                capabilities: capabilities.clone(),
-                timeout: self.client_tool_timeout,
-            }))
-            .using_client_telemetry(Arc::clone(&self.telemetry));
+            .using_client_telemetry(Arc::clone(&self.telemetry))
+            .using_harness_selection(self.harness.clone());
         if let Some(projects) = self.production_projects()? {
             server = server.using_projects_service(projects);
         }
@@ -94,11 +93,14 @@ where
                     terminal_emulator: TerminalEmulator::Unknown,
                 },
                 ClientCapabilities {
-                    callback_kinds: self
-                        .client
-                        .is_some()
-                        .then_some(CallbackKind::Approval)
-                        .into_iter()
+                    // Reference `_client_descriptor`: approvals always, and
+                    // questions only for a client that renders a form.
+                    callback_kinds: std::iter::once(CallbackKind::Approval)
+                        .chain(
+                            capabilities
+                                .elicitation_form
+                                .then_some(CallbackKind::UserInput),
+                        )
                         .collect(),
                     client_tools: declared_client_tools(&capabilities),
                     // The bridge renders every notification the server sends, so

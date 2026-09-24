@@ -65,6 +65,7 @@ impl ServerConnection {
                 .map_err(|error| ProtocolFault::from(ServerError::Resource(error.to_string())))?;
         }
         session.active_turn = Some(turn_id.clone());
+        session.stats.injected_turn = params.injected;
         let started_at = now_millis();
         session.active_turn_started_at = Some(started_at);
         session.status = SessionStatus::Running;
@@ -111,6 +112,7 @@ impl ServerConnection {
                 turn_id,
                 prompt,
                 input: params.input,
+                injected: params.injected,
                 client_user_message_id: params.client_user_message_id,
                 auto_title: params.auto_title,
                 user_display_content: params.user_display_content,

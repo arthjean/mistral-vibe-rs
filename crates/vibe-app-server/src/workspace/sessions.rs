@@ -302,7 +302,13 @@ impl WorkspaceService {
         params: &BTreeMap<String, Value>,
     ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let source = required_string(params, "sessionId")?;
-        let keep_messages = fork_keep_messages(params)?;
+        let keep_messages = match optional_string(params, "messageId")? {
+            Some(message_id) if !message_id.starts_with("history-") => {
+                let stored = self.store.load(source).map_err(storage_error)?;
+                Some(fork_point(&stored.messages, message_id)?)
+            }
+            _ => fork_keep_messages(params)?,
+        };
         let new_id = match optional_string(params, "newSessionId")? {
             Some(new_id) => new_id.to_owned(),
             None => format!(
@@ -321,15 +327,22 @@ impl WorkspaceService {
                 now_millis(),
             )
             .map_err(storage_error)?;
+        // Reference `SessionRuntime.fork` saves the copy with fresh
+        // statistics: the fork has spent nothing yet.
         if let Some(keep_messages) = keep_messages {
             hydrated = self
                 .store
                 .rewind(
                     &hydrated.metadata.id,
                     keep_messages,
-                    hydrated.metadata.statistics.clone(),
+                    BTreeMap::new(),
                     now_millis(),
                 )
+                .map_err(storage_error)?;
+        } else {
+            hydrated.metadata.statistics = BTreeMap::new();
+            self.store
+                .update_metadata(&hydrated.metadata)
                 .map_err(storage_error)?;
         }
         self.continuity
@@ -559,6 +572,35 @@ impl WorkspaceService {
     }
 }
 
+/// How many stored messages a fork anchored at the user message `message_id`
+/// keeps: that message and the turn it opened. Reference `_messages_for_fork`
+/// (`vibe/app_server/_runtime.py`).
+fn fork_point(messages: &[ModelMessage], message_id: &str) -> Result<usize, WorkspaceServiceError> {
+    let anchor = messages
+        .iter()
+        .position(|message| match message {
+            ModelMessage::User { message_id: id, .. } => id.as_deref() == Some(message_id),
+            ModelMessage::Assistant { message_id: id, .. } => id.as_deref() == Some(message_id),
+            _ => false,
+        })
+        .ok_or_else(|| {
+            WorkspaceServiceError::InvalidParams(format!(
+                "no message named `{message_id}` can anchor a fork"
+            ))
+        })?;
+    if !matches!(messages.get(anchor), Some(ModelMessage::User { .. })) {
+        return Err(WorkspaceServiceError::InvalidParams(
+            "a fork can only be anchored at a user message".to_owned(),
+        ));
+    }
+    Ok(messages
+        .iter()
+        .enumerate()
+        .skip(anchor + 1)
+        .find(|(_, message)| matches!(message, ModelMessage::User { .. }))
+        .map_or(messages.len(), |(index, _)| index))
+}
+
 pub(super) fn fork_keep_messages(
     params: &BTreeMap<String, Value>,
 ) -> Result<Option<usize>, WorkspaceServiceError> {
@@ -628,9 +670,12 @@ pub(super) fn rewind_entry_index(
     messages
         .iter()
         .enumerate()
-        .find(|(index, message)| {
-            matches!(message, ModelMessage::User { .. })
-                && history_entry_id(*index, "user") == entry_id
+        .find(|(index, message)| match message {
+            ModelMessage::User { message_id, .. } => {
+                message_id.as_deref() == Some(entry_id)
+                    || history_entry_id(*index, "user") == entry_id
+            }
+            _ => false,
         })
         .map(|(index, _message)| index)
         .ok_or_else(|| {

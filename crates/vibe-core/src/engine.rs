@@ -15,7 +15,7 @@ use tokio::sync::{Notify, mpsc};
 use crate::compaction::{CompactionFailure, CompactionFailureReason, CompactionStatus};
 use crate::events::{
     EngineEvent, EventEnvelope, LifecycleState, ModelMessage, ModelToolCall, ProjectionError,
-    ProjectionSnapshot, SessionHandoffCause,
+    ProjectionSnapshot, PublicContentBlock, SessionHandoffCause,
 };
 use crate::middleware::{
     AutoCompactMiddleware, CompactionSettings, ConversationContext, ConversationMiddleware,
@@ -43,7 +43,7 @@ pub use contracts::{
 };
 use ledger::{
     TurnLedger, TurnRecorder, current_time_millis, lifecycle_for, new_compaction_id, persist,
-    persist_stats, stop_message, title_from_messages,
+    persist_stats, stop_message,
 };
 
 pub type ProviderFuture<'a> =
@@ -70,6 +70,17 @@ pub struct SessionStats {
     pub usage: Usage,
     pub context_tokens: u64,
     pub steps: u32,
+    /// The last model call's own usage and duration, which the reference
+    /// keeps as `last_turn_*` on `AgentStats` and restores with a session.
+    pub last_call: Option<ModelCallStats>,
+}
+
+/// What one model call spent, and how long it took.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ModelCallStats {
+    pub prompt_tokens: u64,
+    pub completion_tokens: u64,
+    pub duration_ms: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -252,6 +263,14 @@ struct TurnSettings {
     /// How a slash-invoked skill resolves, when the session publishes one.
     /// Absent, a `/name` prompt is an ordinary message.
     invoked_skills: Option<Arc<dyn crate::skills::InvokedSkillResolver>>,
+    /// Whether the harness wrote this turn's prompt. Reference `_loop.py`
+    /// appends an injected prompt to the conversation and publishes nothing
+    /// for it: no user entry, no skill or mention expansion.
+    injected_prompt: bool,
+    /// The identifier the client gave the turn's message, which its entry
+    /// and its stored message take. Reference `client_message_id`.
+    user_message_id: Option<String>,
+    user_attachments: Vec<PublicContentBlock>,
     /// The agent profile this turn runs under, which every request and tool
     /// event reports. Reference `self.agent_profile.name`, whose default
     /// profile is named `default`.
@@ -269,6 +288,9 @@ impl Default for TurnSettings {
             middleware: Vec::new(),
             compaction: CompactionSettings::default(),
             invoked_skills: None,
+            injected_prompt: false,
+            user_message_id: None,
+            user_attachments: Vec::new(),
             agent_profile: DEFAULT_AGENT_PROFILE.to_owned(),
             working_directory: None,
         }
@@ -358,6 +380,27 @@ impl<P, T, C, S> ConversationEngine<P, T, C, S> {
     #[must_use]
     pub fn with_observer(mut self, observer: Arc<dyn EventObserver>) -> Self {
         self.settings.observer = observer;
+        self
+    }
+
+    /// Names the turn's message the way its client did.
+    #[must_use]
+    pub fn with_user_message_id(mut self, message_id: impl Into<String>) -> Self {
+        self.settings.user_message_id = Some(message_id.into());
+        self
+    }
+
+    /// Attaches the images and resources the operator sent with the prompt.
+    #[must_use]
+    pub fn with_user_attachments(mut self, attachments: Vec<PublicContentBlock>) -> Self {
+        self.settings.user_attachments = attachments;
+        self
+    }
+
+    /// Marks this turn's prompt as written by the harness.
+    #[must_use]
+    pub fn with_injected_prompt(mut self) -> Self {
+        self.settings.injected_prompt = true;
         self
     }
 
@@ -480,18 +523,50 @@ where
         }
         pipeline.reset(ResetReason::Stop);
 
-        recorder.emit(EngineEvent::UserMessage {
-            content: prompt.clone(),
-        })?;
+        if self.settings.injected_prompt {
+            recorder.emit(EngineEvent::Lifecycle {
+                state: LifecycleState::Running,
+                message: None,
+            })?;
+            messages.push(ModelMessage::injected_user(prompt.clone()));
+        } else {
+            recorder.emit(EngineEvent::UserMessage {
+                content: prompt.clone(),
+                message_id: self.settings.user_message_id.clone(),
+                attachments: self.settings.user_attachments.clone(),
+            })?;
+        }
         // Reference `_current_user_message_id`: every request and tool event of
         // this turn reports the operator's message, as the projection published
         // it.
-        let message_id = recorder.last_entry_id();
-        messages.push(ModelMessage::user(prompt.clone()));
-        self.inject_invoked_skill(&mut recorder, &mut messages, &prompt)?;
-        recorder.emit(EngineEvent::Title {
-            title: title_from_messages(&messages),
-        })?;
+        let message_id = if self.settings.injected_prompt {
+            recorder.last_entry_id()
+        } else {
+            recorder.last_history_entry_id()
+        };
+        if !self.settings.injected_prompt {
+            messages.push(ModelMessage::User {
+                content: prompt.clone(),
+                injected: false,
+                message_id: message_id.clone(),
+                attachments: self.settings.user_attachments.clone(),
+            });
+            // Reference `prepare_prompt_from_context` leaves the title unset:
+            // a turn names its session only through a generated or supplied
+            // title, never from the prompt itself.
+            self.inject_invoked_skill(&mut recorder, &mut messages, &prompt)?;
+            if let Some(message) = self
+                .inject_mentioned_files(&mut recorder, &mut messages, &prompt, &cancellation)
+                .await?
+            {
+                recorder.emit(EngineEvent::Lifecycle {
+                    state: LifecycleState::Failed,
+                    message: Some(message.clone()),
+                })?;
+                persist(&self.sink, &messages, recorder.state()).await?;
+                return Err(EngineError::ToolFailure(message));
+            }
+        }
         persist(&self.sink, &messages, recorder.state()).await?;
         checkpoints = checkpoints.saturating_add(1);
 
@@ -558,6 +633,7 @@ where
             }
             input.messages.clone_from(&messages);
             self.record_request(&mut recorder, &input, &prompt, message_id.clone())?;
+            let call_started = Instant::now();
             let completion = match self
                 .stream_completion(&mut recorder, &input, &cancellation)
                 .await?
@@ -614,12 +690,22 @@ where
             };
 
             ledger.record_completion(&completion.usage, &self.settings.limits);
+            ledger.last_call = Some(ModelCallStats {
+                prompt_tokens: completion.usage.input_tokens,
+                completion_tokens: completion.usage.output_tokens,
+                duration_ms: u64::try_from(call_started.elapsed().as_millis())
+                    .unwrap_or(u64::MAX)
+                    .max(1),
+            });
             recorder.emit(EngineEvent::Stats {
                 context_tokens: ledger.context_tokens,
                 input_tokens: ledger.usage.input_tokens,
                 output_tokens: ledger.usage.output_tokens,
             })?;
+            let (assistant_id, reasoning_id) = recorder.model_call_entries();
             let assistant_message = ModelMessage::Assistant {
+                message_id: assistant_id,
+                reasoning_message_id: reasoning_id,
                 content: completion.text.clone(),
                 reasoning: completion.reasoning.clone(),
                 reasoning_signature: completion.reasoning_signature.clone(),
@@ -643,9 +729,23 @@ where
                 break TurnStopReason::Complete;
             }
 
-            let results = self
-                .execute_tool_calls(&mut recorder, &completion.tool_calls, &cancellation)
-                .await?;
+            let (results, user_cancelled) = match self
+                .execute_tool_calls(&mut recorder, &completion.tool_calls, &cancellation, true)
+                .await?
+            {
+                ToolRound::Settled {
+                    results,
+                    user_cancelled,
+                } => (results, user_cancelled),
+                ToolRound::Failed(message) => {
+                    recorder.emit(EngineEvent::Lifecycle {
+                        state: LifecycleState::Failed,
+                        message: Some(message.clone()),
+                    })?;
+                    persist(&self.sink, &messages, recorder.state()).await?;
+                    return Err(EngineError::ToolFailure(message));
+                }
+            };
             for (call, (content, is_error)) in completion.tool_calls.into_iter().zip(results) {
                 messages.push(ModelMessage::Tool {
                     call_id: call.id,
@@ -657,6 +757,9 @@ where
             checkpoints = checkpoints.saturating_add(1);
             if cancellation.is_cancelled() {
                 break TurnStopReason::Cancelled;
+            }
+            if user_cancelled {
+                break TurnStopReason::Complete;
             }
         };
 
@@ -754,8 +857,80 @@ where
             duration_ms: 0,
             is_error: false,
             cancelled: false,
+            skipped: false,
         })?;
         Ok(())
+    }
+
+    /// Reads every file the prompt mentions with `@`, as though the model had
+    /// asked for it, before the first model call.
+    ///
+    /// Each distinct file runs through `read_file` like any other call, so its
+    /// permission, its client delegation and its public effect are the tool's
+    /// own. A folder or an image mention is not read, and a session without
+    /// `read_file` reads nothing. The answer is the message of a call that
+    /// failed the turn. Reference `_inject_mentioned_files`
+    /// (`vibe/core/agent_loop/_loop.py`).
+    async fn inject_mentioned_files(
+        &self,
+        recorder: &mut TurnRecorder<'_>,
+        messages: &mut Vec<ModelMessage>,
+        content: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<Option<String>, EngineError> {
+        const READ_FILE: &str = "read_file";
+        if !self.tools.publishes(READ_FILE) {
+            return Ok(None);
+        }
+        let base = self
+            .settings
+            .working_directory
+            .clone()
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_default();
+        let payload = crate::path_resources::build_path_prompt_payload(&base, content);
+        for resource in payload
+            .resources
+            .iter()
+            .filter(|resource| resource.kind == crate::path_resources::PathResourceKind::File)
+        {
+            let call = ModelToolCall {
+                id: crate::session_id::uuid_v4(),
+                name: READ_FILE.to_owned(),
+                // The reference serializes the arguments with `json.dumps`,
+                // whose separators carry a space.
+                arguments: format!(
+                    "{{\"file_path\": {}}}",
+                    Value::String(resource.path.to_string_lossy().into_owned())
+                ),
+            };
+            messages.push(ModelMessage::Assistant {
+                message_id: None,
+                reasoning_message_id: None,
+                content: String::new(),
+                reasoning: None,
+                reasoning_signature: None,
+                reasoning_state: Vec::new(),
+                tool_calls: vec![call.clone()],
+            });
+            let calls = [call];
+            match self
+                .execute_tool_calls(recorder, &calls, cancellation, false)
+                .await?
+            {
+                ToolRound::Settled { results, .. } => {
+                    for (call, (content, is_error)) in calls.into_iter().zip(results) {
+                        messages.push(ModelMessage::Tool {
+                            call_id: call.id,
+                            content,
+                            is_error,
+                        });
+                    }
+                }
+                ToolRound::Failed(message) => return Ok(Some(message)),
+            }
+        }
+        Ok(None)
     }
 
     /// Drains queued steering, context injection, callback resolutions and
@@ -964,6 +1139,7 @@ where
         while let Ok(reason) = retry_reasons.try_recv() {
             recorder.emit(EngineEvent::Retrying { reason })?;
         }
+        let (text_id, reasoning_id) = recorder.open_model_call();
         let mut chunks = Vec::new();
         loop {
             let next = tokio::select! {
@@ -979,10 +1155,16 @@ where
             };
             match &chunk {
                 ProviderChunk::Text { text } if !text.is_empty() => {
-                    recorder.emit(EngineEvent::ModelText { text: text.clone() })?;
+                    recorder.emit(EngineEvent::ModelText {
+                        text: text.clone(),
+                        message_id: Some(text_id.clone()),
+                    })?;
                 }
                 ProviderChunk::Reasoning { text, .. } if !text.is_empty() => {
-                    recorder.emit(EngineEvent::ModelReasoning { text: text.clone() })?;
+                    recorder.emit(EngineEvent::ModelReasoning {
+                        text: text.clone(),
+                        message_id: Some(reasoning_id.clone()),
+                    })?;
                 }
                 ProviderChunk::Text { .. }
                 | ProviderChunk::Reasoning { .. }
@@ -1111,8 +1293,58 @@ where
         recorder: &mut TurnRecorder<'_>,
         tool_calls: &[ModelToolCall],
         cancellation: &CancellationToken,
-    ) -> Result<Vec<(String, bool)>, EngineError> {
-        for call in tool_calls {
+        announce: bool,
+    ) -> Result<ToolRound, EngineError> {
+        // Reference `_build_tool_call_events`: each call is announced by name
+        // while the response streams, before its arguments are validated.
+        let resolved = tool_calls
+            .iter()
+            .map(|call| self.tools.publishes(&call.name))
+            .collect::<Vec<_>>();
+        for (call, _) in tool_calls
+            .iter()
+            .zip(&resolved)
+            .filter(|(_, resolved)| announce && **resolved)
+        {
+            recorder.emit(EngineEvent::ToolCallAnnounced {
+                call_id: call.id.clone(),
+                name: call.name.clone(),
+                remote: self.tools.remote_origin(&call.name),
+            })?;
+        }
+        // Reference `_emit_failed_tool_events`: a call naming no available
+        // tool settles first, as an error the model reads, and never runs.
+        let mut results = vec![None; tool_calls.len()];
+        for (index, call) in tool_calls.iter().enumerate() {
+            if resolved[index] {
+                continue;
+            }
+            let error = format!(
+                "<tool_error>{}: no tool named '{}' is available</tool_error>",
+                call.name, call.name
+            );
+            recorder.emit(EngineEvent::ToolCallUnresolved {
+                call_id: call.id.clone(),
+                name: call.name.clone(),
+            })?;
+            recorder.emit(EngineEvent::ToolResult {
+                call_id: call.id.clone(),
+                content: error.clone(),
+                typed_result: Value::Null,
+                projected_result: Value::Null,
+                display: Value::Null,
+                duration_ms: 0,
+                is_error: true,
+                cancelled: false,
+                skipped: false,
+            })?;
+            results[index] = Some((error, true));
+        }
+        for (call, _) in tool_calls
+            .iter()
+            .zip(&resolved)
+            .filter(|(_, resolved)| **resolved)
+        {
             recorder.emit(EngineEvent::ToolCall {
                 call_id: call.id.clone(),
                 name: call.name.clone(),
@@ -1126,6 +1358,9 @@ where
         let mut pending = FuturesUnordered::new();
         let (stream_tx, mut stream_rx) = tokio::sync::mpsc::channel(TOOL_STREAM_CAPACITY);
         for (index, call) in tool_calls.iter().enumerate() {
+            if !resolved[index] {
+                continue;
+            }
             let started = Instant::now();
             let sender = stream_tx.clone();
             let output: ToolStreamSink = Arc::new(move |chunk| {
@@ -1147,7 +1382,7 @@ where
                         async {
                             let result = self
                                 .tools
-                                .execute_stream(&call.name, &call.arguments, output)
+                                .execute_call(&call.id, &call.name, &call.arguments, output)
                                 .await;
                             if let Ok(output) = &result {
                                 set_tool_result(&output.model_text);
@@ -1163,7 +1398,10 @@ where
         }
         drop(stream_tx);
 
-        let mut results = vec![None; tool_calls.len()];
+        // Reference `is_user_cancellation_event`: a call the user declined
+        // without a reason ends the turn once this round settles.
+        let mut user_cancelled = false;
+        let mut failure = None;
         while !pending.is_empty() {
             tokio::select! {
                 streamed = stream_rx.recv() => {
@@ -1182,7 +1420,16 @@ where
                     let duration_ms =
                         u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
                     let (output, is_error) = match result {
-                        Ok(output) => (output, false),
+                        Ok(output) if output.turn_failure.is_some() => {
+                            failure = output.turn_failure;
+                            break;
+                        }
+                        Ok(output) => {
+                            if output.skip.is_some_and(|skip| skip.cancelled) {
+                                user_cancelled = true;
+                            }
+                            (output, false)
+                        }
                         Err(message) => (
                             ToolExecutionOutput::text(bounded_utf8(
                                 &message,
@@ -1200,7 +1447,8 @@ where
                         display: output.display,
                         duration_ms,
                         is_error,
-                        cancelled: false,
+                        cancelled: output.skip.is_some_and(|skip| skip.cancelled),
+                        skipped: output.skip.is_some(),
                     })?;
                     results[index] = Some((output.model_text, is_error));
                 }
@@ -1209,6 +1457,9 @@ where
         }
         drop(pending);
         drain_tool_stream(recorder, tool_calls, &mut stream_rx)?;
+        if let Some(message) = failure {
+            return Ok(ToolRound::Failed(message));
+        }
 
         for (index, result) in results.iter_mut().enumerate() {
             if result.is_some() {
@@ -1223,14 +1474,30 @@ where
                 duration_ms: 0,
                 is_error: true,
                 cancelled: true,
+                skipped: false,
             })?;
             *result = Some((INTERRUPTED_TOOL_RESULT.to_owned(), true));
         }
-        Ok(results
-            .into_iter()
-            .map(|result| result.unwrap_or_else(|| (INTERRUPTED_TOOL_RESULT.to_owned(), true)))
-            .collect())
+        Ok(ToolRound::Settled {
+            results: results
+                .into_iter()
+                .map(|result| result.unwrap_or_else(|| (INTERRUPTED_TOOL_RESULT.to_owned(), true)))
+                .collect(),
+            user_cancelled,
+        })
     }
+}
+
+/// How one round of tool calls ended.
+enum ToolRound {
+    /// Every call answered, in call order, with whether the user's decline
+    /// of one of them ends the turn.
+    Settled {
+        results: Vec<(String, bool)>,
+        user_cancelled: bool,
+    },
+    /// A call's answer failed the turn.
+    Failed(String),
 }
 
 /// Projects every chunk a tool emitted before its result arrived.
@@ -1267,6 +1534,9 @@ pub enum EngineError {
     Persistence(String),
     #[error("event observation failed: {0}")]
     Observation(String),
+    /// A tool's answer failed the turn; the message is the turn's error.
+    #[error("{0}")]
+    ToolFailure(String),
     #[error("turn control state lock is poisoned")]
     ControlStatePoisoned,
 }
@@ -2117,14 +2387,25 @@ mod tests {
             .expect("cleared turn completes");
 
         assert_eq!(outcome.session_id, "session-1-cleared");
+        // The reply carries the identity its public entry was minted under,
+        // which is random, so it is compared apart.
+        let mut messages = outcome.messages.clone();
+        if let Some(ModelMessage::Assistant { message_id, .. }) = messages.last_mut() {
+            assert!(
+                message_id.take().is_some(),
+                "the reply keeps its entry identity"
+            );
+        }
         assert_eq!(
-            outcome.messages,
+            messages,
             vec![
                 ModelMessage::System {
                     content: "system".to_owned(),
                 },
                 ModelMessage::user("Plan approved. Switch to code mode.".to_owned()),
                 ModelMessage::Assistant {
+                    message_id: None,
+                    reasoning_message_id: None,
                     content: "implementing".to_owned(),
                     reasoning: None,
                     reasoning_signature: None,
@@ -2316,6 +2597,7 @@ mod tests {
                 ..EngineLimits::default()
             })
             .with_baseline(SessionStats {
+                last_call: None,
                 usage: Usage {
                     input_tokens: 3,
                     output_tokens: 2,
@@ -3351,8 +3633,13 @@ mod tests {
         let messages = &outcome.messages;
         assert_eq!(
             messages[1],
-            ModelMessage::user("/probe extra instructions here".to_owned()),
-            "the trailing text stays the operator's message"
+            ModelMessage::User {
+                content: "/probe extra instructions here".to_owned(),
+                injected: false,
+                message_id: Some("entry-1".to_owned()),
+                attachments: Vec::new(),
+            },
+            "the trailing text stays the operator's message, under its entry's identity"
         );
         let ModelMessage::Assistant {
             content,
@@ -3423,6 +3710,8 @@ mod tests {
         let mut input = provider_input();
         input.messages.extend([
             ModelMessage::Assistant {
+                message_id: None,
+                reasoning_message_id: None,
                 content: String::new(),
                 reasoning: None,
                 reasoning_signature: None,
@@ -3473,6 +3762,8 @@ mod tests {
         let mut input = provider_input();
         input.messages.extend([
             ModelMessage::Assistant {
+                message_id: None,
+                reasoning_message_id: None,
                 content: String::new(),
                 reasoning: None,
                 reasoning_signature: None,

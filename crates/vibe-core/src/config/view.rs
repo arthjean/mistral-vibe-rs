@@ -207,14 +207,27 @@ impl ConfigSnapshot {
 
     fn model_views(&self) -> JsonValue {
         match self.effective.get("models") {
-            Some(Value::Table(models)) => JsonValue::Array(
-                models
-                    .iter()
-                    .filter_map(|(alias, entry)| {
-                        entry.as_table().map(|entry| model_view(entry, alias))
-                    })
-                    .collect(),
-            ),
+            Some(Value::Table(models)) => {
+                // The merged map is keyed; reference `models` is a dictionary
+                // that keeps the order the layers declared the aliases in.
+                let order = super::effective::model_order(&self.layer_values);
+                let rank = |alias: &str| {
+                    order
+                        .iter()
+                        .position(|declared| declared == alias)
+                        .unwrap_or(order.len())
+                };
+                let mut entries = models.iter().collect::<Vec<_>>();
+                entries.sort_by_key(|(alias, _)| rank(alias));
+                JsonValue::Array(
+                    entries
+                        .into_iter()
+                        .filter_map(|(alias, entry)| {
+                            entry.as_table().map(|entry| model_view(entry, alias))
+                        })
+                        .collect(),
+                )
+            }
             Some(Value::Array(models)) => JsonValue::Array(
                 models
                     .iter()
@@ -344,6 +357,10 @@ impl ConfigSnapshot {
 fn model_view(entry: &Table, alias: &str) -> JsonValue {
     let declared = table_str(entry, "alias", alias);
     let thinking = table_str(entry, "thinking", "off");
+    let display_name = entry
+        .get("display_name")
+        .and_then(Value::as_str)
+        .map_or_else(|| declared.clone(), ToOwned::to_owned);
     json!({
         "name": table_str(entry, "name", ""),
         "alias": declared,
@@ -356,6 +373,7 @@ fn model_view(entry: &Table, alias: &str) -> JsonValue {
             .get("supports_images")
             .and_then(Value::as_bool)
             .unwrap_or(false),
+        "displayName": display_name,
     })
 }
 
@@ -365,7 +383,7 @@ fn model_view(entry: &Table, alias: &str) -> JsonValue {
 /// response down; a client renders an empty model the same way it renders a
 /// missing one.
 fn empty_model_view() -> JsonValue {
-    json!({"name": "", "alias": "", "thinking": "off", "supportsImages": false})
+    json!({"name": "", "alias": "", "thinking": "off", "supportsImages": false, "displayName": ""})
 }
 
 fn table_str(entry: &Table, key: &str, fallback: &str) -> String {

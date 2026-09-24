@@ -75,6 +75,7 @@ async fn live_driver_hydrates_and_extends_a_durable_resume() {
                 text: "new question".to_owned(),
             }],
             prepared_images: None,
+            injected: false,
             client_user_message_id: None,
             auto_title: None,
             user_display_content: None,
@@ -199,6 +200,7 @@ async fn the_context_warning_reaches_the_model_once_per_session() {
                         text: "question".to_owned(),
                     }],
                     prepared_images: None,
+                    injected: false,
                     client_user_message_id: None,
                     auto_title: None,
                     user_display_content: None,
@@ -224,7 +226,7 @@ async fn the_context_warning_reaches_the_model_once_per_session() {
         messages
             .iter()
             .filter(|message| {
-                matches!(message, ModelMessage::User { content, injected }
+                matches!(message, ModelMessage::User { content, injected, .. }
                         if *injected && content.contains("<vibe_warning>"))
             })
             .count()
@@ -456,7 +458,7 @@ async fn manual_compaction_uses_provider_summary_and_durable_handoff() {
     assert!(compacted.messages.iter().any(|message| {
         matches!(
             message,
-            ModelMessage::User { content, injected: true }
+            ModelMessage::User { content, injected: true, .. }
                 if content.contains("<compaction_summary>")
                     && content.contains("resumed answer")
                     && content.contains("retain this decision")
@@ -601,6 +603,8 @@ async fn live_driver_exposes_and_executes_the_session_tool_registry() {
                  -> vibe_core::tools::OwnedToolHandlerFuture {
                     Box::pin(async {
                         Ok(ToolExecutionOutput {
+                            skip: None,
+                            turn_failure: None,
                             typed_result: json!({"echo": "rust"}),
                             model_text: "hello rust".to_owned(),
                             display: Value::Null,
@@ -629,6 +633,7 @@ async fn live_driver_exposes_and_executes_the_session_tool_registry() {
                 text: "use MCP".to_owned(),
             }],
             prepared_images: None,
+            injected: false,
             client_user_message_id: None,
             auto_title: None,
             user_display_content: None,

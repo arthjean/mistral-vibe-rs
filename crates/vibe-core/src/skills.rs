@@ -373,6 +373,8 @@ pub fn append_invoked_skill(
     let call_id = crate::session_id::generate_session_id(None);
     let arguments = json!({"name": invoked.name}).to_string();
     messages.push(ModelMessage::Assistant {
+        message_id: None,
+        reasoning_message_id: None,
         content: String::new(),
         reasoning: None,
         reasoning_signature: None,

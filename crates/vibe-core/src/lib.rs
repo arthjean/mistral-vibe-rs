@@ -22,6 +22,7 @@ pub mod experiments;
 #[cfg(test)]
 mod experiments_parity_tests;
 pub mod extensions;
+pub mod feedback;
 pub mod http_trust;
 pub mod identity;
 pub mod images;
@@ -31,6 +32,8 @@ pub mod mcp;
 pub mod middleware;
 pub mod observability;
 pub mod parity;
+pub mod path_mentions;
+pub mod path_resources;
 pub mod platform;
 pub mod policy;
 pub mod process;

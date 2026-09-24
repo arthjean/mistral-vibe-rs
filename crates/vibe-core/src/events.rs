@@ -46,6 +46,14 @@ pub struct EventEnvelope {
 pub enum EngineEvent {
     UserMessage {
         content: String,
+        /// The identifier the client gave the message, which the entry takes
+        /// as its own. Reference `UserMessageEvent.message_id`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        message_id: Option<String>,
+        /// The images and resources the operator attached, which the entry
+        /// shows after the text. Reference `project_message_content`.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        attachments: Vec<PublicContentBlock>,
     },
     UserSteer {
         content: String,
@@ -56,9 +64,31 @@ pub enum EngineEvent {
     },
     ModelText {
         text: String,
+        /// The identifier of the assistant message this text belongs to,
+        /// which the entry the first chunk opens takes as its own. Reference
+        /// `LLMMessage.message_id`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        message_id: Option<String>,
     },
     ModelReasoning {
         text: String,
+        /// Reference `LLMMessage.reasoning_message_id`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        message_id: Option<String>,
+    },
+    /// A call the model named, before its arguments are read.
+    ToolCallAnnounced {
+        call_id: String,
+        name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        remote: Option<RemoteToolOrigin>,
+    },
+    /// A call naming no tool this turn can run, opened only to be settled by
+    /// the failed result that follows. Reference `FailedToolCall`
+    /// (`vibe/core/llm/format.py`).
+    ToolCallUnresolved {
+        call_id: String,
+        name: String,
     },
     ToolCall {
         call_id: String,
@@ -91,6 +121,10 @@ pub enum EngineEvent {
         is_error: bool,
         #[serde(default)]
         cancelled: bool,
+        /// The call never ran: its approval was refused. Reference
+        /// `ToolResultEvent.skipped`.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        skipped: bool,
     },
     CallbackRequested {
         callback_id: String,
@@ -553,8 +587,24 @@ pub enum ModelMessage {
         /// flag existed loads as operator-authored, which is what it was.
         #[serde(default)]
         injected: bool,
+        /// The identity the message's public entry carries, kept so a reload
+        /// publishes the entry under the identifier it had live. Reference
+        /// `LLMMessage.message_id`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        message_id: Option<String>,
+        /// The images and resources the operator attached, kept so a reload
+        /// shows them. Reference `LLMMessage.images` and `resources`.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        attachments: Vec<PublicContentBlock>,
     },
     Assistant {
+        /// Reference `LLMMessage.message_id`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        message_id: Option<String>,
+        /// Reference `LLMMessage.reasoning_message_id`: the identity of the
+        /// reasoning entry this message's reasoning published.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reasoning_message_id: Option<String>,
         content: String,
         #[serde(default)]
         reasoning: Option<String>,
@@ -579,6 +629,8 @@ impl ModelMessage {
         Self::User {
             content: content.into(),
             injected: false,
+            message_id: None,
+            attachments: Vec::new(),
         }
     }
 
@@ -589,6 +641,8 @@ impl ModelMessage {
         Self::User {
             content: content.into(),
             injected: true,
+            message_id: None,
+            attachments: Vec::new(),
         }
     }
 
@@ -816,6 +870,7 @@ mod tests {
                 content: "steering a turn that never started".to_owned(),
             },
             EngineEvent::ModelText {
+                message_id: None,
                 text: "text with no turn".to_owned(),
             },
             EngineEvent::Title {
@@ -833,6 +888,8 @@ mod tests {
         apply(
             &mut reducer,
             EngineEvent::UserMessage {
+                attachments: Vec::new(),
+                message_id: None,
                 content: "start".to_owned(),
             },
         )
@@ -876,6 +933,7 @@ mod tests {
                 duration_ms: 1,
                 is_error: false,
                 cancelled: false,
+                skipped: false,
             },
         )
         .expect_err("a result without its call is refused");
@@ -960,6 +1018,8 @@ mod tests {
                 .apply(&event(
                     1,
                     EngineEvent::UserMessage {
+                        attachments: Vec::new(),
+                        message_id: None,
                         content: "hello".to_owned(),
                     },
                 ))
@@ -972,6 +1032,7 @@ mod tests {
                 .apply(&event(
                     1,
                     EngineEvent::ModelText {
+                        message_id: None,
                         text: "duplicate".to_owned(),
                     },
                 ))
@@ -987,6 +1048,7 @@ mod tests {
             working_directory: None,
             event_id: 1,
             event: EngineEvent::ModelText {
+                message_id: None,
                 text: "foreign duplicate".to_owned(),
             },
         };
@@ -1000,6 +1062,7 @@ mod tests {
             reducer.apply(&event(
                 3,
                 EngineEvent::ModelText {
+                    message_id: None,
                     text: "gap".to_owned(),
                 }
             )),
@@ -1022,6 +1085,7 @@ mod tests {
             working_directory: None,
             event_id: 1,
             event: EngineEvent::ModelText {
+                message_id: None,
                 text: "wrong".to_owned(),
             },
         };
@@ -1035,6 +1099,7 @@ mod tests {
             reducer.apply(&event(
                 1,
                 EngineEvent::ModelText {
+                    message_id: None,
                     text: "illegal".to_owned(),
                 }
             )),
@@ -1050,6 +1115,8 @@ mod tests {
             event(
                 1,
                 EngineEvent::UserMessage {
+                    attachments: Vec::new(),
+                    message_id: None,
                     content: "ship it".to_owned(),
                 },
             ),
@@ -1109,6 +1176,8 @@ mod tests {
             event(
                 1,
                 EngineEvent::UserMessage {
+                    attachments: Vec::new(),
+                    message_id: None,
                     content: "compact".to_owned(),
                 },
             ),
@@ -1180,6 +1249,8 @@ mod tests {
             event(
                 1,
                 EngineEvent::UserMessage {
+                    attachments: Vec::new(),
+                    message_id: None,
                     content: "compact".to_owned(),
                 },
             ),
@@ -1217,6 +1288,8 @@ mod tests {
             .apply(&event(
                 1,
                 EngineEvent::UserMessage {
+                    attachments: Vec::new(),
+                    message_id: None,
                     content: "compact".to_owned(),
                 },
             ))
@@ -1253,6 +1326,8 @@ mod tests {
             event(
                 1,
                 EngineEvent::UserMessage {
+                    attachments: Vec::new(),
+                    message_id: None,
                     content: "clear it".to_owned(),
                 },
             ),
@@ -1300,6 +1375,8 @@ mod tests {
             event(
                 1,
                 EngineEvent::UserMessage {
+                    attachments: Vec::new(),
+                    message_id: None,
                     content: "delegate".to_owned(),
                 },
             ),
@@ -1338,6 +1415,7 @@ mod tests {
                     duration_ms: 1,
                     is_error: false,
                     cancelled: false,
+                    skipped: false,
                 },
             ),
         ] {
@@ -1362,12 +1440,15 @@ mod tests {
             (
                 1,
                 EngineEvent::UserMessage {
+                    attachments: Vec::new(),
+                    message_id: None,
                     content: "go".to_owned(),
                 },
             ),
             (
                 2,
                 EngineEvent::ModelText {
+                    message_id: None,
                     text: "thinking".to_owned(),
                 },
             ),
@@ -1407,6 +1488,8 @@ mod tests {
     #[test]
     fn public_projection_omits_private_reasoning_signature() {
         let private = ModelMessage::Assistant {
+            message_id: None,
+            reasoning_message_id: None,
             content: "answer".to_owned(),
             reasoning: Some("private chain".to_owned()),
             reasoning_signature: Some("provider-signature".to_owned()),
@@ -1421,6 +1504,8 @@ mod tests {
             .apply(&event(
                 1,
                 EngineEvent::UserMessage {
+                    attachments: Vec::new(),
+                    message_id: None,
                     content: "question".to_owned(),
                 },
             ))
@@ -1429,6 +1514,7 @@ mod tests {
             .apply(&event(
                 2,
                 EngineEvent::ModelReasoning {
+                    message_id: None,
                     text: "summary".to_owned(),
                 },
             ))
@@ -1453,6 +1539,8 @@ mod tests {
             .apply(&event(
                 1,
                 EngineEvent::UserMessage {
+                    attachments: Vec::new(),
+                    message_id: None,
                     content: "go".to_owned(),
                 },
             ))
@@ -1493,6 +1581,7 @@ mod tests {
             duration_ms: 4,
             is_error,
             cancelled: false,
+            skipped: false,
         }
     }
 
@@ -1540,6 +1629,8 @@ mod tests {
             .apply(&event(
                 1,
                 EngineEvent::UserMessage {
+                    attachments: Vec::new(),
+                    message_id: None,
                     content: "go".to_owned(),
                 },
             ))

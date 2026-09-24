@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 
-use vibe_core::images::ImageFormat;
+use crate::images::ImageFormat;
 
 #[must_use]
 pub fn normalize_pasted_text(pasted: &str) -> String {
@@ -16,7 +16,7 @@ pub fn normalize_pasted_text(pasted: &str) -> String {
     rewrite_bare_image_paths(pasted)
 }
 
-pub(super) fn mention_values(text: &str) -> Vec<String> {
+pub fn mention_values(text: &str) -> Vec<String> {
     let mut values = Vec::new();
     let mut cursor = 0usize;
     while cursor < text.len() {
@@ -40,11 +40,11 @@ pub(super) fn mention_values(text: &str) -> Vec<String> {
     values
 }
 
-pub(super) fn resolve_candidate(workspace: &Path, candidate: &str) -> Option<PathBuf> {
+pub fn resolve_candidate(workspace: &Path, candidate: &str) -> Option<PathBuf> {
     fs::canonicalize(candidate_path(workspace, candidate)).ok()
 }
 
-pub(super) fn resolve_owned_candidate(
+pub fn resolve_owned_candidate(
     workspace: &Path,
     candidate: &str,
     is_tracked: impl Fn(&Path) -> bool,

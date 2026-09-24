@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- Serve editors over ACP the way the reference agent does. `vibe-acp`
+  answers every standard method, including `session/resume`, forking at a
+  message and `session/close`, with the reference's validation errors, streams
+  updates projected from the session history, serves `/retry`, `/leanstall`
+  and `/unleanstall`, asks `ask_user_question` through form elicitation, and
+  routes the loops, connectors, identity, account, voice, review, rewind,
+  trust, project links, log level and telemetry extensions. Its terminal
+  sign-in relaunches `vibe-acp --setup`.
+
+- Read the files a prompt mentions with `@` through `read_file` before the
+  first model call, keep attached images under the session's `attachments`
+  directory, and show both in the user's message. A refusal without a reason
+  now ends the turn, a resumed session ends on a checkpoint, and a message
+  keeps its identity after the session is reloaded.
+
+- Ship the reference's default models: `devstral-small` is gone, and an
+  incomplete override of it left in a configuration is dropped. The default
+  agent is `accept-edits`, and `default` is migrated to `ask` wherever a
+  configuration names it.
+
 - Accept `--experimental-harness`, `--legacy-harness` and `--smart-approve`.
   This build runs the legacy harness only, so a request for the Unified
   Harness falls back to it and says so at startup and on `config/read`, which

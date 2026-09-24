@@ -1,8 +1,9 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
-use serde_json::Value;
+use serde_json::{Value, json};
+use sha1::{Digest, Sha1};
 use vibe_core::images::{ImageFormat, MAX_IMAGE_BYTES, read_image, validate_image_size};
 use vibe_core::provider::ImageInput;
 
@@ -124,6 +125,87 @@ async fn encode_file_image(source: &Value, media_type: &str) -> Result<String, D
         )));
     }
     Ok(BASE64_STANDARD.encode(image.bytes))
+}
+
+/// The non-text blocks of a turn's input as its user entry keeps them.
+///
+/// An inline image is written once under the session's `attachments`
+/// directory, named by the SHA-1 of its bytes, and the entry points at that
+/// file instead of carrying the bytes. Without a session directory the image
+/// stays inline. Reference `snapshot_image_bytes`
+/// (`vibe/core/session/image_snapshot.py`).
+pub(crate) async fn snapshot_attachments(
+    input: &[PublicContentBlock],
+    session_dir: Option<&Path>,
+) -> Result<Vec<PublicContentBlock>, DriverError> {
+    let mut attachments = Vec::new();
+    for block in input {
+        match block {
+            PublicContentBlock::Text { .. } => {}
+            PublicContentBlock::Image { attachment } => {
+                let snapshot = match session_dir {
+                    Some(session_dir) => snapshot_inline_image(attachment, session_dir).await?,
+                    None => None,
+                };
+                attachments.push(PublicContentBlock::Image {
+                    attachment: snapshot.unwrap_or_else(|| attachment.clone()),
+                });
+            }
+            PublicContentBlock::Resource { .. } => attachments.push(block.clone()),
+        }
+    }
+    Ok(attachments)
+}
+
+async fn snapshot_inline_image(
+    attachment: &Value,
+    session_dir: &Path,
+) -> Result<Option<Value>, DriverError> {
+    let Some(source) = attachment.get("source") else {
+        return Ok(None);
+    };
+    if source.get("kind").and_then(Value::as_str) != Some("inline") {
+        return Ok(None);
+    }
+    let media_type = attachment_media_type(attachment)?;
+    let extension = match media_type {
+        "image/png" => ".png",
+        "image/jpeg" => ".jpg",
+        "image/gif" => ".gif",
+        "image/webp" => ".webp",
+        other => {
+            return Err(DriverError::ImageAttachment(format!(
+                "unsupported image MIME type `{other}`"
+            )));
+        }
+    };
+    let bytes = BASE64_STANDARD
+        .decode(
+            source
+                .get("data")
+                .and_then(Value::as_str)
+                .unwrap_or_default(),
+        )
+        .map_err(|error| DriverError::ImageAttachment(error.to_string()))?;
+    validate_image_size(bytes.len())
+        .map_err(|error| DriverError::ImageAttachment(error.to_string()))?;
+    let digest = Sha1::digest(&bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    let directory = session_dir.join("attachments");
+    let path = directory.join(format!("{digest}{extension}"));
+    let io_error = |error: std::io::Error| DriverError::ImageAttachment(error.to_string());
+    tokio::fs::create_dir_all(&directory)
+        .await
+        .map_err(io_error)?;
+    if !tokio::fs::try_exists(&path).await.map_err(io_error)? {
+        tokio::fs::write(&path, &bytes).await.map_err(io_error)?;
+    }
+    let path = tokio::fs::canonicalize(&path).await.map_err(io_error)?;
+    let mut snapshot = attachment.clone();
+    snapshot["source"] = json!({"kind": "file", "path": path.to_string_lossy()});
+    Ok(Some(snapshot))
 }
 
 fn attachment_media_type(attachment: &Value) -> Result<&str, DriverError> {

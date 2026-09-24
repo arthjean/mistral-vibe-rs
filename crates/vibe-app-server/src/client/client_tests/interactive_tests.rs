@@ -317,6 +317,7 @@ async fn interactive_approval_callback_returns_the_exact_policy_decision() {
                     "cargo test",
                 )],
                 rationale: "shell command requires approval".to_owned(),
+                call_id: None,
             })
             .await
     });

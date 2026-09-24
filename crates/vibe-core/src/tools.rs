@@ -181,6 +181,22 @@ pub struct ToolExecutionOutput {
     pub display: Value,
     #[serde(default)]
     pub chunks: Vec<String>,
+    /// Set when the call never ran because its approval was refused.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skip: Option<ToolSkip>,
+    /// Set when the answer the call waited on was refused, which fails the
+    /// whole turn with this message. Reference `CallbackRejectedError`
+    /// (`vibe/app_server/_turns.py`) raises out of the tool and ends the turn.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turn_failure: Option<String>,
+}
+
+/// A call the user declined. Reference `ToolResultEvent.skipped`: the reason
+/// is what the model reads, and a decline that gave no reason cancels the turn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolSkip {
+    pub cancelled: bool,
 }
 
 impl ToolExecutionOutput {
@@ -197,6 +213,8 @@ impl ToolExecutionOutput {
             model_text: text,
             display: Value::Null,
             chunks: Vec::new(),
+            skip: None,
+            turn_failure: None,
         }
     }
 
@@ -214,6 +232,8 @@ impl ToolExecutionOutput {
             model_text: model_text.into(),
             display: Value::Null,
             chunks: Vec::new(),
+            skip: None,
+            turn_failure: None,
         }
     }
 
@@ -747,6 +767,12 @@ impl ToolExecutor for ToolRegistry {
         Self::remote_origin(self, name)
     }
 
+    fn publishes(&self, name: &str) -> bool {
+        self.tools
+            .read()
+            .is_ok_and(|tools| tools.contains_key(name))
+    }
+
     fn execute<'a>(&'a self, name: &'a str, arguments: &'a str) -> ToolFuture<'a> {
         Box::pin(async move {
             let arguments = serde_json::from_str(arguments)
@@ -769,19 +795,35 @@ impl ToolExecutor for ToolRegistry {
         arguments: &'a str,
         output: ToolStreamSink,
     ) -> ToolFuture<'a> {
+        self.execute_call("", name, arguments, output)
+    }
+
+    fn execute_call<'a>(
+        &'a self,
+        call_id: &'a str,
+        name: &'a str,
+        arguments: &'a str,
+        output: ToolStreamSink,
+    ) -> ToolFuture<'a> {
         Box::pin(async move {
             let arguments = serde_json::from_str(arguments)
                 .map_err(|error| format!("invalid tool arguments: {error}"))?;
             self.invoke_stream(
                 name,
                 ToolInvocation {
-                    call_id: String::new(),
+                    call_id: call_id.to_owned(),
                     arguments,
                 },
                 Some(output),
             )
             .await
-            .map_err(|error| error.to_string())
+            .or_else(|error| match error {
+                ToolError::TurnFailed(message) => Ok(ToolExecutionOutput {
+                    turn_failure: Some(message.clone()),
+                    ..ToolExecutionOutput::text(message)
+                }),
+                error => Err(error.to_string()),
+            })
         })
     }
 }
@@ -797,6 +839,9 @@ pub enum RegistrationOutcome {
 pub enum ToolError {
     #[error("tool registry lock is poisoned")]
     RegistryPoisoned,
+    /// The answer the call waited on was refused, which fails the turn.
+    #[error("{0}")]
+    TurnFailed(String),
     #[error("invalid tool name `{0}`")]
     InvalidName(String),
     #[error("tool `{name}` is published by two sources: {existing}, {incoming}")]
@@ -1032,6 +1077,8 @@ mod tests {
                   -> OwnedToolHandlerFuture {
                 Box::pin(async move {
                     Ok(ToolExecutionOutput {
+                        skip: None,
+                        turn_failure: None,
                         typed_result: json!({"content": content}),
                         model_text: content.to_owned(),
                         display: json!({"kind": "read"}),
