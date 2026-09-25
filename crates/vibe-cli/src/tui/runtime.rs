@@ -10,7 +10,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::{Value, json};
-use vibe_app_server::client::{HeadlessService, LiveTurnDriver, PublicDispatch};
+use vibe_app_server::client::{
+    HeadlessService, LiveTurnDriver, PublicDispatch, PublicNotification,
+};
 use vibe_app_server::workspace::WorkspaceService;
 use vibe_core::telemetry::TelemetryRecord;
 use vibe_core::telemetry::records::{ProjectPicker, TeleportTracker};
@@ -107,7 +109,9 @@ pub(super) enum UiOperation {
 }
 
 pub(super) struct UiOperationCompletion {
-    pub(super) generation: u64,
+    /// The interactive slot the call held, or none for a call that ran beside
+    /// it (see [`schedule_ui_background`]).
+    pub(super) generation: Option<u64>,
     pub(super) operation: UiOperation,
     pub(super) result: Result<PublicDispatch, String>,
 }
@@ -165,7 +169,68 @@ pub(super) fn schedule_ui_call(
             .map_err(|_| "Interactive operation timed out".to_owned())
             .and_then(|result| result.map_err(|error| error.to_string()));
         let _ = sender.send(UiOperationCompletion {
-            generation,
+            generation: Some(generation),
+            operation,
+            result,
+        });
+    });
+    true
+}
+
+/// How long a call run beside the interactive slot may take: past the five
+/// minutes the MCP login waits on the browser for.
+const BACKGROUND_CALL_LIMIT: Duration = Duration::from_secs(330);
+
+/// Runs `method` beside the interactive slot, for a call that waits on the
+/// operator for minutes and must not hold back every other interaction.
+///
+/// Each notification `progress` maps to an operation is delivered as it is
+/// published, carrying that one notification; the answer is delivered as
+/// `operation`. Neither goes through the generic notification rendering: the
+/// operations own what they carry.
+pub(super) fn schedule_ui_background(
+    runtime: &mut InteractiveRuntime,
+    method: &str,
+    mut params: Value,
+    progress: impl Fn(&PublicNotification) -> Option<UiOperation> + Send + Sync + 'static,
+    operation: UiOperation,
+    state: &mut TuiState,
+) -> bool {
+    let Some(fields) = params.as_object_mut() else {
+        state.push_diagnostic("Interactive operation parameters must be an object");
+        return false;
+    };
+    fields
+        .entry("sessionId")
+        .or_insert_with(|| json!(runtime.session_id));
+    let pending = match runtime.service.begin_public_call(method, params) {
+        Ok(pending) => pending,
+        Err(error) => {
+            state.push_diagnostic(error.to_string());
+            return false;
+        }
+    };
+    let sender = runtime.ui_operation_sender.clone();
+    let live = sender.clone();
+    let pending = pending.with_listener(Arc::new(move |notification: PublicNotification| {
+        if let Some(operation) = progress(&notification) {
+            let _ = live.send(UiOperationCompletion {
+                generation: None,
+                operation,
+                result: Ok(PublicDispatch {
+                    result: BTreeMap::new(),
+                    notifications: vec![notification],
+                }),
+            });
+        }
+    }));
+    tokio::spawn(async move {
+        let result = tokio::time::timeout(BACKGROUND_CALL_LIMIT, pending.complete())
+            .await
+            .map_err(|_| "Interactive operation timed out".to_owned())
+            .and_then(|result| result.map_err(|error| error.to_string()));
+        let _ = sender.send(UiOperationCompletion {
+            generation: None,
             operation,
             result,
         });
@@ -196,7 +261,7 @@ where
             notifications: Vec::new(),
         });
         let _ = sender.send(UiOperationCompletion {
-            generation,
+            generation: Some(generation),
             operation,
             result,
         });
@@ -212,12 +277,14 @@ pub(super) fn apply_ui_operation_completion(
     let Some(runtime) = runtime.as_mut() else {
         return;
     };
-    if runtime.active_ui_operation != Some(completion.generation) {
-        return;
-    }
-    runtime.active_ui_operation = None;
-    if let Ok(dispatch) = &completion.result {
-        apply_public_notifications(dispatch, runtime, state);
+    if let Some(generation) = completion.generation {
+        if runtime.active_ui_operation != Some(generation) {
+            return;
+        }
+        runtime.active_ui_operation = None;
+        if let Ok(dispatch) = &completion.result {
+            apply_public_notifications(dispatch, runtime, state);
+        }
     }
     match completion.operation {
         UiOperation::Mcp(operation) => {

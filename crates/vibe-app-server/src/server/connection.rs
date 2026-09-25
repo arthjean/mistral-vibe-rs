@@ -381,6 +381,9 @@ impl ServerConnection {
             "turn/interrupt" => self.turn_interrupt(request),
             "session/context/inject" => self.context_inject(request),
             "callback/respond" => self.callback_respond(request),
+            method if crate::resources::mcp_catalog::handles(method) => {
+                self.mcp_catalog_request(request)
+            }
             method if RESOURCE_METHODS.contains(&method) => self.resource_request(request),
             method if WORKSPACE_METHODS.contains(&method) => self.workspace_request(request),
             method if PROJECTS_METHODS.contains(&method) => self.projects_request(request),
@@ -537,6 +540,50 @@ impl ServerConnection {
             .projects
             .dispatch(&request.method, &request.params)?;
         Ok(projects_dispatch_batch(request.id, dispatch))
+    }
+
+    /// Reference `MCPCatalogService.dispatch`: the parameters are validated
+    /// and the target resolved here, against the sessions this connection
+    /// holds, and the call itself runs deferred.
+    fn mcp_catalog_request(&mut self, request: ServerRequest) -> DispatchBatch {
+        let params = request
+            .params
+            .iter()
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect();
+        let call = match crate::resources::mcp_catalog::parse(&request.method, &params) {
+            Ok(call) => call,
+            Err(error) => return catalog_error_batch(request.id, error),
+        };
+        let target = {
+            let sessions = match self.server.lock_sessions() {
+                Ok(sessions) => sessions,
+                Err(error) => return internal_error_batch(request.id, &error),
+            };
+            let attached = |session_id: &str| {
+                sessions
+                    .key(session_id)
+                    .is_some_and(|key| self.attached_sessions.contains(key))
+            };
+            crate::resources::mcp_catalog::target(
+                &call,
+                &attached,
+                !self.attached_sessions.is_empty(),
+            )
+        };
+        match target {
+            Ok(target) => DispatchBatch {
+                outbound: Vec::new(),
+                deferred: vec![DeferredWork::McpCatalog {
+                    request_id: request.id,
+                    call,
+                    target,
+                    publish: !self.attached_sessions.is_empty(),
+                }],
+                close_after_flush: false,
+            },
+            Err(error) => catalog_error_batch(request.id, error),
+        }
     }
 
     fn resource_request(&mut self, request: ServerRequest) -> DispatchBatch {

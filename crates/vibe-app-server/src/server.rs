@@ -40,7 +40,8 @@ use crate::projects::{
     LoopFire, PROJECTS_METHODS, ProjectsDispatch, ProjectsService, ProjectsServiceError,
 };
 use crate::resources::{
-    BACKEND_RESOURCE_METHODS, CoreResourceBackend, RESOURCE_METHODS, ResourceBackend,
+    BACKEND_RESOURCE_METHODS, CoreResourceBackend, McpCatalogCall, McpCatalogError,
+    McpCatalogNotify, McpCatalogOutcome, McpCatalogTarget, RESOURCE_METHODS, ResourceBackend,
     ResourceBackendCommand, ResourceBackendRequest, ResourceDispatch, ResourceError,
     ResourceService, ResourceSession, ResourceSignals,
 };
@@ -116,6 +117,8 @@ pub const EMITTED_NOTIFICATIONS: &[&str] = &[
     "history/entryAdded",
     "history/entryUpdated",
     "mcp/authUrl",
+    "mcp_catalog/authRequired",
+    "mcp_catalog/authUrl",
     "runtime/updated",
     "session/compacted",
     "session/contextCleared",
@@ -188,12 +191,18 @@ const IMPLEMENTED_METHODS: &[&str] = &[
     "feedback/record",
     "feedback/shouldShow",
     "mcp/add",
-    "mcp/auth/complete",
     "mcp/login",
     "mcp/logout",
     "mcp/read",
     "mcp/refresh",
     "mcp/toggle",
+    "mcp_catalog/add",
+    "mcp_catalog/login",
+    "mcp_catalog/logout",
+    "mcp_catalog/read",
+    "mcp_catalog/refresh",
+    "mcp_catalog/remove",
+    "mcp_catalog/toggle",
     "narration/summarize",
     "review/approve",
     "review/baseline",
@@ -367,6 +376,15 @@ pub enum DeferredWork {
         session_id: String,
         configs: Vec<McpServerConfig>,
     },
+    /// One MCP catalog call. `publish` says whether a notification it raises
+    /// mid-flight reaches the client: the reference publishes nothing to a
+    /// connection no session is attached to.
+    McpCatalog {
+        request_id: RequestId,
+        call: McpCatalogCall,
+        target: McpCatalogTarget,
+        publish: bool,
+    },
     CompactSession {
         request_id: RequestId,
         session_id: String,
@@ -376,6 +394,22 @@ pub enum DeferredWork {
         session_id: String,
         generation: u64,
     },
+}
+
+/// Where a catalog call's mid-flight notifications go: framed and handed to
+/// `deliver` when `publish` holds, dropped otherwise.
+pub fn mcp_catalog_notifier(
+    publish: bool,
+    deliver: impl Fn(Vec<u8>) + Send + Sync + 'static,
+) -> McpCatalogNotify {
+    Arc::new(move |method, params| {
+        if publish {
+            deliver(encode_notification(
+                notification_method(method),
+                params.into_iter().collect(),
+            ));
+        }
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

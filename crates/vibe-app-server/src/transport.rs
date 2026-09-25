@@ -341,6 +341,27 @@ where
             });
             Ok(Vec::new())
         }
+        DeferredWork::McpCatalog {
+            request_id,
+            call,
+            target,
+            publish,
+        } => {
+            let server = server.clone();
+            let live = events.clone();
+            // A sign-in hands out its URL while the call is still waiting on
+            // the browser, so it goes out through the loop at once.
+            let notify = crate::server::mcp_catalog_notifier(publish, move |frame| {
+                let _ = live.send(ServeEvent::Frame(frame));
+            });
+            spawn_frames(tasks, events.clone(), async move {
+                Ok(server
+                    .execute_mcp_catalog(request_id, call, target, notify)
+                    .await
+                    .outbound)
+            });
+            Ok(Vec::new())
+        }
         DeferredWork::CloudRequest {
             request_id,
             method,
@@ -552,6 +573,7 @@ async fn fail_deferred(server: &AppServer, deferred: &[DeferredWork], message: &
             | DeferredWork::InjectContext { .. }
             | DeferredWork::ResolveCallback { .. }
             | DeferredWork::ResourceRequest { .. }
+            | DeferredWork::McpCatalog { .. }
             | DeferredWork::CloudRequest { .. }
             | DeferredWork::ConfigureMcp { .. } => {}
             DeferredWork::CompactSession {

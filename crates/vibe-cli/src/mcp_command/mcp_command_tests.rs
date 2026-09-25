@@ -13,7 +13,8 @@ use tempfile::TempDir;
 use vibe_core::auth::{KeyringBackend, KeyringFailure};
 
 use super::{LoginFuture, McpEnvironment, McpOAuthLogin, run};
-use vibe_core::mcp::McpServerConfig;
+use vibe_core::auth::AuthUrlSink;
+use vibe_core::mcp::McpAuthenticationService;
 
 /// A credential store that records what it was asked to delete, and can be
 /// told to refuse.
@@ -52,7 +53,12 @@ impl SharedKeyring {
 
 impl KeyringBackend for SharedKeyring {
     fn get(&self, _service: &str, _account: &str) -> Result<Option<String>, KeyringFailure> {
-        Ok(None)
+        // A host with no store fails every read, which is how the reference
+        // learns there is nothing to delete.
+        match &self.0.refusal {
+            Some(KeyringFailure::NoBackend) => Err(KeyringFailure::NoBackend),
+            _ => Ok(None),
+        }
     }
 
     fn set(&self, _service: &str, _account: &str, _secret: &str) -> Result<(), KeyringFailure> {
@@ -122,16 +128,16 @@ impl SharedLogin {
 }
 
 impl McpOAuthLogin for SharedLogin {
-    fn begin<'a>(&'a self, config: &'a McpServerConfig) -> LoginFuture<'a, String> {
+    fn login<'a>(
+        &'a self,
+        _authentication: &'a McpAuthenticationService,
+        name: &'a str,
+        on_url: AuthUrlSink,
+    ) -> LoginFuture<'a, ()> {
         Box::pin(async move {
-            self.record(&format!("begin {}", config.alias));
-            self.0.begin.clone()
-        })
-    }
-
-    fn finish<'a>(&'a self, config: &'a McpServerConfig) -> LoginFuture<'a, ()> {
-        Box::pin(async move {
-            self.record(&format!("finish {}", config.alias));
+            self.record(&format!("login {name}"));
+            on_url(self.0.begin.clone()?).await;
+            self.record(&format!("finish {name}"));
             self.0.finish.clone().map_or(Ok(()), Err)
         })
     }
@@ -146,12 +152,13 @@ impl McpOAuthLogin for SharedLogin {
 struct UnusedLogin;
 
 impl McpOAuthLogin for UnusedLogin {
-    fn begin<'a>(&'a self, _config: &'a McpServerConfig) -> LoginFuture<'a, String> {
+    fn login<'a>(
+        &'a self,
+        _authentication: &'a McpAuthenticationService,
+        _name: &'a str,
+        _on_url: AuthUrlSink,
+    ) -> LoginFuture<'a, ()> {
         Box::pin(async { Err("this case must not start a login".to_owned()) })
-    }
-
-    fn finish<'a>(&'a self, _config: &'a McpServerConfig) -> LoginFuture<'a, ()> {
-        Box::pin(async { Err("this case must not wait on a login".to_owned()) })
     }
 
     fn open(&self, _url: &str) -> Result<(), String> {
@@ -195,7 +202,7 @@ fn drive_with(
     let environment = McpEnvironment::for_home(
         vibe_home,
         working_directory,
-        Box::new(keyring.clone()),
+        std::sync::Arc::new(keyring.clone()),
         Box::new(login),
     );
     let mut stdout = Vec::new();
@@ -247,13 +254,6 @@ fn user_configuration(vibe_home: &Path) -> String {
     std::fs::read_to_string(vibe_home.join("config.toml")).unwrap_or_default()
 }
 
-/// The account naming is vibe-core's, so the test asks it rather than
-/// restating the fingerprint.
-fn expected_account(resource: &str) -> String {
-    let resource = url::Url::parse(resource).expect("resource URL");
-    vibe_core::auth::mcp_oauth_account(&resource).expect("account name")
-}
-
 #[test]
 fn a_credential_deletion_that_fails_leaves_the_configuration_entry_in_place() {
     let (_root, vibe_home, workspace) = home_with(OAUTH_SERVER);
@@ -286,12 +286,18 @@ fn a_successful_removal_deletes_the_credential_before_the_entry() {
 
     assert_eq!(outcome.code, 0, "stderr was {}", outcome.stderr);
     assert_eq!(outcome.stdout, "Removed MCP server `remote`.\n");
+    // The account naming is vibe-core's, so the test asks it rather than
+    // restating it.
+    let current = keyring
+        .deletions()
+        .into_iter()
+        .filter(|(service, _)| service == vibe_core::auth::KEYRING_SERVICE)
+        .map(|(_, account)| account)
+        .collect::<Vec<_>>();
     assert_eq!(
-        keyring.deletions().as_slice(),
-        &[(
-            vibe_core::auth::MCP_OAUTH_KEYRING_SERVICE.to_owned(),
-            expected_account("https://mcp.example.com/sse"),
-        )]
+        current,
+        ["tokens", "client_info", "fingerprint"]
+            .map(|kind| vibe_core::auth::mcp_oauth_username("remote", kind))
     );
     assert!(
         !user_configuration(&vibe_home).contains("name = \"remote\""),
@@ -1006,17 +1012,17 @@ fn an_oauth_add_persists_before_it_logs_in_and_narrates_the_url() {
         outcome.stdout,
         concat!(
             "Added MCP server `docs`.\n",
-            "Authorize the server at this URL:\n",
+            "Open this URL in your browser:\n",
             "\n",
             "  https://auth.example.com/authorize?state=parity\n",
-            "OAuth login succeeded.\n",
+            "OAuth login completed.\n",
         )
     );
     assert!(outcome.stderr.is_empty(), "{}", outcome.stderr);
     assert_eq!(
         login.calls(),
         vec![
-            "begin docs".to_owned(),
+            "login docs".to_owned(),
             "open https://auth.example.com/authorize?state=parity".to_owned(),
             "finish docs".to_owned(),
         ]
@@ -1045,9 +1051,9 @@ fn a_browser_that_will_not_open_is_reported_and_the_login_continues() {
     assert_eq!(outcome.code, 0, "stderr was {}", outcome.stderr);
     assert_eq!(
         outcome.stderr,
-        "The browser did not open: this host has no browser launcher\n"
+        "Could not open the browser: this host has no browser launcher\n"
     );
-    assert!(outcome.stdout.ends_with("OAuth login succeeded.\n"));
+    assert!(outcome.stdout.ends_with("OAuth login completed.\n"));
     // The URL reached stdout before the browser was offered it, which is why
     // a host with no launcher can still finish the login by hand.
     assert!(
@@ -1081,7 +1087,7 @@ fn a_login_that_fails_keeps_the_entry_and_exits_one() {
     assert_eq!(
         outcome.stderr,
         concat!(
-            "vibe mcp add: the OAuth login did not finish: ",
+            "vibe mcp add: OAuth login failed: ",
             "the authorization server refused the exchange\n",
             "Run `/mcp login docs` to authenticate.\n",
         )
@@ -1120,10 +1126,10 @@ fn a_login_that_never_starts_still_leaves_the_server_configured() {
     assert!(
         outcome
             .stderr
-            .contains("vibe mcp add: the OAuth login did not finish: "),
+            .contains("vibe mcp add: OAuth login failed: "),
         "{}",
         outcome.stderr
     );
-    assert_eq!(login.calls(), vec!["begin docs".to_owned()]);
+    assert_eq!(login.calls(), vec!["login docs".to_owned()]);
     assert!(user_configuration(&vibe_home).contains("name = \"docs\""));
 }

@@ -46,9 +46,7 @@ pub(in crate::tui) use keys::handle_overlay_key;
 pub(in crate::tui) use keys::handle_remote_project_create_key;
 #[cfg(test)]
 pub(in crate::tui) use live_commands::scheduled_loop;
-pub(in crate::tui) use live_commands::{
-    FollowUp, LOGIN_POLL_ATTEMPTS, LOGIN_POLL_INTERVAL, LiveBackend, run_command,
-};
+pub(in crate::tui) use live_commands::{FollowUp, LiveBackend, run_command};
 pub(in crate::tui) use mcp::{McpEffect, McpPendingOperation, apply_pending_operation};
 pub(super) use mcp::{SystemUrlOpener, UrlOpenerPort, execute_mcp_effect};
 #[cfg(test)]

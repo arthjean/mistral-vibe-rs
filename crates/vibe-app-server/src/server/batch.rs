@@ -87,14 +87,50 @@ pub(super) fn resource_result_batch(
 }
 
 /// The resource methods whose response declares a `RuntimeSnapshot`.
-const RUNTIME_ANSWERS: &[&str] = &[
-    "connectors/refresh",
-    "mcp/add",
-    "mcp/login",
-    "mcp/logout",
-    "mcp/refresh",
-    "mcp/toggle",
-];
+const RUNTIME_ANSWERS: &[&str] = &["connectors/refresh"];
+
+/// Reference `_forward_mcp_authorization`: each accepted requirement is
+/// published, then the runtime it left.
+pub(super) fn auth_required_frames(
+    server: &AppServer,
+    session_id: &str,
+    accepted: &[serde_json::Map<String, Value>],
+) -> Vec<Vec<u8>> {
+    let mut frames = Vec::new();
+    for params in accepted {
+        frames.push(encode_notification(
+            super::notification_method("mcp_catalog/authRequired"),
+            params.clone().into_iter().collect(),
+        ));
+        if let Some(runtime) = server.runtime_snapshot(session_id) {
+            frames.push(encode_notification(
+                "runtime/updated",
+                result_map([("sessionId", json!(session_id)), ("runtime", runtime)]),
+            ));
+        }
+    }
+    frames
+}
+
+/// Answers a refused catalog call: a parameter rejection with its issues,
+/// anything else under its code with no detail.
+pub(super) fn catalog_error_batch(id: RequestId, error: McpCatalogError) -> DispatchBatch {
+    match error {
+        McpCatalogError::Params(issues) => invalid_params_batch(
+            id,
+            ParamsRejection::with_issues(
+                issues
+                    .into_iter()
+                    .map(|issue| InvalidParamsIssue {
+                        path: issue.path,
+                        message: issue.message,
+                    })
+                    .collect(),
+            ),
+        ),
+        McpCatalogError::Refused { code, message } => plain_error_batch(id, code, &message),
+    }
+}
 
 /// The notifications a dispatch's signals publish, in the reference's order.
 pub(super) fn signal_frames(
@@ -102,19 +138,13 @@ pub(super) fn signal_frames(
     session_id: &str,
     signals: &ResourceSignals,
 ) -> Vec<Vec<u8>> {
-    let mut frames = Vec::new();
+    let mut frames = auth_required_frames(server, session_id, &signals.auth_required);
     if signals.runtime_updated
         && let Some(runtime) = server.runtime_snapshot(session_id)
     {
         frames.push(encode_notification(
             "runtime/updated",
             result_map([("sessionId", json!(session_id)), ("runtime", runtime)]),
-        ));
-    }
-    if let Some(auth) = &signals.auth_url {
-        frames.push(encode_notification(
-            "mcp/authUrl",
-            result_map([("name", json!(auth.name)), ("url", json!(auth.url))]),
         ));
     }
     for warning in &signals.warnings {

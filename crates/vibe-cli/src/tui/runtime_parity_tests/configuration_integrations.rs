@@ -313,7 +313,7 @@ fn effect_observation(effect: McpEffect) -> String {
             match kind {
                 IntegrationKind::Connector => calls.push(format!("connectors/refresh:{source}")),
                 IntegrationKind::McpServer => {
-                    calls.push(format!("mcp/auth/complete:{source}"));
+                    calls.push("mcp/refresh".to_owned());
                     if enable_source {
                         calls.push(format!("mcp/toggle:{source}"));
                     }
@@ -560,7 +560,7 @@ fn refresh_and_auth_completion_execute_distinct_effect_contracts() {
     );
     assert_eq!(
         completion,
-        "effect|complete_auth|server|github|-|calls=mcp/auth/complete:github,mcp/toggle:github"
+        "effect|complete_auth|server|github|-|calls=mcp/refresh,mcp/toggle:github"
     );
 }
 

@@ -1,0 +1,3950 @@
+{
+  "note": "Captured by scripts/parity/mcp_catalog.py from the pinned reference's vibe-app-server against vibe-oauth-script-fixture. Scenario inputs, names and digests only: every string the server authored is a length and a SHA-256.",
+  "reference": {
+    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+  },
+  "scenarios": [
+    {
+      "name": "sessionless/reads-need-a-session",
+      "observed": [
+        {
+          "method": "mcp_catalog/read",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "not_found",
+              "data": null,
+              "message": {
+                "prose": 26,
+                "sha256": "f50897d93c846a496e6125a3be39212e7f3b58b79a928a540250b1cddc13dfb8"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp/read",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "not_found",
+              "data": null,
+              "message": {
+                "prose": 26,
+                "sha256": "f50897d93c846a496e6125a3be39212e7f3b58b79a928a540250b1cddc13dfb8"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/read",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 14,
+                      "sha256": "71a96be9e2ce034f704c0b2a745894820fe1a61e86957cf734f99e08e0a2e338"
+                    },
+                    "path": [
+                      "sessionId"
+                    ]
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/refresh",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "not_found",
+              "data": null,
+              "message": {
+                "prose": 26,
+                "sha256": "f50897d93c846a496e6125a3be39212e7f3b58b79a928a540250b1cddc13dfb8"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp/refresh",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "not_found",
+              "data": null,
+              "message": {
+                "prose": 26,
+                "sha256": "f50897d93c846a496e6125a3be39212e7f3b58b79a928a540250b1cddc13dfb8"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/unknown",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "method_not_found",
+              "data": null,
+              "message": {
+                "prose": 37,
+                "sha256": "d12b92037ffa5114d473d4f432cbbc1ceba30fd8e554857e680e5e121698fd41"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp/remove",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "method_not_found",
+              "data": null,
+              "message": {
+                "prose": 28,
+                "sha256": "eb377f0f0054a99d110318c6aa2772dc7cef9c29d293529f3ff96d5325115a08"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp/auth/complete",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "method_not_found",
+              "data": null,
+              "message": {
+                "prose": 35,
+                "sha256": "b713e062df1f1d7f81e450ea5b10d972cba38502547c2e29e8458c1831cd9716"
+              }
+            }
+          }
+        }
+      ],
+      "scenario": {
+        "name": "sessionless/reads-need-a-session",
+        "steps": [
+          {
+            "send": {
+              "method": "mcp_catalog/read",
+              "params": {
+                "sessionId": "missing"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp/read",
+              "params": {
+                "sessionId": "missing"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/read",
+              "params": {}
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/refresh",
+              "params": {
+                "sessionId": "missing"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp/refresh",
+              "params": {
+                "sessionId": "missing"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/unknown",
+              "params": {
+                "sessionId": "missing"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp/remove",
+              "params": {
+                "name": "docs"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp/auth/complete",
+              "params": {
+                "name": "docs",
+                "sessionId": "missing"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "sessionless/add",
+      "observed": [
+        {
+          "method": "mcp_catalog/add",
+          "notifications": [],
+          "response": {
+            "result": {
+              "created": true,
+              "name": "docs",
+              "runtime": null,
+              "url": "https://docs.example/mcp"
+            }
+          }
+        },
+        {
+          "config": {
+            "project": null,
+            "user": [
+              {
+                "auth": {
+                  "scopes": [],
+                  "type": "oauth"
+                },
+                "name": "docs",
+                "transport": "streamable-http",
+                "url": "https://docs.example/mcp"
+              }
+            ]
+          }
+        },
+        {
+          "method": "mcp_catalog/add",
+          "notifications": [],
+          "response": {
+            "result": {
+              "created": false,
+              "name": "docs",
+              "runtime": null,
+              "url": "https://docs.example/mcp"
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/add",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": null,
+              "message": {
+                "prose": 47,
+                "sha256": "cbbeeebd59224e9f5480eb44d067b23f68c8b28e279ffbc75d09cc60cbbc4f58"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/add",
+          "notifications": [],
+          "response": {
+            "result": {
+              "created": true,
+              "name": "docs-example",
+              "runtime": null,
+              "url": "https://docs.example/second"
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/add",
+          "notifications": [],
+          "response": {
+            "result": {
+              "created": true,
+              "name": "Team_Docs",
+              "runtime": null,
+              "url": "https://api.example/v1/mcp"
+            }
+          }
+        },
+        {
+          "method": "mcp/add",
+          "notifications": [],
+          "response": {
+            "result": {
+              "created": true,
+              "name": "legacy",
+              "runtime": null,
+              "url": "https://legacy.example/sse"
+            }
+          }
+        },
+        {
+          "config": {
+            "project": null,
+            "user": [
+              {
+                "auth": {
+                  "scopes": [],
+                  "type": "oauth"
+                },
+                "name": "docs",
+                "transport": "streamable-http",
+                "url": "https://docs.example/mcp"
+              },
+              {
+                "auth": {
+                  "scopes": [],
+                  "type": "oauth"
+                },
+                "name": "docs-example",
+                "transport": "streamable-http",
+                "url": "https://docs.example/second"
+              },
+              {
+                "auth": {
+                  "scopes": [
+                    "read",
+                    "write"
+                  ],
+                  "type": "oauth"
+                },
+                "name": "Team_Docs",
+                "transport": "streamable-http",
+                "url": "https://api.example/v1/mcp"
+              },
+              {
+                "auth": {
+                  "scopes": [],
+                  "type": "oauth"
+                },
+                "name": "legacy",
+                "transport": "http",
+                "url": "https://legacy.example/sse"
+              }
+            ]
+          }
+        }
+      ],
+      "scenario": {
+        "name": "sessionless/add",
+        "steps": [
+          {
+            "send": {
+              "method": "mcp_catalog/add",
+              "params": {
+                "url": "https://docs.example/mcp"
+              }
+            }
+          },
+          {
+            "config": true
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/add",
+              "params": {
+                "url": "https://docs.example/mcp/"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/add",
+              "params": {
+                "name": "other",
+                "url": "https://docs.example/mcp"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/add",
+              "params": {
+                "name": "docs-example",
+                "url": "https://docs.example/second"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/add",
+              "params": {
+                "name": "Team Docs!",
+                "scopes": [
+                  "read",
+                  "write"
+                ],
+                "url": "https://api.example/v1/mcp"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp/add",
+              "params": {
+                "transport": "http",
+                "url": "https://legacy.example/sse"
+              }
+            }
+          },
+          {
+            "config": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "sessionless/add-refusals",
+      "observed": [
+        {
+          "method": "mcp_catalog/add",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": null,
+              "message": {
+                "prose": 126,
+                "sha256": "fb124a47440905e8c4f5e8943e9e5c9d7d6ff84395aaa3723a7a4f09feffb9e5"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/add",
+          "notifications": [],
+          "response": {
+            "result": {
+              "created": true,
+              "name": "docs",
+              "runtime": null,
+              "url": "http://docs.example/mcp"
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/add",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": null,
+              "message": {
+                "prose": 30,
+                "sha256": "b59a808629ccaeb3a1e3583aad63f0eecb87a26358408bb17052d231aaa3afe0"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/add",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": null,
+              "message": {
+                "prose": 37,
+                "sha256": "dde7ce38ec61a4f00910f9dd2e9ddbba3d8ebda487d1e681d6f829d63e1b908c"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/add",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": null,
+              "message": {
+                "prose": 48,
+                "sha256": "249a8787850a56509d38347e98336f298c31fa78c3a9f24cfa5f4aa70dc41dde"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/add",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": null,
+              "message": {
+                "prose": 46,
+                "sha256": "c14ed3dbe73b9c71d7a9101b67ae8b6f5b678d81624f914729e6768e61f3c280"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/add",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 43,
+                      "sha256": "8101ab0606e56eb20c352cc84398b8b62bd71243c45970cf30f208b7682e834e"
+                    },
+                    "path": [
+                      "transport"
+                    ]
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/add",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 30,
+                      "sha256": "43386f74323f11d019208f474707b65e66ce1f7e1ad6741104a25ebcb263aac7"
+                    },
+                    "path": [
+                      "headers"
+                    ]
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/add",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 14,
+                      "sha256": "71a96be9e2ce034f704c0b2a745894820fe1a61e86957cf734f99e08e0a2e338"
+                    },
+                    "path": [
+                      "url"
+                    ]
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            }
+          }
+        },
+        {
+          "config": {
+            "project": null,
+            "user": [
+              {
+                "command": "true",
+                "name": "local",
+                "transport": "stdio"
+              },
+              {
+                "auth": {
+                  "scopes": [],
+                  "type": "oauth"
+                },
+                "name": "docs",
+                "transport": "streamable-http",
+                "url": "http://docs.example/mcp"
+              }
+            ]
+          }
+        }
+      ],
+      "scenario": {
+        "config": "\n[[mcp_servers]]\nname = \"local\"\ntransport = \"stdio\"\ncommand = \"true\"\n",
+        "name": "sessionless/add-refusals",
+        "steps": [
+          {
+            "send": {
+              "method": "mcp_catalog/add",
+              "params": {
+                "url": "http://docs.example/mcp"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/add",
+              "params": {
+                "allowInsecureHttp": true,
+                "url": "http://docs.example/mcp"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/add",
+              "params": {
+                "url": "ftp://docs.example/mcp"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/add",
+              "params": {
+                "url": "not a url"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/add",
+              "params": {
+                "name": "!!!",
+                "url": "https://docs.example/x"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/add",
+              "params": {
+                "name": "local",
+                "url": "https://docs.example/y"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/add",
+              "params": {
+                "transport": "stdio",
+                "url": "https://docs.example/z"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/add",
+              "params": {
+                "headers": {
+                  "x": "y"
+                },
+                "url": "https://docs.example/z"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/add",
+              "params": {}
+            }
+          },
+          {
+            "config": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "sessionless/toggle",
+      "observed": [
+        {
+          "method": "mcp_catalog/toggle",
+          "notifications": [],
+          "response": {
+            "result": {
+              "runtime": null
+            }
+          }
+        },
+        {
+          "config": {
+            "project": null,
+            "user": [
+              {
+                "auth": {
+                  "scopes": [
+                    "read"
+                  ],
+                  "type": "oauth"
+                },
+                "disabled": true,
+                "name": "remote",
+                "transport": "streamable-http",
+                "url": "https://docs.example/mcp"
+              },
+              {
+                "command": "true",
+                "name": "local",
+                "transport": "stdio"
+              }
+            ]
+          }
+        },
+        {
+          "method": "mcp_catalog/toggle",
+          "notifications": [],
+          "response": {
+            "result": {
+              "runtime": null
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/toggle",
+          "notifications": [],
+          "response": {
+            "result": {
+              "runtime": null
+            }
+          }
+        },
+        {
+          "method": "mcp/toggle",
+          "notifications": [],
+          "response": {
+            "result": {
+              "runtime": null
+            }
+          }
+        },
+        {
+          "config": {
+            "project": null,
+            "user": [
+              {
+                "auth": {
+                  "scopes": [
+                    "read"
+                  ],
+                  "type": "oauth"
+                },
+                "disabled": false,
+                "disabled_tools": [
+                  "search"
+                ],
+                "name": "remote",
+                "transport": "streamable-http",
+                "url": "https://docs.example/mcp"
+              },
+              {
+                "command": "true",
+                "disabled_tools": [
+                  "run"
+                ],
+                "name": "local",
+                "transport": "stdio"
+              }
+            ]
+          }
+        },
+        {
+          "method": "mcp_catalog/toggle",
+          "notifications": [],
+          "response": {
+            "result": {
+              "runtime": null
+            }
+          }
+        },
+        {
+          "config": {
+            "project": null,
+            "user": [
+              {
+                "auth": {
+                  "scopes": [
+                    "read"
+                  ],
+                  "type": "oauth"
+                },
+                "disabled": false,
+                "disabled_tools": [],
+                "name": "remote",
+                "transport": "streamable-http",
+                "url": "https://docs.example/mcp"
+              },
+              {
+                "command": "true",
+                "disabled_tools": [
+                  "run"
+                ],
+                "name": "local",
+                "transport": "stdio"
+              }
+            ]
+          }
+        },
+        {
+          "method": "mcp_catalog/toggle",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "not_implemented",
+              "data": null,
+              "message": {
+                "prose": 59,
+                "sha256": "9d9d838786d331b03ee9c39314cb900256903786b06c5ac47609a1ba11929bcb"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/toggle",
+          "notifications": [],
+          "response": {
+            "result": {
+              "runtime": null
+            }
+          }
+        },
+        {
+          "config": {
+            "project": null,
+            "user": [
+              {
+                "auth": {
+                  "scopes": [
+                    "read"
+                  ],
+                  "type": "oauth"
+                },
+                "disabled": false,
+                "disabled_tools": [],
+                "name": "remote",
+                "transport": "streamable-http",
+                "url": "https://docs.example/mcp"
+              },
+              {
+                "command": "true",
+                "disabled_tools": [
+                  "run"
+                ],
+                "name": "local",
+                "transport": "stdio"
+              }
+            ]
+          }
+        },
+        {
+          "method": "mcp_catalog/toggle",
+          "notifications": [],
+          "response": {
+            "result": {
+              "runtime": null
+            }
+          }
+        },
+        {
+          "config": {
+            "project": null,
+            "user": [
+              {
+                "auth": {
+                  "scopes": [
+                    "read"
+                  ],
+                  "type": "oauth"
+                },
+                "disabled": false,
+                "disabled_tools": [],
+                "name": "remote",
+                "transport": "streamable-http",
+                "url": "https://docs.example/mcp"
+              },
+              {
+                "command": "true",
+                "disabled_tools": [
+                  "run"
+                ],
+                "name": "local",
+                "transport": "stdio"
+              }
+            ]
+          }
+        },
+        {
+          "method": "mcp_catalog/toggle",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 39,
+                      "sha256": "0a8baa9dcd0bab9a13b989abb8e21e9e75f444ac557d1d5549f6fe20b218189e"
+                    },
+                    "path": [
+                      "source"
+                    ]
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/toggle",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 14,
+                      "sha256": "71a96be9e2ce034f704c0b2a745894820fe1a61e86957cf734f99e08e0a2e338"
+                    },
+                    "path": [
+                      "source"
+                    ]
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            }
+          }
+        }
+      ],
+      "scenario": {
+        "config": "\n[[mcp_servers]]\nname = \"remote\"\ntransport = \"streamable-http\"\nurl = \"https://docs.example/mcp\"\nauth = { type = \"oauth\", scopes = [\"read\"] }\n\n[[mcp_servers]]\nname = \"local\"\ntransport = \"stdio\"\ncommand = \"true\"\n",
+        "name": "sessionless/toggle",
+        "steps": [
+          {
+            "send": {
+              "method": "mcp_catalog/toggle",
+              "params": {
+                "disabled": true,
+                "name": "remote",
+                "source": "server"
+              }
+            }
+          },
+          {
+            "config": true
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/toggle",
+              "params": {
+                "disabled": false,
+                "name": "remote",
+                "source": "server"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/toggle",
+              "params": {
+                "disabled": true,
+                "name": "remote",
+                "source": "server",
+                "toolName": "search"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp/toggle",
+              "params": {
+                "disabled": true,
+                "name": "local",
+                "source": "server",
+                "toolName": "run"
+              }
+            }
+          },
+          {
+            "config": true
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/toggle",
+              "params": {
+                "disabled": false,
+                "name": "remote",
+                "source": "server",
+                "toolName": "search"
+              }
+            }
+          },
+          {
+            "config": true
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/toggle",
+              "params": {
+                "disabled": true,
+                "name": "remote",
+                "source": "connector"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/toggle",
+              "params": {
+                "disabled": true,
+                "name": "missing",
+                "source": "server"
+              }
+            }
+          },
+          {
+            "config": true
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/toggle",
+              "params": {
+                "disabled": false,
+                "name": "missing",
+                "source": "server",
+                "toolName": "x"
+              }
+            }
+          },
+          {
+            "config": true
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/toggle",
+              "params": {
+                "disabled": true,
+                "name": "remote",
+                "source": "plugin"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/toggle",
+              "params": {
+                "disabled": true,
+                "name": "remote"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "sessionless/remove",
+      "observed": [
+        {
+          "method": "mcp_catalog/remove",
+          "notifications": [],
+          "response": {
+            "result": {
+              "name": "local",
+              "removed": true,
+              "runtime": null
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/remove",
+          "notifications": [],
+          "response": {
+            "result": {
+              "name": "secure",
+              "removed": true,
+              "runtime": null
+            }
+          }
+        },
+        {
+          "keyring": {
+            "mcp-oauth:remote:tokens": {
+              "access_token": "at-1",
+              "expires_at": "<time>",
+              "expires_in": 3600,
+              "refresh_token": "rt-1",
+              "token_type": "Bearer"
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/remove",
+          "notifications": [],
+          "response": {
+            "result": {
+              "name": "missing",
+              "removed": false,
+              "runtime": null
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/remove",
+          "notifications": [],
+          "response": {
+            "result": {
+              "name": "remote",
+              "removed": true,
+              "runtime": null
+            }
+          }
+        },
+        {
+          "config": {
+            "project": null,
+            "user": []
+          }
+        },
+        {
+          "keyring": {}
+        }
+      ],
+      "scenario": {
+        "config": "\n[[mcp_servers]]\nname = \"remote\"\ntransport = \"streamable-http\"\nurl = \"https://docs.example/mcp\"\nauth = { type = \"oauth\", scopes = [\"read\"] }\n\n[[mcp_servers]]\nname = \"local\"\ntransport = \"stdio\"\ncommand = \"true\"\n\n[[mcp_servers]]\nname = \"secure\"\ntransport = \"streamable-http\"\nurl = \"{server:secure}/mcp\"\nauth = { type = \"oauth\", scopes = [], redirect_port = {redirect:secure} }\n",
+        "keyring": {
+          "mcp-oauth:remote:tokens": {
+            "access_token": "at-1",
+            "expires_at": 4102444800.0,
+            "expires_in": 3600,
+            "refresh_token": "rt-1",
+            "token_type": "Bearer"
+          },
+          "mcp-oauth:secure:client_info": {
+            "client_id": "client-1",
+            "redirect_uris": [
+              "http://127.0.0.1:{redirect:secure}/callback"
+            ],
+            "token_endpoint_auth_method": "none"
+          },
+          "mcp-oauth:secure:tokens": {
+            "access_token": "at-1",
+            "expires_at": 4102444800.0,
+            "expires_in": 3600,
+            "refresh_token": "rt-1",
+            "token_type": "Bearer"
+          }
+        },
+        "name": "sessionless/remove",
+        "servers": {
+          "secure": {
+            "mcp": {
+              "path": "/mcp",
+              "token": "at-1",
+              "tools": [
+                {
+                  "description": "Search the docs.\nMatches titles and bodies.",
+                  "inputSchema": {
+                    "type": "object"
+                  },
+                  "name": "search"
+                },
+                {
+                  "description": "Fetch one page",
+                  "inputSchema": {
+                    "type": "object"
+                  },
+                  "name": "fetch"
+                }
+              ]
+            },
+            "routes": {
+              "GET /.well-known/oauth-authorization-server": [
+                {
+                  "json": {
+                    "authorization_endpoint": "{base}/authorize",
+                    "code_challenge_methods_supported": [
+                      "S256"
+                    ],
+                    "issuer": "{base}",
+                    "registration_endpoint": "{base}/register",
+                    "response_types_supported": [
+                      "code"
+                    ],
+                    "token_endpoint": "{base}/token"
+                  },
+                  "status": 200
+                }
+              ],
+              "GET /.well-known/oauth-protected-resource/mcp": [
+                {
+                  "json": {
+                    "authorization_servers": [
+                      "{base}"
+                    ],
+                    "resource": "{base}/mcp"
+                  },
+                  "status": 200
+                }
+              ],
+              "POST /register": [
+                {
+                  "json": {
+                    "client_id": "client-1",
+                    "redirect_uris": [
+                      "http://127.0.0.1:{redirect}/callback"
+                    ],
+                    "token_endpoint_auth_method": "none"
+                  },
+                  "status": 201
+                }
+              ],
+              "POST /token": [
+                {
+                  "json": {
+                    "access_token": "at-1",
+                    "expires_in": 3600,
+                    "refresh_token": "rt-1",
+                    "token_type": "Bearer"
+                  },
+                  "status": 200
+                }
+              ]
+            }
+          }
+        },
+        "steps": [
+          {
+            "send": {
+              "method": "mcp_catalog/remove",
+              "params": {
+                "name": "local"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/remove",
+              "params": {
+                "name": "secure"
+              }
+            }
+          },
+          {
+            "keyring": true
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/remove",
+              "params": {
+                "name": "missing"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/remove",
+              "params": {
+                "name": "remote"
+              }
+            }
+          },
+          {
+            "config": true
+          },
+          {
+            "keyring": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "sessionless/login-refusals",
+      "observed": [
+        {
+          "method": "mcp_catalog/login",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": null,
+              "message": {
+                "prose": 48,
+                "sha256": "670182d771bbdae7d8ac9f9b5583c949c2426f7d95a10c056b43d5313e7fe42a"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/login",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": null,
+              "message": {
+                "prose": 46,
+                "sha256": "4a07e96660d7fd941122530a48fb20e41ec6a80a0c66bccac866963c4181dadc"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/logout",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": null,
+              "message": {
+                "prose": 46,
+                "sha256": "4a07e96660d7fd941122530a48fb20e41ec6a80a0c66bccac866963c4181dadc"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/logout",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": null,
+              "message": {
+                "prose": 48,
+                "sha256": "670182d771bbdae7d8ac9f9b5583c949c2426f7d95a10c056b43d5313e7fe42a"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp/logout",
+          "notifications": [],
+          "response": {
+            "result": {
+              "runtime": null
+            }
+          }
+        },
+        {
+          "keyring": {}
+        },
+        {
+          "method": "mcp_catalog/logout",
+          "notifications": [],
+          "response": {
+            "result": {
+              "runtime": null
+            }
+          }
+        }
+      ],
+      "scenario": {
+        "config": "\n[[mcp_servers]]\nname = \"remote\"\ntransport = \"streamable-http\"\nurl = \"https://docs.example/mcp\"\nauth = { type = \"oauth\", scopes = [\"read\"] }\n\n[[mcp_servers]]\nname = \"local\"\ntransport = \"stdio\"\ncommand = \"true\"\n",
+        "keyring": {
+          "mcp-oauth:remote:tokens": {
+            "access_token": "at-1",
+            "expires_at": 4102444800.0,
+            "expires_in": 3600,
+            "refresh_token": "rt-1",
+            "token_type": "Bearer"
+          }
+        },
+        "name": "sessionless/login-refusals",
+        "steps": [
+          {
+            "send": {
+              "method": "mcp_catalog/login",
+              "params": {
+                "name": "missing"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/login",
+              "params": {
+                "name": "local"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/logout",
+              "params": {
+                "name": "local"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/logout",
+              "params": {
+                "name": "missing"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp/logout",
+              "params": {
+                "name": "remote"
+              }
+            }
+          },
+          {
+            "keyring": true
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/logout",
+              "params": {
+                "name": "remote"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "sessionless/login-publishes-nothing",
+      "observed": [
+        {
+          "method": "mcp_catalog/login",
+          "notifications": [],
+          "response": {
+            "pending": true
+          }
+        },
+        {
+          "wire": {
+            "secure": [
+              [
+                "POST",
+                "/mcp",
+                "initialize",
+                false
+              ],
+              [
+                "GET",
+                "/.well-known/oauth-protected-resource/mcp",
+                null,
+                false
+              ],
+              [
+                "GET",
+                "/.well-known/oauth-authorization-server",
+                null,
+                false
+              ],
+              [
+                "POST",
+                "/register",
+                null,
+                false
+              ]
+            ]
+          }
+        },
+        {
+          "method": "mcp_catalog/read",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "not_found",
+              "data": null,
+              "message": {
+                "prose": 26,
+                "sha256": "f50897d93c846a496e6125a3be39212e7f3b58b79a928a540250b1cddc13dfb8"
+              }
+            }
+          }
+        },
+        {
+          "keyring": {
+            "mcp-oauth:secure:client_info": {
+              "client_id": "client-1",
+              "client_id_issued_at": null,
+              "client_name": null,
+              "client_secret": null,
+              "client_secret_expires_at": null,
+              "client_uri": null,
+              "contacts": null,
+              "grant_types": [
+                "authorization_code",
+                "refresh_token"
+              ],
+              "jwks": null,
+              "jwks_uri": null,
+              "logo_uri": null,
+              "policy_uri": null,
+              "redirect_uris": [
+                "http://127.0.0.1:<redirect:secure>/callback"
+              ],
+              "response_types": [
+                "code"
+              ],
+              "scope": null,
+              "software_id": null,
+              "software_version": null,
+              "token_endpoint_auth_method": "none",
+              "tos_uri": null
+            }
+          }
+        }
+      ],
+      "scenario": {
+        "config": "\n[[mcp_servers]]\nname = \"secure\"\ntransport = \"streamable-http\"\nurl = \"{server:secure}/mcp\"\nauth = { type = \"oauth\", scopes = [], redirect_port = {redirect:secure} }\n",
+        "name": "sessionless/login-publishes-nothing",
+        "servers": {
+          "secure": {
+            "mcp": {
+              "path": "/mcp",
+              "token": "at-1",
+              "tools": [
+                {
+                  "description": "Search the docs.\nMatches titles and bodies.",
+                  "inputSchema": {
+                    "type": "object"
+                  },
+                  "name": "search"
+                },
+                {
+                  "description": "Fetch one page",
+                  "inputSchema": {
+                    "type": "object"
+                  },
+                  "name": "fetch"
+                }
+              ]
+            },
+            "routes": {
+              "GET /.well-known/oauth-authorization-server": [
+                {
+                  "json": {
+                    "authorization_endpoint": "{base}/authorize",
+                    "code_challenge_methods_supported": [
+                      "S256"
+                    ],
+                    "issuer": "{base}",
+                    "registration_endpoint": "{base}/register",
+                    "response_types_supported": [
+                      "code"
+                    ],
+                    "token_endpoint": "{base}/token"
+                  },
+                  "status": 200
+                }
+              ],
+              "GET /.well-known/oauth-protected-resource/mcp": [
+                {
+                  "json": {
+                    "authorization_servers": [
+                      "{base}"
+                    ],
+                    "resource": "{base}/mcp"
+                  },
+                  "status": 200
+                }
+              ],
+              "POST /register": [
+                {
+                  "json": {
+                    "client_id": "client-1",
+                    "redirect_uris": [
+                      "http://127.0.0.1:{redirect}/callback"
+                    ],
+                    "token_endpoint_auth_method": "none"
+                  },
+                  "status": 201
+                }
+              ],
+              "POST /token": [
+                {
+                  "json": {
+                    "access_token": "at-1",
+                    "expires_in": 3600,
+                    "refresh_token": "rt-1",
+                    "token_type": "Bearer"
+                  },
+                  "status": 200
+                }
+              ]
+            }
+          }
+        },
+        "steps": [
+          {
+            "send": {
+              "method": "mcp_catalog/login",
+              "params": {
+                "name": "secure"
+              }
+            },
+            "wait": 5.0
+          },
+          {
+            "wire": [
+              "secure"
+            ]
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/read",
+              "params": {
+                "sessionId": "missing"
+              }
+            }
+          },
+          {
+            "keyring": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "session/read",
+      "observed": [
+        {
+          "start": {
+            "ok": true
+          }
+        },
+        {
+          "method": "mcp_catalog/read",
+          "notifications": [],
+          "response": {
+            "result": {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "sources": [
+                  {
+                    "displayName": "docs",
+                    "error": null,
+                    "kind": "server",
+                    "name": "docs",
+                    "pluginName": null,
+                    "status": "enabled",
+                    "tools": [
+                      {
+                        "description": "Fetch one page",
+                        "enabled": true,
+                        "name": "fetch"
+                      },
+                      {
+                        "description": "Search the docs.",
+                        "enabled": true,
+                        "name": "search"
+                      }
+                    ],
+                    "transport": "streamable-http"
+                  },
+                  {
+                    "displayName": "remote",
+                    "error": null,
+                    "kind": "server",
+                    "name": "remote",
+                    "pluginName": null,
+                    "status": "needs_auth",
+                    "tools": [],
+                    "transport": "streamable-http"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp/read",
+          "notifications": [],
+          "response": {
+            "result": {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "sources": [
+                  {
+                    "displayName": "docs",
+                    "error": null,
+                    "kind": "server",
+                    "name": "docs",
+                    "pluginName": null,
+                    "status": "enabled",
+                    "tools": [
+                      {
+                        "description": "Fetch one page",
+                        "enabled": true,
+                        "name": "fetch"
+                      },
+                      {
+                        "description": "Search the docs.",
+                        "enabled": true,
+                        "name": "search"
+                      }
+                    ],
+                    "transport": "streamable-http"
+                  },
+                  {
+                    "displayName": "remote",
+                    "error": null,
+                    "kind": "server",
+                    "name": "remote",
+                    "pluginName": null,
+                    "status": "needs_auth",
+                    "tools": [],
+                    "transport": "streamable-http"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/read",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "not_found",
+              "data": null,
+              "message": {
+                "prose": 24,
+                "sha256": "aeb2e47968279c5deb07a21bd3bf253396fee8684c92521b10a0478601a3039b"
+              }
+            }
+          }
+        }
+      ],
+      "scenario": {
+        "config": "\n[[mcp_servers]]\nname = \"docs\"\ntransport = \"streamable-http\"\nurl = \"{server:open}/mcp\"\n\n[[mcp_servers]]\nname = \"remote\"\ntransport = \"streamable-http\"\nurl = \"https://docs.example/mcp\"\nauth = { type = \"oauth\", scopes = [\"read\"] }\n",
+        "name": "session/read",
+        "servers": {
+          "open": {
+            "mcp": {
+              "path": "/mcp",
+              "tools": [
+                {
+                  "description": "Search the docs.\nMatches titles and bodies.",
+                  "inputSchema": {
+                    "type": "object"
+                  },
+                  "name": "search"
+                },
+                {
+                  "description": "Fetch one page",
+                  "inputSchema": {
+                    "type": "object"
+                  },
+                  "name": "fetch"
+                }
+              ]
+            }
+          }
+        },
+        "steps": [
+          {
+            "start": {}
+          },
+          {
+            "settle": 1.0
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/read",
+              "params": {
+                "sessionId": "$S1"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp/read",
+              "params": {
+                "sessionId": "$S1"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/read",
+              "params": {
+                "sessionId": "other"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "session/sessionless-mutations-conflict",
+      "observed": [
+        {
+          "start": {
+            "ok": true
+          }
+        },
+        {
+          "method": "mcp_catalog/add",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "conflict",
+              "data": null,
+              "message": {
+                "prose": 77,
+                "sha256": "f5450376cf504ea27da4d12058c558c59060619568c3554074c6deea9c30bfb8"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/toggle",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "conflict",
+              "data": null,
+              "message": {
+                "prose": 77,
+                "sha256": "f5450376cf504ea27da4d12058c558c59060619568c3554074c6deea9c30bfb8"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/remove",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "conflict",
+              "data": null,
+              "message": {
+                "prose": 77,
+                "sha256": "f5450376cf504ea27da4d12058c558c59060619568c3554074c6deea9c30bfb8"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/login",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "conflict",
+              "data": null,
+              "message": {
+                "prose": 77,
+                "sha256": "f5450376cf504ea27da4d12058c558c59060619568c3554074c6deea9c30bfb8"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/logout",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "conflict",
+              "data": null,
+              "message": {
+                "prose": 77,
+                "sha256": "f5450376cf504ea27da4d12058c558c59060619568c3554074c6deea9c30bfb8"
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/toggle",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "not_found",
+              "data": null,
+              "message": {
+                "prose": 24,
+                "sha256": "aeb2e47968279c5deb07a21bd3bf253396fee8684c92521b10a0478601a3039b"
+              }
+            }
+          }
+        },
+        {
+          "config": {
+            "project": null,
+            "user": [
+              {
+                "auth": {
+                  "scopes": [
+                    "read"
+                  ],
+                  "type": "oauth"
+                },
+                "name": "remote",
+                "transport": "streamable-http",
+                "url": "https://docs.example/mcp"
+              }
+            ]
+          }
+        }
+      ],
+      "scenario": {
+        "config": "\n[[mcp_servers]]\nname = \"remote\"\ntransport = \"streamable-http\"\nurl = \"https://docs.example/mcp\"\nauth = { type = \"oauth\", scopes = [\"read\"] }\n",
+        "name": "session/sessionless-mutations-conflict",
+        "steps": [
+          {
+            "start": {}
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/add",
+              "params": {
+                "url": "https://docs.example/other"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/toggle",
+              "params": {
+                "disabled": true,
+                "name": "remote",
+                "source": "server"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/remove",
+              "params": {
+                "name": "remote"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/login",
+              "params": {
+                "name": "remote"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/logout",
+              "params": {
+                "name": "remote"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/toggle",
+              "params": {
+                "disabled": true,
+                "name": "remote",
+                "sessionId": "other",
+                "source": "server"
+              }
+            }
+          },
+          {
+            "config": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "session/toggle",
+      "observed": [
+        {
+          "start": {
+            "ok": true
+          }
+        },
+        {
+          "method": "mcp_catalog/toggle",
+          "notifications": [
+            {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "sources": [
+                  {
+                    "displayName": "docs",
+                    "error": null,
+                    "kind": "server",
+                    "name": "docs",
+                    "pluginName": null,
+                    "status": "enabled",
+                    "tools": [
+                      {
+                        "description": "Fetch one page",
+                        "enabled": true,
+                        "name": "fetch"
+                      },
+                      {
+                        "description": "Search the docs.",
+                        "enabled": false,
+                        "name": "search"
+                      }
+                    ],
+                    "transport": "streamable-http"
+                  }
+                ]
+              },
+              "method": "runtime/updated"
+            }
+          ],
+          "response": {
+            "result": {
+              "runtime": {
+                "mcp": {
+                  "connectorError": null,
+                  "discoveryErrors": {},
+                  "manageConnectorsUrl": null,
+                  "sources": [
+                    {
+                      "displayName": "docs",
+                      "error": null,
+                      "kind": "server",
+                      "name": "docs",
+                      "pluginName": null,
+                      "status": "enabled",
+                      "tools": [
+                        {
+                          "description": "Fetch one page",
+                          "enabled": true,
+                          "name": "fetch"
+                        },
+                        {
+                          "description": "Search the docs.",
+                          "enabled": false,
+                          "name": "search"
+                        }
+                      ],
+                      "transport": "streamable-http"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "config": {
+            "project": null,
+            "user": [
+              {
+                "disabled_tools": [
+                  "search"
+                ],
+                "name": "docs",
+                "transport": "streamable-http",
+                "url": "http://<server:open>/mcp"
+              }
+            ]
+          }
+        },
+        {
+          "method": "mcp_catalog/toggle",
+          "notifications": [
+            {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "sources": [
+                  {
+                    "displayName": "docs",
+                    "error": null,
+                    "kind": "server",
+                    "name": "docs",
+                    "pluginName": null,
+                    "status": "disabled",
+                    "tools": [],
+                    "transport": "streamable-http"
+                  }
+                ]
+              },
+              "method": "runtime/updated"
+            }
+          ],
+          "response": {
+            "result": {
+              "runtime": {
+                "mcp": {
+                  "connectorError": null,
+                  "discoveryErrors": {},
+                  "manageConnectorsUrl": null,
+                  "sources": [
+                    {
+                      "displayName": "docs",
+                      "error": null,
+                      "kind": "server",
+                      "name": "docs",
+                      "pluginName": null,
+                      "status": "disabled",
+                      "tools": [],
+                      "transport": "streamable-http"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/toggle",
+          "notifications": [
+            {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "sources": [
+                  {
+                    "displayName": "docs",
+                    "error": null,
+                    "kind": "server",
+                    "name": "docs",
+                    "pluginName": null,
+                    "status": "enabled",
+                    "tools": [
+                      {
+                        "description": "Fetch one page",
+                        "enabled": true,
+                        "name": "fetch"
+                      },
+                      {
+                        "description": "Search the docs.",
+                        "enabled": false,
+                        "name": "search"
+                      }
+                    ],
+                    "transport": "streamable-http"
+                  }
+                ]
+              },
+              "method": "runtime/updated"
+            }
+          ],
+          "response": {
+            "result": {
+              "runtime": {
+                "mcp": {
+                  "connectorError": null,
+                  "discoveryErrors": {},
+                  "manageConnectorsUrl": null,
+                  "sources": [
+                    {
+                      "displayName": "docs",
+                      "error": null,
+                      "kind": "server",
+                      "name": "docs",
+                      "pluginName": null,
+                      "status": "enabled",
+                      "tools": [
+                        {
+                          "description": "Fetch one page",
+                          "enabled": true,
+                          "name": "fetch"
+                        },
+                        {
+                          "description": "Search the docs.",
+                          "enabled": false,
+                          "name": "search"
+                        }
+                      ],
+                      "transport": "streamable-http"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp/toggle",
+          "notifications": [
+            {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "sources": [
+                  {
+                    "displayName": "docs",
+                    "error": null,
+                    "kind": "server",
+                    "name": "docs",
+                    "pluginName": null,
+                    "status": "enabled",
+                    "tools": [
+                      {
+                        "description": "Fetch one page",
+                        "enabled": true,
+                        "name": "fetch"
+                      },
+                      {
+                        "description": "Search the docs.",
+                        "enabled": true,
+                        "name": "search"
+                      }
+                    ],
+                    "transport": "streamable-http"
+                  }
+                ]
+              },
+              "method": "runtime/updated"
+            }
+          ],
+          "response": {
+            "result": {
+              "runtime": {
+                "mcp": {
+                  "connectorError": null,
+                  "discoveryErrors": {},
+                  "manageConnectorsUrl": null,
+                  "sources": [
+                    {
+                      "displayName": "docs",
+                      "error": null,
+                      "kind": "server",
+                      "name": "docs",
+                      "pluginName": null,
+                      "status": "enabled",
+                      "tools": [
+                        {
+                          "description": "Fetch one page",
+                          "enabled": true,
+                          "name": "fetch"
+                        },
+                        {
+                          "description": "Search the docs.",
+                          "enabled": true,
+                          "name": "search"
+                        }
+                      ],
+                      "transport": "streamable-http"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "config": {
+            "project": null,
+            "user": [
+              {
+                "disabled": false,
+                "disabled_tools": [],
+                "name": "docs",
+                "transport": "streamable-http",
+                "url": "http://<server:open>/mcp"
+              }
+            ]
+          }
+        },
+        {
+          "method": "mcp_catalog/toggle",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "not_implemented",
+              "data": null,
+              "message": {
+                "prose": 59,
+                "sha256": "9d9d838786d331b03ee9c39314cb900256903786b06c5ac47609a1ba11929bcb"
+              }
+            }
+          }
+        }
+      ],
+      "scenario": {
+        "config": "\n[[mcp_servers]]\nname = \"docs\"\ntransport = \"streamable-http\"\nurl = \"{server:open}/mcp\"\n",
+        "name": "session/toggle",
+        "servers": {
+          "open": {
+            "mcp": {
+              "path": "/mcp",
+              "tools": [
+                {
+                  "description": "Search the docs.\nMatches titles and bodies.",
+                  "inputSchema": {
+                    "type": "object"
+                  },
+                  "name": "search"
+                },
+                {
+                  "description": "Fetch one page",
+                  "inputSchema": {
+                    "type": "object"
+                  },
+                  "name": "fetch"
+                }
+              ]
+            }
+          }
+        },
+        "steps": [
+          {
+            "start": {}
+          },
+          {
+            "settle": 1.0
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/toggle",
+              "params": {
+                "disabled": true,
+                "name": "docs",
+                "sessionId": "$S1",
+                "source": "server",
+                "toolName": "search"
+              }
+            }
+          },
+          {
+            "config": true
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/toggle",
+              "params": {
+                "disabled": true,
+                "name": "docs",
+                "sessionId": "$S1",
+                "source": "server"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/toggle",
+              "params": {
+                "disabled": false,
+                "name": "docs",
+                "sessionId": "$S1",
+                "source": "server"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp/toggle",
+              "params": {
+                "disabled": false,
+                "name": "docs",
+                "sessionId": "$S1",
+                "source": "server",
+                "toolName": "search"
+              }
+            }
+          },
+          {
+            "config": true
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/toggle",
+              "params": {
+                "disabled": true,
+                "name": "docs",
+                "sessionId": "$S1",
+                "source": "connector"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "session/refresh",
+      "observed": [
+        {
+          "start": {
+            "ok": true
+          }
+        },
+        {
+          "wire": {
+            "open": [
+              [
+                "POST",
+                "/mcp",
+                "initialize",
+                false
+              ],
+              [
+                "POST",
+                "/mcp",
+                "notifications/initialized",
+                false
+              ],
+              [
+                "POST",
+                "/mcp",
+                "tools/list",
+                false
+              ]
+            ]
+          }
+        },
+        {
+          "method": "mcp_catalog/refresh",
+          "notifications": [
+            {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "sources": [
+                  {
+                    "displayName": "docs",
+                    "error": null,
+                    "kind": "server",
+                    "name": "docs",
+                    "pluginName": null,
+                    "status": "enabled",
+                    "tools": [
+                      {
+                        "description": "Fetch one page",
+                        "enabled": true,
+                        "name": "fetch"
+                      },
+                      {
+                        "description": "Search the docs.",
+                        "enabled": true,
+                        "name": "search"
+                      }
+                    ],
+                    "transport": "streamable-http"
+                  }
+                ]
+              },
+              "method": "runtime/updated"
+            }
+          ],
+          "response": {
+            "result": {
+              "runtime": {
+                "mcp": {
+                  "connectorError": null,
+                  "discoveryErrors": {},
+                  "manageConnectorsUrl": null,
+                  "sources": [
+                    {
+                      "displayName": "docs",
+                      "error": null,
+                      "kind": "server",
+                      "name": "docs",
+                      "pluginName": null,
+                      "status": "enabled",
+                      "tools": [
+                        {
+                          "description": "Fetch one page",
+                          "enabled": true,
+                          "name": "fetch"
+                        },
+                        {
+                          "description": "Search the docs.",
+                          "enabled": true,
+                          "name": "search"
+                        }
+                      ],
+                      "transport": "streamable-http"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "wire": {
+            "open": [
+              [
+                "POST",
+                "/mcp",
+                "initialize",
+                false
+              ],
+              [
+                "POST",
+                "/mcp",
+                "notifications/initialized",
+                false
+              ],
+              [
+                "POST",
+                "/mcp",
+                "tools/list",
+                false
+              ],
+              [
+                "POST",
+                "/mcp",
+                "initialize",
+                false
+              ],
+              [
+                "POST",
+                "/mcp",
+                "notifications/initialized",
+                false
+              ],
+              [
+                "POST",
+                "/mcp",
+                "tools/list",
+                false
+              ]
+            ]
+          }
+        },
+        {
+          "method": "mcp/refresh",
+          "notifications": [
+            {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "sources": [
+                  {
+                    "displayName": "docs",
+                    "error": null,
+                    "kind": "server",
+                    "name": "docs",
+                    "pluginName": null,
+                    "status": "enabled",
+                    "tools": [
+                      {
+                        "description": "Fetch one page",
+                        "enabled": true,
+                        "name": "fetch"
+                      },
+                      {
+                        "description": "Search the docs.",
+                        "enabled": true,
+                        "name": "search"
+                      }
+                    ],
+                    "transport": "streamable-http"
+                  }
+                ]
+              },
+              "method": "runtime/updated"
+            }
+          ],
+          "response": {
+            "result": {
+              "runtime": {
+                "mcp": {
+                  "connectorError": null,
+                  "discoveryErrors": {},
+                  "manageConnectorsUrl": null,
+                  "sources": [
+                    {
+                      "displayName": "docs",
+                      "error": null,
+                      "kind": "server",
+                      "name": "docs",
+                      "pluginName": null,
+                      "status": "enabled",
+                      "tools": [
+                        {
+                          "description": "Fetch one page",
+                          "enabled": true,
+                          "name": "fetch"
+                        },
+                        {
+                          "description": "Search the docs.",
+                          "enabled": true,
+                          "name": "search"
+                        }
+                      ],
+                      "transport": "streamable-http"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ],
+      "scenario": {
+        "config": "\n[[mcp_servers]]\nname = \"docs\"\ntransport = \"streamable-http\"\nurl = \"{server:open}/mcp\"\n",
+        "name": "session/refresh",
+        "servers": {
+          "open": {
+            "mcp": {
+              "path": "/mcp",
+              "tools": [
+                {
+                  "description": "Search the docs.\nMatches titles and bodies.",
+                  "inputSchema": {
+                    "type": "object"
+                  },
+                  "name": "search"
+                },
+                {
+                  "description": "Fetch one page",
+                  "inputSchema": {
+                    "type": "object"
+                  },
+                  "name": "fetch"
+                }
+              ]
+            }
+          }
+        },
+        "steps": [
+          {
+            "start": {}
+          },
+          {
+            "settle": 1.0
+          },
+          {
+            "wire": [
+              "open"
+            ]
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/refresh",
+              "params": {
+                "sessionId": "$S1"
+              }
+            }
+          },
+          {
+            "wire": [
+              "open"
+            ]
+          },
+          {
+            "send": {
+              "method": "mcp/refresh",
+              "params": {
+                "sessionId": "$S1"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "session/add-and-remove",
+      "observed": [
+        {
+          "start": {
+            "ok": true
+          }
+        },
+        {
+          "method": "mcp_catalog/add",
+          "notifications": [
+            {
+              "method": "mcp_catalog/authRequired",
+              "params": {
+                "descriptorRevision": "mcp-auth-descriptor:<descriptor-1>:0",
+                "name": "127",
+                "observedConnectionRevision": null,
+                "sessionId": "<session-1>"
+              }
+            },
+            {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "sources": [
+                  {
+                    "displayName": "127",
+                    "error": null,
+                    "kind": "server",
+                    "name": "127",
+                    "pluginName": null,
+                    "status": "needs_auth",
+                    "tools": [],
+                    "transport": "streamable-http"
+                  }
+                ]
+              },
+              "method": "runtime/updated"
+            },
+            {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "sources": [
+                  {
+                    "displayName": "127",
+                    "error": null,
+                    "kind": "server",
+                    "name": "127",
+                    "pluginName": null,
+                    "status": "needs_auth",
+                    "tools": [],
+                    "transport": "streamable-http"
+                  }
+                ]
+              },
+              "method": "runtime/updated"
+            }
+          ],
+          "response": {
+            "result": {
+              "created": true,
+              "name": "127",
+              "runtime": {
+                "mcp": {
+                  "connectorError": null,
+                  "discoveryErrors": {},
+                  "manageConnectorsUrl": null,
+                  "sources": [
+                    {
+                      "displayName": "127",
+                      "error": null,
+                      "kind": "server",
+                      "name": "127",
+                      "pluginName": null,
+                      "status": "needs_auth",
+                      "tools": [],
+                      "transport": "streamable-http"
+                    }
+                  ]
+                }
+              },
+              "url": "http://<server:open>/mcp"
+            }
+          }
+        },
+        {
+          "config": {
+            "project": null,
+            "user": [
+              {
+                "auth": {
+                  "scopes": [],
+                  "type": "oauth"
+                },
+                "name": "127",
+                "transport": "streamable-http",
+                "url": "http://<server:open>/mcp"
+              }
+            ]
+          }
+        },
+        {
+          "method": "mcp_catalog/add",
+          "notifications": [
+            {
+              "method": "mcp_catalog/authRequired",
+              "params": {
+                "descriptorRevision": "mcp-auth-descriptor:<descriptor-1>:0",
+                "name": "127",
+                "observedConnectionRevision": null,
+                "sessionId": "<session-1>"
+              }
+            },
+            {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "sources": [
+                  {
+                    "displayName": "127",
+                    "error": null,
+                    "kind": "server",
+                    "name": "127",
+                    "pluginName": null,
+                    "status": "needs_auth",
+                    "tools": [],
+                    "transport": "streamable-http"
+                  }
+                ]
+              },
+              "method": "runtime/updated"
+            },
+            {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "sources": [
+                  {
+                    "displayName": "127",
+                    "error": null,
+                    "kind": "server",
+                    "name": "127",
+                    "pluginName": null,
+                    "status": "needs_auth",
+                    "tools": [],
+                    "transport": "streamable-http"
+                  }
+                ]
+              },
+              "method": "runtime/updated"
+            }
+          ],
+          "response": {
+            "result": {
+              "created": false,
+              "name": "127",
+              "runtime": {
+                "mcp": {
+                  "connectorError": null,
+                  "discoveryErrors": {},
+                  "manageConnectorsUrl": null,
+                  "sources": [
+                    {
+                      "displayName": "127",
+                      "error": null,
+                      "kind": "server",
+                      "name": "127",
+                      "pluginName": null,
+                      "status": "needs_auth",
+                      "tools": [],
+                      "transport": "streamable-http"
+                    }
+                  ]
+                }
+              },
+              "url": "http://<server:open>/mcp"
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/remove",
+          "notifications": [
+            {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "sources": []
+              },
+              "method": "runtime/updated"
+            }
+          ],
+          "response": {
+            "result": {
+              "name": "127",
+              "removed": true,
+              "runtime": {
+                "mcp": {
+                  "connectorError": null,
+                  "discoveryErrors": {},
+                  "manageConnectorsUrl": null,
+                  "sources": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/remove",
+          "notifications": [
+            {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "sources": []
+              },
+              "method": "runtime/updated"
+            }
+          ],
+          "response": {
+            "result": {
+              "name": "missing",
+              "removed": false,
+              "runtime": {
+                "mcp": {
+                  "connectorError": null,
+                  "discoveryErrors": {},
+                  "manageConnectorsUrl": null,
+                  "sources": []
+                }
+              }
+            }
+          }
+        },
+        {
+          "config": {
+            "project": null,
+            "user": []
+          }
+        }
+      ],
+      "scenario": {
+        "name": "session/add-and-remove",
+        "servers": {
+          "open": {
+            "mcp": {
+              "path": "/mcp",
+              "tools": [
+                {
+                  "description": "Search the docs.\nMatches titles and bodies.",
+                  "inputSchema": {
+                    "type": "object"
+                  },
+                  "name": "search"
+                },
+                {
+                  "description": "Fetch one page",
+                  "inputSchema": {
+                    "type": "object"
+                  },
+                  "name": "fetch"
+                }
+              ]
+            }
+          }
+        },
+        "steps": [
+          {
+            "start": {}
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/add",
+              "params": {
+                "allowInsecureHttp": true,
+                "sessionId": "$S1",
+                "url": "{server:open}/mcp"
+              }
+            }
+          },
+          {
+            "settle": 1.0
+          },
+          {
+            "config": true
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/add",
+              "params": {
+                "allowInsecureHttp": true,
+                "sessionId": "$S1",
+                "url": "{server:open}/mcp"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/remove",
+              "params": {
+                "name": "127",
+                "sessionId": "$S1"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/remove",
+              "params": {
+                "name": "missing",
+                "sessionId": "$S1"
+              }
+            }
+          },
+          {
+            "config": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "session/auth-required-then-login",
+      "observed": [
+        {
+          "start": {
+            "ok": true
+          }
+        },
+        {
+          "method": "mcp_catalog/read",
+          "notifications": [],
+          "response": {
+            "result": {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "sources": [
+                  {
+                    "displayName": "secure",
+                    "error": null,
+                    "kind": "server",
+                    "name": "secure",
+                    "pluginName": null,
+                    "status": "needs_auth",
+                    "tools": [],
+                    "transport": "streamable-http"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "browser": [
+            {
+              "status": 200
+            }
+          ],
+          "method": "mcp_catalog/login",
+          "notifications": [
+            {
+              "method": "mcp_catalog/authUrl",
+              "params": {
+                "name": "secure",
+                "url": {
+                  "authorize": "http://<server:secure>/authorize",
+                  "parameters": {
+                    "client_id": "client-1",
+                    "code_challenge": "<code_challenge>",
+                    "code_challenge_method": "S256",
+                    "redirect_uri": "http://127.0.0.1:<redirect:secure>/callback",
+                    "resource": "http://<server:secure>/mcp",
+                    "response_type": "code",
+                    "state": "<state>"
+                  }
+                }
+              }
+            },
+            {
+              "method": "mcp/authUrl",
+              "params": {
+                "name": "secure",
+                "url": {
+                  "authorize": "http://<server:secure>/authorize",
+                  "parameters": {
+                    "client_id": "client-1",
+                    "code_challenge": "<code_challenge>",
+                    "code_challenge_method": "S256",
+                    "redirect_uri": "http://127.0.0.1:<redirect:secure>/callback",
+                    "resource": "http://<server:secure>/mcp",
+                    "response_type": "code",
+                    "state": "<state>"
+                  }
+                }
+              }
+            },
+            {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "sources": [
+                  {
+                    "displayName": "secure",
+                    "error": null,
+                    "kind": "server",
+                    "name": "secure",
+                    "pluginName": null,
+                    "status": "connected",
+                    "tools": [
+                      {
+                        "description": "Fetch one page",
+                        "enabled": true,
+                        "name": "fetch"
+                      },
+                      {
+                        "description": "Search the docs.",
+                        "enabled": true,
+                        "name": "search"
+                      }
+                    ],
+                    "transport": "streamable-http"
+                  }
+                ]
+              },
+              "method": "runtime/updated"
+            }
+          ],
+          "response": {
+            "result": {
+              "runtime": {
+                "mcp": {
+                  "connectorError": null,
+                  "discoveryErrors": {},
+                  "manageConnectorsUrl": null,
+                  "sources": [
+                    {
+                      "displayName": "secure",
+                      "error": null,
+                      "kind": "server",
+                      "name": "secure",
+                      "pluginName": null,
+                      "status": "connected",
+                      "tools": [
+                        {
+                          "description": "Fetch one page",
+                          "enabled": true,
+                          "name": "fetch"
+                        },
+                        {
+                          "description": "Search the docs.",
+                          "enabled": true,
+                          "name": "search"
+                        }
+                      ],
+                      "transport": "streamable-http"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "keyring": {
+            "mcp-oauth:secure:client_info": {
+              "client_id": "client-1",
+              "client_id_issued_at": null,
+              "client_name": null,
+              "client_secret": null,
+              "client_secret_expires_at": null,
+              "client_uri": null,
+              "contacts": null,
+              "grant_types": [
+                "authorization_code",
+                "refresh_token"
+              ],
+              "jwks": null,
+              "jwks_uri": null,
+              "logo_uri": null,
+              "policy_uri": null,
+              "redirect_uris": [
+                "http://127.0.0.1:<redirect:secure>/callback"
+              ],
+              "response_types": [
+                "code"
+              ],
+              "scope": null,
+              "software_id": null,
+              "software_version": null,
+              "token_endpoint_auth_method": "none",
+              "tos_uri": null
+            },
+            "mcp-oauth:secure:fingerprint": {
+              "client_marker": "<dcr>",
+              "scopes_sorted": [],
+              "url": "http://<server:secure>/mcp"
+            },
+            "mcp-oauth:secure:tokens": {
+              "access_token": "at-1",
+              "expires_at": "<time>",
+              "expires_in": 3600,
+              "refresh_token": "rt-1",
+              "scope": null,
+              "token_type": "Bearer"
+            }
+          }
+        },
+        {
+          "method": "mcp_catalog/logout",
+          "notifications": [
+            {
+              "method": "mcp_catalog/authRequired",
+              "params": {
+                "descriptorRevision": "mcp-auth-descriptor:<descriptor-1>:2",
+                "name": "secure",
+                "observedConnectionRevision": null,
+                "sessionId": "<session-1>"
+              }
+            },
+            {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "sources": [
+                  {
+                    "displayName": "secure",
+                    "error": null,
+                    "kind": "server",
+                    "name": "secure",
+                    "pluginName": null,
+                    "status": "needs_auth",
+                    "tools": [],
+                    "transport": "streamable-http"
+                  }
+                ]
+              },
+              "method": "runtime/updated"
+            },
+            {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "sources": [
+                  {
+                    "displayName": "secure",
+                    "error": null,
+                    "kind": "server",
+                    "name": "secure",
+                    "pluginName": null,
+                    "status": "needs_auth",
+                    "tools": [],
+                    "transport": "streamable-http"
+                  }
+                ]
+              },
+              "method": "runtime/updated"
+            }
+          ],
+          "response": {
+            "result": {
+              "runtime": {
+                "mcp": {
+                  "connectorError": null,
+                  "discoveryErrors": {},
+                  "manageConnectorsUrl": null,
+                  "sources": [
+                    {
+                      "displayName": "secure",
+                      "error": null,
+                      "kind": "server",
+                      "name": "secure",
+                      "pluginName": null,
+                      "status": "needs_auth",
+                      "tools": [],
+                      "transport": "streamable-http"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "keyring": {}
+        },
+        {
+          "method": "mcp_catalog/login",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": null,
+              "message": {
+                "prose": 48,
+                "sha256": "670182d771bbdae7d8ac9f9b5583c949c2426f7d95a10c056b43d5313e7fe42a"
+              }
+            }
+          }
+        }
+      ],
+      "scenario": {
+        "config": "\n[[mcp_servers]]\nname = \"secure\"\ntransport = \"streamable-http\"\nurl = \"{server:secure}/mcp\"\nauth = { type = \"oauth\", scopes = [], redirect_port = {redirect:secure} }\n",
+        "name": "session/auth-required-then-login",
+        "servers": {
+          "secure": {
+            "mcp": {
+              "path": "/mcp",
+              "token": "at-1",
+              "tools": [
+                {
+                  "description": "Search the docs.\nMatches titles and bodies.",
+                  "inputSchema": {
+                    "type": "object"
+                  },
+                  "name": "search"
+                },
+                {
+                  "description": "Fetch one page",
+                  "inputSchema": {
+                    "type": "object"
+                  },
+                  "name": "fetch"
+                }
+              ]
+            },
+            "routes": {
+              "GET /.well-known/oauth-authorization-server": [
+                {
+                  "json": {
+                    "authorization_endpoint": "{base}/authorize",
+                    "code_challenge_methods_supported": [
+                      "S256"
+                    ],
+                    "issuer": "{base}",
+                    "registration_endpoint": "{base}/register",
+                    "response_types_supported": [
+                      "code"
+                    ],
+                    "token_endpoint": "{base}/token"
+                  },
+                  "status": 200
+                }
+              ],
+              "GET /.well-known/oauth-protected-resource/mcp": [
+                {
+                  "json": {
+                    "authorization_servers": [
+                      "{base}"
+                    ],
+                    "resource": "{base}/mcp"
+                  },
+                  "status": 200
+                }
+              ],
+              "POST /register": [
+                {
+                  "json": {
+                    "client_id": "client-1",
+                    "redirect_uris": [
+                      "http://127.0.0.1:{redirect}/callback"
+                    ],
+                    "token_endpoint_auth_method": "none"
+                  },
+                  "status": 201
+                }
+              ],
+              "POST /token": [
+                {
+                  "json": {
+                    "access_token": "at-1",
+                    "expires_in": 3600,
+                    "refresh_token": "rt-1",
+                    "token_type": "Bearer"
+                  },
+                  "status": 200
+                }
+              ]
+            }
+          }
+        },
+        "steps": [
+          {
+            "start": {}
+          },
+          {
+            "settle": 1.5
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/read",
+              "params": {
+                "sessionId": "$S1"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/login",
+              "params": {
+                "name": "secure",
+                "sessionId": "$S1"
+              }
+            }
+          },
+          {
+            "keyring": true
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/logout",
+              "params": {
+                "name": "secure",
+                "sessionId": "$S1"
+              }
+            }
+          },
+          {
+            "settle": 1.0
+          },
+          {
+            "keyring": true
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/login",
+              "params": {
+                "name": "missing",
+                "sessionId": "$S1"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "session/credentials-without-fingerprint-are-dropped",
+      "observed": [
+        {
+          "start": {
+            "ok": true
+          }
+        },
+        {
+          "method": "mcp_catalog/read",
+          "notifications": [],
+          "response": {
+            "result": {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "sources": [
+                  {
+                    "displayName": "secure",
+                    "error": null,
+                    "kind": "server",
+                    "name": "secure",
+                    "pluginName": null,
+                    "status": "needs_auth",
+                    "tools": [],
+                    "transport": "streamable-http"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "keyring": {}
+        }
+      ],
+      "scenario": {
+        "config": "\n[[mcp_servers]]\nname = \"secure\"\ntransport = \"streamable-http\"\nurl = \"{server:secure}/mcp\"\nauth = { type = \"oauth\", scopes = [], redirect_port = {redirect:secure} }\n",
+        "keyring": {
+          "mcp-oauth:secure:client_info": {
+            "client_id": "client-1",
+            "redirect_uris": [
+              "http://127.0.0.1:{redirect:secure}/callback"
+            ],
+            "token_endpoint_auth_method": "none"
+          },
+          "mcp-oauth:secure:tokens": {
+            "access_token": "at-1",
+            "expires_at": 4102444800.0,
+            "expires_in": 3600,
+            "refresh_token": "rt-1",
+            "token_type": "Bearer"
+          }
+        },
+        "name": "session/credentials-without-fingerprint-are-dropped",
+        "servers": {
+          "secure": {
+            "mcp": {
+              "path": "/mcp",
+              "token": "at-1",
+              "tools": [
+                {
+                  "description": "Search the docs.\nMatches titles and bodies.",
+                  "inputSchema": {
+                    "type": "object"
+                  },
+                  "name": "search"
+                },
+                {
+                  "description": "Fetch one page",
+                  "inputSchema": {
+                    "type": "object"
+                  },
+                  "name": "fetch"
+                }
+              ]
+            },
+            "routes": {
+              "GET /.well-known/oauth-authorization-server": [
+                {
+                  "json": {
+                    "authorization_endpoint": "{base}/authorize",
+                    "code_challenge_methods_supported": [
+                      "S256"
+                    ],
+                    "issuer": "{base}",
+                    "registration_endpoint": "{base}/register",
+                    "response_types_supported": [
+                      "code"
+                    ],
+                    "token_endpoint": "{base}/token"
+                  },
+                  "status": 200
+                }
+              ],
+              "GET /.well-known/oauth-protected-resource/mcp": [
+                {
+                  "json": {
+                    "authorization_servers": [
+                      "{base}"
+                    ],
+                    "resource": "{base}/mcp"
+                  },
+                  "status": 200
+                }
+              ],
+              "POST /register": [
+                {
+                  "json": {
+                    "client_id": "client-1",
+                    "redirect_uris": [
+                      "http://127.0.0.1:{redirect}/callback"
+                    ],
+                    "token_endpoint_auth_method": "none"
+                  },
+                  "status": 201
+                }
+              ],
+              "POST /token": [
+                {
+                  "json": {
+                    "access_token": "at-1",
+                    "expires_in": 3600,
+                    "refresh_token": "rt-1",
+                    "token_type": "Bearer"
+                  },
+                  "status": 200
+                }
+              ]
+            }
+          }
+        },
+        "steps": [
+          {
+            "start": {}
+          },
+          {
+            "settle": 1.0
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/read",
+              "params": {
+                "sessionId": "$S1"
+              }
+            }
+          },
+          {
+            "keyring": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "session/stored-credentials-connect",
+      "observed": [
+        {
+          "start": {
+            "ok": true
+          }
+        },
+        {
+          "method": "mcp_catalog/read",
+          "notifications": [],
+          "response": {
+            "result": {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "sources": [
+                  {
+                    "displayName": "secure",
+                    "error": null,
+                    "kind": "server",
+                    "name": "secure",
+                    "pluginName": null,
+                    "status": "connected",
+                    "tools": [
+                      {
+                        "description": "Fetch one page",
+                        "enabled": true,
+                        "name": "fetch"
+                      },
+                      {
+                        "description": "Search the docs.",
+                        "enabled": true,
+                        "name": "search"
+                      }
+                    ],
+                    "transport": "streamable-http"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "wire": {
+            "secure": [
+              [
+                "POST",
+                "/mcp",
+                "initialize",
+                true
+              ],
+              [
+                "POST",
+                "/mcp",
+                "notifications/initialized",
+                true
+              ],
+              [
+                "POST",
+                "/mcp",
+                "tools/list",
+                true
+              ]
+            ]
+          }
+        },
+        {
+          "method": "mcp_catalog/logout",
+          "notifications": [
+            {
+              "method": "mcp_catalog/authRequired",
+              "params": {
+                "descriptorRevision": "mcp-auth-descriptor:<descriptor-1>:1",
+                "name": "secure",
+                "observedConnectionRevision": null,
+                "sessionId": "<session-1>"
+              }
+            },
+            {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "sources": [
+                  {
+                    "displayName": "secure",
+                    "error": null,
+                    "kind": "server",
+                    "name": "secure",
+                    "pluginName": null,
+                    "status": "needs_auth",
+                    "tools": [],
+                    "transport": "streamable-http"
+                  }
+                ]
+              },
+              "method": "runtime/updated"
+            },
+            {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "sources": [
+                  {
+                    "displayName": "secure",
+                    "error": null,
+                    "kind": "server",
+                    "name": "secure",
+                    "pluginName": null,
+                    "status": "needs_auth",
+                    "tools": [],
+                    "transport": "streamable-http"
+                  }
+                ]
+              },
+              "method": "runtime/updated"
+            }
+          ],
+          "response": {
+            "result": {
+              "runtime": {
+                "mcp": {
+                  "connectorError": null,
+                  "discoveryErrors": {},
+                  "manageConnectorsUrl": null,
+                  "sources": [
+                    {
+                      "displayName": "secure",
+                      "error": null,
+                      "kind": "server",
+                      "name": "secure",
+                      "pluginName": null,
+                      "status": "needs_auth",
+                      "tools": [],
+                      "transport": "streamable-http"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "keyring": {}
+        },
+        {
+          "method": "mcp_catalog/refresh",
+          "notifications": [
+            {
+              "method": "mcp_catalog/authRequired",
+              "params": {
+                "descriptorRevision": "mcp-auth-descriptor:<descriptor-1>:1",
+                "name": "secure",
+                "observedConnectionRevision": null,
+                "sessionId": "<session-1>"
+              }
+            },
+            {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "sources": [
+                  {
+                    "displayName": "secure",
+                    "error": null,
+                    "kind": "server",
+                    "name": "secure",
+                    "pluginName": null,
+                    "status": "needs_auth",
+                    "tools": [],
+                    "transport": "streamable-http"
+                  }
+                ]
+              },
+              "method": "runtime/updated"
+            },
+            {
+              "mcp": {
+                "connectorError": null,
+                "discoveryErrors": {},
+                "manageConnectorsUrl": null,
+                "sources": [
+                  {
+                    "displayName": "secure",
+                    "error": null,
+                    "kind": "server",
+                    "name": "secure",
+                    "pluginName": null,
+                    "status": "needs_auth",
+                    "tools": [],
+                    "transport": "streamable-http"
+                  }
+                ]
+              },
+              "method": "runtime/updated"
+            }
+          ],
+          "response": {
+            "result": {
+              "runtime": {
+                "mcp": {
+                  "connectorError": null,
+                  "discoveryErrors": {},
+                  "manageConnectorsUrl": null,
+                  "sources": [
+                    {
+                      "displayName": "secure",
+                      "error": null,
+                      "kind": "server",
+                      "name": "secure",
+                      "pluginName": null,
+                      "status": "needs_auth",
+                      "tools": [],
+                      "transport": "streamable-http"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ],
+      "scenario": {
+        "config": "\n[[mcp_servers]]\nname = \"secure\"\ntransport = \"streamable-http\"\nurl = \"{server:secure}/mcp\"\nauth = { type = \"oauth\", scopes = [], redirect_port = {redirect:secure} }\n",
+        "keyring": {
+          "mcp-oauth:secure:client_info": {
+            "client_id": "client-1",
+            "redirect_uris": [
+              "http://127.0.0.1:{redirect:secure}/callback"
+            ],
+            "token_endpoint_auth_method": "none"
+          },
+          "mcp-oauth:secure:fingerprint": "{\"url\":\"{server:secure}/mcp\",\"scopes_sorted\":[],\"client_marker\":\"<dcr>\"}",
+          "mcp-oauth:secure:tokens": {
+            "access_token": "at-1",
+            "expires_at": 4102444800.0,
+            "expires_in": 3600,
+            "refresh_token": "rt-1",
+            "token_type": "Bearer"
+          }
+        },
+        "name": "session/stored-credentials-connect",
+        "servers": {
+          "secure": {
+            "mcp": {
+              "path": "/mcp",
+              "token": "at-1",
+              "tools": [
+                {
+                  "description": "Search the docs.\nMatches titles and bodies.",
+                  "inputSchema": {
+                    "type": "object"
+                  },
+                  "name": "search"
+                },
+                {
+                  "description": "Fetch one page",
+                  "inputSchema": {
+                    "type": "object"
+                  },
+                  "name": "fetch"
+                }
+              ]
+            },
+            "routes": {
+              "GET /.well-known/oauth-authorization-server": [
+                {
+                  "json": {
+                    "authorization_endpoint": "{base}/authorize",
+                    "code_challenge_methods_supported": [
+                      "S256"
+                    ],
+                    "issuer": "{base}",
+                    "registration_endpoint": "{base}/register",
+                    "response_types_supported": [
+                      "code"
+                    ],
+                    "token_endpoint": "{base}/token"
+                  },
+                  "status": 200
+                }
+              ],
+              "GET /.well-known/oauth-protected-resource/mcp": [
+                {
+                  "json": {
+                    "authorization_servers": [
+                      "{base}"
+                    ],
+                    "resource": "{base}/mcp"
+                  },
+                  "status": 200
+                }
+              ],
+              "POST /register": [
+                {
+                  "json": {
+                    "client_id": "client-1",
+                    "redirect_uris": [
+                      "http://127.0.0.1:{redirect}/callback"
+                    ],
+                    "token_endpoint_auth_method": "none"
+                  },
+                  "status": 201
+                }
+              ],
+              "POST /token": [
+                {
+                  "json": {
+                    "access_token": "at-1",
+                    "expires_in": 3600,
+                    "refresh_token": "rt-1",
+                    "token_type": "Bearer"
+                  },
+                  "status": 200
+                }
+              ]
+            }
+          }
+        },
+        "steps": [
+          {
+            "start": {}
+          },
+          {
+            "settle": 1.0
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/read",
+              "params": {
+                "sessionId": "$S1"
+              }
+            }
+          },
+          {
+            "wire": [
+              "secure"
+            ]
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/logout",
+              "params": {
+                "name": "secure",
+                "sessionId": "$S1"
+              }
+            }
+          },
+          {
+            "keyring": true
+          },
+          {
+            "send": {
+              "method": "mcp_catalog/refresh",
+              "params": {
+                "sessionId": "$S1"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "schemaVersion": 1
+}

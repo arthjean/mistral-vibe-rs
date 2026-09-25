@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Manage MCP servers the way the reference does. The app server answers the
+  seven `mcp_catalog/*` methods and their `mcp/*` aliases with the reference's
+  validation, targeting and answers, edits the user configuration when no
+  session is attached, and raises `mcp_catalog/authUrl` and
+  `mcp_catalog/authRequired`; a missing method answers `not_implemented`. A
+  login now answers once the browser comes back, and `vibe mcp add`, the
+  `/mcp login` command, the integrations panel and the ACP agent show its URL
+  as soon as it is published; the `mcp/auth/complete` extension is gone.
+  `vibe mcp remove` deletes a server's OAuth credentials before its entry and
+  restores them when the entry cannot be removed. A streamable HTTP server
+  that names no session is no longer sent a standing `GET`.
+
 - Reach every provider style the way the reference backends do. Reasoning
   items are replayed on the next request, the Responses API gets its
   `include` list and its reasoning items back, `Retry-After` paces a retry,

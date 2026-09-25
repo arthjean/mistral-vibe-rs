@@ -195,6 +195,90 @@ impl AppServer {
         )
     }
 
+    /// Runs one MCP catalog call and answers it: the requirements its
+    /// convergence raised, the answer with the runtime a mutation declares,
+    /// and the `runtime/updated` that follows a session's.
+    pub async fn execute_mcp_catalog(
+        &self,
+        request_id: RequestId,
+        call: McpCatalogCall,
+        target: McpCatalogTarget,
+        notify: McpCatalogNotify,
+    ) -> DispatchBatch {
+        let answers_runtime = call.answers_runtime();
+        let session_id = match &target {
+            McpCatalogTarget::Session(session_id) => Some(session_id.clone()),
+            McpCatalogTarget::Sessionless => None,
+        };
+        let outcome = match &self.resource_backend {
+            Some(backend) => backend.mcp_catalog(call, target, notify).await,
+            None => match (&call, &session_id) {
+                // With no backend nothing but the recorded state is known, so
+                // a read answers it and anything else is refused.
+                (McpCatalogCall::Read { .. }, Some(session_id)) => self
+                    .resources
+                    .lock()
+                    .ok()
+                    .and_then(|resources| resources.runtime(session_id).ok())
+                    .and_then(|mut runtime| runtime.remove("mcp"))
+                    .map(|mcp| McpCatalogOutcome {
+                        result: BTreeMap::from([("mcp".to_owned(), mcp)]),
+                        runtime_updated: false,
+                        integrations: None,
+                        auth_required: Vec::new(),
+                    })
+                    .ok_or_else(|| {
+                        McpCatalogError::refused(
+                            ProtocolErrorCode::InternalError,
+                            "Resource state is unavailable",
+                        )
+                    }),
+                _ => Err(McpCatalogError::refused(
+                    ProtocolErrorCode::NotImplemented,
+                    "The MCP catalog is not available on this server",
+                )),
+            },
+        };
+        let mut outcome = match outcome {
+            Ok(outcome) => outcome,
+            Err(error) => return catalog_error_batch(request_id, error),
+        };
+        if let (Some(session_id), Some(state)) = (&session_id, outcome.integrations.take())
+            && let Ok(mut resources) = self.resources.lock()
+        {
+            resources.record_integrations(session_id, state);
+        }
+        let mut outbound = session_id
+            .as_deref()
+            .map(|session_id| auth_required_frames(self, session_id, &outcome.auth_required))
+            .unwrap_or_default();
+        if answers_runtime {
+            let runtime = session_id
+                .as_deref()
+                .and_then(|session_id| self.runtime_snapshot(session_id))
+                .unwrap_or(Value::Null);
+            outcome.result.insert("runtime".to_owned(), runtime);
+        }
+        outbound.push(success_bytes(request_id, outcome.result));
+        if outcome.runtime_updated
+            && let Some(session_id) = &session_id
+            && let Some(runtime) = self.runtime_snapshot(session_id)
+        {
+            outbound.push(encode_notification(
+                "runtime/updated",
+                BTreeMap::from([
+                    ("sessionId".to_owned(), json!(session_id)),
+                    ("runtime".to_owned(), runtime),
+                ]),
+            ));
+        }
+        DispatchBatch {
+            outbound,
+            deferred: Vec::new(),
+            close_after_flush: false,
+        }
+    }
+
     pub async fn execute_cloud_request(
         &self,
         request_id: RequestId,
@@ -253,7 +337,7 @@ impl AppServer {
         let warning = |message: String| ResourceSignals {
             runtime_updated: false,
             warnings: vec![message],
-            auth_url: None,
+            auth_required: Vec::new(),
             integrations: None,
         };
         let mut signals = match &self.resource_backend {

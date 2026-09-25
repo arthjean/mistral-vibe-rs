@@ -68,7 +68,7 @@ pub fn mcp_overlay(mcp_result: &Value, connector_result: &Value) -> Overlay {
         }
         items.push(OverlayItem::new(
             "heading:connectors",
-            "Workspace Connectors",
+            "Available Connectors",
             "",
             true,
         ));

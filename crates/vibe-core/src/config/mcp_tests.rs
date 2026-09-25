@@ -9,7 +9,7 @@ use super::mcp::{
 };
 use super::*;
 use crate::mcp::{
-    McpAuthConfig, McpOAuthConfig, McpServerConfig, McpStaticAuth, McpTransportConfig,
+    McpAuthConfig, McpDeclared, McpOAuthConfig, McpServerConfig, McpStaticAuth, McpTransportConfig,
 };
 
 const WORKSPACE: &str = "/workspace";
@@ -58,6 +58,7 @@ fn remote(alias: &str, url: &str) -> McpServerConfig {
         auth: McpAuthConfig::default(),
         prompt: None,
         sampling_enabled: true,
+        declared: None,
     }
 }
 
@@ -591,6 +592,12 @@ fn a_persisted_server_round_trips_through_the_file_it_was_written_to() {
         .mcp_servers(Path::new(WORKSPACE))
         .expect("the entry decodes");
 
+    // Decoding records the entry as written, which is what the reference
+    // fingerprints.
+    server.declared = Some(McpDeclared {
+        url: Some("https://docs.example/mcp".to_owned()),
+        ..McpDeclared::default()
+    });
     assert_eq!(reloaded.len(), 1);
     assert_eq!(reloaded.remove(0), server);
 }
@@ -622,6 +629,12 @@ fn a_static_auth_entry_round_trips_without_the_defaults_it_never_set() {
         .expect("the configuration reloads")
         .mcp_servers(Path::new(WORKSPACE))
         .expect("the entry decodes");
+    // Decoding records the entry as written, which is what the reference
+    // fingerprints.
+    server.declared = Some(McpDeclared {
+        url: Some("https://docs.example/mcp".to_owned()),
+        ..McpDeclared::default()
+    });
     assert_eq!(reloaded[0], server);
 }
 

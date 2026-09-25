@@ -29,6 +29,9 @@ pub enum ProtocolErrorCode {
     Forbidden,
     /// The method is not part of [`SERVER_METHODS`](crate::SERVER_METHODS).
     MethodNotFound,
+    /// The method exists but this server, or the part of it the call reaches,
+    /// does not offer it.
+    NotImplemented,
     /// The server failed for a reason the client cannot act on.
     InternalError,
 }

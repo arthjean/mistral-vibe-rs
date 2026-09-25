@@ -11,7 +11,7 @@
 /// Lifecycle methods (`initialize`, `initialized`, `shutdown`, `exit`) are
 /// deliberately absent: they are handled before method dispatch and are not
 /// part of the negotiated surface.
-pub const SERVER_METHODS: [&str; 94] = [
+pub const SERVER_METHODS: [&str; 101] = [
     "account/read",
     "agents/install",
     "agents/list",
@@ -44,6 +44,13 @@ pub const SERVER_METHODS: [&str; 94] = [
     "mcp/read",
     "mcp/refresh",
     "mcp/toggle",
+    "mcp_catalog/add",
+    "mcp_catalog/login",
+    "mcp_catalog/logout",
+    "mcp_catalog/read",
+    "mcp_catalog/refresh",
+    "mcp_catalog/remove",
+    "mcp_catalog/toggle",
     "narration/summarize",
     "projectLinks/create",
     "projectLinks/inspectRoot",
@@ -116,10 +123,9 @@ pub const SERVER_METHODS: [&str; 94] = [
 /// written against the reference protocol never learns a name only this
 /// implementation answers. Each one has a row in the Accepted divergences table
 /// of `docs/parity.md`.
-pub const LOCAL_EXTENSION_METHODS: [&str; 4] = [
+pub const LOCAL_EXTENSION_METHODS: [&str; 3] = [
     "config/batchWrite",
     "connectors/toggle",
-    "mcp/auth/complete",
     "session/overrides/write",
 ];
 

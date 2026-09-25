@@ -19,6 +19,7 @@ use crate::text::truncate_utf8;
 
 mod validate;
 
+pub(crate) use validate::validate_arguments;
 pub use validate::{SchemaViolation, apply_defaults, coerce_and_validate, python_bool};
 use validate::{render_violations, validate_at};
 
@@ -58,11 +59,6 @@ impl ToolOutputSink {
     #[must_use]
     pub fn discard(max_output_bytes: usize) -> Self {
         Self::new(None, max_output_bytes)
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_streaming(stream: ToolStreamSink, max_output_bytes: usize) -> Self {
-        Self::new(Some(stream), max_output_bytes)
     }
 
     pub fn emit(&self, chunk: impl Into<String>) -> Result<(), ToolError> {

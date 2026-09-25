@@ -149,6 +149,58 @@ impl KeyringBackend for NativeKeyringBackend {
     }
 }
 
+/// A credential store held in memory: what a host without one is given for
+/// a test or a replay, and what the capture scripts install in the reference.
+#[derive(Default)]
+pub struct MemoryKeyringBackend {
+    entries: Mutex<BTreeMap<(String, String), String>>,
+}
+
+impl MemoryKeyringBackend {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Every entry, keyed by service and account.
+    #[must_use]
+    pub fn entries(&self) -> BTreeMap<(String, String), String> {
+        self.entries
+            .lock()
+            .map(|entries| entries.clone())
+            .unwrap_or_default()
+    }
+}
+
+impl KeyringBackend for MemoryKeyringBackend {
+    fn get(&self, service: &str, account: &str) -> Result<Option<String>, KeyringFailure> {
+        let entries = self
+            .entries
+            .lock()
+            .map_err(|_| KeyringFailure::Backend("keyring poisoned".to_owned()))?;
+        Ok(entries
+            .get(&(service.to_owned(), account.to_owned()))
+            .cloned())
+    }
+
+    fn set(&self, service: &str, account: &str, secret: &str) -> Result<(), KeyringFailure> {
+        self.entries
+            .lock()
+            .map_err(|_| KeyringFailure::Backend("keyring poisoned".to_owned()))?
+            .insert((service.to_owned(), account.to_owned()), secret.to_owned());
+        Ok(())
+    }
+
+    fn delete(&self, service: &str, account: &str) -> Result<(), KeyringFailure> {
+        self.entries
+            .lock()
+            .map_err(|_| KeyringFailure::Backend("keyring poisoned".to_owned()))?
+            .remove(&(service.to_owned(), account.to_owned()))
+            .map(drop)
+            .ok_or(KeyringFailure::NoEntry)
+    }
+}
+
 /// The credential store the product consults: current service first, then the
 /// reference legacy name, then the prior-build name, migrating on read and
 /// caching per account.

@@ -9,7 +9,8 @@
 use super::*;
 use crate::mcp::{
     DEFAULT_MCP_API_KEY_FORMAT, DEFAULT_MCP_API_KEY_HEADER, DEFAULT_MCP_OAUTH_REDIRECT_PORT,
-    MCP_TOKEN_PLACEHOLDER, McpAuthConfig, McpOAuthConfig, McpStaticAuth,
+    MCP_TOKEN_PLACEHOLDER, McpAuthConfig, McpDeclared, McpDeclaredCommand, McpOAuthConfig,
+    McpStaticAuth,
 };
 
 /// The greatest length a normalized alias keeps.
@@ -290,6 +291,25 @@ pub(super) fn decode_mcp_server(
         }
     };
     let preference = IntegrationCollection::McpServers.preference(table)?;
+    let written = if declared == "stdio" {
+        McpDeclared {
+            command: match table.get("command") {
+                Some(Value::String(command)) => Some(McpDeclaredCommand::Text(command.clone())),
+                Some(Value::Array(_)) => Some(McpDeclaredCommand::Argv(optional_mcp_strings(
+                    table, "command",
+                )?)),
+                _ => None,
+            },
+            args: optional_mcp_strings(table, "args")?,
+            cwd: optional_mcp_string(table, "cwd")?.map(str::to_owned),
+            url: None,
+        }
+    } else {
+        McpDeclared {
+            url: Some(required_mcp_string(table, "url")?.to_owned()),
+            ..McpDeclared::default()
+        }
+    };
     Ok(McpServerConfig {
         alias,
         transport,
@@ -310,6 +330,7 @@ pub(super) fn decode_mcp_server(
         auth,
         prompt: optional_mcp_string(table, "prompt")?.map(str::to_owned),
         sampling_enabled: optional_mcp_bool(table, "sampling_enabled")?.unwrap_or(true),
+        declared: Some(written),
     })
 }
 
@@ -888,6 +909,37 @@ fn point_at(transport: &mut McpTransportConfig, replacement: Url) {
         }
         McpTransportConfig::Stdio { .. } => {}
     }
+}
+
+/// A remote OAuth server to add, reference `persist_oauth_mcp_server`'s
+/// arguments.
+#[derive(Debug, Clone, Copy)]
+pub struct McpOAuthAddition<'a> {
+    pub url: &'a str,
+    pub name: Option<&'a str>,
+    pub scopes: &'a [String],
+    /// The legacy `http` transport rather than `streamable-http`.
+    pub legacy_http: bool,
+    pub allow_insecure_http: bool,
+}
+
+/// Reference `PersistedMCPServerResult` as the catalog answers it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct McpOAuthAdded {
+    pub name: String,
+    /// The URL as the configuration carries it.
+    pub url: String,
+    pub created: bool,
+}
+
+/// The URL `server` was written with, which the parsed form may spell
+/// differently.
+pub(super) fn declared_url(server: &McpServerConfig, url: &Url) -> String {
+    server
+        .declared
+        .as_ref()
+        .and_then(|declared| declared.url.clone())
+        .unwrap_or_else(|| url.to_string())
 }
 
 /// What removing a server by name did.

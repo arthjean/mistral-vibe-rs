@@ -310,6 +310,168 @@ impl super::LayeredConfig {
         })
     }
 
+    /// Adds a remote server that signs in with OAuth, or reports the one
+    /// already addressing that URL.
+    ///
+    /// Reference `persist_oauth_mcp_server`, which the catalog's `add` reaches:
+    /// a URL some entry already addresses answers that entry, uncreated, when
+    /// it signs in with OAuth and was not asked for under another name; an
+    /// alias is derived from the URL when none is requested, and a requested
+    /// one is taken as it is or refused.
+    pub fn persist_oauth_mcp_server(
+        &self,
+        request: &mcp::McpOAuthAddition<'_>,
+    ) -> Result<mcp::McpOAuthAdded, ConfigError> {
+        let normalized_url =
+            mcp::normalize_mcp_server_url_with(request.url, request.allow_insecure_http)?;
+        let requested_name = request.name.map(mcp::normalize_mcp_server_name);
+        if requested_name.as_deref() == Some("") {
+            return Err(ConfigError::InvalidMcp(
+                "MCP server name must contain letters or numbers".to_owned(),
+            ));
+        }
+        let snapshot = self.load()?;
+        let active = snapshot.mcp_servers(&self.paths.working_directory)?;
+        let key = mcp::mcp_server_url_key(&normalized_url);
+        if let Some(existing) = active.iter().find(|server| {
+            mcp::mcp_transport_url(&server.transport)
+                .is_some_and(|url| mcp::mcp_server_url_key(&mcp::declared_url(server, url)) == key)
+        }) {
+            if !matches!(existing.auth, McpAuthConfig::Oauth(_)) {
+                return Err(ConfigError::InvalidMcp(format!(
+                    "MCP server URL is already configured as `{}`, which authenticates \
+                     statically; only OAuth servers can be added here",
+                    existing.alias
+                )));
+            }
+            if requested_name
+                .as_deref()
+                .is_some_and(|requested| requested != existing.alias)
+            {
+                return Err(ConfigError::InvalidMcp(format!(
+                    "MCP server URL is already configured as `{}`",
+                    existing.alias
+                )));
+            }
+            let url = mcp::mcp_transport_url(&existing.transport)
+                .map(|url| mcp::declared_url(existing, url))
+                .unwrap_or_default();
+            return Ok(mcp::McpOAuthAdded {
+                name: existing.alias.clone(),
+                url,
+                created: false,
+            });
+        }
+        let existing = active
+            .iter()
+            .map(|server| server.alias.clone())
+            .collect::<BTreeSet<_>>();
+        let name = mcp::resolve_new_mcp_server_name(
+            requested_name.as_deref(),
+            &normalized_url,
+            &existing,
+        )?;
+        let url = Url::parse(&normalized_url).map_err(|_| {
+            ConfigError::InvalidMcp("MCP server URL must be a valid URL".to_owned())
+        })?;
+        let transport = if request.legacy_http {
+            McpTransportConfig::Http {
+                url,
+                headers: BTreeMap::new(),
+            }
+        } else {
+            McpTransportConfig::StreamableHttp {
+                url,
+                headers: BTreeMap::new(),
+            }
+        };
+        let config = McpServerConfig {
+            alias: name.clone(),
+            transport,
+            enabled: true,
+            disabled_tools: BTreeSet::new(),
+            startup_timeout_ms: crate::mcp::DEFAULT_MCP_STARTUP_TIMEOUT_MS,
+            tool_timeout_ms: crate::mcp::DEFAULT_MCP_TOOL_TIMEOUT_MS,
+            auth: McpAuthConfig::Oauth(crate::mcp::McpOAuthConfig {
+                scopes: request.scopes.to_vec(),
+                ..crate::mcp::McpOAuthConfig::default()
+            }),
+            prompt: None,
+            sampling_enabled: true,
+            declared: Some(crate::mcp::McpDeclared {
+                url: Some(normalized_url.clone()),
+                ..crate::mcp::McpDeclared::default()
+            }),
+        };
+        let added = self.persist_mcp_server(&config)?;
+        Ok(mcp::McpOAuthAdded {
+            name: added.server.alias,
+            url: normalized_url,
+            created: added.created,
+        })
+    }
+
+    /// Switches a configured server, or one of its tools, off or back on.
+    ///
+    /// Reference `persist_mcp_toggle` for a server: only the field the toggle
+    /// is about is written, a tool is appended to or dropped from the entry's
+    /// `disabled_tools` in place, and a name no entry of the file writes land
+    /// in carries is left alone without complaint.
+    pub fn persist_mcp_toggle(
+        &self,
+        name: &str,
+        disabled: bool,
+        tool_name: Option<&str>,
+    ) -> Result<(), ConfigError> {
+        let snapshot = self.load()?;
+        let collection = IntegrationCollection::McpServers;
+        let target = snapshot.selected_target;
+        let mut entries = config_array_for_target(&snapshot, target, collection)?;
+        let Some(entry) = entries
+            .iter_mut()
+            .filter_map(Value::as_table_mut)
+            .find(|entry| entry.get("name").and_then(Value::as_str) == Some(name))
+        else {
+            return Ok(());
+        };
+        match tool_name {
+            Some(tool_name) => {
+                let mut tools = entry
+                    .get("disabled_tools")
+                    .and_then(Value::as_array)
+                    .map(|tools| {
+                        tools
+                            .iter()
+                            .filter_map(Value::as_str)
+                            .map(str::to_owned)
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                if disabled {
+                    if !tools.iter().any(|tool| tool == tool_name) {
+                        tools.push(tool_name.to_owned());
+                    }
+                } else {
+                    tools.retain(|tool| tool != tool_name);
+                }
+                entry.insert(
+                    "disabled_tools".to_owned(),
+                    Value::Array(tools.into_iter().map(Value::String).collect()),
+                );
+            }
+            None => {
+                entry.insert("disabled".to_owned(), Value::Boolean(disabled));
+            }
+        }
+        self.replace_array_cas(
+            target,
+            snapshot.fingerprints.get(&target).cloned().flatten(),
+            collection.key(),
+            entries,
+        )?;
+        Ok(())
+    }
+
     /// Drops the entry named `name` from the file writes land in.
     ///
     /// A name no entry carries is reported as not removed rather than raised:

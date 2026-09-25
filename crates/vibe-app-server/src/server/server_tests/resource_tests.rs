@@ -104,69 +104,65 @@ async fn operational_resources_are_typed_and_transport_failures_are_canonical() 
         assert!(!published.contains(workspace_tool), "{published:?}");
     }
 
-    let add = connection.dispatch(&request(
+    // The catalog is routed apart from the other resources: it resolves its
+    // target against the sessions this connection holds, then runs deferred.
+    let read = connection.dispatch(&request(
         4,
-        "mcp/add",
-        json!({
-            "sessionId": "session-1",
-            "url": "https://127.0.0.1:9/mcp",
-            "name": "example"
-        }),
+        "mcp_catalog/read",
+        json!({"sessionId": "session-1"}),
     ));
-    let deferred = add.deferred.first();
-    assert!(matches!(
-        deferred,
-        Some(DeferredWork::ResourceRequest { .. })
-    ));
-    let Some(DeferredWork::ResourceRequest {
+    let Some(DeferredWork::McpCatalog {
         request_id,
-        session_id,
-        command,
-    }) = deferred
+        call,
+        target,
+        publish,
+    }) = read.deferred.first()
     else {
-        return;
+        unreachable!("mcp_catalog/read runs deferred: {:?}", read.deferred);
     };
-    let add = server
-        .execute_resource_request(request_id.clone(), session_id.clone(), command.clone())
+    assert!(publish, "a connection holding a session hears the catalog");
+    let read = server
+        .execute_mcp_catalog(
+            request_id.clone(),
+            call.clone(),
+            target.clone(),
+            Arc::new(|_, _| {}),
+        )
         .await;
     let Envelope::Success(SuccessResponse { result, .. }) =
-        decode_frame(&add.outbound[0]).expect("MCP response")
+        decode_frame(&read.outbound[0]).expect("catalog response")
     else {
-        unreachable!("mcp/add answers");
+        unreachable!("mcp_catalog/read answers");
     };
     assert_eq!(
-        result.keys().map(String::as_str).collect::<Vec<_>>(),
-        ["created", "name", "runtime", "url"]
+        result["mcp"]
+            .as_object()
+            .map(|state| state.keys().map(String::as_str).collect::<Vec<_>>()),
+        Some(vec![
+            "connectorError",
+            "discoveryErrors",
+            "manageConnectorsUrl",
+            "sources"
+        ])
     );
-    assert_eq!(result["created"], json!(true));
-    assert_eq!(result["name"], json!("example"));
-    assert_eq!(result["url"], json!("https://127.0.0.1:9/mcp"));
-    // The source could not be reached, so it is published as unavailable
-    // rather than as a switch the operator threw.
-    assert_eq!(
-        result["runtime"]["mcp"]["sources"][0]["status"],
-        json!("unavailable")
-    );
-    assert!(
-        result["runtime"]["mcp"]["discoveryErrors"]["example"]
-            .as_str()
-            .is_some_and(|message| message.contains("MCP `example`")),
-        "the source that would not start is named: {}",
-        result["runtime"]["mcp"]
-    );
-    // The change and the problem cross under their reference names.
-    assert!(matches!(
-        decode_frame(&add.outbound[1]).expect("MCP notification"),
-        Envelope::Notification(Notification { method, .. }) if method == "runtime/updated"
-    ));
-    assert!(matches!(
-        decode_frame(&add.outbound[2]).expect("MCP warning"),
-        Envelope::Notification(Notification { method, ref params, .. })
-            if method == "warning"
-                && params["warning"]["message"]
-                    .as_str()
-                    .is_some_and(|message| message.contains("MCP `example`"))
-    ));
+    // A session this connection does not hold is not found, and a change
+    // naming no session is refused while one is attached.
+    for (params, code) in [
+        (json!({"sessionId": "elsewhere"}), "not_found"),
+        (json!({"url": "https://mcp.example/rpc"}), "conflict"),
+    ] {
+        let method = if params.get("url").is_some() {
+            "mcp_catalog/add"
+        } else {
+            "mcp_catalog/read"
+        };
+        let refused = connection.dispatch(&request(5, method, params));
+        assert!(matches!(
+            decode_frame(&refused.outbound[0]).expect("refusal"),
+            Envelope::Error(ErrorResponse { error, .. })
+                if serde_json::to_value(error.code).ok() == Some(json!(code))
+        ));
+    }
 }
 
 #[tokio::test]
@@ -204,21 +200,22 @@ async fn attached_resource_backend_uses_session_tools_and_returns_canonical_stat
         }),
     ));
     assert!(add.outbound.is_empty());
-    let deferred = add.deferred.first();
-    assert!(matches!(
-        deferred,
-        Some(DeferredWork::ResourceRequest { .. })
-    ));
-    let Some(DeferredWork::ResourceRequest {
+    let Some(DeferredWork::McpCatalog {
         request_id,
-        session_id,
-        command,
-    }) = deferred
+        call,
+        target,
+        ..
+    }) = add.deferred.first()
     else {
-        return;
+        unreachable!("mcp/add runs deferred: {:?}", add.deferred);
     };
     let added = server
-        .execute_resource_request(request_id.clone(), session_id.clone(), command.clone())
+        .execute_mcp_catalog(
+            request_id.clone(),
+            call.clone(),
+            target.clone(),
+            Arc::new(|_, _| {}),
+        )
         .await;
     assert_eq!(added.outbound.len(), 2);
     assert!(matches!(
@@ -234,21 +231,22 @@ async fn attached_resource_backend_uses_session_tools_and_returns_canonical_stat
     ));
 
     let read = connection.dispatch(&request(4, "mcp/read", json!({"sessionId": "session-1"})));
-    let deferred = read.deferred.first();
-    assert!(matches!(
-        deferred,
-        Some(DeferredWork::ResourceRequest { .. })
-    ));
-    let Some(DeferredWork::ResourceRequest {
+    let Some(DeferredWork::McpCatalog {
         request_id,
-        session_id,
-        command,
-    }) = deferred
+        call,
+        target,
+        ..
+    }) = read.deferred.first()
     else {
-        return;
+        unreachable!("mcp/read runs deferred: {:?}", read.deferred);
     };
     let read = server
-        .execute_resource_request(request_id.clone(), session_id.clone(), command.clone())
+        .execute_mcp_catalog(
+            request_id.clone(),
+            call.clone(),
+            target.clone(),
+            Arc::new(|_, _| {}),
+        )
         .await;
     assert!(matches!(
         decode_frame(&read.outbound[0]).expect("canonical state"),

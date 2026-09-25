@@ -18,8 +18,8 @@ use vibe_core::integrations::{
     ConnectorRegistry, ConnectorView, redact,
 };
 use vibe_core::mcp::{
-    DefaultMcpPeerFactory, McpPeerFactory, McpRegistry, McpServerConfig, McpServerStatus,
-    McpServerView, McpTransportConfig,
+    DefaultMcpPeerFactory, McpAuthenticationService, McpPeerFactory, McpRegistry, McpServerConfig,
+    McpServerStatus, McpServerView, SamplingHandler,
 };
 use vibe_core::observability::{FileLog, LOG_DEFAULT_PAGE_LIMIT, LogLevel, entry_identity};
 use vibe_core::platform::{Platform, parse_policy_path};
@@ -34,17 +34,41 @@ use vibe_core::tools::config::ShellCommandConfig;
 
 mod backend_command;
 mod core_backend;
-mod mcp_oauth;
+pub mod mcp_catalog;
 mod mistral_connector;
 mod views;
 
 use views::*;
 
-pub use backend_command::{
-    ConnectorCommand, McpAddTransport, McpCommand, ResourceBackendCommand, ShellCommand,
+pub use backend_command::{ConnectorCommand, ResourceBackendCommand, ShellCommand};
+pub use mcp_catalog::{
+    McpCatalogCall, McpCatalogError, McpCatalogNotify, McpCatalogOutcome, McpCatalogTarget,
 };
-pub use mcp_oauth::production_mcp_adapters;
 pub use mistral_connector::MistralConnectorClient;
+
+/// The peer factory the installed binaries connect MCP servers through.
+///
+/// The sampling handler is what turns an entry's `sampling_enabled` into a
+/// capability: it carries the provider the driver already runs turns on.
+#[must_use]
+pub fn production_mcp_factory(
+    sampling: Option<Arc<dyn SamplingHandler>>,
+) -> Arc<dyn McpPeerFactory> {
+    Arc::new(
+        sampling.map_or_else(DefaultMcpPeerFactory::default, |handler| {
+            DefaultMcpPeerFactory::with_sampling(handler)
+        }),
+    )
+}
+
+/// The authentication service the installed binaries resolve MCP credentials
+/// through, over the operating system's keyring.
+#[must_use]
+pub fn production_mcp_authentication() -> Arc<McpAuthenticationService> {
+    Arc::new(McpAuthenticationService::new(Some(Arc::new(
+        vibe_core::auth::McpOAuthStore::native(),
+    ))))
+}
 
 pub const RESOURCE_METHODS: &[&str] = &[
     "account/read",
@@ -56,13 +80,6 @@ pub const RESOURCE_METHODS: &[&str] = &[
     "diagnostics/logs/read",
     "feedback/record",
     "feedback/shouldShow",
-    "mcp/add",
-    "mcp/auth/complete",
-    "mcp/login",
-    "mcp/logout",
-    "mcp/read",
-    "mcp/refresh",
-    "mcp/toggle",
     "narration/summarize",
     "review/approve",
     "review/baseline",
@@ -87,13 +104,6 @@ pub const BACKEND_RESOURCE_METHODS: &[&str] = &[
     "connectors/read",
     "connectors/refresh",
     "connectors/toggle",
-    "mcp/add",
-    "mcp/auth/complete",
-    "mcp/login",
-    "mcp/logout",
-    "mcp/read",
-    "mcp/refresh",
-    "mcp/toggle",
     "shell/interrupt",
     "shell/run",
 ];
@@ -125,8 +135,9 @@ pub struct ResourceSignals {
     pub runtime_updated: bool,
     /// Recoverable problems, each published as its own `warning`.
     pub warnings: Vec<String>,
-    /// An MCP source waiting on authorization, published as `mcp/authUrl`.
-    pub auth_url: Option<McpAuthUrl>,
+    /// The `mcp_catalog/authRequired` parameters the catalog accepted, each
+    /// published ahead of the answer and followed by a `runtime/updated`.
+    pub auth_required: Vec<Map<String, Value>>,
     /// What the backend knows about this session's integrations after the
     /// dispatch.
     ///
@@ -144,13 +155,6 @@ pub struct IntegrationState {
     pub mcp: Value,
     /// A `ConnectorCounts`.
     pub counts: Value,
-}
-
-/// The authorization an MCP source is waiting on.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct McpAuthUrl {
-    pub name: String,
-    pub url: String,
 }
 
 #[derive(Clone)]
@@ -186,27 +190,9 @@ impl ResourceBackendRequest {
 pub type ResourceFuture<'a, T> =
     Pin<Box<dyn Future<Output = Result<T, ResourceError>> + Send + 'a>>;
 
-pub trait McpAuthBackend: Send + Sync {
-    fn login<'a>(
-        &'a self,
-        session_id: &'a str,
-        config: &'a McpServerConfig,
-    ) -> ResourceFuture<'a, String>;
-
-    fn complete<'a>(
-        &'a self,
-        session_id: &'a str,
-        config: &'a McpServerConfig,
-    ) -> ResourceFuture<'a, bool>;
-
-    fn logout<'a>(
-        &'a self,
-        session_id: &'a str,
-        config: &'a McpServerConfig,
-    ) -> ResourceFuture<'a, ()>;
-
-    fn close_session<'a>(&'a self, session_id: &'a str) -> ResourceFuture<'a, ()>;
-}
+/// What a catalog call resolves to.
+pub type McpCatalogFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<McpCatalogOutcome, McpCatalogError>> + Send + 'a>>;
 
 pub trait ConnectorAuthBackend: Send + Sync {
     fn auth_url<'a>(
@@ -250,6 +236,22 @@ pub trait ResourceBackend: Send + Sync {
         &'a self,
         request: ResourceBackendRequest,
     ) -> ResourceFuture<'a, ResourceDispatch>;
+
+    /// Runs one MCP catalog call, publishing what it announces mid-flight
+    /// through `notify`.
+    fn mcp_catalog<'a>(
+        &'a self,
+        _call: McpCatalogCall,
+        _target: McpCatalogTarget,
+        _notify: McpCatalogNotify,
+    ) -> McpCatalogFuture<'a> {
+        Box::pin(async {
+            Err(McpCatalogError::refused(
+                vibe_protocol::ProtocolErrorCode::NotImplemented,
+                "The MCP catalog is not available on this server",
+            ))
+        })
+    }
 
     fn close_session<'a>(
         &'a self,
@@ -379,38 +381,6 @@ impl ResourceService {
             ResourceBackendCommand::Connector(ConnectorCommand::Toggle { .. }) => Err(
                 ResourceError::Unavailable("connector toggle backend is not attached".to_owned()),
             ),
-            ResourceBackendCommand::Mcp(McpCommand::Read) => {
-                Ok(read_only([("mcp", self.mcp_state())]))
-            }
-            ResourceBackendCommand::Mcp(McpCommand::Add(add)) => {
-                Err(ResourceError::Unavailable(format!(
-                    "MCP source `{}` cannot be added because no MCP backend is attached",
-                    add.requested_alias.as_deref().unwrap_or("mcp")
-                )))
-            }
-            ResourceBackendCommand::Mcp(McpCommand::Login { name }) => {
-                Err(ResourceError::Unavailable(format!(
-                    "MCP source `{name}` login backend is not attached"
-                )))
-            }
-            ResourceBackendCommand::Mcp(McpCommand::CompleteAuth { name }) => {
-                Err(ResourceError::Unavailable(format!(
-                    "MCP source `{name}` authentication backend is not attached"
-                )))
-            }
-            ResourceBackendCommand::Mcp(McpCommand::Logout { name }) => {
-                Err(ResourceError::Unavailable(format!(
-                    "MCP source `{name}` logout backend is not attached"
-                )))
-            }
-            ResourceBackendCommand::Mcp(McpCommand::Refresh { .. }) => Err(
-                ResourceError::Unavailable("MCP refresh backend is not attached".to_owned()),
-            ),
-            ResourceBackendCommand::Mcp(McpCommand::Toggle { name, .. }) => {
-                Err(ResourceError::Unavailable(format!(
-                    "MCP source `{name}` toggle backend is not attached"
-                )))
-            }
             ResourceBackendCommand::Shell(ShellCommand::Run { operation_id, .. }) => {
                 Err(ResourceError::Unavailable(format!(
                     "shell operation `{operation_id}` cannot run because no shell backend is attached"
@@ -717,18 +687,23 @@ impl ResourceService {
                             .map(|source| {
                                 json!({
                                     "name": source.name,
+                                    "displayName": source.name,
                                     "kind": "server",
                                     "transport": source.transport,
                                     "status": source.status,
                                     "tools": source.tools.iter().map(|(name, enabled)| {
                                         json!({"name": name, "description": "", "enabled": enabled})
-                                    }).collect::<Vec<_>>()
+                                    }).collect::<Vec<_>>(),
+                                    "error": null,
+                                    "pluginName": null,
                                 })
                             })
                             .collect(),
                     ),
                 ),
                 ("discoveryErrors".to_owned(), json!({})),
+                ("connectorError".to_owned(), Value::Null),
+                ("manageConnectorsUrl".to_owned(), Value::Null),
             ]
             .into_iter()
             .collect::<Map<_, _>>(),

@@ -883,18 +883,13 @@ fn last_line(stream: &[u8]) -> Option<String> {
 struct RefusingLogin;
 
 impl mcp_command::McpOAuthLogin for RefusingLogin {
-    fn begin<'a>(
+    fn login<'a>(
         &'a self,
-        _config: &'a vibe_core::mcp::McpServerConfig,
-    ) -> mcp_command::LoginFuture<'a, String> {
-        Box::pin(async { Err("the replay must never start an OAuth login".to_owned()) })
-    }
-
-    fn finish<'a>(
-        &'a self,
-        _config: &'a vibe_core::mcp::McpServerConfig,
+        _authentication: &'a vibe_core::mcp::McpAuthenticationService,
+        _name: &'a str,
+        _on_url: vibe_core::auth::AuthUrlSink,
     ) -> mcp_command::LoginFuture<'a, ()> {
-        Box::pin(async { Err("the replay must never wait on an OAuth login".to_owned()) })
+        Box::pin(async { Err("the replay must never start an OAuth login".to_owned()) })
     }
 
     fn open(&self, _url: &str) -> Result<(), String> {
@@ -936,7 +931,7 @@ impl McpSession {
         let environment = mcp_command::McpEnvironment::for_home(
             &self.vibe_home,
             &self.workspace,
-            Box::new(AbsentKeyring),
+            std::sync::Arc::new(AbsentKeyring),
             Box::new(RefusingLogin),
         );
         let mut stdout = Vec::new();

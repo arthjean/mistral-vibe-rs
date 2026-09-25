@@ -10,7 +10,7 @@ use super::super::interaction::{
     AuthAction, AuthActionKind, IntegrationKind, IntegrationTarget, OverlayAction, OverlayKind,
 };
 use super::super::pickers::{mcp_auth_overlay, mcp_detail_overlay, mcp_overlay};
-use super::super::runtime::{schedule_ui_call, schedule_ui_external};
+use super::super::runtime::{schedule_ui_background, schedule_ui_call, schedule_ui_external};
 use super::super::state::{EntryStatus, TuiState};
 use super::super::{InteractiveRuntime, UiOperation, push_local_document, push_local_notice};
 use super::map_value;
@@ -93,17 +93,59 @@ pub(in crate::tui) enum McpPendingOperation {
     },
     CopyUrl,
     OpenUrl,
-    /// A `/mcp login` waiting for the browser: the wait elapsed, and the login
-    /// is asked whether it finished.
-    AwaitLogin {
+    /// A server login published the URL that authorizes it.
+    LoginUrl {
         source: String,
-        attempt: u32,
+        origin: McpLoginOrigin,
     },
-    /// What the login answered when asked.
-    LoginChecked {
+    /// A server login answered: the browser came back, or the login failed.
+    LoginFinished {
         source: String,
-        attempt: u32,
+        origin: McpLoginOrigin,
     },
+}
+
+/// Who started a server login, which decides where its URL is shown.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::tui) enum McpLoginOrigin {
+    /// `/mcp login` or `/mcp add`: the URL goes to the transcript and the
+    /// browser, reference `_mcp_login`.
+    Command,
+    /// The integrations overlay: the URL goes to the authentication overlay,
+    /// reference `MCPOAuthApp`.
+    Overlay { enable_on_complete: bool },
+}
+
+/// Runs a server login beside the interactive slot, reference
+/// `MCPResource.login`: the call blocks until the browser comes back, and the
+/// URL it publishes on the way reaches the operator as it is published.
+pub(in crate::tui) fn schedule_mcp_login(
+    runtime: &mut InteractiveRuntime,
+    source: String,
+    origin: McpLoginOrigin,
+    state: &mut TuiState,
+) -> bool {
+    let name = source.clone();
+    let progress_origin = origin.clone();
+    schedule_ui_background(
+        runtime,
+        "mcp_catalog/login",
+        json!({"name": source}),
+        move |notification| {
+            // The catalog publishes `mcp/authUrl` beside the canonical name;
+            // reference `consume_notification` reads only the canonical one.
+            (notification.method == "mcp_catalog/authUrl"
+                && notification.params.get("name").and_then(Value::as_str) == Some(&name))
+            .then(|| {
+                UiOperation::Mcp(McpPendingOperation::LoginUrl {
+                    source: name.clone(),
+                    origin: progress_origin.clone(),
+                })
+            })
+        },
+        UiOperation::Mcp(McpPendingOperation::LoginFinished { source, origin }),
+        state,
+    )
 }
 
 type UrlOpenFuture = Pin<Box<dyn Future<Output = Result<(), String>> + Send + 'static>>;
@@ -167,17 +209,25 @@ pub(in crate::tui) fn execute_mcp_effect(
             schedule_read_integrations(runtime, None, Some(target), state);
         }
         McpEffect::BeginAuth {
+            kind: IntegrationKind::McpServer,
+            source,
+            enable_on_complete,
+        } => {
+            schedule_mcp_login(
+                runtime,
+                source,
+                McpLoginOrigin::Overlay { enable_on_complete },
+                state,
+            );
+        }
+        McpEffect::BeginAuth {
             kind,
             source,
             enable_on_complete,
         } => {
-            let method = match kind {
-                IntegrationKind::Connector => "connectors/auth/read",
-                IntegrationKind::McpServer => "mcp/login",
-            };
             schedule_ui_call(
                 runtime,
-                method,
+                "connectors/auth/read",
                 json!({"name": source}),
                 UiOperation::Mcp(McpPendingOperation::BeginAuth {
                     kind,
@@ -192,18 +242,29 @@ pub(in crate::tui) fn execute_mcp_effect(
             detail,
             enabled,
         } => {
-            let method = match target.kind {
-                IntegrationKind::Connector => "connectors/toggle",
-                IntegrationKind::McpServer => "mcp/toggle",
+            let (method, params) = match target.kind {
+                IntegrationKind::Connector => (
+                    "connectors/toggle",
+                    json!({
+                        "name": target.source,
+                        "toolName": target.tool,
+                        "disabled": !enabled,
+                    }),
+                ),
+                IntegrationKind::McpServer => (
+                    "mcp/toggle",
+                    json!({
+                        "name": target.source,
+                        "source": "server",
+                        "toolName": target.tool,
+                        "disabled": !enabled,
+                    }),
+                ),
             };
             schedule_ui_call(
                 runtime,
                 method,
-                json!({
-                    "name": target.source,
-                    "toolName": target.tool,
-                    "disabled": !enabled,
-                }),
+                params,
                 UiOperation::Mcp(McpPendingOperation::SetEnabled { target, detail }),
                 state,
             );
@@ -254,14 +315,16 @@ pub(in crate::tui) fn execute_mcp_effect(
             );
         }
         McpEffect::Refresh { kind, source } => {
-            let method = match kind {
-                IntegrationKind::Connector => "connectors/refresh",
-                IntegrationKind::McpServer => "mcp/refresh",
+            // The MCP catalog refreshes the whole session, reference
+            // `MCPRefreshParams`, which names no server.
+            let (method, params) = match kind {
+                IntegrationKind::Connector => ("connectors/refresh", json!({"name": source})),
+                IntegrationKind::McpServer => ("mcp/refresh", json!({})),
             };
             schedule_ui_call(
                 runtime,
                 method,
-                json!({"name": source}),
+                params,
                 UiOperation::Mcp(McpPendingOperation::Refresh { kind, source }),
                 state,
             );
@@ -275,10 +338,12 @@ pub(in crate::tui) fn execute_mcp_effect(
                 execute_mcp_effect(McpEffect::Refresh { kind, source }, runtime, state, opener);
             }
             IntegrationKind::McpServer => {
+                // The login answers on its own once the browser comes back;
+                // this re-reads the session so a finished one shows.
                 schedule_ui_call(
                     runtime,
-                    "mcp/auth/complete",
-                    json!({"name": source}),
+                    "mcp/refresh",
+                    json!({}),
                     UiOperation::Mcp(McpPendingOperation::CompleteAuthentication {
                         source,
                         enable_source,
@@ -388,38 +453,55 @@ pub(in crate::tui) fn apply_pending_operation(
         }
     };
     match operation {
-        McpPendingOperation::AwaitLogin { source, attempt } => {
-            schedule_ui_call(
-                runtime,
-                "mcp/auth/complete",
-                json!({"name": source}),
-                UiOperation::Mcp(McpPendingOperation::LoginChecked { source, attempt }),
-                state,
-            );
+        McpPendingOperation::LoginUrl { source, origin } => {
+            let url = dispatch
+                .notifications
+                .first()
+                .and_then(|notification| notification.params.get("url"))
+                .and_then(Value::as_str)
+                .filter(|url| valid_auth_url(url))
+                .map(ToOwned::to_owned);
+            let Some(url) = url else {
+                state.push_diagnostic("Authentication source returned an invalid or unsafe URL");
+                return;
+            };
+            match origin {
+                McpLoginOrigin::Command => {
+                    push_local_document(
+                        state,
+                        format!("Open this URL in your browser:\n\n  {url}"),
+                    );
+                    // Reference `webbrowser.open` is fire and forget: a
+                    // browser that will not open leaves the URL printed above.
+                    tokio::spawn(async move {
+                        drop(open_auth_url(url).await);
+                    });
+                }
+                McpLoginOrigin::Overlay { enable_on_complete } => {
+                    state.overlay = Some(mcp_auth_overlay(
+                        IntegrationKind::McpServer,
+                        &source,
+                        &url,
+                        enable_on_complete,
+                    ));
+                }
+            }
             return;
         }
-        McpPendingOperation::LoginChecked { source, attempt } => {
-            let verified = dispatch
-                .result
-                .get("auth")
-                .and_then(|auth| auth.get("verified"))
-                .and_then(Value::as_bool)
-                .unwrap_or(false);
-            if verified {
-                push_local_document(state, mcp_authenticated(&source));
-            } else if attempt < super::LOGIN_POLL_ATTEMPTS {
-                schedule_ui_external(
-                    runtime,
-                    UiOperation::Mcp(McpPendingOperation::AwaitLogin {
-                        source,
-                        attempt: attempt.saturating_add(1),
-                    }),
-                    async {
-                        tokio::time::sleep(super::LOGIN_POLL_INTERVAL).await;
-                        Ok(())
-                    },
-                    state,
-                );
+        McpPendingOperation::LoginFinished { source, origin } => {
+            push_local_document(state, mcp_authenticated(&source));
+            if let McpLoginOrigin::Overlay { enable_on_complete } = origin {
+                // Reference `MCPOAuthClosed(refreshed=True)`.
+                state.overlay = None;
+                if enable_on_complete {
+                    schedule_ui_call(
+                        runtime,
+                        "mcp/toggle",
+                        json!({"name": source, "source": "server", "toolName": null, "disabled": false}),
+                        UiOperation::Mcp(McpPendingOperation::EnableAfterAuthentication),
+                        state,
+                    );
+                }
             }
             return;
         }
@@ -453,18 +535,8 @@ pub(in crate::tui) fn apply_pending_operation(
             source,
             enable_on_complete,
         } => {
-            // A server login publishes its URL as `mcp/authUrl` and declares
-            // nothing on the answer; a connector answers with the URL directly.
-            let notified = dispatch
-                .notifications
-                .iter()
-                .find(|notification| notification.method == "mcp/authUrl")
-                .and_then(|notification| notification.params.get("url"))
-                .and_then(Value::as_str)
-                .map(ToOwned::to_owned);
-            let url = notified
-                .as_deref()
-                .or_else(|| value.get("url").and_then(Value::as_str));
+            // Only a connector sign-in comes here, and it answers with the URL.
+            let url = value.get("url").and_then(Value::as_str);
             if let Some(url) = url.filter(|url| valid_auth_url(url)) {
                 state.overlay = Some(mcp_auth_overlay(kind, &source, url, enable_on_complete));
             } else {
@@ -498,10 +570,16 @@ pub(in crate::tui) fn apply_pending_operation(
             source,
             enable_source,
         } => {
+            // The refresh answers with the runtime it produced; a server still
+            // waiting on its browser is still `needs_auth` there.
             let verified = value
-                .pointer("/auth/verified")
-                .and_then(Value::as_bool)
-                .unwrap_or(false);
+                .pointer("/runtime/mcp/sources")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .find(|candidate| candidate.get("name").and_then(Value::as_str) == Some(&source))
+                .and_then(|candidate| candidate.get("status").and_then(Value::as_str))
+                .is_some_and(|status| status != "needs_auth");
             if !verified {
                 push_local_notice(
                     state,
@@ -512,7 +590,7 @@ pub(in crate::tui) fn apply_pending_operation(
                 schedule_ui_call(
                     runtime,
                     "mcp/toggle",
-                    json!({"name": source, "toolName": null, "disabled": false}),
+                    json!({"name": source, "source": "server", "toolName": null, "disabled": false}),
                     UiOperation::Mcp(McpPendingOperation::EnableAfterAuthentication),
                     state,
                 );
@@ -527,7 +605,7 @@ pub(in crate::tui) fn apply_pending_operation(
             schedule_read_integrations(runtime, None, detail.then_some(target), state);
         }
         // Answered before the dispatch is read as a runtime.
-        McpPendingOperation::AwaitLogin { .. } | McpPendingOperation::LoginChecked { .. } => {}
+        McpPendingOperation::LoginUrl { .. } | McpPendingOperation::LoginFinished { .. } => {}
         operation @ (McpPendingOperation::CopyUrl | McpPendingOperation::OpenUrl) => {
             let message = if matches!(operation, McpPendingOperation::CopyUrl) {
                 "Authentication URL copied to the clipboard"

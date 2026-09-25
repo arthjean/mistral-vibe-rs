@@ -11,10 +11,9 @@ use vibe_core::integrations::{
     IntegrationError,
 };
 use vibe_core::mcp::{
-    DEFAULT_MCP_STARTUP_TIMEOUT_MS, DEFAULT_MCP_TOOL_TIMEOUT_MS, HttpMcpPeerFactory,
-    McpPeerFactory, McpServerConfig, McpTransportConfig,
+    DEFAULT_MCP_STARTUP_TIMEOUT_MS, DEFAULT_MCP_TOOL_TIMEOUT_MS, McpServerConfig,
+    McpTransportConfig, call_http_tool, decode_tool_result,
 };
-use vibe_core::tools::ToolOutputSink;
 
 use super::{
     ConnectorAuthBackend, ConnectorCatalog, ConnectorCatalogBackend, ResourceError, ResourceFuture,
@@ -152,28 +151,21 @@ impl ConnectorBackend for MistralConnectorClient {
                 auth: Default::default(),
                 prompt: None,
                 sampling_enabled: true,
+                declared: None,
             };
-            let peer = HttpMcpPeerFactory
-                .connect(&config)
+            let result = call_http_tool(&config, tool, arguments)
                 .await
+                .and_then(decode_tool_result)
                 .map_err(|error| IntegrationError::Tool(redact(&error.to_string())))?;
-            let result = peer
-                .call(
-                    tool,
-                    arguments,
-                    max_response_bytes,
-                    ToolOutputSink::discard(max_response_bytes),
-                )
-                .await
-                .map_err(|error| IntegrationError::Tool(redact(&error.to_string())));
-            let close = peer
-                .close()
-                .await
-                .map_err(|error| IntegrationError::Tool(redact(&error.to_string())));
-            match (result, close) {
-                (Ok(result), Ok(())) => Ok(result),
-                (Err(error), _) | (Ok(_), Err(error)) => Err(error),
+            let encoded = serde_json::to_vec(&result.typed_result)
+                .map_or(usize::MAX, |encoded| encoded.len())
+                .saturating_add(result.model_text.len());
+            if encoded > max_response_bytes {
+                return Err(IntegrationError::Tool(
+                    "connector response exceeded its byte budget".to_owned(),
+                ));
             }
+            Ok(result)
         })
     }
 }

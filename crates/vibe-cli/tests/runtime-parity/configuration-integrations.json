@@ -268,10 +268,6 @@
     {
       "divergences": [
         {
-          "event": 0,
-          "reason": "Since v2.25.5 the reference titles the connector group `Available Connectors` (vibe/cli/textual_ui/widgets/mcp_app.py:397-402 at 4a96003186b166d55b9f06895c45bb136eef61cd, was `Workspace Connectors` at b78b451:mcp_app.py:254); the Rust MCP overlay still emits `Workspace Connectors` (crates/vibe-cli/src/tui/pickers/integrations.rs:71). Every other row of the list matches."
-        },
-        {
           "event": 2,
           "reason": "The reference points at the `r` binding in a disabled hint; the Rust detail view exposes the refresh as a selectable action so credential setup stays executable from the overlay."
         },
@@ -518,7 +514,7 @@
         }
       ],
       "expected": [
-        "mcp|MCP Servers & Connectors|-|Local MCP Servers:disabled:;github:enabled:streamable-http · 1/2 tools · enabled;:disabled:;Workspace Connectors:disabled:;Calendar:enabled:connector · 1 tool · connected;Drive:enabled:connector · 1 tool · needs auth;Vault:enabled:connector · 1 tool · needs setup;Archive:enabled:connector · no tools · disabled;Broken:enabled:connector · no tools · error - try refreshing",
+        "mcp|MCP Servers & Connectors|-|Local MCP Servers:disabled:;github:enabled:streamable-http · 1/2 tools · enabled;:disabled:;Available Connectors:disabled:;Calendar:enabled:connector · 1 tool · connected;Drive:enabled:connector · 1 tool · needs auth;Vault:enabled:connector · 1 tool · needs setup;Archive:enabled:connector · no tools · disabled;Broken:enabled:connector · no tools · error - try refreshing",
         "mcp-detail|MCP Server: github|-|read:enabled:Read files (disabled);search:enabled:Search repositories",
         "mcp-detail|Connector: Vault|-|Set up credentials in the Mistral dashboard:disabled:Then refresh this connector;Refresh connector:enabled:Check whether credential setup is complete",
         "auth|Authenticate github|-|Open in browser:enabled:Open the validated authentication URL;Copy URL:enabled:Copy the authentication URL to the clipboard;Show URL:enabled:Print the authentication URL in the transcript;Authentication complete:enabled:Refresh source state after sign-in;Log out:enabled:Clear saved authentication for this source;Close:enabled:Return without changing source state",
@@ -526,7 +522,7 @@
         "effect|open_url|server|github|https://auth.example/authorize?state=opaque|calls=url/open:https://auth.example/authorize?state=opaque",
         "effect|copy_url|server|github|https://auth.example/authorize?state=opaque|calls=clipboard/write:https://auth.example/authorize?state=opaque",
         "effect|show_url|server|github|https://auth.example/authorize?state=opaque|calls=transcript/write:github",
-        "effect|complete_auth|server|github|-|calls=mcp/auth/complete:github",
+        "effect|complete_auth|server|github|-|calls=mcp/refresh",
         "effect|logout|server|github|calls=mcp/logout:github",
         "effect|close|-|-|calls=overlay/close",
         "effect|complete_auth|connector|drive|-|calls=connectors/refresh:drive",

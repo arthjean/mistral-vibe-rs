@@ -15,7 +15,7 @@
 
 pub mod env_file;
 pub mod keyring;
-pub mod mcp_credentials;
+pub mod mcp_oauth;
 pub mod persistence;
 pub mod provider;
 pub mod sign_in;
@@ -39,10 +39,11 @@ pub(crate) mod testing;
 
 pub use keyring::{
     KEYRING_SERVICE, KeyringBackend, KeyringFailure, KeyringStore, LEGACY_KEYRING_SERVICES,
-    NativeKeyringBackend, PRIOR_BUILD_KEYRING_SERVICE,
+    MemoryKeyringBackend, NativeKeyringBackend, PRIOR_BUILD_KEYRING_SERVICE,
 };
-pub use mcp_credentials::{
-    MCP_OAUTH_KEYRING_SERVICE, delete_mcp_oauth_credential, mcp_oauth_account,
+pub use mcp_oauth::{
+    AuthUrlSink, McpOAuthError, McpOAuthStore, RefreshOutcome, mcp_oauth_username,
+    perform_login as perform_mcp_oauth_login, refresh_credential as refresh_mcp_oauth_credential,
 };
 pub use persistence::{
     PersistOutcome, PersistReport, RemoveError, persist_api_key, remove_api_key,

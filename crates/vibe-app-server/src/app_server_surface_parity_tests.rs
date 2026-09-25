@@ -112,34 +112,6 @@ const UNDECLARED_METHODS: &[(&str, &str)] = &[
         "v2.25.7 declares it at vibe/app_server/protocol.py:128 and routes it at vibe/app_server/server.py:718; SERVER_METHODS does not declare it and nothing here routes it",
     ),
     (
-        "mcp_catalog/add",
-        "v2.25.7 declares it at vibe/app_server/protocol.py:143 and routes it at vibe/app_server/mcp_catalog.py:297; SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
-        "mcp_catalog/login",
-        "v2.25.7 declares it at vibe/app_server/protocol.py:144 and routes it at vibe/app_server/mcp_catalog.py:303; SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
-        "mcp_catalog/logout",
-        "v2.25.7 declares it at vibe/app_server/protocol.py:145 and routes it at vibe/app_server/mcp_catalog.py:306; SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
-        "mcp_catalog/read",
-        "v2.25.7 declares it at vibe/app_server/protocol.py:146 and routes it at vibe/app_server/mcp_catalog.py:266; SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
-        "mcp_catalog/refresh",
-        "v2.25.7 declares it at vibe/app_server/protocol.py:147 and routes it at vibe/app_server/mcp_catalog.py:274; SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
-        "mcp_catalog/remove",
-        "v2.25.7 declares it at vibe/app_server/protocol.py:148 and routes it at vibe/app_server/mcp_catalog.py:300; SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
-        "mcp_catalog/toggle",
-        "v2.25.7 declares it at vibe/app_server/protocol.py:149 and routes it at vibe/app_server/mcp_catalog.py:294; SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
         "plugin/info",
         "v2.25.7 declares it at vibe/app_server/protocol.py:151 and routes it at vibe/app_server/_unified_harness_backend_adapter.py:3827; SERVER_METHODS does not declare it and nothing here routes it",
     ),
@@ -308,8 +280,8 @@ const RETIRED_METHODS: &[(&str, &str)] = &[
 
 /// Reference notifications this build does not emit yet.
 ///
-/// US-085 emptied the list; the v2.25.7 re-pin added the seven notifications
-/// below, which this port does not emit. A notification that stops being
+/// US-085 emptied the list; the v2.25.7 re-pin added seven notifications, five of
+/// which remain below, which this port does not emit. A notification that stops being
 /// emitted has to earn an entry here before the replay accepts it.
 const UNEMITTED_NOTIFICATIONS: &[(&str, &str)] = &[
     (
@@ -319,14 +291,6 @@ const UNEMITTED_NOTIFICATIONS: &[(&str, &str)] = &[
     (
         "session/childSessionUpdated",
         "v2.25.7 sequences it (vibe/app_server/events.py:662) and emits it for child sessions (vibe/app_server/_unified_harness_backend_adapter.py:6496); this port emits nothing under this name",
-    ),
-    (
-        "mcp_catalog/authUrl",
-        "v2.25.7 publishes the MCP login URL under this name beside mcp/authUrl (vibe/app_server/mcp_catalog.py:469-470); this port emits only mcp/authUrl",
-    ),
-    (
-        "mcp_catalog/authRequired",
-        "v2.25.7 announces an MCP server that needs authorization (vibe/app_server/server.py:375, vibe/app_server/events.py:291); this port emits nothing under this name",
     ),
     (
         "connector_catalog/authRequired",
@@ -371,10 +335,6 @@ const UNSPOKEN_ERROR_CODES: &[(&str, &str)] = &[
     (
         "callback_closed",
         "v2.25.7 adds it (vibe/app_server/protocol.py:2127); vibe_protocol::ProtocolErrorCode has no such code",
-    ),
-    (
-        "not_implemented",
-        "v2.25.7 adds it (vibe/app_server/protocol.py:2132); vibe_protocol::ProtocolErrorCode has no such code",
     ),
     (
         "stale_cursor",
@@ -939,6 +899,7 @@ fn every_error_code_the_reference_declares_is_spoken_here() {
         vibe_protocol::ProtocolErrorCode::Unauthorized,
         vibe_protocol::ProtocolErrorCode::Forbidden,
         vibe_protocol::ProtocolErrorCode::MethodNotFound,
+        vibe_protocol::ProtocolErrorCode::NotImplemented,
         vibe_protocol::ProtocolErrorCode::InternalError,
     ]
     .into_iter()
@@ -2569,8 +2530,8 @@ fn probe(
 /// Runs the work a dispatch deferred, so its answer is validated like an inline
 /// one.
 ///
-/// `mcp/read` and `connectors/read` are served by the asynchronous resource
-/// backend, and the session-less project surface resolves a repository root off
+/// `mcp/read` is served by the catalog and `connectors/read` by the
+/// asynchronous resource backend, and the session-less project surface resolves a repository root off
 /// the loop, so in both cases the frame exists only after the deferred work
 /// runs. Without this those methods would leave the probe silently.
 fn run_deferred(server: &AppServer, batch: DispatchBatch) -> Option<DispatchBatch> {
@@ -2591,6 +2552,17 @@ fn run_deferred(server: &AppServer, batch: DispatchBatch) -> Option<DispatchBatc
             method,
             params,
         } => Some(runtime.block_on(server.execute_cloud_request(request_id, method, params))),
+        DeferredWork::McpCatalog {
+            request_id,
+            call,
+            target,
+            ..
+        } => Some(runtime.block_on(server.execute_mcp_catalog(
+            request_id,
+            call,
+            target,
+            std::sync::Arc::new(|_, _| {}),
+        ))),
         _ => None,
     }
 }

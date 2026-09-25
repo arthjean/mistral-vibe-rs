@@ -469,6 +469,12 @@ pub struct LayeredConfig {
 }
 
 impl LayeredConfig {
+    /// The directory a relative path in this configuration resolves against.
+    #[must_use]
+    pub fn working_directory(&self) -> &Path {
+        &self.paths.working_directory
+    }
+
     #[must_use]
     pub fn new(paths: ConfigPaths, defaults: Table) -> Self {
         Self {
@@ -1824,6 +1830,7 @@ disabled_tools = ["admin"]
             auth: Default::default(),
             prompt: None,
             sampling_enabled: true,
+            declared: None,
         };
 
         store.persist_mcp_add(&server).expect("MCP persists");
@@ -1893,6 +1900,7 @@ env = { API_TOKEN = "must-not-be-copied" }
             auth: Default::default(),
             prompt: None,
             sampling_enabled: true,
+            declared: None,
         };
 
         store

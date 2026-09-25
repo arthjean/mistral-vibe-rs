@@ -17,7 +17,9 @@ pub(super) struct CoreResourceSession {
     policy: PermissionStore,
     tools: ToolRegistry,
     mcp: McpRegistry,
-    persistent_mcp_aliases: Mutex<BTreeSet<String>>,
+    /// The servers the session was started with, which are all it knows
+    /// when it has no configuration store to read them from.
+    started_mcp: StdMutex<Vec<McpServerConfig>>,
     pub(super) connectors: ConnectorRegistry,
     connectors_initialized: AtomicBool,
     config: Option<LayeredConfig>,
@@ -44,11 +46,20 @@ struct CoreResourceEntry {
     session: Arc<CoreResourceSession>,
 }
 
+/// What `mcp_catalog/authRequired` is deduplicated on, reference
+/// `_auth_required_key`: the session, the server, the descriptor revision and
+/// the connection revision observed.
+type AuthRequiredKey = (String, String, String, Option<String>);
+
 #[derive(Clone)]
 pub struct CoreResourceBackend {
     sessions: Arc<StdMutex<BTreeMap<String, CoreResourceEntry>>>,
     mcp_factory: Option<Arc<dyn McpPeerFactory>>,
-    mcp_auth: Option<Arc<dyn McpAuthBackend>>,
+    /// Reference `MCPAuthenticationService`: one per process, holding every
+    /// session's catalog and the credentials they sign in with.
+    mcp_authentication: Arc<McpAuthenticationService>,
+    mcp_auth_required: Arc<StdMutex<Vec<mcp_backend::PendingAuthRequired>>>,
+    mcp_auth_required_seen: Arc<StdMutex<BTreeSet<AuthRequiredKey>>>,
     connector_definitions: Arc<Vec<ConnectorDefinition>>,
     connector_catalog: Option<Arc<dyn ConnectorCatalogBackend>>,
     connector_backend: Option<Arc<dyn ConnectorBackend>>,
@@ -63,7 +74,11 @@ impl Default for CoreResourceBackend {
         Self {
             sessions: Arc::new(StdMutex::new(BTreeMap::new())),
             mcp_factory: Some(Arc::new(DefaultMcpPeerFactory::default())),
-            mcp_auth: None,
+            // No credential store: every OAuth server reads as never signed
+            // in, which is what a host that attached none can offer.
+            mcp_authentication: Arc::new(McpAuthenticationService::new(None)),
+            mcp_auth_required: Arc::new(StdMutex::new(Vec::new())),
+            mcp_auth_required_seen: Arc::new(StdMutex::new(BTreeSet::new())),
             connector_definitions: Arc::new(Vec::new()),
             connector_catalog: None,
             connector_backend: None,
@@ -82,9 +97,11 @@ impl CoreResourceBackend {
         self
     }
 
+    /// The authentication service every session's MCP servers resolve their
+    /// credentials through.
     #[must_use]
-    pub fn with_mcp_auth(mut self, backend: Arc<dyn McpAuthBackend>) -> Self {
-        self.mcp_auth = Some(backend);
+    pub fn with_mcp_authentication(mut self, service: Arc<McpAuthenticationService>) -> Self {
+        self.mcp_authentication = service;
         self
     }
 
@@ -154,38 +171,12 @@ fn config_error(error: vibe_core::config::ConfigError) -> ResourceError {
     }
 }
 
-fn persist_mcp_view(
-    store: &LayeredConfig,
-    name: &str,
-    view: &McpServerView,
-) -> Result<ConfigSnapshot, vibe_core::config::ConfigError> {
-    let disabled_tools = persisted_tool_names("mcp", name, &view.disabled_tools);
-    store.persist_mcp_state(name, view.enabled, &disabled_tools)
-}
-
 fn persist_connector_view(
     store: &LayeredConfig,
     view: &ConnectorView,
 ) -> Result<ConfigSnapshot, vibe_core::config::ConfigError> {
     let disabled_tools = persisted_tool_names("connector", &view.alias, &view.disabled_tools);
     store.persist_connector_state(&view.alias, view.enabled, &disabled_tools)
-}
-
-fn rollback_mcp_view(
-    store: &LayeredConfig,
-    name: &str,
-    view: &McpServerView,
-    committed: &ConfigSnapshot,
-) -> Result<ConfigSnapshot, vibe_core::config::ConfigError> {
-    let target = committed.selected_target;
-    let disabled_tools = persisted_tool_names("mcp", name, &view.disabled_tools);
-    store.persist_mcp_state_cas(
-        name,
-        view.enabled,
-        &disabled_tools,
-        target,
-        committed.fingerprints[&target].clone(),
-    )
 }
 
 fn rollback_connector_view(
@@ -217,16 +208,6 @@ fn config_rollback_error(
     match rollback {
         vibe_core::config::ConfigError::ConcurrentEdit { .. } => ResourceError::Conflict(message),
         _ => ResourceError::Unavailable(message),
-    }
-}
-
-fn mcp_error(error: vibe_core::mcp::McpError) -> ResourceError {
-    match error {
-        vibe_core::mcp::McpError::UnknownServer(name) => {
-            ResourceError::NotFound(format!("MCP source `{name}` was not found"))
-        }
-        vibe_core::mcp::McpError::InvalidConfig(message) => ResourceError::Conflict(message),
-        _ => ResourceError::Unavailable(redact(&error.to_string())),
     }
 }
 
@@ -273,7 +254,7 @@ impl ResourceBackend for CoreResourceBackend {
                     policy: session.policy,
                     tools: session.tools,
                     mcp: McpRegistry::default(),
-                    persistent_mcp_aliases: Mutex::new(BTreeSet::new()),
+                    started_mcp: StdMutex::new(Vec::new()),
                     connectors: ConnectorRegistry::default(),
                     connectors_initialized: AtomicBool::new(false),
                     config: scoped_config,
@@ -294,18 +275,14 @@ impl ResourceBackend for CoreResourceBackend {
     ) -> ResourceFuture<'a, ResourceDispatch> {
         Box::pin(async move {
             let session = self.session(session_id)?;
-            let configured_aliases = if let Some(store) = session.config() {
-                store
-                    .load()
-                    .and_then(|snapshot| snapshot.mcp_aliases())
-                    .map_err(config_error)?
-            } else {
-                BTreeSet::new()
-            };
-            *session.persistent_mcp_aliases.lock().await = configured_aliases;
+            if let Ok(mut started) = session.started_mcp.lock() {
+                started.clone_from(&configs);
+            }
             let factory = self.mcp_factory.clone().ok_or_else(|| {
                 ResourceError::Unavailable("MCP transport backend is not configured".to_owned())
             })?;
+            let _mutation = session.mcp_mutation.lock().await;
+            self.wire_mcp_registry(&session, session_id, &configs).await;
             let diagnostics = session
                 .mcp
                 .discover_all(
@@ -318,8 +295,18 @@ impl ResourceBackend for CoreResourceBackend {
                 .await;
             let mut dispatch = runtime_mutation([], diagnostics);
             dispatch.signals.integrations = Some(self.integration_state(&session).await);
+            dispatch.signals.auth_required = self.accept_auth_required(&session, session_id).await;
             Ok(dispatch)
         })
+    }
+
+    fn mcp_catalog<'a>(
+        &'a self,
+        call: McpCatalogCall,
+        target: McpCatalogTarget,
+        notify: McpCatalogNotify,
+    ) -> McpCatalogFuture<'a> {
+        Box::pin(self.run_mcp_catalog(call, target, notify))
     }
 
     fn dispatch<'a>(
@@ -329,10 +316,6 @@ impl ResourceBackend for CoreResourceBackend {
         Box::pin(async move {
             let session = self.session(&request.session_id)?;
             let mut dispatch = match &request.command {
-                ResourceBackendCommand::Mcp(command) => {
-                    self.dispatch_mcp(&session, &request.session_id, command)
-                        .await
-                }
                 ResourceBackendCommand::Connector(command) => {
                     self.dispatch_connectors(&session, &request.session_id, command)
                         .await
@@ -344,10 +327,7 @@ impl ResourceBackend for CoreResourceBackend {
             // Every integration call learns the current state on its way
             // through, so it carries it back: the runtime snapshot is composed
             // synchronously and cannot ask an async backend for it.
-            if matches!(
-                request.command,
-                ResourceBackendCommand::Mcp(_) | ResourceBackendCommand::Connector(_)
-            ) {
+            if matches!(request.command, ResourceBackendCommand::Connector(_)) {
                 dispatch.signals.integrations = Some(self.integration_state(&session).await);
             }
             Ok(dispatch)
@@ -372,10 +352,16 @@ impl ResourceBackend for CoreResourceBackend {
                 return Ok(());
             };
             let mut failures = Vec::new();
-            if let Some(auth) = &self.mcp_auth
-                && let Err(error) = auth.close_session(session_id).await
-            {
-                failures.push(redact(&error.to_string()));
+            // Reference files a session's catalog under a weak key, which goes
+            // with the session.
+            self.mcp_authentication
+                .release(&Some(session_id.to_owned()))
+                .await;
+            if let Ok(mut seen) = self.mcp_auth_required_seen.lock() {
+                seen.retain(|(session, ..)| session != session_id);
+            }
+            if let Ok(mut pending) = self.mcp_auth_required.lock() {
+                pending.retain(|event| event.session_id() != session_id);
             }
             failures.extend(session.mcp.close().await);
             if let Err(error) = session.connectors.close().await {

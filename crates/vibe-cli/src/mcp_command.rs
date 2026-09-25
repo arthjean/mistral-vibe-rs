@@ -22,23 +22,21 @@ use std::future::Future;
 use std::io::Write;
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::sync::{Arc, OnceLock};
-use std::time::{Duration, Instant};
+use std::sync::Arc;
 
 use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::{Arg, ArgAction, ArgMatches, Command};
 use toml::Table;
 use url::Url;
-use vibe_app_server::resources::{McpAuthBackend, production_mcp_adapters};
-use vibe_core::auth::{
-    KeyringBackend, NativeKeyringBackend, delete_mcp_oauth_credential, open_system_browser,
-};
+#[cfg(test)]
+use vibe_core::auth::KeyringBackend;
+use vibe_core::auth::{AuthUrlSink, McpOAuthStore, open_system_browser};
 use vibe_core::config::mcp::normalize_mcp_server_url_with;
 use vibe_core::config::{ConfigError, ConfigPaths, ConfigSource, LayeredConfig};
 use vibe_core::mcp::{
     DEFAULT_MCP_API_KEY_FORMAT, DEFAULT_MCP_API_KEY_HEADER, DEFAULT_MCP_STARTUP_TIMEOUT_MS,
-    DEFAULT_MCP_TOOL_TIMEOUT_MS, McpAuthConfig, McpOAuthConfig, McpServerConfig, McpStaticAuth,
-    McpTransportConfig,
+    DEFAULT_MCP_TOOL_TIMEOUT_MS, McpAuthConfig, McpAuthenticationService, McpOAuthConfig,
+    McpServerConfig, McpServerRemoveError, McpStaticAuth, McpTransportConfig,
 };
 
 /// The program name every usage line and every error line carries.
@@ -219,96 +217,50 @@ fn remove_declaration() -> Command {
 // The OAuth login a remote add performs
 // --------------------------------------------------------------------------
 
-/// The session identity the login is filed under.
-///
-/// The backend keys a pending login by session and resource, so `begin` and
-/// `finish` have to name the same session; a command that runs one login and
-/// exits needs only the one name.
-const LOGIN_SESSION: &str = "vibe-mcp-add";
-
-/// How long a poll waits past the backend's own login timeout before giving up
-/// on it answering at all.
-const LOGIN_POLL_LIMIT: Duration = Duration::from_secs(310);
-
-/// How often the poll asks whether the authorization server came back.
-const LOGIN_POLL_INTERVAL: Duration = Duration::from_millis(250);
-
 pub(crate) type LoginFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, String>> + 'a>>;
 
 /// The browser login a remote `add` runs, injected for the same reason the
 /// credential store is: a replay that drove the real one would open a browser
 /// and reach a live authorization server.
 pub(crate) trait McpOAuthLogin {
-    /// Starts a login and answers with the URL that authorizes it.
-    fn begin<'a>(&'a self, config: &'a McpServerConfig) -> LoginFuture<'a, String>;
+    /// Runs the login for the bound server `name`, handing the URL that
+    /// authorizes it to `on_url`, and returns once the exchange settles.
+    fn login<'a>(
+        &'a self,
+        authentication: &'a McpAuthenticationService,
+        name: &'a str,
+        on_url: AuthUrlSink,
+    ) -> LoginFuture<'a, ()>;
 
-    /// Waits for the login [`Self::begin`] started to finish.
-    fn finish<'a>(&'a self, config: &'a McpServerConfig) -> LoginFuture<'a, ()>;
-
-    /// Hands `url` to the host's browser. A host with no launcher is reported
-    /// and not fatal: the URL was printed first, so the login can still be
-    /// completed by hand.
+    /// Hands `url` to the host's browser.
     fn open(&self, url: &str) -> Result<(), String>;
 }
 
-/// The login the installed binary runs, over the app server's OAuth backend.
-#[derive(Default)]
-struct ProcessOAuthLogin {
-    /// One backend for both halves of a login: it holds the pending exchange
-    /// in memory, so a second instance would not recognize what the first
-    /// started.
-    backend: OnceLock<Arc<dyn McpAuthBackend>>,
-}
-
-impl ProcessOAuthLogin {
-    fn backend(&self) -> Result<Arc<dyn McpAuthBackend>, String> {
-        if let Some(backend) = self.backend.get() {
-            return Ok(backend.clone());
-        }
-        let (_, auth) = production_mcp_adapters(None).map_err(|error| error.to_string())?;
-        Ok(self.backend.get_or_init(|| auth).clone())
-    }
-}
+/// The login the installed binary runs, over the shared authentication
+/// service.
+struct ProcessOAuthLogin;
 
 impl McpOAuthLogin for ProcessOAuthLogin {
-    fn begin<'a>(&'a self, config: &'a McpServerConfig) -> LoginFuture<'a, String> {
+    fn login<'a>(
+        &'a self,
+        authentication: &'a McpAuthenticationService,
+        name: &'a str,
+        on_url: AuthUrlSink,
+    ) -> LoginFuture<'a, ()> {
         Box::pin(async move {
-            let backend = self.backend()?;
-            backend
-                .login(LOGIN_SESSION, config)
+            authentication
+                .login(name, on_url, &None)
                 .await
+                .map(|_| ())
                 .map_err(|error| error.to_string())
         })
     }
 
-    fn finish<'a>(&'a self, config: &'a McpServerConfig) -> LoginFuture<'a, ()> {
-        Box::pin(async move {
-            let backend = self.backend()?;
-            // The backend answers a pending login without blocking, so the
-            // wait is this loop rather than a call that parks. It also carries
-            // its own timeout, and the limit here only bounds a backend that
-            // stops answering at all.
-            let deadline = Instant::now() + LOGIN_POLL_LIMIT;
-            loop {
-                match backend.complete(LOGIN_SESSION, config).await {
-                    Ok(true) => return Ok(()),
-                    Ok(false) => {}
-                    Err(error) => return Err(error.to_string()),
-                }
-                if Instant::now() >= deadline {
-                    return Err("the authorization server did not answer".to_owned());
-                }
-                tokio::time::sleep(LOGIN_POLL_INTERVAL).await;
-            }
-        })
-    }
-
     fn open(&self, url: &str) -> Result<(), String> {
-        if open_system_browser(url) {
-            Ok(())
-        } else {
-            Err("this host has no browser launcher".to_owned())
-        }
+        // Reference `webbrowser.open` reports a host with no launcher by
+        // answering false, which the command does not read.
+        let _ = open_system_browser(url);
+        Ok(())
     }
 }
 
@@ -324,7 +276,8 @@ impl McpOAuthLogin for ProcessOAuthLogin {
 pub struct McpEnvironment {
     vibe_home: PathBuf,
     working_directory: PathBuf,
-    keyring: Box<dyn KeyringBackend>,
+    /// One service per run, reference `create_sessionless_mcp_catalog`.
+    authentication: McpAuthenticationService,
     login: Box<dyn McpOAuthLogin>,
 }
 
@@ -338,8 +291,8 @@ impl McpEnvironment {
         Self {
             vibe_home,
             working_directory,
-            keyring: Box::new(NativeKeyringBackend::new()),
-            login: Box::new(ProcessOAuthLogin::default()),
+            authentication: McpAuthenticationService::new(Some(Arc::new(McpOAuthStore::native()))),
+            login: Box::new(ProcessOAuthLogin),
         }
     }
 
@@ -354,13 +307,15 @@ impl McpEnvironment {
     pub(crate) fn for_home(
         vibe_home: impl Into<PathBuf>,
         working_directory: impl Into<PathBuf>,
-        keyring: Box<dyn KeyringBackend>,
+        keyring: Arc<dyn KeyringBackend>,
         login: Box<dyn McpOAuthLogin>,
     ) -> Self {
         Self {
             vibe_home: vibe_home.into(),
             working_directory: working_directory.into(),
-            keyring,
+            authentication: McpAuthenticationService::new(Some(Arc::new(McpOAuthStore::new(
+                keyring, false,
+            )))),
             login,
         }
     }
@@ -375,6 +330,17 @@ impl McpEnvironment {
             Table::new(),
         )
         .with_sources(BTreeSet::from([ConfigSource::User]))
+    }
+
+    /// Binds the user configuration's servers under the anonymous owner, as
+    /// the reference does before every sessionless login or removal.
+    async fn bind(&self, store: &LayeredConfig) -> Result<(), String> {
+        let servers = store
+            .load()
+            .and_then(|snapshot| snapshot.mcp_servers(&self.working_directory))
+            .map_err(mcp_failure)?;
+        self.authentication.bind_catalog(&servers, None).await;
+        Ok(())
     }
 }
 
@@ -465,7 +431,7 @@ async fn dispatch(
                 .get_one::<String>("name")
                 .cloned()
                 .unwrap_or_default();
-            match remove(&requested, environment) {
+            match remove(&requested, environment).await {
                 Ok(message) => write_line(stdout, &message),
                 Err(message) => fail(&sub, &prog, &message, stderr),
             }
@@ -500,10 +466,11 @@ async fn add(
     stderr: &mut dyn Write,
 ) -> Result<u8, String> {
     let command = parse_add(matches)?;
-    let addition = environment
-        .store()
+    let store = environment.store();
+    let addition = store
         .persist_mcp_server(&command.config)
         .map_err(mcp_failure)?;
+    environment.bind(&store).await?;
     let message = if addition.created {
         format!("Added MCP server `{}`.", addition.server.alias)
     } else {
@@ -528,13 +495,12 @@ async fn add(
     // written rather than at the end, so the narration reaches the terminal
     // before the wait does.
     let _ = writeln!(stdout, "{message}");
-    match authenticate(&addition.server, environment, stdout, stderr).await {
-        Ok(()) => Ok(write_line(stdout, "OAuth login succeeded.")),
+    match authenticate(&addition.server.alias, environment, stdout, stderr).await {
+        Ok(()) => Ok(write_line(stdout, "OAuth login completed.")),
         Err(error) => {
-            let _ = writeln!(
-                stderr,
-                "{PROG} add: the OAuth login did not finish: {error}"
-            );
+            // The server is persisted; the login is best effort and can be
+            // retried.
+            let _ = writeln!(stderr, "{PROG} add: OAuth login failed: {error}");
             let _ = writeln!(
                 stderr,
                 "Run `/mcp login {}` to authenticate.",
@@ -545,22 +511,48 @@ async fn add(
     }
 }
 
-/// Narrates the authorization URL and waits for the exchange behind it.
+/// Runs the login, narrating each authorization URL as the service publishes
+/// it and offering it to the browser.
 ///
-/// A host with no browser launcher is reported and not fatal: the URL was
-/// printed first, so the login can still be completed by hand.
+/// Reference `show_oauth_url`: the URL is printed before the browser is
+/// asked, so a host that cannot open one can still finish the login by hand.
 async fn authenticate(
-    config: &McpServerConfig,
+    name: &str,
     environment: &McpEnvironment,
     stdout: &mut dyn Write,
     stderr: &mut dyn Write,
 ) -> Result<(), String> {
-    let url = environment.login.begin(config).await?;
-    let _ = writeln!(stdout, "Authorize the server at this URL:\n\n  {url}");
-    if let Err(reason) = environment.login.open(&url) {
-        let _ = writeln!(stderr, "The browser did not open: {reason}");
+    // The streams are not the sink's to hold, so each URL crosses to this
+    // task, and the sink waits until it has been shown: the reference awaits
+    // `on_oauth_url` before it starts waiting on the callback.
+    let (sender, mut urls) =
+        tokio::sync::mpsc::unbounded_channel::<(String, tokio::sync::oneshot::Sender<()>)>();
+    let on_url: AuthUrlSink = Arc::new(move |url| {
+        let (shown, wait) = tokio::sync::oneshot::channel();
+        let sent = sender.send((url, shown)).is_ok();
+        Box::pin(async move {
+            if sent {
+                let _ = wait.await;
+            }
+        })
+    });
+    let login = environment
+        .login
+        .login(&environment.authentication, name, on_url);
+    tokio::pin!(login);
+    loop {
+        tokio::select! {
+            biased;
+            Some((url, shown)) = urls.recv() => {
+                let _ = writeln!(stdout, "Open this URL in your browser:\n\n  {url}");
+                if let Err(reason) = environment.login.open(&url) {
+                    let _ = writeln!(stderr, "Could not open the browser: {reason}");
+                }
+                let _ = shown.send(());
+            }
+            outcome = &mut login => return outcome,
+        }
     }
-    environment.login.finish(config).await
 }
 
 /// Reads the argument vector as the entry it describes.
@@ -769,6 +761,7 @@ fn server(
         auth,
         prompt: None,
         sampling_enabled: true,
+        declared: None,
     }
 }
 
@@ -824,16 +817,19 @@ fn mcp_failure(error: ConfigError) -> String {
 /// credential deletion can fail on a locked keyring, so doing it first leaves
 /// the configuration untouched and needs no restore, and the write that races
 /// other writers happens last.
-fn remove(name: &str, environment: &McpEnvironment) -> Result<String, String> {
+async fn remove(name: &str, environment: &McpEnvironment) -> Result<String, String> {
     let store = environment.store();
-    if let Some(resource) = store.persisted_oauth_mcp_server(name, &environment.working_directory) {
-        delete_mcp_oauth_credential(environment.keyring.as_ref(), &resource).map_err(
-            |failure| format!("could not delete the OAuth credentials for `{name}`: {failure}"),
-        )?;
-    }
-    let removal = store
-        .persist_mcp_remove(name)
-        .map_err(|error| error.to_string())?;
+    environment.bind(&store).await?;
+    let removal = environment
+        .authentication
+        .remove_with_credentials(&store, name, &None)
+        .await
+        .map_err(|error| match error {
+            McpServerRemoveError::Config(error) => mcp_failure(error),
+            McpServerRemoveError::Credentials(error) => {
+                format!("Failed to remove OAuth credentials for `{name}`: {error}")
+            }
+        })?;
     Ok(if removal.removed {
         format!("Removed MCP server `{}`.", removal.name)
     } else {

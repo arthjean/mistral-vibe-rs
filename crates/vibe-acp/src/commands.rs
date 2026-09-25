@@ -572,32 +572,52 @@ where
             Err(error) => return self.reply(harness, &app_server_message(&error), None),
         };
         if !known {
-            return self.reply(harness, &format!("No MCP server is named `{alias}`"), None);
+            return self.reply(harness, &format!("Unknown MCP server: `{alias}`"), None);
         }
-        match self
-            .call_async(harness, "mcp/login", json!({"name": alias}))
-            .await
-        {
-            Ok(dispatch) => {
-                for notification in &dispatch.notifications {
-                    if notification.method != "mcp/authUrl" {
-                        continue;
-                    }
-                    if let Some(url) = notification.params.get("url").and_then(Value::as_str) {
-                        self.command_message(
-                            harness,
-                            &format!("Sign in to MCP server `{alias}` at {url}"),
-                            None,
-                        );
-                    }
+        // Reference `MCPResource.login`: the call answers once the browser
+        // comes back, and each URL it publishes on the way is relayed as it
+        // is published.
+        let pending = harness.service.lock().await.begin_public_call(
+            "mcp_catalog/login",
+            json!({"sessionId": harness.canonical_id(), "name": alias}),
+        );
+        let pending = match pending {
+            Ok(pending) => pending,
+            Err(error) => return self.reply(harness, &app_server_message(&error.into()), None),
+        };
+        let (sender, mut urls) = tokio::sync::mpsc::unbounded_channel::<String>();
+        let name = alias.to_owned();
+        let login = pending
+            .with_listener(Arc::new(move |notification| {
+                // The catalog publishes `mcp/authUrl` beside the canonical
+                // name; reference `consume_notification` reads only this one.
+                if notification.method == "mcp_catalog/authUrl"
+                    && notification.params.get("name").and_then(Value::as_str) == Some(&name)
+                    && let Some(url) = notification.params.get("url").and_then(Value::as_str)
+                {
+                    let _ = sender.send(url.to_owned());
                 }
-                self.reply(
+            }))
+            .complete();
+        tokio::pin!(login);
+        let outcome = loop {
+            tokio::select! {
+                biased;
+                Some(url) = urls.recv() => self.command_message(
                     harness,
-                    &format!("Signed in to MCP server `{alias}`."),
+                    &format!("Authenticate MCP server `{alias}`: {url}"),
                     None,
-                )
+                ),
+                outcome = &mut login => break outcome,
             }
-            Err(error) => self.reply(harness, &app_server_message(&error), None),
+        };
+        match outcome {
+            Ok(_) => self.reply(
+                harness,
+                &format!("MCP server `{alias}` authenticated."),
+                None,
+            ),
+            Err(error) => self.reply(harness, &app_server_message(&error.into()), None),
         }
     }
 
@@ -606,11 +626,7 @@ where
             .call_async(harness, "mcp/logout", json!({"name": alias}))
             .await
         {
-            Ok(_) => self.reply(
-                harness,
-                &format!("Signed out of MCP server `{alias}`."),
-                None,
-            ),
+            Ok(_) => self.reply(harness, &format!("MCP server `{alias}` logged out."), None),
             Err(error) => self.reply(harness, &app_server_message(&error), None),
         }
     }

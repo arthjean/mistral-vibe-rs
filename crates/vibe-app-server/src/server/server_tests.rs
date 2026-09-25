@@ -85,34 +85,52 @@ impl ResourceBackend for RecordingResourceBackend {
         request: ResourceBackendRequest,
     ) -> crate::resources::ResourceFuture<'a, ResourceDispatch> {
         Box::pin(async move {
-            match request.command {
-                ResourceBackendCommand::Mcp(crate::resources::McpCommand::Add(_)) => {
-                    *self.mcp_added.lock().map_err(|_| {
-                        ResourceError::Unavailable("test backend lock".to_owned())
-                    })? = true;
-                    Ok(ResourceDispatch {
-                        result: result_map([("mcp", json!({"sources": ["example"]}))]),
-                        signals: crate::resources::ResourceSignals {
-                            runtime_updated: true,
-                            ..crate::resources::ResourceSignals::default()
-                        },
-                    })
+            Err(ResourceError::MethodNotFound(format!(
+                "{:?}",
+                request.command
+            )))
+        })
+    }
+
+    fn mcp_catalog<'a>(
+        &'a self,
+        call: crate::resources::McpCatalogCall,
+        _target: crate::resources::McpCatalogTarget,
+        _notify: crate::resources::McpCatalogNotify,
+    ) -> crate::resources::McpCatalogFuture<'a> {
+        Box::pin(async move {
+            let mut added = self.mcp_added.lock().map_err(|_| {
+                crate::resources::McpCatalogError::refused(
+                    ProtocolErrorCode::InternalError,
+                    "test backend lock",
+                )
+            })?;
+            let (result, runtime_updated) = match call {
+                crate::resources::McpCatalogCall::Add { name, url, .. } => {
+                    *added = true;
+                    (
+                        result_map([
+                            ("name", json!(name)),
+                            ("url", json!(url)),
+                            ("created", json!(true)),
+                        ]),
+                        true,
+                    )
                 }
-                ResourceBackendCommand::Mcp(crate::resources::McpCommand::Read) => {
-                    let added = *self
-                        .mcp_added
-                        .lock()
-                        .map_err(|_| ResourceError::Unavailable("test backend lock".to_owned()))?;
-                    Ok(ResourceDispatch {
-                        result: result_map([(
-                            "mcp",
-                            json!({"sources": if added { vec!["example"] } else { vec![] }}),
-                        )]),
-                        signals: crate::resources::ResourceSignals::default(),
-                    })
-                }
-                command => Err(ResourceError::MethodNotFound(format!("{command:?}"))),
-            }
+                _ => (
+                    result_map([(
+                        "mcp",
+                        json!({"sources": if *added { vec!["example"] } else { vec![] }}),
+                    )]),
+                    false,
+                ),
+            };
+            Ok(crate::resources::McpCatalogOutcome {
+                result,
+                runtime_updated,
+                integrations: None,
+                auth_required: Vec::new(),
+            })
         })
     }
 

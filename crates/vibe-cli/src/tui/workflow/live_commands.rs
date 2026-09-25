@@ -28,7 +28,6 @@ use super::super::controls::ControlState;
 use super::super::interaction::{IntegrationKind, Overlay, OverlayItem, OverlayKind};
 use super::super::pickers::{mcp_overlay, sessions_overlay, theme_overlay, thinking_overlay};
 use super::super::remote_project_workflow::{handle_teleport_command, open_project_picker};
-use super::super::runtime::{UiOperation, schedule_ui_external};
 use super::super::setup::ResolvedTheme;
 use super::super::state::{EntrySource, EntryStatus, TranscriptEntry, TranscriptKind, TuiState};
 use super::super::{
@@ -38,8 +37,8 @@ use super::super::{
 };
 use super::config::{apply_render_preferences, persisted_theme};
 use super::mcp::{
-    McpEffect, McpPendingOperation, SystemUrlOpener, connector_sources, execute_mcp_effect,
-    server_sources, valid_auth_url,
+    McpEffect, McpLoginOrigin, SystemUrlOpener, connector_sources, execute_mcp_effect,
+    schedule_mcp_login, server_sources,
 };
 use super::{show_config, show_debug, show_model, show_proxy, show_rewind, show_voice};
 
@@ -54,11 +53,6 @@ pub(in crate::tui) enum FollowUp {
 /// How long `/whoami` waits on the identity service before answering that
 /// there is no identity.
 const IDENTITY_TIMEOUT: Duration = Duration::from_secs(10);
-
-/// How often a server login is asked whether the browser finished, and for how
-/// long, before the login is left to the MCP browser's own refresh.
-pub(in crate::tui) const LOGIN_POLL_INTERVAL: Duration = Duration::from_secs(2);
-pub(in crate::tui) const LOGIN_POLL_ATTEMPTS: u32 = 150;
 
 const SETUP_REQUIRED: &str = "Setup is required before using this command";
 
@@ -614,38 +608,20 @@ impl CommandBackend for LiveBackend<'_> {
         state
     }
 
-    /// Starts the OAuth login and reports its URL. The browser answers later,
-    /// so the completion is polled for and reported when it lands.
+    /// Starts the OAuth login beside the interactive slot. It answers once
+    /// the browser comes back, and reports its URL and its outcome itself.
     async fn mcp_login(&mut self, alias: &str) -> Result<McpLogin, String> {
-        let dispatch = self
-            .call_deferred("mcp/login", json!({"name": alias}))
-            .await?;
-        let url = dispatch
-            .notifications
-            .iter()
-            .find(|notification| notification.method == "mcp/authUrl")
-            .and_then(|notification| notification.params.get("url"))
-            .and_then(Value::as_str)
-            .or_else(|| dispatch.result.get("url").and_then(Value::as_str))
-            .filter(|url| valid_auth_url(url))
-            .map(ToOwned::to_owned);
         let Some(runtime) = self.runtime.as_mut() else {
             return Err(SETUP_REQUIRED.to_owned());
         };
-        schedule_ui_external(
+        schedule_mcp_login(
             runtime,
-            UiOperation::Mcp(McpPendingOperation::AwaitLogin {
-                source: alias.to_owned(),
-                attempt: 0,
-            }),
-            async {
-                tokio::time::sleep(LOGIN_POLL_INTERVAL).await;
-                Ok(())
-            },
+            alias.to_owned(),
+            McpLoginOrigin::Command,
             self.state,
         );
         Ok(McpLogin {
-            urls: url.into_iter().collect(),
+            urls: Vec::new(),
             completed: false,
         })
     }

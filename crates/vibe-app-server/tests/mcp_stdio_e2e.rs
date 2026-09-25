@@ -57,7 +57,14 @@ impl CompletionProvider for ModelSelectsMcp {
                             call_id,
                             content,
                             is_error: false,
-                        } if call_id == "call-1" && content == "hello rust"
+                        } if call_id == "call-1"
+                            // Reference `_parse_call_result`: structured
+                            // content wins over the text blocks, and the model
+                            // reads the rendered `MCPToolResult`.
+                            && content.starts_with("ok: True\nserver: stdio:")
+                            && content.ends_with(
+                                "\ntool: echo\ntext: None\nstructured: {'echo': 'rust'}"
+                            )
                     )
                 }) {
                     return Err(vibe_core::provider::ProviderError::InvalidRequest(
@@ -202,12 +209,17 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
         .integrations
         .as_ref()
         .expect("discovery reports the integration state");
-    assert_eq!(integrations.mcp["sources"][0]["status"], json!("connected"));
+    // Reference `project_mcp_sources` reserves `connected` for a signed-in
+    // OAuth server; a reachable stdio server is `enabled`.
+    assert_eq!(integrations.mcp["sources"][0]["status"], json!("enabled"));
 
+    // The reference reads the first page of `tools/list` and never follows
+    // `nextCursor` (measured by `mcp_transport_parity_tests`), so the tool the
+    // fixture holds back for its second page stays unpublished.
     assert_eq!(
         tools.list().expect("registered tools").len(),
-        2,
-        "all paginated tools are registered"
+        1,
+        "only the first page of tools is registered"
     );
     // Discovery is what teaches the registry where a tool comes from, and the
     // published name no longer says it: `fixture_echo` joins the alias to a

@@ -1,10 +1,5 @@
 use super::*;
 
-struct FakeMcpAuth {
-    url: String,
-    calls: StdMutex<Vec<String>>,
-}
-
 struct FakeConnectorTransport;
 
 struct CountingEmptyConnectorCatalog {
@@ -71,58 +66,20 @@ impl ConnectorAuthBackend for FakeConnectorAuth {
     }
 }
 
-impl McpAuthBackend for FakeMcpAuth {
-    fn login<'a>(
-        &'a self,
-        session_id: &'a str,
-        config: &'a McpServerConfig,
-    ) -> ResourceFuture<'a, String> {
-        Box::pin(async move {
-            self.calls
-                .lock()
-                .map_err(|_| ResourceError::Unavailable("auth test lock".to_owned()))?
-                .push(format!("login:{session_id}:{}", config.alias));
-            Ok(self.url.clone())
-        })
-    }
-
-    fn complete<'a>(
-        &'a self,
-        session_id: &'a str,
-        config: &'a McpServerConfig,
-    ) -> ResourceFuture<'a, bool> {
-        Box::pin(async move {
-            self.calls
-                .lock()
-                .map_err(|_| ResourceError::Unavailable("auth test lock".to_owned()))?
-                .push(format!("complete:{session_id}:{}", config.alias));
-            Ok(true)
-        })
-    }
-
-    fn logout<'a>(
-        &'a self,
-        session_id: &'a str,
-        config: &'a McpServerConfig,
-    ) -> ResourceFuture<'a, ()> {
-        Box::pin(async move {
-            self.calls
-                .lock()
-                .map_err(|_| ResourceError::Unavailable("auth test lock".to_owned()))?
-                .push(format!("logout:{session_id}:{}", config.alias));
-            Ok(())
-        })
-    }
-
-    fn close_session<'a>(&'a self, session_id: &'a str) -> ResourceFuture<'a, ()> {
-        Box::pin(async move {
-            self.calls
-                .lock()
-                .map_err(|_| ResourceError::Unavailable("auth test lock".to_owned()))?
-                .push(format!("close:{session_id}"));
-            Ok(())
-        })
-    }
+/// Reads a session's MCP state through the catalog, as `mcp_catalog/read`.
+async fn read_mcp(
+    backend: &CoreResourceBackend,
+    session_id: &str,
+) -> Result<McpCatalogOutcome, McpCatalogError> {
+    backend
+        .mcp_catalog(
+            McpCatalogCall::Read {
+                session_id: session_id.to_owned(),
+            },
+            McpCatalogTarget::Session(session_id.to_owned()),
+            Arc::new(|_, _| {}),
+        )
+        .await
 }
 
 fn params(value: Value) -> BTreeMap<String, Value> {
@@ -141,23 +98,6 @@ fn backend_request(
 ) -> ResourceBackendRequest {
     ResourceBackendRequest::parse(session_id.to_owned(), method, &params, false)
         .expect("valid backend request")
-}
-
-fn disabled_mcp(alias: &str) -> McpServerConfig {
-    McpServerConfig {
-        alias: alias.to_owned(),
-        transport: McpTransportConfig::StreamableHttp {
-            url: Url::parse("https://mcp.example/rpc").expect("MCP URL"),
-            headers: BTreeMap::new(),
-        },
-        enabled: false,
-        disabled_tools: Default::default(),
-        startup_timeout_ms: vibe_core::mcp::DEFAULT_MCP_STARTUP_TIMEOUT_MS,
-        tool_timeout_ms: vibe_core::mcp::DEFAULT_MCP_TOOL_TIMEOUT_MS,
-        auth: Default::default(),
-        prompt: None,
-        sampling_enabled: true,
-    }
 }
 
 fn oauth_connector() -> ConnectorDefinition {
@@ -300,8 +240,7 @@ async fn an_entry_withholds_only_the_tool_it_names_by_its_remote_name() {
         view.disabled_tools.iter().collect::<Vec<_>>(),
         ["connector_Drive_search"]
     );
-    let sources = backend
-        .dispatch(backend_request("gated", "mcp/read", BTreeMap::new()))
+    let sources = read_mcp(&backend, "gated")
         .await
         .expect("the merged source list");
     assert_eq!(
@@ -831,133 +770,6 @@ fn session_scoped_resource_state_is_bounded_and_released() {
         .expect("released capacity");
 }
 
-#[test]
-fn mcp_rejects_non_https_endpoints() {
-    let mut resources = ResourceService::default();
-    let error = resources
-        .dispatch(
-            "mcp/add",
-            &params(json!({"url": "http://mcp.example"})),
-            false,
-        )
-        .expect_err("insecure URL");
-    assert!(matches!(error, ResourceError::InvalidParams(_)));
-}
-
-#[tokio::test]
-async fn mcp_oauth_routes_the_exact_source_and_rejects_unsafe_urls() {
-    let auth = Arc::new(FakeMcpAuth {
-        url: "https://auth.example/authorize?state=opaque".to_owned(),
-        calls: StdMutex::new(Vec::new()),
-    });
-    let backend = CoreResourceBackend::default().with_mcp_auth(auth.clone());
-    backend
-        .open_session(ResourceSession {
-            session_id: "s1".to_owned(),
-            generation: 1,
-            working_directory: "/workspace".to_owned(),
-            project_trusted: false,
-            policy: PermissionStore::default(),
-            tools: ToolRegistry::default(),
-        })
-        .expect("open session");
-    backend
-        .configure_mcp("s1", vec![disabled_mcp("source-a")])
-        .await
-        .expect("configure source");
-    let login = backend
-        .dispatch(backend_request(
-            "s1",
-            "mcp/login",
-            params(json!({"name": "source-a"})),
-        ))
-        .await
-        .expect("OAuth URL");
-    // The URL is not on the answer: it crosses as `mcp/authUrl`, which is
-    // where a reference client reads it, and the answer declares only the
-    // runtime the server fills in.
-    assert!(!login.result.contains_key("auth"));
-    assert_eq!(
-        login.signals.auth_url,
-        Some(McpAuthUrl {
-            name: "source-a".to_owned(),
-            url: "https://auth.example/authorize?state=opaque".to_owned(),
-        })
-    );
-    let completion = backend
-        .dispatch(backend_request(
-            "s1",
-            "mcp/auth/complete",
-            params(json!({"name": "source-a"})),
-        ))
-        .await
-        .expect("OAuth completion is checked");
-    assert_eq!(completion.result["auth"]["verified"], true);
-    backend
-        .dispatch(backend_request(
-            "s1",
-            "mcp/logout",
-            params(json!({"name": "source-a"})),
-        ))
-        .await
-        .expect("logout");
-    assert_eq!(
-        auth.calls.lock().expect("calls").as_slice(),
-        [
-            "login:s1:source-a",
-            "complete:s1:source-a",
-            "logout:s1:source-a"
-        ]
-    );
-    assert!(matches!(
-        backend
-            .dispatch(backend_request(
-                "s1",
-                "mcp/login",
-                params(json!({"name": "unknown"})),
-            ))
-            .await,
-        Err(ResourceError::NotFound(_))
-    ));
-    backend
-        .close_session("s1", 1)
-        .await
-        .expect("OAuth session cleanup");
-    assert_eq!(
-        auth.calls.lock().expect("calls").last().map(String::as_str),
-        Some("close:s1")
-    );
-
-    let unsafe_backend = CoreResourceBackend::default().with_mcp_auth(Arc::new(FakeMcpAuth {
-        url: "http://auth.example/authorize".to_owned(),
-        calls: StdMutex::new(Vec::new()),
-    }));
-    unsafe_backend
-        .open_session(ResourceSession {
-            session_id: "s2".to_owned(),
-            generation: 1,
-            working_directory: "/workspace".to_owned(),
-            project_trusted: false,
-            policy: PermissionStore::default(),
-            tools: ToolRegistry::default(),
-        })
-        .expect("open unsafe session");
-    unsafe_backend
-        .configure_mcp("s2", vec![disabled_mcp("source-b")])
-        .await
-        .expect("configure unsafe source");
-    assert!(matches!(
-        unsafe_backend
-            .dispatch(backend_request(
-                "s2",
-                "mcp/login",
-                params(json!({"name": "source-b"})),
-            ))
-            .await,
-        Err(ResourceError::Unavailable(_))
-    ));
-}
-
 #[tokio::test]
 async fn connectors_initialize_lazily_and_route_auth_to_the_exact_source() {
     let auth = Arc::new(FakeConnectorAuth {
@@ -1048,17 +860,19 @@ async fn connectors_initialize_lazily_and_route_auth_to_the_exact_source() {
         "the runtime is filled in by the server, which owns it"
     );
     assert!(refreshed.signals.runtime_updated);
-    let connectors = backend
-        .dispatch(backend_request("s1", "mcp/read", BTreeMap::new()))
+    let connectors = read_mcp(&backend, "s1")
         .await
         .expect("the merged source list");
     assert_eq!(
         connectors.result["mcp"]["sources"][0],
         json!({
             "name": "Drive",
+            "displayName": "Drive",
             "kind": "connector",
             "transport": "connector",
             "status": "connected",
+            "error": null,
+            "pluginName": null,
             "tools": [{
                 "name": "connector_Drive_search",
                 "description": "Search files",
@@ -1208,78 +1022,6 @@ async fn a_preference_persisted_under_the_lowercased_alias_still_applies() {
 }
 
 #[tokio::test]
-async fn core_backend_denies_stdio_mcp_before_workspace_trust() {
-    let workspace = tempfile::tempdir().expect("workspace");
-    let backend = CoreResourceBackend::default();
-    backend
-        .open_session(ResourceSession {
-            session_id: "s1".to_owned(),
-            generation: 1,
-            working_directory: workspace.path().to_string_lossy().into_owned(),
-            project_trusted: false,
-            policy: PermissionStore::default(),
-            tools: ToolRegistry::default(),
-        })
-        .expect("open session");
-    let error = backend
-        .dispatch(backend_request(
-            "s1",
-            "mcp/add",
-            params(json!({
-                "name": "untrusted",
-                "transport": "stdio",
-                "command": "must-not-launch"
-            })),
-        ))
-        .await
-        .expect_err("untrusted executable must be denied before spawn");
-    assert!(
-        matches!(error, ResourceError::Unavailable(message) if message.contains("workspace trust"))
-    );
-}
-
-#[tokio::test]
-async fn core_backend_denies_stdio_mcp_working_directory_outside_trust() {
-    let workspace = tempfile::tempdir().expect("workspace");
-    let outside = tempfile::tempdir().expect("outside directory");
-    let policy = PermissionStore::default();
-    policy
-        .try_set_trust(
-            workspace.path(),
-            TrustDecision::SessionTrusted,
-            TrustRootKind::Workspace,
-        )
-        .expect("trust workspace");
-    let backend = CoreResourceBackend::default();
-    backend
-        .open_session(ResourceSession {
-            session_id: "s1".to_owned(),
-            generation: 1,
-            working_directory: workspace.path().to_string_lossy().into_owned(),
-            project_trusted: true,
-            policy,
-            tools: ToolRegistry::default(),
-        })
-        .expect("open session");
-    let error = backend
-        .dispatch(backend_request(
-            "s1",
-            "mcp/add",
-            params(json!({
-                "name": "outside",
-                "transport": "stdio",
-                "command": "must-not-launch",
-                "workingDirectory": outside.path()
-            })),
-        ))
-        .await
-        .expect_err("outside working directory must be denied before spawn");
-    assert!(
-        matches!(error, ResourceError::Unavailable(message) if message.contains("workspace trust"))
-    );
-}
-
-#[tokio::test]
 async fn core_backend_runs_trusted_shell_and_cleans_the_owned_process() {
     let workspace = tempfile::tempdir().expect("workspace");
     let policy = PermissionStore::default();
@@ -1395,8 +1137,7 @@ async fn stale_close_cannot_remove_a_reattached_resource_generation() {
         .close_session("s1", 1)
         .await
         .expect("stale cleanup is harmless");
-    let dispatch = backend
-        .dispatch(backend_request("s1", "mcp/read", BTreeMap::new()))
+    let dispatch = read_mcp(&backend, "s1")
         .await
         .expect("reattached resources remain available");
     assert!(dispatch.result.contains_key("mcp"));
@@ -1406,10 +1147,11 @@ async fn stale_close_cannot_remove_a_reattached_resource_generation() {
         .await
         .expect("current cleanup");
     assert!(matches!(
-        backend
-            .dispatch(backend_request("s1", "mcp/read", BTreeMap::new()))
-            .await,
-        Err(ResourceError::NotFound(_))
+        read_mcp(&backend, "s1").await,
+        Err(McpCatalogError::Refused {
+            code: vibe_protocol::ProtocolErrorCode::NotFound,
+            ..
+        })
     ));
 }
 

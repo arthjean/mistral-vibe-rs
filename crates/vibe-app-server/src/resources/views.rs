@@ -42,7 +42,7 @@ pub(super) fn canonical_mutation(
         signals: ResourceSignals {
             runtime_updated: true,
             warnings: diagnostics,
-            auth_url: None,
+            auth_required: Vec::new(),
             integrations: None,
         },
     }
@@ -60,80 +60,9 @@ pub(super) fn runtime_mutation<const N: usize>(
         signals: ResourceSignals {
             runtime_updated: true,
             warnings: diagnostics,
-            auth_url: None,
+            auth_required: Vec::new(),
             integrations: None,
         },
-    }
-}
-
-pub(super) fn mcp_view(
-    views: Vec<McpServerView>,
-    connectors: Vec<ConnectorView>,
-    tools: &ToolRegistry,
-) -> Value {
-    let descriptions = tools
-        .list()
-        .unwrap_or_default()
-        .into_iter()
-        .map(|tool| (tool.name, tool.description))
-        .collect::<BTreeMap<_, _>>();
-    let mut discovery_errors = Map::new();
-    let mut sources = Vec::with_capacity(views.len().saturating_add(connectors.len()));
-    for view in views {
-        if let Some(diagnostic) = &view.diagnostic {
-            discovery_errors.insert(view.alias.clone(), json!(redact(diagnostic)));
-        }
-        let disabled_tools = view.disabled_tools;
-        let source_available = view.enabled && view.status == McpServerStatus::Healthy;
-        sources.push(json!({
-            "name": view.alias,
-            "kind": McpSourceKind::Server,
-            "transport": view.transport,
-            "status": server_status(view.enabled, view.status),
-            "tools": view.tools.into_iter().map(|name| {
-                let enabled = source_available && !disabled_tools.contains(&name);
-                let description = descriptions.get(&name).cloned().unwrap_or_default();
-                json!({"name": name, "description": description, "enabled": enabled})
-            }).collect::<Vec<_>>()
-        }));
-    }
-    for view in connectors {
-        if let Some(diagnostic) = &view.diagnostic {
-            discovery_errors.insert(view.name.clone(), json!(redact(diagnostic)));
-        }
-        let disabled_tools = view.disabled_tools;
-        let status = connector_status(view.enabled, view.auth_state);
-        let available = status == McpSourceStatus::Connected;
-        sources.push(json!({
-            "name": view.name,
-            "kind": McpSourceKind::Connector,
-            "transport": CONNECTOR_TRANSPORT,
-            "status": status,
-            "tools": view.tool_names.into_iter().map(|name| {
-                let enabled = available && !disabled_tools.contains(&name);
-                let description = descriptions.get(&name).cloned().unwrap_or_default();
-                json!({"name": name, "description": description, "enabled": enabled})
-            }).collect::<Vec<_>>()
-        }));
-    }
-    json!({"sources": sources, "discoveryErrors": Value::Object(discovery_errors)})
-}
-
-/// How a configured MCP server stands, in the vocabulary the wire declares.
-///
-/// A source the operator switched off is `Disabled` whatever its transport last
-/// reported, so a deliberate choice is never rendered as a breakage; a source
-/// that failed to start is `Unavailable`, which is the distinction the reference
-/// vocabulary keeps and the internal status does not.
-pub(super) fn server_status(enabled: bool, status: McpServerStatus) -> McpSourceStatus {
-    if !enabled {
-        return McpSourceStatus::Disabled;
-    }
-    match status {
-        McpServerStatus::Healthy => McpSourceStatus::Connected,
-        McpServerStatus::AuthRequired => McpSourceStatus::NeedsAuth,
-        McpServerStatus::Failed => McpSourceStatus::Unavailable,
-        McpServerStatus::Disabled => McpSourceStatus::Disabled,
     }
 }
 

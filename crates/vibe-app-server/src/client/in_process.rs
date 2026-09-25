@@ -233,16 +233,48 @@ pub struct InProcessClient {
     pub(super) pending_mcp: BTreeMap<String, Vec<McpServerConfig>>,
 }
 
+/// Hears a notification a call publishes while it is still running.
+pub type LiveNotificationListener = Arc<dyn Fn(PublicNotification) + Send + Sync>;
+
 pub struct PendingPublicCall {
     server: AppServer,
     request_id: RequestId,
     method: String,
     outbound: Vec<Vec<u8>>,
     deferred: Vec<DeferredWork>,
+    listener: Option<LiveNotificationListener>,
 }
 
 impl PendingPublicCall {
+    /// The same call, with what it publishes mid-flight also handed to
+    /// `listener` as it happens, which is how a sign-in's URL reaches a user
+    /// before the sign-in answers.
+    #[must_use]
+    pub fn with_listener(mut self, listener: LiveNotificationListener) -> Self {
+        self.listener = Some(listener);
+        self
+    }
+
     pub async fn complete(mut self) -> Result<PublicDispatch, ClientError> {
+        // What a call publishes before it answers comes ahead of its answer.
+        let early = Arc::new(std::sync::Mutex::new(Vec::<Vec<u8>>::new()));
+        let live: Arc<dyn Fn(Vec<u8>) + Send + Sync> = {
+            let early = early.clone();
+            let listener = self.listener.clone();
+            Arc::new(move |frame: Vec<u8>| {
+                if let Some(listener) = &listener
+                    && let Ok(Envelope::Notification(notification)) = decode_frame(&frame)
+                {
+                    listener(PublicNotification {
+                        method: notification.method,
+                        params: notification.params,
+                    });
+                }
+                if let Ok(mut early) = early.lock() {
+                    early.push(frame);
+                }
+            })
+        };
         for work in self.deferred {
             let completed = match work {
                 DeferredWork::ResourceRequest {
@@ -263,6 +295,20 @@ impl PendingPublicCall {
                         .execute_cloud_request(request_id, method, params)
                         .await
                 }
+                DeferredWork::McpCatalog {
+                    request_id,
+                    call,
+                    target,
+                    publish,
+                } => {
+                    let live = live.clone();
+                    let notify = crate::server::mcp_catalog_notifier(publish, move |frame| {
+                        live(frame);
+                    });
+                    self.server
+                        .execute_mcp_catalog(request_id, call, target, notify)
+                        .await
+                }
                 _ => {
                     return Err(ClientError::InvalidResponse(format!(
                         "unsupported deferred work returned by `{}`",
@@ -275,6 +321,9 @@ impl PendingPublicCall {
                     "deferred work returned nested work for `{}`",
                     self.method
                 )));
+            }
+            if let Ok(mut early) = early.lock() {
+                self.outbound.append(&mut early);
             }
             self.outbound.extend(completed.outbound);
         }
@@ -674,6 +723,7 @@ impl InProcessClient {
             method: method.to_owned(),
             outbound: batch.outbound,
             deferred: batch.deferred,
+            listener: None,
         })
     }
 
