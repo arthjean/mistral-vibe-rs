@@ -238,11 +238,7 @@ pub struct Arguments {
     pub input_price: f64,
     #[arg(long, default_value_t = 7.5, hide = true)]
     pub output_price: f64,
-    #[arg(
-        long,
-        default_value = "https://api.mistral.ai/v1/chat/completions",
-        hide = true
-    )]
+    #[arg(long, default_value = "https://api.mistral.ai/v1", hide = true)]
     pub api_base: String,
     #[arg(long, default_value = "MISTRAL_API_KEY", hide = true)]
     pub credential_environment: String,
@@ -293,11 +289,6 @@ pub async fn run(
         )
         .await
     } else {
-        let config = bootstrap::live_driver_config(
-            &arguments,
-            &arguments.model,
-            WorkspaceService::default().compaction_prompts(),
-        )?;
         let credential = bootstrap::credential(&arguments)?;
         let workspace = WorkspaceService::default();
         // The programmatic entry point starts here, so this is where an older
@@ -305,6 +296,7 @@ pub async fn run(
         workspace
             .migrate_configuration()
             .map_err(|error| CliError::Configuration(error.to_string()))?;
+        let config = bootstrap::live_driver_config(&arguments, &arguments.model, &workspace)?;
         let telemetry = telemetry_observer(&arguments, &workspace)?;
         // The server takes ownership of the service, and the session census is
         // read off the same one.
@@ -833,7 +825,7 @@ pub(crate) fn arguments_for_test() -> Arguments {
         model: "mistral-medium-3.5".to_owned(),
         input_price: 1.5,
         output_price: 7.5,
-        api_base: "https://api.mistral.ai/v1/chat/completions".to_owned(),
+        api_base: "https://api.mistral.ai/v1".to_owned(),
         credential_environment: "MISTRAL_API_KEY".to_owned(),
         session_root: None,
         fake_response: None,

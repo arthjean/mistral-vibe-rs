@@ -22,8 +22,7 @@ use std::path::PathBuf;
 use crate::events::{ModelMessage, ModelToolCall};
 use crate::prompt::library::{UtilityPrompt, load_prompt};
 use crate::provider::{
-    AssistantMessage, ProviderError, ProviderInput, RequestLimits, ToolChoice, ToolDefinition,
-    Usage,
+    AssistantMessage, ProviderInput, RequestLimits, ToolChoice, ToolDefinition, Usage,
 };
 
 use super::context::{
@@ -155,6 +154,9 @@ pub struct CompactionPlan {
     pub limits: RequestLimits,
     /// How many tokens of the operator's own words survive.
     pub max_preserved_tokens: i64,
+    /// The session both calls pin their affinity to, as the reference's turn
+    /// calls do: compaction reaches the model through `AgentLoop._complete`.
+    pub session_id: Option<String>,
 }
 
 impl Default for CompactionPlan {
@@ -168,6 +170,7 @@ impl Default for CompactionPlan {
             strict: false,
             limits: RequestLimits::default(),
             max_preserved_tokens: COMPACT_USER_MESSAGE_MAX_TOKENS,
+            session_id: None,
         }
     }
 }
@@ -398,15 +401,13 @@ async fn summarize_call(
                     .saturating_add(answer.usage.output_tokens);
                 return Ok((answer, working));
             }
-            Err(ProviderError::ContextOverflow) => match drop_oldest_round(&working) {
+            Err(error) if error.is_context_overflow() => match drop_oldest_round(&working) {
                 Some(trimmed) if tries_left > 0 => {
                     working = trimmed;
                     tries_left -= 1;
                 }
                 _ => {
-                    return Err(CompactionFailure::from(
-                        ProviderError::ContextOverflow.to_string(),
-                    ));
+                    return Err(CompactionFailure::from(error.to_string()));
                 }
             },
             Err(error) => return Err(CompactionFailure::from(error.to_string())),
@@ -449,6 +450,7 @@ fn build_input(
     };
     ProviderInput {
         turn_id: None,
+        session_id: plan.session_id.clone(),
         model_override: plan.model.clone(),
         messages,
         stream: false,

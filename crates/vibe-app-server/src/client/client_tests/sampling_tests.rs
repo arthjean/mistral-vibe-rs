@@ -27,8 +27,7 @@ async fn a_sampling_request_reaches_the_provider_as_a_completion() {
                 Ok(AssistantMessage {
                     text: "sampled answer".to_owned(),
                     reasoning: None,
-                    reasoning_signature: None,
-                    reasoning_state: Vec::new(),
+                    reasoning_payloads: Vec::new(),
                     tool_calls: Vec::new(),
                     usage: Usage {
                         input_tokens: 1,
@@ -91,13 +90,12 @@ async fn a_sampling_request_reaches_the_provider_as_a_completion() {
                 reasoning_message_id: None,
                 content: "pong".to_owned(),
                 reasoning: None,
-                reasoning_signature: None,
-                reasoning_state: Vec::new(),
+                reasoning_payloads: Vec::new(),
                 tool_calls: Vec::new(),
             },
         ]
     );
-    assert_eq!(input.limits.max_tokens, 64);
+    assert_eq!(input.limits.max_tokens, Some(64));
     assert_eq!(input.limits.temperature_millis, Some(250));
     assert!(!input.stream, "a sampling request is not streamed");
     assert!(

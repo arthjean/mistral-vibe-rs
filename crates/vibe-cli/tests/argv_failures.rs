@@ -112,7 +112,13 @@ fn a_budget_already_spent_stops_the_run_before_its_first_request() {
         ["--max-tokens", "-1"],
         ["--max-price", "-2.5"],
     ] {
-        let mut argv = vec!["-p", "hello", "--trust", "--api-base", "http://127.0.0.1:9"];
+        let mut argv = vec![
+            "-p",
+            "hello",
+            "--trust",
+            "--api-base",
+            "http://127.0.0.1:9/v1",
+        ];
         argv.extend(budget);
         let output = launch_with_key(&argv);
         let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
@@ -140,7 +146,7 @@ fn the_harness_flags_start_a_programmatic_run() {
             "hello",
             "--trust",
             "--api-base",
-            "http://127.0.0.1:9",
+            "http://127.0.0.1:9/v1",
             "--max-turns",
             "0",
         ];

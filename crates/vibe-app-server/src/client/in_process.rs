@@ -538,8 +538,17 @@ impl InProcessClient {
         message: &str,
         code: TurnErrorCode,
     ) -> Result<(), ClientError> {
+        self.fail_turn_with(reservation, super::public_turn_failure(code, message))
+    }
+
+    /// Ends a reserved turn as failed with `error` as it is published.
+    pub fn fail_turn_with(
+        &mut self,
+        reservation: &TurnReservation,
+        error: PublicError,
+    ) -> Result<(), ClientError> {
         self.server
-            .fail_turn(&reservation.session_id, &reservation.turn_id, message, code)?;
+            .fail_turn_with(&reservation.session_id, &reservation.turn_id, error)?;
         Ok(())
     }
 

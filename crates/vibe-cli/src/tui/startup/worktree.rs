@@ -10,6 +10,10 @@
 use std::fs;
 use std::io::{BufRead, Write};
 use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
+
+use vibe_core::llm::AmbientCredentials;
+use vibe_core::provider::config::ModelConfig;
 
 use vibe_core::worktree::{
     ManagedRoot, ManagedWorktree, PreparedWorktree, WorktreeError, WorktreeRepository,
@@ -186,25 +190,38 @@ fn naming_prompt(arguments: &Arguments) -> Option<String> {
 /// the global dotenv file, as every credential of this launch does.
 fn suggest_worktree_name(arguments: &Arguments, prompt: Option<&str>) -> Option<String> {
     prompt.filter(|prompt| !prompt.is_empty())?;
-    let provider = naming_model::utility_provider(utility_model(arguments))?;
+    let provider = utility_provider(arguments)?;
     naming_model::suggest_worktree_name_blocking(prompt, Some(provider.as_ref()))
 }
 
-/// The model utility completions of this launch run on.
+/// The provider utility completions of this launch run on: the fast Mistral
+/// model when a Mistral provider is usable, the launch's own model otherwise.
+/// Keys resolve from the environment, the global dotenv file and the keyring,
+/// as every credential of this launch does.
 #[must_use]
-pub(crate) fn utility_model(arguments: &Arguments) -> naming_model::UtilityModel {
-    let dotenv = crate::bootstrap::dotenv_values(arguments);
-    naming_model::UtilityModel::select(
-        naming_model::UtilityModel {
-            style: arguments.provider_style.clone(),
-            endpoint: arguments.api_base.clone(),
-            model: arguments.model.clone(),
-            credential: dotenv
-                .variable(&arguments.credential_environment)
-                .unwrap_or_default(),
-        },
-        dotenv.variable("MISTRAL_API_KEY"),
-    )
+pub(crate) fn utility_provider(
+    arguments: &Arguments,
+) -> Option<Arc<dyn vibe_core::engine::CompletionProvider>> {
+    let workspace = vibe_app_server::workspace::WorkspaceService::default();
+    let mut routing = crate::bootstrap::model_routing(&workspace).ok()?;
+    let launch = crate::bootstrap::launch_provider(arguments, &routing).ok()?;
+    // The session's model runs on the provider the launch names.
+    let mut active = routing
+        .model(Some(&arguments.model))
+        .unwrap_or_else(|_| ModelConfig::new(&arguments.model, &launch.name));
+    active.provider.clone_from(&launch.name);
+    routing
+        .providers
+        .retain(|provider| provider.name != launch.name);
+    routing.providers.insert(0, launch);
+    routing.models.retain(|model| model.alias != active.alias);
+    routing.active_alias = Some(active.alias.clone());
+    routing.models.push(active);
+    let credentials = Arc::new(AmbientCredentials::new(
+        crate::bootstrap::dotenv_values(arguments),
+        vibe_core::auth::KeyringStore::native(),
+    ));
+    naming_model::utility_provider(&routing, credentials)
 }
 
 fn resolve_additional_directories(

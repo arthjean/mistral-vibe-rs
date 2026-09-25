@@ -498,8 +498,7 @@ fn build(entry: &MessageEntry, envelopes: &BTreeMap<String, String>) -> ModelMes
             reasoning_message_id: None,
             content,
             reasoning: None,
-            reasoning_signature: None,
-            reasoning_state: Vec::new(),
+            reasoning_payloads: Vec::new(),
             tool_calls: Vec::new(),
         },
         "tool" => ModelMessage::Tool {

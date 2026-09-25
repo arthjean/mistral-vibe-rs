@@ -148,8 +148,7 @@ async fn the_context_warning_reaches_the_model_once_per_session() {
                 Ok(AssistantMessage {
                     text: "answered".to_owned(),
                     reasoning: None,
-                    reasoning_signature: None,
-                    reasoning_state: Vec::new(),
+                    reasoning_payloads: Vec::new(),
                     tool_calls: Vec::new(),
                     // The context stays above half the window and below it,
                     // so the second turn is a real chance to warn again.
@@ -280,8 +279,7 @@ async fn the_configured_compaction_model_overrides_the_summarization_request() {
                 Ok(AssistantMessage {
                     text: "<summary>a summary</summary>".to_owned(),
                     reasoning: None,
-                    reasoning_signature: None,
-                    reasoning_state: Vec::new(),
+                    reasoning_payloads: Vec::new(),
                     tool_calls: Vec::new(),
                     usage: Usage::default(),
                     refusal: None,
@@ -337,8 +335,7 @@ async fn an_empty_summary_is_reported_as_the_classified_failure() {
                 Ok(AssistantMessage {
                     text: "   ".to_owned(),
                     reasoning: None,
-                    reasoning_signature: None,
-                    reasoning_state: Vec::new(),
+                    reasoning_payloads: Vec::new(),
                     tool_calls: Vec::new(),
                     usage: Usage::default(),
                     refusal: None,
@@ -397,8 +394,7 @@ async fn manual_compaction_uses_provider_summary_and_appends_a_boundary() {
                 Ok(AssistantMessage {
                     text: "<summary>resumed answer</summary>".to_owned(),
                     reasoning: None,
-                    reasoning_signature: None,
-                    reasoning_state: Vec::new(),
+                    reasoning_payloads: Vec::new(),
                     tool_calls: Vec::new(),
                     usage: Usage {
                         input_tokens: 3,
@@ -501,8 +497,7 @@ async fn compacting_twice_keeps_the_identity_and_appends_two_boundaries() {
                 Ok(AssistantMessage {
                     text: "<summary>the state so far</summary>".to_owned(),
                     reasoning: None,
-                    reasoning_signature: None,
-                    reasoning_state: Vec::new(),
+                    reasoning_payloads: Vec::new(),
                     tool_calls: Vec::new(),
                     usage: Usage {
                         input_tokens: 3,

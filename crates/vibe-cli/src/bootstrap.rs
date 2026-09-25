@@ -16,9 +16,9 @@ use vibe_app_server::resources::{
 };
 use vibe_app_server::server::{AppServer, WebSearchAccess};
 use vibe_app_server::workspace::WorkspaceService;
-use vibe_core::compaction::manager::CompactionPromptResolution;
 use vibe_core::config::DotenvValues;
 use vibe_core::mcp::SamplingHandler;
+use vibe_core::provider::config::{ModelRouting, ProviderConfig};
 
 use secrecy::SecretString;
 use url::Url;
@@ -50,17 +50,50 @@ pub(crate) fn credential(arguments: &Arguments) -> Result<String, DriverError> {
         })
 }
 
+/// The provider this launch sends turns to. See
+/// [`ModelRouting::launch_provider`].
+pub(crate) fn launch_provider(
+    arguments: &Arguments,
+    routing: &ModelRouting,
+) -> Result<ProviderConfig, CliError> {
+    routing
+        .launch_provider(
+            &arguments.provider_style,
+            &arguments.api_base,
+            &arguments.credential_environment,
+        )
+        .ok_or_else(|| {
+            CliError::Configuration(format!(
+                "`{}` is not a provider style this build speaks",
+                arguments.provider_style
+            ))
+        })
+}
+
+/// The providers and models the merged configuration declares.
+pub(crate) fn model_routing(workspace: &WorkspaceService) -> Result<ModelRouting, CliError> {
+    let snapshot = workspace
+        .layered_config()
+        .load()
+        .map_err(|error| CliError::Configuration(error.to_string()))?;
+    Ok(ModelRouting::from_effective(
+        &snapshot.effective,
+        snapshot.active_model_alias(),
+    ))
+}
+
 pub(crate) fn live_driver_config(
     arguments: &Arguments,
     model: &str,
-    compaction_prompts: CompactionPromptResolution,
+    workspace: &WorkspaceService,
 ) -> Result<LiveDriverConfig, CliError> {
+    let routing = model_routing(workspace)?;
     Ok(LiveDriverConfig {
-        compaction_prompts,
-        style: arguments.provider_style.clone(),
-        endpoint: arguments.api_base.clone(),
+        compaction_prompts: workspace.compaction_prompts(),
+        provider: launch_provider(arguments, &routing)?,
+        models: routing.models,
         model: model.to_owned(),
-        credential_environment: arguments.credential_environment.clone(),
+        api: routing.api,
         system_prompt: SYSTEM_PROMPT.to_owned(),
         session_root: arguments.session_root.clone(),
         input_price_per_million_micros: price_per_million_micros(arguments.input_price)?,
@@ -101,9 +134,7 @@ pub(crate) fn resource_server(
     Ok(AppServer::with_resource_backend(Arc::new(resource_backend))
         .using_workspace_service(workspace)
         .using_web_search_access(Some(web_search_access(arguments, credential)))
-        .using_utility_provider(vibe_core::worktree::naming_model::utility_provider(
-            crate::tui::startup::utility_model(arguments),
-        ))
+        .using_utility_provider(crate::tui::startup::utility_provider(arguments))
         .using_harness_selection(HarnessSelection::resolve(
             arguments.experimental_harness,
             arguments.legacy_harness,

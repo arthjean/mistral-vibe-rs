@@ -377,8 +377,7 @@ pub fn append_invoked_skill(
         reasoning_message_id: None,
         content: String::new(),
         reasoning: None,
-        reasoning_signature: None,
-        reasoning_state: Vec::new(),
+        reasoning_payloads: Vec::new(),
         tool_calls: vec![ModelToolCall {
             id: call_id.clone(),
             name: "skill".to_owned(),

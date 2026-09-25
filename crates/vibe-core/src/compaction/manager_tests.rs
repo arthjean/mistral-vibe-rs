@@ -139,8 +139,7 @@ impl CompletionProvider for ScriptedProvider {
             Ok(AssistantMessage {
                 text: step.text,
                 reasoning: None,
-                reasoning_signature: None,
-                reasoning_state: Vec::new(),
+                reasoning_payloads: Vec::new(),
                 tool_calls: (0..step.tool_calls)
                     .map(|index| ModelToolCall {
                         id: format!("call-{index}"),
@@ -187,8 +186,7 @@ pub(crate) fn conversation() -> Vec<ModelMessage> {
             reasoning_message_id: None,
             content: "reply one".to_owned(),
             reasoning: None,
-            reasoning_signature: None,
-            reasoning_state: Vec::new(),
+            reasoning_payloads: Vec::new(),
             tool_calls: Vec::new(),
         },
         ModelMessage::user("second"),
@@ -197,8 +195,7 @@ pub(crate) fn conversation() -> Vec<ModelMessage> {
             reasoning_message_id: None,
             content: "reply two".to_owned(),
             reasoning: None,
-            reasoning_signature: None,
-            reasoning_state: Vec::new(),
+            reasoning_payloads: Vec::new(),
             tool_calls: Vec::new(),
         },
     ]
@@ -435,8 +432,7 @@ async fn the_overflow_ladder_sheds_the_oldest_round_and_stops_after_three_retrie
             reasoning_message_id: None,
             content: format!("reply {index}"),
             reasoning: None,
-            reasoning_signature: None,
-            reasoning_state: Vec::new(),
+            reasoning_payloads: Vec::new(),
             tool_calls: Vec::new(),
         });
     }
@@ -471,8 +467,7 @@ async fn an_overflow_with_nothing_to_drop_propagates_at_once() {
             reasoning_message_id: None,
             content: "reply".to_owned(),
             reasoning: None,
-            reasoning_signature: None,
-            reasoning_state: Vec::new(),
+            reasoning_payloads: Vec::new(),
             tool_calls: Vec::new(),
         },
     ];
@@ -497,8 +492,7 @@ async fn the_fallback_renders_the_history_the_ladder_ended_on() {
             reasoning_message_id: None,
             content: format!("reply {index}"),
             reasoning: None,
-            reasoning_signature: None,
-            reasoning_state: Vec::new(),
+            reasoning_payloads: Vec::new(),
             tool_calls: Vec::new(),
         });
     }
@@ -584,8 +578,7 @@ fn the_rendered_transcript_keeps_actions_and_drops_reasoning() {
             reasoning_message_id: None,
             content: String::new(),
             reasoning: Some("thinking hard".to_owned()),
-            reasoning_signature: None,
-            reasoning_state: Vec::new(),
+            reasoning_payloads: Vec::new(),
             tool_calls: vec![ModelToolCall {
                 id: "call-0".to_owned(),
                 name: "read_file".to_owned(),
@@ -602,8 +595,7 @@ fn the_rendered_transcript_keeps_actions_and_drops_reasoning() {
             reasoning_message_id: None,
             content: String::new(),
             reasoning: Some("more thinking".to_owned()),
-            reasoning_signature: None,
-            reasoning_state: Vec::new(),
+            reasoning_payloads: Vec::new(),
             tool_calls: Vec::new(),
         },
     ];

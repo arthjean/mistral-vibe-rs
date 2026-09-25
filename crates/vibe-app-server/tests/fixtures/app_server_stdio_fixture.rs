@@ -19,6 +19,7 @@ use vibe_app_server::transport::{StdioTransport, serve_stdio};
 use vibe_app_server::workspace::WorkspaceService;
 use vibe_core::compaction::manager::CompactionPromptResolution;
 use vibe_core::config::DotenvValues;
+use vibe_core::provider::config::{ApiSettings, ProviderConfig};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -28,18 +29,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let session_root = vibe_home.join("sessions");
     let working_directory = std::env::current_dir()?;
     let dotenv = DotenvValues::global(&vibe_home);
+    let style = dotenv
+        .variable("VIBE_PROVIDER_STYLE")
+        .unwrap_or_else(|| "mistral".to_owned());
+    let api_base = dotenv
+        .variable("VIBE_API_BASE")
+        .ok_or("VIBE_API_BASE must name the scripted completions endpoint")?;
     let config = LiveDriverConfig {
         compaction_prompts: CompactionPromptResolution::default(),
-        style: dotenv
-            .variable("VIBE_PROVIDER_STYLE")
-            .unwrap_or_else(|| "mistral".to_owned()),
-        endpoint: dotenv
-            .variable("VIBE_API_BASE")
-            .ok_or("VIBE_API_BASE must name the scripted completions endpoint")?,
+        provider: ProviderConfig::for_style(&style, &api_base, "MISTRAL_API_KEY")
+            .ok_or("VIBE_PROVIDER_STYLE names no provider style")?,
+        models: Vec::new(),
         model: dotenv
             .variable("VIBE_MODEL")
             .unwrap_or_else(|| "mistral-medium-3.5".to_owned()),
-        credential_environment: "MISTRAL_API_KEY".to_owned(),
+        api: ApiSettings::default(),
         system_prompt: "You are Mistral Vibe.".to_owned(),
         session_root: Some(session_root.clone()),
         input_price_per_million_micros: 1_500_000,

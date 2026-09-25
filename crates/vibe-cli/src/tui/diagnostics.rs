@@ -172,22 +172,35 @@ fn refusal_message(details: &Value) -> String {
 #[must_use]
 pub fn driver_error_code(error: &vibe_app_server::client::DriverError) -> Option<&'static str> {
     use vibe_app_server::client::DriverError;
-    use vibe_core::provider::{ProviderError, TransportError};
+    use vibe_core::llm::error::{BackendErrorSource, FailureCode};
+    use vibe_core::provider::ProviderError;
 
     match error {
         DriverError::MissingCredentialEnvironment(_) => Some("auth"),
-        DriverError::Transport(_) => Some("transport"),
+        // A request that never got an answer is the network's failure.
+        DriverError::Provider(ProviderError::Call(call))
+            if call
+                .failure
+                .backend_error()
+                .is_some_and(|error| matches!(error.source, BackendErrorSource::Request(_))) =>
+        {
+            Some("transport")
+        }
+        DriverError::Provider(ProviderError::Call(call)) => Some(match call.failure.code() {
+            FailureCode::RateLimit => "rate_limit",
+            FailureCode::ContextTooLong => "context_too_long",
+            FailureCode::ResponseTooLong => "response_too_long",
+            FailureCode::Refusal => "refusal",
+            FailureCode::InvalidApiKey => "auth",
+            FailureCode::IncompleteStream
+            | FailureCode::InvalidModel
+            | FailureCode::BackendError
+            | FailureCode::InternalError => "model",
+        }),
         DriverError::Provider(ProviderError::Refusal(_)) => Some("refusal"),
         DriverError::Provider(ProviderError::ContextOverflow) => Some("context_too_long"),
-        DriverError::Provider(ProviderError::Authentication { .. }) => Some("auth"),
-        DriverError::Provider(
-            ProviderError::RetryExhausted { status: 429 }
-            | ProviderError::HttpStatus { status: 429 },
-        ) => Some("rate_limit"),
-        DriverError::Provider(ProviderError::Transport(TransportError::ResponseTooLarge {
-            ..
-        })) => Some("response_too_long"),
-        DriverError::Provider(ProviderError::Transport(_)) => Some("transport"),
+        DriverError::Provider(ProviderError::HttpStatus { status: 401 | 403 }) => Some("auth"),
+        DriverError::Provider(ProviderError::HttpStatus { status: 429 }) => Some("rate_limit"),
         DriverError::Provider(_) => Some("model"),
         DriverError::Tool(_) => Some("tool"),
         DriverError::Storage(_) | DriverError::Engine(_) | DriverError::Observation(_) => {

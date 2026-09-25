@@ -48,7 +48,11 @@ pub(crate) enum AppServerUpdate {
     },
     /// A provider request the backend is retrying, so a client can say why the
     /// turn is stalling instead of showing it as merely slow.
-    Retrying { session_id: String, reason: String },
+    Retrying {
+        session_id: String,
+        category: String,
+        detail: String,
+    },
     /// Usage the engine reported mid-turn, so context pressure is published as
     /// it builds rather than once the turn settles.
     Stats {
@@ -123,11 +127,12 @@ impl EventObserver for AppServerEventObserver {
         if let EngineEvent::CompactionCompleted { summary_length, .. } = &event.event {
             projection.summary_length = usize::try_from(*summary_length).unwrap_or(usize::MAX);
         }
-        if let EngineEvent::Retrying { reason } = &event.event {
+        if let EngineEvent::Retrying { category, detail } = &event.event {
             self.sender
                 .send(AppServerUpdate::Retrying {
                     session_id: projection.reducer.state().session_id.clone(),
-                    reason: reason.clone(),
+                    category: category.clone(),
+                    detail: detail.clone(),
                 })
                 .map_err(|_| "app-server update receiver is closed".to_owned())?;
             return Ok(());
@@ -356,12 +361,16 @@ pub(crate) fn app_server_notification(
                 }
             })
         }
-        AppServerUpdate::Retrying { session_id, reason } => serde_json::json!({
+        AppServerUpdate::Retrying {
+            session_id,
+            category,
+            detail,
+        } => serde_json::json!({
             "jsonrpc": "2.0",
             "method": notification_method("turn/retrying"),
             // The reference does not sequence this one: it reports a wait, not
             // a state change the client's projection has to order.
-            "params": {"sessionId": session_id, "reason": reason},
+            "params": {"sessionId": session_id, "category": category, "detail": detail},
         }),
         AppServerUpdate::Stats {
             session_id,

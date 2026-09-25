@@ -340,6 +340,7 @@ impl SubagentRunner for ProviderSubagentRunner {
             }
             let input = ProviderInput {
                 turn_id: Some(format!("{}-turn", context.child_session_id)),
+                session_id: None,
                 model_override: settings.model,
                 messages,
                 stream: true,
@@ -349,11 +350,7 @@ impl SubagentRunner for ProviderSubagentRunner {
                 thinking: settings.thinking.unwrap_or(false),
                 reasoning_effort: settings.reasoning_effort,
                 headers: BTreeMap::new(),
-                limits: RequestLimits {
-                    max_tokens: 4096,
-                    temperature_millis: None,
-                    max_response_bytes: 2 * 1024 * 1024,
-                },
+                limits: RequestLimits::default(),
                 metadata: BTreeMap::from([
                     ("parent_session_id".to_owned(), context.parent_session_id),
                     ("agent".to_owned(), context.agent.name),
@@ -414,6 +411,7 @@ impl SamplingHandler for ProviderSamplingHandler {
         Box::pin(async move {
             let input = ProviderInput {
                 turn_id: None,
+                session_id: None,
                 model_override: None,
                 messages: request
                     .messages
@@ -428,8 +426,7 @@ impl SamplingHandler for ProviderSamplingHandler {
                             reasoning_message_id: None,
                             content: message.content,
                             reasoning: None,
-                            reasoning_signature: None,
-                            reasoning_state: Vec::new(),
+                            reasoning_payloads: Vec::new(),
                             tool_calls: Vec::new(),
                         },
                     })
@@ -442,9 +439,8 @@ impl SamplingHandler for ProviderSamplingHandler {
                 reasoning_effort: None,
                 headers: BTreeMap::new(),
                 limits: RequestLimits {
-                    max_tokens: request.max_tokens.unwrap_or(4096),
+                    max_tokens: request.max_tokens,
                     temperature_millis: request.temperature_millis,
-                    max_response_bytes: 2 * 1024 * 1024,
                 },
                 metadata: BTreeMap::from([("operation".to_owned(), "mcp_sampling".to_owned())]),
             };

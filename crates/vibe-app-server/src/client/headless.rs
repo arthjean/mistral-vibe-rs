@@ -750,11 +750,22 @@ where
         message: &str,
         code: TurnErrorCode,
     ) -> Result<(), ClientError> {
-        let result = self.client.fail_turn(reservation, message, code);
+        self.fail_reserved_with(reservation, super::public_turn_failure(code, message))
+    }
+
+    /// Ends a reserved turn as failed with `error` as it is published, which
+    /// [`public_driver_error`] builds out of a driver failure.
+    pub fn fail_reserved_with(
+        &mut self,
+        reservation: &TurnReservation,
+        error: PublicError,
+    ) -> Result<(), ClientError> {
+        let message = error.message.clone();
+        let result = self.client.fail_turn_with(reservation, error);
         self.fail_interactive_callbacks(
             Some(&reservation.session_id),
             Some(&reservation.turn_id),
-            message,
+            &message,
         );
         result
     }
@@ -769,7 +780,7 @@ where
         match self.driver.run(&reservation).await {
             Ok(outcome) => self.finish_reserved(&reservation, outcome),
             Err(error) => {
-                self.fail_reserved(&reservation, &error.to_string(), turn_error_code(&error))?;
+                self.fail_reserved_with(&reservation, public_driver_error(&error))?;
                 Err(ClientError::Driver(error))
             }
         }
@@ -786,7 +797,7 @@ where
         match self.driver.run_observed(&reservation, observer).await {
             Ok(outcome) => self.finish_reserved(&reservation, outcome),
             Err(error) => {
-                self.fail_reserved(&reservation, &error.to_string(), turn_error_code(&error))?;
+                self.fail_reserved_with(&reservation, public_driver_error(&error))?;
                 Err(ClientError::Driver(error))
             }
         }

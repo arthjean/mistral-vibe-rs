@@ -29,7 +29,7 @@ pub use update::{
     scheduled_update_gateway, update_cache_store, update_checks_enabled,
 };
 pub use vibe_core::worktree::PreparedWorktree;
-pub(crate) use worktree::utility_model;
+pub(crate) use worktree::utility_provider;
 pub use worktree::{
     CleanupOutcome, LaunchWorkspace, cleanup_is_offered, cleanup_worktree,
     cleanup_worktree_terminal,

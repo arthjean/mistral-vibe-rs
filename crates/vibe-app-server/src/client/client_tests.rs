@@ -203,8 +203,7 @@ impl CompletionProvider for RecordingProvider {
             Ok(AssistantMessage {
                 text: "resumed answer".to_owned(),
                 reasoning: None,
-                reasoning_signature: None,
-                reasoning_state: Vec::new(),
+                reasoning_payloads: Vec::new(),
                 tool_calls: Vec::new(),
                 usage: Usage {
                     input_tokens: 3,
@@ -256,8 +255,7 @@ impl CompletionProvider for SubagentSelectingProvider {
                     return Ok(AssistantMessage {
                         text: String::new(),
                         reasoning: None,
-                        reasoning_signature: None,
-                        reasoning_state: Vec::new(),
+                        reasoning_payloads: Vec::new(),
                         tool_calls: vec![
                             ModelToolCall {
                                 id: "child-edit".to_owned(),
@@ -295,8 +293,7 @@ impl CompletionProvider for SubagentSelectingProvider {
                 return Ok(AssistantMessage {
                     text: "child answer".to_owned(),
                     reasoning: None,
-                    reasoning_signature: None,
-                    reasoning_state: Vec::new(),
+                    reasoning_payloads: Vec::new(),
                     tool_calls: Vec::new(),
                     usage: Usage::default(),
                     refusal: None,
@@ -318,8 +315,7 @@ impl CompletionProvider for SubagentSelectingProvider {
                 Ok(AssistantMessage {
                     text: String::new(),
                     reasoning: None,
-                    reasoning_signature: None,
-                    reasoning_state: Vec::new(),
+                    reasoning_payloads: Vec::new(),
                     tool_calls: vec![ModelToolCall {
                         id: "delegate-1".to_owned(),
                         name: "task".to_owned(),
@@ -351,8 +347,7 @@ impl CompletionProvider for SubagentSelectingProvider {
                 Ok(AssistantMessage {
                     text: "root done".to_owned(),
                     reasoning: None,
-                    reasoning_signature: None,
-                    reasoning_state: Vec::new(),
+                    reasoning_payloads: Vec::new(),
                     tool_calls: Vec::new(),
                     usage: Usage::default(),
                     refusal: None,
@@ -383,8 +378,7 @@ impl CompletionProvider for ToolSelectingProvider {
                 Ok(AssistantMessage {
                     text: String::new(),
                     reasoning: None,
-                    reasoning_signature: None,
-                    reasoning_state: Vec::new(),
+                    reasoning_payloads: Vec::new(),
                     tool_calls: vec![ModelToolCall {
                         id: "call-1".to_owned(),
                         name: "mcp_fixture_echo".to_owned(),
@@ -414,8 +408,7 @@ impl CompletionProvider for ToolSelectingProvider {
                 Ok(AssistantMessage {
                     text: "done".to_owned(),
                     reasoning: None,
-                    reasoning_signature: None,
-                    reasoning_state: Vec::new(),
+                    reasoning_payloads: Vec::new(),
                     tool_calls: Vec::new(),
                     usage: Usage::default(),
                     refusal: None,

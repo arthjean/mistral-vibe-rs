@@ -159,7 +159,7 @@ fn interactive_tui_edits_input_and_restores_the_terminal_after_exit() -> Result<
         .env("VIBE_HOME", home.join(".vibe"))
         .env("MISTRAL_API_KEY", "fixture")
         // Update discovery must never leave the machine during tests.
-        .env("VIBE_UPDATE_BASE_URL", "http://127.0.0.1:9")
+        .env("VIBE_UPDATE_BASE_URL", "http://127.0.0.1:9/v1")
         .env("NO_COLOR", "1")
         .env("TERM", "xterm-256color")
         .stdin(Stdio::from(slave.try_clone().expect("PTY stdin clones")))
@@ -385,7 +385,7 @@ impl PtyProcess {
                 "--wait",
                 "sh",
                 "-c",
-                "printf '%s\\n' \"$VIBE_TEST_PROMPT\" | \"$VIBE_TEST_BIN\" --trust --api-base http://127.0.0.1:9",
+                "printf '%s\\n' \"$VIBE_TEST_PROMPT\" | \"$VIBE_TEST_BIN\" --trust --api-base http://127.0.0.1:9/v1",
             ])
             .env("VIBE_TEST_PROMPT", prompt)
             .env("VIBE_TEST_BIN", env!("CARGO_BIN_EXE_vibe"));
@@ -421,7 +421,7 @@ impl PtyProcess {
             .env("VIBE_HOME", vibe_home.join(".vibe"))
             .env("MISTRAL_API_KEY", "fixture")
             // Update discovery must never leave the machine during tests.
-            .env("VIBE_UPDATE_BASE_URL", "http://127.0.0.1:9")
+            .env("VIBE_UPDATE_BASE_URL", "http://127.0.0.1:9/v1")
             .env("NO_COLOR", "1")
             .env("TERM", "xterm-256color")
             .envs(environment.iter().map(|(key, value)| (*key, value)))
@@ -606,8 +606,7 @@ fn seed_session(vibe_home: &Path, workspace: &Path, id: &str, marker: &str, time
                 reasoning_message_id: None,
                 content: "saved answer".to_owned(),
                 reasoning: None,
-                reasoning_signature: None,
-                reasoning_state: Vec::new(),
+                reasoning_payloads: Vec::new(),
                 tool_calls: Vec::new(),
             },
             timestamp + 2,
@@ -666,7 +665,7 @@ fn every_advertised_shortcut_performs_its_action_in_the_running_tui() {
             "--resume",
             "shortcut-session",
             "--api-base",
-            "http://127.0.0.1:9",
+            "http://127.0.0.1:9/v1",
         ],
         &[("EDITOR", editor.to_string_lossy().into_owned())],
     );
@@ -768,7 +767,7 @@ fn a_submitted_command_line_is_echoed_in_the_running_tui() {
     let mut process = PtyProcess::spawn(
         &workspace,
         &home,
-        &["--trust", "--api-base", "http://127.0.0.1:9"],
+        &["--trust", "--api-base", "http://127.0.0.1:9/v1"],
     );
     process.wait_for_visible("Type /help for more information", STEP);
 
@@ -888,7 +887,7 @@ fn positional_prompt_mounts_the_tui_before_dispatch() {
         &[
             "--trust",
             "--api-base",
-            "http://127.0.0.1:9",
+            "http://127.0.0.1:9/v1",
             "hello from startup",
         ],
     );
@@ -939,7 +938,7 @@ fn bare_resume_opens_the_directory_scoped_picker_before_starting_new() {
     let mut process = PtyProcess::spawn(
         &workspace,
         &home,
-        &["--trust", "--resume", "--api-base", "http://127.0.0.1:9"],
+        &["--trust", "--resume", "--api-base", "http://127.0.0.1:9/v1"],
     );
     process.wait_for(b"Resume", STEP);
     process.write(b"\x1b");
@@ -975,7 +974,7 @@ fn bare_resume_deletes_only_after_confirmation_and_final_delete_starts_new() {
     let mut process = PtyProcess::spawn(
         &workspace,
         &home,
-        &["--trust", "--resume", "--api-base", "http://127.0.0.1:9"],
+        &["--trust", "--resume", "--api-base", "http://127.0.0.1:9/v1"],
     );
     process.wait_for(b"Resume", STEP);
 
@@ -1006,12 +1005,17 @@ fn direct_resume_and_continue_hydrate_the_requested_saved_session() {
                 "--resume",
                 "direct-session",
                 "--api-base",
-                "http://127.0.0.1:9",
+                "http://127.0.0.1:9/v1",
             ],
             "direct resume marker",
         ),
         (
-            vec!["--trust", "--continue", "--api-base", "http://127.0.0.1:9"],
+            vec![
+                "--trust",
+                "--continue",
+                "--api-base",
+                "http://127.0.0.1:9/v1",
+            ],
             "continue marker",
         ),
     ] {
@@ -1105,7 +1109,7 @@ fn ctrl_z_suspends_the_session_and_resumes_a_restored_terminal() {
     let mut process = PtyProcess::spawn(
         &workspace,
         &home,
-        &["--trust", "--api-base", "http://127.0.0.1:9"],
+        &["--trust", "--api-base", "http://127.0.0.1:9/v1"],
     );
     process.wait_for(b"\x1b[?1049h", STEP);
     process.write(b"\x1a");
@@ -1159,7 +1163,7 @@ fn confirmed_exit_prints_the_reference_session_summary() {
     let mut process = PtyProcess::spawn(
         &workspace,
         &home,
-        &["--trust", "--api-base", "http://127.0.0.1:9"],
+        &["--trust", "--api-base", "http://127.0.0.1:9/v1"],
     );
     process.wait_for(b"\x1b[?1049h", STEP);
     process.write(b"\x04");
@@ -1193,7 +1197,7 @@ fn focus_events_restore_the_reference_terminal_title() {
     let mut process = PtyProcess::spawn(
         &workspace,
         &home,
-        &["--trust", "--api-base", "http://127.0.0.1:9"],
+        &["--trust", "--api-base", "http://127.0.0.1:9/v1"],
     );
     process.wait_for(b"\x1b[?1049h", STEP);
     // Reference `on_app_blur` records focus silently; `on_app_focus` restores

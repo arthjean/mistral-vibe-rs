@@ -214,7 +214,11 @@ pub enum EngineEvent {
     /// it carries no history: a client renders it as a transient state, not as
     /// a transcript entry.
     Retrying {
-        reason: String,
+        /// Reference `RetryCategory`: `rate_limited`, `server_error`,
+        /// `timed_out`, `connection` or `unknown`.
+        category: String,
+        /// The raw cause, `HTTP 503` or the transport failure's name.
+        detail: String,
     },
     /// A backend request the turn is about to make, and what it is made of.
     ///
@@ -432,7 +436,10 @@ pub enum TurnErrorCode {
     InvalidImageAttachment,
     ImagesNotSupported,
     CompactionFailed,
+    IncompleteStream,
     BackendError,
+    InvalidModel,
+    InvalidApiKey,
     InternalError,
 }
 
@@ -608,10 +615,12 @@ pub enum ModelMessage {
         content: String,
         #[serde(default)]
         reasoning: Option<String>,
-        #[serde(default)]
-        reasoning_signature: Option<String>,
-        #[serde(default)]
-        reasoning_state: Vec<String>,
+        /// Provider-native reasoning items, replayed verbatim to the dialect
+        /// that produced them: an Anthropic thinking block with its signature,
+        /// an OpenAI Responses reasoning item with its encrypted content.
+        /// Reference `LLMMessage.reasoning_payloads`.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        reasoning_payloads: Vec<serde_json::Map<String, Value>>,
         #[serde(default)]
         tool_calls: Vec<ModelToolCall>,
     },
@@ -1492,8 +1501,12 @@ mod tests {
             reasoning_message_id: None,
             content: "answer".to_owned(),
             reasoning: Some("private chain".to_owned()),
-            reasoning_signature: Some("provider-signature".to_owned()),
-            reasoning_state: vec!["provider-state".to_owned()],
+            reasoning_payloads: vec![
+                serde_json::json!({"type": "thinking", "signature": "provider-signature"})
+                    .as_object()
+                    .cloned()
+                    .unwrap_or_default(),
+            ],
             tool_calls: Vec::new(),
         };
         let encoded_private = serde_json::to_string(&private).expect("private message serializes");

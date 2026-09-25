@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Reach every provider style the way the reference backends do. Reasoning
+  items are replayed on the next request, the Responses API gets its
+  `include` list and its reasoning items back, `Retry-After` paces a retry,
+  and `vertex-anthropic` reaches Vertex AI with Application Default
+  Credentials: a credentials file, the gcloud login file or the metadata
+  server. A failed turn reports the reference's codes, `incomplete_stream`,
+  `invalid_model` and `invalid_api_key` included, with the provider, the model
+  and the backend details, and `turn/retrying` carries the retry's category
+  and detail. `api_connect_timeout` bounds the connection to Mistral,
+  `api_write_timeout` and `api_pool_timeout` are accepted, the provider
+  `emits_finish_reason` field is read, and compaction requests carry the
+  session affinity.
+
 - Rewind as the reference does. The rewind panel asks what to do with the
   files and then whether to stay in the session or fork it, and `Esc` steps
   back between the two. A fork is written by its first turn, a rewind reports

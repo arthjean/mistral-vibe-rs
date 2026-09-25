@@ -1328,8 +1328,7 @@ mod tests {
                 reasoning_message_id: None,
                 content: String::new(),
                 reasoning: None,
-                reasoning_signature: None,
-                reasoning_state: Vec::new(),
+                reasoning_payloads: Vec::new(),
                 tool_calls: vec![crate::events::ModelToolCall {
                     id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee".to_owned(),
                     name: "skill".to_owned(),

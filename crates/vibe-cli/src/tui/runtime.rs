@@ -359,10 +359,15 @@ pub(in crate::tui) fn interactive_test_runtime_with_trust(
     let driver = Arc::new(
         LiveTurnDriver::from_credential(
             LiveDriverConfig {
-                style: "mistral".to_owned(),
-                endpoint: "http://127.0.0.1:1/v1".to_owned(),
+                provider: vibe_core::provider::config::ProviderConfig::for_style(
+                    "mistral",
+                    "http://127.0.0.1:1/v1",
+                    "TEST_CREDENTIAL",
+                )
+                .expect("a known style"),
+                models: Vec::new(),
                 model: "test-model".to_owned(),
-                credential_environment: "TEST_CREDENTIAL".to_owned(),
+                api: vibe_core::provider::config::ApiSettings::default(),
                 system_prompt: "test".to_owned(),
                 session_root: None,
                 compaction_prompts: CompactionPromptResolution::default(),

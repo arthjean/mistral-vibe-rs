@@ -26,8 +26,7 @@ fn assistant(content: &str) -> ModelMessage {
         reasoning_message_id: None,
         content: content.to_owned(),
         reasoning: None,
-        reasoning_signature: None,
-        reasoning_state: Vec::new(),
+        reasoning_payloads: Vec::new(),
         tool_calls: Vec::new(),
     }
 }

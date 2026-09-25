@@ -27,6 +27,7 @@ pub mod http_trust;
 pub mod identity;
 pub mod images;
 pub mod integrations;
+pub mod llm;
 pub mod matching;
 pub mod mcp;
 pub mod middleware;

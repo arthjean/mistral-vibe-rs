@@ -32,6 +32,7 @@ use std::process::Command;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
+use vibe_core::llm::retry::RetryCategory;
 use vibe_core::process::ClientToolRequest;
 use vibe_protocol::{
     Envelope, LOCAL_EXTENSION_METHODS, SERVER_METHODS, TransportKind, decode_frame,
@@ -348,16 +349,8 @@ const UNEMITTED_NOTIFICATIONS: &[(&str, &str)] = &[
 const LOCAL_NOTIFICATIONS: &[(&str, &str)] = &[];
 
 /// Enum vocabularies the reference declares that this port does not model yet.
-///
-/// `PublicRetryCategory` was recorded as absent until v2.24.0, which reaches it
-/// from `turn/error`; nothing in this port classifies a retry, so US-142
-/// recorded it here rather than inventing a vocabulary no code produces.
 const UNMODELED_ENUMS: &[(&str, &str)] = &[
     ("TerminalEmulator", "US-081"),
-    (
-        "PublicRetryCategory",
-        "US-142: reachable from v2.24.0, unmodeled here",
-    ),
     (
         "RuntimeMutationStatus",
         "v2.25.7 declares it (vibe/app_server/protocol.py:849) as the vocabulary of the status field RuntimeMutationResponse gained; this port models no such vocabulary",
@@ -371,23 +364,7 @@ const UNMODELED_ENUMS: &[(&str, &str)] = &[
 /// Values a vocabulary this port declares is missing, each with the reference
 /// declaration that added it. The comparison below still fails on any other
 /// difference, on order, and on an entry whose value this port now spells.
-const DIVERGENT_ENUM_VALUES: &[(&str, &str, &str)] = &[
-    (
-        "TurnErrorCode",
-        "incomplete_stream",
-        "v2.25.7 adds it after compaction_failed (vibe/app_server/models.py:386); vibe_core::events::TurnErrorCode has no such code",
-    ),
-    (
-        "TurnErrorCode",
-        "invalid_model",
-        "v2.25.7 adds it after backend_error (vibe/app_server/models.py:388); vibe_core::events::TurnErrorCode has no such code",
-    ),
-    (
-        "TurnErrorCode",
-        "invalid_api_key",
-        "v2.25.7 adds it after invalid_model (vibe/app_server/models.py:389); vibe_core::events::TurnErrorCode has no such code",
-    ),
-];
+const DIVERGENT_ENUM_VALUES: &[(&str, &str, &str)] = &[];
 
 /// Protocol error codes the reference declares that this port does not speak.
 const UNSPOKEN_ERROR_CODES: &[(&str, &str)] = &[
@@ -1007,7 +984,7 @@ fn the_enum_vocabularies_this_port_declares_match_the_reference() {
 
     // The vocabularies this port already spells. Everything else is in the
     // backlog above until the story that models it lands.
-    let declared: [(&str, Vec<String>); 19] = [
+    let declared: [(&str, Vec<String>); 20] = [
         (
             "AccountActionKind",
             wire_values(&crate::vocabulary::AccountActionKind::ALL),
@@ -1128,9 +1105,27 @@ fn the_enum_vocabularies_this_port_declares_match_the_reference() {
                 vibe_core::events::TurnErrorCode::InvalidImageAttachment,
                 vibe_core::events::TurnErrorCode::ImagesNotSupported,
                 vibe_core::events::TurnErrorCode::CompactionFailed,
+                vibe_core::events::TurnErrorCode::IncompleteStream,
                 vibe_core::events::TurnErrorCode::BackendError,
+                vibe_core::events::TurnErrorCode::InvalidModel,
+                vibe_core::events::TurnErrorCode::InvalidApiKey,
                 vibe_core::events::TurnErrorCode::InternalError,
             ]),
+        ),
+        (
+            // Classified by the backend retry loop and published by
+            // `turn/retrying`.
+            "PublicRetryCategory",
+            [
+                RetryCategory::RateLimited,
+                RetryCategory::ServerError,
+                RetryCategory::TimedOut,
+                RetryCategory::Connection,
+                RetryCategory::Unknown,
+            ]
+            .into_iter()
+            .map(|category| category.as_str().to_owned())
+            .collect(),
         ),
     ];
     for (name, values) in &declared {

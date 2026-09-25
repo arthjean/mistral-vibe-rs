@@ -35,11 +35,7 @@ pub(super) fn start_runtime(
     let preferences = startup_preferences(arguments, &workspace)?;
     let telemetry = telemetry_observer(arguments, &workspace)?;
     let mut driver = LiveTurnDriver::from_credential(
-        bootstrap::live_driver_config(
-            arguments,
-            &preferences.model,
-            workspace.compaction_prompts(),
-        )?,
+        bootstrap::live_driver_config(arguments, &preferences.model, &workspace)?,
         credential.clone(),
     )?;
     driver = driver.with_event_observer(telemetry.clone());

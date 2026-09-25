@@ -13,9 +13,10 @@ use vibe_core::events::{
     ApplyOutcome, CallbackKind as EngineCallbackKind, EventEnvelope, LifecycleState, ModelMessage,
     ProjectionReducer,
 };
+use vibe_core::llm::error::FailureCode;
 use vibe_core::mcp::McpServerConfig;
 use vibe_core::middleware::CompactionSettings;
-use vibe_core::provider::{ProviderError, TransportError, Usage};
+use vibe_core::provider::{ProviderError, Usage};
 use vibe_core::storage::{HydratedSession, SessionStore};
 use vibe_core::tools::ToolRegistry;
 use vibe_protocol::{
@@ -528,8 +529,7 @@ impl TurnDriver for EchoTurnDriver {
                         reasoning_message_id: None,
                         content: self.response.clone(),
                         reasoning: None,
-                        reasoning_signature: None,
-                        reasoning_state: Vec::new(),
+                        reasoning_payloads: Vec::new(),
                         tool_calls: Vec::new(),
                     },
                 ],
@@ -633,8 +633,6 @@ pub enum DriverError {
     #[error("tool registry failed: {0}")]
     Tool(String),
     #[error(transparent)]
-    Transport(vibe_core::provider::TransportError),
-    #[error(transparent)]
     Provider(vibe_core::provider::ProviderError),
     #[error(transparent)]
     Storage(vibe_core::storage::StorageError),
@@ -715,9 +713,7 @@ pub fn turn_error_code(error: &DriverError) -> TurnErrorCode {
     match error {
         DriverError::ImageAttachment(_) => TurnErrorCode::InvalidImageAttachment,
         DriverError::Compaction(_) => TurnErrorCode::CompactionFailed,
-        DriverError::Transport(_) | DriverError::MissingCredentialEnvironment(_) => {
-            TurnErrorCode::BackendError
-        }
+        DriverError::MissingCredentialEnvironment(_) => TurnErrorCode::BackendError,
         DriverError::Provider(provider) => provider_error_code(provider),
         DriverError::Engine(EngineError::Provider(provider)) => provider_error_code(provider),
         DriverError::Engine(EngineError::Compaction(_)) => TurnErrorCode::CompactionFailed,
@@ -733,30 +729,52 @@ pub fn turn_error_code(error: &DriverError) -> TurnErrorCode {
 
 fn provider_error_code(error: &ProviderError) -> TurnErrorCode {
     match error {
+        // Reference `public_error`, over the failure the loop raised.
+        ProviderError::Call(call) => match call.failure.code() {
+            FailureCode::RateLimit => TurnErrorCode::RateLimit,
+            FailureCode::ContextTooLong => TurnErrorCode::ContextTooLong,
+            FailureCode::ResponseTooLong => TurnErrorCode::ResponseTooLong,
+            FailureCode::Refusal => TurnErrorCode::Refusal,
+            FailureCode::IncompleteStream => TurnErrorCode::IncompleteStream,
+            FailureCode::InvalidModel => TurnErrorCode::InvalidModel,
+            FailureCode::InvalidApiKey => TurnErrorCode::InvalidApiKey,
+            FailureCode::BackendError => TurnErrorCode::BackendError,
+            FailureCode::InternalError => TurnErrorCode::InternalError,
+        },
         ProviderError::ContextOverflow => TurnErrorCode::ContextTooLong,
         ProviderError::Refusal(_) => TurnErrorCode::Refusal,
-        ProviderError::UnsupportedContentBlock(_) => TurnErrorCode::ImagesNotSupported,
-        ProviderError::Transport(TransportError::ResponseTooLarge { .. }) => {
-            TurnErrorCode::ResponseTooLong
-        }
-        // 429 is the rate limit; every other answered status, exhausted budget
-        // or broken stream is the backend failing rather than this port.
-        ProviderError::HttpStatus { status } | ProviderError::RetryExhausted { status } => {
-            if *status == 429 {
-                TurnErrorCode::RateLimit
-            } else {
-                TurnErrorCode::BackendError
-            }
-        }
-        ProviderError::Transport(_)
-        | ProviderError::Authentication { .. }
-        | ProviderError::ElapsedTimeout
+        ProviderError::HttpStatus { status: 429 } => TurnErrorCode::RateLimit,
+        ProviderError::HttpStatus { .. }
         | ProviderError::MalformedStream(_)
         | ProviderError::MissingUsage => TurnErrorCode::BackendError,
-        ProviderError::UnknownStyle(_) | ProviderError::InvalidRequest(_) => {
-            TurnErrorCode::InternalError
-        }
+        ProviderError::InvalidRequest(_) => TurnErrorCode::InternalError,
     }
+}
+
+/// A driver failure as a failed turn publishes it: the message, the code and
+/// the details. Reference `public_error`.
+#[must_use]
+pub fn public_driver_error(error: &DriverError) -> PublicError {
+    PublicError {
+        details: turn_error_details(error),
+        ..public_turn_failure(turn_error_code(error), &error.to_string())
+    }
+}
+
+/// Reference `public_error`'s details: the provider, the model and a
+/// refusal's reasons, where the failure carries them.
+#[must_use]
+pub fn turn_error_details(error: &DriverError) -> Value {
+    let provider = match error {
+        DriverError::Provider(provider) | DriverError::Engine(EngineError::Provider(provider)) => {
+            provider
+        }
+        _ => return Value::Null,
+    };
+    provider
+        .call_failure()
+        .and_then(vibe_core::llm::error::CallFailure::details)
+        .map_or(Value::Null, Value::Object)
 }
 
 /// The frame answering a request, out of everything the dispatch produced.

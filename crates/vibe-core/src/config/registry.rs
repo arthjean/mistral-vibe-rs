@@ -271,6 +271,7 @@ const PROVIDER_ITEMS: &str = r#"{
             "api_style": {"type": "string"},
             "backend": {"type": "string"},
             "reasoning_field_name": {"type": "string"},
+            "emits_finish_reason": {"type": "boolean"},
             "project_id": {"type": "string"},
             "region": {"type": "string"},
             "extra_headers": {"type": "object", "additionalProperties": {"type": "string"}}
@@ -449,6 +450,7 @@ const DEFAULT_PROVIDERS: &str = r#"[
         "api_style": "openai",
         "backend": "mistral",
         "reasoning_field_name": "reasoning_content",
+        "emits_finish_reason": true,
         "project_id": "",
         "region": "",
         "extra_headers": {}
@@ -460,6 +462,7 @@ const DEFAULT_PROVIDERS: &str = r#"[
         "api_style": "openai",
         "backend": "generic",
         "reasoning_field_name": "reasoning_content",
+        "emits_finish_reason": true,
         "project_id": "",
         "region": "",
         "extra_headers": {}
@@ -990,6 +993,21 @@ pub static FIELDS: &[FieldSpec] = &[
     FieldSpec::declared("api_retry_max_elapsed_time", FieldKind::Float, REPLACE).published(
         FieldDefault::Float(300.0),
         "Seconds spent retrying a provider request before giving up.",
+        r#"{"exclusiveMinimum": 0}"#,
+    ),
+    FieldSpec::declared("api_connect_timeout", FieldKind::Float, REPLACE).published(
+        FieldDefault::Float(10.0),
+        "Seconds a provider connection may take to open.",
+        r#"{"exclusiveMinimum": 0}"#,
+    ),
+    FieldSpec::declared("api_write_timeout", FieldKind::Float, REPLACE).published(
+        FieldDefault::Float(30.0),
+        "Seconds a provider request may take to send.",
+        r#"{"exclusiveMinimum": 0}"#,
+    ),
+    FieldSpec::declared("api_pool_timeout", FieldKind::Float, REPLACE).published(
+        FieldDefault::Float(10.0),
+        "Seconds a provider request may wait for a free connection.",
         r#"{"exclusiveMinimum": 0}"#,
     ),
     FieldSpec::declared("vibe_base_url", FieldKind::Str, REPLACE).published(

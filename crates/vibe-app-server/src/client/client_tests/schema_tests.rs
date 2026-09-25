@@ -2,6 +2,53 @@
 //! vocabulary a driver classifies into.
 
 use super::*;
+use vibe_core::llm::error::{
+    BackendError, BackendErrorSource, CallFailure, PayloadSummary, WrappedCause,
+};
+use vibe_core::provider::CallError;
+
+fn classified(failure: CallFailure) -> DriverError {
+    DriverError::Provider(ProviderError::Call(Box::new(CallError {
+        failure,
+        appended: None,
+    })))
+}
+
+fn backend_error(status: u16, body: &str) -> BackendError {
+    BackendError {
+        provider: "mistral".to_owned(),
+        endpoint: "https://api.mistral.ai".to_owned(),
+        status: Some(status),
+        reason: None,
+        headers: std::collections::BTreeMap::new(),
+        body_text: body.to_owned(),
+        parsed_error: None,
+        model: "m".to_owned(),
+        payload_summary: PayloadSummary {
+            model: "m".to_owned(),
+            message_count: 1,
+            approx_chars: 1,
+            temperature: 0.2,
+            has_tools: false,
+            tool_choice: None,
+        },
+        api_key_origin: None,
+        source: BackendErrorSource::Status,
+    }
+}
+
+/// A classified failure publishes the provider and the model it came from,
+/// as `public_error` reads them off the failure and its cause.
+#[test]
+fn a_classified_failure_publishes_its_provider_and_model() {
+    let error = classified(CallFailure::IncompleteStream {
+        provider: "mistral".to_owned(),
+        model: "m".to_owned(),
+    });
+    let public = public_driver_error(&error);
+    assert_eq!(public.code.as_deref(), Some("incomplete_stream"));
+    assert_eq!(public.details, json!({"provider": "mistral", "model": "m"}));
+}
 
 /// A turn error is classified from the failure's type, so rewording a
 /// message never moves the code a client branches on.
@@ -25,9 +72,33 @@ fn driver_failures_classify_into_the_reference_error_vocabulary() {
             TurnErrorCode::BackendError,
         ),
         (
-            DriverError::Provider(ProviderError::Transport(TransportError::ResponseTooLarge {
-                limit: 8,
-            })),
+            classified(CallFailure::IncompleteStream {
+                provider: "mistral".to_owned(),
+                model: "m".to_owned(),
+            }),
+            TurnErrorCode::IncompleteStream,
+        ),
+        (
+            classified(CallFailure::InvalidModel(Box::new(backend_error(
+                400,
+                "invalid_model",
+            )))),
+            TurnErrorCode::InvalidModel,
+        ),
+        (
+            classified(CallFailure::Wrapped {
+                provider: "mistral".to_owned(),
+                model: "m".to_owned(),
+                cause: WrappedCause::Backend(Box::new(backend_error(401, "{}"))),
+            }),
+            TurnErrorCode::InvalidApiKey,
+        ),
+        (
+            classified(CallFailure::ResponseTooLong {
+                provider: "mistral".to_owned(),
+                model: "m".to_owned(),
+                cause: Box::new(backend_error(422, "max_tokens_exceeded")),
+            }),
             TurnErrorCode::ResponseTooLong,
         ),
         (

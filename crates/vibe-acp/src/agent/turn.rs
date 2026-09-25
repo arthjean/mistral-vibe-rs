@@ -349,24 +349,22 @@ where
         let unauthorized = matches!(
             error,
             DriverError::MissingCredentialEnvironment(_)
-                | DriverError::Provider(ProviderError::Authentication { .. })
+                | DriverError::Provider(ProviderError::HttpStatus { status: 401 | 403 })
                 | DriverError::Engine(vibe_core::engine::EngineError::Provider(
-                    ProviderError::Authentication { .. }
+                    ProviderError::HttpStatus { status: 401 | 403 }
                 ))
-        ) || matches!(
-            error,
-            DriverError::Provider(
-                ProviderError::HttpStatus { status: 401 | 403 }
-                    | ProviderError::RetryExhausted { status: 401 | 403 }
-            ) | DriverError::Engine(vibe_core::engine::EngineError::Provider(
-                ProviderError::HttpStatus { status: 401 | 403 }
-                    | ProviderError::RetryExhausted { status: 401 | 403 }
-            ))
         );
         if unauthorized {
             return AcpError::Configuration(error.to_string());
         }
-        let (provider, model) = self.active_provider(harness).await;
+        // Reference `from_public_error` reads the provider, the model and a
+        // refusal's reasons off the published details; a failure that carries
+        // none names the active model.
+        let details = vibe_app_server::client::turn_error_details(error);
+        let detail = |name: &str| details.get(name).and_then(Value::as_str).map(str::to_owned);
+        let (active_provider, active_model) = self.active_provider(harness).await;
+        let provider = detail("provider").unwrap_or(active_provider);
+        let model = detail("model").unwrap_or(active_model);
         match code {
             TurnErrorCode::RateLimit => AcpError::RateLimited { provider, model },
             TurnErrorCode::ContextTooLong => AcpError::ContextTooLong { provider, model },
@@ -374,9 +372,12 @@ where
             TurnErrorCode::Refusal => AcpError::Refusal {
                 provider,
                 model,
-                category: None,
-                explanation: None,
+                category: detail("category"),
+                explanation: detail("explanation"),
             },
+            TurnErrorCode::InvalidModel | TurnErrorCode::InvalidApiKey => {
+                AcpError::Configuration(error.to_string())
+            }
             TurnErrorCode::InvalidImageAttachment => AcpError::InvalidImage {
                 detail: error.to_string(),
                 reason: "invalid_image_attachment".to_owned(),
@@ -386,9 +387,9 @@ where
                 reason: "failed".to_owned(),
                 detail: error.to_string(),
             },
-            TurnErrorCode::BackendError | TurnErrorCode::InternalError => {
-                AcpError::Internal(error.to_string())
-            }
+            TurnErrorCode::IncompleteStream
+            | TurnErrorCode::BackendError
+            | TurnErrorCode::InternalError => AcpError::Internal(error.to_string()),
         }
     }
 

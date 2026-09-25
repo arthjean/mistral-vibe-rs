@@ -81,6 +81,7 @@ const MODELED_PROVIDER_FIELDS: &[&str] = &[
     "api_style",
     "backend",
     "reasoning_field_name",
+    "emits_finish_reason",
     "project_id",
     "region",
     "extra_headers",
@@ -95,6 +96,7 @@ fn is_provider_field_default(key: &str, value: &Value) -> bool {
         "api_style" => value.as_str() == Some("openai"),
         "backend" => value.as_str() == Some("generic"),
         "reasoning_field_name" => value.as_str() == Some("reasoning_content"),
+        "emits_finish_reason" => value.as_bool() == Some(true),
         "extra_headers" => value.as_table().is_some_and(Table::is_empty),
         _ => false,
     }

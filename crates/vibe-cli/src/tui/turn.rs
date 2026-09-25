@@ -545,9 +545,21 @@ mod tests {
 
         report_turn_failure(
             &mut state,
-            &DriverError::Transport(vibe_core::provider::TransportError::Connection(
-                "reset".to_owned(),
-            )),
+            &DriverError::Provider(vibe_core::provider::ProviderError::Call(Box::new(
+                vibe_core::provider::CallError {
+                    failure: vibe_core::llm::error::CallFailure::Wrapped {
+                        provider: "mistral".to_owned(),
+                        model: "m".to_owned(),
+                        cause: vibe_core::llm::error::WrappedCause::Local(
+                            vibe_core::llm::error::LocalFailure::new(
+                                vibe_core::llm::error::LocalKind::Runtime,
+                                "connection reset",
+                            ),
+                        ),
+                    },
+                    appended: None,
+                },
+            ))),
         );
         assert_eq!(state.entries.len(), 2, "a distinct failure stays visible");
         let transport = &state.entries[1];

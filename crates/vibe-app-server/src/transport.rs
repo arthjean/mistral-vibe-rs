@@ -7,7 +7,9 @@ use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 
-use crate::client::{DriverError, TurnDriver, TurnReservation, public_turn_error, turn_error_code};
+use crate::client::{
+    DriverError, TurnDriver, TurnReservation, public_driver_error, public_turn_error,
+};
 use crate::live_projection::{app_server_notification, app_server_update_channel_for_turn};
 use crate::server::{AppServer, DeferredWork, ServerError, server_error_frame};
 
@@ -287,12 +289,9 @@ where
             turn_id,
         } => match driver.interrupt(&session_id, &turn_id) {
             Ok(()) => Ok(Vec::new()),
-            Err(error) => {
-                let code = turn_error_code(&error);
-                server
-                    .fail_turn(&session_id, &turn_id, &error.to_string(), code)
-                    .map_err(TransportError::Server)
-            }
+            Err(error) => server
+                .fail_turn_with(&session_id, &turn_id, public_driver_error(&error))
+                .map_err(TransportError::Server),
         },
         DeferredWork::SteerTurn {
             session_id,
@@ -502,15 +501,11 @@ async fn run_turn<D>(
                 error,
             )
         }
-        Err(error) => {
-            let code = turn_error_code(&error);
-            server.fail_turn(
-                &reservation.session_id,
-                &reservation.turn_id,
-                &error.to_string(),
-                code,
-            )
-        }
+        Err(error) => server.fail_turn_with(
+            &reservation.session_id,
+            &reservation.turn_id,
+            public_driver_error(&error),
+        ),
     };
     let _ = events.send(settle(notification));
 }

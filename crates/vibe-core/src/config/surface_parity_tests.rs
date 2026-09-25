@@ -102,21 +102,6 @@ const UNDECLARED_FIELDS: &[(&str, &str)] = &[
         "v2.25.1 tab status toggle (vibe_schema.py:594), unported; the registry declares no such \
          key",
     ),
-    (
-        "api_connect_timeout",
-        "v2.25.0 split API timeouts (vibe_schema.py:600), unported; the port carries only \
-         `api_timeout`",
-    ),
-    (
-        "api_write_timeout",
-        "v2.25.0 split API timeouts (vibe_schema.py:603), unported; the port carries only \
-         `api_timeout`",
-    ),
-    (
-        "api_pool_timeout",
-        "v2.25.0 split API timeouts (vibe_schema.py:604), unported; the port carries only \
-         `api_timeout`",
-    ),
 ];
 
 /// The sentinel v2.24.0 ships for `active_model`, meaning "not pinned": both
@@ -208,10 +193,6 @@ const ACTIVE_MODEL_FALLBACK: &str = "v2.25.0 resets an unknown `active_model` to
 const ORIGIN_REWRITE: &str = "v2.25.0 adds `browser_auth_allow_origin_rewrite` to ProviderConfig, default \
      false (models.py:105); the port's provider entries carry no such key";
 
-/// v2.24.1 gave `ProviderConfig` a finish-reason flag.
-const FINISH_REASON: &str = "v2.24.1 adds `emits_finish_reason` to ProviderConfig, default true \
-     (models.py:113); the port's provider entries carry no such key";
-
 /// Pointers at which the document this port ships diverges from the reference
 /// default document, as `(pointer, reason)`.
 const DEFAULT_DIVERGENCES: &[(&str, &str)] = &[
@@ -224,12 +205,10 @@ const DEFAULT_DIVERGENCES: &[(&str, &str)] = &[
         "/providers/0/browser_auth_allow_origin_rewrite",
         ORIGIN_REWRITE,
     ),
-    ("/providers/0/emits_finish_reason", FINISH_REASON),
     (
         "/providers/1/browser_auth_allow_origin_rewrite",
         ORIGIN_REWRITE,
     ),
-    ("/providers/1/emits_finish_reason", FINISH_REASON),
     (
         "/session_logging/generate_titles",
         "v2.24.4 adds `generate_titles` to SessionLoggingConfig, default false \

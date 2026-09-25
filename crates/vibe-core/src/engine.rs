@@ -23,7 +23,7 @@ use crate::middleware::{
 };
 use crate::provider::{
     AssistantMessage, ModelCallDescriptor, ProviderChunk, ProviderError, ProviderInput,
-    ProviderStream, TransportError, Usage, aggregate_provider_chunks,
+    ProviderStream, Usage, aggregate_provider_chunks,
 };
 use crate::text::bounded_utf8;
 use crate::tools::{MAX_TOOL_ERROR_BYTES, ToolExecutionOutput};
@@ -39,7 +39,7 @@ use contracts::ChannelRetrySink;
 pub use contracts::{
     Compactor, CompletionProvider, CompositeEventObserver, EventObserver, NoTools,
     NoopEventObserver, NoopTranscriptSink, RejectCompaction, SessionTranscriptSink, ToolExecutor,
-    TranscriptSink,
+    TranscriptSink, chunks_of,
 };
 use ledger::{
     TurnLedger, TurnRecorder, current_time_millis, lifecycle_for, new_compaction_id, persist,
@@ -49,7 +49,15 @@ use ledger::{
 pub type ProviderFuture<'a> =
     Pin<Box<dyn Future<Output = Result<AssistantMessage, ProviderError>> + Send + 'a>>;
 pub type ProviderStreamFuture<'a> =
-    Pin<Box<dyn Future<Output = Result<ProviderStream, ProviderError>> + Send + 'a>>;
+    Pin<Box<dyn Future<Output = Result<ProviderStream<'a>, ProviderError>> + Send + 'a>>;
+/// A retry as the turn publishes it.
+fn retrying(reason: crate::llm::retry::RetryReason) -> EngineEvent {
+    EngineEvent::Retrying {
+        category: reason.category.as_str().to_owned(),
+        detail: reason.detail,
+    }
+}
+
 pub type ToolFuture<'a> =
     Pin<Box<dyn Future<Output = Result<ToolExecutionOutput, String>> + Send + 'a>>;
 pub type ToolStreamSink = Arc<dyn Fn(String) -> Result<(), String> + Send + Sync>;
@@ -634,6 +642,7 @@ where
             // The model reads from the latest compaction envelope on; the
             // transcript keeps what came before it.
             input.messages = crate::compaction::context::select_model_context(&messages);
+            input.session_id = Some(recorder.state().session_id.clone());
             self.record_request(&mut recorder, &input, &prompt, message_id.clone())?;
             let call_started = Instant::now();
             let completion = match self
@@ -642,7 +651,7 @@ where
             {
                 StreamOutcome::Cancelled => break TurnStopReason::Cancelled,
                 StreamOutcome::Completed(Ok(completion)) => *completion,
-                StreamOutcome::Completed(Err(ProviderError::ContextOverflow)) => {
+                StreamOutcome::Completed(Err(error)) if error.is_context_overflow() => {
                     // Reference `_should_self_heal`: one recovery per turn, and
                     // none at all in strict mode, where the operator asked for
                     // the overflow rather than for a silent repair.
@@ -651,10 +660,10 @@ where
                     {
                         recorder.emit(EngineEvent::Lifecycle {
                             state: LifecycleState::Failed,
-                            message: Some(ProviderError::ContextOverflow.to_string()),
+                            message: Some(error.to_string()),
                         })?;
                         persist(&self.sink, &messages, recorder.state()).await?;
-                        return Err(EngineError::Provider(ProviderError::ContextOverflow));
+                        return Err(EngineError::Provider(error));
                     }
                     reactive_recovery_used = true;
                     match self
@@ -678,10 +687,30 @@ where
                 StreamOutcome::Completed(Err(ProviderError::Refusal(_))) => {
                     break TurnStopReason::Refusal;
                 }
-                StreamOutcome::Completed(Err(ProviderError::Transport(
-                    TransportError::ResponseTooLarge { .. },
-                ))) => break TurnStopReason::ResponseLength,
                 StreamOutcome::Completed(Err(error)) => {
+                    // Reference `_chat_streaming`: a refused answer is kept
+                    // whole and counted, an interrupted one keeps its text.
+                    if let ProviderError::Call(call) = &error
+                        && let Some(appended) = &call.appended
+                    {
+                        if appended.usage != Usage::default() {
+                            ledger.record_completion(&appended.usage, &self.settings.limits);
+                            recorder.emit(EngineEvent::Stats {
+                                context_tokens: ledger.context_tokens,
+                                input_tokens: ledger.usage.input_tokens,
+                                output_tokens: ledger.usage.output_tokens,
+                            })?;
+                        }
+                        let (assistant_id, reasoning_id) = recorder.model_call_entries();
+                        messages.push(ModelMessage::Assistant {
+                            message_id: assistant_id,
+                            reasoning_message_id: reasoning_id,
+                            content: appended.text.clone(),
+                            reasoning: appended.reasoning.clone(),
+                            reasoning_payloads: appended.reasoning_payloads.clone(),
+                            tool_calls: appended.tool_calls.clone(),
+                        });
+                    }
                     recorder.emit(EngineEvent::Lifecycle {
                         state: LifecycleState::Failed,
                         message: Some(error.to_string()),
@@ -710,8 +739,7 @@ where
                 reasoning_message_id: reasoning_id,
                 content: completion.text.clone(),
                 reasoning: completion.reasoning.clone(),
-                reasoning_signature: completion.reasoning_signature.clone(),
-                reasoning_state: completion.reasoning_state.clone(),
+                reasoning_payloads: completion.reasoning_payloads.clone(),
                 tool_calls: completion.tool_calls.clone(),
             };
             // A limit reached mid-cycle keeps a tool-free reply, but never a
@@ -911,8 +939,7 @@ where
                 reasoning_message_id: None,
                 content: String::new(),
                 reasoning: None,
-                reasoning_signature: None,
-                reasoning_state: Vec::new(),
+                reasoning_payloads: Vec::new(),
                 tool_calls: vec![call.clone()],
             });
             let calls = [call];
@@ -1069,40 +1096,40 @@ where
                 endpoint: String::new(),
             });
         let model = self.resolved_model(input).unwrap_or_default();
-        let outcome = model_call_span(
-            ModelCallSpan {
-                provider_name: &descriptor.provider_name,
-                provider_api_style: &descriptor.api_style,
-                model: &model,
-                streaming: input.stream,
-                temperature: input
-                    .limits
-                    .temperature_millis
-                    .map(|thousandths| f64::from(thousandths) / 1000.0),
-                max_tokens: Some(i64::from(input.limits.max_tokens)),
-                session_id: None,
-                call_type: input.metadata.get("call_type").map(String::as_str),
-                message_id: input.metadata.get("message_id").map(String::as_str),
-                http_method: None,
-                http_url: Some(&descriptor.endpoint),
-            },
-            async {
-                match self
-                    .stream_traced_completion(recorder, input, cancellation, &model)
-                    .await
-                {
-                    // A backend that refused is a failing span and an answered
-                    // turn: the outcome the caller reads is unchanged, and the
-                    // span carries the refusal it would otherwise never see.
-                    Ok(StreamOutcome::Completed(Err(error))) => {
-                        Err(ModelCallFailure::Provider(error))
-                    }
-                    Ok(outcome) => Ok(outcome),
-                    Err(error) => Err(ModelCallFailure::Engine(error)),
-                }
-            },
-        )
-        .await;
+        let span = ModelCallSpan {
+            provider_name: &descriptor.provider_name,
+            provider_api_style: &descriptor.api_style,
+            model: &model,
+            streaming: input.stream,
+            temperature: input
+                .limits
+                .temperature_millis
+                .map(|thousandths| f64::from(thousandths) / 1000.0),
+            max_tokens: input.limits.max_tokens.map(i64::from),
+            session_id: None,
+            call_type: input.metadata.get("call_type").map(String::as_str),
+            message_id: input.metadata.get("message_id").map(String::as_str),
+            http_method: None,
+            http_url: Some(&descriptor.endpoint),
+        };
+        let call = async {
+            match self
+                .stream_traced_completion(recorder, input, cancellation, &model)
+                .await
+            {
+                // A backend that refused is a failing span and an answered
+                // turn: the outcome the caller reads is unchanged, and the
+                // span carries the refusal it would otherwise never see.
+                Ok(StreamOutcome::Completed(Err(error))) => Err(ModelCallFailure::Provider(error)),
+                Ok(outcome) => Ok(outcome),
+                Err(error) => Err(ModelCallFailure::Engine(error)),
+            }
+        };
+        let outcome = if self.provider.traces_model_calls() {
+            model_call_span(span, call).await
+        } else {
+            call.await
+        };
         match outcome {
             Ok(outcome) => Ok(outcome),
             Err(ModelCallFailure::Provider(error)) => Ok(StreamOutcome::Completed(Err(error))),
@@ -1132,14 +1159,14 @@ where
                     Err(error) => return Ok(StreamOutcome::Completed(Err(error))),
                 },
                 Some(reason) = retry_reasons.recv() => {
-                    recorder.emit(EngineEvent::Retrying { reason })?;
+                    recorder.emit(retrying(reason))?;
                 }
                 () = cancellation.cancelled() => return Ok(StreamOutcome::Cancelled),
             }
         };
         drop(opening);
         while let Ok(reason) = retry_reasons.try_recv() {
-            recorder.emit(EngineEvent::Retrying { reason })?;
+            recorder.emit(retrying(reason))?;
         }
         let (text_id, reasoning_id) = recorder.open_model_call();
         let mut chunks = Vec::new();
@@ -1170,6 +1197,7 @@ where
                 }
                 ProviderChunk::Text { .. }
                 | ProviderChunk::Reasoning { .. }
+                | ProviderChunk::ReasoningPayload { .. }
                 | ProviderChunk::ToolCall { .. }
                 | ProviderChunk::Usage { .. }
                 | ProviderChunk::Refusal { .. }
@@ -1593,7 +1621,7 @@ mod tests {
     use std::collections::{BTreeMap, VecDeque};
 
     use crate::events::ProjectionReducer;
-    use crate::provider::RetrySink;
+    use crate::llm::retry::{RetryObserver, RetryReason};
     use crate::storage::SessionStore;
     use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 
@@ -1835,9 +1863,9 @@ mod tests {
         fn stream_observed<'a>(
             &'a self,
             input: &'a ProviderInput,
-            retries: &'a (dyn RetrySink + 'a),
+            retries: &'a (dyn RetryObserver + 'a),
         ) -> ProviderStreamFuture<'a> {
-            retries.retrying("provider answered HTTP 503");
+            retries.retrying(&RetryReason::for_status(503));
             self.stream(input)
         }
     }
@@ -1862,11 +1890,13 @@ mod tests {
                 .events
                 .iter()
                 .filter_map(|event| match &event.event {
-                    EngineEvent::Retrying { reason } => Some(reason.as_str()),
+                    EngineEvent::Retrying { category, detail } => {
+                        Some((category.as_str(), detail.as_str()))
+                    }
                     _ => None,
                 })
                 .collect::<Vec<_>>(),
-            ["provider answered HTTP 503"]
+            [("server_error", "HTTP 503")]
         );
     }
 
@@ -2025,6 +2055,7 @@ mod tests {
     fn provider_input() -> ProviderInput {
         ProviderInput {
             turn_id: None,
+            session_id: None,
             model_override: None,
             messages: vec![ModelMessage::System {
                 content: "system".to_owned(),
@@ -2045,8 +2076,7 @@ mod tests {
         AssistantMessage {
             text: text.to_owned(),
             reasoning: None,
-            reasoning_signature: None,
-            reasoning_state: Vec::new(),
+            reasoning_payloads: Vec::new(),
             tool_calls: calls,
             usage: Usage {
                 input_tokens: 2,
@@ -2414,8 +2444,7 @@ mod tests {
                     reasoning_message_id: None,
                     content: "implementing".to_owned(),
                     reasoning: None,
-                    reasoning_signature: None,
-                    reasoning_state: Vec::new(),
+                    reasoning_payloads: Vec::new(),
                     tool_calls: Vec::new(),
                 },
             ],
@@ -3720,8 +3749,7 @@ mod tests {
                 reasoning_message_id: None,
                 content: String::new(),
                 reasoning: None,
-                reasoning_signature: None,
-                reasoning_state: Vec::new(),
+                reasoning_payloads: Vec::new(),
                 tool_calls: vec![ModelToolCall {
                     id: "earlier-call".to_owned(),
                     name: "skill".to_owned(),
@@ -3772,8 +3800,7 @@ mod tests {
                 reasoning_message_id: None,
                 content: String::new(),
                 reasoning: None,
-                reasoning_signature: None,
-                reasoning_state: Vec::new(),
+                reasoning_payloads: Vec::new(),
                 tool_calls: vec![ModelToolCall {
                     id: "read-call".to_owned(),
                     name: "read".to_owned(),

@@ -38,8 +38,7 @@ impl CompletionProvider for ModelSelectsMcp {
                 AssistantMessage {
                     text: String::new(),
                     reasoning: None,
-                    reasoning_signature: None,
-                    reasoning_state: Vec::new(),
+                    reasoning_payloads: Vec::new(),
                     tool_calls: vec![ModelToolCall {
                         id: "call-1".to_owned(),
                         name: "fixture_echo".to_owned(),
@@ -68,8 +67,7 @@ impl CompletionProvider for ModelSelectsMcp {
                 AssistantMessage {
                     text: "done".to_owned(),
                     reasoning: None,
-                    reasoning_signature: None,
-                    reasoning_state: Vec::new(),
+                    reasoning_payloads: Vec::new(),
                     tool_calls: Vec::new(),
                     usage: Usage::default(),
                     refusal: None,

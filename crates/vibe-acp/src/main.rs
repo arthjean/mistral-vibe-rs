@@ -20,6 +20,7 @@ use vibe_core::auth::KeyringStore;
 use vibe_core::compaction::manager::CompactionPromptResolution;
 use vibe_core::config::DotenvValues;
 use vibe_core::observability::{LogLevel, init_file_logging, log};
+use vibe_core::provider::config::ModelRouting;
 use vibe_core::telemetry::{
     ExperimentExposures, LaunchContext, ReqwestTelemetryTransport, TelemetryClient,
     TelemetryConfig, TelemetryConfigGetter, TelemetryContext, TelemetryEventObserver,
@@ -74,18 +75,29 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // The span exporter is installed before the first session is opened, and
     // its guard lives as long as this process: dropping it flushes the batch.
     let _tracing = install_tracing(&vibe_home, &dotenv);
+    let routing = ambient_workspace(&vibe_home)
+        .and_then(|workspace| workspace.layered_config().load().ok())
+        .map(|snapshot| {
+            ModelRouting::from_effective(&snapshot.effective, snapshot.active_model_alias())
+        })
+        .unwrap_or_else(|| ModelRouting::from_effective(&toml::Table::new(), None));
+    let style = dotenv
+        .variable("VIBE_PROVIDER_STYLE")
+        .unwrap_or_else(|| "mistral".to_owned());
+    let api_base = dotenv
+        .variable("VIBE_API_BASE")
+        .unwrap_or_else(|| "https://api.mistral.ai/v1".to_owned());
+    let provider = routing
+        .launch_provider(&style, &api_base, &credential_environment)
+        .ok_or_else(|| format!("`{style}` is not a provider style this build speaks"))?;
     let config = LiveDriverConfig {
         compaction_prompts: CompactionPromptResolution::default(),
-        style: dotenv
-            .variable("VIBE_PROVIDER_STYLE")
-            .unwrap_or_else(|| "mistral".to_owned()),
-        endpoint: dotenv
-            .variable("VIBE_API_BASE")
-            .unwrap_or_else(|| "https://api.mistral.ai/v1/chat/completions".to_owned()),
+        provider,
+        models: routing.models.clone(),
         model: dotenv
             .variable("VIBE_MODEL")
             .unwrap_or_else(|| "mistral-medium-3.5".to_owned()),
-        credential_environment: credential_environment.clone(),
+        api: routing.api,
         system_prompt: "You are Mistral Vibe.".to_owned(),
         session_root: Some(session_root.clone()),
         input_price_per_million_micros: price_from_dotenv(&dotenv, "VIBE_INPUT_PRICE", 1_500_000)?,

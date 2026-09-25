@@ -16,7 +16,8 @@ fn a_retried_request_is_published_as_turn_retrying() {
             emitted_at: 10,
             working_directory: None,
             event: EngineEvent::Retrying {
-                reason: "provider answered HTTP 503".to_owned(),
+                category: "server_error".to_owned(),
+                detail: "HTTP 503".to_owned(),
             },
         })
         .expect("the retry projects");
@@ -29,7 +30,8 @@ fn a_retried_request_is_published_as_turn_retrying() {
         Envelope::Notification(Notification { method, params, .. })
             if method == "turn/retrying"
                 && params["sessionId"] == "session-1"
-                && params["reason"] == "provider answered HTTP 503"
+                && params["category"] == "server_error"
+                && params["detail"] == "HTTP 503"
                 // The reference does not sequence this one, so it carries
                 // no event id a client would count.
                 && !params.contains_key("eventId")

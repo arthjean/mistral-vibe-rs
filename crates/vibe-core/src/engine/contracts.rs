@@ -24,9 +24,9 @@ use crate::compaction::CompactionFailure;
 use crate::events::{
     EventEnvelope, ModelMessage, ProjectionSnapshot, RemoteToolOrigin, SessionHandoffCause,
 };
+use crate::llm::retry::{RetryObserver, RetryReason};
 use crate::provider::{
-    ModelCallDescriptor, ProviderBackend, ProviderChunk, ProviderInput, ProviderStream,
-    ProviderTransport, RetrySink,
+    AssistantMessage, ModelCallDescriptor, ProviderChunk, ProviderInput, ProviderStream,
 };
 use crate::storage::{SessionMetadata, SessionStore};
 
@@ -52,6 +52,12 @@ pub trait CompletionProvider: Send + Sync {
         None
     }
 
+    /// Whether a call to this provider is reported under a model call span.
+    /// Reference `GenericBackend` opens one and `MistralBackend` none.
+    fn traces_model_calls(&self) -> bool {
+        true
+    }
+
     /// Streams one completion, reporting every retry to `retries`.
     ///
     /// A provider that does not retry never calls the sink, which is why the
@@ -60,86 +66,54 @@ pub trait CompletionProvider: Send + Sync {
     fn stream_observed<'a>(
         &'a self,
         input: &'a ProviderInput,
-        _retries: &'a (dyn RetrySink + 'a),
+        _retries: &'a (dyn RetryObserver + 'a),
     ) -> ProviderStreamFuture<'a> {
         self.stream(input)
     }
 
     fn stream<'a>(&'a self, input: &'a ProviderInput) -> ProviderStreamFuture<'a> {
-        Box::pin(async move {
-            let message = self.complete(input).await?;
-            let mut chunks = Vec::new();
-            if let Some(reasoning) = message.reasoning {
-                chunks.push(ProviderChunk::Reasoning {
-                    text: reasoning,
-                    signature: message.reasoning_signature.clone(),
-                });
-            }
-            chunks.extend(
-                message
-                    .reasoning_state
-                    .into_iter()
-                    .filter(|state| Some(state) != message.reasoning_signature.as_ref())
-                    .map(|signature| ProviderChunk::Reasoning {
-                        text: String::new(),
-                        signature: Some(signature),
-                    }),
-            );
-            chunks.push(ProviderChunk::Text { text: message.text });
-            chunks.extend(
-                message
-                    .tool_calls
-                    .into_iter()
-                    .map(|call| ProviderChunk::ToolCall {
-                        id: call.id,
-                        name: call.name,
-                        arguments: call.arguments,
-                    }),
-            );
-            chunks.push(ProviderChunk::Usage {
-                input_tokens: message.usage.input_tokens,
-                output_tokens: message.usage.output_tokens,
-            });
-            if let Some(message) = message.refusal {
-                chunks.push(ProviderChunk::Refusal { message });
-            }
-            chunks.push(ProviderChunk::Stop {
-                reason: message.stop_reason,
-            });
-            Ok(ProviderStream {
-                correlation_id: message.correlation_id,
-                chunks: Box::pin(futures_util::stream::iter(chunks.into_iter().map(Ok))),
-            })
-        })
+        Box::pin(async move { Ok(chunks_of(self.complete(input).await?)) })
     }
 }
 
-impl<T> CompletionProvider for ProviderBackend<T>
-where
-    T: ProviderTransport,
-{
-    fn complete<'a>(&'a self, input: &'a ProviderInput) -> ProviderFuture<'a> {
-        Box::pin(ProviderBackend::complete(self, input))
+/// A finished message as the stream a real provider would have produced, in
+/// the same chunk order.
+#[must_use]
+pub fn chunks_of(message: AssistantMessage) -> ProviderStream<'static> {
+    let mut chunks = Vec::new();
+    if let Some(reasoning) = message.reasoning {
+        chunks.push(ProviderChunk::Reasoning { text: reasoning });
     }
-
-    fn stream<'a>(&'a self, input: &'a ProviderInput) -> ProviderStreamFuture<'a> {
-        Box::pin(ProviderBackend::stream(self, input))
+    chunks.extend(
+        message
+            .reasoning_payloads
+            .into_iter()
+            .map(|payload| ProviderChunk::ReasoningPayload { payload }),
+    );
+    chunks.push(ProviderChunk::Text { text: message.text });
+    chunks.extend(
+        message
+            .tool_calls
+            .into_iter()
+            .map(|call| ProviderChunk::ToolCall {
+                id: call.id,
+                name: call.name,
+                arguments: call.arguments,
+            }),
+    );
+    chunks.push(ProviderChunk::Usage {
+        input_tokens: message.usage.input_tokens,
+        output_tokens: message.usage.output_tokens,
+    });
+    if let Some(message) = message.refusal {
+        chunks.push(ProviderChunk::Refusal { message });
     }
-
-    fn stream_observed<'a>(
-        &'a self,
-        input: &'a ProviderInput,
-        retries: &'a (dyn RetrySink + 'a),
-    ) -> ProviderStreamFuture<'a> {
-        Box::pin(ProviderBackend::stream_observed(self, input, retries))
-    }
-
-    fn model(&self) -> Option<&str> {
-        Some(ProviderBackend::model(self))
-    }
-
-    fn call_descriptor(&self) -> Option<ModelCallDescriptor> {
-        Some(ProviderBackend::call_descriptor(self))
+    chunks.push(ProviderChunk::Stop {
+        reason: message.stop_reason,
+    });
+    ProviderStream {
+        correlation_id: message.correlation_id,
+        chunks: Box::pin(futures_util::stream::iter(chunks.into_iter().map(Ok))),
     }
 }
 
@@ -158,7 +132,7 @@ where
     fn stream_observed<'a>(
         &'a self,
         input: &'a ProviderInput,
-        retries: &'a (dyn RetrySink + 'a),
+        retries: &'a (dyn RetryObserver + 'a),
     ) -> ProviderStreamFuture<'a> {
         (**self).stream_observed(input, retries)
     }
@@ -170,17 +144,21 @@ where
     fn call_descriptor(&self) -> Option<ModelCallDescriptor> {
         (**self).call_descriptor()
     }
+
+    fn traces_model_calls(&self) -> bool {
+        (**self).traces_model_calls()
+    }
 }
 
 /// Forwards a retry to the turn that is waiting on the request.
 pub(super) struct ChannelRetrySink {
-    pub(super) reasons: mpsc::UnboundedSender<String>,
+    pub(super) reasons: mpsc::UnboundedSender<RetryReason>,
 }
 
-impl RetrySink for ChannelRetrySink {
-    fn retrying(&self, reason: &str) {
+impl RetryObserver for ChannelRetrySink {
+    fn retrying(&self, reason: &RetryReason) {
         // A closed receiver means the turn is gone; the request still finishes.
-        let _ = self.reasons.send(reason.to_owned());
+        let _ = self.reasons.send(reason.clone());
     }
 }
 

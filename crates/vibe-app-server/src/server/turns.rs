@@ -316,6 +316,18 @@ impl AppServer {
         message: &str,
         code: TurnErrorCode,
     ) -> Result<Vec<Vec<u8>>, ServerError> {
+        self.fail_turn_with(session_id, turn_id, public_turn_failure(code, message))
+    }
+
+    /// Ends the turn as failed with `error` as it is published, details
+    /// included.
+    pub fn fail_turn_with(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        error: PublicError,
+    ) -> Result<Vec<Vec<u8>>, ServerError> {
+        let message = error.message.as_str();
         let mut sessions = self.lock_sessions()?;
         let session = sessions
             .get_mut(session_id)
@@ -351,7 +363,7 @@ impl AppServer {
             status: PublicTurnStatus::Failed,
             started_at,
             completed_at: Some(now_millis()),
-            error: Some(public_turn_failure(code, message)),
+            error: Some(error.clone()),
             stop_reason: None,
         };
         session.record_turn(turn.clone());

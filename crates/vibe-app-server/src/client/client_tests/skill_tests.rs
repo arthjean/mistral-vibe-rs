@@ -18,8 +18,7 @@ impl CompletionProvider for TranscriptProbeProvider {
             Ok(AssistantMessage {
                 text: "done".to_owned(),
                 reasoning: None,
-                reasoning_signature: None,
-                reasoning_state: Vec::new(),
+                reasoning_payloads: Vec::new(),
                 tool_calls: Vec::new(),
                 usage: Usage::default(),
                 refusal: None,
@@ -231,8 +230,7 @@ impl CompletionProvider for TaskProbeProvider {
             let finished = AssistantMessage {
                 text: "done".to_owned(),
                 reasoning: None,
-                reasoning_signature: None,
-                reasoning_state: Vec::new(),
+                reasoning_payloads: Vec::new(),
                 tool_calls: Vec::new(),
                 usage: Usage::default(),
                 refusal: None,

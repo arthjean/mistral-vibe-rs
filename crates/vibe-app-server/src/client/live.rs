@@ -10,7 +10,6 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use secrecy::SecretString;
 use serde_json::{Value, json};
 
 use vibe_core::compaction::CompactionFailure;
@@ -29,15 +28,17 @@ use vibe_core::extensions::{
     ExtensionSource, SubagentFuture, SubagentManager, SubagentRun, SubagentRunner,
     discover_extensions,
 };
+use vibe_core::llm::completion::LlmCompletion;
+use vibe_core::llm::{AmbientCredentials, BackendContext, Credentials, MapCredentials};
 use vibe_core::matching::NameFilter;
 use vibe_core::mcp::{
     McpError, McpFuture, SamplingHandler, SamplingRequest, SamplingResponse, SamplingRole,
 };
 use vibe_core::middleware::{CompactionSettings, ContextWarningMiddleware};
 use vibe_core::policy::{PolicyGuardedTool, resolve_task_tool_permission};
+use vibe_core::provider::config::{ApiSettings, ModelConfig, ProviderConfig};
 use vibe_core::provider::{
-    HttpTransport, ProviderBackend, ProviderInput, ProviderStyle, RequestLimits, ToolChoice,
-    ToolDefinition,
+    ProviderError, ProviderInput, RequestLimits, ToolChoice, ToolDefinition,
 };
 use vibe_core::schema::{ObjectSchema, Property};
 use vibe_core::session_id::rotate_session_id;
@@ -61,10 +62,17 @@ use super::{
 
 #[derive(Debug, Clone)]
 pub struct LiveDriverConfig {
-    pub style: String,
-    pub endpoint: String,
+    /// The provider turns are sent to. Its `api_key_env_var` names the key,
+    /// read from the environment, the global dotenv file, then the keyring.
+    pub provider: ProviderConfig,
+    /// The models the configuration declares, which a turn's model name is
+    /// resolved against for its temperature, thinking level and image support.
+    pub models: Vec<ModelConfig>,
+    /// The model a turn that names none runs on.
     pub model: String,
-    pub credential_environment: String,
+    /// The request timeout and the retry budget, with the three transport
+    /// timeouts. Reference `api_timeout` and its four siblings.
+    pub api: ApiSettings,
     pub system_prompt: String,
     pub session_root: Option<PathBuf>,
     pub input_price_per_million_micros: u64,
@@ -153,9 +161,13 @@ impl ProviderSessionCompactor {
         messages: &[ModelMessage],
         extra_instructions: &str,
     ) -> Result<CompactionResult, CompactionFailure> {
+        let plan = CompactionPlan {
+            session_id: Some(current_session_id.to_owned()),
+            ..(*self.plan).clone()
+        };
         let summarized = compaction_manager::compact(
             self.provider.as_ref(),
-            &self.plan,
+            &plan,
             messages,
             extra_instructions.trim(),
         )
@@ -381,33 +393,36 @@ impl LiveTurnDriver {
         config: LiveDriverConfig,
         dotenv: &vibe_core::config::DotenvValues,
     ) -> Result<Self, DriverError> {
-        let credential = dotenv
-            .variable(&config.credential_environment)
-            .filter(|credential| !credential.is_empty())
-            .ok_or_else(|| {
-                DriverError::MissingCredentialEnvironment(config.credential_environment.clone())
-            })?;
-        Self::from_credential(config, credential)
+        let credentials = Arc::new(AmbientCredentials::new(
+            dotenv.clone(),
+            vibe_core::auth::KeyringStore::native(),
+        ));
+        Self::with_credentials(config, credentials)
     }
 
     pub fn from_credential(
         config: LiveDriverConfig,
         credential: String,
     ) -> Result<Self, DriverError> {
-        let style = ProviderStyle::parse(&config.style).map_err(DriverError::Provider)?;
-        if credential.is_empty() {
-            return Err(DriverError::MissingCredentialEnvironment(
-                config.credential_environment,
-            ));
+        let credentials = Arc::new(MapCredentials(
+            [(config.provider.api_key_env_var.clone(), credential)].into(),
+        ));
+        Self::with_credentials(config, credentials)
+    }
+
+    fn with_credentials(
+        config: LiveDriverConfig,
+        credentials: Arc<dyn Credentials>,
+    ) -> Result<Self, DriverError> {
+        let variable = &config.provider.api_key_env_var;
+        if !variable.is_empty() && credentials.resolve(variable).is_none() {
+            return Err(DriverError::MissingCredentialEnvironment(variable.clone()));
         }
-        let transport = HttpTransport::new().map_err(DriverError::Transport)?;
-        let provider = ProviderBackend::new(
-            style,
-            config.endpoint,
-            config.model,
-            SecretString::from(credential),
-            transport,
-        );
+        let context = BackendContext::ambient(config.api, credentials);
+        let provider = LlmCompletion::new(config.provider, config.models, config.model, context)
+            .map_err(|failure| {
+                DriverError::Provider(ProviderError::InvalidRequest(failure.to_string()))
+            })?;
         let provider: Arc<dyn CompletionProvider> = Arc::new(provider);
         let compactor = ProviderSessionCompactor::new(provider.clone()).with_plan(CompactionPlan {
             prompts: config.compaction_prompts,
@@ -536,6 +551,7 @@ impl LiveTurnDriver {
             SessionToolExecutor::new(reservation.tools.clone(), &reservation.intent);
         let input = ProviderInput {
             turn_id: Some(reservation.turn_id.clone()),
+            session_id: None,
             model_override: reservation.intent.model.clone(),
             messages,
             stream: true,
@@ -555,10 +571,8 @@ impl LiveTurnDriver {
                 max_tokens: reservation
                     .intent
                     .max_tokens
-                    .and_then(|value| u32::try_from(value).ok())
-                    .unwrap_or(4096),
+                    .and_then(|value| u32::try_from(value).ok()),
                 temperature_millis: None,
-                max_response_bytes: limits.max_response_bytes,
             },
             metadata: turn_metadata(reservation),
         };

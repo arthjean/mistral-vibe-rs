@@ -82,8 +82,7 @@ async fn the_withheld_tools_stay_withheld_when_the_allowlist_names_one() {
                 Ok(AssistantMessage {
                     text: "done".to_owned(),
                     reasoning: None,
-                    reasoning_signature: None,
-                    reasoning_state: Vec::new(),
+                    reasoning_payloads: Vec::new(),
                     tool_calls: Vec::new(),
                     usage: Usage {
                         input_tokens: 1,

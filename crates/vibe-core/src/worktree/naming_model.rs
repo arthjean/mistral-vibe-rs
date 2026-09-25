@@ -10,15 +10,14 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use secrecy::SecretString;
-
 use crate::engine::CompletionProvider;
 use crate::events::ModelMessage;
+use crate::llm::completion::LlmCompletion;
+use crate::llm::{BackendContext, Credentials, utility};
 use crate::observability::{self, LogLevel};
 use crate::prompt::library::UtilityPrompt;
-use crate::provider::{
-    HttpTransport, ProviderBackend, ProviderInput, ProviderStyle, RequestLimits, RetryPolicy,
-};
+use crate::provider::config::{ApiSettings, ModelRouting};
+use crate::provider::{ProviderInput, RequestLimits};
 
 /// One attempt's deadline (`naming_model.py:15`).
 pub const REQUEST_TIMEOUT: Duration = Duration::from_millis(1_500);
@@ -27,66 +26,33 @@ pub const TOTAL_TIMEOUT: Duration = Duration::from_millis(2_000);
 /// A name is a handful of words (`naming_model.py:17`).
 pub const MAX_TOKENS: u32 = 24;
 
-/// The cheap fast model background niceties prefer whenever a Mistral key
-/// resolves (`vibe/core/llm/utility_completion.py:12-19`).
-pub const FAST_UTILITY_MODEL: &str = "mistral-vibe-cli-fast";
-
-/// A provider for one utility completion: the model and the endpoint, with a
-/// resolved credential. [`None`] from [`utility_provider`] is the reference's
-/// `skip_if_no_key`: a provider whose key does not resolve falls back at once.
-pub struct UtilityModel {
-    pub style: String,
-    pub endpoint: String,
-    pub model: String,
-    pub credential: String,
-}
-
-/// The Mistral endpoint the fast utility model is reached at when the session
-/// runs on another provider.
-pub const MISTRAL_CHAT_COMPLETIONS: &str = "https://api.mistral.ai/v1/chat/completions";
-
-impl UtilityModel {
-    /// The model a utility completion runs on: the fast one whenever a Mistral
-    /// key resolves, else the session's own `active` model
-    /// (`vibe/core/llm/utility_completion.py:22-76`).
-    #[must_use]
-    pub fn select(active: Self, mistral_credential: Option<String>) -> Self {
-        match mistral_credential.filter(|credential| !credential.is_empty()) {
-            Some(credential) => Self {
-                endpoint: if active.style == "mistral" {
-                    active.endpoint
-                } else {
-                    MISTRAL_CHAT_COMPLETIONS.to_owned()
-                },
-                style: "mistral".to_owned(),
-                model: FAST_UTILITY_MODEL.to_owned(),
-                credential,
-            },
-            None => active,
-        }
-    }
-}
-
-/// Builds the non-retrying provider a utility completion runs on.
+/// The non-retrying provider a utility completion runs on, picked the way
+/// `select_utility_model` picks it (`vibe/core/llm/utility_completion.py`):
+/// the fast Mistral model whenever a Mistral provider is usable, the
+/// session's own model otherwise. [`None`] is the reference's
+/// `skip_if_no_key`: a provider whose key does not resolve is not called.
 #[must_use]
-pub fn utility_provider(model: UtilityModel) -> Option<Arc<dyn CompletionProvider>> {
-    if model.credential.is_empty() {
+pub fn utility_provider(
+    routing: &ModelRouting,
+    credentials: Arc<dyn Credentials>,
+) -> Option<Arc<dyn CompletionProvider>> {
+    let selection = utility::select(routing, credentials.as_ref()).ok()?;
+    let key = &selection.provider.api_key_env_var;
+    if !key.is_empty() && credentials.resolve(key).is_none() {
         return None;
     }
-    let style = ProviderStyle::parse(&model.style).ok()?;
-    let transport = HttpTransport::new().ok()?;
-    let backend = ProviderBackend::new(
-        style,
-        model.endpoint,
-        model.model,
-        SecretString::from(model.credential),
-        transport,
-    )
-    .with_retry_policy(RetryPolicy {
-        max_elapsed: Duration::ZERO,
-        initial_delay: Duration::ZERO,
-    });
-    Some(Arc::new(backend))
+    let context = BackendContext::ambient(
+        ApiSettings {
+            timeout: REQUEST_TIMEOUT,
+            retry_max_elapsed_time: Duration::ZERO,
+            ..ApiSettings::default()
+        },
+        credentials,
+    );
+    let name = selection.model.name.clone();
+    let completion =
+        LlmCompletion::new(selection.provider, vec![selection.model], name, context).ok()?;
+    Some(Arc::new(completion))
 }
 
 /// [`suggest_worktree_name`] for a caller with no runtime of its own to await
@@ -137,6 +103,7 @@ pub async fn suggest_worktree_name(
 async fn complete(prompt: &str, provider: &dyn CompletionProvider) -> Option<String> {
     let input = ProviderInput {
         turn_id: None,
+        session_id: None,
         model_override: None,
         messages: vec![
             ModelMessage::System {
@@ -152,9 +119,8 @@ async fn complete(prompt: &str, provider: &dyn CompletionProvider) -> Option<Str
         reasoning_effort: None,
         headers: std::collections::BTreeMap::new(),
         limits: RequestLimits {
-            max_tokens: MAX_TOKENS,
+            max_tokens: Some(MAX_TOKENS),
             temperature_millis: Some(0),
-            ..RequestLimits::default()
         },
         metadata: std::collections::BTreeMap::from([(
             "call_type".to_owned(),
