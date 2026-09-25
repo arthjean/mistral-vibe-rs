@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+- Run the terminal UI the way the reference does. Consecutive tool calls,
+  reasoning and hook notices fold under one line that says what they did;
+  a click folds or unfolds a group or a section, and Ctrl+O resets them all
+  without a message. A `!` command shows as a call, stops after 30 seconds,
+  and what it printed reaches the model with the next prompt. A running call
+  shows what its output last appended, a failed `!` command folds its error
+  behind a line count, and web search sources link their titles. The loading line
+  sweeps its colors over a snake spinner, the banner's cat moves until the
+  first prompt (`disable_welcome_banner_animation` stops it), and an approval
+  or question that arrives while you type waits for a one-second pause
+  (`VIBE_TYPING_GRACE_PERIOD_MS`). Older history loads by batch from a
+  "Load more" line. Prompts sent while busy merge into one queued turn, Enter
+  on an empty prompt steers them into the running turn, and Up at the top of
+  the prompt walks the queue to edit or remove one. Double- and triple-click
+  select a word and a line, Ctrl+Y and Ctrl+Shift+C copy from anywhere, and a
+  copy is reported on the loading line, on every release when
+  `autocopy_to_clipboard` is set. A resumed session names itself, a resume
+  that fails says so, and closing `/skills` is announced. The tab title shows
+  the session state when `experimental_enable_tab_status` is set,
+  `show_subagent_status_list` is accepted, and `notifications` is no longer a
+  setting. The sign-in panel for an MCP server or a connector lays out its URL
+  rows as the reference does, `r` retries a failed login and refreshes the
+  `/mcp` panel in place, and `/proxy-setup` refuses a proxy URL that is not
+  http or https without writing anything.
+
+- Take a turn's content as `message` in `turn/start` and `turn/steer`, as the
+  reference does, and accept their `idempotencyKey`.
+
 - Run `vibe -p` the way the reference does. The launch uses the configured
   model on its configured provider, with that model's prices and a key from
   the environment, the `.env` file in the Vibe home or the keyring, and a

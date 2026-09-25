@@ -249,10 +249,9 @@ def render_start(dialect: str, workspace: Path, agent: str) -> dict[str, Any]:
 
 
 def render_turn(dialect: str, session_id: str, text: str) -> dict[str, Any]:
-    content = [{"type": "text", "text": text}]
-    if dialect == "reference":
-        return {"sessionId": session_id, "message": content}
-    return {"sessionId": session_id, "input": content}
+    # Both servers read `TurnStartParams.message` (vibe/app_server/protocol.py).
+    del dialect
+    return {"sessionId": session_id, "message": [{"type": "text", "text": text}]}
 
 
 def settles(session_id_holder: dict[str, str]) -> Any:

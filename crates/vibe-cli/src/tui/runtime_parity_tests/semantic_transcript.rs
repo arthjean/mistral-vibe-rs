@@ -14,7 +14,7 @@ use crate::tui::diagnostics::{
 use crate::tui::hydration::published_fixture;
 use crate::tui::render::{TokenState, format_context_progress};
 use crate::tui::state::TranscriptEntry;
-use crate::tui::transcript::{EffectLayout, EffectRegion, Region, region};
+use crate::tui::transcript::{EffectLayout, EffectRegion, Region, keeps_tool_group, region};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -148,6 +148,8 @@ enum Outcome {
     Completed {
         #[serde(default)]
         result: Option<Value>,
+        #[serde(default, rename = "outputText")]
+        output_text: String,
     },
 }
 
@@ -256,7 +258,7 @@ fn observe_effect(tool: &str, arguments: &Value, outcome: &Outcome) -> String {
         effect.message,
         effect.suffix,
         u8::from(effect.kind.collapses()),
-        u8::from(effect.kind.joins_tool_group()),
+        u8::from(keeps_tool_group(&entry)),
         effect
             .body
             .iter()
@@ -310,7 +312,10 @@ fn effect_state(detail: &EffectDetail, outcome: &Outcome) -> Value {
             "durationMs": 0,
             "display": EffectResultDisplay::skipped(&detail.tool_name),
         }),
-        Outcome::Completed { result } => {
+        Outcome::Completed {
+            result,
+            output_text,
+        } => {
             // Without a result the reference server projects an explicit
             // unsuccessful display, which stays authoritative here.
             let emitted = if result.is_none() {
@@ -328,7 +333,7 @@ fn effect_state(detail: &EffectDetail, outcome: &Outcome) -> Value {
                     &emitted,
                 ),
                 "output": output,
-                "outputText": "",
+                "outputText": output_text,
                 "durationMs": 0,
             })
         }
@@ -360,7 +365,7 @@ fn corpus_replays_semantic_regions_errors_activity_and_diagnostics() {
             .iter()
             .map(|trace| trace.story.as_str())
             .collect::<BTreeSet<_>>(),
-        BTreeSet::from(["US-034", "US-035", "US-036"])
+        BTreeSet::from(["US-034", "US-035", "US-036", "US-037"])
     );
     let python_expected = assert_python_oracle_probe(&corpus.oracle_probe);
 

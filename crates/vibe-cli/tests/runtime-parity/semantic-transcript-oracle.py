@@ -67,6 +67,7 @@ from vibe.cli.textual_ui.widgets.loading import LoadingWidget, _format_elapsed
 from vibe.cli.textual_ui.widgets.messages import _HOOK_SEVERITY_ICONS
 from vibe.cli.textual_ui.widgets.status_message import IndicatorState
 from vibe.cli.textual_ui.widgets.tool_widgets import (
+    clean_output,
     effect_result_is_collapsible,
     get_result_widget,
 )
@@ -307,7 +308,16 @@ def decode_result(
         )
     if result_model is None:
         return None
-    return result_model.model_validate(payload)
+    result = result_model.model_validate(payload)
+    if tool == "edit" and payload.get("occurrences"):
+        # The whole-line occurrences ride on a private attribute the edit tool
+        # fills from the file it rewrote (vibe/core/tools/builtins/edit.py), so
+        # a fixture that names them sets them the same way.
+        result._ui_occurrences = [
+            (item["start_line"], item["old_text"], item["new_text"])
+            for item in payload["occurrences"]
+        ]
+    return result
 
 
 def indicator_of(entry: PublicEffectEntry) -> str:
@@ -356,16 +366,22 @@ def result_body(entry: PublicEffectEntry, detail: EffectDetail) -> list[str]:
     if status in {"skipped", "cancelled"}:
         return [f"Skipped: {state.reason}"]
     display = state.display
-    lines = [f"⚠ {warning}" for warning in display.warnings]
+    # ToolResultMessage (vibe/cli/textual_ui/widgets/tools.py): a completed
+    # effect with no structured output shows its cleaned text instead, and
+    # otherwise the kind's widget draws the body, advisories included.
+    if state.output is None:
+        fallback = clean_output(state.output_text).strip()
+        if fallback:
+            return fallback.split("\n")
     widget = get_result_widget(
         detail,
         state.output,
         success=display.success,
         message=display.message,
         warnings=display.warnings,
+        approval_note=display.approval_note,
     )
-    lines.extend(widget_text(widget))
-    return lines
+    return widget_text(widget)
 
 
 def observe_hook(event: dict) -> str:

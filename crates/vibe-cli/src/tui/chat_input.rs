@@ -16,6 +16,7 @@ use std::path::Path;
 
 use unicode_segmentation::UnicodeSegmentation;
 
+use super::click_chain::ClickChain;
 use super::commands::{CommandContext, CommandId};
 use super::completion::{
     CompletionCandidate, CompletionEngine, CompletionKey, CompletionKeyOutcome, CompletionKind,
@@ -54,6 +55,8 @@ pub struct ChatInputState {
     voice: VoiceState,
     secret_input: bool,
     history_navigating: bool,
+    queue_selectable: bool,
+    click_chain: ClickChain<usize>,
     content_width: usize,
     viewport_height: u16,
     last_paste: Option<Range<usize>>,
@@ -72,6 +75,8 @@ impl Default for ChatInputState {
             voice: VoiceState::default(),
             secret_input: false,
             history_navigating: false,
+            queue_selectable: false,
+            click_chain: ClickChain::default(),
             content_width: 71,
             viewport_height: 24,
             last_paste: None,
@@ -143,6 +148,12 @@ impl ChatInputState {
         if !self.teleport_available() && self.mode == InputMode::Teleport {
             self.mode = InputMode::Prompt;
         }
+    }
+
+    /// Reference `_is_queue_edit_active`: Up at the top of the composer walks
+    /// the queue instead of the history while a job runs with prompts queued.
+    pub fn set_queue_selectable(&mut self, selectable: bool) {
+        self.queue_selectable = selectable;
     }
 
     #[must_use]
@@ -384,15 +395,8 @@ impl ChatInputState {
                 x,
                 y,
                 extend_selection,
-            } => {
-                let _ = self.editor.move_to_visual_cell(
-                    usize::from(y),
-                    usize::from(x),
-                    self.effective_content_width(),
-                    self.mode_prefix(),
-                    extend_selection,
-                );
-            }
+                at_ms,
+            } => self.point(x, y, extend_selection, at_ms),
             InputEvent::Resize { width, height } => self.set_viewport(width, height),
             InputEvent::SafetyChanged { value } => self.safety = value,
         }
@@ -753,6 +757,30 @@ impl ChatInputState {
         self.mode.prefix_len()
     }
 
+    /// Reference `ChatTextArea._on_mouse_down` and `_on_mouse_move`.
+    fn point(&mut self, x: u16, y: u16, extend_selection: bool, at_ms: u64) {
+        let Some(target) = self.editor.visual_cell_target(
+            usize::from(y),
+            usize::from(x),
+            self.effective_content_width(),
+            self.mode_prefix(),
+        ) else {
+            return;
+        };
+        if !extend_selection {
+            let granularity = self.click_chain.press(target, at_ms);
+            self.editor.press_at(target, granularity);
+            return;
+        }
+        let anchor = self.click_chain.anchor().copied().unwrap_or(target);
+        if self
+            .editor
+            .drag_to(anchor, target, self.click_chain.granularity())
+        {
+            self.click_chain.mark_dragged();
+        }
+    }
+
     fn history_up(&mut self, effects: &mut Vec<InputEffect>) {
         let mode_prefix = self.mode_prefix();
         let loaded_unmoved =
@@ -766,6 +794,10 @@ impl ChatInputState {
         }
         if !loaded_unmoved && self.editor.cursor() != mode_prefix {
             self.editor.move_home_bounded(false, mode_prefix);
+            return;
+        }
+        if self.queue_selectable {
+            effects.push(InputEffect::QueueSelectionRequested);
             return;
         }
         effects.push(InputEffect::HistoryPrevious);

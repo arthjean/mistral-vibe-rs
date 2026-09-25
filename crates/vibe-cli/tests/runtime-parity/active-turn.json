@@ -90,6 +90,28 @@
       ]
     },
     {
+      "id": "typed-queue-rollback-and-shell-boundaries",
+      "story": "US-027",
+      "events": [
+        {"kind": "queue", "text": "first"},
+        {"kind": "queue", "text": "second"},
+        {"kind": "queue", "text": "!pwd"},
+        {"kind": "queue", "text": "third"},
+        {"kind": "pause_queue"},
+        {"kind": "resume_queue"},
+        {"kind": "drain_batch"}
+      ],
+      "expected": [
+        "queued:first",
+        "queued:second",
+        "rejected:!pwd",
+        "queued:third",
+        "queue:paused:3",
+        "queue:resumed:3",
+        "batch:prompt:3"
+      ]
+    },
+    {
       "id": "shell-stream-and-identity-cancellation",
       "story": "US-028",
       "events": [
@@ -108,11 +130,5 @@
       ]
     }
   ],
-  "unavailable": [
-    {
-      "id": "typed-queue-rollback-and-shell-boundaries",
-      "story": "US-027",
-      "reason": "The reference dropped its local typed queue at v2.25.0. At 4a96003186b166d55b9f06895c45bb136eef61cd a busy input goes through VibeApp._handle_queue_submit (vibe/cli/textual_ui/app.py:2028), which refuses a shell command instead of queueing it (app.py:2045), and QueueController (vibe/cli/textual_ui/message_queue.py:141) folds every busy prompt into one app-server queue item that the server promotes as a single turn (message_queue.py:599, :640). For the same inputs active-turn-oracle.py measures queued:first, queued:second, rejected:!pwd, queued:third, queue:paused:3, queue:resumed:3, batch:prompt:3. The port still queues !pwd as a shell intent (crates/vibe-cli/src/tui/interaction.rs:378) and drains typed batches split at every shell boundary (interaction.rs:397), replaying queued:!pwd, queue:paused:4, queue:resumed:4, batch:prompt:2, batch:shell:1, batch:prompt:1, so this trace has no conformant expectation until the port refuses busy shell input and merges queued prompts into one turn."
-    }
-  ]
+  "unavailable": []
 }

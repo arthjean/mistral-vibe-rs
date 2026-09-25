@@ -154,6 +154,8 @@ pub(super) fn draw_overlay(
         OverlayKind::RemoteProjectCreate => {
             "↑↓/Tab Field  Type Edit  Enter Next/Create  Esc Cancel"
         }
+        // The skills list is read-only here: it has nothing to select.
+        OverlayKind::Skills => "↑↓/jk Navigate  Esc Close",
         _ => "↑↓/jk Navigate  Enter Select  Esc Close",
     };
     lines.push(Line::styled(help, theme.muted()));

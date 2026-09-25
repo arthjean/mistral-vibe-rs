@@ -193,7 +193,7 @@ fn resource_requests_validate_session_ownership_and_idle_review_mutations() {
     owner.dispatch(&request(
         4,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "busy"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "busy"}]}),
     ));
     let review = owner.dispatch(&request(
         5,
@@ -239,7 +239,7 @@ fn closing_an_active_session_retains_ownership_until_terminal_cleanup() {
     connection.dispatch(&request(
         3,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "hello"}]}),
     ));
     let close = connection.dispatch(&request(
         4,
@@ -307,7 +307,7 @@ fn driver_failure_releases_the_turn_reservation() {
     connection.dispatch(&request(
         3,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "first"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "first"}]}),
     ));
     server
         .fail_turn(
@@ -320,7 +320,7 @@ fn driver_failure_releases_the_turn_reservation() {
     let retry = connection.dispatch(&request(
         4,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "retry"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "retry"}]}),
     ));
     assert_eq!(retry.deferred.len(), 1);
     assert_eq!(
@@ -342,7 +342,7 @@ fn conversation_limits_complete_with_the_public_limit_reason() {
     connection.dispatch(&request(
         3,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "bounded"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "bounded"}]}),
     ));
     let mut reducer = vibe_core::events::ProjectionReducer::new("session-1");
     for envelope in [
@@ -401,7 +401,7 @@ fn provider_terminal_failures_preserve_their_public_error() {
     connection.dispatch(&request(
         3,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "bounded"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "bounded"}]}),
     ));
     let mut reducer = vibe_core::events::ProjectionReducer::new("session-1");
     for envelope in [
@@ -468,7 +468,7 @@ fn a_handoff_onto_the_same_session_is_refused() {
     connection.dispatch(&request(
         3,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "clear"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "clear"}]}),
     ));
     let mut reducer = vibe_core::events::ProjectionReducer::for_turn("session-1", "turn-1");
     reducer
@@ -529,7 +529,7 @@ fn a_failed_turn_publishes_a_reference_error_code() {
     connection.dispatch(&request(
         3,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "fail"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "fail"}]}),
     ));
     let notification = server
         .fail_turn(
@@ -566,7 +566,7 @@ fn handoff_atomically_migrates_the_runtime_to_the_projected_id() {
     connection.dispatch(&request(
         3,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "compact"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "compact"}]}),
     ));
     let mut reducer = vibe_core::events::ProjectionReducer::new("session-1");
     for envelope in [

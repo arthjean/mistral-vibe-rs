@@ -317,15 +317,21 @@ impl NarratorManager {
         effect
     }
 
-    /// Reference `NarratorStatus._tick`, without its animation frames.
+    /// Reference `NarratorStatus._tick` at animation step `frame`: a
+    /// shrinking block while summarizing, dancing bars while speaking.
     #[must_use]
-    pub fn status_line(&self) -> Option<String> {
-        match self.state {
-            NarratorState::Idle => None,
-            NarratorState::Summarizing | NarratorState::Speaking => {
-                Some(format!("{} Esc/Ctrl+C to stop", self.state.label()))
-            }
-        }
+    pub fn status_line(&self, frame: u64) -> Option<String> {
+        const SHRINK_FRAMES: [&str; 8] = ["█", "▇", "▆", "▅", "▄", "▃", "▂", "▁"];
+        const BAR_FRAMES: [&str; 6] = ["▂▅▇", "▃▆▅", "▅▃▇", "▇▂▅", "▅▇▃", "▃▅▆"];
+        let pick = |frames: &[&'static str]| {
+            frames[usize::try_from(frame % frames.len() as u64).unwrap_or(0)]
+        };
+        let glyph = match self.state {
+            NarratorState::Idle => return None,
+            NarratorState::Summarizing => pick(&SHRINK_FRAMES),
+            NarratorState::Speaking => pick(&BAR_FRAMES),
+        };
+        Some(format!("{glyph} {} Esc/Ctrl+C to stop", self.state.label()))
     }
 }
 
@@ -344,7 +350,7 @@ mod tests {
         narrator.on_assistant_text("done");
         assert_eq!(narrator.on_turn_end(), None);
         assert_eq!(narrator.state(), NarratorState::Idle);
-        assert_eq!(narrator.status_line(), None);
+        assert_eq!(narrator.status_line(0), None);
     }
 
     #[test]
@@ -376,8 +382,8 @@ mod tests {
         );
         assert_eq!(narrator.state(), NarratorState::Summarizing);
         assert_eq!(
-            narrator.status_line().as_deref(),
-            Some("summarizing Esc/Ctrl+C to stop")
+            narrator.status_line(0).as_deref(),
+            Some("█ summarizing Esc/Ctrl+C to stop")
         );
         assert_eq!(
             narrator.apply_summary(1, Some("wrote the parser".to_owned())),
@@ -391,8 +397,8 @@ mod tests {
         narrator.playback_started(1);
         assert_eq!(narrator.state(), NarratorState::Speaking);
         assert_eq!(
-            narrator.status_line().as_deref(),
-            Some("speaking Esc/Ctrl+C to stop")
+            narrator.status_line(7).as_deref(),
+            Some("▃▆▅ speaking Esc/Ctrl+C to stop")
         );
         narrator.settle(1);
         assert_eq!(narrator.state(), NarratorState::Idle);

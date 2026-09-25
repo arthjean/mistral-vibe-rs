@@ -92,16 +92,6 @@ const UNDECLARED_FIELDS: &[(&str, &str)] = &[
         "smart_approve_default",
         "v2.25.1 smart approve (vibe_schema.py:482), unported; the registry declares no such key",
     ),
-    (
-        "show_subagent_status_list",
-        "v2.25.5 subagent status list toggle (vibe_schema.py:568), unported; the registry \
-         declares no such key",
-    ),
-    (
-        "experimental_enable_tab_status",
-        "v2.25.1 tab status toggle (vibe_schema.py:594), unported; the registry declares no such \
-         key",
-    ),
 ];
 
 /// The sentinel v2.24.0 ships for `active_model`, meaning "not pinned": both
@@ -531,13 +521,7 @@ fn every_reference_field_is_declared_with_the_strategy_the_reference_uses() {
     );
     assert_eq!(
         local,
-        [
-            "thinking",
-            "notifications",
-            "proxy",
-            "tls_ca_path",
-            "dotenv_path"
-        ],
+        ["thinking", "proxy", "tls_ca_path", "dotenv_path"],
         "the locally declared key set changed; record the divergence in the PRD"
     );
     // The numerator is the reference field set minus what the ledger still

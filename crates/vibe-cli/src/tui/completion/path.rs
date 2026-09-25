@@ -308,6 +308,20 @@ impl PathIndex {
         self.locked()?.candidates(workspace, raw_query)
     }
 
+    /// What the composer's path completer answers for the text after `@`:
+    /// reference `PathCompleter._collect_matches` lists the working directory
+    /// for a bare `@` and ranks the index for anything else.
+    pub(crate) fn completer_candidates(
+        &self,
+        workspace: &Path,
+        raw_query: &str,
+    ) -> Result<Vec<CompletionCandidate>, InputError> {
+        if raw_query.is_empty() {
+            return Ok(list_current_directory(workspace));
+        }
+        self.candidates(workspace, raw_query)
+    }
+
     /// Publishes `file_watcher_for_autocomplete`. The index reads it on every
     /// query, so a preference change takes effect on the next one without
     /// rebuilding anything.
@@ -376,6 +390,32 @@ fn rank_indexed_paths<'a>(
         .into_iter()
         .take(MAX_PATH_MATCHES)
         .map(|(candidate, _)| candidate)
+        .collect()
+}
+
+/// Reference `PathCompleter._list_current_directory`
+/// (`vibe/cli/autocompletion/completers.py`): a bare `@` lists the working
+/// directory as it is on disk, without the index or its ignore rules. Hidden
+/// entries are skipped, names sort case-insensitively (ties keep the directory
+/// order), directories carry a trailing slash, and the list stops at the
+/// completer's target count.
+fn list_current_directory(workspace: &Path) -> Vec<CompletionCandidate> {
+    let Ok(entries) = fs::read_dir(workspace) else {
+        return Vec::new();
+    };
+    let mut names = entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| !name.starts_with('.'))
+        .collect::<Vec<_>>();
+    names.sort_by_cached_key(|name| name.to_lowercase());
+    names
+        .into_iter()
+        .take(MAX_PATH_MATCHES)
+        .map(|name| {
+            let is_directory = workspace.join(&name).is_dir();
+            mention_candidate(name, is_directory)
+        })
         .collect()
 }
 

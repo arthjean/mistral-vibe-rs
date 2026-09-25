@@ -6,7 +6,7 @@ use std::time::Duration;
 use super::attachments::{PromptDraft, prepare_submission};
 use super::callback::activate_pending_callback_state;
 use super::chat_input::InputMode;
-use super::clipboard_images::ClipboardImageManager;
+use super::commands::CommandContext;
 use super::completion::CompletionEngine;
 use super::controls::{
     ApprovalScope, CallbackChoice, CallbackEffect, CallbackInput, CallbackInputOutcome,
@@ -14,10 +14,8 @@ use super::controls::{
     PendingCallback, UserInputChoice,
 };
 use super::input::PromptEditor;
-use super::interaction::{Overlay, OverlayItem, OverlayKind, PromptQueue, QueuedIntentKind};
+use super::interaction::{Overlay, OverlayItem, OverlayKind, PromptQueue};
 use super::plan_review::PlanReviewMonitor;
-use super::prompt::PromptContext;
-use super::queue::start_next_queued_prompt;
 use super::render::{BannerContext, TokenState, UiContext, draw};
 use super::rewind::{RewindEffect, RewindState, RewindTarget, reduce_key as reduce_rewind_key};
 use super::session_picker::{
@@ -26,7 +24,7 @@ use super::session_picker::{
 use super::setup::{DetectedTheme, Theme, resolve_theme};
 use super::shell::{ActiveShell, ShellRead, apply_shell_read};
 use super::state::{EntrySource, EntryStatus, TranscriptEntry, TranscriptKind, TuiState};
-use super::{ActiveTurn, InteractiveRuntime};
+use super::submission::{Occupancy, Route, classify, route};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -61,6 +59,7 @@ fn pinned_python_oracle() -> Option<(PathBuf, PathBuf)> {
 mod configuration_integrations;
 mod semantic_transcript;
 mod terminal_services;
+mod tui_interactions;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -336,7 +335,7 @@ enum TraceEvent {
     RefreshPlan,
     Queue { text: String },
     DrainBatch,
-    DrainUnavailable,
+    PauseQueue,
     ResumeQueue,
     ShellStart,
     ShellChunk { text: String },
@@ -355,13 +354,13 @@ enum ReplayInput {
 struct Replay {
     controls: ControlState,
     state: TuiState,
-    clipboard_images: ClipboardImageManager,
     plan_monitor: PlanReviewMonitor,
     plan_path: PathBuf,
     shell_id: Option<String>,
     shell: Option<ActiveShell>,
     shell_cursor: u64,
-    temporary: tempfile::TempDir,
+    /// Owns the directory `plan_path` lives in.
+    _workspace: tempfile::TempDir,
 }
 
 impl Replay {
@@ -371,13 +370,12 @@ impl Replay {
         Self {
             controls: ControlState::new("session"),
             state: TuiState::new("session"),
-            clipboard_images: ClipboardImageManager::default(),
             plan_monitor: PlanReviewMonitor::default(),
             plan_path,
             shell_id: None,
             shell: None,
             shell_cursor: 0,
-            temporary,
+            _workspace: temporary,
         }
     }
 
@@ -486,8 +484,20 @@ impl Replay {
                 )
             }
             TraceEvent::Queue { text } => {
-                self.state.prompt_queue.push(PromptDraft::text_only(text));
-                format!("queued:{text}")
+                // Reference `_handle_queue_submit` behind a running turn.
+                let occupancy = Occupancy {
+                    turn: true,
+                    shell: false,
+                    paused: self.state.prompt_queue.is_paused(),
+                };
+                let kind = classify(text, &CommandContext::default(), None);
+                match route(kind, occupancy, true) {
+                    Route::Queue { .. } => {
+                        self.state.prompt_queue.push(PromptDraft::text_only(text));
+                        format!("queued:{text}")
+                    }
+                    _ => format!("rejected:{text}"),
+                }
             }
             TraceEvent::DrainBatch => {
                 let batch = self
@@ -495,26 +505,11 @@ impl Replay {
                     .prompt_queue
                     .take_next_batch()
                     .expect("batch drains");
-                let kind = match batch[0].kind {
-                    QueuedIntentKind::Prompt => "prompt",
-                    QueuedIntentKind::Shell => "shell",
-                };
-                let observation = format!("batch:{kind}:{}", batch.len());
-                observation
+                format!("batch:prompt:{}", batch.len())
             }
-            TraceEvent::DrainUnavailable => {
-                let mut runtime: Option<InteractiveRuntime> = None;
-                let mut active: Option<ActiveTurn> = None;
-                start_next_queued_prompt(PromptContext::new(
-                    self.temporary.path(),
-                    &mut runtime,
-                    &mut active,
-                    &mut self.state,
-                    &mut self.controls,
-                    &mut self.clipboard_images,
-                ))
-                .await
-                .expect("unavailable runtime pauses without losing the batch");
+            TraceEvent::PauseQueue => {
+                // The interrupted turn pauses what is queued behind it.
+                self.state.prompt_queue.pause();
                 format!("queue:paused:{}", self.state.prompt_queue.len())
             }
             TraceEvent::ResumeQueue => {
@@ -523,13 +518,19 @@ impl Replay {
             }
             TraceEvent::ShellStart => {
                 let id = self.state.append_local(shell_entry(String::new()));
-                self.shell = Some(ActiveShell::new("fixture", "operation", id.clone()));
+                self.shell = Some(ActiveShell::new(
+                    "fixture",
+                    "operation",
+                    id.clone(),
+                    std::path::PathBuf::from("/workspace"),
+                ));
                 self.shell_id = Some(id);
                 "shell:streaming:".to_owned()
             }
             TraceEvent::ShellChunk { text } => {
                 if let Some(shell) = self.shell.take() {
                     apply_shell_read(
+                        "session",
                         &mut self.shell,
                         &mut self.state,
                         shell,
@@ -542,6 +543,7 @@ impl Replay {
             TraceEvent::ShellCancel => {
                 if let Some(shell) = self.shell.take() {
                     apply_shell_read(
+                        "session",
                         &mut self.shell,
                         &mut self.state,
                         shell,
@@ -590,11 +592,8 @@ impl Replay {
             .iter()
             .find(|entry| entry.id == id)
             .expect("shell entry remains");
-        let output = entry
-            .text
-            .lines()
-            .filter_map(|line| line.strip_prefix("    "))
-            .collect::<String>();
+        // The effect entry reads as its title, then the output it streamed.
+        let output = entry.text.split_once('\n').map_or("", |(_, output)| output);
         format!("shell:{:?}:{output}", entry.status).to_lowercase()
     }
 }
@@ -721,10 +720,10 @@ async fn active_turn_corpus_replays_every_event_against_runtime_reducers() {
     assert_eq!(corpus.reference.commit, REFERENCE_COMMIT);
     assert!(!corpus.reference.version.is_empty());
     assert_eq!(corpus.reference.source_files.len(), 5);
-    // US-027 left the replayable set when the reference replaced its typed
-    // queue with one merged app-server item at v2.25.0, measured by
-    // `tests/runtime-parity/active-turn-oracle.py`. Every story stays accounted
-    // for: a dropped trace names its story and why no expectation is replayed.
+    // US-027 replays the merged queue the reference moved to at v2.25.0, as
+    // `tests/runtime-parity/active-turn-oracle.py` measures it. A trace dropped
+    // later stays accounted for: it names its story and why no expectation is
+    // replayed.
     let mut unavailable = BTreeSet::new();
     for entry in &corpus.unavailable {
         for field in ["id", "story", "reason"] {
@@ -748,14 +747,14 @@ async fn active_turn_corpus_replays_every_event_against_runtime_reducers() {
                 .unwrap_or_default(),
         );
     }
-    assert_eq!(unavailable, BTreeSet::from(["US-027"]));
+    assert!(unavailable.is_empty(), "{unavailable:?}");
     assert_eq!(
         corpus
             .traces
             .iter()
             .map(|trace| trace.story.as_str())
             .collect::<BTreeSet<_>>(),
-        BTreeSet::from(["US-024", "US-025", "US-026", "US-028"])
+        BTreeSet::from(["US-024", "US-025", "US-026", "US-027", "US-028"])
     );
 
     for trace in corpus.traces {

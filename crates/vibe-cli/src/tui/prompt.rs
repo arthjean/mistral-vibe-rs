@@ -183,19 +183,12 @@ pub(super) async fn start_prompt_with_client_id(
         state.push_diagnostic("Setup is required before starting a session. Restart with --setup.");
         return Ok(false);
     };
-    // Reference `_record_mentions`, raised where the turn is submitted: a
-    // prompt that mentioned nothing reports nothing, and the message the
-    // mentions belong to travels with them.
-    report_mentions(
+    report_prompt_telemetry(
         runtime,
+        &prepared.turn.prompt,
         &prepared.mention_stats,
         prepared.turn.client_user_message_id.clone(),
     );
-    // Reference `_send_skill_telemetry`: a prompt whose first word names a
-    // published skill is a slash command of type `skill`.
-    if invoked_skill(runtime, &prepared.turn.prompt).is_some() {
-        super::report_slash_command(runtime, &prepared.turn.prompt, TelemetryCommandKind::Skill);
-    }
     let reservation = runtime
         .service
         .reserve_prepared_prompt(
@@ -226,6 +219,22 @@ pub(super) async fn start_prompt_with_client_id(
     *active = Some(started);
     state.waiting = true;
     Ok(true)
+}
+
+/// Reference `_record_mentions`, raised where the turn is submitted: a prompt
+/// that mentioned nothing reports nothing, and the message the mentions belong
+/// to travels with them. Then reference `_send_skill_telemetry`: a prompt whose
+/// first word names a published skill is a slash command of type `skill`.
+pub(super) fn report_prompt_telemetry(
+    runtime: &InteractiveRuntime,
+    prompt: &str,
+    stats: &MentionStats,
+    message_id: Option<String>,
+) {
+    report_mentions(runtime, stats, message_id);
+    if invoked_skill(runtime, prompt).is_some() {
+        super::report_slash_command(runtime, prompt, TelemetryCommandKind::Skill);
+    }
 }
 
 /// Reference `_record_mentions`.

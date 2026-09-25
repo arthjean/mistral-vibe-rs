@@ -27,21 +27,18 @@ pub trait EffectLayout {
     /// question results always render in full, everything else folds into its
     /// header until the operator expands it.
     fn collapses(&self) -> bool;
-
-    /// Reference `_NON_GROUPED_EFFECT_KINDS`: writes and edits break the
-    /// current tool group and stand on their own.
-    fn joins_tool_group(&self) -> bool;
 }
 
 impl EffectLayout for EffectKind {
     fn collapses(&self) -> bool {
         !matches!(self, Self::FileEdit | Self::FileWrite | Self::UserQuestion)
     }
-
-    fn joins_tool_group(&self) -> bool {
-        !matches!(self, Self::FileEdit | Self::FileWrite)
-    }
 }
+
+/// Reference `MANUAL_SHELL_TOOL_NAME`: the tool name an operator's own `!`
+/// command is published under, which is what tells it apart from a model's
+/// shell call of the same kind.
+pub const MANUAL_SHELL_TOOL_NAME: &str = "shell";
 
 /// The published effect an entry projects, when the entry is one and its
 /// canonical form was restored with it.
@@ -90,20 +87,21 @@ pub enum BodyStyle {
 pub struct BodyLine {
     pub text: String,
     pub style: BodyStyle,
+    /// Where activating the line's label leads. Reference `link_content`
+    /// attaches the target to a label that does not spell it out.
+    pub link: Option<String>,
 }
 
 impl BodyLine {
     fn plain(text: impl Into<String>) -> Self {
-        Self {
-            text: text.into(),
-            style: BodyStyle::Plain,
-        }
+        Self::styled(text, BodyStyle::Plain)
     }
 
     fn styled(text: impl Into<String>, style: BodyStyle) -> Self {
         Self {
             text: text.into(),
             style,
+            link: None,
         }
     }
 }
@@ -121,9 +119,13 @@ pub struct EffectRegion {
     pub suffix: String,
     /// Reference default: collapsible results show only their header.
     pub collapsed_by_default: bool,
-    /// Streaming output rendered under the header while the effect runs.
-    pub stream: Option<String>,
     pub body: Vec<BodyLine>,
+    /// Reference `_mount_manual_shell_output`: what a failed or interrupted
+    /// `!` command printed, shown above how it ended.
+    pub printed: Vec<BodyLine>,
+    /// Whether the body is the error a failure reported, which a result that
+    /// always opens folds behind its line count.
+    pub failed: bool,
 }
 
 impl EffectRegion {
@@ -235,8 +237,9 @@ pub fn activity_status(entries: &[TranscriptEntry]) -> String {
     super::diagnostics::DEFAULT_ACTIVITY_STATUS.to_owned()
 }
 
-/// Reference `_entry_keeps_tool_group`: effects other than writes and edits,
-/// reasoning, and hook notices stay inside the current tool group.
+/// Reference `entry_keeps_tool_group` (`vibe/cli/textual_ui/widgets/tools.py`):
+/// every effect but an operator's own `!` command, reasoning, and hook notices
+/// stay inside the current tool group.
 #[must_use]
 pub fn keeps_tool_group(entry: &TranscriptEntry) -> bool {
     // Grouping is decided per frame for every visible entry, so it reads the
@@ -244,8 +247,7 @@ pub fn keeps_tool_group(entry: &TranscriptEntry) -> bool {
     match entry.kind {
         TranscriptKind::Reasoning => true,
         TranscriptKind::Effect => published_effect(entry)
-            .map_or(EffectKind::Tool, |(detail, _)| detail.kind)
-            .joins_tool_group(),
+            .is_none_or(|(detail, _)| detail.tool_name != MANUAL_SHELL_TOOL_NAME),
         TranscriptKind::Notice => matches!(notice_detail(entry), Some(detail) if is_hook(detail)),
         _ => false,
     }
@@ -343,8 +345,9 @@ fn restored_effect_region(entry: &TranscriptEntry) -> EffectRegion {
         message: title.to_owned(),
         suffix: String::new(),
         collapsed_by_default: EffectKind::Tool.collapses(),
-        stream: None,
         body: text_lines(output),
+        printed: Vec::new(),
+        failed: false,
     }
 }
 
@@ -368,22 +371,34 @@ fn effect_region(entry: &TranscriptEntry) -> EffectRegion {
     // a reference client renders and the one this terminal renders are the same
     // strings rather than two derivations of the same arguments.
     let settled = settled_display(state);
-    let (verb, message, suffix) = settled.map_or_else(
-        || {
-            (
-                detail.display.verb.clone(),
-                detail.display.subject().to_owned(),
-                detail.display.suffix.clone(),
-            )
-        },
-        |display| {
-            (
-                display.verb.clone(),
-                display.message.clone(),
-                display.suffix.clone(),
-            )
-        },
-    );
+    // Reference `_failed_header_display`: a failed call keeps the header its
+    // call display settles to, whatever message the failure carries.
+    let failed_header = match (state, detail.display.settled_message.as_ref()) {
+        (PublicEffectState::Failed { .. }, Some(settled_message)) => Some((
+            detail.display.settled_verb.clone(),
+            settled_message.clone(),
+            detail.display.suffix.clone(),
+        )),
+        _ => None,
+    };
+    let (verb, message, suffix) = failed_header.unwrap_or_else(|| {
+        settled.map_or_else(
+            || {
+                (
+                    detail.display.verb.clone(),
+                    detail.display.subject().to_owned(),
+                    detail.display.suffix.clone(),
+                )
+            },
+            |display| {
+                (
+                    display.verb.clone(),
+                    display.message.clone(),
+                    display.suffix.clone(),
+                )
+            },
+        )
+    });
     EffectRegion {
         kind: detail.kind,
         status,
@@ -391,9 +406,20 @@ fn effect_region(entry: &TranscriptEntry) -> EffectRegion {
         verb,
         message,
         suffix,
-        collapsed_by_default: detail.kind.collapses(),
-        stream: running_stream(state),
+        // Reference `_result_is_collapsible`: an operator's own `!` command
+        // opens like a diff does, since its output is the point.
+        collapsed_by_default: detail.kind.collapses() && detail.tool_name != MANUAL_SHELL_TOOL_NAME,
         body: effect_body(detail.kind, state, settled),
+        printed: match state {
+            PublicEffectState::Failed { output_text, .. }
+            | PublicEffectState::Cancelled { output_text, .. }
+                if detail.tool_name == MANUAL_SHELL_TOOL_NAME =>
+            {
+                detail_lines(output_text)
+            }
+            _ => Vec::new(),
+        },
+        failed: matches!(state, PublicEffectState::Failed { .. }),
     }
 }
 
@@ -411,20 +437,16 @@ const fn settled_display(state: &PublicEffectState) -> Option<&EffectResultDispl
     }
 }
 
-/// Reference `ToolCallMessage.set_stream_message`: streaming output is only
-/// shown while the effect is still running.
-fn running_stream(state: &PublicEffectState) -> Option<String> {
-    let output_text = match state {
+/// The output a published effect has streamed so far, while it still runs.
+/// Reference `ToolCallMessage.set_stream_message` shows what each update
+/// appends to it, which is why the transcript state diffs successive values.
+#[must_use]
+pub fn running_output(entry: &TranscriptEntry) -> Option<&str> {
+    match published_effect(entry)?.1 {
         PublicEffectState::Running { output_text }
-        | PublicEffectState::Blocked { output_text, .. } => output_text.as_str(),
-        _ => return None,
-    };
-    let last = output_text
-        .trim_end_matches('\n')
-        .lines()
-        .next_back()
-        .unwrap_or_default();
-    (!last.is_empty()).then(|| format!("→ {last}"))
+        | PublicEffectState::Blocked { output_text, .. } => Some(output_text),
+        _ => None,
+    }
 }
 
 fn indicator(status: EntryStatus, settled: Option<&EffectResultDisplay>) -> Indicator {
@@ -466,106 +488,208 @@ fn effect_body(
             output_text,
             ..
         } => {
-            let mut lines = settled
-                .into_iter()
-                .flat_map(|display| display.warnings.iter())
-                .map(|warning| BodyLine::styled(format!("⚠ {warning}"), BodyStyle::Warning))
-                .collect::<Vec<_>>();
-            lines.extend(completed_body(kind, output, output_text));
+            // Reference `ToolResultMessage`: a hook that replaced the result
+            // leaves no structured output, so its text stands in for the body.
+            if output.is_null() {
+                let fallback = clean_output(output_text);
+                let fallback = fallback.trim();
+                if !fallback.is_empty() {
+                    return fallback.split('\n').map(BodyLine::plain).collect();
+                }
+            }
+            let mut lines = if shows_advisories(kind, output) {
+                advisories(settled)
+            } else {
+                Vec::new()
+            };
+            lines.extend(completed_body(kind, output));
             lines
         }
     }
 }
 
-/// The settled output an effect produced, laid out the way its kind declares.
+/// Which result widgets open with their advisories: the todo, question and
+/// web widgets never do, and the read and edit widgets only above a result.
+fn shows_advisories(kind: EffectKind, output: &Value) -> bool {
+    match kind {
+        EffectKind::Todo
+        | EffectKind::UserQuestion
+        | EffectKind::WebSearch
+        | EffectKind::WebFetch
+        | EffectKind::Process => false,
+        EffectKind::FileRead | EffectKind::FileEdit => !output.is_null(),
+        _ => true,
+    }
+}
+
+/// Reference `ToolResultWidget._advisories`: the approval note, which says the
+/// call was allowed and so carries no glyph, then each warning.
+fn advisories(settled: Option<&EffectResultDisplay>) -> Vec<BodyLine> {
+    let Some(display) = settled else {
+        return Vec::new();
+    };
+    display
+        .approval_note
+        .iter()
+        .filter(|note| !note.is_empty())
+        .map(|note| BodyLine::styled(note.clone(), BodyStyle::Muted))
+        .chain(
+            display
+                .warnings
+                .iter()
+                .map(|warning| BodyLine::styled(format!("⚠ {warning}"), BodyStyle::Warning)),
+        )
+        .collect()
+}
+
+/// The settled output an effect produced, laid out the way its kind's result
+/// widget declares (`vibe/cli/textual_ui/widgets/tool_widgets.py`). A widget
+/// given no output draws nothing but the todo widget's empty line.
 ///
 /// The output itself stays a [`Value`]: its shape is the tool's own, and the
 /// wire contract publishes it as one.
-fn completed_body(kind: EffectKind, output: &Value, output_text: &str) -> Vec<BodyLine> {
+fn completed_body(kind: EffectKind, output: &Value) -> Vec<BodyLine> {
+    let text = |key: &str| output.get(key).and_then(Value::as_str).unwrap_or_default();
+    if output.is_null() && kind != EffectKind::Todo {
+        return Vec::new();
+    }
     match kind {
+        // Reference `BashResultWidget`: the arrival-ordered transcript, or the
+        // two captures joined without fabricating a line.
         EffectKind::Shell => {
-            let mut parts = Vec::new();
-            for key in ["stdout", "stderr"] {
-                let text = output.get(key).and_then(Value::as_str).unwrap_or_default();
-                if !text.trim_matches('\n').is_empty() {
-                    parts.push(text.trim_matches('\n').to_owned());
-                }
-            }
-            if parts.is_empty() && !output_text.trim().is_empty() {
-                parts.push(output_text.trim_matches('\n').to_owned());
-            }
-            if parts.is_empty() {
+            let transcript = shell_transcript(output);
+            let transcript = transcript.trim_matches('\n');
+            if transcript.is_empty() {
                 return vec![BodyLine::styled("(no content)", BodyStyle::Muted)];
             }
-            text_lines(&parts.join("\n"))
+            detail_lines(transcript)
         }
-        EffectKind::FileRead => {
-            let content = output
-                .get("content")
-                .and_then(Value::as_str)
-                .unwrap_or(output_text);
-            text_lines(&strip_line_numbers(content))
-        }
-        EffectKind::FileWrite => {
-            let content = output
-                .get("content")
-                .and_then(Value::as_str)
-                .unwrap_or(output_text);
-            text_lines(content)
-        }
-        EffectKind::FileEdit => {
-            let occurrences = occurrence_diff_lines(output);
-            if occurrences.is_empty() {
-                diff_lines(
-                    output
-                        .get("diff")
-                        .and_then(Value::as_str)
-                        .unwrap_or(output_text),
-                )
-            } else {
-                occurrences
-            }
-        }
+        EffectKind::FileRead => text_lines(&strip_line_numbers(text("content"))),
+        EffectKind::FileWrite => text_lines(text("content")),
+        EffectKind::FileEdit => occurrence_diff_lines(output),
         EffectKind::FileSearch => match output.get("matches") {
-            Some(Value::String(matches)) => text_lines(matches),
-            _ => search_lines(output, output_text),
+            Some(Value::String(matches)) => detail_lines(matches),
+            _ => search_lines(output),
         },
         EffectKind::Todo => todo_lines(output),
         EffectKind::UserQuestion => Vec::new(),
         EffectKind::WebSearch => web_search_lines(output),
-        EffectKind::WebFetch => text_lines(
-            output
-                .get("content")
-                .and_then(Value::as_str)
-                .unwrap_or(output_text),
-        ),
-        // A worktree entry settles with no output of its own, and a process
-        // one is published only by the Unified harness this port does not run.
-        EffectKind::Skill
-        | EffectKind::Subagent
-        | EffectKind::Tool
-        | EffectKind::Worktree
-        | EffectKind::Process => generic_lines(output, output_text),
+        EffectKind::WebFetch => detail_lines(text("content")),
+        EffectKind::Process => process_lines(output),
+        // A worktree entry settles with no output of its own.
+        EffectKind::Skill | EffectKind::Subagent | EffectKind::Tool | EffectKind::Worktree => {
+            generic_lines(output)
+        }
+    }
+}
+
+/// Reference `ProcessResultWidget`: one layout per `process.*` operation, read
+/// off the envelope's `tool_name`. Only the Unified harness publishes the kind;
+/// the layout is kept so a transcript carrying one still reads as it did.
+fn process_lines(output: &Value) -> Vec<BodyLine> {
+    let field = |key: &str| output.get(key).filter(|value| !value.is_null());
+    let text = |key: &str| field(key).and_then(Value::as_str).unwrap_or_default();
+    let labeled = |keys: &[&str]| {
+        keys.iter()
+            .filter_map(|key| {
+                field(key)
+                    .filter(|value| !matches!(value, Value::String(text) if text.is_empty()))
+                    .map(|value| format!("{key}: {}", scalar_text(value)))
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    match text("tool_name") {
+        "process.start" | "process.stop" => {
+            detail_lines(&labeled(&["processId", "status", "exitCode"]))
+        }
+        "process.output" => {
+            let body = text("output");
+            let mut lines = if body.trim().is_empty() {
+                vec![BodyLine::plain("(no output)")]
+            } else {
+                detail_lines(body)
+            };
+            let mut hints = Vec::new();
+            if let Some(available) = field("bytesAvailable").and_then(Value::as_i64)
+                && available > 0
+            {
+                hints.push(format!("{available} bytes available"));
+            }
+            if field("hasMore").and_then(Value::as_bool) == Some(true) {
+                hints.push("more output pending".to_owned());
+            }
+            if field("truncatedBefore").and_then(Value::as_bool) == Some(true) {
+                hints.push("earlier output truncated".to_owned());
+            }
+            if !hints.is_empty() {
+                lines.push(BodyLine::styled(hints.join(" | "), BodyStyle::Muted));
+            }
+            lines
+        }
+        "process.list" => {
+            let processes = field("processes")
+                .and_then(Value::as_array)
+                .filter(|processes| !processes.is_empty());
+            let Some(processes) = processes else {
+                return vec![BodyLine::plain("(no background processes)")];
+            };
+            let listed = processes
+                .iter()
+                .map(|process| {
+                    let value =
+                        |key: &str| process.get(key).map_or_else(|| "?".to_owned(), scalar_text);
+                    let id = process
+                        .get("processId")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default();
+                    format!(
+                        "{}  {}  {}",
+                        short_process_id(id),
+                        value("status"),
+                        value("command")
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            detail_lines(&listed)
+        }
+        "process.write" => detail_lines(&labeled(&["bytesWritten", "status"])),
+        _ => Vec::new(),
+    }
+}
+
+/// Reference `_short_pid`: the last eight characters of a longer id.
+fn short_process_id(id: &str) -> &str {
+    let count = id.chars().count();
+    if count > 8 {
+        id.char_indices()
+            .nth(count - 8)
+            .map_or(id, |(index, _)| &id[index..])
+    } else {
+        id
     }
 }
 
 /// Reference `GenericToolResultWidget`: `key: value` per populated field, and
 /// the raw value otherwise.
-fn generic_lines(output: &Value, output_text: &str) -> Vec<BodyLine> {
+fn generic_lines(output: &Value) -> Vec<BodyLine> {
     match output {
-        Value::Object(fields) => fields
-            .iter()
-            .filter(|(_, value)| !is_empty_value(value))
-            .map(|(key, value)| BodyLine::plain(format!("{key}: {}", scalar_text(value))))
-            .collect(),
-        Value::Null => text_lines(output_text),
-        value => text_lines(&scalar_text(value)),
+        Value::Object(fields) => detail_lines(
+            &fields
+                .iter()
+                .filter(|(_, value)| !is_empty_value(value))
+                .map(|(key, value)| format!("{key}: {}", scalar_text(value)))
+                .collect::<Vec<_>>()
+                .join("\n"),
+        ),
+        value => detail_lines(&scalar_text(value)),
     }
 }
 
-fn search_lines(output: &Value, output_text: &str) -> Vec<BodyLine> {
+fn search_lines(output: &Value) -> Vec<BodyLine> {
     let Some(matches) = output.as_array() else {
-        return text_lines(output_text);
+        return Vec::new();
     };
     matches
         .iter()
@@ -637,7 +761,7 @@ fn web_search_lines(output: &Value) -> Vec<BodyLine> {
     if let Some(answer) = output.get("answer").and_then(Value::as_str)
         && !answer.is_empty()
     {
-        lines.extend(text_lines(&format!("answer: {answer}")));
+        lines.extend(detail_lines(&format!("answer: {answer}")));
     }
     let sources = output
         .get("sources")
@@ -659,59 +783,239 @@ fn web_search_lines(output: &Value) -> Vec<BodyLine> {
                 .and_then(Value::as_str)
                 .filter(|title| !title.is_empty())
                 .unwrap_or(url);
-            lines.push(BodyLine::plain(format!("  • {label}")));
+            let mut line = BodyLine::plain(format!("  • {label}"));
+            // Reference `_is_safe_url`: only a web address becomes clickable.
+            line.link = is_safe_link(url).then(|| url.to_owned());
+            lines.push(line);
         }
     }
     lines
 }
 
-/// Reference `EditResultWidget`: one diff per replaced occurrence, anchored on
-/// the replaced text.
-///
-/// The `edit` projection always publishes an occurrence, down to the bare
-/// replacement for an anchor that sits on no line of its own, so an empty list
-/// here means the effect published no edit at all rather than one this
-/// renderer has to reconstruct from the anchor strings.
+/// Reference `_SAFE_SCHEMES` (`vibe/cli/textual_ui/widgets/links.py`).
+fn is_safe_link(url: &str) -> bool {
+    url.split_once(':').is_some_and(|(scheme, _)| {
+        scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https")
+    })
+}
+
+/// Reference `EditResultWidget` over `render_edit_diff`
+/// (`vibe/cli/textual_ui/widgets/diff_rendering.py`): each occurrence is its
+/// own unified diff with two lines of context, numbered from the line it starts
+/// on, with a gap row between occurrences and between hunks.
 fn occurrence_diff_lines(output: &Value) -> Vec<BodyLine> {
-    let replacement = |old: &str, new: &str, lines: &mut Vec<BodyLine>| {
-        for line in old.trim_end_matches('\n').split('\n') {
-            lines.push(BodyLine::styled(format!("- {line}"), BodyStyle::Removed));
-        }
-        for line in new.trim_end_matches('\n').split('\n') {
-            lines.push(BodyLine::styled(format!("+ {line}"), BodyStyle::Added));
-        }
-    };
-    let mut lines = Vec::new();
-    let occurrences = output
+    let mut occurrences = output
         .get("occurrences")
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default();
-    for occurrence in &occurrences {
-        replacement(
-            &string_argument(occurrence, &["old_text", "oldText"]),
-            &string_argument(occurrence, &["new_text", "newText"]),
+    // Reference `EditResultWidget.__init__`: without occurrences, the bare
+    // replacement is the one occurrence, anchored nowhere.
+    if occurrences.is_empty()
+        && let (Some(old), Some(new)) = (
+            output.get("old_string").and_then(Value::as_str),
+            output.get("new_string").and_then(Value::as_str),
+        )
+    {
+        occurrences.push(serde_json::json!({"old_text": old, "new_text": new}));
+    }
+    let mut lines = Vec::new();
+    for (index, occurrence) in occurrences.iter().enumerate() {
+        if index > 0 {
+            lines.push(diff_gap());
+        }
+        let start_line = occurrence
+            .get("start_line")
+            .or_else(|| occurrence.get("startLine"))
+            .and_then(Value::as_u64)
+            .filter(|line| *line > 0);
+        let old = string_argument(occurrence, &["old_text", "oldText"]);
+        let new = string_argument(occurrence, &["new_text", "newText"]);
+        let old = old.trim_end_matches('\n').split('\n').collect::<Vec<_>>();
+        let new = new.trim_end_matches('\n').split('\n').collect::<Vec<_>>();
+        occurrence_rows(
+            &vibe_core::difflib::unified_diff(&old, &new, 2),
+            start_line,
             &mut lines,
         );
     }
     lines
 }
 
-fn diff_lines(diff: &str) -> Vec<BodyLine> {
-    diff.lines()
+/// Reference `_gap_line`.
+fn diff_gap() -> BodyLine {
+    BodyLine::styled("⋯", BodyStyle::Muted)
+}
+
+/// Reference `_render_occurrence`: the hunk headers become line numbers in the
+/// gutter, and every hunk after the first is announced by a gap row.
+fn occurrence_rows(diff: &[String], start_line: Option<u64>, lines: &mut Vec<BodyLine>) {
+    let offset = start_line.map_or(0, |line| line - 1);
+    let (mut old_line, mut new_line) = (0u64, 0u64);
+    let mut first_hunk = true;
+    for row in diff {
+        let mut characters = row.chars();
+        let Some(prefix) = characters.next() else {
+            continue;
+        };
+        let code = characters.as_str();
+        if prefix == '@' {
+            if !first_hunk {
+                lines.push(diff_gap());
+            }
+            first_hunk = false;
+            if let Some((old_start, new_start)) = hunk_starts(row) {
+                old_line = old_start + offset;
+                new_line = new_start + offset;
+            }
+            continue;
+        }
+        let (number, style) = match prefix {
+            '-' => {
+                old_line += 1;
+                (old_line - 1, BodyStyle::Removed)
+            }
+            '+' => {
+                new_line += 1;
+                (new_line - 1, BodyStyle::Added)
+            }
+            _ => {
+                old_line += 1;
+                new_line += 1;
+                (new_line - 1, BodyStyle::Plain)
+            }
+        };
+        let gutter = start_line.map_or_else(String::new, |_| format!("{number:>4} "));
+        lines.push(BodyLine::styled(format!("{gutter}{prefix} {code}"), style));
+    }
+}
+
+/// The old and new start lines of an `@@ -a,b +c,d @@` header.
+fn hunk_starts(header: &str) -> Option<(u64, u64)> {
+    let ranges = header.strip_prefix("@@ -")?;
+    let (old, rest) = ranges.split_once(" +")?;
+    let new = rest.split_once(" @@")?.0;
+    let start = |range: &str| range.split(',').next()?.parse::<u64>().ok();
+    Some((start(old)?, start(new)?))
+}
+
+/// Reference `ShellEffectOutput.transcript`.
+fn shell_transcript(output: &Value) -> String {
+    let field = |key: &str| {
+        output
+            .get(key)
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned()
+    };
+    let transcript = field("output");
+    if !transcript.is_empty() {
+        return transcript;
+    }
+    let (stdout, stderr) = (field("stdout"), field("stderr"));
+    if !stdout.is_empty() && !stderr.is_empty() && !stdout.ends_with('\n') {
+        return format!("{stdout}\n{stderr}");
+    }
+    stdout + &stderr
+}
+
+/// Reference `ToolResultWidget._yield_text`: captured output is cleaned for
+/// display, and nothing is shown when nothing is left.
+fn detail_lines(text: &str) -> Vec<BodyLine> {
+    let cleaned = clean_output(text.trim_matches('\n'));
+    if cleaned.is_empty() {
+        return Vec::new();
+    }
+    cleaned.split('\n').map(BodyLine::plain).collect()
+}
+
+/// Reference `clean_output` (`vibe/cli/textual_ui/widgets/tool_widgets.py`):
+/// each line keeps only what its last carriage return redrew, loses its escape
+/// sequences, and loses every control character but the tab.
+#[must_use]
+pub fn clean_output(content: &str) -> String {
+    content
+        .replace("\r\n", "\n")
+        .split('\n')
         .map(|line| {
-            let style = if line.starts_with("+++") || line.starts_with("---") {
-                BodyStyle::Muted
-            } else if line.starts_with('+') {
-                BodyStyle::Added
-            } else if line.starts_with('-') {
-                BodyStyle::Removed
-            } else {
-                BodyStyle::Muted
-            };
-            BodyLine::styled(line, style)
+            let written = line.trim_end_matches('\r');
+            let redrawn = written.rsplit('\r').next().unwrap_or(written);
+            strip_escapes(redrawn)
+                .chars()
+                .filter(
+                    |character| !matches!(u32::from(*character), 0x00..=0x08 | 0x0b..=0x1f | 0x7f),
+                )
+                .collect::<String>()
         })
-        .collect()
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Reference `_ANSI_ESCAPE`: an OSC ended by BEL or ST, a CSI with its final
+/// byte, or a two-byte escape. An escape that is none of those is left for the
+/// control filter, which drops the ESC alone.
+fn strip_escapes(line: &str) -> String {
+    let characters = line.chars().collect::<Vec<_>>();
+    let mut output = String::with_capacity(line.len());
+    let mut index = 0;
+    while index < characters.len() {
+        if characters[index] != '\u{1b}' {
+            output.push(characters[index]);
+            index += 1;
+            continue;
+        }
+        let end = escape_end(&characters, index);
+        match end {
+            Some(end) => index = end,
+            None => {
+                output.push(characters[index]);
+                index += 1;
+            }
+        }
+    }
+    output
+}
+
+/// Where the escape starting at `start` ends, exclusive, when it matches.
+fn escape_end(characters: &[char], start: usize) -> Option<usize> {
+    let introducer = *characters.get(start + 1)?;
+    if introducer == ']' {
+        let mut cursor = start + 2;
+        while let Some(&character) = characters.get(cursor) {
+            match character {
+                '\u{7}' => return Some(cursor + 1),
+                '\u{1b}' => {
+                    if characters.get(cursor + 1) == Some(&'\\') {
+                        return Some(cursor + 2);
+                    }
+                    break;
+                }
+                _ => cursor += 1,
+            }
+        }
+        // An unterminated OSC still matches as the two-byte `ESC ]`.
+        return Some(start + 2);
+    }
+    if introducer == '[' {
+        let mut cursor = start + 2;
+        while characters
+            .get(cursor)
+            .is_some_and(|character| ('0'..='?').contains(character))
+        {
+            cursor += 1;
+        }
+        while characters
+            .get(cursor)
+            .is_some_and(|character| (' '..='/').contains(character))
+        {
+            cursor += 1;
+        }
+        return characters
+            .get(cursor)
+            .filter(|character| ('@'..='~').contains(*character))
+            .map(|_| cursor + 1);
+    }
+    (('@'..='Z').contains(&introducer) || ('\\'..='_').contains(&introducer)).then_some(start + 2)
 }
 
 fn text_lines(text: &str) -> Vec<BodyLine> {
@@ -933,19 +1237,20 @@ mod tests {
     }
 
     #[test]
-    fn in_flight_effects_stream_their_latest_line_and_settle_without_it() {
-        let running = effect_of(&effect(
+    fn in_flight_effects_expose_their_output_and_settle_without_it() {
+        let entry = effect(
             "shell",
             json!({"command": "cargo build"}),
             json!({"status": "running", "outputText": "compiling\nlinking\n"}),
-        ));
+        );
+        let running = effect_of(&entry);
         assert_eq!(running.indicator, Indicator::Running);
-        assert_eq!(running.stream.as_deref(), Some("→ linking"));
+        assert_eq!(running_output(&entry), Some("compiling\nlinking\n"));
         assert!(running.body.is_empty());
 
-        let pending = effect_of(&effect("shell", json!({}), json!({"status": "pending"})));
-        assert_eq!(pending.status, EntryStatus::Pending);
-        assert_eq!(pending.stream, None);
+        let pending = effect("shell", json!({}), json!({"status": "pending"}));
+        assert_eq!(effect_of(&pending).status, EntryStatus::Pending);
+        assert_eq!(running_output(&pending), None);
 
         let blocked = effect_of(&effect(
             "shell",
@@ -954,6 +1259,48 @@ mod tests {
         ));
         assert_eq!(blocked.status, EntryStatus::Blocked);
         assert_eq!(blocked.indicator, Indicator::Running);
+    }
+
+    /// Reference `ProcessResultWidget`, one layout per operation.
+    #[test]
+    fn process_results_take_the_layout_their_operation_declares() {
+        let texts = |output: Value| {
+            process_lines(&output)
+                .into_iter()
+                .map(|line| line.text)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            texts(
+                json!({"tool_name": "process.start", "processId": "p", "status": "running", "exitCode": null})
+            ),
+            ["processId: p", "status: running"]
+        );
+        assert_eq!(
+            texts(
+                json!({"tool_name": "process.output", "output": "", "bytesAvailable": 12, "hasMore": true, "truncatedBefore": true})
+            ),
+            [
+                "(no output)",
+                "12 bytes available | more output pending | earlier output truncated"
+            ]
+        );
+        assert_eq!(
+            texts(json!({"tool_name": "process.list", "processes": [
+                {"processId": "0123456789abcdef", "status": "exited", "command": "make"},
+                {"processId": "short"}
+            ]})),
+            ["89abcdef  exited  make", "short  ?  ?"]
+        );
+        assert_eq!(
+            texts(json!({"tool_name": "process.list", "processes": []})),
+            ["(no background processes)"]
+        );
+        assert_eq!(
+            texts(json!({"tool_name": "process.write", "bytesWritten": 0, "status": ""})),
+            ["bytesWritten: 0"]
+        );
+        assert!(texts(json!({"tool_name": "process.other"})).is_empty());
     }
 
     /// The rename moved the published names onto `read_file` and `grep`. Both
@@ -1022,7 +1369,7 @@ mod tests {
             json!({"path": "src/lib.rs"}),
             json!({
                 "status": "completed",
-                "output": {"path": "src/lib.rs", "diff": "--- a\n+++ b\n-old\n+new"},
+                "output": {"file": "src/lib.rs", "old_string": "old", "new_string": "new"},
             }),
         ));
         assert_eq!(edit.header_text(), "Edited src/lib.rs");
@@ -1032,12 +1379,7 @@ mod tests {
                 .iter()
                 .map(|line| (line.text.as_str(), line.style))
                 .collect::<Vec<_>>(),
-            vec![
-                ("--- a", BodyStyle::Muted),
-                ("+++ b", BodyStyle::Muted),
-                ("-old", BodyStyle::Removed),
-                ("+new", BodyStyle::Added),
-            ]
+            vec![("- old", BodyStyle::Removed), ("+ new", BodyStyle::Added)]
         );
 
         // US-247: the body is read off the occurrences the `edit` projection
@@ -1065,17 +1407,16 @@ mod tests {
                 .map(|line| line.text.as_str())
                 .collect::<Vec<_>>(),
             vec![
-                "- let old = 1;",
-                "+ let new = 1;",
-                "- drop(old)",
-                "+ drop(new)",
+                "   3 - let old = 1;",
+                "   3 + let new = 1;",
+                "⋯",
+                "   7 - drop(old)",
+                "   7 + drop(new)",
             ]
         );
 
-        // An edit that published no occurrence renders what it answered rather
-        // than diffing the anchor strings against each other: the projection
-        // always carries an occurrence when a replacement happened, so an empty
-        // list is an empty case and not a payload to reconstruct.
+        // Reference `EditResultWidget.__init__`: an edit that published no
+        // occurrence diffs its anchor strings, anchored on no line.
         let empty_edit = effect_of(&effect(
             "edit",
             json!({"file_path": "src/lib.rs"}),
@@ -1096,7 +1437,7 @@ mod tests {
                 .iter()
                 .map(|line| line.text.as_str())
                 .collect::<Vec<_>>(),
-            vec!["nothing to replace"]
+            vec!["- old", "+ new"]
         );
 
         let search = effect_of(&effect(
@@ -1188,11 +1529,17 @@ mod tests {
     }
 
     #[test]
-    fn writes_and_edits_break_the_tool_group_that_other_effects_keep() {
-        let shell = effect("shell", json!({}), json!({"status": "running"}));
+    fn only_a_manual_shell_command_breaks_the_tool_group() {
+        let shell = effect("bash", json!({}), json!({"status": "running"}));
         let edit = effect("edit", json!({}), json!({"status": "running"}));
+        let manual = effect(
+            MANUAL_SHELL_TOOL_NAME,
+            json!({}),
+            json!({"status": "running"}),
+        );
         assert!(keeps_tool_group(&shell));
-        assert!(!keeps_tool_group(&edit));
+        assert!(keeps_tool_group(&edit));
+        assert!(!keeps_tool_group(&manual));
 
         let mut reasoning = shell.clone();
         reasoning.kind = TranscriptKind::Reasoning;
@@ -1291,6 +1638,5 @@ mod tests {
         assert_eq!(restored.indicator, Indicator::Error);
         assert_eq!(restored.header_text(), "Tool call-7");
         assert_eq!(restored.body[0].text, "exit status 1");
-        assert_eq!(restored.stream, None);
     }
 }

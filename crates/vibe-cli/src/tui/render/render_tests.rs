@@ -9,11 +9,14 @@ use serde_json::json;
 use vibe_app_server::client::{EffectDetail, PublicNoticeLevel};
 
 use super::*;
+use crate::tui::attachments::PromptDraft;
 use crate::tui::chat_input::{ChatInputState, InputEffect, InputEvent, KeyName};
 use crate::tui::hydration::published_fixture as published;
 use crate::tui::rewind::{RewindState, RewindTarget};
 use crate::tui::setup::Theme;
-use crate::tui::state::{EntrySource, EntryStatus, TranscriptEntry, TranscriptKind};
+use crate::tui::state::{
+    EntrySource, EntryStatus, QueueSelection, TranscriptEntry, TranscriptKind,
+};
 
 fn theme(colors_enabled: bool) -> ResolvedTheme {
     ResolvedTheme {
@@ -49,6 +52,17 @@ fn test_context(secret_input: bool) -> UiContext<'static> {
             max_tokens: 200_000,
             current_tokens: 0,
         },
+    }
+}
+
+/// What `Ctrl+O` does to the folds, as `shortcuts::ToggleTools` applies it.
+fn toggle_tools(state: &mut TuiState) {
+    state.tools_collapsed = !state.tools_collapsed;
+    let collapsed = state.tools_collapsed;
+    for (key, folded) in &mut state.folds {
+        if follows_tool_toggle(key) {
+            *folded = collapsed;
+        }
     }
 }
 
@@ -247,38 +261,60 @@ fn every_semantic_region_renders_at_the_reference_widths() {
         ),
         message("assistant", "assistant", "done"),
     ];
-    for width in [40, 80, 120] {
-        let mut state = TuiState::new("session");
-        state.ready = true;
-        state.entries.clone_from(&entries);
-        let backend = TestBackend::new(width, 30);
-        let mut terminal = Terminal::new(backend).expect("test terminal");
+    let paint = |state: &mut TuiState, width: u16| {
+        let mut terminal = Terminal::new(TestBackend::new(width, 30)).expect("test terminal");
         let editor = PromptEditor::default();
         terminal
-            .draw(|frame| draw_test(frame, &mut state, &editor, false))
+            .draw(|frame| draw_test(frame, state, &editor, false))
             .expect("semantic regions render");
-        let rendered = terminal
+        terminal
             .backend()
             .buffer()
             .content
             .iter()
             .map(|cell| cell.symbol())
-            .collect::<String>();
+            .collect::<String>()
+    };
+    for width in [40, 80, 120] {
+        let mut state = TuiState::new("session");
+        state.ready = true;
+        state.entries.clone_from(&entries);
+        // Reference `ToolGroup`, folded by default: the calls, the reasoning
+        // and the hook between the prompt and the answer read as one summary.
+        let folded = paint(&mut state, width);
         for expected in [
             "deploy the service",
-            "weighing options",
-            "✓ Ran cargo test",
-            "✓ Edited lib.rs",
-            "- old",
-            "+ new",
-            "[format] reformatted",
+            "⏵ Ran commands, edited files, thought",
             "Compacting conversation",
             "done",
         ] {
-            assert!(rendered.contains(expected), "{expected} missing at {width}");
+            assert!(folded.contains(expected), "{expected} missing at {width}");
         }
-        // A collapsible result folds into its header; a diff never does.
-        assert!(!rendered.contains("│ ok"), "shell body expanded at {width}");
+        assert!(
+            !folded.contains("weighing options"),
+            "group unfolded at {width}"
+        );
+
+        // `Ctrl+O` unfolds the group and every section in it, but not the
+        // reasoning, which reference `action_toggle_tool` never reaches.
+        toggle_tools(&mut state);
+        let unfolded = paint(&mut state, width);
+        assert!(
+            !unfolded.contains("weighing options"),
+            "reasoning unfolded at {width}"
+        );
+        for expected in [
+            "⏷ Ran commands, edited files, thought",
+            "⏵ Thought",
+            "⏷ Ran cargo test",
+            "ok",
+            "⏵ Edited lib.rs",
+            "- old",
+            "+ new",
+            "[format] reformatted",
+        ] {
+            assert!(unfolded.contains(expected), "{expected} missing at {width}");
+        }
         assert!(
             state
                 .transcript_view
@@ -290,39 +326,67 @@ fn every_semantic_region_renders_at_the_reference_widths() {
     }
 }
 
+/// Reference `CollapsibleSection.on_click` and `ToolGroupHeader.on_click`: a
+/// click folds or unfolds one group or section, and `Ctrl+O` resets them all.
 #[test]
-fn a_keyboard_selection_is_visible_and_survives_a_streaming_repaint() {
+fn a_header_click_folds_one_section_and_ctrl_o_resets_every_fold() {
     let mut state = TuiState::new("session");
     state.ready = true;
-    let mut streaming = message("assistant", "assistant", "deployed");
-    streaming.status = EntryStatus::Streaming;
-    state.entries.push(streaming);
+    state.entries.push(published(
+        "shell",
+        json!({
+            "type": "effect",
+            "title": "bash",
+            "detail": EffectDetail::for_call("bash", &json!({"command": "cargo test"})),
+            "state": {
+                "status": "completed",
+                "output": {"stdout": "all green", "stderr": ""},
+                "display": {"success": true, "verb": "Ran", "message": "cargo test"},
+            },
+        }),
+    ));
+    let mut terminal = Terminal::new(TestBackend::new(60, 12)).expect("test terminal");
     let editor = PromptEditor::default();
-    let mut terminal = Terminal::new(TestBackend::new(40, 12)).expect("test terminal");
-    terminal
-        .draw(|frame| draw_test(frame, &mut state, &editor, false))
-        .expect("first frame paints the transcript");
-    assert!(state.transcript_view.move_selection(1));
-    assert_eq!(
-        state.transcript_view.selected_text().as_deref(),
-        Some("  deployed")
-    );
-
-    // The reference reverses the selected cells; a repaint keeps them.
-    for text in ["deployed", "deployed twice"] {
-        state.entries[0].text = text.to_owned();
+    let mut paint = |state: &mut TuiState| {
         terminal
-            .draw(|frame| draw_test(frame, &mut state, &editor, false))
-            .expect("repaint keeps the selection");
-    }
-    let reversed = terminal
-        .backend()
-        .buffer()
-        .content
-        .iter()
-        .filter(|cell| cell.modifier.contains(Modifier::REVERSED))
-        .count();
-    assert!(reversed > 0, "the selection was not marked on screen");
+            .draw(|frame| draw_test(frame, state, &editor, false))
+            .expect("frame paints");
+    };
+    let row = |state: &TuiState, needle: &str| {
+        state
+            .transcript_view
+            .lines()
+            .iter()
+            .position(|line| line.contains(needle))
+    };
+    let click = |state: &mut TuiState, line: usize| {
+        let cell = crate::tui::transcript_view::Cell { line, column: 0 };
+        let key = state
+            .transcript_view
+            .toggle_at(cell)
+            .expect("the header folds")
+            .to_owned();
+        let folded = state.folds.entry(key).or_insert(true);
+        *folded = !*folded;
+    };
+
+    paint(&mut state);
+    let group = row(&state, "⏵ Ran commands").expect("the group is folded");
+    click(&mut state, group);
+    paint(&mut state);
+    let section = row(&state, "⏵ Ran cargo test").expect("the section is folded");
+    assert_eq!(row(&state, "all green"), None);
+    click(&mut state, section);
+    paint(&mut state);
+    assert!(row(&state, "⏷ Ran cargo test").is_some());
+    assert!(row(&state, "all green").is_some());
+
+    // `Ctrl+O` twice: everything unfolds, then everything folds again.
+    toggle_tools(&mut state);
+    toggle_tools(&mut state);
+    paint(&mut state);
+    assert!(row(&state, "⏵ Ran commands").is_some());
+    assert_eq!(row(&state, "all green"), None);
 }
 
 #[test]
@@ -346,8 +410,19 @@ fn failed_effects_render_the_error_indicator_and_never_a_success_header() {
         }),
     ));
     let editor = PromptEditor::default();
+    let colored = |frame: &mut Frame<'_>, state: &mut TuiState| {
+        draw(
+            frame,
+            state,
+            &editor,
+            &CompletionEngine::default(),
+            InputMode::Prompt,
+            theme(true),
+            test_context(false),
+        );
+    };
     terminal
-        .draw(|frame| draw_test(frame, &mut state, &editor, false))
+        .draw(|frame| colored(frame, &mut state))
         .expect("snapshot renders");
     let text = terminal
         .backend()
@@ -356,8 +431,46 @@ fn failed_effects_render_the_error_indicator_and_never_a_success_header() {
         .iter()
         .map(|cell| cell.symbol())
         .collect::<String>();
-    assert!(text.contains("✕ Edited lib.rs"), "{text}");
+    // Reference `ToolGroupHeader`: the group settles with its last call's
+    // outcome.
+    assert!(text.contains("⏵ Edited files"), "{text}");
+    let glyph = |terminal: &Terminal<TestBackend>| {
+        terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .find(|cell| cell.symbol() == "⏵")
+            .map(|cell| cell.fg)
+    };
+    assert_eq!(
+        glyph(&terminal),
+        Some(theme(true).error().fg.expect("error color"))
+    );
+
+    // Unfolded, the failure nothing recovered from reads red once the turn
+    // has ended, and its error is the body.
+    toggle_tools(&mut state);
+    terminal
+        .draw(|frame| colored(frame, &mut state))
+        .expect("snapshot renders");
+    let text = terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(text.contains("⏵ Edited src/lib.rs"), "{text}");
     assert!(text.contains("Error: permission denied"), "{text}");
+    let red = terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .filter(|cell| cell.symbol() == "⏵")
+        .all(|cell| cell.fg == theme(true).error().fg.expect("error color"));
+    assert!(red, "an unrecovered failure did not escalate");
     assert!(!text.contains('✓'), "{text}");
 }
 
@@ -818,6 +931,48 @@ fn latest_diagnostic_is_visible_without_leaving_the_prompt() {
 }
 
 #[test]
+fn the_inline_notice_ends_the_loading_row_and_the_selected_queued_prompt_stands_out() {
+    let backend = TestBackend::new(60, 16);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut state = TuiState::new("session");
+    state.prompt_queue.push(PromptDraft::text_only("older"));
+    state.prompt_queue.push(PromptDraft::text_only("newer"));
+    let selected = state.prompt_queue.newest_first()[1].0.to_owned();
+    state.queue_selection = Some(QueueSelection {
+        selected,
+        position: 1,
+        original: String::new(),
+        editing: false,
+        consumed: false,
+    });
+    state.show_inline_notice("Copied to clipboard", Some(4_000), 0);
+    terminal
+        .draw(|frame| draw_test(frame, &mut state, &PromptEditor::default(), false))
+        .expect("notice renders");
+    let buffer = terminal.backend().buffer();
+    let row = |y: u16| {
+        (0..60)
+            .map(|x| buffer[(x, y)].symbol().to_owned())
+            .collect::<String>()
+    };
+    let notice_row = (0..16)
+        .find(|&y| row(y).contains("Copied to clipboard"))
+        .expect("the notice is on screen");
+    assert!(row(notice_row).ends_with("Copied to clipboard"));
+    let older_row = (0..16)
+        .find(|&y| row(y).contains("> older"))
+        .expect("the queue is on screen");
+    assert!(buffer[(0, older_row)].modifier.contains(Modifier::REVERSED));
+    let newer_row = (0..16)
+        .find(|&y| row(y).contains("> newer"))
+        .expect("newer");
+    assert!(!buffer[(0, newer_row)].modifier.contains(Modifier::REVERSED));
+
+    state.expire_inline_notice(4_000);
+    assert!(state.inline_notice.is_none());
+}
+
+#[test]
 fn prompt_snapshot_keeps_selection_and_cursor_visible() {
     let backend = TestBackend::new(30, 9);
     let mut terminal = Terminal::new(backend).expect("test terminal");
@@ -1009,11 +1164,11 @@ fn tiny_terminals_keep_long_unbroken_prompts_bounded() {
 fn overflowing_queue_rows_are_keyboard_scrollable() {
     let backend = TestBackend::new(48, 6);
     let mut terminal = Terminal::new(backend).expect("queue terminal");
-    let mut lines = vec!["Queued messages".to_owned()];
-    lines.extend((0..10).map(|index| format!("› queued item {index}")));
+    let mut lines = vec!["» Queued".to_owned()];
+    lines.extend((0..10).map(|index| format!("> queued item {index}")));
 
     terminal
-        .draw(|frame| draw_queue(frame, frame.area(), &lines, 0, theme(true)))
+        .draw(|frame| draw_queue(frame, frame.area(), &lines, (0, None), theme(true)))
         .expect("queue start renders");
     let first = terminal
         .backend()
@@ -1027,7 +1182,7 @@ fn overflowing_queue_rows_are_keyboard_scrollable() {
     assert!(first.contains("Alt+PgUp/PgDn"));
 
     terminal
-        .draw(|frame| draw_queue(frame, frame.area(), &lines, 5, theme(true)))
+        .draw(|frame| draw_queue(frame, frame.area(), &lines, (5, None), theme(true)))
         .expect("queue tail renders");
     let tail = terminal
         .backend()
@@ -1038,4 +1193,161 @@ fn overflowing_queue_rows_are_keyboard_scrollable() {
         .collect::<String>();
     assert!(!tail.contains("queued item 0"));
     assert!(tail.contains("queued item 9"));
+}
+
+/// Reference `WebSearchResultWidget`: a source reads as its title, and
+/// clicking the title opens the address it names.
+#[test]
+fn a_web_search_source_links_its_title_to_its_address() {
+    let mut terminal = Terminal::new(TestBackend::new(60, 16)).expect("test terminal");
+    let mut state = TuiState::new("session");
+    state.ready = true;
+    state.entries.push(published(
+        "effect",
+        json!({
+            "type": "effect",
+            "title": "web_search",
+            "detail": EffectDetail::for_call("web_search", &json!({"query": "ratatui"})),
+            "state": {
+                "status": "completed",
+                "output": {
+                    "query": "ratatui",
+                    "sources": [
+                        {"title": "Ratatui", "url": "https://ratatui.rs"},
+                        {"title": "Unsafe", "url": "javascript:alert(1)"}
+                    ]
+                },
+                "display": {"success": true, "message": "ratatui"},
+            },
+        }),
+    ));
+    let editor = PromptEditor::default();
+    terminal
+        .draw(|frame| draw_test(frame, &mut state, &editor, false))
+        .expect("snapshot renders");
+    toggle_tools(&mut state);
+    terminal
+        .draw(|frame| draw_test(frame, &mut state, &editor, false))
+        .expect("snapshot renders");
+    let row = |label: &str| {
+        state
+            .transcript_view
+            .lines()
+            .iter()
+            .position(|line| line.ends_with(label))
+            .expect("the source is painted")
+    };
+    let (ratatui, unsafe_row) = (row("• Ratatui"), row("• Unsafe"));
+    let column = state.transcript_view.lines()[ratatui]
+        .chars()
+        .position(|character| character == 'R')
+        .expect("title");
+    assert_eq!(
+        state
+            .transcript_view
+            .link_at(crate::tui::transcript_view::Cell {
+                line: ratatui,
+                column
+            })
+            .as_deref(),
+        Some("https://ratatui.rs")
+    );
+    assert_eq!(
+        state
+            .transcript_view
+            .link_at(crate::tui::transcript_view::Cell {
+                line: unsafe_row,
+                column
+            }),
+        None
+    );
+}
+
+/// Reference `_render_result_expanded` and `ReasoningMessage`: a failed `!`
+/// command shows what it printed and folds its error behind a line count, and
+/// finished reasoning reads "Thought" until a click unfolds it.
+#[test]
+fn a_failed_manual_command_folds_its_error_and_reasoning_unfolds_on_click() {
+    let mut state = TuiState::new("session");
+    state.ready = true;
+    state.entries.push(published(
+        "shell",
+        json!({
+            "type": "effect",
+            "title": "shell",
+            "detail": {
+                "kind": "shell",
+                "toolName": "shell",
+                "display": {
+                    "summary": "shell: make",
+                    "verb": "Running",
+                    "message": "make",
+                    "settledVerb": "Ran",
+                    "settledMessage": "make",
+                    "statusText": "Running command",
+                },
+                "input": {"command": "make"},
+            },
+            "state": {
+                "status": "failed",
+                "error": {"message": "Command exited with status 2"},
+                "outputText": "no rule to make target\n",
+                "display": {"success": false, "message": "Command exited with status 2"},
+            },
+        }),
+    ));
+    state.entries.push(message("prompt", "user", "why"));
+    state.entries.push(published(
+        "reasoning",
+        json!({"type": "reasoning", "text": "the makefile is missing"}),
+    ));
+    let mut terminal = Terminal::new(TestBackend::new(60, 20)).expect("test terminal");
+    let editor = PromptEditor::default();
+    let mut paint = |state: &mut TuiState| {
+        terminal
+            .draw(|frame| draw_test(frame, state, &editor, false))
+            .expect("frame paints");
+        state.transcript_view.lines().join("\n")
+    };
+    let row = |state: &TuiState, needle: &str| {
+        state
+            .transcript_view
+            .lines()
+            .iter()
+            .position(|line| line.contains(needle))
+            .expect("the row is painted")
+    };
+    let click = |state: &mut TuiState, line: usize| {
+        let cell = crate::tui::transcript_view::Cell { line, column: 0 };
+        let key = state
+            .transcript_view
+            .toggle_at(cell)
+            .expect("the row folds")
+            .to_owned();
+        let folded = state.folds.entry(key).or_insert(true);
+        *folded = !*folded;
+    };
+
+    let frame = paint(&mut state);
+    assert!(frame.contains("⏵ Ran make"), "{frame}");
+    assert!(frame.contains("no rule to make target"), "{frame}");
+    assert!(frame.contains("⏵ 1 line"), "{frame}");
+    assert!(!frame.contains("Command exited with status 2"), "{frame}");
+    let fold = row(&state, "⏵ 1 line");
+    click(&mut state, fold);
+    let frame = paint(&mut state);
+    assert!(
+        frame.contains("Error: Command exited with status 2"),
+        "{frame}"
+    );
+    assert!(frame.contains("⏷ show less"), "{frame}");
+
+    let group = row(&state, "⏵ Thought");
+    click(&mut state, group);
+    paint(&mut state);
+    let thought = row(&state, "⏵ Thought");
+    click(&mut state, thought);
+    let frame = paint(&mut state);
+    assert!(frame.contains("⏷ Thought"), "{frame}");
+    assert!(frame.contains("the makefile is missing"), "{frame}");
 }

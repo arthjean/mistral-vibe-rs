@@ -213,7 +213,7 @@ fn completion_worker_loop(
         };
         let request = job.request;
         let resolution = match request.query.strip_prefix('@') {
-            Some(query) => match index.candidates(&job.workspace, query) {
+            Some(query) => match index.completer_candidates(&job.workspace, query) {
                 Ok(candidates) => CompletionResolution::Results {
                     request,
                     candidates,
@@ -813,7 +813,7 @@ pub(crate) fn prompt_candidates_in(
     let Some(raw_query) = query.strip_prefix('@') else {
         return Ok(Vec::new());
     };
-    index.candidates(workspace, raw_query)
+    index.completer_candidates(workspace, raw_query)
 }
 
 #[cfg(test)]

@@ -253,7 +253,6 @@ const CONCAT: MergeStrategy = MergeStrategy::Concat;
 const DEEP_MERGE: MergeStrategy = MergeStrategy::DeepMerge;
 
 pub(super) const THINKING_VALUES: &[&str] = &["off", "low", "medium", "high", "max"];
-const NOTIFICATION_VALUES: &[&str] = &["off", "unfocused", "always"];
 const OTEL_REDACTION_VALUES: &[&str] = &["default", "none", "strict"];
 
 /// One provider entry, as `providers` and the two voice provider lists carry it.
@@ -902,6 +901,11 @@ pub static FIELDS: &[FieldSpec] = &[
         "Show reasoning regions in the transcript.",
         "",
     ),
+    FieldSpec::declared("show_subagent_status_list", FieldKind::Bool, REPLACE).published(
+        FieldDefault::Bool(true),
+        "List running subagents above the prompt and let their transcripts be opened.",
+        "",
+    ),
     FieldSpec::declared("worktree_limit", FieldKind::Int, REPLACE).published(
         FieldDefault::Int(15),
         "How many inactive managed worktrees are kept before the oldest are pruned.",
@@ -980,6 +984,11 @@ pub static FIELDS: &[FieldSpec] = &[
             "Allow desktop notifications.",
             "",
         ),
+    FieldSpec::declared("experimental_enable_tab_status", FieldKind::Bool, REPLACE).published(
+        FieldDefault::Bool(true),
+        "Prefix the terminal title with the session's running or waiting state.",
+        "",
+    ),
     FieldSpec::declared("enable_system_trust_store", FieldKind::Bool, REPLACE).published(
         FieldDefault::Bool(false),
         "Validate TLS against the operating system trust store.",
@@ -1042,9 +1051,8 @@ pub static FIELDS: &[FieldSpec] = &[
         EXPERIMENTS,
     ),
     // Fields only this port declares. Each is a recorded divergence rather than
-    // a mapping onto a reference field: `thinking` is per-model upstream,
-    // `notifications` is a tri-state where upstream carries a boolean, and the
-    // remaining three name no reference field at all. The reasons are written
+    // a mapping onto a reference field: `thinking` is per-model upstream, and
+    // the remaining three name no reference field at all. The reasons are written
     // out in the divergence table of `docs/parity.md`.
     FieldSpec::declared("thinking", FieldKind::Enum, REPLACE)
         .local()
@@ -1052,14 +1060,6 @@ pub static FIELDS: &[FieldSpec] = &[
         .published(
             FieldDefault::Str("off"),
             "Reasoning effort for the active model.",
-            "",
-        ),
-    FieldSpec::declared("notifications", FieldKind::Enum, REPLACE)
-        .local()
-        .choices(NOTIFICATION_VALUES)
-        .published(
-            FieldDefault::Str("unfocused"),
-            "When desktop notifications may be sent.",
             "",
         ),
     FieldSpec::declared("proxy", FieldKind::Str, REPLACE)

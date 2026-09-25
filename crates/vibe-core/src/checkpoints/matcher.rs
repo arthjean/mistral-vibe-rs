@@ -108,6 +108,24 @@ impl<'a, T: Hash + Eq> SequenceMatcher<'a, T> {
         Self { a, b, b2j }
     }
 
+    /// A matcher with the popular-element heuristic on, which is what
+    /// CPython's `SequenceMatcher(None, a, b)` defaults to and so what
+    /// `difflib.unified_diff` runs: once `b` holds 200 elements or more, an
+    /// element occurring more than `len(b) / 100 + 1` times is left out of the
+    /// index. It still extends a match found around it; it only never seeds
+    /// one.
+    #[must_use]
+    pub fn with_autojunk(a: &'a [T], b: &'a [T]) -> Self {
+        let mut matcher = Self::new(a, b);
+        if b.len() >= 200 {
+            let threshold = b.len() / 100 + 1;
+            matcher
+                .b2j
+                .retain(|_, positions| positions.len() <= threshold);
+        }
+        matcher
+    }
+
     /// The longest run equal in `a[alo..ahi]` and `b[blo..bhi]`, earliest in `a`
     /// and then earliest in `b` among the runs of that length.
     ///
@@ -250,5 +268,53 @@ impl<'a, T: Hash + Eq> SequenceMatcher<'a, T> {
             }
         }
         opcodes
+    }
+
+    /// CPython `get_grouped_opcodes(n)`: the opcodes cut into hunks, each
+    /// change carrying at most `context` equal elements on either side, and a
+    /// run of equal elements longer than twice that splitting two hunks.
+    #[must_use]
+    pub fn grouped_opcodes(&self, context: usize) -> Vec<Vec<Opcode>> {
+        let mut codes = self.opcodes();
+        if codes.is_empty() {
+            codes.push(Opcode {
+                tag: Tag::Equal,
+                i1: 0,
+                i2: 1,
+                j1: 0,
+                j2: 1,
+            });
+        }
+        if let Some(first) = codes.first_mut()
+            && first.tag == Tag::Equal
+        {
+            first.i1 = first.i1.max(first.i2.saturating_sub(context));
+            first.j1 = first.j1.max(first.j2.saturating_sub(context));
+        }
+        if let Some(last) = codes.last_mut()
+            && last.tag == Tag::Equal
+        {
+            last.i2 = last.i2.min(last.i1 + context);
+            last.j2 = last.j2.min(last.j1 + context);
+        }
+        let mut groups = Vec::new();
+        let mut group = Vec::new();
+        for mut code in codes {
+            if code.tag == Tag::Equal && code.i2 - code.i1 > context * 2 {
+                group.push(Opcode {
+                    i2: code.i2.min(code.i1 + context),
+                    j2: code.j2.min(code.j1 + context),
+                    ..code
+                });
+                groups.push(std::mem::take(&mut group));
+                code.i1 = code.i1.max(code.i2.saturating_sub(context));
+                code.j1 = code.j1.max(code.j2.saturating_sub(context));
+            }
+            group.push(code);
+        }
+        if !(group.is_empty() || group.len() == 1 && group[0].tag == Tag::Equal) {
+            groups.push(group);
+        }
+        groups
     }
 }

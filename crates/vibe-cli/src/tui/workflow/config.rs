@@ -364,6 +364,13 @@ pub(in crate::tui) fn apply_render_preferences(
     state.show_reasoning = configured_value(runtime, "show_thinking_nodes")
         .and_then(|value| value.as_bool())
         .unwrap_or(true);
+    // Reference `WelcomeBanner.__init__`: the cat keeps still under this key.
+    if configured_value(runtime, "disable_welcome_banner_animation")
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false)
+    {
+        state.banner_cat.stop();
+    }
     state.autocopy_to_clipboard = configured_value(runtime, "autocopy_to_clipboard")
         .and_then(|value| value.as_bool())
         .unwrap_or(false);
@@ -384,13 +391,17 @@ pub(in crate::tui) fn apply_render_preferences(
         configured_value(runtime, "file_watcher_for_autocomplete")
             .and_then(|value| value.as_bool())
             .unwrap_or(false);
-    state
-        .notifier
-        .set_policy(crate::tui::attention::NotificationPolicy::from_config(
-            configured_value(runtime, "notifications")
-                .as_ref()
-                .and_then(Value::as_str),
-        ));
+    // Reference `get_enabled` and `get_title_enabled`, both on by default.
+    state.notifier.set_enabled(
+        configured_value(runtime, "enable_notifications")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(true),
+    );
+    state.notifier.set_title_enabled(
+        configured_value(runtime, "experimental_enable_tab_status")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(true),
+    );
     // Reference `_refresh_config_from_disk`: a preference change cancels live
     // narration before the new preference applies.
     let narrator_enabled = configured_value(runtime, "narrator_enabled")

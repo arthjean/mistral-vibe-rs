@@ -51,7 +51,7 @@ fn the_invoked_skill_flag_reaches_the_deferred_driver_work() {
     let started = connection.dispatch(&request(
         5,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "hello"}]}),
     ));
     let turn_id = match decode_frame(&started.outbound[0]).expect("turn answer") {
         Envelope::Success(SuccessResponse { result, .. }) => {
@@ -65,7 +65,7 @@ fn the_invoked_skill_flag_reaches_the_deferred_driver_work() {
         json!({
             "sessionId": "session-1",
             "expectedTurnId": turn_id,
-            "input": [{"type": "text", "text": "/probe"}]
+            "message": [{"type": "text", "text": "/probe"}]
         }),
     ));
     assert!(
@@ -85,7 +85,7 @@ fn the_invoked_skill_flag_reaches_the_deferred_driver_work() {
         json!({
             "sessionId": "session-1",
             "expectedTurnId": turn_id,
-            "input": [{"type": "text", "text": "/probe"}],
+            "message": [{"type": "text", "text": "/probe"}],
             "injectInvokedSkill": false
         }),
     ));
@@ -107,7 +107,7 @@ fn stale_mutations_and_duplicate_callbacks_leave_runtime_unchanged() {
     connection.dispatch(&request(
         3,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "hello"}]}),
     ));
     let before = server.session("session-1").expect("session view");
     let stale = connection.dispatch(&request(
@@ -116,7 +116,7 @@ fn stale_mutations_and_duplicate_callbacks_leave_runtime_unchanged() {
         json!({
             "sessionId": "session-1",
             "expectedTurnId": "turn-stale",
-            "input": [{"type": "text", "text": "wrong"}]
+            "message": [{"type": "text", "text": "wrong"}]
         }),
     ));
     assert_eq!(
@@ -294,7 +294,7 @@ fn rejected_callback_delivery_cancels_the_owned_turn_once() {
     connection.dispatch(&request(
         3,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "hello"}]}),
     ));
 
     let (callback_id, callback_request) = connection
@@ -371,7 +371,7 @@ fn cancelled_user_input_is_answered_without_interrupting_the_turn() {
     connection.dispatch(&request(
         3,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "hello"}]}),
     ));
     let (callback_id, callback_request) = connection
         .request_callback(
@@ -456,7 +456,7 @@ fn approval_denial_is_answered_and_only_cancel_turn_interrupts() {
     connection.dispatch(&request(
         3,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "hello"}]}),
     ));
 
     connection
@@ -583,7 +583,7 @@ fn answered_delivery_ignores_a_late_negative_acknowledgment() {
     connection.dispatch(&request(
         3,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "hello"}]}),
     ));
     let (_, first_delivery) = connection
         .request_callback(
@@ -651,7 +651,7 @@ fn a_plan_review_becomes_a_notice_and_leaves_the_callback_detail_conformant() {
     connection.dispatch(&request(
         3,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "hello"}]}),
     ));
     let review = |file_path: Value| {
         json!({
@@ -744,7 +744,7 @@ fn callback_requests_and_answers_are_validated_before_mutation() {
     connection.dispatch(&request(
         3,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "hello"}]}),
     ));
     let before = server.session("session-1").expect("session");
     for detail in [
@@ -858,7 +858,7 @@ fn final_handoff_preserves_prior_turn_history_and_rebinds_callbacks() {
     connection.dispatch(&request(
         3,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "first"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "first"}]}),
     ));
     server
         .complete_turn(
@@ -884,7 +884,7 @@ fn final_handoff_preserves_prior_turn_history_and_rebinds_callbacks() {
     connection.dispatch(&request(
         4,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "second"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "second"}]}),
     ));
     connection
         .request_callback(
@@ -964,7 +964,7 @@ fn malformed_callback_outputs_fail_closed_without_settling_state() {
     connection.dispatch(&request(
         3,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "hello"}]}),
     ));
     let (_, callback_request) = connection
         .request_callback(

@@ -12,9 +12,7 @@ use vibe_core::updates::{
 };
 
 use super::{REFERENCE_COMMIT, Reference, pinned_python_oracle};
-use crate::tui::attention::{
-    AttentionNotifier, DEFAULT_TITLE, NotificationContext, NotificationPolicy, THROTTLE_MS,
-};
+use crate::tui::attention::{AttentionNotifier, DEFAULT_TITLE, NotificationContext, THROTTLE_MS};
 use crate::tui::exit::{
     SUSPEND_MESSAGE, SessionExitSummary, SessionUsage, format_session_usage, quit_prompt,
     session_resume_lines, shorten_session_id,
@@ -198,10 +196,11 @@ enum Event {
     },
     Attention {
         action: String,
+        /// The name the trace gives its policy; the boolean beside it is what
+        /// both implementations read.
+        #[allow(dead_code)]
         #[serde(default)]
         policy: Option<String>,
-        /// Read by the Python oracle, which drives the reference boolean.
-        #[allow(dead_code)]
         #[serde(default)]
         enabled: Option<bool>,
         #[serde(default)]
@@ -577,7 +576,7 @@ impl Replay {
             }
             Event::Attention {
                 action,
-                policy,
+                enabled,
                 context,
                 now_ms,
                 ..
@@ -586,14 +585,14 @@ impl Replay {
                     .notifier
                     .get_or_insert_with(AttentionAccumulator::default);
                 match action.as_str() {
-                    "policy" => accumulator
-                        .notifier
-                        .set_policy(NotificationPolicy::from_config(policy.as_deref())),
-                    "blur" => accumulator.notifier.on_blur(),
+                    "policy" => accumulator.notifier.set_enabled(enabled.unwrap_or(true)),
+                    "blur" => {
+                        let effect = accumulator.notifier.on_blur();
+                        accumulator.record(&effect);
+                    }
                     "focus" => {
-                        if let Some(effect) = accumulator.notifier.on_focus() {
-                            accumulator.record(&effect);
-                        }
+                        let effect = accumulator.notifier.on_focus();
+                        accumulator.record(&effect);
                     }
                     "notify" => {
                         let context = match context.as_deref() {
@@ -601,12 +600,10 @@ impl Replay {
                             Some("complete") => NotificationContext::Complete,
                             other => panic!("unknown notification context {other:?}"),
                         };
-                        if let Some(effect) = accumulator
+                        let effect = accumulator
                             .notifier
-                            .notify(context, now_ms.unwrap_or_default())
-                        {
-                            accumulator.record(&effect);
-                        }
+                            .notify(context, now_ms.unwrap_or_default());
+                        accumulator.record(&effect);
                     }
                     other => panic!("unknown attention action {other}"),
                 }

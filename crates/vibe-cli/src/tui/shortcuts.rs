@@ -15,7 +15,6 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::layout::Rect;
 
 use super::chat_input::{ChatInputState, InputEffect, InputEvent, VoicePhase};
-use super::clipboard::copy_and_report;
 use super::clipboard_images::ClipboardImageManager;
 use super::composer::{
     apply_effects as apply_composer_effects, apply_event as apply_composer_event,
@@ -26,6 +25,10 @@ use super::history::PromptHistory;
 use super::input::{ExternalEditorPort, PromptEditor, SystemExternalEditor};
 use super::path_normalization::PathNormalizationManager;
 use super::prompt::{PromptContext, start_injected_prompt, start_prompt};
+use super::queue::{
+    enter_queue_selection, leave_queue_edit, queue_selection_key, steer_queued_prompts,
+    submit_queue_edit,
+};
 use super::remote_project_workflow::{handle_project_action, handle_teleport_push_response};
 use super::setup::ResolvedTheme;
 use super::shell::interrupt_shell;
@@ -38,10 +41,10 @@ use super::workflow::{
     show_rewind,
 };
 use super::{
-    ActiveTurn, Arguments, CliError, InteractiveRuntime, callback, command_context,
-    copy_transcript_selection, emit_attention, exit, feedback, help, interaction,
-    page_older_debug_logs, page_older_history, render, request_active_turn_interrupt,
-    settle_transcript_pointer, stop_narration, submission, suspend_session, unix_millis,
+    ActiveTurn, Arguments, CliError, InteractiveRuntime, callback, command_context, exit, feedback,
+    help, interaction, page_older_debug_logs, page_older_history, render,
+    request_active_turn_interrupt, settle_transcript_pointer, stop_narration, submission,
+    suspend_session, unix_millis,
 };
 
 /// The global chords the help document advertises.
@@ -151,11 +154,13 @@ pub(super) async fn handle_terminal_event(
         }
         // Reference `on_app_focus` and `on_app_blur`.
         Event::FocusGained => {
-            if let Some(effect) = context.state.notifier.on_focus() {
-                emit_attention(context.state, &effect);
-            }
+            let effect = context.state.notifier.on_focus();
+            context.state.attend(effect);
         }
-        Event::FocusLost => context.state.notifier.on_blur(),
+        Event::FocusLost => {
+            let effect = context.state.notifier.on_blur();
+            context.state.attend(effect);
+        }
         Event::Key(_) => {}
     }
     Ok(false)
@@ -186,17 +191,25 @@ async fn handle_mouse(kind: MouseEventKind, column: u16, row: u16, context: &mut
                     x: u16::try_from(cell_column).unwrap_or(u16::MAX),
                     y: u16::try_from(cell_row).unwrap_or(u16::MAX),
                     extend_selection,
+                    at_ms: unix_millis(),
                 });
             } else if let Some(cell) = context.state.transcript_view.cell_at(column, row) {
                 if extend_selection {
                     context.state.transcript_view.extend_selection(cell);
                 } else {
-                    context.state.transcript_view.begin_selection(cell);
+                    context
+                        .state
+                        .transcript_view
+                        .press(cell, (column, row), unix_millis());
                 }
             }
         }
         MouseEventKind::Up(MouseButton::Left) => {
-            settle_transcript_pointer(context.state, column, row).await;
+            settle_transcript_pointer(context.runtime.as_mut(), context.state, column, row).await;
+            // Reference `on_mouse_up`: every release copies what is selected.
+            if context.state.autocopy_to_clipboard {
+                copy_selection(context);
+            }
         }
         _ => {}
     }
@@ -221,6 +234,16 @@ pub(super) async fn handle_key(
     context
         .input
         .set_command_context(command_context(context.runtime.as_ref()));
+    // Reference priority bindings `ctrl+y` and `ctrl+shift+c`: a copy reaches
+    // past every prompt and picker.
+    if is_copy_chord(key) {
+        copy_selection(context);
+        return Ok(false);
+    }
+    let queue_selectable = context.state.queue_selection.is_none()
+        && !context.state.prompt_queue.is_empty()
+        && (context.active.is_some() || context.shell_running());
+    context.input.set_queue_selectable(queue_selectable);
     if callback::handle_key(
         key,
         context.runtime,
@@ -233,6 +256,10 @@ pub(super) async fn handle_key(
         return Ok(false);
     }
     if handle_modal_key(key, context).await {
+        return Ok(false);
+    }
+    context.state.last_keystroke_ms = unix_millis();
+    if queue_selection_key(key, context.input, context.state) {
         return Ok(false);
     }
     if key.code != KeyCode::Esc {
@@ -355,14 +382,16 @@ async fn control_chord(
                 unix_millis(),
             )));
         }
+        // Reference `action_toggle_tool`: every section and group takes the new
+        // state, whatever it was folded to one at a time, and nothing is said.
         Some(Chord::ToggleTools) => {
-            context.state.tools_collapsed = !context.state.tools_collapsed;
-            let message = if context.state.tools_collapsed {
-                "Tool output collapsed"
-            } else {
-                "Tool output expanded"
-            };
-            context.state.push_diagnostic(message);
+            let collapsed = !context.state.tools_collapsed;
+            context.state.tools_collapsed = collapsed;
+            for (key, folded) in &mut context.state.folds {
+                if super::render::follows_tool_toggle(key) {
+                    *folded = collapsed;
+                }
+            }
         }
         Some(Chord::ExternalEditor) => open_external_editor(key, context)?,
         // `Ctrl+J` is the newline chord, and the composer is what inserts it.
@@ -372,19 +401,27 @@ async fn control_chord(
             KeyCode::Char('z') => {
                 suspend_session(context.terminal_guard, context.terminal, context.state)?;
             }
-            KeyCode::Char('y' | 'Y') => copy_selection(context),
             _ => return Ok(None),
         },
     }
     Ok(Some(false))
 }
 
+fn is_copy_chord(key: KeyEvent) -> bool {
+    key.modifiers.contains(KeyModifiers::CONTROL)
+        && match key.code {
+            KeyCode::Char('y' | 'Y') => true,
+            KeyCode::Char('c' | 'C') => key.modifiers.contains(KeyModifiers::SHIFT),
+            _ => false,
+        }
+}
+
 fn copy_selection(context: &mut KeyContext<'_>) {
-    let copied = copy_transcript_selection(context.state)
-        .or_else(|| copy_prompt_selection(context.input.editor(), context.state));
-    if let Some(copied) = copied {
-        super::report_copied_text(context.runtime.as_ref(), &copied);
-    }
+    super::copy_selection(
+        context.runtime.as_ref(),
+        context.state,
+        context.input.editor(),
+    );
 }
 
 /// Reference `action_interrupt_or_quit`: an active turn, then a shell, then a
@@ -448,7 +485,11 @@ fn open_external_editor(key: KeyEvent, context: &mut KeyContext<'_>) -> Result<(
         .restore()
         .map_err(|error| CliError::Terminal(error.to_string()))?;
     let mut external = SystemExternalEditor::from_environment();
-    let edited = ExternalEditorPort::edit(&mut external, &text);
+    // Reference `ExternalEditor.edit`: an editor that fails or changes nothing
+    // leaves the prompt as it was, without a word.
+    let edited = ExternalEditorPort::edit(&mut external, &text)
+        .ok()
+        .filter(|edited| *edited != text);
     context
         .terminal_guard
         .resume()
@@ -457,12 +498,7 @@ fn open_external_editor(key: KeyEvent, context: &mut KeyContext<'_>) -> Result<(
         .terminal
         .clear()
         .map_err(|error| CliError::Terminal(error.to_string()))?;
-    match edited {
-        Ok(edited) => {
-            context.compose(InputEvent::ExternalEditor { text: Some(edited) });
-        }
-        Err(error) => context.state.push_diagnostic(error),
-    }
+    context.compose(InputEvent::ExternalEditor { text: edited });
     Ok(())
 }
 
@@ -524,6 +560,12 @@ async fn navigate(key: KeyEvent, context: &mut KeyContext<'_>) -> Result<bool, C
         | KeyCode::Down
         | KeyCode::Char(_) => {
             let effects = context.compose_key(key);
+            if effects
+                .iter()
+                .any(|effect| matches!(effect, InputEffect::QueueSelectionRequested))
+            {
+                enter_queue_selection(context.input, context.state);
+            }
             feedback::handle_effects(&effects, context.runtime, context.input, context.state).await;
             context
                 .path_normalization
@@ -536,6 +578,11 @@ async fn navigate(key: KeyEvent, context: &mut KeyContext<'_>) -> Result<bool, C
 }
 
 async fn escape(key: KeyEvent, context: &mut KeyContext<'_>) {
+    // Reference `check_action`: queue mode turns the interrupt off, and Esc
+    // drops the edit instead.
+    if leave_queue_edit(context.input, context.state) {
+        return;
+    }
     if let Some(edit) = context.state.value_edit.take() {
         cancel_value_edit(edit, context.runtime, context.input, context.state);
         return;
@@ -585,12 +632,52 @@ async fn submit(key: KeyEvent, context: &mut KeyContext<'_>) -> Result<bool, Cli
         context.refresh_composer();
         return Ok(false);
     }
+    // Reference `ChatTextArea._on_key`: an open completion takes Enter before
+    // the queue edit does.
+    let input = &mut *context.input;
+    if input.completion().view().is_none()
+        && submit_queue_edit(
+            PromptContext::new(
+                context.working_directory,
+                context.runtime,
+                context.active,
+                context.state,
+                context.controls,
+                context.clipboard_images,
+            ),
+            input,
+        )
+        .await?
+    {
+        context.refresh_composer();
+        return Ok(false);
+    }
     if resume_paused_queue(context.input.editor(), context.state) {
+        return Ok(false);
+    }
+    // Reference `_dispatch_submitted_value`: an empty Enter steers what is
+    // queued into the running turn, except in queue mode (`_steer_queued_now`).
+    if context.input.editor().text().trim().is_empty()
+        && !context.state.prompt_queue.is_empty()
+        && context.state.queue_selection.is_none()
+    {
+        steer_queued_prompts(PromptContext::new(
+            context.working_directory,
+            context.runtime,
+            context.active,
+            context.state,
+            context.controls,
+            context.clipboard_images,
+        ))
+        .await?;
         return Ok(false);
     }
     let Some(submitted) = take_submission(key, context) else {
         return Ok(false);
     };
+    // Reference `_dispatch_submitted_value`: the first line sent stills the
+    // banner's cat.
+    context.state.banner_cat.freeze();
     // Reference `_dispatch_submitted_value` strips the line once, and every
     // route below reads the stripped value.
     let value = submitted.trim().to_owned();
@@ -689,12 +776,6 @@ fn take_submission(key: KeyEvent, context: &mut KeyContext<'_>) -> Option<String
     });
     debug_assert!(submitted.is_none() || context.input.editor().text().is_empty());
     submitted
-}
-
-pub(super) fn copy_prompt_selection(editor: &PromptEditor, state: &mut TuiState) -> Option<String> {
-    let selection = editor.selected_text()?;
-    copy_and_report(state, "Selection", &selection);
-    Some(selection)
 }
 
 pub(super) fn resume_paused_queue(editor: &PromptEditor, state: &mut TuiState) -> bool {

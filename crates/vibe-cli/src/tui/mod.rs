@@ -4,6 +4,7 @@ mod callback;
 pub mod chat_input;
 #[cfg(test)]
 mod chat_input_parity_tests;
+pub mod click_chain;
 pub mod clipboard;
 mod clipboard_images;
 mod cloud_workflow;
@@ -26,6 +27,7 @@ mod hydration;
 pub mod input;
 pub mod interaction;
 mod interactive;
+pub mod loading;
 pub mod narration;
 pub mod narrator;
 pub mod onboarding;
@@ -110,17 +112,23 @@ const INITIAL_HISTORY_LIMIT: usize = 200;
 pub(crate) const DEFAULT_MODEL: &str = "mistral-medium-3.5";
 const DEFAULT_CONTEXT_WINDOW: u64 = 200_000;
 
-fn emit_attention(state: &mut TuiState, effect: &attention::AttentionEffect) {
-    if let Err(error) = attention::write_attention(&mut std::io::stdout().lock(), effect) {
-        state.push_diagnostic(error);
+/// Performs the attention writes queued since the last frame, after reporting
+/// a busy transition the way reference `_on_busy_state_changed` does.
+fn flush_attention(state: &mut TuiState) {
+    if let Some(effect) = state.notifier.sync_busy(state.waiting) {
+        state.attend(effect);
+    }
+    for effect in std::mem::take(&mut state.pending_attention) {
+        if let Err(error) = attention::write_attention(&mut std::io::stdout().lock(), &effect) {
+            state.push_diagnostic(error);
+        }
     }
 }
 
 /// Reference `_terminal_notifier.notify`.
 fn notify_attention(state: &mut TuiState, context: attention::NotificationContext, now_ms: u64) {
-    if let Some(effect) = state.notifier.notify(context, now_ms) {
-        emit_attention(state, &effect);
-    }
+    let effect = state.notifier.notify(context, now_ms);
+    state.attend(effect);
 }
 
 fn apply_path_normalization_event(
@@ -357,12 +365,42 @@ fn compact_json(value: &Value) -> String {
 /// plain click or settles a drag selection, auto-copying it when the reference
 /// preference is on. Every external effect is scoped: a failure is reported and
 /// the selection survives it.
-async fn settle_transcript_pointer(state: &mut TuiState, column: u16, row: u16) {
+async fn settle_transcript_pointer(
+    runtime: Option<&mut InteractiveRuntime>,
+    state: &mut TuiState,
+    column: u16,
+    row: u16,
+) {
     let Some(cell) = state.transcript_view.cell_at(column, row) else {
         return;
     };
+    if state.transcript_view.is_click()
+        && state.transcript_view.granularity() != click_chain::Granularity::Character
+    {
+        // Reference `WordSelectScreen._forward_event`: a chained click still
+        // folds the header it lands on, and elsewhere keeps the word or line
+        // its press selected.
+        if let Some(key) = state.transcript_view.toggle_at(cell).map(ToOwned::to_owned) {
+            state.transcript_view.clear_selection();
+            let folded = state.folds.entry(key).or_insert(true);
+            *folded = !*folded;
+        }
+        return;
+    }
     if state.transcript_view.is_click() {
         state.transcript_view.clear_selection();
+        // Reference `HistoryLoadMoreMessage.on_button_pressed`.
+        if state.transcript_view.is_load_more(cell) {
+            hydration::load_more_history(runtime, state);
+            return;
+        }
+        // Reference `CollapsibleSection.on_click`: a click on a header folds or
+        // unfolds that one section or group.
+        if let Some(key) = state.transcript_view.toggle_at(cell).map(ToOwned::to_owned) {
+            let folded = state.folds.entry(key).or_insert(true);
+            *folded = !*folded;
+            return;
+        }
         let Some(url) = state.transcript_view.link_at(cell) else {
             return;
         };
@@ -374,21 +412,36 @@ async fn settle_transcript_pointer(state: &mut TuiState, column: u16, row: u16) 
         return;
     }
     state.transcript_view.extend_selection(cell);
-    if state.autocopy_to_clipboard {
-        // A drag copies as it goes, so no event is raised here: the reference
-        // reports a copy the operator asked for, not one the selection made.
-        let _ = copy_transcript_selection(state);
-    }
 }
 
-/// Reference `action_copy_selection`: copies the transcript selection when one
-/// exists, and reports a clipboard refusal without discarding it. The copied
-/// text is answered back because its length is what `vibe.user_copied_text`
-/// reports; the text itself never leaves the process.
-fn copy_transcript_selection(state: &mut TuiState) -> Option<String> {
-    let selection = state.transcript_view.selected_text()?;
-    clipboard::copy_and_report(state, "Selection", &selection);
-    Some(selection)
+/// Reference `_get_selected_texts`: the transcript selection, then the
+/// composer's, in the order the screen shows them.
+fn selected_text(state: &TuiState, editor: &input::PromptEditor) -> Option<String> {
+    let parts = [
+        state.transcript_view.selected_text(),
+        editor
+            .selected_text()
+            .filter(|text| !text.trim().is_empty()),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>();
+    (!parts.is_empty()).then(|| parts.join("\n"))
+}
+
+/// Reference `action_copy_selection`, which the autocopy in `on_mouse_up`
+/// repeats on every release: every selection is copied, a notice says so,
+/// and only the copied length reaches telemetry.
+fn copy_selection(
+    runtime: Option<&InteractiveRuntime>,
+    state: &mut TuiState,
+    editor: &input::PromptEditor,
+) {
+    let Some(text) = selected_text(state, editor) else {
+        return;
+    };
+    clipboard::copy_and_notify(state, &text);
+    report_copied_text(runtime, &text);
 }
 
 /// Reference `_try_load_previous`: reveals the page above the debug window and
@@ -488,6 +541,18 @@ fn push_command_echo(state: &mut TuiState, message: String) -> String {
 
 /// Appends a notice this client wrote itself and answers the transcript id it
 /// was filed under, which is what a later settlement addresses it by.
+/// Reference `ErrorMessage` mounted by the client itself.
+fn push_local_error(state: &mut TuiState, message: String) {
+    state.append_local(TranscriptEntry {
+        id: String::new(),
+        revision: 1,
+        kind: TranscriptKind::Notice,
+        text: message,
+        status: EntryStatus::Failed,
+        source: EntrySource::notice(PublicNoticeLevel::Error),
+    });
+}
+
 fn push_local_notice(state: &mut TuiState, message: &str, status: EntryStatus) -> String {
     state.append_local(TranscriptEntry {
         id: String::new(),

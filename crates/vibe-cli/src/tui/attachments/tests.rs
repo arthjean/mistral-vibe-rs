@@ -73,14 +73,14 @@ fn only_supported_images_become_attachments() {
     };
     assert_eq!(attachment["alias"], "image.png");
     assert_eq!(attachment["mimeType"], "image/png");
-    assert_eq!(attachment["source"]["kind"], "file");
+    // A mentioned image travels inline, as the reference sends it without a
+    // session directory; the server snapshots it when one exists.
+    assert_eq!(attachment["source"]["kind"], "inline");
     assert_eq!(
-        attachment["source"]["path"],
-        temporary
-            .path()
-            .join("image.png")
-            .to_string_lossy()
-            .as_ref()
+        attachment["source"]["data"],
+        BASE64_STANDARD.encode(
+            std::fs::read(temporary.path().join("image.png")).expect("fixture image reads")
+        )
     );
     assert_eq!(prepared.turn.user_display_content, None);
 }
@@ -124,8 +124,23 @@ fn pasted_workspace_images_become_quoted_mentions() {
     fs::write(&text, "context").expect("text fixture");
     assert_eq!(
         normalize_pasted_text(&text.to_string_lossy()),
-        text.to_string_lossy()
+        format!("@'{}'", text.to_string_lossy())
     );
+    assert_eq!(
+        normalize_pasted_text(&format!(
+            "{}\n\n{}\n",
+            image.to_string_lossy(),
+            text.to_string_lossy()
+        )),
+        format!(
+            "@'{}' @'{}'",
+            image.to_string_lossy(),
+            text.to_string_lossy()
+        )
+    );
+    let missing = temporary.path().join("missing.txt");
+    let mixed = format!("{}\n{}", text.to_string_lossy(), missing.to_string_lossy());
+    assert_eq!(normalize_pasted_text(&mixed), mixed);
 
     assert_eq!(
         normalize_pasted_text(&format!(

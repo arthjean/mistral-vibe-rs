@@ -97,13 +97,16 @@ pub struct IntegrationTarget {
     pub requires_setup: bool,
 }
 
+/// What a row or key of the authentication panel does. Reference
+/// `MCPOAuthApp` and `ConnectorAuthApp` offer three rows (open, copy, show)
+/// and two keys: `r` (retry a failed login, or check a connector) and
+/// `Escape`/`Backspace` (back to the MCP browser).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthActionKind {
     Open,
     Copy,
     Show,
     Refresh,
-    Logout,
     Close,
 }
 
@@ -111,9 +114,12 @@ pub enum AuthActionKind {
 pub struct AuthAction {
     pub kind: IntegrationKind,
     pub source: String,
+    /// Empty once a server login failed: the panel then only retries.
     pub url: String,
     pub action: AuthActionKind,
     pub enable_on_complete: bool,
+    /// Whether the panel currently prints the URL above its instruction.
+    pub url_visible: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -357,20 +363,19 @@ impl Overlay {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum QueuedIntentKind {
-    Prompt,
-    Shell,
-}
-
+/// One prompt submitted while the session was busy.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QueuedIntent {
     pub id: String,
-    pub kind: QueuedIntentKind,
     pub draft: PromptDraft,
     pub prepared: Option<PreparedSubmission>,
 }
 
+/// Reference `QueueController` (`vibe/cli/textual_ui/message_queue.py`): every
+/// prompt submitted while busy folds into one pending item that promotes as a
+/// single turn, each prompt staying individually removable until then. Only
+/// prompts queue: the dispatcher refuses shell lines, slash commands and
+/// teleports while busy, as `_handle_queue_submit` does.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PromptQueue {
     items: VecDeque<QueuedIntent>,
@@ -390,6 +395,11 @@ impl Default for PromptQueue {
     }
 }
 
+/// Reference `QueueHeaderMessage.DEFAULT_LABEL`, and this port's own wording
+/// for its `PAUSED_LABEL`, which names the same two remedies.
+pub const QUEUE_HEADER: &str = "» Queued";
+pub const PAUSED_QUEUE_HEADER: &str = "» Queued (paused): Enter sends, typing adds";
+
 impl PromptQueue {
     pub fn push(&mut self, prompt: PromptDraft) {
         self.push_item(prompt, None);
@@ -403,48 +413,41 @@ impl PromptQueue {
         if self.items.is_empty() {
             self.scroll_offset = 0;
         }
-        let kind = if prompt.text().trim_start().starts_with('!') {
-            QueuedIntentKind::Shell
-        } else {
-            QueuedIntentKind::Prompt
-        };
         let id = format!("queued-{}", self.next_id);
         self.next_id = self.next_id.saturating_add(1);
         self.items.push_back(QueuedIntent {
             id,
-            kind,
             draft: prompt,
             prepared,
         });
     }
 
+    /// Every queued prompt, which the reference server promotes together as
+    /// the one merged item (`message_queue.py` `_MergedTurn`).
     pub fn take_next_batch(&mut self) -> Option<Vec<QueuedIntent>> {
-        if self.paused {
+        if self.paused || self.items.is_empty() {
             return None;
         }
-        let first = self.items.pop_front()?;
-        let kind = first.kind;
-        let mut items = vec![first];
-        if kind == QueuedIntentKind::Prompt {
-            while self
-                .items
-                .front()
-                .is_some_and(|intent| intent.kind == QueuedIntentKind::Prompt)
-            {
-                if let Some(intent) = self.items.pop_front() {
-                    items.push(intent);
-                }
-            }
-        }
-        self.clamp_scroll();
-        Some(items)
+        self.scroll_offset = 0;
+        Some(self.items.drain(..).collect())
+    }
+
+    /// Every queued prompt regardless of the pause, which is what a steer
+    /// sends into the running turn.
+    pub fn take_all(&mut self) -> Vec<QueuedIntent> {
+        self.scroll_offset = 0;
+        self.items.drain(..).collect()
     }
 
     pub fn restore_batch_and_pause(&mut self, batch: Vec<QueuedIntent>) {
+        self.restore_batch(batch);
+        self.paused = true;
+    }
+
+    pub fn restore_batch(&mut self, batch: Vec<QueuedIntent>) {
         for item in batch.into_iter().rev() {
             self.items.push_front(item);
         }
-        self.paused = true;
         self.scroll_offset = 0;
     }
 
@@ -455,6 +458,51 @@ impl PromptQueue {
         }
         self.clamp_scroll();
         cancelled
+    }
+
+    /// Reference `queue_item_texts`, newest first: the order Up walks it in.
+    #[must_use]
+    pub fn newest_first(&self) -> Vec<(&str, &str)> {
+        self.items
+            .iter()
+            .rev()
+            .map(|intent| (intent.id.as_str(), intent.draft.text()))
+            .collect()
+    }
+
+    #[must_use]
+    pub fn index_of(&self, id: &str) -> Option<usize> {
+        self.items.iter().position(|intent| intent.id == id)
+    }
+
+    /// Reference `pop_at`: removes one queued prompt before it starts.
+    pub fn remove(&mut self, id: &str) -> Option<QueuedIntent> {
+        let removed = self.items.remove(self.index_of(id)?);
+        if self.items.is_empty() {
+            self.paused = false;
+        }
+        self.clamp_scroll();
+        removed
+    }
+
+    /// Reference `update_prompt`: rewrites a queued prompt in place, which
+    /// fails once it started.
+    pub fn replace(&mut self, id: &str, draft: PromptDraft, prepared: PreparedSubmission) -> bool {
+        let Some(index) = self.index_of(id) else {
+            return false;
+        };
+        let intent = &mut self.items[index];
+        intent.draft = draft;
+        intent.prepared = Some(prepared);
+        true
+    }
+
+    /// Scrolls the queue so the prompt `id` heads it, as the reference
+    /// scrolls the selected widget to the top.
+    pub fn reveal(&mut self, id: &str) {
+        if let Some(index) = self.index_of(id) {
+            self.scroll_offset = index;
+        }
     }
 
     pub fn pause(&mut self) {
@@ -494,34 +542,23 @@ impl PromptQueue {
         self.paused
     }
 
-    #[must_use]
-    pub fn next_kind(&self) -> Option<QueuedIntentKind> {
-        self.items.front().map(|item| item.kind)
-    }
-
+    /// Reference `QueueHeaderMessage` above the pending `UserMessage` widgets.
     #[must_use]
     pub fn presentation_lines(&self) -> Vec<String> {
         if self.items.is_empty() {
             return Vec::new();
         }
-        let mut lines = vec![if self.paused {
-            "Queued messages (paused)".to_owned()
+        let header = if self.paused {
+            PAUSED_QUEUE_HEADER
         } else {
-            "Queued messages".to_owned()
-        }];
-        lines.extend(self.items.iter().map(|intent| match intent.kind {
-            QueuedIntentKind::Prompt => format!("› {}", intent.draft.text()),
-            QueuedIntentKind::Shell => format!(
-                    "$ {}",
-                    intent
-                        .draft
-                        .text()
-                        .trim_start()
-                        .strip_prefix('!')
-                        .unwrap_or(intent.draft.text())
-                        .trim_start()
-                ),
-        }));
+            QUEUE_HEADER
+        };
+        let mut lines = vec![header.to_owned()];
+        lines.extend(
+            self.items
+                .iter()
+                .map(|intent| format!("> {}", intent.draft.text())),
+        );
         lines
     }
 

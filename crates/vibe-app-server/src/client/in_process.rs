@@ -453,7 +453,7 @@ impl InProcessClient {
             "turn/start",
             json!({
                 "sessionId": session_id,
-                "input": turn.input,
+                "message": turn.input,
                 "injected": turn.injected,
                 "clientUserMessageId": turn.client_user_message_id,
                 "autoTitle": turn.auto_title,
@@ -601,6 +601,40 @@ impl InProcessClient {
         Ok(())
     }
 
+    /// Sends `session/context/inject` for an idle session and returns the text
+    /// the driver is to hold for the next turn, once the canonical session has
+    /// recorded it.
+    pub fn inject_context(
+        &mut self,
+        session_id: &str,
+        text: &str,
+    ) -> Result<(String, bool, bool), ClientError> {
+        let request_id = self.take_request_id();
+        let request = request_bytes(
+            request_id.clone(),
+            "session/context/inject",
+            json!({
+                "sessionId": session_id,
+                "input": [{"type": "text", "text": text}],
+            }),
+        )?;
+        let batch = self.connection.dispatch(&request);
+        response_result(response_frame(batch.outbound)?, &request_id)?;
+        match batch.deferred.as_slice() {
+            [
+                DeferredWork::InjectContext {
+                    content,
+                    as_message,
+                    inject_invoked_skill,
+                    ..
+                },
+            ] => Ok((content.clone(), *as_message, *inject_invoked_skill)),
+            _ => Err(ClientError::InvalidResponse(
+                "context injection did not schedule delivery".to_owned(),
+            )),
+        }
+    }
+
     pub fn interrupt(&mut self, session_id: &str, turn_id: &str) -> Result<(), ClientError> {
         let request_id = self.take_request_id();
         let request = request_bytes(
@@ -621,6 +655,42 @@ impl InProcessClient {
             ));
         }
         Ok(())
+    }
+
+    /// Sends `turn/steer` for the running turn and returns the text the
+    /// driver is to deliver, once the canonical turn has accepted it.
+    pub fn steer(
+        &mut self,
+        session_id: &str,
+        turn_id: &str,
+        input: &[PublicContentBlock],
+        client_user_message_id: Option<&str>,
+    ) -> Result<(String, bool), ClientError> {
+        let request_id = self.take_request_id();
+        let request = request_bytes(
+            request_id.clone(),
+            "turn/steer",
+            json!({
+                "sessionId": session_id,
+                "expectedTurnId": turn_id,
+                "message": input,
+                "clientUserMessageId": client_user_message_id,
+            }),
+        )?;
+        let batch = self.connection.dispatch(&request);
+        response_result(response_frame(batch.outbound)?, &request_id)?;
+        match batch.deferred.as_slice() {
+            [
+                DeferredWork::SteerTurn {
+                    content,
+                    inject_invoked_skill,
+                    ..
+                },
+            ] => Ok((content.clone(), *inject_invoked_skill)),
+            _ => Err(ClientError::InvalidResponse(
+                "steer did not schedule delivery".to_owned(),
+            )),
+        }
     }
 
     pub async fn close_session(

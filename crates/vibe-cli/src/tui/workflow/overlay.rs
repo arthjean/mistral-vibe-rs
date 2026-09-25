@@ -173,23 +173,14 @@ pub(super) async fn select_overlay_item(
             }
             return Some(OverlayEffect::Mcp(McpEffect::ShowDetail { target }));
         }
-        OverlayKind::McpDetail => {
-            let OverlayAction::Integration(target) = item.action else {
-                return None;
-            };
-            if target.requires_setup {
-                return Some(OverlayEffect::Mcp(McpEffect::Refresh {
-                    kind: target.kind,
-                    source: target.source,
-                }));
-            }
-        }
+        // A tool row toggles through `e` and `d`, not `Enter`.
+        OverlayKind::McpDetail => {}
         OverlayKind::McpAuth => {
             let OverlayAction::Authenticate(action) = item.action else {
                 state.push_diagnostic("Authentication action is malformed");
                 return None;
             };
-            return Some(OverlayEffect::Mcp(reduce_auth_action(&action)));
+            return reduce_auth_action(&action).map(OverlayEffect::Mcp);
         }
         OverlayKind::Voice => {
             // The two active-model fields open their own choice list; every

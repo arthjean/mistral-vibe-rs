@@ -39,7 +39,7 @@ pub(super) fn handle_key(
     terminal_guard: &mut TerminalGuard<CrosstermOps<std::io::Stdout>>,
     terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
 ) -> Result<bool, CliError> {
-    if controls.pending_callback().is_none() {
+    if controls.pending_callback().is_none() || state.typing_hold {
         return Ok(false);
     }
     if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
@@ -77,7 +77,11 @@ pub(super) fn handle_key(
                     error: None,
                 });
             }
-            Err(error) => state.push_diagnostic(format!("Could not open plan in editor: {error}")),
+            // Reference `PlanFileMessage.open_in_editor` names the file, not
+            // the cause.
+            Err(_) => {
+                state.push_diagnostic(format!("Could not open plan in editor: {}", path.display()))
+            }
         }
         sync_callback_presentation(controls, state, unix_millis());
         return Ok(true);
@@ -263,6 +267,12 @@ pub(super) fn respond_to_pending_callback(
             push_local_notice(state, "Callback response accepted", EntryStatus::Completed);
             resync_current_projection(runtime, state);
             sync_active_callbacks(runtime, state, controls);
+            // Reference `_show_callback`: once no callback is left, the tab
+            // shows whether the agent still runs.
+            if controls.pending_callback().is_none() {
+                let effect = state.notifier.set_running(state.waiting);
+                state.attend(effect);
+            }
         }
         Err(error) => {
             let still_pending = recover_from_callback_response_error(
@@ -769,11 +779,47 @@ fn plan_option_id(label: &str) -> Option<&'static str> {
     }
 }
 
+/// Reference `_resolve_typing_debounce_s`: `VIBE_TYPING_GRACE_PERIOD_MS`, a
+/// non-negative count of milliseconds, or one second.
+fn typing_grace_ms() -> u64 {
+    std::env::var("VIBE_TYPING_GRACE_PERIOD_MS")
+        .ok()
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .unwrap_or(1_000)
+}
+
+/// Reference `_wait_for_typing_pause`: a callback that arrives while the
+/// operator is typing waits until the keyboard has been quiet for the grace
+/// period, so a keystroke meant for the prompt never answers it.
+pub(super) fn hold_for_typing(controls: &mut ControlState, state: &mut TuiState, now_ms: u64) {
+    let Some(callback_id) = controls
+        .pending_callback()
+        .map(|pending| pending.callback_id.clone())
+    else {
+        state.typing_hold = false;
+        state.revealed_callback = None;
+        return;
+    };
+    if state.revealed_callback.as_deref() == Some(callback_id.as_str()) {
+        state.typing_hold = false;
+        return;
+    }
+    state.typing_hold = now_ms.saturating_sub(state.last_keystroke_ms) < typing_grace_ms();
+    if !state.typing_hold {
+        state.revealed_callback = Some(callback_id);
+        controls.rearm_input_grace(now_ms);
+    }
+}
+
 pub(super) fn sync_callback_presentation(
     controls: &ControlState,
     state: &mut TuiState,
     now_ms: u64,
 ) {
+    if state.typing_hold {
+        state.set_callback_presentation(None);
+        return;
+    }
     let mut presentation = controls.callback_presentation(now_ms);
     if !controls
         .pending_callback()
@@ -1161,6 +1207,46 @@ mod tests {
                 .diagnostics()
                 .any(|message| message.contains("Cannot approve the plan"))
         );
+    }
+
+    #[test]
+    fn a_callback_waits_for_the_typing_pause_before_it_shows() {
+        let mut state = TuiState::new("session");
+        let mut controls = ControlState::new("session");
+        controls.begin_turn("turn").expect("turn begins");
+        controls
+            .present_callback(PendingCallback {
+                callback_id: "typed-over".to_owned(),
+                session_id: "session".to_owned(),
+                turn_id: "turn".to_owned(),
+                prompt: "Approve?".to_owned(),
+                request: CallbackRequest::Approval {
+                    options: Vec::new(),
+                    effect: CallbackEffect {
+                        tool_name: "test".to_owned(),
+                        summary: String::new(),
+                        content: String::new(),
+                        permissions: Vec::new(),
+                    },
+                },
+            })
+            .expect("callback presents");
+        state.last_keystroke_ms = 10_000;
+
+        hold_for_typing(&mut controls, &mut state, 10_400);
+        sync_callback_presentation(&controls, &mut state, 10_400);
+        assert!(state.typing_hold);
+        assert!(state.callback.is_none());
+
+        hold_for_typing(&mut controls, &mut state, 11_000);
+        sync_callback_presentation(&controls, &mut state, 11_000);
+        assert!(!state.typing_hold);
+        assert!(state.callback.is_some());
+        assert!(!controls.input_is_ready(11_000));
+
+        state.last_keystroke_ms = 11_100;
+        hold_for_typing(&mut controls, &mut state, 11_200);
+        assert!(!state.typing_hold, "a revealed callback stays revealed");
     }
 
     #[test]

@@ -667,13 +667,22 @@ fn run_ranking(corpus: &Corpus, report: &mut Report) {
         let Some((_, scratch, entries)) = current.as_ref() else {
             continue;
         };
-        let query = format!("@{}", case.query);
-        let resolution = engine.resolve_request(
-            CompletionRequest::new(0, 0..query.chars().count(), query),
-            &scratch.root,
-        );
-        let CompletionResolution::Results { candidates, .. } = resolution else {
-            panic!("the fixture root answers a mention query: {}", case.case);
+        // The capture drives `PathCompleter._score_matches`. For every query but
+        // the empty one that is what the engine answers; a bare `@` is answered
+        // by the directory listing instead, which the composer corpus measures,
+        // so the empty query is scored against the index directly.
+        let candidates = if case.query.is_empty() {
+            rank_indexed_paths(entries.entries.values(), &case.query, true)
+        } else {
+            let query = format!("@{}", case.query);
+            let resolution = engine.resolve_request(
+                CompletionRequest::new(0, 0..query.chars().count(), query),
+                &scratch.root,
+            );
+            let CompletionResolution::Results { candidates, .. } = resolution else {
+                panic!("the fixture root answers a mention query: {}", case.case);
+            };
+            candidates
         };
         let context = path_search_context(&case.query);
         let by_label = entries

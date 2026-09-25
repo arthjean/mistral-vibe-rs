@@ -17,16 +17,18 @@ pub fn teleport_push_overlay(event: &Value) -> Option<Overlay> {
         .get("branchNotPushed")
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    let detail = if branch {
-        "Publish the current branch before starting Teleport".to_owned()
+    // Reference `VibeApp._ask_push_approval`: one question under a `Push`
+    // header with two choices and no free-text answer.
+    let question = if branch {
+        "Your branch doesn't exist on remote. Push to continue?".to_owned()
     } else {
         format!(
-            "Push {count} unpushed commit{} before starting Teleport",
+            "You have {count} unpushed commit{}. Push to continue?",
             if count == 1 { "" } else { "s" }
         )
     };
-    let action = |approved, id: &str, label: &str, description: &str| {
-        OverlayItem::new(id, label, description, false).with_action(OverlayAction::TeleportPush(
+    let action = |approved, id: &str, label: &str| {
+        OverlayItem::new(id, label, "", false).with_action(OverlayAction::TeleportPush(
             TeleportPushAction {
                 operation_id: operation_id.to_owned(),
                 approved,
@@ -35,18 +37,13 @@ pub fn teleport_push_overlay(event: &Value) -> Option<Overlay> {
     };
     let mut overlay = Overlay::new(
         OverlayKind::TeleportApproval,
-        "Teleport needs to push changes",
+        "Push",
         vec![
-            action(true, "teleport:push:approve", "Push and continue", &detail),
-            action(
-                false,
-                "teleport:push:cancel",
-                "Cancel",
-                "Cancel Teleport without pushing",
-            ),
+            action(true, "teleport:push:approve", "Push and continue"),
+            action(false, "teleport:push:cancel", "Cancel"),
         ],
     );
-    overlay.notice = Some("Choose whether Teleport may push this repository.".to_owned());
+    overlay.notice = Some(question);
     Some(overlay)
 }
 
@@ -230,18 +227,9 @@ pub fn remote_projects_overlay(view: &Value) -> Overlay {
         );
     }
     let mut overlay = Overlay::new(OverlayKind::RemoteProjects, PICKER_TITLE, items);
-    overlay.notice = if view
-        .get("savedProjectLinkCleared")
-        .and_then(Value::as_bool)
-        .unwrap_or(false)
-    {
-        Some(
-            "The saved project link no longer matches this repository. Select a project."
-                .to_owned(),
-        )
-    } else {
-        Some(format!("Repository: {}", repository_label(repo_url)))
-    };
+    // Reference `VibeCodeProjectPickerApp`: a saved link that stopped matching
+    // is cleared without a word, and the picker keeps its repository line.
+    overlay.notice = Some(format!("Repository: {}", repository_label(repo_url)));
     overlay
 }
 

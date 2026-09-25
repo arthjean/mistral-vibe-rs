@@ -166,7 +166,7 @@ fn a_muted_notification_is_dropped_and_a_sequenced_event_is_not() {
     muted.dispatch(&request(
         4,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "hello"}]}),
     ));
     let started = server
         .turn_started("session-1", "turn-1")
@@ -207,7 +207,7 @@ fn session_updated_names_the_turn_the_callback_and_the_failure() {
     connection.dispatch(&request(
         3,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "hello"}]}),
     ));
     let started = server
         .turn_started("session-1", "turn-1")
@@ -278,7 +278,7 @@ fn stats_updated_carries_the_whole_snapshot_and_the_session_token_usage() {
     connection.dispatch(&request(
         3,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "hello"}]}),
     ));
     server
         .turn_started("session-1", "turn-1")
@@ -798,7 +798,7 @@ fn invalid_params_names_the_offending_value() {
     let batch = connection.dispatch(&request(
         3,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": 7}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": 7}]}),
     ));
     let Envelope::Error(ErrorResponse { error, .. }) =
         decode_frame(&batch.outbound[0]).expect("rejection")
@@ -814,7 +814,7 @@ fn invalid_params_names_the_offending_value() {
     // up on the variant, not inside the one it never selected.
     assert_eq!(
         issue["path"],
-        json!(["input", 0]),
+        json!(["message", 0]),
         "the path names the field and index that failed: {}",
         error.data
     );
@@ -830,7 +830,7 @@ fn invalid_params_names_the_offending_value() {
     let batch = connection.dispatch(&request(
         4,
         "turn/start",
-        json!({"sessionId": "absent", "input": [{"type": "text", "text": "hello"}]}),
+        json!({"sessionId": "absent", "message": [{"type": "text", "text": "hello"}]}),
     ));
     let Envelope::Error(ErrorResponse { error, .. }) =
         decode_frame(&batch.outbound[0]).expect("rejection")

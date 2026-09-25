@@ -227,14 +227,13 @@ fn an_unknown_active_model_falls_back_and_publishes_a_readable_warning() {
     );
 }
 
-/// The five keys only this port declares stay readable beside the shipped
+/// The four keys only this port declares stay readable beside the shipped
 /// reference defaults; each is a recorded divergence rather than a mapping, so
 /// nothing reinterprets a value already on disk.
 #[test]
 fn a_persisted_locally_declared_key_still_loads_beside_the_shipped_defaults() {
     let effective = shipped(concat!(
         "thinking = \"high\"\n",
-        "notifications = \"always\"\n",
         "proxy = \"http://proxy.example.test:3128\"\n",
         "tls_ca_path = \"/etc/ssl/certs/custom.pem\"\n",
         "dotenv_path = \"/home/user/.vibe/.env\"\n",
@@ -243,7 +242,6 @@ fn a_persisted_locally_declared_key_still_loads_beside_the_shipped_defaults() {
     .effective;
 
     assert_eq!(effective["thinking"].as_str(), Some("high"));
-    assert_eq!(effective["notifications"].as_str(), Some("always"));
     assert_eq!(
         effective["proxy"].as_str(),
         Some("http://proxy.example.test:3128")

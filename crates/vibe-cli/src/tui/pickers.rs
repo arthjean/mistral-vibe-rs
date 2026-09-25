@@ -5,7 +5,9 @@ use serde_json::Value;
 mod integrations;
 mod remote_projects;
 
-pub use integrations::{mcp_auth_overlay, mcp_detail_overlay, mcp_overlay};
+pub use integrations::{
+    mcp_auth_failed_overlay, mcp_auth_overlay, mcp_detail_overlay, mcp_overlay,
+};
 pub use remote_projects::{
     remote_project_create_overlay, remote_projects_overlay, teleport_push_overlay,
 };
@@ -26,7 +28,7 @@ const POPULAR_CONFIG_FIELDS: &[&str] = &[
     ACTIVE_MODEL_FIELD,
     THINKING_FIELD,
     THEME_FIELD,
-    "notifications",
+    "enable_notifications",
     "voice_mode_enabled",
     "narrator_enabled",
 ];

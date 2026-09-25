@@ -211,9 +211,16 @@ impl WorkspaceService {
             parsed.insert(key, value);
         }
         if !parsed.is_empty() {
+            // Reference `_config_proxy_write` answers `ProxySetupError` as
+            // invalid params (`vibe/app_server/_resources.py`).
             ProxyEnvironmentStore::new(&self.paths.vibe_home)
                 .write(&parsed)
-                .map_err(config_error)?;
+                .map_err(|error| match error {
+                    vibe_core::config::ConfigError::InvalidProxyScheme(..) => {
+                        WorkspaceServiceError::InvalidParams(error.to_string())
+                    }
+                    error => config_error(error),
+                })?;
         }
         Ok(WorkspaceDispatch::result([] as [(&str, Value); 0]))
     }

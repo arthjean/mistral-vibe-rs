@@ -387,6 +387,8 @@ pub(super) async fn finish_active(
     if let Some(effect) = state.narrator.on_turn_end() {
         apply_narrator_effect(effect, runtime, state);
     }
+    let idle = state.notifier.set_running(false);
+    state.attend(idle);
     notify_attention(
         state,
         attention::NotificationContext::Complete,

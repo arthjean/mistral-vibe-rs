@@ -206,29 +206,28 @@ pub fn mcp_detail_overlay(
         }
     };
     if requires_setup {
+        // Reference `MCPApp._refresh_view` for `NEEDS_SETUP`: one instruction,
+        // and the browser's `r` binding performs the refresh it names.
         items = vec![
             OverlayItem::new(
                 "mcp-detail:setup",
-                "Set up credentials in the Mistral dashboard",
-                "Then refresh this connector",
+                "Set up credentials in the Mistral dashboard, then press r to refresh.",
+                "",
                 true,
-            ),
-            OverlayItem::new(
-                "mcp-detail:setup-refresh",
-                "Refresh connector",
-                "Check whether credential setup is complete",
-                false,
             )
             .with_action(OverlayAction::Integration(target.clone())),
         ];
     }
     if items.is_empty() {
-        items.push(OverlayItem::new(
-            "mcp-detail:empty",
-            "No tools discovered",
-            "Backspace returns to all sources",
-            true,
-        ));
+        items.push(
+            OverlayItem::new(
+                "mcp-detail:empty",
+                "No tools discovered",
+                "Backspace returns to all sources",
+                true,
+            )
+            .with_action(OverlayAction::Integration(target.clone())),
+        );
     }
     Overlay::new(OverlayKind::McpDetail, title, items)
 }
@@ -364,61 +363,84 @@ fn integration_item(
     ))
 }
 
+/// Reference `MCPOAuthApp` once its login published a URL, and
+/// `ConnectorAuthApp` once it fetched one: a heading row, a spacer, the three
+/// URL rows, and the instruction below them, which carries the URL itself
+/// while "Manually show the URL" has it shown.
 #[must_use]
 pub fn mcp_auth_overlay(
     kind: IntegrationKind,
     source: &str,
     url: &str,
     enable_on_complete: bool,
+    url_visible: bool,
 ) -> Overlay {
-    let action = |action: AuthActionKind, label: &str, description: &str| {
-        OverlayItem::new(format!("auth:{action:?}"), label, description, false).with_action(
-            OverlayAction::Authenticate(AuthAction {
-                kind,
-                source: source.to_owned(),
-                url: url.to_owned(),
-                action,
-                enable_on_complete,
-            }),
-        )
+    let context = |action: AuthActionKind| {
+        OverlayAction::Authenticate(AuthAction {
+            kind,
+            source: source.to_owned(),
+            url: url.to_owned(),
+            action,
+            enable_on_complete,
+            url_visible,
+        })
     };
-    let mut items = vec![
-        action(
-            AuthActionKind::Open,
-            "Open in browser",
-            "Open the validated authentication URL",
+    let (title, heading, open, instruction) = match kind {
+        IntegrationKind::McpServer => (
+            format!("MCP Server: {source}"),
+            "This MCP server requires authentication",
+            "Press enter to open auth in your browser",
+            "Once authenticated in your browser, return to Vibe",
         ),
-        action(
-            AuthActionKind::Copy,
-            "Copy URL",
-            "Copy the authentication URL to the clipboard",
+        IntegrationKind::Connector => (
+            format!("Connector: {source}"),
+            "This connector requires authentication",
+            "Press Enter to open auth in your browser",
+            "Once authenticated, press r to refresh",
         ),
-        action(
-            AuthActionKind::Show,
-            "Show URL",
-            "Print the authentication URL in the transcript",
-        ),
-        action(
-            AuthActionKind::Refresh,
-            "Authentication complete",
-            "Refresh source state after sign-in",
-        ),
+    };
+    let row = |id: &str, label: &str, action: AuthActionKind| {
+        OverlayItem::new(format!("auth:{id}"), label, "", false).with_action(context(action))
+    };
+    let items = vec![
+        OverlayItem::new("auth:heading", heading, "", true)
+            .with_action(context(AuthActionKind::Refresh)),
+        OverlayItem::new("auth:spacer", "", "", true),
+        row("open", open, AuthActionKind::Open),
+        row("copy", "Copy URL to clipboard", AuthActionKind::Copy),
+        row("show", "Manually show the URL", AuthActionKind::Show),
     ];
-    if kind == IntegrationKind::McpServer {
-        items.push(action(
-            AuthActionKind::Logout,
-            "Log out",
-            "Clear saved authentication for this source",
-        ));
-    }
-    items.push(action(
-        AuthActionKind::Close,
-        "Close",
-        "Return without changing source state",
-    ));
+    let mut overlay = Overlay::new(OverlayKind::McpAuth, title, items);
+    overlay.notice = Some(if url_visible {
+        format!("{url}\n\n{instruction}")
+    } else {
+        instruction.to_owned()
+    });
+    overlay
+}
+
+/// Reference `MCPOAuthApp._on_login_failed`: the rows give way to one
+/// instruction, and `r` starts the login again.
+#[must_use]
+pub fn mcp_auth_failed_overlay(source: &str, enable_on_complete: bool) -> Overlay {
     Overlay::new(
         OverlayKind::McpAuth,
-        format!("Authenticate {source}"),
-        items,
+        format!("MCP Server: {source}"),
+        vec![
+            OverlayItem::new(
+                "auth:failed",
+                "Authentication failed. Press R to retry.",
+                "",
+                true,
+            )
+            .with_action(OverlayAction::Authenticate(AuthAction {
+                kind: IntegrationKind::McpServer,
+                source: source.to_owned(),
+                url: String::new(),
+                action: AuthActionKind::Refresh,
+                enable_on_complete,
+                url_visible: false,
+            })),
+        ],
     )
 }

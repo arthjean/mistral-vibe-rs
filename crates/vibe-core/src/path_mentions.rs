@@ -3,17 +3,50 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::images::ImageFormat;
 
+/// Normalizes a bracketed paste before it is inserted.
+///
+/// Reference `maybe_prepend_at_for_path`
+/// (`vibe/cli/textual_ui/widgets/chat_input/paste_path.py`): a paste whose
+/// non-blank lines are all existing absolute paths, of any type, becomes one
+/// mention per line joined by spaces; anything else keeps the bare image
+/// rewrite the text-changed hook applies.
 #[must_use]
 pub fn normalize_pasted_text(pasted: &str) -> String {
-    let trimmed = pasted.trim();
-    if !trimmed.is_empty() && !trimmed.contains(['\n', '\r']) && !trimmed.starts_with('@') {
-        let candidate = unescaped_path_candidate(trimmed);
-        if candidate.starts_with(['/', '~']) && is_image_file(&candidate) {
-            return format!("@{}", quote_path_if_needed(&candidate));
-        }
+    let lines = pasted
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>();
+    if !lines.is_empty()
+        && let Some(mentions) = lines
+            .iter()
+            .map(|line| pasted_path_mention(line))
+            .collect::<Option<Vec<_>>>()
+    {
+        return mentions.join(" ");
     }
 
     rewrite_bare_image_paths(pasted)
+}
+
+/// Normalizes the composer text after an edit: reference
+/// `rewrite_bare_image_paths_in_text`, the text-changed hook that recovers
+/// drag-and-drop in terminals without bracketed paste.
+#[must_use]
+pub fn normalize_typed_text(text: &str) -> String {
+    rewrite_bare_image_paths(text)
+}
+
+fn pasted_path_mention(line: &str) -> Option<String> {
+    if line.starts_with('@') {
+        return None;
+    }
+    let candidate = unescaped_path_candidate(line);
+    if candidate.is_empty() {
+        return None;
+    }
+    let path = expand_tilde_path(&candidate);
+    (path.is_absolute() && path.exists()).then(|| format!("@{}", quote_path_if_needed(&candidate)))
 }
 
 pub fn mention_values(text: &str) -> Vec<String> {
@@ -120,7 +153,12 @@ fn unescaped_path_candidate(value: &str) -> String {
                 .and_then(|inner| inner.strip_suffix(quote))
         })
         .unwrap_or(value);
-    unquoted.replace("\\ ", " ")
+    // Reference `_unescape_spaces` leaves Windows paths as typed.
+    if cfg!(windows) {
+        unquoted.to_owned()
+    } else {
+        unquoted.replace("\\ ", " ")
+    }
 }
 
 fn is_image_file(candidate: &str) -> bool {
@@ -128,11 +166,19 @@ fn is_image_file(candidate: &str) -> bool {
     path.is_absolute() && ImageFormat::from_path(&path).is_some() && path.is_file()
 }
 
+/// Reference `_quote_if_needed`: a path made only of alphanumerics and the
+/// unquoted mention characters stays bare; otherwise it takes the first quote
+/// it does not contain, escaping single quotes when it contains both.
 fn quote_path_if_needed(path: &str) -> String {
-    if path.contains(' ') {
+    if path.chars().all(is_mention_path_character) {
+        return path.to_owned();
+    }
+    if !path.contains('\'') {
         format!("'{path}'")
+    } else if !path.contains('"') {
+        format!("\"{path}\"")
     } else {
-        path.to_owned()
+        format!("'{}'", path.replace('\'', "\\'"))
     }
 }
 

@@ -31,8 +31,8 @@ use super::session_picker::SessionDeleteState;
 use super::state::{EntryStatus, TuiState};
 use super::switching::{self, SwitchRequest};
 use super::{
-    InteractiveRuntime, adopt_hydrated_session, call_runtime, metadata_session_id,
-    push_local_notice, unix_millis,
+    InteractiveRuntime, adopt_hydrated_session, call_runtime, hydration, metadata_session_id,
+    push_local_error, push_local_notice, unix_millis,
 };
 pub(in crate::tui) use config::apply_render_preferences;
 use config::{
@@ -50,7 +50,7 @@ pub(in crate::tui) use live_commands::{FollowUp, LiveBackend, run_command};
 pub(in crate::tui) use mcp::{McpEffect, McpPendingOperation, apply_pending_operation};
 pub(super) use mcp::{SystemUrlOpener, UrlOpenerPort, execute_mcp_effect};
 #[cfg(test)]
-pub(in crate::tui) use mcp::{reduce_auth_action, valid_auth_url};
+pub(in crate::tui) use mcp::{auth_panel_context, reduce_auth_action};
 
 /// How much of the saved transcript one page of the rewind picker reads,
 /// which is the most the store answers at once.
@@ -400,17 +400,26 @@ fn resume_selected_session(
         state.push_diagnostic("This session is already active.");
         return;
     }
-    if let Some(result) = call_runtime(
-        runtime,
-        "session/resume",
-        json!({"sessionId": session_id}),
-        state,
-    ) && let Some(session_id) = metadata_session_id(&result)
-        && adopt_hydrated_session(runtime, state, controls, session_id)
+    // Reference `on_session_picker_app_session_selected`: the picker closes
+    // first, and a refused resume is an error in the transcript.
+    state.overlay = None;
+    state.session_delete = None;
+    let result = match runtime
+        .service
+        .public_call("session/resume", json!({"sessionId": session_id}))
     {
-        state.overlay = None;
-        state.session_delete = None;
-        push_local_notice(state, "Resumed session", EntryStatus::Completed);
+        Ok(result) => result,
+        Err(error) => {
+            push_local_error(state, format!("Failed to load session: {error}"));
+            return;
+        }
+    };
+    let Some(session_id) = metadata_session_id(&result) else {
+        return;
+    };
+    let notice = hydration::resumed_session_notice(&session_id);
+    if adopt_hydrated_session(runtime, state, controls, session_id) {
+        push_local_notice(state, &notice, EntryStatus::Completed);
     }
 }
 

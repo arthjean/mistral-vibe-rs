@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::attention::AttentionNotifier;
+use super::attention::{AttentionEffect, AttentionNotifier};
 use super::controls::CallbackPresentation;
 use super::debug_console::DebugConsole;
 use super::diagnostics::{Activity, ErrorLog};
@@ -13,9 +13,16 @@ use super::narrator::NarratorManager;
 use super::rewind::RewindState;
 use super::session_picker::SessionDeleteState;
 use super::transcript_view::TranscriptView;
-use vibe_app_server::client::{PublicEffectState, PublicHistoryEntry, PublicNoticeLevel};
+use vibe_app_server::client::{
+    NoticeDetail, PublicEffectState, PublicHistoryEntry, PublicNoticeLevel,
+};
 
 const MAX_DIAGNOSTICS: usize = 100;
+
+/// Reference `HISTORY_RESUME_TAIL_MESSAGES` and `LOAD_MORE_BATCH_SIZE`
+/// (`vibe/cli/textual_ui/windowing/state.py`).
+pub const HISTORY_RESUME_TAIL_MESSAGES: usize = 20;
+pub const LOAD_MORE_BATCH_SIZE: usize = 10;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -211,6 +218,28 @@ pub enum ApplyResult {
     ResyncRequired,
 }
 
+/// Reference `DEFAULT_NOTICE_TIMEOUT`.
+pub const INLINE_NOTICE_MS: u64 = 4_000;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InlineNotice {
+    pub text: String,
+    pub expires_at_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QueueSelection {
+    /// The selected prompt's queue id.
+    pub selected: String,
+    /// Its place counted from the newest, kept when a promotion takes it.
+    pub position: usize,
+    /// What the composer held before the queue took it, restored on exit.
+    pub original: String,
+    pub editing: bool,
+    /// The edited prompt started before the edit was saved.
+    pub consumed: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TuiState {
     pub session_id: String,
@@ -218,6 +247,10 @@ pub struct TuiState {
     pub entries: Vec<TranscriptEntry>,
     pub cursor_before: Option<String>,
     pub cursor_after: Option<String>,
+    /// Reference `SessionWindowing`: a resumed transcript shows its latest
+    /// entries, and this names the oldest one shown. Everything before it is
+    /// revealed a batch at a time by "Load more messages".
+    pub history_first_visible: Option<String>,
     pub waiting: bool,
     pub ready: bool,
     pub connected: bool,
@@ -231,6 +264,33 @@ pub struct TuiState {
     pub quit_confirmation: QuitConfirmation,
     pub rewind_confirmation: QuitConfirmation,
     pub tools_collapsed: bool,
+    /// Whether each tool section, tool group and reasoning block is folded,
+    /// by the key the renderer gives it when it first paints.
+    pub folds: BTreeMap<String, bool>,
+    /// Advances every tenth of a second, which is the interval reference
+    /// `SpinnerMixin` animates a running indicator at.
+    pub animation_frame: u64,
+    /// Reference `LoadingWidget`, rebuilt for every turn.
+    pub loading: super::loading::LoadingAnimation,
+    /// Reference `PetitChat`, the banner's cat.
+    pub banner_cat: super::loading::PetitChat,
+    /// What the last update appended to each running effect's output, which
+    /// reference `set_stream_message` shows under the call.
+    pub effect_streams: BTreeMap<String, String>,
+    /// When a key last reached the composer, which reference
+    /// `time_since_last_keystroke` reads.
+    pub last_keystroke_ms: u64,
+    /// Reference `_wait_for_typing_pause`: a callback that arrived while the
+    /// operator was typing waits, and the composer keeps the keyboard.
+    pub typing_hold: bool,
+    /// The callback the typing pause last released, so it is held only once.
+    pub revealed_callback: Option<String>,
+    /// Reference `InlineNotice`: a muted line at the right end of the loading
+    /// row that hides itself once its timeout passes.
+    pub inline_notice: Option<InlineNotice>,
+    /// Reference `ChatInputBody` queue mode: the queued prompt Up selected, and
+    /// whether the composer is editing it.
+    pub queue_selection: Option<QueueSelection>,
     pub show_reasoning: bool,
     /// Reference `autocopy_to_clipboard`: copy on pointer release.
     pub autocopy_to_clipboard: bool,
@@ -249,6 +309,8 @@ pub struct TuiState {
     pub transcript_view: TranscriptView,
     /// Focus-aware attention effects, owned locally like the reference adapter.
     pub notifier: AttentionNotifier,
+    /// Terminal writes the notifier decided and the next frame performs.
+    pub pending_attention: Vec<AttentionEffect>,
     /// Narration lifecycle, owned locally so a resync cannot revive a summary.
     pub narrator: NarratorManager,
     /// Whether this session already reported that narration cannot be spoken.
@@ -280,6 +342,7 @@ impl TuiState {
             entries: Vec::new(),
             cursor_before: None,
             cursor_after: None,
+            history_first_visible: None,
             waiting: false,
             ready: false,
             connected: true,
@@ -295,6 +358,16 @@ impl TuiState {
             // The reference folds collapsible tool results into their header
             // until the operator expands them.
             tools_collapsed: true,
+            folds: BTreeMap::new(),
+            animation_frame: 0,
+            loading: super::loading::LoadingAnimation::default(),
+            banner_cat: super::loading::PetitChat::default(),
+            effect_streams: BTreeMap::new(),
+            last_keystroke_ms: 0,
+            typing_hold: false,
+            revealed_callback: None,
+            inline_notice: None,
+            queue_selection: None,
             show_reasoning: true,
             autocopy_to_clipboard: false,
             ask_confirmation_on_exit: true,
@@ -306,6 +379,7 @@ impl TuiState {
             debug_console: None,
             transcript_view: TranscriptView::default(),
             notifier: AttentionNotifier::default(),
+            pending_attention: Vec::new(),
             narrator: NarratorManager::default(),
             speech_notice_shown: false,
             file_watcher_for_autocomplete: false,
@@ -336,6 +410,10 @@ impl TuiState {
                 self.connected = true;
                 self.resync_required = false;
                 self.reindex();
+                if let Some(title) = self.entries.iter().rev().find_map(session_title_update) {
+                    let title = title.to_owned();
+                    self.retitle(&title);
+                }
                 Ok(ApplyResult::Applied)
             }
             ServerEvent::TransportLost(message) => {
@@ -366,7 +444,11 @@ impl TuiState {
                 self.watermark = event_id;
                 self.entry_indexes
                     .insert(entry.id.clone(), self.entries.len());
+                let title = session_title_update(&entry).map(ToOwned::to_owned);
                 self.entries.push(entry);
+                if let Some(title) = title {
+                    self.retitle(&title);
+                }
                 Ok(ApplyResult::Applied)
             }
             ServerEvent::EntryUpdated { event_id, entry } => {
@@ -387,10 +469,17 @@ impl TuiState {
                 // Streaming content only ever grows, but a settling effect
                 // replaces its accumulated stream with the authoritative
                 // terminal projection, so that rewrite must not be rejected.
-                if !entry.status.is_terminal() && !entry.text.starts_with(&current.text) {
+                // A running effect's output is patched with `replace` when it
+                // is not a prefix of the next (reference `make_json_patch`),
+                // so only messages and reasoning are held to growing.
+                if !entry.status.is_terminal()
+                    && entry.kind != TranscriptKind::Effect
+                    && !entry.text.starts_with(&current.text)
+                {
                     return Err(StateError::NonMonotonicStream(entry.id));
                 }
                 self.watermark = event_id;
+                self.track_stream(index, &entry);
                 self.entries[index] = entry;
                 Ok(ApplyResult::Applied)
             }
@@ -402,6 +491,19 @@ impl TuiState {
                 }
                 other => Ok(other),
             },
+        }
+    }
+
+    /// Queues one attention write for the next frame.
+    pub fn attend(&mut self, effect: AttentionEffect) {
+        self.pending_attention.push(effect);
+    }
+
+    /// Reference `_on_session_title_changed`: the session title becomes the
+    /// tab's default title.
+    pub fn retitle(&mut self, title: &str) {
+        if let Some(effect) = self.notifier.set_default_title(title) {
+            self.attend(effect);
         }
     }
 
@@ -422,10 +524,21 @@ impl TuiState {
             // Failure muting is scoped to one turn: the same failure repeated
             // by a later turn is new information and must be shown again.
             self.errors.clear();
+            // Reference `_ensure_loading_widget` mounts a fresh widget per turn.
+            self.loading = super::loading::LoadingAnimation::default();
         }
         let started = *self.turn_started_ms.get_or_insert(now_ms);
+        let (month, day) = super::loading::month_day(now_ms);
+        let status = self
+            .loading
+            .status(
+                &super::transcript::activity_status(&self.entries),
+                month,
+                day,
+            )
+            .to_owned();
         self.activity = Some(Activity::new(
-            super::transcript::activity_status(&self.entries),
+            status,
             now_ms.saturating_sub(started) / 1_000,
             self.prompt_queue.len(),
         ));
@@ -448,7 +561,61 @@ impl TuiState {
 
     #[must_use]
     pub fn needs_older_history(&self) -> bool {
-        self.cursor_before.is_some() && self.scroll_offset >= self.scroll_line_limit
+        self.has_older_history() && self.scroll_offset >= self.scroll_line_limit
+    }
+
+    /// Reference `create_resume_plan`: a resumed transcript shows its latest
+    /// `HISTORY_RESUME_TAIL_MESSAGES` entries and holds the rest back.
+    pub fn window_history_tail(&mut self) {
+        self.history_first_visible = self
+            .entries
+            .len()
+            .checked_sub(HISTORY_RESUME_TAIL_MESSAGES)
+            .filter(|start| *start > 0)
+            .and_then(|start| self.entries.get(start))
+            .map(|entry| entry.id.clone());
+    }
+
+    /// How many leading entries the window holds back.
+    #[must_use]
+    pub fn hidden_history(&self) -> usize {
+        self.history_first_visible
+            .as_ref()
+            .and_then(|id| self.entry_indexes.get(id))
+            .copied()
+            .unwrap_or_default()
+    }
+
+    /// Reference `_has_older_history`: entries held back here, or a page the
+    /// server has not sent yet.
+    #[must_use]
+    pub fn has_older_history(&self) -> bool {
+        self.hidden_history() > 0 || self.cursor_before.is_some()
+    }
+
+    /// Reference `_history_backfill_remaining`: the count shown on the button,
+    /// known only once no page is left on the server.
+    #[must_use]
+    pub fn older_history_remaining(&self) -> Option<usize> {
+        if self.cursor_before.is_some() {
+            return None;
+        }
+        Some(self.hidden_history()).filter(|remaining| *remaining > 0)
+    }
+
+    /// Reference `SessionWindowing.next_load_more_batch`: reveals the
+    /// `LOAD_MORE_BATCH_SIZE` entries above the oldest one shown. Answers
+    /// whether anything held back here was revealed.
+    pub fn reveal_older_history(&mut self) -> bool {
+        let hidden = self.hidden_history();
+        if hidden == 0 {
+            return false;
+        }
+        let start = hidden.saturating_sub(LOAD_MORE_BATCH_SIZE);
+        self.history_first_visible = (start > 0)
+            .then(|| self.entries.get(start).map(|entry| entry.id.clone()))
+            .flatten();
+        true
     }
 
     pub(crate) fn set_scroll_line_limit(&mut self, limit: usize) {
@@ -475,6 +642,9 @@ impl TuiState {
         }
         self.entries = combined;
         self.cursor_before = cursor_before;
+        // A page fetched from the server is shown whole, as the reference
+        // mounts the batch it just loaded.
+        self.history_first_visible = None;
         self.reindex();
         Ok(())
     }
@@ -487,6 +657,11 @@ impl TuiState {
             return Err(StateError::ForeignSession(replacement.session_id));
         }
         replacement.viewport = self.viewport;
+        // The window survives a resync while the entry it starts at does.
+        replacement.history_first_visible = self
+            .history_first_visible
+            .take()
+            .filter(|id| replacement.entries.iter().any(|entry| &entry.id == id));
         replacement.overlay = self.overlay.take();
         replacement.rewind = self.rewind.take();
         replacement.session_delete = self.session_delete.take();
@@ -494,6 +669,15 @@ impl TuiState {
         replacement.quit_confirmation = std::mem::take(&mut self.quit_confirmation);
         replacement.rewind_confirmation = std::mem::take(&mut self.rewind_confirmation);
         replacement.tools_collapsed = self.tools_collapsed;
+        replacement.folds = std::mem::take(&mut self.folds);
+        replacement.animation_frame = self.animation_frame;
+        replacement.loading = std::mem::take(&mut self.loading);
+        replacement.banner_cat = std::mem::take(&mut self.banner_cat);
+        replacement.last_keystroke_ms = self.last_keystroke_ms;
+        replacement.typing_hold = self.typing_hold;
+        replacement.revealed_callback = self.revealed_callback.take();
+        replacement.inline_notice = self.inline_notice.take();
+        replacement.queue_selection = self.queue_selection.take();
         replacement.show_reasoning = self.show_reasoning;
         replacement.autocopy_to_clipboard = self.autocopy_to_clipboard;
         replacement.ask_confirmation_on_exit = self.ask_confirmation_on_exit;
@@ -556,6 +740,31 @@ impl TuiState {
             self.diagnostics.pop_front();
         }
         self.diagnostics.push_back(message.into());
+    }
+
+    /// Reference `InlineNotice.show`: replaces the notice, which hides itself
+    /// after `timeout_ms` or stays until hidden when there is none.
+    pub fn show_inline_notice(
+        &mut self,
+        text: impl Into<String>,
+        timeout_ms: Option<u64>,
+        now_ms: u64,
+    ) {
+        self.inline_notice = Some(InlineNotice {
+            text: text.into(),
+            expires_at_ms: timeout_ms.map(|timeout| now_ms.saturating_add(timeout)),
+        });
+    }
+
+    pub fn expire_inline_notice(&mut self, now_ms: u64) {
+        if self
+            .inline_notice
+            .as_ref()
+            .and_then(|notice| notice.expires_at_ms)
+            .is_some_and(|expires| now_ms >= expires)
+        {
+            self.inline_notice = None;
+        }
     }
 
     pub fn set_callback_presentation(&mut self, presentation: Option<CallbackPresentation>) {
@@ -640,6 +849,44 @@ impl TuiState {
         Ok(())
     }
 
+    /// Swaps a local entry for a newer projection of the same thing, keeping
+    /// its identifier and position. A settled entry stays as it settled.
+    pub fn replace_local(
+        &mut self,
+        entry_id: &str,
+        mut replacement: TranscriptEntry,
+    ) -> Result<(), StateError> {
+        let Some(index) = self.entry_indexes.get(entry_id).copied() else {
+            return Err(StateError::UnknownEntry(entry_id.to_owned()));
+        };
+        let entry = &mut self.entries[index];
+        if entry.status.is_terminal() {
+            return Ok(());
+        }
+        replacement.id = entry.id.clone();
+        replacement.revision = entry.revision.saturating_add(1);
+        self.track_stream(index, &replacement);
+        self.entries[index] = replacement;
+        Ok(())
+    }
+
+    /// Reference `set_stream_message`: a running effect keeps what its next
+    /// revision appended to its output, and a settled one drops it.
+    fn track_stream(&mut self, index: usize, next: &TranscriptEntry) {
+        if next.status.is_terminal() {
+            self.effect_streams.remove(&next.id);
+            return;
+        }
+        let previous = super::transcript::running_output(&self.entries[index]).unwrap_or_default();
+        if let Some(appended) = super::transcript::running_output(next)
+            .and_then(|output| output.strip_prefix(previous))
+            .filter(|appended| !appended.is_empty())
+        {
+            self.effect_streams
+                .insert(next.id.clone(), appended.to_owned());
+        }
+    }
+
     fn check_sequence(&mut self, event_id: u64) -> ApplyResult {
         if event_id <= self.watermark {
             return ApplyResult::Duplicate;
@@ -687,6 +934,18 @@ pub enum StateError {
     NonMonotonicStream(String),
 }
 
+/// The title a `session_title_updated` notice announces, which is what the
+/// reference event handler forwards to the tab title.
+fn session_title_update(entry: &TranscriptEntry) -> Option<&str> {
+    match entry.source.server()? {
+        PublicHistoryEntry::Notice {
+            detail: NoticeDetail::SessionTitleUpdated { title },
+            ..
+        } => Some(title),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -702,6 +961,53 @@ mod tests {
             status,
             source: EntrySource::Restored,
         }
+    }
+
+    fn history(count: usize) -> TuiState {
+        let mut state = TuiState::new("session");
+        state.entries = (0..count)
+            .map(|index| entry(&format!("entry-{index}"), 1, "text", EntryStatus::Completed))
+            .collect();
+        state.reindex();
+        state
+    }
+
+    #[test]
+    fn a_resumed_transcript_shows_its_tail_and_reveals_the_rest_ten_at_a_time() {
+        let mut state = history(35);
+        state.window_history_tail();
+        assert_eq!(state.hidden_history(), 15);
+        assert_eq!(state.older_history_remaining(), Some(15));
+
+        assert!(state.reveal_older_history());
+        assert_eq!(state.hidden_history(), 5);
+        assert!(state.reveal_older_history());
+        assert_eq!(state.hidden_history(), 0);
+        assert!(!state.has_older_history());
+        assert!(!state.reveal_older_history());
+
+        // A short transcript holds nothing back.
+        let mut short = history(20);
+        short.window_history_tail();
+        assert!(!short.has_older_history());
+    }
+
+    #[test]
+    fn the_button_names_no_count_while_the_server_holds_older_pages() {
+        let mut state = history(25);
+        state.window_history_tail();
+        state.cursor_before = Some("5".to_owned());
+        assert!(state.has_older_history());
+        assert_eq!(state.older_history_remaining(), None);
+        // A page fetched from the server is shown whole.
+        state
+            .prepend_history(
+                vec![entry("older", 1, "text", EntryStatus::Completed)],
+                None,
+            )
+            .expect("older page prepends");
+        assert_eq!(state.hidden_history(), 0);
+        assert!(!state.has_older_history());
     }
 
     #[test]
@@ -762,6 +1068,68 @@ mod tests {
         assert_eq!(state.watermark, 3);
         assert_eq!(state.entries.len(), 2);
         assert!(!state.resync_required);
+    }
+
+    /// Reference `_appended_text(update.patch, "/state/outputText")`: the call
+    /// shows what each update appended, and nothing once it settles.
+    #[test]
+    fn a_running_effect_streams_what_each_update_appended() {
+        let effect = |revision: u64, state: serde_json::Value| {
+            let mut entry = crate::tui::hydration::published_fixture(
+                "call",
+                serde_json::json!({
+                    "type": "effect",
+                    "title": "bash",
+                    "detail": vibe_app_server::client::EffectDetail::for_call(
+                        "bash",
+                        &serde_json::json!({"command": "make"}),
+                    ),
+                    "state": state,
+                    "generationStatus": "in_progress",
+                }),
+            );
+            entry.revision = revision;
+            entry
+        };
+        let mut state = TuiState::new("session");
+        state
+            .apply(ServerEvent::EntryAdded {
+                event_id: 1,
+                entry: effect(
+                    1,
+                    serde_json::json!({"status": "running", "outputText": "a\n"}),
+                ),
+            })
+            .expect("the call starts");
+        assert!(state.effect_streams.is_empty());
+        state
+            .apply(ServerEvent::EntryUpdated {
+                event_id: 2,
+                entry: effect(
+                    2,
+                    serde_json::json!({"status": "running", "outputText": "a\nb\nc\n"}),
+                ),
+            })
+            .expect("output grows");
+        assert_eq!(
+            state.effect_streams.get("call").map(String::as_str),
+            Some("b\nc\n")
+        );
+        state
+            .apply(ServerEvent::EntryUpdated {
+                event_id: 3,
+                entry: effect(
+                    3,
+                    serde_json::json!({
+                        "status": "failed",
+                        "error": {"message": "exit 2"},
+                        "outputText": "a\nb\nc\n",
+                        "display": {"success": false, "message": "make"},
+                    }),
+                ),
+            })
+            .expect("the call settles");
+        assert!(state.effect_streams.is_empty());
     }
 
     #[test]

@@ -24,7 +24,7 @@ use crate::tui::pickers::{
 use crate::tui::render::{BannerContext, TokenState, UiContext, draw};
 use crate::tui::setup::{DetectedTheme, Theme, resolve_theme};
 use crate::tui::state::TuiState;
-use crate::tui::workflow::{McpEffect, reduce_auth_action, scheduled_loop, valid_auth_url};
+use crate::tui::workflow::{McpEffect, auth_panel_context, reduce_auth_action, scheduled_loop};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -209,29 +209,16 @@ fn apply(event: Event) -> String {
             source,
             source_kind,
             url,
-        } => {
-            let kind = integration_kind(&source_kind);
-            if !valid_auth_url(&url) {
-                return "error:unsafe authentication URL".to_owned();
-            }
-            overlay_observation("auth", &mcp_auth_overlay(kind, &source, &url, false))
-        }
+        } => overlay_observation(
+            "auth",
+            &mcp_auth_overlay(integration_kind(&source_kind), &source, &url, false, false),
+        ),
         Event::AuthAction {
             source,
             source_kind,
             url,
             action,
-        } => {
-            let kind = integration_kind(&source_kind);
-            let action = AuthAction {
-                kind,
-                source,
-                url,
-                action: auth_action_kind(&action),
-                enable_on_complete: false,
-            };
-            effect_observation(reduce_auth_action(&action))
-        }
+        } => auth_action_observation(&source_kind, &source, &url, &action),
         Event::Projects { view, .. } => {
             overlay_observation("projects", &remote_projects_overlay(&view))
         }
@@ -265,95 +252,84 @@ fn integration_kind(value: &str) -> IntegrationKind {
     }
 }
 
-fn auth_action_kind(value: &str) -> AuthActionKind {
+/// The panel rows the corpus drives, or `None` for an action the panel does
+/// not offer.
+fn auth_action_kind(value: &str) -> Option<AuthActionKind> {
     match value {
-        "open" => AuthActionKind::Open,
-        "copy" => AuthActionKind::Copy,
-        "show" => AuthActionKind::Show,
-        "refresh" => AuthActionKind::Refresh,
-        "logout" => AuthActionKind::Logout,
-        "close" => AuthActionKind::Close,
-        value => panic!("unknown authentication action `{value}`"),
+        "open" => Some(AuthActionKind::Open),
+        "copy" => Some(AuthActionKind::Copy),
+        "show" => Some(AuthActionKind::Show),
+        "refresh" => Some(AuthActionKind::Refresh),
+        "close" => Some(AuthActionKind::Close),
+        _ => None,
     }
 }
 
-fn effect_observation(effect: McpEffect) -> String {
-    let mut calls = Vec::new();
-    let observation = match effect {
-        McpEffect::OpenUrl {
-            kind, source, url, ..
-        } => {
-            calls.push(format!("url/open:{url}"));
-            typed_effect("open_url", kind, &source, Some(&url))
-        }
-        McpEffect::CopyUrl {
-            kind, source, url, ..
-        } => {
-            calls.push(format!("clipboard/write:{url}"));
-            typed_effect("copy_url", kind, &source, Some(&url))
-        }
-        McpEffect::ShowUrl {
-            kind, source, url, ..
-        } => {
-            calls.push(format!("transcript/write:{source}"));
-            typed_effect("show_url", kind, &source, Some(&url))
-        }
-        McpEffect::Refresh { kind, source } => {
-            calls.push(format!(
-                "{}/refresh:{source}",
-                integration_method_prefix(kind)
+/// One action on a freshly opened authentication panel, observed as the
+/// oracle observes the reference panel: what the panel shows below its rows
+/// afterward, and every call it made in the oracle's order (the URL opened,
+/// the text copied, the sign-in client, then the message the panel posted).
+///
+/// The panel exists because its sign-in began: a server login
+/// (`McpEffect::BeginAuth`, whose URL opened the panel) or a connector's URL
+/// fetch. That call is the one the oracle's stub client records on mount.
+fn auth_action_observation(source_kind: &str, source: &str, url: &str, action: &str) -> String {
+    let Some(action_kind) = auth_action_kind(action) else {
+        return format!("reference|{action}|unsupported");
+    };
+    let kind = integration_kind(source_kind);
+    let mut state = TuiState::new("session");
+    state.overlay = Some(mcp_auth_overlay(kind, source, url, false, false));
+    let panel = auth_panel_context(&state).expect("the panel carries its context");
+    let effect = reduce_auth_action(&AuthAction {
+        action: action_kind,
+        ..panel
+    });
+    let mut effects = Vec::new();
+    let mut client = vec![match kind {
+        IntegrationKind::McpServer => format!("mcp/login:{source}"),
+        IntegrationKind::Connector => format!("connectors/auth-url:{source}"),
+    }];
+    let mut messages = Vec::new();
+    match effect {
+        None => {}
+        Some(McpEffect::OpenUrl { url }) => effects.push(format!("url/open:{url}")),
+        Some(McpEffect::CopyUrl { url }) => effects.push(format!("clipboard/write:{url}")),
+        Some(McpEffect::ToggleUrl { action }) => {
+            state.overlay = Some(mcp_auth_overlay(
+                action.kind,
+                &action.source,
+                &action.url,
+                action.enable_on_complete,
+                !action.url_visible,
             ));
-            typed_effect("refresh", kind, &source, None)
         }
-        McpEffect::CompleteAuthentication {
-            kind,
-            source,
-            enable_source,
-        } => {
-            match kind {
-                IntegrationKind::Connector => calls.push(format!("connectors/refresh:{source}")),
-                IntegrationKind::McpServer => {
-                    calls.push("mcp/refresh".to_owned());
-                    if enable_source {
-                        calls.push(format!("mcp/toggle:{source}"));
-                    }
-                }
-            }
-            typed_effect("complete_auth", kind, &source, None)
+        Some(McpEffect::CheckConnector { source }) => {
+            client.push(format!("connectors/refresh:{source}"));
         }
-        McpEffect::Logout { source } => {
-            calls.push(format!("mcp/logout:{source}"));
-            format!("effect|logout|server|{source}")
-        }
-        McpEffect::Close => {
-            calls.push("overlay/close".to_owned());
-            "effect|close|-|-".to_owned()
-        }
-        McpEffect::Show { .. }
-        | McpEffect::ShowDetail { .. }
-        | McpEffect::BeginAuth { .. }
-        | McpEffect::SetEnabled { .. } => {
-            panic!(
-                "configuration-integrations authentication fixtures must reduce to an authentication effect"
-            )
-        }
-    };
-    format!("{observation}|calls={}", calls.join(","))
-}
-
-fn integration_method_prefix(kind: IntegrationKind) -> &'static str {
-    match kind {
-        IntegrationKind::McpServer => "mcp",
-        IntegrationKind::Connector => "connectors",
+        Some(McpEffect::Show { filter: None }) => messages.push(match kind {
+            IntegrationKind::McpServer => "MCPOAuthClosed(refreshed=False,server_name=)",
+            IntegrationKind::Connector => "ConnectorAuthClosed(refreshed=False,connector_name=)",
+        }),
+        Some(other) => panic!("the authentication panel reduced `{action}` to {other:?}"),
     }
-}
-
-fn typed_effect(name: &str, kind: IntegrationKind, source: &str, url: Option<&str>) -> String {
-    let kind = match kind {
-        IntegrationKind::McpServer => "server",
-        IntegrationKind::Connector => "connector",
-    };
-    format!("effect|{name}|{kind}|{source}|{}", url.unwrap_or("-"))
+    let detail = state
+        .overlay
+        .as_ref()
+        .and_then(|overlay| overlay.notice.as_deref())
+        .unwrap_or_default()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let calls = effects
+        .into_iter()
+        .chain(client)
+        .chain(messages.into_iter().map(ToOwned::to_owned))
+        .collect::<Vec<_>>();
+    format!(
+        "reference|{action}|{source_kind}|{source}|detail={detail}|calls={}",
+        calls.join(",")
+    )
 }
 
 fn overlay_observation(label: &str, overlay: &Overlay) -> String {
@@ -544,39 +520,24 @@ fn regenerate_corpus() {
 }
 
 #[test]
-fn refresh_and_auth_completion_execute_distinct_effect_contracts() {
-    let refresh = effect_observation(McpEffect::Refresh {
-        kind: IntegrationKind::McpServer,
-        source: "github".to_owned(),
-    });
-    let completion = effect_observation(McpEffect::CompleteAuthentication {
-        kind: IntegrationKind::McpServer,
-        source: "github".to_owned(),
-        enable_source: true,
-    });
-    assert_eq!(
-        refresh,
-        "effect|refresh|server|github|-|calls=mcp/refresh:github"
-    );
-    assert_eq!(
-        completion,
-        "effect|complete_auth|server|github|-|calls=mcp/refresh,mcp/toggle:github"
-    );
-}
-
-#[test]
 fn overlays_preserve_typed_actions_and_render_at_fixed_widths() {
     let auth = mcp_auth_overlay(
         IntegrationKind::Connector,
         "drive",
         "https://auth.example/drive",
         false,
+        false,
     );
-    assert!(auth.items.iter().all(|item| matches!(
-        &item.action,
-        OverlayAction::Authenticate(action)
-            if action.kind == IntegrationKind::Connector && action.source == "drive"
-    )));
+    assert!(
+        auth.items
+            .iter()
+            .filter(|item| !item.disabled)
+            .all(|item| matches!(
+                &item.action,
+                OverlayAction::Authenticate(action)
+                    if action.kind == IntegrationKind::Connector && action.source == "drive"
+            ))
+    );
     let projects = remote_projects_overlay(&serde_json::json!({
         "state": {"projects": [{
             "projectId": "project-1",
@@ -632,7 +593,7 @@ fn overlays_preserve_typed_actions_and_render_at_fixed_widths() {
             ),
             "MCP",
         ),
-        (auth, "Authenticate"),
+        (auth, "Connector: drive"),
         (
             proxy_overlay(&serde_json::json!({"values": {"HTTP_PROXY": null}})),
             "Proxy",

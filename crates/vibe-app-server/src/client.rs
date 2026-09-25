@@ -21,6 +21,7 @@ use vibe_core::storage::{HydratedSession, SessionStore};
 use vibe_core::tools::ToolRegistry;
 pub use vibe_protocol::{
     CallbackKind as ClientCallbackKind, ClientCapabilities, ClientEntrypoint, ClientInfo,
+    ProtocolErrorCode,
 };
 use vibe_protocol::{
     Envelope, ErrorResponse, ProtocolError, RequestId, SuccessResponse, TerminalEmulator,
@@ -222,7 +223,14 @@ pub struct ScheduledTurn {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TurnRequest {
+    /// Reference `TurnStartParams.idempotency_key`
+    /// (`vibe/app_server/protocol.py:1923`); this client never sets one.
+    #[serde(default)]
+    pub idempotency_key: Option<String>,
     pub prompt: String,
+    /// Published as `message` since v2.24.1
+    /// (`vibe/app_server/protocol.py:1925`).
+    #[serde(rename = "message")]
     pub input: Vec<PublicContentBlock>,
     /// Whether the harness is starting this turn rather than the operator,
     /// which v2.24.0 added to `TurnStartParams`
@@ -245,6 +253,7 @@ impl TurnRequest {
     pub fn text(prompt: impl Into<String>) -> Self {
         let prompt = prompt.into();
         Self {
+            idempotency_key: None,
             input: vec![PublicContentBlock::Text {
                 text: prompt.clone(),
             }],

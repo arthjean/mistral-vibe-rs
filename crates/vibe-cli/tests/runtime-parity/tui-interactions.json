@@ -1,0 +1,678 @@
+{
+  "composer": [
+    {
+      "id": "word-then-line-then-over",
+      "reference": [
+        "caret 0:8",
+        "caret 0:8",
+        "0:6-0:12",
+        "0:6-0:12",
+        "0:0-0:18",
+        "0:0-0:18",
+        "caret 0:8",
+        "caret 0:8"
+      ],
+      "steps": [
+        {
+          "atMs": 0,
+          "kind": "down",
+          "x": 8,
+          "y": 0
+        },
+        {
+          "atMs": 0,
+          "kind": "up",
+          "x": 8,
+          "y": 0
+        },
+        {
+          "atMs": 100,
+          "kind": "down",
+          "x": 8,
+          "y": 0
+        },
+        {
+          "atMs": 100,
+          "kind": "up",
+          "x": 8,
+          "y": 0
+        },
+        {
+          "atMs": 200,
+          "kind": "down",
+          "x": 8,
+          "y": 0
+        },
+        {
+          "atMs": 200,
+          "kind": "up",
+          "x": 8,
+          "y": 0
+        },
+        {
+          "atMs": 300,
+          "kind": "down",
+          "x": 8,
+          "y": 0
+        },
+        {
+          "atMs": 300,
+          "kind": "up",
+          "x": 8,
+          "y": 0
+        }
+      ],
+      "text": "alpha beta_2 gamma\nsecond line here"
+    },
+    {
+      "id": "word-drag-snaps-and-ends-the-chain",
+      "reference": [
+        "caret 0:8",
+        "caret 0:8",
+        "0:6-0:12",
+        "0:6-0:18",
+        "0:6-1:6",
+        "0:6-1:6",
+        "caret 1:3",
+        "caret 1:3"
+      ],
+      "steps": [
+        {
+          "atMs": 0,
+          "kind": "down",
+          "x": 8,
+          "y": 0
+        },
+        {
+          "atMs": 0,
+          "kind": "up",
+          "x": 8,
+          "y": 0
+        },
+        {
+          "atMs": 100,
+          "kind": "down",
+          "x": 8,
+          "y": 0
+        },
+        {
+          "atMs": 150,
+          "kind": "move",
+          "x": 15,
+          "y": 0
+        },
+        {
+          "atMs": 200,
+          "kind": "move",
+          "x": 3,
+          "y": 1
+        },
+        {
+          "atMs": 200,
+          "kind": "up",
+          "x": 3,
+          "y": 1
+        },
+        {
+          "atMs": 250,
+          "kind": "down",
+          "x": 3,
+          "y": 1
+        },
+        {
+          "atMs": 250,
+          "kind": "up",
+          "x": 3,
+          "y": 1
+        }
+      ],
+      "text": "alpha beta_2 gamma\nsecond line here"
+    },
+    {
+      "id": "line-drag-backward",
+      "reference": [
+        "caret 1:3",
+        "caret 1:3",
+        "1:0-1:6",
+        "1:0-1:6",
+        "1:0-1:16",
+        "0:0-1:16",
+        "0:0-1:16"
+      ],
+      "steps": [
+        {
+          "atMs": 0,
+          "kind": "down",
+          "x": 3,
+          "y": 1
+        },
+        {
+          "atMs": 0,
+          "kind": "up",
+          "x": 3,
+          "y": 1
+        },
+        {
+          "atMs": 100,
+          "kind": "down",
+          "x": 3,
+          "y": 1
+        },
+        {
+          "atMs": 100,
+          "kind": "up",
+          "x": 3,
+          "y": 1
+        },
+        {
+          "atMs": 200,
+          "kind": "down",
+          "x": 3,
+          "y": 1
+        },
+        {
+          "atMs": 250,
+          "kind": "move",
+          "x": 2,
+          "y": 0
+        },
+        {
+          "atMs": 250,
+          "kind": "up",
+          "x": 2,
+          "y": 0
+        }
+      ],
+      "text": "alpha beta_2 gamma\nsecond line here"
+    },
+    {
+      "id": "a-pause-or-a-blank-breaks-the-word",
+      "reference": [
+        "caret 1:3",
+        "caret 1:3",
+        "caret 1:3",
+        "caret 1:3",
+        "caret 0:13",
+        "caret 0:13",
+        "caret 0:12",
+        "caret 0:12"
+      ],
+      "steps": [
+        {
+          "atMs": 0,
+          "kind": "down",
+          "x": 3,
+          "y": 1
+        },
+        {
+          "atMs": 0,
+          "kind": "up",
+          "x": 3,
+          "y": 1
+        },
+        {
+          "atMs": 600,
+          "kind": "down",
+          "x": 3,
+          "y": 1
+        },
+        {
+          "atMs": 600,
+          "kind": "up",
+          "x": 3,
+          "y": 1
+        },
+        {
+          "atMs": 1000,
+          "kind": "down",
+          "x": 13,
+          "y": 0
+        },
+        {
+          "atMs": 1000,
+          "kind": "up",
+          "x": 13,
+          "y": 0
+        },
+        {
+          "atMs": 1100,
+          "kind": "down",
+          "x": 12,
+          "y": 0
+        },
+        {
+          "atMs": 1100,
+          "kind": "up",
+          "x": 12,
+          "y": 0
+        }
+      ],
+      "text": "alpha beta_2 gamma\nsecond line here"
+    },
+    {
+      "id": "a-character-drag-selects-across-lines",
+      "reference": [
+        "caret 0:2",
+        "0:2-1:9",
+        "0:2-1:9"
+      ],
+      "steps": [
+        {
+          "atMs": 0,
+          "kind": "down",
+          "x": 2,
+          "y": 0
+        },
+        {
+          "atMs": 50,
+          "kind": "move",
+          "x": 9,
+          "y": 1
+        },
+        {
+          "atMs": 50,
+          "kind": "up",
+          "x": 9,
+          "y": 1
+        }
+      ],
+      "text": "alpha beta_2 gamma\nsecond line here"
+    }
+  ],
+  "groupHeader": [
+    {
+      "kinds": [
+        "shell",
+        "file_edit"
+      ],
+      "label": "Running commands, editing files, thinking",
+      "reasoning": true,
+      "running": true
+    },
+    {
+      "kinds": [
+        "shell",
+        "file_edit"
+      ],
+      "label": "Ran commands, edited files, thought",
+      "reasoning": true,
+      "running": false
+    },
+    {
+      "kinds": [
+        "file_read"
+      ],
+      "label": "Reading files",
+      "reasoning": false,
+      "running": true
+    },
+    {
+      "kinds": [
+        "file_read"
+      ],
+      "label": "Read files",
+      "reasoning": false,
+      "running": false
+    },
+    {
+      "kinds": [],
+      "label": "Thinking",
+      "reasoning": true,
+      "running": true
+    },
+    {
+      "kinds": [],
+      "label": "Thought",
+      "reasoning": true,
+      "running": false
+    },
+    {
+      "kinds": [
+        "tool",
+        "process"
+      ],
+      "label": "Calling tools, calling tools",
+      "reasoning": false,
+      "running": true
+    },
+    {
+      "kinds": [
+        "tool",
+        "process"
+      ],
+      "label": "Called tools, called tools",
+      "reasoning": false,
+      "running": false
+    },
+    {
+      "kinds": [
+        "web_search",
+        "web_fetch",
+        "todo",
+        "user_question",
+        "skill",
+        "subagent",
+        "worktree",
+        "file_write",
+        "file_search"
+      ],
+      "label": "Searching the web, fetching pages, updating todos, asking questions, loading skills, running subagents, creating worktrees, writing files, searching files",
+      "reasoning": false,
+      "running": true
+    },
+    {
+      "kinds": [
+        "web_search",
+        "web_fetch",
+        "todo",
+        "user_question",
+        "skill",
+        "subagent",
+        "worktree",
+        "file_write",
+        "file_search"
+      ],
+      "label": "Searched the web, fetched pages, updated todos, asked questions, loaded skills, ran subagents, created worktrees, wrote files, searched files",
+      "reasoning": false,
+      "running": false
+    }
+  ],
+  "loadingSweep": [
+    {
+      "frames": [
+        "0000000000",
+        "1000000000",
+        "1100000000",
+        "1110000000",
+        "1111000000",
+        "1111100000",
+        "1111110000",
+        "1111111000",
+        "1111111100",
+        "1111111110",
+        "1111111111",
+        "1111111111",
+        "2111111111",
+        "2211111111",
+        "2221111111",
+        "2222111111",
+        "2222211111",
+        "2222221111",
+        "2222222111",
+        "2222222211",
+        "2222222221",
+        "2222222222",
+        "2222222222",
+        "3222222222",
+        "3322222222",
+        "3332222222",
+        "3333222222",
+        "3333322222",
+        "3333332222",
+        "3333333222",
+        "3333333322",
+        "3333333332",
+        "3333333333",
+        "3333333333",
+        "4333333333",
+        "4433333333",
+        "4443333333",
+        "4444333333",
+        "4444433333",
+        "4444443333",
+        "4444444333",
+        "4444444433",
+        "4444444443",
+        "4444444444",
+        "4444444444",
+        "3444444444",
+        "3344444444",
+        "3334444444",
+        "3333444444",
+        "3333344444",
+        "3333334444",
+        "3333333444",
+        "3333333344",
+        "3333333334",
+        "3333333333",
+        "3333333333",
+        "2333333333",
+        "2233333333",
+        "2223333333",
+        "2222333333",
+        "2222233333",
+        "2222223333",
+        "2222222333",
+        "2222222233",
+        "2222222223",
+        "2222222222",
+        "2222222222",
+        "1222222222",
+        "1122222222",
+        "1112222222"
+      ],
+      "status": "Retrying"
+    }
+  ],
+  "oracle": "tui-interactions-oracle.py",
+  "queue": [
+    {
+      "id": "walk-edit-save-remove-exit",
+      "keys": [
+        "type:draft",
+        "up",
+        "up",
+        "up",
+        "up",
+        "up",
+        "x",
+        "down",
+        "enter",
+        "home",
+        "type:x",
+        "enter",
+        "backspace",
+        "escape"
+      ],
+      "queue": [
+        "first",
+        "second",
+        "third"
+      ],
+      "reference": [
+        "{\"cursor\": -1, \"editing\": false, \"notice\": null, \"queue\": [\"first\", \"second\", \"third\"], \"text\": \"draft\"}",
+        "{\"cursor\": -1, \"editing\": false, \"notice\": null, \"queue\": [\"first\", \"second\", \"third\"], \"text\": \"draft\"}",
+        "{\"cursor\": 0, \"editing\": false, \"notice\": \"selection\", \"queue\": [\"first\", \"second\", \"third\"], \"text\": \"draft\"}",
+        "{\"cursor\": 1, \"editing\": false, \"notice\": \"selection\", \"queue\": [\"first\", \"second\", \"third\"], \"text\": \"draft\"}",
+        "{\"cursor\": 2, \"editing\": false, \"notice\": \"selection\", \"queue\": [\"first\", \"second\", \"third\"], \"text\": \"draft\"}",
+        "{\"cursor\": 2, \"editing\": false, \"notice\": \"selection\", \"queue\": [\"first\", \"second\", \"third\"], \"text\": \"draft\"}",
+        "{\"cursor\": 2, \"editing\": false, \"notice\": \"selection\", \"queue\": [\"first\", \"second\", \"third\"], \"text\": \"draft\"}",
+        "{\"cursor\": 1, \"editing\": false, \"notice\": \"selection\", \"queue\": [\"first\", \"second\", \"third\"], \"text\": \"draft\"}",
+        "{\"cursor\": 1, \"editing\": true, \"notice\": \"edit\", \"queue\": [\"first\", \"second\", \"third\"], \"text\": \"second\"}",
+        "{\"cursor\": 1, \"editing\": true, \"notice\": \"edit\", \"queue\": [\"first\", \"second\", \"third\"], \"text\": \"second\"}",
+        "{\"cursor\": 1, \"editing\": true, \"notice\": \"edit\", \"queue\": [\"first\", \"second\", \"third\"], \"text\": \"xsecond\"}",
+        "{\"cursor\": 1, \"editing\": false, \"notice\": null, \"queue\": [\"first\", \"xsecond\", \"third\"], \"text\": \"\"}",
+        "{\"cursor\": 0, \"editing\": false, \"notice\": null, \"queue\": [\"first\", \"third\"], \"text\": \"\"}",
+        "{\"cursor\": -1, \"editing\": false, \"notice\": null, \"queue\": [\"first\", \"third\"], \"text\": \"draft\"}"
+      ]
+    },
+    {
+      "id": "down-past-the-newest-leaves",
+      "keys": [
+        "up",
+        "down",
+        "up",
+        "delete"
+      ],
+      "queue": [
+        "only"
+      ],
+      "reference": [
+        "{\"cursor\": 0, \"editing\": false, \"notice\": \"selection\", \"queue\": [\"only\"], \"text\": \"\"}",
+        "{\"cursor\": -1, \"editing\": false, \"notice\": \"selection\", \"queue\": [\"only\"], \"text\": \"\"}",
+        "{\"cursor\": 0, \"editing\": false, \"notice\": \"selection\", \"queue\": [\"only\"], \"text\": \"\"}",
+        "{\"cursor\": -1, \"editing\": false, \"notice\": \"selection\", \"queue\": [], \"text\": \"\"}"
+      ]
+    },
+    {
+      "id": "an-edit-dropped-by-escape",
+      "keys": [
+        "up",
+        "enter",
+        "type:!",
+        "escape",
+        "escape"
+      ],
+      "queue": [
+        "first",
+        "second"
+      ],
+      "reference": [
+        "{\"cursor\": 0, \"editing\": false, \"notice\": \"selection\", \"queue\": [\"first\", \"second\"], \"text\": \"\"}",
+        "{\"cursor\": 0, \"editing\": true, \"notice\": \"edit\", \"queue\": [\"first\", \"second\"], \"text\": \"second\"}",
+        "{\"cursor\": 0, \"editing\": true, \"notice\": \"edit\", \"queue\": [\"first\", \"second\"], \"text\": \"second!\"}",
+        "{\"cursor\": 0, \"editing\": false, \"notice\": null, \"queue\": [\"first\", \"second\"], \"text\": \"\"}",
+        "{\"cursor\": -1, \"editing\": false, \"notice\": null, \"queue\": [\"first\", \"second\"], \"text\": \"\"}"
+      ]
+    },
+    {
+      "id": "a-started-prompt-asks-before-requeueing",
+      "keys": [
+        "up",
+        "up",
+        "enter",
+        "promote",
+        "type: again",
+        "enter",
+        "enter",
+        "escape"
+      ],
+      "queue": [
+        "first",
+        "second"
+      ],
+      "reference": [
+        "{\"cursor\": 0, \"editing\": false, \"notice\": \"selection\", \"queue\": [\"first\", \"second\"], \"text\": \"\"}",
+        "{\"cursor\": 1, \"editing\": false, \"notice\": \"selection\", \"queue\": [\"first\", \"second\"], \"text\": \"\"}",
+        "{\"cursor\": 1, \"editing\": true, \"notice\": \"edit\", \"queue\": [\"first\", \"second\"], \"text\": \"first\"}",
+        "{\"cursor\": 1, \"editing\": true, \"notice\": \"edit\", \"queue\": [\"second\"], \"text\": \"first\"}",
+        "{\"cursor\": 1, \"editing\": true, \"notice\": \"edit\", \"queue\": [\"second\"], \"text\": \"first again\"}",
+        "{\"cursor\": 1, \"editing\": true, \"notice\": \"consumed\", \"queue\": [\"second\"], \"text\": \"first again\"}",
+        "{\"cursor\": 0, \"editing\": false, \"notice\": null, \"queue\": [\"second\", \"first again\"], \"text\": \"\"}",
+        "{\"cursor\": -1, \"editing\": false, \"notice\": null, \"queue\": [\"second\", \"first again\"], \"text\": \"\"}"
+      ]
+    }
+  ],
+  "reference": {
+    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd",
+    "sourceFiles": [
+      "vibe/app_server/_patch.py",
+      "vibe/app_server/events.py",
+      "vibe/cli/textual_ui/handlers/event_handler.py",
+      "vibe/cli/textual_ui/widgets/chat_input/body.py",
+      "vibe/cli/textual_ui/widgets/chat_input/text_area.py",
+      "vibe/cli/textual_ui/widgets/loading.py",
+      "vibe/cli/textual_ui/widgets/tools.py",
+      "vibe/cli/textual_ui/word_selection.py"
+    ],
+    "version": "2.25.7"
+  },
+  "schemaVersion": 1,
+  "streamDelta": [
+    {
+      "id": "appends-show-their-delta",
+      "outputs": [
+        "",
+        "a\n",
+        "a\nb\n",
+        "a\nb\nc\n",
+        null
+      ],
+      "reference": [
+        "",
+        "a\n",
+        "b\n",
+        "c\n",
+        ""
+      ]
+    },
+    {
+      "id": "a-rewrite-keeps-the-last-delta",
+      "outputs": [
+        "one",
+        "one two",
+        "zero",
+        "zero",
+        null
+      ],
+      "reference": [
+        "",
+        " two",
+        " two",
+        " two",
+        ""
+      ]
+    },
+    {
+      "id": "an-unchanged-update-keeps-the-line",
+      "outputs": [
+        "x",
+        "x",
+        "xy",
+        "xy"
+      ],
+      "reference": [
+        "",
+        "",
+        "y",
+        "y"
+      ]
+    }
+  ],
+  "transcript": [
+    {
+      "lines": [
+        "See https://ratatui.rs for details",
+        "second_line here, ok"
+      ],
+      "spans": [
+        {
+          "granularity": "word",
+          "reference": "0:4-0:9",
+          "x": 5,
+          "y": 0
+        },
+        {
+          "granularity": "word",
+          "reference": "0:0-0:3",
+          "x": 3,
+          "y": 0
+        },
+        {
+          "granularity": "word",
+          "reference": "1:0-1:11",
+          "x": 2,
+          "y": 1
+        },
+        {
+          "granularity": "word",
+          "reference": "1:12-1:16",
+          "x": 16,
+          "y": 1
+        },
+        {
+          "granularity": "paragraph",
+          "reference": "0:0-0:34",
+          "x": 5,
+          "y": 0
+        },
+        {
+          "granularity": "paragraph",
+          "reference": "1:0-1:20",
+          "x": 0,
+          "y": 1
+        }
+      ]
+    }
+  ]
+}

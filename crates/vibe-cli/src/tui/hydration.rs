@@ -19,7 +19,8 @@ use super::callback::sync_active_callbacks;
 use super::controls::ControlState;
 use super::runtime::InteractiveRuntime;
 use super::state::{
-    EntrySource, EntryStatus, ServerEvent, TranscriptEntry, TranscriptKind, TuiSnapshot, TuiState,
+    EntrySource, EntryStatus, LOAD_MORE_BATCH_SIZE, ServerEvent, TranscriptEntry, TranscriptKind,
+    TuiSnapshot, TuiState,
 };
 use super::{Arguments, CliError, INITIAL_HISTORY_LIMIT, sync_runtime_intent};
 
@@ -86,17 +87,36 @@ pub(super) fn metadata_session_id(result: &BTreeMap<String, Value>) -> Option<St
 
 pub(super) fn hydrate_initial_state(
     runtime: &mut InteractiveRuntime,
-    _arguments: &Arguments,
+    arguments: &Arguments,
     _working_directory: &Path,
 ) -> Result<TuiState, CliError> {
     let session_id = runtime.session_id.clone();
     match canonical_session_projection(runtime, &session_id, true) {
-        Ok(state) => Ok(state),
+        Ok(mut state) => {
+            // Reference `_auto_resume_on_startup`: a launch that resumed a
+            // session ends its rebuilt transcript by naming it.
+            if arguments.continue_session
+                || arguments.resume.as_deref().is_some_and(|id| !id.is_empty())
+            {
+                super::push_local_notice(
+                    &mut state,
+                    &resumed_session_notice(&session_id),
+                    EntryStatus::Completed,
+                );
+            }
+            Ok(state)
+        }
         Err(error) => Ok(recoverable_initial_state(
             &session_id,
             format!("Initial session state is unavailable: {error}"),
         )),
     }
+}
+
+/// Reference `_resume_local_session`.
+pub(super) fn resumed_session_notice(session_id: &str) -> String {
+    let short = session_id.chars().take(8).collect::<String>();
+    format!("Resumed session `{short}`")
 }
 
 pub(super) fn canonical_session_projection(
@@ -115,6 +135,7 @@ pub(super) fn canonical_session_projection(
     let mut state = tui_state_from_public_session(session_id, public_state)?;
     if include_saved_history {
         overlay_latest_saved_history(runtime, &mut state)?;
+        state.window_history_tail();
     }
     Ok(state)
 }
@@ -187,7 +208,15 @@ fn overlay_latest_saved_history(
 /// Reveals the page above the oldest entry once the operator scrolls past it,
 /// leaving the projection ordered oldest-first.
 pub(super) fn page_older_history(runtime: Option<&mut InteractiveRuntime>, state: &mut TuiState) {
-    if !state.needs_older_history() {
+    if state.needs_older_history() {
+        load_more_history(runtime, state);
+    }
+}
+
+/// Reference `on_history_load_more_requested`: the next batch of entries held
+/// back locally, or else the next page the server holds, which is shown whole.
+pub(super) fn load_more_history(runtime: Option<&mut InteractiveRuntime>, state: &mut TuiState) {
+    if state.reveal_older_history() {
         return;
     }
     let Some(runtime) = runtime else {
@@ -202,7 +231,7 @@ pub(super) fn page_older_history(runtime: Option<&mut InteractiveRuntime>, state
         state.push_diagnostic("Saved-history cursor is invalid");
         return;
     };
-    let limit = before.min(INITIAL_HISTORY_LIMIT);
+    let limit = before.min(LOAD_MORE_BATCH_SIZE);
     let offset = before.saturating_sub(limit);
     let result = runtime.service.public_call(
         "history/list",

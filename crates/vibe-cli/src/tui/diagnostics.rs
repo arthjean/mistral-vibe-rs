@@ -268,11 +268,35 @@ impl Activity {
     /// Reference `LoadingWidget._format_hint`.
     #[must_use]
     pub fn hint(&self) -> String {
+        self.hint_parts()
+            .into_iter()
+            .map(|(text, _)| text)
+            .collect()
+    }
+
+    /// The hint in runs, each saying whether it names a key, which reference
+    /// `shortcut` styles apart from the words around it.
+    #[must_use]
+    pub fn hint_parts(&self) -> Vec<(String, bool)> {
         let elapsed = format_elapsed(self.elapsed_seconds);
+        let text = |text: &str| (text.to_owned(), false);
+        let key = |key: &str| (key.to_owned(), true);
         if self.queued > 0 {
-            format!("({elapsed} Esc to interrupt · Ctrl+C to cancel last queued message)")
+            vec![
+                (format!("({elapsed} "), false),
+                key("Esc"),
+                text(" to interrupt · "),
+                key("Enter"),
+                text(" to steer · "),
+                key("Ctrl+C"),
+                text(" to cancel last queued message)"),
+            ]
         } else {
-            format!("({elapsed} Esc/Ctrl+C to interrupt)")
+            vec![
+                (format!("({elapsed} "), false),
+                key("Esc/Ctrl+C"),
+                text(" to interrupt)"),
+            ]
         }
     }
 
@@ -453,7 +477,7 @@ mod tests {
         );
         assert_eq!(
             Activity::new("", 75, 2).hint(),
-            "(1m15s Esc to interrupt · Ctrl+C to cancel last queued message)"
+            "(1m15s Esc to interrupt · Enter to steer · Ctrl+C to cancel last queued message)"
         );
         assert_eq!(Activity::new("", 0, 0).status, DEFAULT_ACTIVITY_STATUS);
         assert_eq!(

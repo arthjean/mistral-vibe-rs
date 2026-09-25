@@ -74,7 +74,7 @@ fn a_cleared_context_publishes_session_context_cleared() {
             "method": "turn/start",
             "params": {
                 "sessionId": "session-1",
-                "input": [{"type": "text", "text": "plan"}]
+                "message": [{"type": "text", "text": "plan"}]
             }
         }),
     ] {
@@ -180,7 +180,7 @@ fn compaction_rebinds_history_and_resets_the_new_session_watermark() {
             "method": "turn/start",
             "params": {
                 "sessionId": "session-1",
-                "input": [{"type": "text", "text": "compact"}]
+                "message": [{"type": "text", "text": "compact"}]
             }
         }),
     ] {

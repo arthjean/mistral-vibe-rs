@@ -86,6 +86,9 @@ pub(in crate::tui) async fn complete_mounted_startup(
         Ok(Vec::new())
     };
     state.waiting = false;
+    // Reference `_mount_after_session_ready`.
+    let effect = state.notifier.clear_waiting();
+    state.attend(effect);
     if !record_initialization(startup, state, initialization) {
         return Ok(());
     }

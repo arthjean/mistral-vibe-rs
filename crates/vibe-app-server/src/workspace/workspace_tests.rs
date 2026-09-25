@@ -261,7 +261,7 @@ fn proxy_environment_round_trips_all_supported_keys_and_preserves_other_values()
                 json!({
                     "HTTP_PROXY": "https://proxy.example",
                     "HTTPS_PROXY": "https://secure-proxy.example",
-                    "ALL_PROXY": "socks5://proxy.example",
+                    "ALL_PROXY": "http://proxy.example",
                     "NO_PROXY": "localhost,.internal",
                     "SSL_CERT_FILE": "/certs/ca.pem",
                     "SSL_CERT_DIR": "/certs",

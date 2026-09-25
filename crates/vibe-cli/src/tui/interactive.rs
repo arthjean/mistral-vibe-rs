@@ -17,7 +17,9 @@ use serde_json::Value;
 use vibe_core::telemetry::TelemetryRecord;
 use vibe_core::updates::UpdateCacheStore;
 
-use super::callback::{drain_callback_requests, sync_active_callbacks, sync_callback_presentation};
+use super::callback::{
+    drain_callback_requests, hold_for_typing, sync_active_callbacks, sync_callback_presentation,
+};
 use super::chat_input::{ChatInputState, InputEvent, Safety, VoicePhase};
 use super::clipboard_images::ClipboardImageManager;
 use super::composer::{
@@ -213,6 +215,7 @@ impl Session {
         self.plan_review_monitor
             .sync(plan_path, &mut self.state)
             .await;
+        hold_for_typing(&mut self.controls, &mut self.state, now_ms);
         sync_callback_presentation(&self.controls, &mut self.state, now_ms);
         self.state.sync_activity(now_ms);
         if self
@@ -229,6 +232,7 @@ impl Session {
 
     /// Paints one frame from the projection as it now stands.
     fn draw(&mut self) -> Result<(), CliError> {
+        super::flush_attention(&mut self.state);
         let runtime = self.runtime.as_ref();
         let agent_name = runtime.map_or("default", |runtime| runtime.agent_name.as_str());
         let border_title = format!(" {} ", agent_name.to_lowercase());
@@ -669,6 +673,14 @@ pub async fn run_interactive(
                     }
                 }
                 _ = voice_ticker.tick() => {
+                    let now = vibe_core::clock::now_millis();
+                    session.state.banner_cat.advance(now);
+                    session.state.expire_inline_notice(now);
+                    session.state.animation_frame = session.state.animation_frame.wrapping_add(1);
+                    // Only a busy session shows the loading line.
+                    if session.state.waiting {
+                        session.state.loading.tick();
+                    }
                     if session.input.voice_phase() == VoicePhase::Transcribing {
                         apply_composer_event(
                             &mut session.input,

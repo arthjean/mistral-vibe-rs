@@ -336,3 +336,32 @@ async fn clearing_the_history_re_mounts_the_command_line_it_erased() {
         "the clear continues under a new session id"
     );
 }
+
+/// Reference `on_session_picker_app_session_selected`: the picker closes
+/// before the resume, a refused one is reported with its prefix, and the
+/// resumed transcript ends by naming the session it now shows.
+#[test]
+fn a_picked_session_names_itself_and_a_refused_one_says_it_failed_to_load() {
+    let mut runtime = interactive_test_runtime("picker-current");
+    let mut state = TuiState::new(&runtime.session_id);
+    let mut controls = ControlState::new(&runtime.session_id);
+    state.overlay = Some(crate::tui::interaction::Overlay::new(
+        crate::tui::interaction::OverlayKind::Sessions,
+        "Sessions",
+        Vec::new(),
+    ));
+
+    super::resume_selected_session(&mut runtime, &mut state, &mut controls, "missing-session");
+
+    assert!(state.overlay.is_none());
+    let error = state.entries.last().expect("an error entry");
+    assert!(
+        error.text.starts_with("Failed to load session: "),
+        "{}",
+        error.text
+    );
+    assert_eq!(
+        crate::tui::hydration::resumed_session_notice("0123456789abcdef"),
+        "Resumed session `01234567`"
+    );
+}

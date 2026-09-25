@@ -6,6 +6,7 @@
 //! the same contract without any I/O: the renderer publishes the visible lines,
 //! and every action resolves against them.
 
+use super::click_chain::{ClickChain, Granularity, is_word_character, word_span};
 use super::diagnostics::safe_link_spans;
 
 /// A cell in the painted transcript: the visible line and the column inside it.
@@ -22,6 +23,38 @@ pub struct TranscriptView {
     anchor: Option<Cell>,
     head: Option<Cell>,
     dragged: bool,
+    /// The painted line holding "Load more messages", when one is on screen.
+    load_more_line: Option<usize>,
+    /// What activating a painted row does, by the row it sits on.
+    row_actions: Vec<(usize, RowAction)>,
+    /// Presses by screen cell, and the cell the last one landed on.
+    chain: ClickChain<(u16, u16)>,
+    pressed: Option<Cell>,
+}
+
+/// What activating a painted transcript row does.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RowAction {
+    /// Opens `url` from a label that does not spell it out, when the click
+    /// lands at or past `column`. Reference `link_content`.
+    Link { column: usize, url: String },
+    /// Folds or unfolds the section or tool group `key` names. Reference
+    /// `CollapsibleSection.on_click` and `ToolGroupHeader.on_click`.
+    Toggle(String),
+}
+
+impl RowAction {
+    /// The same action on a row shifted right by `columns`.
+    #[must_use]
+    pub fn indented(self, columns: usize) -> Self {
+        match self {
+            Self::Link { column, url } => Self::Link {
+                column: column + columns,
+                url,
+            },
+            toggle @ Self::Toggle(_) => toggle,
+        }
+    }
 }
 
 impl TranscriptView {
@@ -41,6 +74,32 @@ impl TranscriptView {
     #[must_use]
     pub fn lines(&self) -> &[String] {
         &self.lines
+    }
+
+    pub fn set_load_more_line(&mut self, line: Option<usize>) {
+        self.load_more_line = line;
+    }
+
+    /// Publishes what activating each painted row does.
+    pub fn set_row_actions(&mut self, actions: Vec<(usize, RowAction)>) {
+        self.row_actions = actions;
+    }
+
+    /// The section or tool group a click on `cell` folds or unfolds.
+    #[must_use]
+    pub fn toggle_at(&self, cell: Cell) -> Option<&str> {
+        self.row_actions
+            .iter()
+            .find_map(|(line, action)| match action {
+                RowAction::Toggle(key) if *line == cell.line => Some(key.as_str()),
+                _ => None,
+            })
+    }
+
+    /// Whether a click on `cell` presses the load-more row.
+    #[must_use]
+    pub fn is_load_more(&self, cell: Cell) -> bool {
+        self.load_more_line == Some(cell.line)
     }
 
     pub fn clear_selection(&mut self) {
@@ -72,9 +131,62 @@ impl TranscriptView {
         self.dragged = false;
     }
 
+    /// Reference `WordSelectScreen.on_mouse_down`: a press at screen `spot`
+    /// begins a selection at `cell`, and the second and third presses of a
+    /// chain select the word under it and then its whole painted line.
+    pub fn press(&mut self, cell: Cell, spot: (u16, u16), now_ms: u64) {
+        let granularity = self.chain.press(spot, now_ms);
+        self.pressed = Some(cell);
+        match self.span_at(cell, granularity) {
+            Some((start, end)) => {
+                self.anchor = Some(start);
+                self.head = Some(end);
+                self.dragged = false;
+            }
+            None => self.begin_selection(cell),
+        }
+    }
+
+    /// What the press that started the current gesture selects.
+    #[must_use]
+    pub const fn granularity(&self) -> Granularity {
+        self.chain.granularity()
+    }
+
+    fn span_at(&self, cell: Cell, granularity: Granularity) -> Option<(Cell, Cell)> {
+        let characters = self.lines.get(cell.line)?.chars().collect::<Vec<_>>();
+        let (start, end) = match granularity {
+            Granularity::Character => return None,
+            Granularity::Word => word_span(characters.len(), cell.column, |index| {
+                is_word_character(characters[index])
+            })?,
+            Granularity::Line => (0, characters.len()),
+        };
+        let at = |column| Cell {
+            line: cell.line,
+            column,
+        };
+        Some((at(start), at(end)))
+    }
+
     pub fn extend_selection(&mut self, cell: Cell) {
         if self.anchor.is_none() {
             self.begin_selection(cell);
+            return;
+        }
+        let granularity = self.chain.granularity();
+        if let (Some(pressed), false) = (self.pressed, granularity == Granularity::Character) {
+            // Reference `WordSelectScreen._snap_drag`: both ends snap outward
+            // to the word or line they reach.
+            let (low, high) = (pressed.min(cell), pressed.max(cell));
+            let start = self.span_at(low, granularity).map_or(low, |span| span.0);
+            let end = self.span_at(high, granularity).map_or(high, |span| span.1);
+            if (self.anchor, self.head) != (Some(start), Some(end)) {
+                self.anchor = Some(start);
+                self.head = Some(end);
+                self.dragged = true;
+                self.chain.mark_dragged();
+            }
             return;
         }
         if self.head != Some(cell) {
@@ -178,6 +290,17 @@ impl TranscriptView {
     #[must_use]
     pub fn link_at(&self, cell: Cell) -> Option<String> {
         let text = self.lines.get(cell.line)?;
+        let labeled = self
+            .row_actions
+            .iter()
+            .find_map(|(line, action)| match action {
+                RowAction::Link { column, url } if *line == cell.line => Some((*column, url)),
+                _ => None,
+            });
+        if let Some((column, url)) = labeled {
+            return (cell.column >= column && cell.column < text.chars().count())
+                .then(|| url.clone());
+        }
         let characters = text.chars().collect::<Vec<_>>();
         for (start, end) in safe_link_spans(text) {
             let start = text[..start].chars().count();
@@ -214,6 +337,56 @@ mod tests {
             ],
         );
         view
+    }
+
+    #[test]
+    fn a_click_chain_selects_the_word_then_the_line_and_drags_by_words() {
+        let mut view = view();
+        let cell = Cell { line: 0, column: 5 };
+        view.press(cell, (5, 2), 0);
+        assert!(view.is_click() && !view.has_selection());
+        view.press(cell, (5, 2), 100);
+        assert_eq!(view.selected_text().as_deref(), Some("deploy"));
+        view.press(cell, (5, 2), 200);
+        assert_eq!(
+            view.selected_text().as_deref(),
+            Some("> deploy the service")
+        );
+
+        view.press(cell, (5, 2), 1_000);
+        view.press(cell, (5, 2), 1_100);
+        view.extend_selection(Cell { line: 1, column: 1 });
+        assert_eq!(
+            view.selected_text().as_deref(),
+            Some("deploy the service\nSee")
+        );
+        assert!(!view.is_click());
+    }
+
+    /// Reference `WebSearchResultWidget._source_content`: the title is the
+    /// link, and the gutter before it is not.
+    #[test]
+    fn a_labeled_link_resolves_only_over_its_label() {
+        let mut view = view();
+        view.set_row_actions(vec![(
+            0,
+            RowAction::Link {
+                column: 4,
+                url: "https://example.com".to_owned(),
+            },
+        )]);
+        assert_eq!(view.link_at(Cell { line: 0, column: 3 }), None);
+        assert_eq!(
+            view.link_at(Cell { line: 0, column: 4 }).as_deref(),
+            Some("https://example.com")
+        );
+        assert_eq!(
+            view.link_at(Cell {
+                line: 0,
+                column: "> deploy the service".len()
+            }),
+            None
+        );
     }
 
     #[test]

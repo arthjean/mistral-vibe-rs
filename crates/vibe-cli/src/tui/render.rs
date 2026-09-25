@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
-use ratatui::style::{Modifier, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Block, Borders, Clear, Padding, Paragraph, Wrap};
 use unicode_width::UnicodeWidthStr;
@@ -18,19 +18,22 @@ mod text;
 use super::chat_input::{InputMode, Safety, VoicePhase};
 use super::completion::CompletionEngine;
 use super::composer_layout::{CHROME_HEIGHT, ComposerLayout, PROMPT_WIDTH};
+use super::diagnostics::Activity;
 use super::input::{PromptEditor, VisualLayout};
+use super::loading::LoadingAnimation;
 use super::rewind::{RewindChoice, RewindState};
 use super::setup::ResolvedTheme;
-use super::state::{TranscriptKind, TuiState};
+use super::state::{TranscriptEntry, TranscriptKind, TuiState};
 use super::transcript;
-use entries::semantic_lines;
+pub(in crate::tui) use entries::follows_tool_toggle;
+#[cfg(test)]
+pub(in crate::tui) use entries::group_label;
+use entries::{Folding, Painted, effect_block, fold_keys, semantic_lines, tool_group};
 use overlays::{draw_callback_overlay, draw_overlay};
 use rewind::draw_rewind;
 use text::{MAX_RENDER_LINES, sanitize_inline, truncate_width, wrapped_terminal_lines};
 
 pub use text::{MAX_RENDER_CHARS, RenderLimits, sanitize_terminal};
-
-const PETIT_CHAT: [&str; 3] = ["  ⡠⣒⠄  ⡔⢄⠔⡄", " ⢸⠸⣀⡔⢉⠱⣃⡢⣂⡣", "  ⠉⠒⠣⠤⠵⠤⠬⠮⠆"];
 
 #[derive(Debug, Clone, Copy)]
 pub struct BannerContext<'a> {
@@ -77,7 +80,8 @@ pub fn draw(
     context: UiContext<'_>,
 ) {
     let requested_completion_height = completion_popup::requested_height(completion);
-    let activity_height = u16::from(activity_text(state).is_some());
+    let activity_height =
+        u16::from(activity_text(state).is_some() || state.inline_notice.is_some());
     let queue_lines = state.prompt_queue.presentation_lines();
     let queue_height = u16::try_from(queue_lines.len()).unwrap_or(u16::MAX).min(6);
     let composer = ComposerLayout::for_viewport(
@@ -112,17 +116,33 @@ pub fn draw(
     ])
     .areas(frame.area());
     draw_transcript(frame, transcript_area, state, theme, context.banner);
+    let selected = state
+        .queue_selection
+        .as_ref()
+        .and_then(|selection| state.prompt_queue.index_of(&selection.selected));
     draw_queue(
         frame,
         queue_area,
         &queue_lines,
-        state.prompt_queue.scroll_offset(),
+        (state.prompt_queue.scroll_offset(), selected),
         theme,
     );
     draw_activity(frame, activity_area, state, theme);
     completion_popup::draw(frame, completion_area, completion, theme);
+    // Reference `_lock_input_for_selection`: a selected queued prompt hides the
+    // caret of the draft it locked.
+    let caret = !state
+        .queue_selection
+        .as_ref()
+        .is_some_and(|selection| !selection.editing);
     draw_input(
-        frame, input_area, editor, input_mode, theme, context, &composer,
+        frame,
+        input_area,
+        editor,
+        input_mode,
+        theme,
+        context,
+        (&composer, caret),
     );
     // Reference `QuitManager.request_confirmation` writes into the path display.
     let quit_prompt = state
@@ -152,7 +172,7 @@ fn draw_queue(
     frame: &mut Frame<'_>,
     area: Rect,
     lines: &[String],
-    scroll_offset: usize,
+    (scroll_offset, selected): (usize, Option<usize>),
     theme: ResolvedTheme,
 ) {
     if area.height == 0 || lines.is_empty() {
@@ -177,6 +197,9 @@ fn draw_queue(
                 truncate_width(&sanitize_inline(line), width),
                 if index == 0 {
                     theme.warning().add_modifier(Modifier::BOLD)
+                } else if selected == Some(start + index - 1) {
+                    // Reference `.user-message.queue-selected`.
+                    theme.muted().add_modifier(Modifier::REVERSED)
                 } else {
                     theme.muted()
                 },
@@ -184,6 +207,14 @@ fn draw_queue(
         })
         .collect::<Vec<_>>();
     frame.render_widget(Paragraph::new(rendered), area);
+}
+
+/// Reference `HistoryLoadMoreMessage._label_text`.
+fn load_more_label(remaining: Option<usize>) -> String {
+    remaining.map_or_else(
+        || "Load more messages".to_owned(),
+        |remaining| format!("Load more messages ({remaining})"),
+    )
 }
 
 fn draw_transcript(
@@ -195,40 +226,106 @@ fn draw_transcript(
 ) {
     let visible_height = usize::from(area.height).max(1);
     let mut newest_first = Vec::new();
+    let mut action_rows = Vec::new();
     let mut rendered_chars = 0usize;
     let mut history_truncated = false;
     let visible = state
         .entries
         .iter()
+        .skip(state.hidden_history())
         .filter(|entry| entry.kind != TranscriptKind::Reasoning || state.show_reasoning)
         .collect::<Vec<_>>();
-    'entries: for (index, entry) in visible.iter().enumerate().rev() {
-        // Consecutive tool-group members are packed; anything else opens with a
-        // blank line, exactly as the reference spaces a group from the
-        // surrounding conversation.
-        let packed = transcript::keeps_tool_group(entry)
-            && index
-                .checked_sub(1)
-                .and_then(|previous| visible.get(previous))
-                .is_some_and(|previous| transcript::keeps_tool_group(previous));
-        let mut entry_lines = semantic_lines(entry, area.width, theme, state.tools_collapsed);
-        if !packed {
-            entry_lines.insert(0, Line::default());
+    // Reference `ToolGroup`: a run of tool calls, their reasoning and hook
+    // notices folds under one summary; anything else stands alone.
+    let mut blocks: Vec<Vec<&TranscriptEntry>> = Vec::new();
+    for entry in visible {
+        let grouped = transcript::keeps_tool_group(entry);
+        match blocks.last_mut() {
+            Some(block)
+                if grouped
+                    && block
+                        .first()
+                        .is_some_and(|first| transcript::keeps_tool_group(first)) =>
+            {
+                block.push(entry);
+            }
+            _ => blocks.push(vec![entry]),
         }
-        for line in entry_lines.into_iter().rev() {
+    }
+    // A widget mounts once and keeps its own fold from then on.
+    for block in &blocks {
+        for (key, collapsed) in fold_keys(block, state.tools_collapsed) {
+            state.folds.entry(key).or_insert(collapsed);
+        }
+    }
+    let folding = Folding {
+        folds: &state.folds,
+        frame: state.animation_frame,
+        streams: &state.effect_streams,
+    };
+    let block_count = blocks.len();
+    'blocks: for (index, block) in blocks.iter().enumerate().rev() {
+        let painted = match block.as_slice() {
+            [entry] if !transcript::keeps_tool_group(entry) => match transcript::region(entry) {
+                transcript::Region::Effect(effect) => {
+                    effect_block(entry, &effect, true, folding, area.width, theme)
+                }
+                _ => Painted {
+                    lines: semantic_lines(entry, area.width, theme, state.tools_collapsed),
+                    actions: Vec::new(),
+                },
+            },
+            // Reference `_finalize_tool_group`: the newest group keeps running
+            // until the turn that opened it ends.
+            members => tool_group(
+                members,
+                index + 1 == block_count && state.waiting,
+                folding,
+                area.width,
+                theme,
+            ),
+        };
+        // Every block opens with a blank line, as the reference spaces a group
+        // or a message from what precedes it.
+        let newest_line = newest_first.len() + painted.lines.len();
+        action_rows.extend(
+            painted
+                .actions
+                .into_iter()
+                .map(|(line, action)| (newest_line - (line + 1), action)),
+        );
+        for line in painted
+            .lines
+            .into_iter()
+            .rev()
+            .chain(std::iter::once(Line::default()))
+        {
             let line_chars = line.to_string().chars().count();
             if newest_first.len() >= MAX_RENDER_LINES
                 || rendered_chars.saturating_add(line_chars) > MAX_RENDER_CHARS
             {
                 history_truncated = true;
-                break 'entries;
+                break 'blocks;
             }
             rendered_chars = rendered_chars.saturating_add(line_chars);
             newest_first.push(line);
         }
     }
+    // Reference `HistoryLoadMoreMessage`, mounted above the oldest entry shown.
+    let mut load_more_index = None;
+    if !history_truncated && state.has_older_history() {
+        load_more_index = Some(newest_first.len());
+        newest_first.push(Line::styled(
+            load_more_label(state.older_history_remaining()),
+            theme.secondary(),
+        ));
+        newest_first.push(Line::default());
+    }
     if !history_truncated {
-        for line in banner_lines(banner, theme).into_iter().rev() {
+        for line in banner_lines(banner, state.banner_cat.frame(), theme)
+            .into_iter()
+            .rev()
+        {
             let line_chars = line.to_string().chars().count();
             if newest_first.len() >= MAX_RENDER_LINES
                 || rendered_chars.saturating_add(line_chars) > MAX_RENDER_CHARS
@@ -248,16 +345,29 @@ fn draw_transcript(
         .into_iter()
         .rev()
         .collect::<Vec<_>>();
-    if lines.len() < visible_height {
-        lines.splice(
-            0..0,
-            std::iter::repeat_with(Line::default).take(visible_height - lines.len()),
-        );
+    let padding = visible_height.saturating_sub(lines.len());
+    // Where a row counted from the newest line landed on screen, counted from
+    // the top.
+    let on_screen = |index: usize| {
+        index
+            .checked_sub(state.scroll_offset)
+            .filter(|from_bottom| *from_bottom < lines.len())
+            .map(|from_bottom| padding + lines.len() - 1 - from_bottom)
+    };
+    let load_more_line = load_more_index.and_then(on_screen);
+    let actions = action_rows
+        .into_iter()
+        .filter_map(|(index, action)| Some((on_screen(index)?, action)))
+        .collect::<Vec<_>>();
+    if padding > 0 {
+        lines.splice(0..0, std::iter::repeat_with(Line::default).take(padding));
     }
     // Interaction resolves against what was painted, so the frame publishes its
     // visible text before handing the lines to the widget.
     let painted = lines.iter().map(ToString::to_string).collect::<Vec<_>>();
     state.transcript_view.publish(area.y, painted.clone());
+    state.transcript_view.set_load_more_line(load_more_line);
+    state.transcript_view.set_row_actions(actions);
     for (index, from, to) in state.transcript_view.selection_ranges() {
         let (Some(line), Some(text)) = (lines.get_mut(index), painted.get(index)) else {
             continue;
@@ -284,13 +394,13 @@ fn selected_line(text: &str, from: usize, to: usize) -> Line<'static> {
     ])
 }
 
-fn banner_lines(banner: BannerContext<'_>, theme: ResolvedTheme) -> Vec<Line<'static>> {
+fn banner_lines(
+    banner: BannerContext<'_>,
+    cat: [&'static str; 3],
+    theme: ResolvedTheme,
+) -> Vec<Line<'static>> {
     let mut lines = vec![Line::default()];
-    lines.extend(
-        PETIT_CHAT
-            .into_iter()
-            .map(|line| Line::styled(line, theme.base())),
-    );
+    lines.extend(cat.into_iter().map(|line| Line::styled(line, theme.base())));
     lines.push(Line::default());
     let mut identity = vec![
         Span::styled("Mistral Vibe", theme.orange().add_modifier(Modifier::BOLD)),
@@ -382,14 +492,42 @@ fn activity_text(state: &TuiState) -> Option<(String, bool)> {
     // loading indicator is gone.
     state
         .narrator
-        .status_line()
+        // Reference `ANIMATION_INTERVAL`: a frame every 150 ms, read off the
+        // tenth-of-a-second animation tick.
+        .status_line(state.animation_frame * 2 / 3)
         .map(|narration| (narration, false))
 }
 
 fn draw_activity(frame: &mut Frame<'_>, area: Rect, state: &TuiState, theme: ResolvedTheme) {
+    // Reference `#inline-notice`: after the loading content, which takes the
+    // rest of the row, in the muted color.
+    let area = match state.inline_notice.as_ref() {
+        Some(notice) => {
+            let text = truncate_width(&sanitize_inline(&notice.text), usize::from(area.width));
+            let width = u16::try_from(text.width()).unwrap_or(area.width);
+            let [rest, notice_area] =
+                Layout::horizontal([Constraint::Min(0), Constraint::Length(width)]).areas(area);
+            frame.render_widget(Paragraph::new(text).style(theme.muted()), notice_area);
+            rest
+        }
+        None => area,
+    };
     let Some((text, warning)) = activity_text(state) else {
         return;
     };
+    // Anything but a warning shown while a turn runs is the turn's own line.
+    if let (Some(activity), false) = (state.activity.as_ref(), warning) {
+        frame.render_widget(
+            Paragraph::new(loading_line(
+                activity,
+                &state.loading,
+                state.typing_hold,
+                theme,
+            )),
+            area,
+        );
+        return;
+    }
     frame.render_widget(
         Paragraph::new(truncate_width(&text, usize::from(area.width))).style(if warning {
             theme.warning()
@@ -398,6 +536,44 @@ fn draw_activity(frame: &mut Frame<'_>, area: Rect, state: &TuiState, theme: Res
         }),
         area,
     );
+}
+
+/// Reference `LoadingWidget`: the snake and the status take the color sweep
+/// cell by cell, and the hint follows in the muted color with its keys picked
+/// out.
+fn loading_line(
+    activity: &Activity,
+    loading: &LoadingAnimation,
+    typing_hold: bool,
+    theme: ResolvedTheme,
+) -> Line<'static> {
+    let swept = |position: usize| {
+        let (red, green, blue) = loading.color_at(position);
+        theme.colored(Color::Rgb(red, green, blue))
+    };
+    let mut spans = vec![Span::styled(loading.spinner(), swept(0)), Span::raw(" ")];
+    let status = sanitize_inline(&activity.status);
+    let length = status.chars().count();
+    spans.extend(
+        status
+            .chars()
+            .enumerate()
+            .map(|(index, character)| Span::styled(character.to_string(), swept(1 + index))),
+    );
+    spans.push(Span::styled("… ", swept(1 + length)));
+    spans.extend(
+        activity.hint_parts().into_iter().map(|(text, key)| {
+            Span::styled(text, if key { theme.orange() } else { theme.muted() })
+        }),
+    );
+    // Reference `show_debounce_hint`.
+    if typing_hold {
+        spans.push(Span::styled(
+            " typing detected, waiting…",
+            theme.muted().add_modifier(Modifier::ITALIC),
+        ));
+    }
+    Line::from(spans)
 }
 
 fn draw_footer(
@@ -493,7 +669,7 @@ fn draw_input(
     input_mode: InputMode,
     theme: ResolvedTheme,
     context: UiContext<'_>,
-    composer: &ComposerLayout,
+    (composer, caret): (&ComposerLayout, bool),
 ) {
     let input_width = composer.width();
     let title = if context.secret_input {
@@ -559,7 +735,7 @@ fn draw_input(
         theme.base()
     };
     frame.render_widget(Paragraph::new(text).style(input_style), input_area);
-    if input_area.width > 0 && input_area.height > 0 {
+    if caret && input_area.width > 0 && input_area.height > 0 {
         frame.set_cursor_position((
             input_area.x.saturating_add(
                 u16::try_from(composer.cursor_column())

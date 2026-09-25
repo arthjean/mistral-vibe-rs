@@ -816,6 +816,33 @@ where
         Ok(InterruptOutcome::Complete)
     }
 
+    /// Delivers `input` into the running turn: the canonical turn accepts it
+    /// first, so a stale or finished turn refuses it before the driver sees it.
+    pub fn steer(
+        &mut self,
+        session_id: &str,
+        turn_id: &str,
+        input: &[PublicContentBlock],
+        client_user_message_id: Option<&str>,
+    ) -> Result<(), ClientError> {
+        let (content, inject_invoked_skill) =
+            self.client
+                .steer(session_id, turn_id, input, client_user_message_id)?;
+        self.driver
+            .steer(session_id, turn_id, &content, inject_invoked_skill)?;
+        Ok(())
+    }
+
+    /// Hands `text` to the model as context for the next turn of an idle
+    /// session, without a user message of its own.
+    pub fn inject_context(&mut self, session_id: &str, text: &str) -> Result<(), ClientError> {
+        let (content, as_message, inject_invoked_skill) =
+            self.client.inject_context(session_id, text)?;
+        self.driver
+            .inject_context(session_id, &content, as_message, inject_invoked_skill)?;
+        Ok(())
+    }
+
     pub async fn close_session(&mut self, session_id: &str) -> Result<(), ClientError> {
         let interrupt = self.client.close_session(session_id).await?;
         self.fail_interactive_callbacks(Some(session_id), None, "session was closed");

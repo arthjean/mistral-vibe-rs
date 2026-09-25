@@ -130,12 +130,7 @@
   "schemaVersion": 5,
   "traces": [
     {
-      "divergences": [
-        {
-          "event": 2,
-          "reason": "Since v2.25.0 the reference refuses a proxy URL variable whose value lacks an http:// or https:// scheme: `set_proxy_var` checks every key in `PROXY_URL_VARS` (vibe/core/proxy_setup.py:16-17, :42-45 at 4a96003186b166d55b9f06895c45bb136eef61cd) and `_config_proxy_write` answers the `ProxySetupError` as INVALID_PARAMS (vibe/app_server/_resources.py:710-727), so `ALL_PROXY=socks5://all.example` fails the write; only that `error` status is a reference measurement. The reference writes one key per `set_proxy_var` call in wire order with no rollback (vibe/app_server/_resources.py:716-722, vibe/core/proxy_setup.py:35-51), so keys that precede ALL_PROXY in the payload stay written; the recorded file content comes from the oracle's restore-on-error convention, not from the reference. The Rust `ProxyEnvironmentStore::write` (crates/vibe-core/src/config/proxy.rs:100-121) rejects only control characters and writes every change."
-        }
-      ],
+      "divergences": [],
       "events": [
         {
           "kind": "config",
@@ -253,7 +248,7 @@
       "expected": [
         "config|Settings|-|Save changes to:enabled:project configuration layer;Popular settings:disabled:;active model:enabled:codestral · string · project config · Model.;Advanced settings:disabled:;api key:disabled:[redacted] · string · effective · Secret.;custom runtime:disabled:7 · number · effective · schema unavailable; read-only;enable update checks:enabled:True · boolean · effective · Updates.;limits › max turns:enabled:12 · integer · env · Turn limit.;optional note:enabled:— · string · defaults · Optional.",
         "proxy|Proxy Configuration|-|HTTP_PROXY:enabled:https://proxy.example · Proxy URL for HTTP requests;HTTPS_PROXY:enabled:not set · Proxy URL for HTTPS requests;ALL_PROXY:enabled:socks5://proxy.example · Proxy URL for all requests (fallback);NO_PROXY:enabled:localhost,.internal · Comma-separated list of hosts to bypass proxy;SSL_CERT_FILE:enabled:/certs/ca.pem · Path to custom SSL certificate file;SSL_CERT_DIR:enabled:/certs · Path to directory containing SSL certificates",
-        "proxy-fs|ok|\"CUSTOM=value\\nHTTP_PROXY='https://new.example'\\nALL_PROXY='socks5://all.example'\\nNO_PROXY='localhost,.internal'\\nSSL_CERT_FILE='/certs/ca.pem'\\nSSL_CERT_DIR='/certs'\\n\"",
+        "proxy-fs|error|\"CUSTOM=value\\nHTTP_PROXY='old'\\n\"",
         "proxy-fs|error|\"CUSTOM=value\\nHTTP_PROXY='old'\\n\""
       ],
       "id": "typed-layers-and-proxy-contract",
@@ -266,52 +261,7 @@
       "story": "US-031"
     },
     {
-      "divergences": [
-        {
-          "event": 2,
-          "reason": "The reference points at the `r` binding in a disabled hint; the Rust detail view exposes the refresh as a selectable action so credential setup stays executable from the overlay."
-        },
-        {
-          "event": 3,
-          "reason": "US-032 requires open, copy, show URL, completion refresh, logout and close as explicit actions; the reference drives a streaming OAuth login worker whose only affordances are three options plus keyboard bindings, so the two surfaces cannot present the same rows."
-        },
-        {
-          "event": 4,
-          "reason": "US-032 requires open, copy, show URL, completion refresh, logout and close as explicit actions; the reference drives a streaming OAuth login worker whose only affordances are three options plus keyboard bindings, so the two surfaces cannot present the same rows."
-        },
-        {
-          "event": 5,
-          "reason": "The Rust overlay reduces each choice to one typed effect the runtime executes; the reference performs the action inside the widget (webbrowser, clipboard, detail panel) and has no logout affordance at all."
-        },
-        {
-          "event": 6,
-          "reason": "The Rust overlay reduces each choice to one typed effect the runtime executes; the reference performs the action inside the widget (webbrowser, clipboard, detail panel) and has no logout affordance at all."
-        },
-        {
-          "event": 7,
-          "reason": "The Rust overlay reduces each choice to one typed effect the runtime executes; the reference performs the action inside the widget (webbrowser, clipboard, detail panel) and has no logout affordance at all."
-        },
-        {
-          "event": 8,
-          "reason": "The Rust overlay reduces each choice to one typed effect the runtime executes; the reference performs the action inside the widget (webbrowser, clipboard, detail panel) and has no logout affordance at all."
-        },
-        {
-          "event": 9,
-          "reason": "The Rust overlay reduces each choice to one typed effect the runtime executes; the reference performs the action inside the widget (webbrowser, clipboard, detail panel) and has no logout affordance at all."
-        },
-        {
-          "event": 10,
-          "reason": "The Rust overlay reduces each choice to one typed effect the runtime executes; the reference performs the action inside the widget (webbrowser, clipboard, detail panel) and has no logout affordance at all."
-        },
-        {
-          "event": 11,
-          "reason": "The Rust overlay reduces each choice to one typed effect the runtime executes; the reference performs the action inside the widget (webbrowser, clipboard, detail panel) and has no logout affordance at all."
-        },
-        {
-          "event": 12,
-          "reason": "The Rust runtime refuses an authentication URL that is neither HTTPS nor loopback; the reference opens whatever the server returns."
-        }
-      ],
+      "divergences": [],
       "events": [
         {
           "connectors": {
@@ -516,17 +466,17 @@
       "expected": [
         "mcp|MCP Servers & Connectors|-|Local MCP Servers:disabled:;github:enabled:streamable-http · 1/2 tools · enabled;:disabled:;Available Connectors:disabled:;Calendar:enabled:connector · 1 tool · connected;Drive:enabled:connector · 1 tool · needs auth;Vault:enabled:connector · 1 tool · needs setup;Archive:enabled:connector · no tools · disabled;Broken:enabled:connector · no tools · error - try refreshing",
         "mcp-detail|MCP Server: github|-|read:enabled:Read files (disabled);search:enabled:Search repositories",
-        "mcp-detail|Connector: Vault|-|Set up credentials in the Mistral dashboard:disabled:Then refresh this connector;Refresh connector:enabled:Check whether credential setup is complete",
-        "auth|Authenticate github|-|Open in browser:enabled:Open the validated authentication URL;Copy URL:enabled:Copy the authentication URL to the clipboard;Show URL:enabled:Print the authentication URL in the transcript;Authentication complete:enabled:Refresh source state after sign-in;Log out:enabled:Clear saved authentication for this source;Close:enabled:Return without changing source state",
-        "auth|Authenticate drive|-|Open in browser:enabled:Open the validated authentication URL;Copy URL:enabled:Copy the authentication URL to the clipboard;Show URL:enabled:Print the authentication URL in the transcript;Authentication complete:enabled:Refresh source state after sign-in;Close:enabled:Return without changing source state",
-        "effect|open_url|server|github|https://auth.example/authorize?state=opaque|calls=url/open:https://auth.example/authorize?state=opaque",
-        "effect|copy_url|server|github|https://auth.example/authorize?state=opaque|calls=clipboard/write:https://auth.example/authorize?state=opaque",
-        "effect|show_url|server|github|https://auth.example/authorize?state=opaque|calls=transcript/write:github",
-        "effect|complete_auth|server|github|-|calls=mcp/refresh",
-        "effect|logout|server|github|calls=mcp/logout:github",
-        "effect|close|-|-|calls=overlay/close",
-        "effect|complete_auth|connector|drive|-|calls=connectors/refresh:drive",
-        "error:unsafe authentication URL"
+        "mcp-detail|Connector: Vault|-|Set up credentials in the Mistral dashboard, then press r to refresh.:disabled:",
+        "auth|MCP Server: github|Once authenticated in your browser, return to Vibe|This MCP server requires authentication:disabled:;:disabled:;Press enter to open auth in your browser:enabled:;Copy URL to clipboard:enabled:;Manually show the URL:enabled:",
+        "auth|Connector: drive|Once authenticated, press r to refresh|This connector requires authentication:disabled:;:disabled:;Press Enter to open auth in your browser:enabled:;Copy URL to clipboard:enabled:;Manually show the URL:enabled:",
+        "reference|open|server|github|detail=Once authenticated in your browser, return to Vibe|calls=url/open:https://auth.example/authorize?state=opaque,mcp/login:github",
+        "reference|copy|server|github|detail=Once authenticated in your browser, return to Vibe|calls=clipboard/write:https://auth.example/authorize?state=opaque,mcp/login:github",
+        "reference|show|server|github|detail=https://auth.example/authorize?state=opaque Once authenticated in your browser, return to Vibe|calls=mcp/login:github",
+        "reference|refresh|server|github|detail=Once authenticated in your browser, return to Vibe|calls=mcp/login:github",
+        "reference|logout|unsupported",
+        "reference|close|server|github|detail=Once authenticated in your browser, return to Vibe|calls=mcp/login:github,MCPOAuthClosed(refreshed=False,server_name=)",
+        "reference|refresh|connector|drive|detail=Once authenticated, press r to refresh|calls=connectors/auth-url:drive,connectors/refresh:drive",
+        "auth|MCP Server: github|Once authenticated in your browser, return to Vibe|This MCP server requires authentication:disabled:;:disabled:;Press enter to open auth in your browser:enabled:;Copy URL to clipboard:enabled:;Manually show the URL:enabled:"
       ],
       "id": "grouped-mcp-connector-lifecycle",
       "reference": [
@@ -547,16 +497,7 @@
       "story": "US-032"
     },
     {
-      "divergences": [
-        {
-          "event": 1,
-          "reason": "The Rust picker reports that the saved project link stopped matching this repository; the reference clears the link silently and keeps the repository line."
-        },
-        {
-          "event": 3,
-          "reason": "The Rust runtime opens a typed approval overlay; the reference asks the same question through the shared user-question flow built inline in `app.py:_ask_push_approval`."
-        }
-      ],
+      "divergences": [],
       "events": [
         {
           "kind": "projects",
@@ -652,9 +593,9 @@
       ],
       "expected": [
         "projects|Vibe Code project|Repository: example/parity|Projects:disabled:;Parity:enabled:1 repo · Currently linked;:disabled:;:disabled:;Actions:disabled:;Create new project:enabled:repo-linked project;Unlink project:enabled:",
-        "projects|Vibe Code project|The saved project link no longer matches this repository. Select a project.|:disabled:;:disabled:;Actions:disabled:;Create new project:enabled:recommended",
+        "projects|Vibe Code project|Repository: example/parity|:disabled:;:disabled:;Actions:disabled:;Create new project:enabled:recommended",
         "| Prompt | Next in | Every | ID |\n|--------|------|-------|----|\n| check \\| deploy report | 30s | 1h1m1s | `loop-1` |",
-        "teleport-approval|Teleport needs to push changes|Choose whether Teleport may push this repository.|Push and continue:enabled:Push 2 unpushed commits before starting Teleport;Cancel:enabled:Cancel Teleport without pushing",
+        "teleport-approval|Push|You have 2 unpushed commits. Push to continue?|Push and continue:enabled:;Cancel:enabled:",
         "Completed:Teleported to Vibe Code Web: https://chat.mistral.ai/code/project-1",
         "Failed:Teleport failed: cloud unavailable",
         "Cancelled:Teleport cancelled."
@@ -664,7 +605,7 @@
         "projects|Vibe Code project|Repository: example/parity|Projects:disabled:;Parity:enabled:1 repo · Currently linked;:disabled:;:disabled:;Actions:disabled:;Create new project:enabled:repo-linked project;Unlink project:enabled:",
         "projects|Vibe Code project|Repository: example/parity|:disabled:;:disabled:;Actions:disabled:;Create new project:enabled:recommended",
         "| Prompt | Next in | Every | ID |\n|--------|------|-------|----|\n| check \\| deploy report | 30s | 1h1m1s | `loop-1` |",
-        "Streaming:Teleport requires pushing 2 commits. Use `/teleport approve` or `/teleport deny`.",
+        "teleport-approval|Push|You have 2 unpushed commits. Push to continue?|Push and continue:enabled:;Cancel:enabled:",
         "Completed:Teleported to Vibe Code Web: https://chat.mistral.ai/code/project-1",
         "Failed:Teleport failed: cloud unavailable",
         "Cancelled:Teleport cancelled."

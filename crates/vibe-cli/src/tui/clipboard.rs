@@ -11,21 +11,18 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use thiserror::Error;
 
-use super::state::{EntryStatus, TuiState};
-/// Copies `text` and reports the outcome once, the way every copy shortcut
-/// reports it: a notice naming what was copied, or the single refusal a
-/// terminal without a clipboard produces.
-pub(in crate::tui) fn copy_and_report(state: &mut TuiState, subject: &str, text: &str) {
-    match SystemClipboardPort::copy_text(&SystemClipboard, text) {
-        Ok(()) => {
-            crate::tui::push_local_notice(
-                state,
-                &format!("{subject} copied to clipboard"),
-                EntryStatus::Completed,
-            );
-        }
-        Err(_) => state.push_diagnostic("Failed to copy: clipboard not available"),
-    }
+use super::command_handlers::NATIVE_COPY_HINT;
+use super::state::{INLINE_NOTICE_MS, TuiState};
+/// Reference `copy_selection_to_clipboard(show_toast=False)` followed by
+/// `_clipboard_notice_message`: a copy is never refused, and the notice says
+/// whether the platform clipboard confirmed it.
+pub(in crate::tui) fn copy_and_notify(state: &mut TuiState, text: &str) {
+    let notice = if copy_text_verified(text) {
+        "Copied to clipboard".to_owned()
+    } else {
+        format!("Copied \u{b7} {NATIVE_COPY_HINT}")
+    };
+    state.show_inline_notice(notice, Some(INLINE_NOTICE_MS), super::unix_millis());
 }
 
 /// Reference `copy_to_clipboard`: outside an SSH session the platform command

@@ -40,7 +40,7 @@ mod events;
 mod files;
 mod history;
 mod lines;
-mod matcher;
+pub(crate) mod matcher;
 mod models;
 mod recorder;
 mod review;

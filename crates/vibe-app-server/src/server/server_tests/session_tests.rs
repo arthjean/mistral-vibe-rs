@@ -52,7 +52,7 @@ fn turn_is_reserved_before_deferred_work_is_exposed() {
     let batch = connection.dispatch(&request(
         3,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "hello"}]}),
     ));
     assert_eq!(batch.outbound.len(), 1);
     assert_eq!(
@@ -78,7 +78,7 @@ fn turn_is_reserved_before_deferred_work_is_exposed() {
     let concurrent = connection.dispatch(&request(
         4,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "second"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "second"}]}),
     ));
     let frame = decode_frame(&concurrent.outbound[0]).expect("conflict response");
     assert!(matches!(
@@ -102,7 +102,7 @@ fn settings_update_is_strict_and_applies_to_the_next_turn_while_active() {
     let turn = connection.dispatch(&request(
         3,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "hello"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "hello"}]}),
     ));
     assert_eq!(turn.deferred.len(), 1);
 
@@ -219,7 +219,7 @@ fn manual_compaction_reserves_exclusive_session_work_and_failure_releases_it() {
     let blocked = connection.dispatch(&request(
         4,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "race"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "race"}]}),
     ));
     assert!(matches!(
         decode_frame(&blocked.outbound[0]).expect("conflict"),
@@ -250,7 +250,7 @@ fn manual_compaction_reserves_exclusive_session_work_and_failure_releases_it() {
     let next = connection.dispatch(&request(
         5,
         "turn/start",
-        json!({"sessionId": "session-1", "input": [{"type": "text", "text": "retry"}]}),
+        json!({"sessionId": "session-1", "message": [{"type": "text", "text": "retry"}]}),
     ));
     assert_eq!(next.deferred.len(), 1);
 }
@@ -445,7 +445,7 @@ fn rewind_read_and_restore_use_live_target_specific_checkpoints() {
         "turn/start",
         json!({
             "sessionId": "source-session",
-            "input": [{"type": "text", "text": "prior live turn"}]
+            "message": [{"type": "text", "text": "prior live turn"}]
         }),
     ));
     let first_turn_id = first_turn.deferred.iter().find_map(|work| match work {
@@ -491,7 +491,7 @@ fn rewind_read_and_restore_use_live_target_specific_checkpoints() {
         "turn/start",
         json!({
             "sessionId": "source-session",
-            "input": [{"type": "text", "text": "restore live target"}]
+            "message": [{"type": "text", "text": "restore live target"}]
         }),
     ));
     let checkpoint_turn_id = checkpoint_turn.deferred.iter().find_map(|work| match work {

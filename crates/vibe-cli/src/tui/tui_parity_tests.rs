@@ -8,7 +8,8 @@ use crate::tui::completion::CompletionEngine;
 use crate::tui::input::PromptEditor;
 use crate::tui::interaction::{
     ConfigLayerTarget, IntegrationKind, IntegrationTarget, Overlay, OverlayAction, OverlayItem,
-    OverlayKind, PromptQueue, QuitConfirmation, RemoteProjectAction,
+    OverlayKind, PAUSED_QUEUE_HEADER, PromptQueue, QUEUE_HEADER, QuitConfirmation,
+    RemoteProjectAction,
 };
 use crate::tui::pickers::{
     config_overlay, config_target_overlay, mcp_detail_overlay, mcp_overlay, proxy_overlay,
@@ -159,18 +160,25 @@ fn failed_queue_batch_can_be_restored_at_the_front_without_reordering() {
 }
 
 #[test]
-fn cancelling_the_last_item_resumes_an_empty_queue_and_shell_rows_drop_the_sigil() {
+fn cancelling_the_last_item_resumes_an_empty_queue_under_the_queue_header() {
     let mut queue = PromptQueue::default();
-    queue.push(prompt_draft("!pwd"));
-    queue.pause();
+    queue.push(prompt_draft("first"));
+    queue.push(prompt_draft("second"));
     assert_eq!(
         queue.presentation_lines(),
-        vec!["Queued messages (paused)", "$ pwd"]
+        vec![QUEUE_HEADER, "> first", "> second"]
     );
+    queue.pause();
+    assert_eq!(queue.presentation_lines()[0], PAUSED_QUEUE_HEADER);
 
     assert_eq!(
         queue.cancel_last().map(PromptDraft::into_text).as_deref(),
-        Some("!pwd")
+        Some("second")
+    );
+    assert!(queue.is_paused());
+    assert_eq!(
+        queue.cancel_last().map(PromptDraft::into_text).as_deref(),
+        Some("first")
     );
     assert!(!queue.is_paused());
 }

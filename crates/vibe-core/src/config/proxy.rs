@@ -41,6 +41,12 @@ impl ProxyKey {
         }
     }
 
+    /// Reference `PROXY_URL_VARS` (`vibe/core/proxy_setup.py`).
+    #[must_use]
+    pub const fn is_url(self) -> bool {
+        matches!(self, Self::Http | Self::Https | Self::All)
+    }
+
     #[must_use]
     pub const fn description(self) -> &'static str {
         match self {
@@ -101,12 +107,17 @@ impl ProxyEnvironmentStore {
         if changes.is_empty() {
             return Ok(());
         }
+        // Every value is checked before any is written, so a refused change
+        // leaves the file as it was.
         for (key, value) in changes {
-            if value
-                .as_deref()
-                .is_some_and(|value| value.contains(['\n', '\r', '\0']))
-            {
+            let Some(value) = value.as_deref() else {
+                continue;
+            };
+            if value.contains(['\n', '\r', '\0']) {
                 return Err(ConfigError::InvalidProxyValue(*key));
+            }
+            if key.is_url() && !value.starts_with("http://") && !value.starts_with("https://") {
+                return Err(ConfigError::InvalidProxyScheme(*key, value.to_owned()));
             }
         }
         let parent = self
@@ -243,6 +254,31 @@ mod tests {
         assert!(matches!(
             error,
             ConfigError::InvalidProxyValue(ProxyKey::Http)
+        ));
+        assert_eq!(
+            fs::read_to_string(path).expect("unchanged dotenv"),
+            "HTTP_PROXY='old'\n"
+        );
+    }
+
+    #[test]
+    fn a_proxy_url_without_a_web_scheme_refuses_the_whole_change() {
+        let temporary = tempfile::tempdir().expect("temporary directory");
+        let path = temporary.path().join(PROXY_ENV_FILE);
+        fs::write(&path, "HTTP_PROXY='old'\n").expect("dotenv fixture");
+        let store = ProxyEnvironmentStore::new(temporary.path());
+
+        let error = store
+            .write(&BTreeMap::from([
+                (ProxyKey::Http, Some("https://new.example".to_owned())),
+                (ProxyKey::All, Some("socks5://all.example".to_owned())),
+                (ProxyKey::No, Some("localhost".to_owned())),
+            ]))
+            .expect_err("a socks proxy URL is refused");
+
+        assert!(matches!(
+            error,
+            ConfigError::InvalidProxyScheme(ProxyKey::All, ref value) if value == "socks5://all.example"
         ));
         assert_eq!(
             fs::read_to_string(path).expect("unchanged dotenv"),

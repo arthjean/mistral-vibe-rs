@@ -140,7 +140,7 @@ fn every_reference_field_reaches_the_default_document() {
     }
     // A locally declared key never reaches the document: it would make the
     // shipped defaults incomparable to the reference ones.
-    for name in ["thinking", "notifications", "proxy"] {
+    for name in ["thinking", "proxy"] {
         assert!(
             !document.contains_key(name),
             "`{name}` leaked into defaults"
@@ -180,7 +180,18 @@ fn every_field_published_before_the_registry_keeps_its_shape() {
     let properties = previous["properties"]
         .as_object()
         .expect("the previous schema declares properties");
+    // `notifications` was a tri-state only this port declared; the terminal
+    // now reads the reference's `enable_notifications` and
+    // `experimental_enable_tab_status` instead.
+    let retired = ["notifications"];
     for (name, before) in properties {
+        if retired.contains(&name.as_str()) {
+            assert!(
+                generated["properties"].get(name).is_none(),
+                "retired field `{name}` is published again"
+            );
+            continue;
+        }
         let after = generated["properties"]
             .get(name)
             .unwrap_or_else(|| panic!("field `{name}` is no longer published"));

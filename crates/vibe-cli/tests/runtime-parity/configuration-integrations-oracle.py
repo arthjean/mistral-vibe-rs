@@ -637,6 +637,37 @@ def project_line(item: object) -> tuple[str, str, str]:
     return normalize(f"{name} {item.label}"), name, item.label
 
 
+def observe_push_approval(event_data: dict) -> str:
+    """Asks the reference for its push approval and records the question.
+
+    ``VibeApp._ask_push_approval`` (vibe/cli/textual_ui/app.py) builds one
+    ``UserQuestion`` and hands it to the shared local user-input flow; the
+    double captures that request instead of mounting the question widget.
+    """
+    from types import SimpleNamespace
+
+    from vibe.cli.textual_ui.app import VibeApp
+
+    requests: list = []
+
+    class AppDouble:
+        async def _request_local_user_input(self, request):
+            requests.append(request)
+            return SimpleNamespace(cancelled=True, answers=[])
+
+    asyncio.run(
+        VibeApp._ask_push_approval(  # noqa: SLF001
+            AppDouble(),
+            event_data["unpushedCount"],
+            event_data.get("branchNotPushed", False),
+        )
+    )
+    (question,) = requests[0].questions
+    assert question.hide_other, "the push question offers no free-text answer"
+    items = [(choice.label, False, choice.description) for choice in question.options]
+    return overlay("teleport-approval", question.header, question.question, items)
+
+
 def observe_event(event: dict) -> str:
     kind = event["kind"]
     if kind == "config": return observe_config(event)
@@ -655,7 +686,7 @@ def observe_event(event: dict) -> str:
         finally:
             loop_runner.time.time = original
     event_data = event["event"]
-    if event_data["kind"] == "push_required": return f"Streaming:Teleport requires pushing {event_data['unpushedCount']} commits. Use `/teleport approve` or `/teleport deny`."
+    if event_data["kind"] == "push_required": return observe_push_approval(event_data)
     if event_data["kind"] == "complete": return f"Completed:Teleported to Vibe Code Web: {event_data['url']}"
     if event_data["kind"] == "failed": return f"Failed:Teleport failed: {event_data['error']['message']}"
     return "Cancelled:Teleport cancelled."

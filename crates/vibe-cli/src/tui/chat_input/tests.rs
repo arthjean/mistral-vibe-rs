@@ -398,6 +398,19 @@ fn history_navigation_is_observed_from_the_editor() {
 }
 
 #[test]
+fn up_at_the_top_hands_the_key_to_the_queue_instead_of_the_history() {
+    let mut state = ChatInputState::new();
+    type_text(&mut state, "first");
+    state.apply(key(KeyName::Enter));
+    state.set_queue_selectable(true);
+    assert_eq!(
+        state.apply(key(KeyName::Up)),
+        vec![InputEffect::QueueSelectionRequested]
+    );
+    assert_eq!(state.observe().text, "");
+}
+
+#[test]
 fn teleport_mode_is_capability_gated_and_resets_without_losing_follow_up_text() {
     let mut unavailable = ChatInputState::new();
     unavailable.set_command_context(CommandContext::default().with_excluded(["teleport"]));
@@ -444,11 +457,13 @@ fn mouse_selection_is_bounded_and_out_of_bounds_events_are_inert() {
         x: 0,
         y: 0,
         extend_selection: false,
+        at_ms: 0,
     });
     state.apply(InputEvent::Mouse {
         x: 3,
         y: 0,
         extend_selection: true,
+        at_ms: 0,
     });
     assert_eq!(state.observe().selection, Some([0, 3]));
     let before = state.observe();
@@ -456,8 +471,41 @@ fn mouse_selection_is_bounded_and_out_of_bounds_events_are_inert() {
         x: 0,
         y: 99,
         extend_selection: false,
+        at_ms: 0,
     });
     assert_eq!(state.observe(), before);
+}
+
+#[test]
+fn a_click_chain_selects_a_word_then_a_line_and_drags_by_that_unit() {
+    let mut state = ChatInputState::new();
+    type_text(&mut state, "alpha beta_2 gamma");
+    let press = |state: &mut ChatInputState, x: u16, at_ms: u64| {
+        state.apply(InputEvent::Mouse {
+            x,
+            y: 0,
+            extend_selection: false,
+            at_ms,
+        });
+    };
+    press(&mut state, 8, 1_000);
+    assert_eq!(state.observe().selection, None);
+    press(&mut state, 8, 1_200);
+    assert_eq!(state.observe().selection, Some([6, 12]));
+    // A word drag snaps the far end to the end of the word it reaches.
+    state.apply(InputEvent::Mouse {
+        x: 15,
+        y: 0,
+        extend_selection: true,
+        at_ms: 1_300,
+    });
+    assert_eq!(state.observe().selection, Some([6, 18]));
+    // The drag ended the chain, so the next press only places the caret.
+    press(&mut state, 8, 1_400);
+    assert_eq!(state.observe().selection, None);
+    press(&mut state, 8, 1_500);
+    press(&mut state, 8, 1_600);
+    assert_eq!(state.observe().selection, Some([0, 18]));
 }
 
 #[test]

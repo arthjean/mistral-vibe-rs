@@ -336,7 +336,13 @@ pub(crate) struct SessionCompactParams {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub(crate) struct TurnStartParams {
+    /// Accepted for wire compatibility: this server does not deduplicate.
+    #[expect(dead_code, reason = "accepted for wire compatibility, not read yet")]
+    #[serde(default)]
+    pub(crate) idempotency_key: Option<String>,
     pub(crate) session_id: String,
+    /// Reference `TurnStartParams.message` (`vibe/app_server/protocol.py:1925`).
+    #[serde(rename = "message")]
     pub(crate) input: Vec<PublicContentBlock>,
     #[serde(default)]
     pub(crate) injected: bool,
@@ -360,14 +366,22 @@ pub(crate) struct TurnParams {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub(crate) struct TurnSteerParams {
+    #[expect(dead_code, reason = "accepted for wire compatibility, not read yet")]
+    #[serde(default)]
+    pub(crate) idempotency_key: Option<String>,
     pub(crate) session_id: String,
     pub(crate) expected_turn_id: String,
+    /// Reference `TurnSteerParams.message` (`vibe/app_server/protocol.py:1945`).
+    #[serde(rename = "message")]
     pub(crate) input: Vec<PublicContentBlock>,
     /// Accepted for wire compatibility. Steering does not create a history
     /// entry, so neither of these two reaches the engine yet.
     #[expect(dead_code, reason = "accepted for wire compatibility, not read yet")]
     #[serde(default)]
     pub(crate) client_user_message_id: Option<String>,
+    #[expect(dead_code, reason = "accepted for wire compatibility, not read yet")]
+    #[serde(default)]
+    pub(crate) user_display_content: Option<Value>,
     #[serde(default = "default_true")]
     pub(crate) inject_invoked_skill: bool,
     #[expect(dead_code, reason = "accepted for wire compatibility, not read yet")]

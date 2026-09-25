@@ -2,19 +2,19 @@
   "traces": {
     "async-cancelled-by-space": {
       "effects": "parity",
-      "render": "gap",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "async-generation-supersedes": {
       "effects": "parity",
-      "render": "gap",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "async-history-recall-closes": {
       "effects": "parity",
       "history": "parity",
-      "render": "gap",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "clipboard-explicit-ctrl-v": {
       "state": "unavailable"
@@ -49,23 +49,23 @@
     },
     "corpus-dot-query": {
       "effects": "parity",
-      "render": "gap",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "corpus-gitignore": {
       "effects": "parity",
-      "render": "gap",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "corpus-hidden-files": {
       "effects": "parity",
-      "render": "gap",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "corpus-nested-ranking": {
       "effects": "parity",
-      "render": "gap",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "dnd-absolute-image": {
       "effects": "parity",
@@ -79,8 +79,8 @@
     },
     "dnd-text-path-untouched": {
       "effects": "parity",
-      "render": "gap",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "external-editor-refreshes-completion": {
       "effects": "parity",
@@ -116,7 +116,7 @@
       "effects": "parity",
       "history": "parity",
       "render": "parity",
-      "state": "gap"
+      "state": "parity"
     },
     "history-edit-after-recall": {
       "effects": "parity",
@@ -188,29 +188,29 @@
     },
     "mention-directory-submission": {
       "effects": "parity",
-      "render": "gap",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "mention-external-path-submission": {
       "effects": "parity",
-      "render": "gap",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "mention-image-payload-submission": {
       "effects": "parity",
       "render": "parity",
       "state": "parity",
-      "submission": "gap"
+      "submission": "parity"
     },
     "mention-missing-path-submission": {
       "effects": "parity",
-      "render": "gap",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "mention-text-file-submission": {
       "effects": "parity",
-      "render": "gap",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "mode-backspace-keeps-text": {
       "effects": "parity",
@@ -289,43 +289,43 @@
     },
     "path-accept-directory": {
       "effects": "parity",
-      "render": "gap",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "path-accept-inserts-space": {
       "effects": "parity",
-      "render": "gap",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "path-mid-token-completion": {
       "effects": "parity",
-      "render": "gap",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "path-trigger-after-punctuation": {
       "effects": "parity",
-      "render": "gap",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "path-trigger-bare-at": {
       "effects": "parity",
-      "render": "gap",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "path-trigger-basic": {
       "effects": "parity",
-      "render": "gap",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "path-trigger-nested": {
       "effects": "parity",
-      "render": "gap",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "path-trigger-space-closes": {
       "effects": "parity",
-      "render": "gap",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "popup-render-120": {
       "effects": "parity",
@@ -344,8 +344,8 @@
     },
     "popup-render-path-bound": {
       "effects": "parity",
-      "render": "gap",
-      "state": "gap"
+      "render": "parity",
+      "state": "parity"
     },
     "safety-destructive-chrome": {
       "effects": "parity",

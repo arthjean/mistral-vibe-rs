@@ -16,6 +16,7 @@ pub mod clock;
 pub mod compaction;
 pub mod config;
 pub mod continuity;
+pub mod difflib;
 pub mod engine;
 pub mod events;
 pub mod experiments;

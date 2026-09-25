@@ -13,7 +13,7 @@ use super::super::chat_input::ChatInputState;
 use super::super::controls::ControlState;
 use super::super::interaction::RemoteProjectField;
 use super::super::interaction::{
-    OverlayAction, OverlayKind, RemoteProjectAction, TeleportPushAction,
+    AuthAction, AuthActionKind, OverlayAction, OverlayKind, RemoteProjectAction, TeleportPushAction,
 };
 use super::super::pickers::remote_project_create_overlay;
 use super::super::session_picker::{SessionPickerEffect, reduce_key as reduce_session_picker_key};
@@ -22,7 +22,9 @@ use super::super::state::TuiState;
 use super::super::{InteractiveRuntime, preview_theme};
 use super::config::persisted_theme;
 use super::live_commands::handle_log_level_key;
-use super::mcp::{McpEffect, refresh_selected_mcp, set_selected_mcp};
+use super::mcp::{
+    McpEffect, auth_panel_context, reduce_auth_action, refresh_mcp_view, set_selected_mcp,
+};
 use super::overlay::select_overlay_item;
 use super::{
     OverlayEffect, OverlayKeyResult, delete_selected_session, handle_rewind_key,
@@ -63,11 +65,16 @@ enum Escape {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Chords {
     None,
-    /// `Ctrl+R` refreshes, `e` and `d` enable and disable, and `Backspace`
-    /// leaves a server's detail for the list it was opened from.
+    /// Reference `MCPApp`: `r` refreshes, `e` and `d` enable and disable,
+    /// and `Backspace` leaves a server's detail for the list it was opened
+    /// from.
     Mcp {
         detail: bool,
     },
+    /// Reference `MCPOAuthApp` and `ConnectorAuthApp`: `r` retries a failed
+    /// login or checks a connector, and `Esc` or `Backspace` goes back to the
+    /// MCP browser.
+    McpAuth,
     /// `Ctrl+R` restores the selected field to its default.
     ConfigReset,
 }
@@ -114,6 +121,10 @@ const fn policy(kind: OverlayKind) -> OverlayPolicy {
             chords: Chords::Mcp { detail: true },
             ..LIST
         },
+        OverlayKind::McpAuth => OverlayPolicy {
+            chords: Chords::McpAuth,
+            ..LIST
+        },
         OverlayKind::Config => OverlayPolicy {
             chords: Chords::ConfigReset,
             ..LIST
@@ -123,7 +134,6 @@ const fn policy(kind: OverlayKind) -> OverlayPolicy {
         | OverlayKind::Model
         | OverlayKind::Thinking
         | OverlayKind::Sessions
-        | OverlayKind::McpAuth
         | OverlayKind::Voice
         | OverlayKind::VoiceModel
         | OverlayKind::Proxy
@@ -359,7 +369,16 @@ fn dismiss(
                 preview_theme(&persisted_theme(runtime), theme);
             }
         }
-        Escape::Close => {}
+        Escape::Close => {
+            // Reference `on_skills_browser_app_closed`.
+            if state
+                .overlay
+                .as_ref()
+                .is_some_and(|overlay| overlay.kind == OverlayKind::Skills)
+            {
+                super::super::push_local_document(state, "Skills browser closed.".to_owned());
+            }
+        }
     }
     state.overlay = None;
     OverlayKeyResult::Handled
@@ -379,8 +398,8 @@ fn reduce_chord(
         (Chords::Mcp { detail: true }, KeyCode::Backspace) if bare => Some(
             OverlayKeyResult::Effect(OverlayEffect::Mcp(McpEffect::Show { filter: None })),
         ),
-        (Chords::Mcp { .. }, KeyCode::Char('r')) if control => {
-            Some(mcp_effect(refresh_selected_mcp(state)))
+        (Chords::Mcp { .. }, KeyCode::Char('r')) if bare => {
+            Some(mcp_effect(refresh_mcp_view(state)))
         }
         (Chords::Mcp { .. }, KeyCode::Char('d')) if bare => {
             Some(mcp_effect(set_selected_mcp(state, false)))
@@ -388,6 +407,22 @@ fn reduce_chord(
         (Chords::Mcp { .. }, KeyCode::Char('e')) if bare => {
             Some(mcp_effect(set_selected_mcp(state, true)))
         }
+        (Chords::McpAuth, KeyCode::Char('r' | 'R')) if !control => {
+            Some(mcp_effect(auth_panel_context(state).and_then(|panel| {
+                reduce_auth_action(&AuthAction {
+                    action: AuthActionKind::Refresh,
+                    ..panel
+                })
+            })))
+        }
+        (Chords::McpAuth, KeyCode::Esc | KeyCode::Backspace) if bare => Some(mcp_effect(
+            auth_panel_context(state).map_or(Some(McpEffect::Show { filter: None }), |panel| {
+                reduce_auth_action(&AuthAction {
+                    action: AuthActionKind::Close,
+                    ..panel
+                })
+            }),
+        )),
         (Chords::ConfigReset, KeyCode::Char('r')) if control => {
             reset_selected_config(runtime, state);
             Some(OverlayKeyResult::Handled)
@@ -434,6 +469,30 @@ mod tests {
             &mut theme,
         )
         .await
+    }
+
+    /// Reference `on_skills_browser_app_closed`: closing the browser says so.
+    #[tokio::test]
+    async fn closing_the_skills_browser_says_so() {
+        let mut state = open(OverlayKind::Skills, Vec::new());
+        let mut theme = ResolvedTheme {
+            theme: crate::tui::setup::Theme::Dark,
+            colors_enabled: false,
+        };
+        handle_overlay_key(
+            key(KeyCode::Esc),
+            &mut None,
+            &mut state,
+            &mut ControlState::new("session"),
+            &mut ChatInputState::default(),
+            &mut theme,
+        )
+        .await;
+        assert!(state.overlay.is_none());
+        assert_eq!(
+            state.entries.last().map(|entry| entry.text.as_str()),
+            Some("Skills browser closed.")
+        );
     }
 
     /// Dismissing the project picker answers the selection it was opened for

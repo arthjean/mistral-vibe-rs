@@ -219,6 +219,7 @@ where
                 .map(|resource| PublicContentBlock::Resource { resource }),
         );
         let request = TurnRequest {
+            idempotency_key: None,
             prompt: input.text,
             input: blocks,
             injected: input.injected,

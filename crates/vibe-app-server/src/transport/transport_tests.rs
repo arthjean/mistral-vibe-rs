@@ -90,7 +90,7 @@ async fn stdio_server_flushes_turn_response_before_deferred_notification() {
         r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"test","version":"1","entrypoint":"programmatic","terminalEmulator":"unknown"},"capabilities":{}}}"#,
         r#"{"jsonrpc":"2.0","method":"initialized","params":{}}"#,
         r#"{"jsonrpc":"2.0","id":2,"method":"session/start","params":{"sessionId":"session-1","workingDirectory":"/workspace"}}"#,
-        r#"{"jsonrpc":"2.0","id":3,"method":"turn/start","params":{"sessionId":"session-1","input":[{"type":"text","text":"hello"}]}}"#,
+        r#"{"jsonrpc":"2.0","id":3,"method":"turn/start","params":{"sessionId":"session-1","message":[{"type":"text","text":"hello"}]}}"#,
     ] {
         client_write
             .write_all(request.as_bytes())

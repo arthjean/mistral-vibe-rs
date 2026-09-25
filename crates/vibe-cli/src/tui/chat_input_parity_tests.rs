@@ -20,7 +20,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
-use crate::tui::attachments::{PromptDraft, normalize_pasted_text, prepare_submission};
+use crate::tui::attachments::{
+    PromptDraft, normalize_pasted_text, normalize_typed_text, prepare_submission,
+};
 use crate::tui::chat_input::{ChatInputState, InputEffect, InputEvent, Safety};
 use crate::tui::commands::CommandContext;
 use crate::tui::completion::CompletionRequest;
@@ -63,344 +65,10 @@ struct LedgeredDivergence {
     reason: &'static str,
 }
 
-// Reasons, one per reference change the corpus recaptured at
-// 4a96003 (2.25.7). Every reference path is
-// read at that commit; every port path at the state these entries were
+// Every recaptured difference at 4a96003 (2.25.7) has converged, so the ledger
+// is empty; an entry names the reference path and the port path it was
 // measured against.
-const WHY_BARE_AT_LISTING: &str = "row 14: v2.25.3 answers a bare @ with \
-     PathCompleter._list_current_directory (vibe/cli/autocompletion/completers.py:436-461, routed \
-     at vibe/cli/autocompletion/completers.py:474-475): every non-hidden working-directory entry, \
-     with no ignore rules, sorted case-insensitively, so @build.log and @ignored/ appear and \
-     @README.md sorts after @notes.txt. This port answers it from its gitignore-filtered index \
-     (crates/vibe-cli/src/tui/completion/path.rs:384-391 and :635-660) in its own order";
-const WHY_PASTED_PATH_MENTION: &str = "row 14: v2.25.3 passes every paste through \
-     maybe_prepend_at_for_path (vibe/cli/textual_ui/widgets/chat_input/text_area.py:387, \
-     vibe/cli/textual_ui/widgets/chat_input/paste_path.py:27-40 and :80-92), which turns a pasted \
-     existing absolute path of any type into an @ mention. This port's normalize_pasted_text \
-     mentions image paths only (crates/vibe-cli/src/tui/path_mentions.rs:7-17), so a pasted text \
-     file path stays verbatim";
-const WHY_DRAFT_LOAD_MARKER: &str = "row 14: v2.25.5 clears the history load marker once Down \
-     leaves history navigation (vibe/cli/textual_ui/widgets/chat_input/body.py:228-231), so the \
-     restored draft reports loadedEntry false. This port restores the draft through \
-     load_history_text (crates/vibe-cli/src/tui/input.rs:535-538), which sets history_loaded \
-     (crates/vibe-cli/src/tui/input.rs:616)";
-const WHY_TURN_MESSAGE: &str = "row 14: v2.24.1 renames TurnStartParams.input to message \
-     (vibe/app_server/protocol.py:1925, input surviving only as a read-only property at \
-     vibe/app_server/protocol.py:1932-1934). This port's TurnRequest still serializes input \
-     (crates/vibe-app-server/src/client.rs:222). Masked behind that first field: with no session \
-     directory v2.25.5 inlines the image as base64 (vibe/core/session/image_snapshot.py:77-82) \
-     where this port records a file source";
-
-const DIVERGENCES: &[LedgeredDivergence] = &[
-    LedgeredDivergence {
-        trace: "async-cancelled-by-space",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "async-cancelled-by-space",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "async-generation-supersedes",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "async-generation-supersedes",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "async-history-recall-closes",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "async-history-recall-closes",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "corpus-dot-query",
-        dimension: "state",
-        path: "completion.items",
-        events: &[5],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "corpus-dot-query",
-        dimension: "render",
-        path: "popupRows",
-        events: &[5],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "corpus-gitignore",
-        dimension: "state",
-        path: "completion.items",
-        events: &[5],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "corpus-gitignore",
-        dimension: "render",
-        path: "popupRows",
-        events: &[5],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "corpus-hidden-files",
-        dimension: "state",
-        path: "completion.items",
-        events: &[5],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "corpus-hidden-files",
-        dimension: "render",
-        path: "popupRows",
-        events: &[5],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "corpus-nested-ranking",
-        dimension: "state",
-        path: "completion.items",
-        events: &[5],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "corpus-nested-ranking",
-        dimension: "render",
-        path: "popupRows",
-        events: &[5],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "dnd-text-path-untouched",
-        dimension: "state",
-        path: "cursor",
-        events: &[0],
-        reason: WHY_PASTED_PATH_MENTION,
-    },
-    LedgeredDivergence {
-        trace: "dnd-text-path-untouched",
-        dimension: "render",
-        path: "visualLines[0]",
-        events: &[0],
-        reason: WHY_PASTED_PATH_MENTION,
-    },
-    LedgeredDivergence {
-        trace: "history-down-restores-draft",
-        dimension: "state",
-        path: "history.loadedEntry",
-        events: &[9],
-        reason: WHY_DRAFT_LOAD_MARKER,
-    },
-    LedgeredDivergence {
-        trace: "mention-directory-submission",
-        dimension: "state",
-        path: "completion.items",
-        events: &[7],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "mention-directory-submission",
-        dimension: "render",
-        path: "popupRows",
-        events: &[7],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "mention-external-path-submission",
-        dimension: "state",
-        path: "completion.items",
-        events: &[8],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "mention-external-path-submission",
-        dimension: "render",
-        path: "popupRows",
-        events: &[8],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "mention-image-payload-submission",
-        dimension: "submission",
-        path: "input",
-        events: &[1],
-        reason: WHY_TURN_MESSAGE,
-    },
-    LedgeredDivergence {
-        trace: "mention-missing-path-submission",
-        dimension: "state",
-        path: "completion.items",
-        events: &[5],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "mention-missing-path-submission",
-        dimension: "render",
-        path: "popupRows",
-        events: &[5],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "mention-text-file-submission",
-        dimension: "state",
-        path: "completion.items",
-        events: &[10],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "mention-text-file-submission",
-        dimension: "render",
-        path: "popupRows",
-        events: &[10],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "path-accept-directory",
-        dimension: "state",
-        path: "completion.items",
-        events: &[8],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "path-accept-directory",
-        dimension: "render",
-        path: "popupRows",
-        events: &[8],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "path-accept-inserts-space",
-        dimension: "state",
-        path: "completion.items",
-        events: &[8],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "path-accept-inserts-space",
-        dimension: "render",
-        path: "popupRows",
-        events: &[8],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "path-mid-token-completion",
-        dimension: "state",
-        path: "completion.items",
-        events: &[8],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "path-mid-token-completion",
-        dimension: "render",
-        path: "popupRows",
-        events: &[8],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "path-trigger-after-punctuation",
-        dimension: "state",
-        path: "completion.items",
-        events: &[4],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "path-trigger-after-punctuation",
-        dimension: "render",
-        path: "popupRows",
-        events: &[4],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "path-trigger-bare-at",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "path-trigger-bare-at",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "path-trigger-basic",
-        dimension: "state",
-        path: "completion.items",
-        events: &[8],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "path-trigger-basic",
-        dimension: "render",
-        path: "popupRows",
-        events: &[8],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "path-trigger-nested",
-        dimension: "state",
-        path: "completion.items",
-        events: &[5],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "path-trigger-nested",
-        dimension: "render",
-        path: "popupRows",
-        events: &[5],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "path-trigger-space-closes",
-        dimension: "state",
-        path: "completion.items",
-        events: &[5],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "path-trigger-space-closes",
-        dimension: "render",
-        path: "popupRows",
-        events: &[5],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "popup-render-path-bound",
-        dimension: "state",
-        path: "completion.items",
-        events: &[0],
-        reason: WHY_BARE_AT_LISTING,
-    },
-    LedgeredDivergence {
-        trace: "popup-render-path-bound",
-        dimension: "render",
-        path: "popupRows",
-        events: &[0],
-        reason: WHY_BARE_AT_LISTING,
-    },
-];
+const DIVERGENCES: &[LedgeredDivergence] = &[];
 const OBSERVABLE_EFFECTS: &[&str] = &[
     "submitRequested",
     "submit",
@@ -729,6 +397,7 @@ fn deferred_dimensions_name_their_story() -> Result<(), String> {
 // Replay
 // ---------------------------------------------------------------------------
 
+#[derive(Clone)]
 struct Divergence {
     dimension: &'static str,
     event_index: Option<usize>,
@@ -901,7 +570,7 @@ impl Replay {
                         }
                     }
                     InputEffect::NormalizeCurrentText { snapshot } => {
-                        let normalized = normalize_pasted_text(&snapshot.text);
+                        let normalized = normalize_typed_text(&snapshot.text);
                         if normalized != snapshot.text {
                             follow_up.push(InputEvent::TextNormalized {
                                 snapshot,
@@ -1240,7 +909,17 @@ fn unledgered_divergences(
     divergences: &[Divergence],
     commit: &str,
 ) -> Vec<String> {
-    let ledgered = DIVERGENCES
+    unledgered_divergences_in(DIVERGENCES, trace, dimension, divergences, commit)
+}
+
+fn unledgered_divergences_in(
+    ledger: &[LedgeredDivergence],
+    trace: &str,
+    dimension: &str,
+    divergences: &[Divergence],
+    commit: &str,
+) -> Vec<String> {
+    let ledgered = ledger
         .iter()
         .filter(|entry| entry.trace == trace && entry.dimension == dimension)
         .flat_map(|entry| entry.events.iter().map(|event| (*event, entry.path)))
@@ -1674,12 +1353,32 @@ fn gap_divergences_are_held_to_their_ledgered_events_and_pointers() {
         &json!({"cursor": 2}),
     )
     .expect("a divergence");
-    let unledgered = unledgered_divergences("unledgered-trace", "state", &[divergence], "abc123");
+    let unledgered = unledgered_divergences(
+        "unledgered-trace",
+        "state",
+        std::slice::from_ref(&divergence),
+        "abc123",
+    );
     assert_eq!(unledgered.len(), 1, "{unledgered:?}");
     assert!(unledgered[0].contains("not ledgered"), "{unledgered:?}");
     assert!(unledgered[0].contains("`cursor`"), "{unledgered:?}");
 
-    let stale = unledgered_divergences("history-down-restores-draft", "state", &[], "abc123");
+    let ledger = [LedgeredDivergence {
+        trace: "ledgered-trace",
+        dimension: "state",
+        path: "cursor",
+        events: &[2],
+        reason: "a fixture entry",
+    }];
+    let held = unledgered_divergences_in(
+        &ledger,
+        "ledgered-trace",
+        "state",
+        std::slice::from_ref(&divergence),
+        "abc123",
+    );
+    assert!(held.is_empty(), "{held:?}");
+    let stale = unledgered_divergences_in(&ledger, "ledgered-trace", "state", &[], "abc123");
     assert_eq!(stale.len(), 1, "{stale:?}");
     assert!(stale[0].contains("no longer diverges"), "{stale:?}");
 

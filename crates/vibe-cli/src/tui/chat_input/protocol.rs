@@ -122,6 +122,9 @@ pub enum InputEvent {
         y: u16,
         #[serde(default)]
         extend_selection: bool,
+        /// When the press happened, which chains it with the ones before.
+        #[serde(default)]
+        at_ms: u64,
     },
     CompletionResolved {
         resolution: CompletionResolution,
@@ -194,6 +197,9 @@ pub enum InputEffect {
         mode: InputMode,
     },
     HistoryPrevious,
+    /// Up reached the top of the composer while prompts are queued behind a
+    /// running job: the queue takes the key instead of the history.
+    QueueSelectionRequested,
     HistoryNext,
     HistoryReset,
     CompletionReset,

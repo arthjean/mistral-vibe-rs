@@ -362,6 +362,13 @@ impl ControlState {
         self.notifications.push(message.into());
     }
 
+    /// Starts the input grace over, for a callback shown only now.
+    pub fn rearm_input_grace(&mut self, now_ms: u64) {
+        if self.activated_at_ms.is_some() {
+            self.activated_at_ms = Some(now_ms);
+        }
+    }
+
     #[must_use]
     pub fn input_is_ready(&self, now_ms: u64) -> bool {
         self.activated_at_ms

@@ -9,6 +9,8 @@ use thiserror::Error;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
+use super::click_chain::{Granularity, word_span};
+
 pub(crate) const COMPOSER_HORIZONTAL_OVERHEAD: u16 = 9;
 
 #[must_use]
@@ -449,6 +451,79 @@ impl PromptEditor {
         true
     }
 
+    /// The caret position a visual cell lands on, without moving there.
+    #[must_use]
+    pub fn visual_cell_target(
+        &self,
+        row: usize,
+        column: usize,
+        width: usize,
+        prefix: usize,
+    ) -> Option<usize> {
+        let layout = self.visual_layout(width, prefix);
+        let line = layout.lines().get(row)?;
+        Some(layout.cursor_at_cell(&self.text, line.clone(), column))
+    }
+
+    /// Reference `ChatTextArea._on_mouse_down`: a press places the caret, the
+    /// second of a chain selects the word around it and the third its line.
+    pub fn press_at(&mut self, target: usize, granularity: Granularity) {
+        self.move_cursor(target, false);
+        let span = match granularity {
+            Granularity::Character => None,
+            Granularity::Word => self.word_span_at(target),
+            Granularity::Line => Some(self.line_span_at(target)),
+        };
+        if let Some(span) = span {
+            self.select(span);
+        }
+    }
+
+    /// Reference `ChatTextArea._expand_drag_selection`: a drag after a word or
+    /// line press grows the selection by whole words or lines from the press.
+    /// Answers whether the selection changed.
+    pub fn drag_to(&mut self, anchor: usize, target: usize, granularity: Granularity) -> bool {
+        let (low, high) = (anchor.min(target), anchor.max(target));
+        let span = match granularity {
+            Granularity::Character => {
+                self.move_cursor(target, true);
+                return false;
+            }
+            Granularity::Word => {
+                let start = self.word_span_at(low).map_or(low, |span| span.start);
+                let end = self.word_span_at(high).map_or(high, |span| span.end);
+                start..end
+            }
+            Granularity::Line => self.line_span_at(low).start..self.line_span_at(high).end,
+        };
+        let before = self.selection.clone();
+        self.select(span);
+        before != self.selection
+    }
+
+    fn word_span_at(&self, at: usize) -> Option<Range<usize>> {
+        let line = self.line_span_at(at);
+        let graphemes = self.text.graphemes(true).collect::<Vec<_>>();
+        let (start, end) = word_span(line.len(), at.saturating_sub(line.start), |index| {
+            graphemes
+                .get(line.start + index)
+                .is_some_and(|grapheme| is_word_grapheme(grapheme))
+        })?;
+        Some(line.start + start..line.start + end)
+    }
+
+    /// The logical line holding `at`, without its line break.
+    fn line_span_at(&self, at: usize) -> Range<usize> {
+        let graphemes = self.text.graphemes(true).collect::<Vec<_>>();
+        let at = at.min(graphemes.len());
+        let breaks = |index: &usize| graphemes[*index].contains('\n');
+        let start = (0..at).rev().find(breaks).map_or(0, |index| index + 1);
+        let end = (at..graphemes.len())
+            .find(breaks)
+            .unwrap_or(graphemes.len());
+        start..end
+    }
+
     pub fn delete_backward(&mut self) {
         self.delete_backward_bounded(0);
     }
@@ -532,6 +607,9 @@ impl PromptEditor {
         } else {
             self.history_index = None;
             self.load_history_text(self.draft.clone());
+            // Reference `on_chat_text_area_history_next`: leaving history
+            // navigation restores the draft without a load marker.
+            self.history_loaded = false;
         }
         true
     }
@@ -874,14 +952,13 @@ impl SystemExternalEditor {
             }
             options.open(path).map_err(|error| error.to_string())?;
         }
-        let status = Command::new(&command[0])
+        // Reference `ExternalEditor.edit_file(check=False)`: only an editor
+        // that cannot start fails; its exit status is not read.
+        Command::new(&command[0])
             .args(&command[1..])
             .arg(path)
             .status()
             .map_err(|error| format!("External editor could not start: {error}"))?;
-        if !status.success() {
-            return Err(format!("External editor exited with {status}"));
-        }
         fs::read_to_string(path).map_err(|error| error.to_string())
     }
 }

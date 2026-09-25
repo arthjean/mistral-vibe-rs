@@ -1362,6 +1362,10 @@ pub enum ConfigError {
     },
     #[error("proxy value for `{0}` contains a forbidden control character")]
     InvalidProxyValue(ProxyKey),
+    /// Reference `set_proxy_var`: a proxy URL needs an `http://` or `https://`
+    /// scheme, which is what `httpx` accepts at startup.
+    #[error("{0} needs an http:// or https:// URL, not '{1}'")]
+    InvalidProxyScheme(ProxyKey, String),
     #[error("invalid MCP configuration: {0}")]
     InvalidMcp(String),
     #[error("invalid integration configuration: {0}")]

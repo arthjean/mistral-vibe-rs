@@ -239,6 +239,7 @@ async fn prepared_prompt_reserves_already_validated_images() {
         data: "aW1hZ2U=".to_owned(),
     };
     let turn = TurnRequest {
+        idempotency_key: None,
         prompt: "inspect @image.png".to_owned(),
         input: vec![
             PublicContentBlock::Text {

@@ -10,8 +10,8 @@ use vibe_app_server::client::{PreparedImages, PublicContentBlock, TurnRequest};
 use vibe_core::images::{ImageDigest, ImageReadError, MAX_IMAGES_PER_MESSAGE, read_image};
 use vibe_core::provider::ImageInput;
 
-pub use vibe_core::path_mentions::normalize_pasted_text;
 use vibe_core::path_mentions::{mention_values, resolve_owned_candidate};
+pub use vibe_core::path_mentions::{normalize_pasted_text, normalize_typed_text};
 pub use vibe_core::path_resources::MentionStats;
 use vibe_core::path_resources::{PathResourceKind, build_path_prompt_payload};
 
@@ -84,6 +84,83 @@ impl PromptDraft {
     pub fn into_text(self) -> String {
         self.text
     }
+
+    /// Reference `QueueController._server_text`: queued prompts merged into
+    /// one turn join with a blank line, and every transient image they hold
+    /// stays owned by the merged draft.
+    #[must_use]
+    pub fn merged<'a>(drafts: impl IntoIterator<Item = &'a Self>) -> Self {
+        let mut merged = Self::text_only(String::new());
+        for (index, draft) in drafts.into_iter().enumerate() {
+            if index > 0 {
+                merged.text.push_str(QUEUE_MERGE_SEPARATOR);
+            }
+            merged.text.push_str(&draft.text);
+            for image in &draft.transient_images {
+                if !merged
+                    .transient_images
+                    .iter()
+                    .any(|existing| existing.path == image.path)
+                {
+                    merged.transient_images.push(image.clone());
+                }
+            }
+        }
+        merged
+    }
+}
+
+/// Reference `_MERGE_SEPARATOR` (`vibe/cli/textual_ui/message_queue.py`).
+pub const QUEUE_MERGE_SEPARATOR: &str = "\n\n";
+
+/// Reference `QueueController._server_text` and `_server_images`: the prompts
+/// queued while busy promote as one turn whose text joins theirs with a blank
+/// line and which carries every image they attached, in order. The promoted
+/// turn names no mention statistics, as `session/turn/enqueue` carries none;
+/// the first prompt's statistics stay on the submission for its telemetry.
+pub fn merge_submissions(
+    submissions: Vec<PreparedSubmission>,
+) -> Result<PreparedSubmission, SubmissionError> {
+    let mut texts = Vec::with_capacity(submissions.len());
+    let mut attachments = Vec::new();
+    let mut images = Vec::new();
+    let mut cleanup_paths = Vec::new();
+    let mut mention_stats = None;
+    for submission in submissions {
+        texts.push(submission.turn.prompt);
+        attachments.extend(
+            submission
+                .turn
+                .input
+                .into_iter()
+                .filter(|block| !matches!(block, PublicContentBlock::Text { .. })),
+        );
+        images.extend(submission.provider_images.as_slice().iter().cloned());
+        cleanup_paths.extend(submission.cleanup_paths);
+        mention_stats.get_or_insert(submission.mention_stats);
+    }
+    let prompt = texts.join(QUEUE_MERGE_SEPARATOR);
+    let mut input = Vec::with_capacity(attachments.len().saturating_add(1));
+    input.push(PublicContentBlock::Text {
+        text: prompt.clone(),
+    });
+    input.extend(attachments);
+    Ok(PreparedSubmission {
+        turn: TurnRequest {
+            idempotency_key: None,
+            prompt,
+            input,
+            injected: false,
+            client_user_message_id: None,
+            auto_title: None,
+            user_display_content: None,
+            mention_stats: None,
+        },
+        provider_images: PreparedImages::try_new(images)
+            .map_err(|error| SubmissionError::ProviderImage(error.to_string()))?,
+        mention_stats: mention_stats.unwrap_or_default(),
+        cleanup_paths,
+    })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -158,20 +235,14 @@ pub fn prepare_submission(
             media_type: media_type.to_owned(),
             data: encoded.clone(),
         });
-        let source = if transient.is_some() {
-            json!({
-                "kind": "inline",
-                "data": encoded,
-            })
-        } else {
-            json!({
-                "kind": "file",
-                "path": resource.path,
-            })
-        };
+        // Reference `snapshot_image` (`vibe/core/session/image_snapshot.py`)
+        // keeps the bytes inline when there is no session directory; with
+        // one, the server writes the same bytes under the session's
+        // `attachments` and the entry points there, as `snapshot_attachments`
+        // does here.
         input.push(PublicContentBlock::Image {
             attachment: json!({
-                "source": source,
+                "source": {"kind": "inline", "data": encoded},
                 "alias": resource.alias,
                 "mimeType": media_type,
             }),
@@ -179,6 +250,7 @@ pub fn prepare_submission(
     }
 
     let turn = TurnRequest {
+        idempotency_key: None,
         prompt: draft.text().to_owned(),
         input,
         injected: false,

@@ -3,7 +3,7 @@ use std::thread::JoinHandle;
 
 use tokio::sync::mpsc::{self, Receiver};
 
-use super::attachments::normalize_pasted_text;
+use super::attachments::{normalize_pasted_text, normalize_typed_text};
 use super::chat_input::{EditorSnapshot, InputEffect, InputEvent};
 
 pub(super) struct PathNormalizationManager {
@@ -142,7 +142,7 @@ impl NormalizationRequest {
                 text: normalize_pasted_text(&text),
             },
             Self::Current { snapshot } => {
-                let text = normalize_pasted_text(&snapshot.text);
+                let text = normalize_typed_text(&snapshot.text);
                 InputEvent::TextNormalized { snapshot, text }
             }
         }
