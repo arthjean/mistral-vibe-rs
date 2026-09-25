@@ -235,7 +235,9 @@ class Session:
             return [self.substitute(item) for item in value]
         if not isinstance(value, str):
             return value
-        text = value.replace("$WS", str(self.world.workspace))
+        text = value.replace("$WS", str(self.world.workspace)).replace(
+            "$ROOT", str(self.world.root)
+        )
         for prefix, table in (("$S", self.sessions), ("$U", self.users), ("$A", self.assistants)):
             for index in range(len(table), 0, -1):
                 text = text.replace(f"{prefix}{index}", table[index - 1])
@@ -266,14 +268,24 @@ def base_config(backend: acp.Backend, extra: str) -> str:
 
 
 def run_scenario(
-    scenario: dict[str, Any], command: list[str], dialect: str, quiet: float
+    scenario: dict[str, Any],
+    command: list[str],
+    dialect: str,
+    quiet: float,
+    session_factory: Any = None,
 ) -> dict[str, Any]:
+    """Runs one scenario against a fresh server.
+
+    ``session_factory`` lets another capture script learn more from the answers
+    than rewinds need, such as the review oracle's owners and regions.
+    """
     backend = RecordingBackend()
     root = Path(tempfile.mkdtemp(prefix="vibe-rewind-oracle-"))
-    session = Session(root)
+    session = (session_factory or Session)(root)
     world = session.world
     try:
-        backend.responses = copy.deepcopy(scenario.get("backend", []))
+        # A tool call may name a scenario directory, which only exists now.
+        backend.responses = session.substitute(copy.deepcopy(scenario.get("backend", [])))
         (world.vibe_home / "config.toml").write_text(
             base_config(backend, scenario.get("config", "")), encoding="utf-8"
         )
@@ -317,6 +329,18 @@ def run_scenario(
     finally:
         backend.close()
         shutil.rmtree(root, ignore_errors=True)
+
+
+def watched_file(path: Path) -> Any:
+    """A watched file's content: its text, its bytes in hexadecimal when they
+    are not UTF-8, or ``None`` when nothing is there."""
+    if not path.is_file():
+        return None
+    data = path.read_bytes()
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return {"hex": data.hex()}
 
 
 def run_steps(
@@ -368,11 +392,30 @@ def run_steps(
         if "write" in step:
             acp.write_tree(world.workspace, step["write"])
             continue
+        if "writeBytes" in step:
+            # A hand edit no text encoding can carry, given as hexadecimal.
+            for name, data in step["writeBytes"].items():
+                target = world.workspace / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(bytes.fromhex(data))
+            continue
+        if "symlink" in step:
+            # A link inside the workspace, pointing at a path relative to it.
+            for name, target in step["symlink"].items():
+                (world.workspace / name).symlink_to(target)
+            continue
+        if "remove" in step:
+            # A hand deletion, of a file or of a whole directory.
+            for name in step["remove"]:
+                target = world.workspace / name
+                if target.is_dir():
+                    shutil.rmtree(target)
+                elif target.exists():
+                    target.unlink()
+            continue
         if "files" in step:
             steps.append({"files": {
-                name: (world.workspace / name).read_text(encoding="utf-8")
-                if (world.workspace / name).is_file() else None
-                for name in step["files"]
+                name: watched_file(world.workspace / name) for name in step["files"]
             }})
             continue
         if "context" in step:

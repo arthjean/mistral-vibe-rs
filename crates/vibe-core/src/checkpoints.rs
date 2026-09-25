@@ -45,10 +45,10 @@ mod models;
 mod recorder;
 mod review;
 
-pub use checkpointer::{Checkpointer, RETAINED_BYTES_LIMIT};
+pub use checkpointer::{Checkpointer, LogView, RETAINED_BYTES_LIMIT};
 pub use files::{CheckpointFiles, FileAccessError, FileStore};
 pub use lines::FileState;
-pub use models::{CheckpointError, Decision, HunkSide, Owner};
+pub use models::{CheckpointError, Decision, HunkSide, Owner, RegionId};
 pub use recorder::{CheckpointRecorder, RecorderError};
 pub use review::{
     ReviewError, ReviewFileStatus, ReviewHunk, ReviewState, ReviewTarget, TurnFileDiff,

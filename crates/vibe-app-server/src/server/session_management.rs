@@ -201,7 +201,9 @@ fn apply_after(
         }
         // The session a clear continues under starts with an empty list, so
         // its log starts empty too.
-        After::ClearCheckpointLog => reset_checkpoint_log(connection, session_id, 0),
+        // A cleared list keeps only the system prompt, which the log's turn
+        // numbering counts (`vibe/core/types.py` `MessageList.reset`).
+        After::ClearCheckpointLog => reset_checkpoint_log(connection, session_id, 1),
         After::ConfigContext => {
             enrich_config_response(connection, session_id, &request.method, dispatch);
             Ok(())

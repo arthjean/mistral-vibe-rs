@@ -864,11 +864,18 @@ fn the_review_surface_answers_the_six_methods_from_the_session_engine() {
         }
     };
     let session = json!({"sessionId": "review-session"});
+    // Every answer names a file by the resolved absolute path the log keys it
+    // by, and a client sends that path back.
+    let main = fs::canonicalize(&working_directory)
+        .expect("canonical workspace")
+        .join("main.txt")
+        .to_string_lossy()
+        .into_owned();
 
     let state = answer(&mut connection, 3, "review/state", session.clone());
     let files = state["files"].as_array().expect("a file list");
     assert_eq!(files.len(), 1, "the turn's change is reviewable: {state:?}");
-    assert_eq!(files[0]["path"], "main.txt");
+    assert_eq!(files[0]["path"], main.as_str());
     assert_eq!(files[0]["status"], "modified");
     let region = &files[0]["regions"][0];
     assert_eq!(region["kind"], "text");
@@ -886,7 +893,7 @@ fn the_review_surface_answers_the_six_methods_from_the_session_engine() {
         &mut connection,
         4,
         "review/baseline",
-        json!({"sessionId": "review-session", "path": "main.txt"}),
+        json!({"sessionId": "review-session", "path": main}),
     );
     assert_eq!(baseline["content"], "one\n");
 
@@ -894,7 +901,7 @@ fn the_review_surface_answers_the_six_methods_from_the_session_engine() {
         &mut connection,
         5,
         "review/hunks",
-        json!({"sessionId": "review-session", "path": "main.txt"}),
+        json!({"sessionId": "review-session", "path": main}),
     );
     assert_eq!(hunks["hunks"].as_array().expect("anchors").len(), 1);
     assert_eq!(hunks["hunks"][0]["side"], "additions");
@@ -906,7 +913,7 @@ fn the_review_surface_answers_the_six_methods_from_the_session_engine() {
         "review/turnDiff",
         json!({
             "sessionId": "review-session",
-            "path": "main.txt",
+            "path": main,
             "owner": {"kind": "agent", "turnId": 1}
         }),
     );
@@ -920,7 +927,7 @@ fn the_review_surface_answers_the_six_methods_from_the_session_engine() {
     // The region the panel was shown is the region it sends back.
     let target = json!({
         "kind": "region",
-        "path": "main.txt",
+        "path": main,
         "versionIndex": region["versionIndex"],
         "ordinal": region["ordinal"]
     });
@@ -953,7 +960,7 @@ fn the_review_surface_answers_the_six_methods_from_the_session_engine() {
             &mut connection,
             9,
             "review/baseline",
-            json!({"sessionId": "review-session", "path": "main.txt"})
+            json!({"sessionId": "review-session", "path": main})
         )["content"],
         "one\ntwo\n",
         "the accepted baseline now carries the kept region"
@@ -988,8 +995,9 @@ fn the_review_surface_answers_the_six_methods_from_the_session_engine() {
         "a revert is persisted immediately"
     );
 
-    // What the engine refuses is `invalid_params`, which is the code the
-    // reference answers a review failure with.
+    // A region the file does not carry is not one of the refusals the
+    // reference's `ReviewManager` converts: its `FileStateError` reaches the
+    // server's catch-all, which answers `internal_error`.
     let refused = connection.dispatch(&request(
         11,
         "review/approve",
@@ -997,7 +1005,7 @@ fn the_review_surface_answers_the_six_methods_from_the_session_engine() {
             "sessionId": "review-session",
             "target": {
                 "kind": "region",
-                "path": "main.txt",
+                "path": main,
                 "versionIndex": 99,
                 "ordinal": 4
             }
@@ -1008,7 +1016,7 @@ fn the_review_surface_answers_the_six_methods_from_the_session_engine() {
             decode_frame(&refused.outbound[0]).expect("a refusal"),
             Envelope::Error(ErrorResponse {
                 error: ProtocolError {
-                    code: ProtocolErrorCode::InvalidParams,
+                    code: ProtocolErrorCode::InternalError,
                     ..
                 },
                 ..

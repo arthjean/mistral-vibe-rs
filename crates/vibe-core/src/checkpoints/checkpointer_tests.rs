@@ -542,3 +542,57 @@ fn truncating_closes_an_open_turn() {
     );
     assert!(log.begin_turn(2).is_ok());
 }
+
+// -- The view a running turn is read through ---------------------------------
+
+/// Reference `Checkpointer.view(current)`: while a turn runs, a path it
+/// recorded a before state for and that no longer holds it reads as an edit
+/// owned by that turn, numbered past the log by its position in `current`.
+#[test]
+fn a_running_turns_unsealed_change_reads_as_its_own_provisional_edit() {
+    let mut log = Checkpointer::new();
+    turn_from(&mut log, 1, text("a\n"), text("A\n"));
+    log.begin_turn(5).unwrap();
+    log.record_pre_edit(PATH, text("A\n")).unwrap();
+
+    let current = [
+        ("untracked".to_owned(), text("x\n")),
+        (PATH.to_owned(), text("A\nb\n")),
+    ];
+    let view = log.view(&current);
+    let history = view.history();
+    let regions = history.regions(PATH);
+    assert_eq!(regions.len(), 2);
+    assert_eq!(regions[1].owner, Owner::Agent { turn_id: 5 });
+    assert_eq!(
+        regions[1].region_id,
+        RegionId::new(5, 0),
+        "numbered past the log's last sequence (3) by its position (1), the skipped path counted"
+    );
+    assert_eq!(regions[1].decision, Decision::Pending);
+    assert_eq!(
+        log.history().scopes(),
+        vec![Owner::Agent { turn_id: 1 }],
+        "the sealed log itself is untouched"
+    );
+}
+
+#[test]
+fn with_no_turn_running_or_nothing_drifted_the_view_is_the_log() {
+    let mut log = Checkpointer::new();
+    turn_from(&mut log, 1, text("a\n"), text("A\n"));
+    let current = [(PATH.to_owned(), text("drifted\n"))];
+    assert_eq!(
+        log.view(&current).history().regions(PATH),
+        log.history().regions(PATH),
+        "outside a turn a drift is a hand edit for reconcile to capture, not a provisional one"
+    );
+
+    log.begin_turn(5).unwrap();
+    log.record_pre_edit(PATH, text("A\n")).unwrap();
+    let unchanged = [(PATH.to_owned(), text("A\n"))];
+    assert_eq!(
+        log.view(&unchanged).history().regions(PATH),
+        log.history().regions(PATH)
+    );
+}

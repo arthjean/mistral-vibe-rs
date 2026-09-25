@@ -9,17 +9,6 @@ use super::config::config_map;
 use super::*;
 
 impl WorkspaceService {
-    pub(crate) fn message_count(
-        &self,
-        session_id: &str,
-    ) -> Result<Option<usize>, WorkspaceServiceError> {
-        match self.load_session(session_id) {
-            Ok(hydrated) => Ok(Some(hydrated.messages.len())),
-            Err(WorkspaceServiceError::NotFound(_)) => Ok(None),
-            Err(error) => Err(error),
-        }
-    }
-
     /// Where the store writes a session it names `directory`.
     pub(crate) fn session_path(&self, directory: &str) -> PathBuf {
         self.paths.session_root.join(directory)

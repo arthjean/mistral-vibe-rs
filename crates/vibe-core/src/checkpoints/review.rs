@@ -22,8 +22,6 @@
 //! `vibe/app_server/_review.py`. Every name here is the reference's; every field
 //! is one the app-server census records.
 
-use std::collections::BTreeMap;
-
 use serde::{Deserialize, Serialize};
 
 use super::checkpointer::Checkpointer;
@@ -36,17 +34,51 @@ use super::models::{
 use crate::workspace::text_file::decode;
 
 /// What went wrong answering or deciding a review.
+///
+/// The reference raises two families here and a client tells them apart by
+/// the error code: `ReviewError`, which `vibe/app_server/_review.py` answers
+/// as `invalid_params`, covers a decision refused while a turn is open and a
+/// file its decision could not be written to; everything else escapes the
+/// handler and is answered as `internal_error`. [`Self::is_request_failure`]
+/// is that split.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ReviewError {
     /// The log refused the decision.
     #[error(transparent)]
     Log(#[from] CheckpointError),
-    /// A file could not be read or written.
+    /// A file could not be read.
     #[error(transparent)]
     File(#[from] FileAccessError),
+    /// A decided file could not be written back, so the decision was rolled
+    /// back with it.
+    #[error("{0}")]
+    Persist(FileAccessError),
     /// Another thread poisoned the log.
     #[error("the checkpoint log lock is poisoned")]
     LockPoisoned,
+}
+
+impl ReviewError {
+    /// Whether the reference answers this as a refused request rather than as
+    /// an internal failure.
+    ///
+    /// Reference `ReviewManager._decide` (`vibe/core/review/manager.py:340-356`)
+    /// converts only a `TurnStateError` and a failed write into its
+    /// `ReviewError`; an unknown region or a pending decision is a plain
+    /// `FileStateError`, and an unreadable file an `OSError`, both of which
+    /// reach the server's catch-all.
+    #[must_use]
+    pub const fn is_request_failure(&self) -> bool {
+        matches!(
+            self,
+            Self::Persist(_)
+                | Self::Log(
+                    CheckpointError::DecisionDuringTurn
+                        | CheckpointError::TurnAlreadyOpen
+                        | CheckpointError::NoOpenTurn { .. }
+                )
+        )
+    }
 }
 
 /// How a file stands relative to the review baseline.
@@ -300,9 +332,11 @@ fn project_region(region: &TurnRegion) -> ReviewRegion {
 /// The order is the reference's and each step subsumes the ones after it: a file
 /// that is gone is deleted whatever its regions look like, and a file carrying
 /// an undecodable change cannot be rendered as a line diff even if it was
-/// created by this log.
+/// created by this log. Whether it was created is read from the sealed log
+/// (`log`), as the reference reads it, not from the view a running turn's
+/// changes were folded into.
 fn project_status(
-    history: &History<'_>,
+    log: &History<'_>,
     path: &str,
     current: &FileState,
     view: &[TurnRegion],
@@ -317,7 +351,7 @@ fn project_status(
     if undecodable {
         return ReviewFileStatus::BinaryOrUndecodable;
     }
-    if history.original(path).data().is_none() {
+    if log.original(path).data().is_none() {
         return ReviewFileStatus::Created;
     }
     ReviewFileStatus::Modified
@@ -329,7 +363,7 @@ fn project_status(
 /// decided is resolved: the kept ones live in the accepted baseline and the
 /// reverted ones are already back on disk.
 fn project_file(
-    history: &History<'_>,
+    log: &History<'_>,
     path: &str,
     current: &FileState,
     view: &[TurnRegion],
@@ -343,15 +377,18 @@ fn project_file(
     }
     Some(ReviewFile {
         path: path.to_owned(),
-        status: project_status(history, path, current, view),
+        status: project_status(log, path, current, view),
         regions: view.iter().map(project_region).collect(),
     })
 }
 
 /// Every owner's slot, in log order, with the files it still has pending.
-fn project_scopes(history: &History<'_>, files: &[ReviewFile]) -> Vec<ReviewScope> {
-    history
-        .scopes()
+///
+/// The slots are the sealed log's: a turn still running has regions in the
+/// files it touched but no slot until it seals, which is how the reference
+/// answers (`vibe/core/review/manager.py`, `_review_scopes`).
+fn project_scopes(log: &History<'_>, files: &[ReviewFile]) -> Vec<ReviewScope> {
+    log.scopes()
         .into_iter()
         .map(|owner| ReviewScope {
             owner,
@@ -376,23 +413,33 @@ fn project_scopes(history: &History<'_>, files: &[ReviewFile]) -> Vec<ReviewScop
         .collect()
 }
 
-/// Everything `review/state` publishes, over the states the caller read.
+/// Everything `review/state` publishes.
 ///
-/// A tracked path missing from `current` is treated as absent, which is the
-/// same answer the port gives for a path that is not there.
+/// `view` is the log with a running turn's changes folded in
+/// ([`super::Checkpointer::view`]), which the regions are read from; `log` is
+/// the sealed log, which the slots and each file's origin are read from.
+/// `current` is what every tracked path holds, and a tracked path missing from
+/// it is treated as absent.
 #[must_use]
-pub fn project_state(history: &History<'_>, current: &BTreeMap<String, FileState>) -> ReviewState {
+pub fn project_state(
+    view: &History<'_>,
+    log: &History<'_>,
+    current: &[(String, FileState)],
+) -> ReviewState {
     let absent = FileState::absent();
-    let files: Vec<ReviewFile> = history
+    let files: Vec<ReviewFile> = view
         .tracked_paths()
         .into_iter()
         .filter_map(|path| {
-            let view = history.regions(&path);
-            let state = current.get(&path).unwrap_or(&absent);
-            project_file(history, &path, state, &view)
+            let regions = view.regions(&path);
+            let state = current
+                .iter()
+                .find(|(known, _)| *known == path)
+                .map_or(&absent, |(_, state)| state);
+            project_file(log, &path, state, &regions)
         })
         .collect();
-    let scopes = project_scopes(history, &files);
+    let scopes = project_scopes(log, &files);
     ReviewState { files, scopes }
 }
 

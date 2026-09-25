@@ -17,6 +17,7 @@
 //!
 //! Mirrors `vibe/core/checkpoints/checkpointer.py`.
 
+use std::borrow::Cow;
 use std::collections::{BTreeSet, HashMap};
 
 use super::events::{Decide, Edit, Event, StateMap, TurnMark};
@@ -35,6 +36,23 @@ struct OpenTurn {
     /// Each touched path's state as the turn last left it, replaced on every
     /// recording because the last write is what the turn produced.
     post: StateMap,
+}
+
+/// A read of the log, possibly carrying a running turn's unsealed changes.
+///
+/// [`Checkpointer::view`] answers one; it owns a copy of the events only when
+/// it had something provisional to add.
+#[derive(Debug)]
+pub struct LogView<'a> {
+    events: Cow<'a, [Event]>,
+}
+
+impl LogView<'_> {
+    /// The read model over this view.
+    #[must_use]
+    pub fn history(&self) -> History<'_> {
+        History::new(&self.events)
+    }
 }
 
 /// How many file bytes one session's log may retain.
@@ -100,6 +118,59 @@ impl Checkpointer {
     #[must_use]
     pub fn history(&self) -> History<'_> {
         History::new(&self.events)
+    }
+
+    /// The read model with the running turn's unsealed changes folded in.
+    ///
+    /// Reference `Checkpointer.view(current)`
+    /// (`vibe/core/checkpoints/checkpointer.py:192-214`): while a turn is open,
+    /// every path of `current` that the turn recorded a before state for, and
+    /// that no longer holds it, reads as a provisional edit owned by that turn,
+    /// so a review panel renders the change before the turn seals it. The
+    /// provisional edits are numbered past the log's last sequence number by
+    /// their position in `current`, skipped paths included, which is why
+    /// `current` is ordered. With no turn open, or nothing drifted, this is the
+    /// log itself.
+    #[must_use]
+    pub fn view(&self, current: &[(String, FileState)]) -> LogView<'_> {
+        let borrowed = LogView {
+            events: Cow::Borrowed(&self.events),
+        };
+        let Some(open) = self.open.as_ref() else {
+            return borrowed;
+        };
+        let Some(mark) = self.mark(open.mark_seq) else {
+            return borrowed;
+        };
+        let history = self.history();
+        let mut provisional = Vec::new();
+        for (position, (path, state)) in current.iter().enumerate() {
+            let Some(pre) = mark.pre.get(path) else {
+                continue;
+            };
+            if pre == state {
+                continue;
+            }
+            let offset = u64::try_from(position).unwrap_or(u64::MAX);
+            provisional.push(Event::Edit(Edit {
+                seq: self.seq.saturating_add(1).saturating_add(offset),
+                owner: Owner::Agent {
+                    turn_id: open.turn_id,
+                },
+                path: path.clone(),
+                before: pre.clone(),
+                after: state.clone(),
+                deps: history.compute_deps(path, pre, state),
+            }));
+        }
+        if provisional.is_empty() {
+            return borrowed;
+        }
+        let mut events = self.events.clone();
+        events.extend(provisional);
+        LogView {
+            events: Cow::Owned(events),
+        }
     }
 
     /// How many file bytes the log holds, counting every state it carries.

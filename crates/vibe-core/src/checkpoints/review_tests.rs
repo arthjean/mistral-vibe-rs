@@ -7,8 +7,6 @@
 //! granularities reaches. Every scenario is built through the log's own
 //! lifecycle rather than by planting events.
 
-use std::collections::BTreeMap;
-
 use super::checkpointer::Checkpointer;
 use super::lines::FileState;
 use super::models::{Decision, OpaqueReason, Owner, RegionId};
@@ -41,7 +39,7 @@ fn turn(log: &mut Checkpointer, turn_id: u64, after: FileState) {
 
 /// The states a caller would have read from disk for every tracked path,
 /// assuming disk holds what the log projects.
-fn on_disk(log: &Checkpointer) -> BTreeMap<String, FileState> {
+fn on_disk(log: &Checkpointer) -> Vec<(String, FileState)> {
     log.history()
         .tracked_paths()
         .into_iter()
@@ -58,7 +56,7 @@ fn a_text_region_projects_its_identity_owner_spans_and_dependencies() {
     turn(&mut log, 1, text("one\ntwo\n"));
     turn(&mut log, 2, text("one\ntwo\nthree\n"));
 
-    let state = project_state(&log.history(), &on_disk(&log));
+    let state = project_state(&log.history(), &log.history(), &on_disk(&log));
     let file = state.files.first().expect("one changed file");
     assert_eq!(file.path, PATH);
     assert_eq!(file.status, ReviewFileStatus::Created);
@@ -84,7 +82,7 @@ fn an_opaque_region_projects_its_reason_and_carries_no_line_coordinates() {
     turn(&mut log, 1, text("readable\n"));
     turn(&mut log, 2, FileState::from_bytes(b"\0\x01binary".to_vec()));
 
-    let state = project_state(&log.history(), &on_disk(&log));
+    let state = project_state(&log.history(), &log.history(), &on_disk(&log));
     let file = state.files.first().expect("one changed file");
     assert_eq!(file.status, ReviewFileStatus::BinaryOrUndecodable);
     let ReviewRegion::Opaque(opaque) = file.regions.get(1).expect("the binary rewrite") else {
@@ -100,11 +98,11 @@ fn a_file_whose_regions_are_all_decided_leaves_the_state() {
     let mut log = Checkpointer::new();
     turn(&mut log, 1, text("one\n"));
 
-    let state = project_state(&log.history(), &on_disk(&log));
+    let state = project_state(&log.history(), &log.history(), &on_disk(&log));
     assert_eq!(state.files.len(), 1, "one pending change is reviewable");
 
     log.decide_file(PATH, Decision::Keep).unwrap();
-    let resolved = project_state(&log.history(), &on_disk(&log));
+    let resolved = project_state(&log.history(), &log.history(), &on_disk(&log));
     assert!(
         resolved.files.is_empty(),
         "a file with nothing pending is resolved, not empty-listed"
@@ -127,12 +125,16 @@ fn a_files_status_names_deletion_before_opacity_and_creation_before_modification
     existing.record_pre_edit(PATH, text("before\n")).unwrap();
     existing.record_post_edit(PATH, text("after\n")).unwrap();
     existing.seal_turn();
-    let modified = project_state(&existing.history(), &on_disk(&existing));
+    let modified = project_state(
+        &existing.history(),
+        &existing.history(),
+        &on_disk(&existing),
+    );
     assert_eq!(modified.files[0].status, ReviewFileStatus::Modified);
 
     let mut created = Checkpointer::new();
     turn(&mut created, 1, text("new\n"));
-    let created_state = project_state(&created.history(), &on_disk(&created));
+    let created_state = project_state(&created.history(), &created.history(), &on_disk(&created));
     assert_eq!(created_state.files[0].status, ReviewFileStatus::Created);
 
     let mut deleted = Checkpointer::new();
@@ -140,7 +142,7 @@ fn a_files_status_names_deletion_before_opacity_and_creation_before_modification
     deleted.record_pre_edit(PATH, text("gone\n")).unwrap();
     deleted.record_post_edit(PATH, FileState::absent()).unwrap();
     deleted.seal_turn();
-    let deleted_state = project_state(&deleted.history(), &on_disk(&deleted));
+    let deleted_state = project_state(&deleted.history(), &deleted.history(), &on_disk(&deleted));
     assert_eq!(
         deleted_state.files[0].status,
         ReviewFileStatus::Deleted,
@@ -156,7 +158,7 @@ fn every_owner_keeps_a_slot_in_log_order_with_its_still_pending_files() {
         .expect("room for the drift");
     turn(&mut log, 2, text("one\nby hand\ntwo\n"));
 
-    let state = project_state(&log.history(), &on_disk(&log));
+    let state = project_state(&log.history(), &log.history(), &on_disk(&log));
     let owners: Vec<Owner> = state.scopes.iter().map(|scope| scope.owner).collect();
     assert_eq!(
         owners,
@@ -174,7 +176,7 @@ fn every_owner_keeps_a_slot_in_log_order_with_its_still_pending_files() {
 #[test]
 fn a_log_with_no_tracked_file_projects_empty_files_and_scopes() {
     let log = Checkpointer::new();
-    let state = project_state(&log.history(), &BTreeMap::new());
+    let state = project_state(&log.history(), &log.history(), &[]);
     assert!(state.files.is_empty());
     assert!(state.scopes.is_empty());
 }
@@ -477,7 +479,7 @@ fn a_projected_region_serializes_under_the_names_the_census_records() {
     let mut log = Checkpointer::new();
     turn(&mut log, 1, text("one\n"));
     turn(&mut log, 2, text("one\ntwo\n"));
-    let state = project_state(&log.history(), &on_disk(&log));
+    let state = project_state(&log.history(), &log.history(), &on_disk(&log));
 
     let encoded = serde_json::to_value(&state).expect("the projection encodes");
     let region = &encoded["files"][0]["regions"][1];
@@ -511,7 +513,7 @@ fn a_manual_owner_and_an_opaque_region_serialize_as_the_census_declares_them() {
     turn(&mut log, 1, text("one\n"));
     log.reconcile(PATH, FileState::from_bytes(b"\0by hand".to_vec()))
         .expect("room for the drift");
-    let state = project_state(&log.history(), &on_disk(&log));
+    let state = project_state(&log.history(), &log.history(), &on_disk(&log));
 
     let encoded = serde_json::to_value(&state).expect("the projection encodes");
     let region = &encoded["files"][0]["regions"][1];

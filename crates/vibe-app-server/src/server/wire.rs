@@ -435,22 +435,36 @@ pub(crate) fn price_dollars_to_micros(price: f64) -> Option<i64> {
         .then(|| (price * 1_000_000.0).round() as i64)
 }
 
+/// The identifier the checkpoint log numbers the next turn by.
+///
+/// Reference `CheckpointRecorder.create_checkpoint`
+/// (`vibe/core/checkpoints/recorder.py:46`) opens a turn under
+/// `len(self._messages)`, a list that starts with the system prompt a stored
+/// transcript here leaves out, so the count is read the way
+/// [`crate::workspace::reference_message_index`] reads a position. A client
+/// sees this number as `owner.turnId` on every review answer.
 pub(crate) fn review_message_index(
     workspace: &WorkspaceService,
     session: &SessionRuntime,
 ) -> Result<usize, ServerError> {
-    workspace
-        .message_count(&session.id)
-        .map_err(|error| ServerError::Resource(error.to_string()))
-        .map(|message_count| {
-            message_count.unwrap_or_else(|| {
-                session
-                    .persisted
-                    .as_ref()
-                    .map(|persisted| persisted.messages.len())
-                    .unwrap_or_default()
-            })
+    let stored = match workspace.load_session(&session.id) {
+        Ok(hydrated) => Some(hydrated.messages),
+        Err(crate::workspace::WorkspaceServiceError::NotFound(_)) => None,
+        Err(error) => return Err(ServerError::Resource(error.to_string())),
+    };
+    let messages = stored
+        .as_deref()
+        .or_else(|| {
+            session
+                .persisted
+                .as_ref()
+                .map(|persisted| persisted.messages.as_slice())
         })
+        .unwrap_or_default();
+    Ok(crate::workspace::reference_message_index(
+        messages,
+        messages.len(),
+    ))
 }
 
 pub(crate) const fn default_history_limit() -> u16 {

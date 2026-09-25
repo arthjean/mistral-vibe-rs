@@ -8,8 +8,21 @@
 //! connection onto an unwritten successor, which its first turn writes.
 
 use super::*;
-use crate::workspace::{WorkspaceServiceError, rewind_entry_index};
+use crate::workspace::{WorkspaceServiceError, reference_message_index, rewind_entry_index};
 use vibe_core::events::ModelMessage;
+
+/// The message a rewind goes back to.
+struct RewindTarget {
+    /// Its position in the stored transcript, which is where the transcript
+    /// is cut.
+    stored: usize,
+    /// Its position in the reference's message list, which opens with the
+    /// system prompt: the number the checkpoint log opened that turn under
+    /// (`vibe/core/rewind/manager.py` addresses the log by it).
+    turn: usize,
+    /// What the operator wrote there.
+    message: String,
+}
 
 /// Reference `SessionRewindParams`, which `SessionRewindReadParams` is the
 /// first two fields of.
@@ -38,10 +51,10 @@ impl ServerConnection {
             let session = current_session(&sessions, &params.session_id)?;
             (session.review.clone(), session.working_directory.clone())
         };
-        let (index, _message) = self.rewind_target(&params)?;
+        let target = self.rewind_target(&params)?;
         let paths = match review {
             Some(review) => review
-                .restorable_paths_at(index)
+                .restorable_paths_at(target.turn)
                 .map_err(|error| ServerError::Resource(error.to_string()))?,
             None => Vec::new(),
         };
@@ -71,7 +84,11 @@ impl ServerConnection {
                 "Session is not attached",
             ));
         }
-        let (index, message) = self.rewind_target(&params)?;
+        let RewindTarget {
+            stored: index,
+            turn,
+            message,
+        } = self.rewind_target(&params)?;
         let session = sessions
             .get_mut(&key)
             .ok_or_else(|| session_missing("Session not found"))?;
@@ -101,7 +118,7 @@ impl ServerConnection {
         let (restore_errors, restored_paths) = match (&session.review, params.restore_files) {
             (Some(review), true) => {
                 let staged = review
-                    .stage_restore_to_message(index)
+                    .stage_restore_to_message(turn)
                     .map_err(|error| ServerError::Resource(error.to_string()))?;
                 (staged.errors, staged.transaction.commit())
             }
@@ -144,7 +161,7 @@ impl ServerConnection {
             .ok_or_else(|| session_missing("Session not found"))?;
         if let Some(review) = &session.review {
             review
-                .drop_turns_from(index)
+                .drop_turns_from(turn)
                 .map_err(|error| ServerError::Resource(error.to_string()))?;
         }
         // Reference `replace_idle_with_history`: the entries before the one
@@ -208,13 +225,12 @@ impl ServerConnection {
         ))
     }
 
-    /// The stored position of the message `params` names, and what the
-    /// operator wrote there.
+    /// The message `params` names and what the operator wrote there.
     ///
     /// Reference `history_user_message_index`: a session nothing was written
     /// to yet has no rewindable entry, which is the same refusal as an entry
     /// it does not hold.
-    fn rewind_target(&self, params: &RewindParams) -> Result<(usize, String), ProtocolFault> {
+    fn rewind_target(&self, params: &RewindParams) -> Result<RewindTarget, ProtocolFault> {
         let messages = match self.server.workspace.load_session(&params.session_id) {
             Ok(hydrated) => hydrated.messages,
             Err(WorkspaceServiceError::NotFound(_)) => Vec::new(),
@@ -222,7 +238,11 @@ impl ServerConnection {
         };
         rewind_entry_index(&messages, &params.entry_id)
             .and_then(|index| match messages.get(index) {
-                Some(ModelMessage::User { content, .. }) => Some((index, content.clone())),
+                Some(ModelMessage::User { content, .. }) => Some(RewindTarget {
+                    stored: index,
+                    turn: reference_message_index(&messages, index),
+                    message: content.clone(),
+                }),
                 _ => None,
             })
             .ok_or_else(|| {

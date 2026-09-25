@@ -1426,14 +1426,21 @@ mod tests {
         review.seal_turn().expect("second checkpoint");
 
         // The plan is the log's, so its order is the order the dropped turns
-        // first touched each path rather than an alphabetical one.
+        // first touched each path rather than an alphabetical one, and each is
+        // named by the resolved absolute path the log keys it by.
+        let canonical = std::fs::canonicalize(directory.path()).expect("canonical");
+        let key = |name: &str| canonical.join(name).to_string_lossy().into_owned();
         assert_eq!(
             review.restorable_paths_at(4).expect("latest paths"),
-            vec!["main.txt", "generated/later.txt"]
+            vec![key("main.txt"), key("generated/later.txt")]
         );
         assert_eq!(
             review.restorable_paths_at(2).expect("earlier paths"),
-            vec!["generated/first.txt", "main.txt", "generated/later.txt"]
+            vec![
+                key("generated/first.txt"),
+                key("main.txt"),
+                key("generated/later.txt")
+            ]
         );
 
         let staged = review
@@ -1460,7 +1467,11 @@ mod tests {
             .commit();
         assert_eq!(
             restored,
-            vec!["generated/first.txt", "main.txt", "generated/later.txt"]
+            vec![
+                key("generated/first.txt"),
+                key("main.txt"),
+                key("generated/later.txt")
+            ]
         );
         assert_eq!(
             std::fs::read_to_string(directory.path().join("main.txt")).expect("restored main"),

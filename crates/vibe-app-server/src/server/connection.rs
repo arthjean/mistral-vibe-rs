@@ -5,6 +5,7 @@
 //! server-to-client requests are still outstanding. Every routed method is
 //! answered here, against the server above.
 
+mod review_request;
 mod rewind;
 mod session;
 mod trust;
@@ -388,6 +389,7 @@ impl ServerConnection {
             method if crate::resources::mcp_catalog::handles(method) => {
                 self.mcp_catalog_request(request)
             }
+            method if review::is_review_method(method) => self.review_request(request),
             method if RESOURCE_METHODS.contains(&method) => self.resource_request(request),
             method if WORKSPACE_METHODS.contains(&method) => self.workspace_request(request),
             method if PROJECTS_METHODS.contains(&method) => self.projects_request(request),
@@ -621,36 +623,12 @@ impl ServerConnection {
         if request.method.starts_with("feedback/") {
             return Ok(self.feedback_request(request, &session_id));
         }
-        let (session_active, review) = {
+        let session_active = {
             let sessions = self.server.lock_sessions()?;
-            let session = sessions.get(&session_id);
-            (
-                session.is_some_and(|session| session.active_turn.is_some()),
-                session.and_then(|session| session.review.clone()),
-            )
+            sessions
+                .get(&session_id)
+                .is_some_and(|session| session.active_turn.is_some())
         };
-        // The review surface is composed here for the same reason the live-state
-        // reads are: all six of its methods answer from the session's checkpoint
-        // engine, and the resource service holds no session.
-        if review::is_review_method(&request.method) {
-            let result = review::dispatch(
-                &request.method,
-                &request.params,
-                review.as_deref(),
-                session_active,
-            )
-            .map(|result| ResourceDispatch {
-                result,
-                signals: ResourceSignals::default(),
-            });
-            return Ok(resource_result_batch(
-                request.id,
-                &self.server,
-                &session_id,
-                &request.method,
-                result,
-            ));
-        }
         if BACKEND_RESOURCE_METHODS.contains(&request.method.as_str())
             && self.server.resource_backend.is_some()
         {

@@ -126,40 +126,27 @@ struct SnapshotState {
     retention_notice: Option<String>,
 }
 
-/// The checkpoint engine's filesystem port, backed by the workspace.
+/// The checkpoint engine's filesystem port: the disk itself, reached by the
+/// path the log keys a file by.
 ///
-/// Every path arrives in the display form the engine keys its log by, which is
-/// relative for a file under the root and absolute for one a file tool reached
-/// outside it, and is located the way the tool that wrote it located it. A
-/// path that cannot be resolved fails rather than reading as absent, because
-/// the engine would otherwise record a deletion for a file it never saw.
-#[derive(Clone)]
-struct WorkspaceFiles {
-    workspace: Arc<Workspace>,
-}
+/// Reference `DiskFilesystem` (`vibe/core/checkpoints/fs.py`). Every file a
+/// tool snapshots is keyed by its resolved absolute path, and a review client
+/// may name any other path; a relative one resolves against the process's
+/// working directory, as the reference's `Path(path)` does. Absence is
+/// `NotFound` or `NotADirectory` and nothing else, so a file that is there but
+/// will not open is never recorded as a deletion. A write lands in place and
+/// creates the directories it needs, which is what lets a revert restore a file
+/// whose directory was removed after it.
+#[derive(Debug, Clone, Copy, Default)]
+struct DiskFiles;
 
-impl WorkspaceFiles {
-    fn located(&self, path: &str, operation: &'static str) -> Result<PathBuf, FileAccessError> {
-        self.workspace
-            .located(Path::new(path), false)
-            .map_err(|error| FileAccessError::new(operation, path, error))
-    }
-}
-
-impl CheckpointFiles for WorkspaceFiles {
+impl CheckpointFiles for DiskFiles {
     fn read_bytes(&self, path: &str) -> Result<Option<Vec<u8>>, FileAccessError> {
-        let relative = self.located(path, "reading")?;
-        // One read, classified by what it failed with, rather than a presence
-        // check followed by a read: the check answers for a moment that has
-        // passed by the time the read lands, and a file deleted in between
-        // would fail the turn it was carried into. These two kinds are what
-        // absence means; anything else is a file that is there and would not
-        // open, which must never be recorded as a deletion.
-        match self.workspace.read_raw(&relative) {
+        match std::fs::read(path) {
             Ok(bytes) => Ok(Some(bytes)),
-            Err(WorkspaceError::Io { source, .. })
+            Err(error)
                 if matches!(
-                    source.kind(),
+                    error.kind(),
                     std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
                 ) =>
             {
@@ -170,22 +157,23 @@ impl CheckpointFiles for WorkspaceFiles {
     }
 
     fn write_bytes(&self, path: &str, data: &[u8]) -> Result<(), FileAccessError> {
-        let relative = self.located(path, "writing")?;
-        self.workspace
-            .atomic_replace(&relative, data)
-            .map_err(|error| FileAccessError::new("writing", path, error))
+        let target = Path::new(path);
+        if let Some(parent) = target
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
+            std::fs::create_dir_all(parent)
+                .map_err(|error| FileAccessError::new("writing", path, error))?;
+        }
+        std::fs::write(target, data).map_err(|error| FileAccessError::new("writing", path, error))
     }
 
     fn remove(&self, path: &str) -> Result<(), FileAccessError> {
-        let relative = self.located(path, "deleting")?;
-        self.workspace
-            .remove(&relative)
-            .map_err(|error| FileAccessError::new("deleting", path, error))
+        std::fs::remove_file(path).map_err(|error| FileAccessError::new("deleting", path, error))
     }
 
     fn exists(&self, path: &str) -> bool {
-        self.located(path, "reading")
-            .is_ok_and(|relative| self.workspace.exists(&relative))
+        Path::new(path).exists()
     }
 }
 
@@ -198,16 +186,14 @@ pub struct ReviewManager {
     /// rewind, and the log answers which region of which file each turn and
     /// each hand edit produced.
     log: Mutex<Checkpointer>,
-    recorder: CheckpointRecorder<WorkspaceFiles>,
+    recorder: CheckpointRecorder<DiskFiles>,
 }
 
 impl ReviewManager {
     #[must_use]
     pub fn new(workspace: Arc<Workspace>) -> Self {
         Self {
-            recorder: CheckpointRecorder::new(FileStore::new(WorkspaceFiles {
-                workspace: workspace.clone(),
-            })),
+            recorder: CheckpointRecorder::new(FileStore::new(DiskFiles)),
             workspace,
             state: Mutex::new(SnapshotState::default()),
             log: Mutex::new(Checkpointer::new()),
@@ -231,12 +217,15 @@ impl ReviewManager {
 
     // -- The review surface ---------------------------------------------------
     //
-    // Six answers over one log. Every one of them reads disk before it reads the
-    // log, because a hand edit made since the last look is a change the log does
-    // not carry yet, and projecting or deciding without folding it in would
-    // attribute it to whichever turn touched the file next. The reference draws
-    // the same boundary in `vibe/core/review/manager.py`: rendering and deciding
-    // are both acting boundaries.
+    // Six answers over one log, each the reference's `ReviewManager`
+    // (`vibe/core/review/manager.py`) step for step. A path is the log's key as
+    // the client sent it: the absolute path every answer publishes, or any
+    // other spelling, which the log does not know and the disk resolves on its
+    // own terms. Reading and deciding are acting boundaries: a hand edit made
+    // since the last look is folded in as its own slot first, so it is never
+    // attributed to the next turn and never clobbered by a decision. While a
+    // turn runs, the reads see its unsealed changes through
+    // `Checkpointer::view`.
 
     /// Every file with something left to review, and every owner's slot.
     ///
@@ -252,7 +241,11 @@ impl ReviewManager {
             for (path, state) in &current {
                 reconcile_tracked(log, path, state.clone(), &mut refused);
             }
-            (project_state(&log.history(), &current), refused)
+            let view = log.view(&current);
+            (
+                project_state(&view.history(), &log.history(), &current),
+                refused,
+            )
         })?;
         self.note_retention(refused);
         Ok(state)
@@ -291,19 +284,13 @@ impl ReviewManager {
     ///
     /// # Errors
     ///
-    /// Fails when another thread poisoned the log. The file is not read: the
-    /// baseline is the log's answer, not disk's.
+    /// Fails when the path exists but cannot be read, and when another thread
+    /// poisoned the log.
     pub fn baseline_text(&self, path: &str) -> Result<String, ReviewError> {
-        let path = self.review_key(path);
-        self.with_review_log(|log| state_text(&log.history().accepted_baseline(&path)))
-    }
-
-    /// The key the log files `path` under: workspace-relative, as the tools
-    /// record it, whether the client named it relative or absolute.
-    fn review_key(&self, path: &str) -> String {
-        self.workspace
-            .located(Path::new(path), false)
-            .map_or_else(|_| path.to_owned(), |relative| path_display(&relative))
+        let current = [(path.to_owned(), self.recorder.files().read(path)?)];
+        self.with_review_log(|log| {
+            state_text(&log.view(&current).history().accepted_baseline(path))
+        })
     }
 
     /// One owner's own change to `path`: its kept regions against its kept plus
@@ -311,17 +298,20 @@ impl ReviewManager {
     ///
     /// # Errors
     ///
-    /// Fails when another thread poisoned the log.
+    /// Fails when the path exists but cannot be read, and when another thread
+    /// poisoned the log.
     pub fn scope_file_diff(&self, path: &str, owner: Owner) -> Result<TurnFileDiff, ReviewError> {
-        let path = self.review_key(path);
-        self.with_review_log(|log| project_scope_diff(&log.history(), &path, owner))
+        let current = [(path.to_owned(), self.recorder.files().read(path)?)];
+        self.with_review_log(|log| project_scope_diff(&log.view(&current).history(), path, owner))
     }
 
     /// Every pending change of `path`, located in a rendered diff.
     ///
     /// With no owner the diff is the accepted baseline against what belongs on
     /// disk, which is what a whole-file panel renders; with one it is that
-    /// owner's own scope diff.
+    /// owner's own scope diff. Reconciling first is what keeps the anchors in
+    /// line with the disk the panel renders, and it applies to a path the log
+    /// never tracked too: its content becomes a hand edit of its own.
     ///
     /// # Errors
     ///
@@ -332,13 +322,12 @@ impl ReviewManager {
         path: &str,
         owner: Option<Owner>,
     ) -> Result<Vec<AnchoredHunk>, ReviewError> {
-        let path = self.review_key(path);
-        let path = path.as_str();
-        let current = self.recorder.files().read(path)?;
+        let current = [(path.to_owned(), self.recorder.files().read(path)?)];
         let (hunks, refused) = self.with_review_log(|log| {
             let mut refused = None;
-            reconcile_tracked(log, path, current, &mut refused);
+            reconcile_tracked(log, path, current[0].1.clone(), &mut refused);
             let hunks = log
+                .view(&current)
                 .history()
                 .pending_hunks(path, owner)
                 .into_iter()
@@ -400,6 +389,9 @@ impl ReviewManager {
     }
 
     /// Writes `path` to what the log now projects, unless disk already holds it.
+    ///
+    /// A path the log never tracked projects to nothing, so deciding one that
+    /// exists deletes it, as the reference's `_persist` does.
     fn persist(&self, log: &Checkpointer, path: &str) -> Result<(), ReviewError> {
         let files = self.recorder.files();
         let current = files.read(path)?;
@@ -413,13 +405,13 @@ impl ReviewManager {
             .into_iter()
             .next()
         {
-            Some(error) => Err(ReviewError::File(error)),
+            Some(error) => Err(ReviewError::Persist(error)),
             None => Ok(()),
         }
     }
 
-    /// What every path of `paths` holds now.
-    fn read_states(&self, paths: &[String]) -> Result<BTreeMap<String, FileState>, ReviewError> {
+    /// What every path of `paths` holds now, in the order given.
+    fn read_states(&self, paths: &[String]) -> Result<Vec<(String, FileState)>, ReviewError> {
         let files = self.recorder.files();
         paths
             .iter()
@@ -434,6 +426,26 @@ impl ReviewManager {
     ) -> Result<T, ReviewError> {
         let mut log = self.log.lock().map_err(|_| ReviewError::LockPoisoned)?;
         Ok(body(&mut log))
+    }
+
+    /// The key the log files a located path under: its resolved absolute
+    /// path, which is what the reference's `get_file_snapshot_for_path`
+    /// (`vibe/core/tools/base.py:466-478`) records and what every review answer
+    /// publishes.
+    fn log_key(&self, located: &Path) -> String {
+        let absolute = if located.is_absolute() {
+            located.to_path_buf()
+        } else {
+            self.workspace.canonical_root.join(located)
+        };
+        let absolute = if absolute.ends_with(".") {
+            absolute
+                .parent()
+                .map_or_else(|| absolute.clone(), Path::to_path_buf)
+        } else {
+            absolute
+        };
+        absolute.to_string_lossy().into_owned()
     }
 
     pub fn begin_turn(&self, turn_id: impl Into<String>) -> Result<(), WorkspaceError> {
@@ -749,7 +761,7 @@ impl ReviewManager {
             .map_or_else(FileState::absent, FileState::from_bytes);
         if let Err(refusal) = self.with_log(|log| {
             self.recorder
-                .add_snapshot(log, &path_display(relative), snapshot)
+                .add_snapshot(log, &self.log_key(relative), snapshot)
         })? {
             // A log with no room left refuses the capture rather than dropping
             // an earlier event to make space, and the write itself still
@@ -799,7 +811,7 @@ pub struct StagedRestore {
 }
 
 pub struct RestoreTransaction {
-    files: FileStore<WorkspaceFiles>,
+    files: FileStore<DiskFiles>,
     previous: Option<Vec<(String, FileState)>>,
     changed_paths: Vec<String>,
 }
@@ -1150,12 +1162,14 @@ mod tests {
         }
         review.seal_turn().expect("seal turn");
 
-        let locked = root.path().join("locked");
-        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555))
-            .expect("seal the directory");
+        // A restore writes in place, as the reference's does, so it is the
+        // file that has to refuse the write, not its directory.
+        let locked = root.path().join("locked/held.txt");
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o444))
+            .expect("seal the file");
         let staged = review.stage_restore_to_message(1);
-        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755))
-            .expect("reopen the directory");
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644))
+            .expect("reopen the file");
         let staged = staged.expect("the restore still answers");
 
         assert_eq!(staged.errors.len(), 1, "one path could not be written");
@@ -1166,7 +1180,7 @@ mod tests {
         );
         assert_eq!(
             staged.transaction.commit(),
-            vec!["open.txt"],
+            vec![key(root.path(), "open.txt")],
             "the path that could be written was"
         );
         assert_eq!(
@@ -1179,35 +1193,40 @@ mod tests {
     /// actually runs: nothing there is absence, and something there that will
     /// not open is a failure. Collapsing the second into the first would have
     /// the engine record a deletion nobody performed and offer to revert it.
+    /// A write creates the directories it needs, as the reference's does, so a
+    /// revert can restore a file whose directory was removed after it.
     #[test]
-    fn the_workspace_port_tells_an_absent_path_apart_from_an_unreadable_one() {
+    fn the_disk_port_tells_an_absent_path_apart_from_an_unreadable_one() {
         let root = tempdir().expect("workspace");
-        std::fs::write(root.path().join("there.txt"), "body\n").expect("seed file");
-        std::fs::create_dir(root.path().join("a-directory")).expect("seed directory");
-        let files = WorkspaceFiles {
-            workspace: Arc::new(Workspace::open(root.path()).expect("open")),
-        };
+        let root = std::fs::canonicalize(root.path()).expect("canonical");
+        std::fs::write(root.join("there.txt"), "body\n").expect("seed file");
+        std::fs::create_dir(root.join("a-directory")).expect("seed directory");
+        let key = |name: &str| root.join(name).to_string_lossy().into_owned();
+        let files = DiskFiles;
 
-        assert_eq!(files.read_bytes("there.txt"), Ok(Some(b"body\n".to_vec())));
-        assert_eq!(files.read_bytes("gone.txt"), Ok(None));
-        assert_eq!(files.read_bytes("gone/deeper.txt"), Ok(None));
+        assert_eq!(
+            files.read_bytes(&key("there.txt")),
+            Ok(Some(b"body\n".to_vec()))
+        );
+        assert_eq!(files.read_bytes(&key("gone.txt")), Ok(None));
+        assert_eq!(files.read_bytes(&key("gone/deeper.txt")), Ok(None));
+        assert_eq!(files.read_bytes(&key("there.txt/below")), Ok(None));
         assert!(
-            files.read_bytes("a-directory").is_err(),
+            files.read_bytes(&key("a-directory")).is_err(),
             "something that is there and will not open is never absence"
         );
-        // A file a tool reached outside the root is keyed by its absolute
-        // path and read through the same port, so a rewind restores it too.
-        let outside = tempdir().expect("outside");
-        let kept = std::fs::canonicalize(outside.path())
-            .expect("canonical")
-            .join("kept.txt");
-        std::fs::write(&kept, "outside\n").expect("seed outside");
-        let kept = kept.to_string_lossy().into_owned();
-        assert_eq!(files.read_bytes(&kept), Ok(Some(b"outside\n".to_vec())));
         files
-            .write_bytes(&kept, b"restored\n")
-            .expect("write outside");
-        assert_eq!(files.read_bytes(&kept), Ok(Some(b"restored\n".to_vec())));
+            .write_bytes(&key("removed/again/restored.txt"), b"restored\n")
+            .expect("a write creates its directories");
+        assert_eq!(
+            files.read_bytes(&key("removed/again/restored.txt")),
+            Ok(Some(b"restored\n".to_vec()))
+        );
+        assert!(files.exists(&key("removed/again/restored.txt")));
+        files
+            .remove(&key("removed/again/restored.txt"))
+            .expect("remove");
+        assert!(!files.exists(&key("removed/again/restored.txt")));
     }
 
     /// The engine is fed by the turn boundaries the server already drives, so a
@@ -1251,7 +1270,7 @@ mod tests {
         let owners = review
             .with_log(|log| {
                 log.history()
-                    .regions("wired.txt")
+                    .regions(&key(root.path(), "wired.txt"))
                     .into_iter()
                     .map(|region| region.owner)
                     .collect::<Vec<_>>()
@@ -1275,7 +1294,7 @@ mod tests {
                     .collect::<Vec<_>>()
             })
             .expect("log");
-        assert_eq!(restorable, vec!["wired.txt"]);
+        assert_eq!(restorable, vec![key(root.path(), "wired.txt")]);
     }
 
     /// A rewind drops the turns at and after its point from the log and keeps
@@ -1317,6 +1336,15 @@ mod tests {
 
     // -- The review surface ---------------------------------------------------
 
+    /// The key the log files `name` under: its resolved absolute path.
+    fn key(root: &std::path::Path, name: &str) -> String {
+        std::fs::canonicalize(root)
+            .expect("canonical root")
+            .join(name)
+            .to_string_lossy()
+            .into_owned()
+    }
+
     /// A manager over a fresh workspace holding `seed` at `main.txt`.
     fn seeded(root: &std::path::Path, seed: &str) -> ReviewManager {
         std::fs::write(root.join("main.txt"), seed).expect("seed file");
@@ -1349,7 +1377,7 @@ mod tests {
 
         let state = review.review_state().expect("review state");
         assert_eq!(state.files.len(), 1);
-        assert_eq!(state.files[0].path, "main.txt");
+        assert_eq!(state.files[0].path, key(root.path(), "main.txt"));
         assert_eq!(state.files[0].status, ReviewFileStatus::Modified);
         assert_eq!(state.files[0].regions.len(), 1);
         assert_eq!(
@@ -1403,10 +1431,10 @@ mod tests {
 
         let approved = review
             .approve_review(&ReviewTarget::File {
-                path: "main.txt".to_owned(),
+                path: key(root.path(), "main.txt"),
             })
             .expect("approve");
-        assert_eq!(approved, vec!["main.txt"]);
+        assert_eq!(approved, vec![key(root.path(), "main.txt")]);
         assert_eq!(
             std::fs::read_to_string(root.path().join("main.txt")).expect("read"),
             "one\ntwo\n",
@@ -1422,10 +1450,10 @@ mod tests {
         edited_turn(&review, 1, "one\n", "one\ntwo\n");
         let reverted = review
             .revert_review(&ReviewTarget::File {
-                path: "main.txt".to_owned(),
+                path: key(second.path(), "main.txt"),
             })
             .expect("revert");
-        assert_eq!(reverted, vec!["main.txt"]);
+        assert_eq!(reverted, vec![key(second.path(), "main.txt")]);
         assert_eq!(
             std::fs::read_to_string(second.path().join("main.txt")).expect("read"),
             "one\n",
@@ -1478,7 +1506,9 @@ mod tests {
         edited_turn(&review, 1, "one\n", "one\ntwo\n");
         std::fs::write(root.path().join("main.txt"), "one\ntwo\nby hand\n").expect("hand edit");
 
-        let hunks = review.file_hunks("main.txt", None).expect("hunks");
+        let hunks = review
+            .file_hunks(&key(root.path(), "main.txt"), None)
+            .expect("hunks");
         assert_eq!(
             hunks.len(),
             1,
@@ -1521,17 +1551,17 @@ mod tests {
             .expect("edit");
         review.seal_turn().expect("seal turn");
 
-        let locked = root.path().join("locked");
-        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555))
-            .expect("seal the directory");
+        let locked = root.path().join("locked/main.txt");
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o444))
+            .expect("seal the file");
         let failure = review.revert_review(&ReviewTarget::File {
-            path: "locked/main.txt".to_owned(),
+            path: key(root.path(), "locked/main.txt"),
         });
-        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755))
-            .expect("reopen the directory");
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o644))
+            .expect("reopen the file");
 
         assert!(
-            matches!(failure, Err(ReviewError::File(_))),
+            matches!(failure, Err(ReviewError::Persist(_))),
             "the write failure is reported: {failure:?}"
         );
         let state = review.review_state().expect("review state");
@@ -1553,37 +1583,40 @@ mod tests {
         let review = seeded(root.path(), "one\n");
         edited_turn(&review, 1, "one\n", "one\ntwo\n");
 
+        let main = key(root.path(), "main.txt");
         assert_eq!(
-            review.baseline_text("main.txt").expect("baseline"),
+            review.baseline_text(&main).expect("baseline"),
             "one\n",
             "nothing is kept yet, so the accepted baseline is the original"
         );
         assert_eq!(
-            review.baseline_text("untracked.txt").expect("baseline"),
+            review
+                .baseline_text(&key(root.path(), "untracked.txt"))
+                .expect("baseline"),
             "",
             "a path the log never saw answers empty rather than failing"
         );
 
         let diff = review
-            .scope_file_diff("main.txt", Owner::Agent { turn_id: 1 })
+            .scope_file_diff(&main, Owner::Agent { turn_id: 1 })
             .expect("scope diff");
         assert_eq!(diff.status, ReviewFileStatus::Modified);
         assert_eq!(diff.baseline, "one\n");
         assert_eq!(diff.current, "one\ntwo\n");
 
-        let hunks = review.file_hunks("main.txt", None).expect("hunks");
+        let hunks = review.file_hunks(&main, None).expect("hunks");
         assert_eq!(hunks.len(), 1);
         assert_eq!(hunks[0].side, HunkSide::Additions);
         assert_eq!(hunks[0].line, 1);
         assert_eq!(hunks[0].regions.len(), 1);
 
         let scoped = review
-            .file_hunks("main.txt", Some(Owner::Agent { turn_id: 1 }))
+            .file_hunks(&main, Some(Owner::Agent { turn_id: 1 }))
             .expect("scoped hunks");
         assert_eq!(scoped, hunks, "the one turn's scope is the whole diff");
         assert!(
             review
-                .file_hunks("main.txt", Some(Owner::Agent { turn_id: 9 }))
+                .file_hunks(&main, Some(Owner::Agent { turn_id: 9 }))
                 .expect("absent owner")
                 .is_empty(),
             "an owner with nothing pending anchors nothing"

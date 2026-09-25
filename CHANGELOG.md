@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Answer the `review/*` methods the way the reference does. Files are keyed by
+  their absolute path and turns by the reference's message numbering, a
+  running turn's unsaved changes show as its own regions, reading the hunks of
+  a file edited by hand records the edit, and reverting a file whose directory
+  was removed recreates the directory. Parameters are validated with the
+  reference's issues and integer coercions, requests are refused in the
+  reference's order (no session, a compaction in progress, invalid
+  parameters, an unknown session, a decision while a turn runs), and a failed
+  write or a decision during a turn is `invalid_params` while an unknown region
+  is `internal_error`.
 - Run the terminal UI the way the reference does. Consecutive tool calls,
   reasoning and hook notices fold under one line that says what they did;
   a click folds or unfolds a group or a section, and Ctrl+O resets them all
