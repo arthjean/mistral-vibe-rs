@@ -691,11 +691,13 @@ impl WorkspaceService {
         params: &BTreeMap<String, Value>,
         working_directory: PathBuf,
         project_trusted: bool,
+        project_file_trust: Option<bool>,
     ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let mut scoped = self.clone();
         scoped.config = self
             .config
-            .scoped_to_working_directory(working_directory, project_trusted);
+            .scoped_to_working_directory(working_directory, project_trusted)
+            .with_project_file_trust(project_file_trust);
         scoped.dispatch(method, params)
     }
 

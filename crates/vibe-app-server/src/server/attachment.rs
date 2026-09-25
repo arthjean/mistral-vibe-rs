@@ -99,6 +99,34 @@ pub(super) fn recompose_agent_profile_settings(
 }
 
 impl AppServer {
+    /// What a session opened in `working_directory` trusts: the directory,
+    /// after a `trustWorkspace` grant is recorded for the rest of the process,
+    /// and the project configuration file as of now, which the session keeps.
+    ///
+    /// Reference `_build_session_config`: the grant goes into the process-wide
+    /// trust store, so it is also what a later `workspace/trust/status` and a
+    /// later session in the same directory read.
+    pub(crate) fn session_trust(
+        &self,
+        working_directory: &Path,
+        grant: bool,
+    ) -> (bool, Option<bool>) {
+        let vibe_home = self.workspace.vibe_home();
+        let store = vibe_core::trust::TrustStore::for_vibe_home(vibe_home);
+        if grant {
+            store.trust_for_session(working_directory);
+        }
+        let trusted = store.is_trusted(working_directory) == Some(true);
+        let project_file_trust = vibe_core::config::harness::discover_project_config(
+            working_directory,
+            vibe_home,
+        )
+        .map(|file| {
+            vibe_core::trust::project_config_trusted(&store, &file, working_directory, trusted)
+        });
+        (trusted, project_file_trust)
+    }
+
     pub fn live_projection_seed(
         &self,
         session_id: &str,
@@ -531,17 +559,15 @@ impl AppServer {
         let tools = ToolRegistry::default();
         // A resumed session runs under the same configuration a fresh one does,
         // so its two filter lists are read again here rather than left empty.
+        let (trusted, project_file_trust) =
+            self.session_trust(Path::new(&attachment.working_directory), false);
         let (enabled_tools, disabled_tools) = self
             .workspace
-            .tool_filters_for_session(
-                Path::new(&attachment.working_directory),
-                matches!(
-                    policy.try_trust_decision(&attachment.working_directory),
-                    Ok(Some(TrustDecision::Trusted | TrustDecision::SessionTrusted))
-                ),
-            )
+            .tool_filters_for_session(Path::new(&attachment.working_directory), trusted)
             .unwrap_or_default();
         let mut intent = SessionIntent {
+            trusted,
+            project_file_trust,
             agent: attachment.agent.clone(),
             resume: Some(attachment.id.clone()),
             requested_enabled_tools: enabled_tools.clone(),
@@ -595,10 +621,7 @@ impl AppServer {
                 session_id: attachment.id.clone(),
                 generation: 1,
                 working_directory: attachment.working_directory.clone(),
-                project_trusted: matches!(
-                    policy.try_trust_decision(&attachment.working_directory),
-                    Ok(Some(TrustDecision::Trusted | TrustDecision::SessionTrusted))
-                ),
+                project_trusted: trusted,
                 policy,
                 tools,
             },

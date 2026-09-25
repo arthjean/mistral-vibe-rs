@@ -131,12 +131,14 @@ fn dispatch_workspace(
     match plan.dispatch {
         Dispatch::Plain => workspace.dispatch(&request.method, &request.params),
         Dispatch::SessionScoped => match session_scope(connection, target_session_id) {
-            Some((working_directory, project_trusted)) => workspace.dispatch_scoped(
-                &request.method,
-                &request.params,
-                working_directory,
-                project_trusted,
-            ),
+            Some((working_directory, project_trusted, project_file_trust)) => workspace
+                .dispatch_scoped(
+                    &request.method,
+                    &request.params,
+                    working_directory,
+                    project_trusted,
+                    project_file_trust,
+                ),
             // A connection with no session attached has no project layer to
             // read, so the process configuration answers on its own.
             None => workspace.dispatch(&request.method, &request.params),
@@ -144,16 +146,19 @@ fn dispatch_workspace(
     }
 }
 
-/// The directory and the trust a scoped dispatch layers over.
+/// The directory and the trust a scoped dispatch layers over: the working
+/// directory's trust, which moves with a decision, and the project file's,
+/// which the session resolved when it started.
 fn session_scope(
     connection: &ServerConnection,
     target_session_id: Option<&str>,
-) -> Option<(PathBuf, bool)> {
+) -> Option<(PathBuf, bool, Option<bool>)> {
     let sessions = connection.server.lock_sessions().ok()?;
     sessions.get(target_session_id?).map(|session| {
         (
             PathBuf::from(&session.working_directory),
             session.intent.trusted,
+            session.intent.project_file_trust,
         )
     })
 }

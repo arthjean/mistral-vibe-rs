@@ -54,6 +54,11 @@ fn the_walk_finds_the_nearest_project_file_above_the_working_directory() {
     let nested = repository.join("a/b/c");
     fs::create_dir_all(&nested).expect("nested working directory");
     write_config(&project_config(&repository), "active_model = \"root\"\n");
+    // A file above the working directory is read only when the trust store
+    // covers the folder holding it, as reference `_check_trust` asks.
+    crate::trust::TrustStore::for_vibe_home(&vibe_home(root))
+        .add_trusted(&repository)
+        .expect("repository trusted");
 
     let snapshot = store(root, &nested)
         .with_project_trusted(true)

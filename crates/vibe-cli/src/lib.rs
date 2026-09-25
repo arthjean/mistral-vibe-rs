@@ -406,6 +406,11 @@ where
     );
     let mut service = HeadlessService::new_shared_with_server(Arc::new(driver), server)?;
     let session_id = service.start_session(&options)?;
+    warn_if_workspace_untrusted(
+        service.workspace_service().vibe_home(),
+        &working_directory,
+        stderr,
+    )?;
     // Reference `emit_new_session_telemetry` and `emit_ready_telemetry`: the
     // agent loop raises both once its initialization settles, whichever
     // entrypoint launched it.
@@ -462,6 +467,45 @@ where
     close_result?;
     shutdown_result?;
     Ok(())
+}
+
+/// Reference `_warn_if_workspace_untrusted` (`vibe/cli/programmatic.py`): a
+/// run in a folder nobody trusted, and that holds project configuration, says
+/// on stderr that the configuration is skipped and how to lift that.
+fn warn_if_workspace_untrusted(
+    vibe_home: &Path,
+    working_directory: &Path,
+    stderr: &mut impl Write,
+) -> Result<(), CliError> {
+    let store = vibe_core::trust::TrustStore::for_vibe_home(vibe_home);
+    let cwd = vibe_core::trust::resolve(working_directory);
+    if store.trust_status(&cwd) != vibe_core::trust::TrustStatus::Untrusted {
+        return Ok(());
+    }
+    let Some(prompt) = vibe_core::trust::build_trust_prompt(&cwd, true, &store) else {
+        return Ok(());
+    };
+    let mut files: Vec<&str> = Vec::new();
+    for file in prompt
+        .detected_files
+        .iter()
+        .chain(&prompt.repo_detected_files)
+    {
+        if !files.contains(&file.as_str()) {
+            files.push(file);
+        }
+    }
+    if files.is_empty() {
+        return Ok(());
+    }
+    writeln!(
+        stderr,
+        "Warning: {} is untrusted, so its project configuration ({}) is not loaded. \
+         Pass --trust to trust this folder for this run.",
+        prompt.cwd.display(),
+        files.join(", ")
+    )
+    .map_err(CliError::Stderr)
 }
 
 /// What a programmatic launch produced.
@@ -1358,6 +1402,27 @@ mod tests {
             context.base_metadata(None).properties()["experiments"],
             serde_json::json!({"vibe_cli_system_prompt": "lean"})
         );
+    }
+
+    #[test]
+    fn an_untrusted_folder_with_project_configuration_warns_on_stderr() {
+        let root = tempfile::tempdir().expect("root");
+        let home = root.path().join("vibe-home");
+        let project = root.path().join("project");
+        std::fs::create_dir_all(project.join(".vibe")).expect("project");
+        std::fs::write(project.join(".vibe/config.toml"), "").expect("config");
+        std::fs::write(project.join("AGENTS.md"), "").expect("agents");
+        let mut stderr = Vec::new();
+        warn_if_workspace_untrusted(&home, &project, &mut stderr).expect("warned");
+        let warning = String::from_utf8(stderr).expect("UTF-8");
+        assert!(warning.contains("(.vibe/, AGENTS.md)"), "{warning}");
+
+        let store = vibe_core::trust::TrustStore::for_vibe_home(&home);
+        store.trust_for_session(&project);
+        let mut stderr = Vec::new();
+        warn_if_workspace_untrusted(&home, &project, &mut stderr).expect("silent");
+        store.revoke_session_trust(&project);
+        assert!(stderr.is_empty(), "a --trust run is not warned");
     }
 
     #[tokio::test]

@@ -177,7 +177,7 @@ impl ServerConnection {
         let held_directory = PathBuf::from(&opening.working_directory);
         let mcp_configs = self.server.workspace.mcp_servers_for_session(
             Path::new(&opening.working_directory),
-            params.trusted,
+            opening.intent.trusted,
             &params.mcp_servers,
         )?;
         let SessionOpening {
@@ -378,10 +378,13 @@ impl ServerConnection {
             Some(profile) => profile,
             None => self.server.workspace.agent_profile(&selected_agent)?,
         };
+        let (trusted, project_file_trust) = self
+            .server
+            .session_trust(Path::new(&working_directory), params.trusted);
         let (config_enabled_tools, config_disabled_tools) = self
             .server
             .workspace
-            .tool_filters_for_session(Path::new(&working_directory), params.trusted)?;
+            .tool_filters_for_session(Path::new(&working_directory), trusted)?;
         // Reference `_session_config_overrides`: an `enabled_tools` the client
         // sent replaces the configured allowlist, while `disabled_tools`
         // concatenates onto it.
@@ -391,7 +394,7 @@ impl ServerConnection {
         disabled_tools.dedup();
         let mut intent = SessionIntent {
             add_directories: params.add_directories.clone(),
-            trusted: params.trusted,
+            trusted,
             agent: Some(selected_agent),
             tool_filters: params.tool_filters.clone(),
             enabled_tools: params.enabled_tools.clone().unwrap_or(config_enabled_tools),
@@ -412,6 +415,7 @@ impl ServerConnection {
             requested_auto_approve: params.auto_approve,
             approval: AgentApproval::Prompt,
             system_prompt_id: None,
+            project_file_trust,
             resume: attachment
                 .as_ref()
                 .map(|attachment| attachment.id.clone())

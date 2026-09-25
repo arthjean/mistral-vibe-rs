@@ -74,6 +74,10 @@ pub struct HarnessFiles {
     sources: BTreeSet<ConfigSource>,
     additional_roots: Vec<PathBuf>,
     project_trusted: bool,
+    /// The project file's trust when a caller already resolved it, which pins
+    /// it for the life of a session as upstream caches it on the layer; `None`
+    /// asks the trust store on every read.
+    project_file_trust: Option<bool>,
 }
 
 impl HarnessFiles {
@@ -89,7 +93,15 @@ impl HarnessFiles {
             sources,
             additional_roots,
             project_trusted,
+            project_file_trust: None,
         }
+    }
+
+    /// Pins the project file's trust instead of asking the trust store.
+    #[must_use]
+    pub const fn with_project_file_trust(mut self, trust: Option<bool>) -> Self {
+        self.project_file_trust = trust;
+        self
     }
 
     /// The file backing the selected layer, or `None` when no enabled source
@@ -111,14 +123,28 @@ impl HarnessFiles {
         None
     }
 
-    /// The discovered project file, once the source is enabled and the
-    /// workspace is trusted.
+    /// The discovered project file, once the source is enabled and the trust
+    /// store allows the `.vibe` directory holding it.
+    ///
+    /// Reference `ProjectConfigLayer._check_trust`: the question is about the
+    /// directory the file sits in, not the working directory, so a file found
+    /// above a trusted subdirectory stays out, and so does one whose `.vibe` is
+    /// declined inside a trusted directory ([`crate::trust::project_config_trusted`]).
     #[must_use]
     pub fn trusted_project_config(&self) -> Option<PathBuf> {
-        if !self.sources.contains(&ConfigSource::Project) || !self.project_trusted {
+        if !self.sources.contains(&ConfigSource::Project) {
             return None;
         }
-        discover_project_config(&self.paths.working_directory, &self.paths.vibe_home)
+        let file = discover_project_config(&self.paths.working_directory, &self.paths.vibe_home)?;
+        let trusted = self.project_file_trust.unwrap_or_else(|| {
+            crate::trust::project_config_trusted(
+                &crate::trust::TrustStore::for_vibe_home(&self.paths.vibe_home),
+                &file,
+                &self.paths.working_directory,
+                self.project_trusted,
+            )
+        });
+        trusted.then_some(file)
     }
 
     #[must_use]

@@ -36,8 +36,21 @@ tool_timeout_sec = 2
     let mut connection = server.connect(TransportKind::InProcess);
     initialize(&mut connection);
 
-    let trusted = connection.dispatch(&request(
+    // A grant for the session lasts for the process, as the reference's
+    // `trust_for_session` does, so the untrusted session opens first.
+    let untrusted = connection.dispatch(&request(
         2,
+        "session/start",
+        json!({
+            "sessionId": "untrusted",
+            "workingDirectory": temporary.path().join("workspace"),
+            "trustWorkspace": false
+        }),
+    ));
+    assert!(untrusted.deferred.is_empty());
+
+    let trusted = connection.dispatch(&request(
+        3,
         "session/start",
         json!({
             "sessionId": "trusted",
@@ -56,17 +69,6 @@ tool_timeout_sec = 2
             && configs[0].startup_timeout_ms == 1_000
             && configs[0].tool_timeout_ms == 2_000
     ));
-
-    let untrusted = connection.dispatch(&request(
-        3,
-        "session/start",
-        json!({
-            "sessionId": "untrusted",
-            "workingDirectory": temporary.path().join("workspace"),
-            "trustWorkspace": false
-        }),
-    ));
-    assert!(untrusted.deferred.is_empty());
 }
 
 /// The configuration file is a shared surface with the reference, so the

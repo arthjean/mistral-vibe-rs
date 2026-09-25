@@ -839,7 +839,12 @@ fn trust_abort_restores_terminal_without_starting_session_discovery() {
 
     assert!(status.success(), "trust cancellation exited with {status}");
     assert!(!home.join(".vibe/sessions").exists());
-    assert!(!home.join(".vibe/trusted_folders.toml").exists());
+    // Reference `trusted_folders_manager` creates the file empty at import,
+    // so an aborted prompt leaves it holding no decision.
+    assert_eq!(
+        std::fs::read_to_string(home.join(".vibe/trusted_folders.toml")).expect("trust file"),
+        "trusted = []\nuntrusted = []\n"
+    );
     assert!(
         transcript
             .windows(b"\x1b[?1049h".len())

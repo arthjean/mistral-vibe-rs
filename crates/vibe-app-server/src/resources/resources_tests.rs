@@ -1,4 +1,5 @@
 use super::*;
+use vibe_core::policy::TrustRootKind;
 
 struct FakeConnectorTransport;
 
@@ -432,40 +433,6 @@ async fn a_refresh_withholds_a_connector_the_catalog_gained() {
         callable_names(&tools),
         ["connector_Drive_search", "connector_Drive_share"],
         "the connector the configuration never names must be withheld"
-    );
-}
-
-#[test]
-fn trust_mutation_returns_a_canonical_notification_after_the_response() {
-    let mut resources = ResourceService::default();
-    let workspace = tempfile::tempdir().expect("workspace");
-    let policy = PermissionStore::default();
-    resources
-        .open_session("s1", policy.clone(), ToolRegistry::default())
-        .expect("session");
-    let dispatch = resources
-        .dispatch(
-            "workspace/trust/decision",
-            &params(json!({
-                "sessionId": "s1",
-                "cwd": workspace.path(),
-                "decision": "trust_cwd"
-            })),
-            false,
-        )
-        .expect("trust decision");
-    // The decision moved runtime state, which the server publishes as
-    // `runtime/updated` rather than a name only this port ever spoke.
-    assert!(dispatch.signals.runtime_updated);
-    assert!(dispatch.signals.warnings.is_empty());
-    assert!(dispatch.result.is_empty());
-    assert_eq!(
-        policy
-            .try_trust_decision(workspace.path())
-            .expect("canonical policy"),
-        Some(TrustDecision::Trusted),
-        "reference `trust_cwd` records the directory in the trust file, so the session \
-         holds it as trusted rather than trusted for itself alone"
     );
 }
 

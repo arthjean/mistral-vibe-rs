@@ -1,18 +1,14 @@
-use std::collections::BTreeSet;
-use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 
-use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 use thiserror::Error;
 use vibe_core::events::ModelMessage;
 use vibe_core::storage::{SessionStore, StorageError};
+use vibe_core::trust::{self, TrustError, TrustStatus, TrustStore};
 
 use crate::projects::{ProjectsService, ProjectsServiceError};
 use crate::session_lifecycle::{DeleteSessionError, delete_session_transactionally};
 use crate::workspace::{WorkspacePaths, WorkspaceService, WorkspaceServiceError};
-
-static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkspaceTrustDecision {
@@ -56,52 +52,54 @@ impl StartupHost {
         Self { paths }
     }
 
+    fn trust_store(&self) -> TrustStore {
+        TrustStore::for_vibe_home(&self.paths.vibe_home)
+    }
+
+    /// Whether the working directory is trusted, and otherwise the prompt a
+    /// client shows about it. Reference `_resolve_workspace_trust` over
+    /// `read_workspace_trust`: a session grant counts as trust, and a folder
+    /// declined earlier is asked about again rather than refused.
     pub fn inspect_workspace_trust(&self) -> Result<WorkspaceTrustInspection, StartupHostError> {
-        let settings_path = self.paths.vibe_home.join("trusted_folders.toml");
-        let settings = TrustSettings::load(&settings_path)?;
-        // Reference `Path.resolve()`, which answers for a directory that does
-        // not exist too: nothing there can be trusted or detected.
-        let cwd = fs::canonicalize(&self.paths.working_directory)
-            .or_else(|_| std::path::absolute(&self.paths.working_directory))
-            .map_err(|source| startup_io(&self.paths.working_directory, source))?;
-        if settings.closest(&cwd) == Some(true) {
+        let store = self.trust_store();
+        let cwd = trust::resolve(&self.paths.working_directory);
+        if store.trust_status(&cwd) != TrustStatus::Untrusted {
             return Ok(WorkspaceTrustInspection {
                 trusted: true,
                 prompt: None,
             });
         }
+        let settings_path = store.settings_path();
         Ok(WorkspaceTrustInspection {
             trusted: false,
-            prompt: build_trust_prompt(&cwd, &settings, settings_path),
+            prompt: trust::build_trust_prompt(&cwd, true, &store)
+                .map(|prompt| WorkspaceTrustPrompt::from_core(prompt, settings_path)),
         })
     }
 
+    /// Records `decision` and answers whether the working directory is
+    /// trusted afterward.
     pub fn decide_workspace_trust(
         &self,
         prompt: &WorkspaceTrustPrompt,
         decision: WorkspaceTrustDecision,
     ) -> Result<bool, StartupHostError> {
-        let mut settings = TrustSettings::load(&prompt.settings_path)?;
-        let (scope, trusted) = match decision {
-            WorkspaceTrustDecision::TrustRepository => (
-                prompt.repo_root.as_deref().ok_or_else(|| {
-                    StartupHostError::InvalidTrustDecision(
-                        "repository trust requires a repository root".to_owned(),
-                    )
-                })?,
-                true,
-            ),
-            WorkspaceTrustDecision::TrustDirectory => (prompt.cwd.as_path(), true),
-            WorkspaceTrustDecision::Decline => (prompt.cwd.as_path(), false),
-        };
         if !prompt.decisions.contains(&decision) {
             return Err(StartupHostError::InvalidTrustDecision(
                 "trust decision was not offered by the startup host".to_owned(),
             ));
         }
-        settings.apply(scope, trusted);
-        settings.save(&prompt.settings_path)?;
-        Ok(trusted)
+        let store = self.trust_store();
+        let core = trust::build_trust_prompt(&prompt.cwd, true, &store).ok_or_else(|| {
+            StartupHostError::InvalidTrustDecision(
+                "this workspace has no trust decision to make".to_owned(),
+            )
+        })?;
+        trust::apply_decision(&core, decision.core(), &store).map_err(|error| match error {
+            TrustError::Io(source) => startup_io(&store.settings_path(), source),
+            TrustError::Unsupported(_) => StartupHostError::InvalidTrustDecision(error.to_string()),
+        })?;
+        Ok(store.is_trusted(&prompt.cwd) == Some(true))
     }
 
     pub fn saved_sessions(
@@ -165,11 +163,7 @@ impl WorkspaceTrustDecision {
     /// The wire name of a decision. Reference `WorkspaceTrustDecision`.
     #[must_use]
     pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::TrustRepository => "trust_repo",
-            Self::TrustDirectory => "trust_cwd",
-            Self::Decline => "decline",
-        }
+        self.core().as_str()
     }
 
     #[must_use]
@@ -178,64 +172,139 @@ impl WorkspaceTrustDecision {
             .into_iter()
             .find(|decision| decision.as_str() == value)
     }
+
+    const fn core(self) -> trust::WorkspaceTrustDecision {
+        match self {
+            Self::TrustRepository => trust::WorkspaceTrustDecision::TrustRepository,
+            Self::TrustDirectory => trust::WorkspaceTrustDecision::TrustDirectory,
+            Self::Decline => trust::WorkspaceTrustDecision::Decline,
+        }
+    }
+
+    const fn from_core(decision: trust::WorkspaceTrustDecision) -> Option<Self> {
+        match decision {
+            trust::WorkspaceTrustDecision::TrustRepository => Some(Self::TrustRepository),
+            trust::WorkspaceTrustDecision::TrustDirectory => Some(Self::TrustDirectory),
+            trust::WorkspaceTrustDecision::Decline => Some(Self::Decline),
+            trust::WorkspaceTrustDecision::TrustSession => None,
+        }
+    }
 }
 
-fn trust_host(vibe_home: &Path, cwd: &Path) -> StartupHost {
-    StartupHost::new(WorkspacePaths {
-        vibe_home: vibe_home.to_path_buf(),
-        working_directory: cwd.to_path_buf(),
-        session_root: vibe_home.join("sessions"),
-    })
+impl WorkspaceTrustPrompt {
+    /// The dialog's view of a prompt: the files it names, where decisions
+    /// persist, and the choices a client offers, which never include a session
+    /// grant.
+    fn from_core(prompt: trust::WorkspaceTrustPrompt, settings_path: PathBuf) -> Self {
+        let decisions = trust::available_decisions(&prompt, false)
+            .into_iter()
+            .filter_map(WorkspaceTrustDecision::from_core)
+            .collect();
+        Self {
+            cwd: trust::resolve(&prompt.cwd),
+            repo_root: prompt.repo_root,
+            detected_files: prompt.detected_files,
+            repo_detected_files: prompt.repo_detected_files,
+            repo_explicitly_untrusted: prompt.repo_explicitly_untrusted,
+            settings_path,
+            decisions,
+        }
+    }
+
+    fn details(&self) -> Value {
+        json!({
+            "cwd": self.cwd,
+            "repoRoot": self.repo_root,
+            "detectedFiles": self.detected_files,
+            "repoDetectedFiles": self.repo_detected_files,
+            "repoExplicitlyUntrusted": self.repo_explicitly_untrusted,
+            "settingsPath": self.settings_path,
+            "availableDecisions": self
+                .decisions
+                .iter()
+                .map(|decision| decision.as_str())
+                .collect::<Vec<_>>(),
+        })
+    }
+}
+
+/// Why a workspace trust request was refused, which the app server answers as
+/// `invalid_params` with no further detail, as upstream's `WorkspaceTrustError`.
+#[derive(Debug, Error)]
+pub enum WorkspaceTrustError {
+    #[error("There is no workspace trust decision to make here")]
+    NothingToDecide,
+    #[error("The trust prompt for this workspace does not offer `{0}`")]
+    Unsupported(String),
+    #[error("A trust decision about a session must name the session's own working directory")]
+    OutsideSession,
+    #[error("The trust file could not be written: {0}")]
+    Io(std::io::Error),
 }
 
 /// Reference `read_workspace_trust`: the trust `cwd` resolves to, and the
 /// prompt a client would show about it while it is untrusted. The details
 /// are `None` when there is nothing to ask, which is a workspace that holds
 /// no file a trust decision would unlock.
-pub fn read_workspace_trust(
-    vibe_home: &Path,
-    cwd: &Path,
-) -> Result<serde_json::Value, StartupHostError> {
-    let inspection = trust_host(vibe_home, cwd).inspect_workspace_trust()?;
-    if inspection.trusted {
-        return Ok(serde_json::json!({"status": "trusted", "details": null}));
-    }
-    let details = inspection.prompt.map_or(serde_json::Value::Null, |prompt| {
-        serde_json::json!({
-            "cwd": prompt.cwd,
-            "repoRoot": prompt.repo_root,
-            "detectedFiles": prompt.detected_files,
-            "repoDetectedFiles": prompt.repo_detected_files,
-            "repoExplicitlyUntrusted": prompt.repo_explicitly_untrusted,
-            "settingsPath": prompt.settings_path,
-            "availableDecisions": prompt
-                .decisions
-                .iter()
-                .map(|decision| decision.as_str())
-                .collect::<Vec<_>>(),
+#[must_use]
+pub fn read_workspace_trust(store: &TrustStore, cwd: &Path) -> serde_json::Map<String, Value> {
+    let resolved = trust::resolve(cwd);
+    let status = store.trust_status(&resolved);
+    let details = if status == TrustStatus::Untrusted {
+        trust::build_trust_prompt(&resolved, true, store).map_or(Value::Null, |prompt| {
+            WorkspaceTrustPrompt::from_core(prompt, store.settings_path()).details()
         })
-    });
-    Ok(serde_json::json!({"status": "untrusted", "details": details}))
+    } else {
+        Value::Null
+    };
+    let mut answer = serde_json::Map::new();
+    answer.insert("status".to_owned(), json!(status.as_str()));
+    answer.insert("details".to_owned(), details);
+    answer
 }
 
-/// Reference `decide_workspace_trust`: a decision the current prompt offers
-/// is written to the trust file, and the trust it leaves is read back.
+/// Reference `decide_workspace_trust`: a decision the current prompt offers is
+/// recorded, and the trust it leaves is read back.
+///
+/// # Errors
+///
+/// When nothing is undecided about `cwd`, when its prompt does not offer
+/// `decision`, or when the trust file cannot be created.
 pub fn decide_workspace_trust(
-    vibe_home: &Path,
+    store: &TrustStore,
     cwd: &Path,
-    decision: &str,
-) -> Result<serde_json::Value, StartupHostError> {
-    let host = trust_host(vibe_home, cwd);
-    let prompt = host.inspect_workspace_trust()?.prompt.ok_or_else(|| {
-        StartupHostError::InvalidTrustDecision(
-            "this workspace has no trust decision to make".to_owned(),
-        )
+    decision: WorkspaceTrustDecision,
+) -> Result<serde_json::Map<String, Value>, WorkspaceTrustError> {
+    let resolved = trust::resolve(cwd);
+    let prompt = trust::build_trust_prompt(&resolved, true, store)
+        .ok_or(WorkspaceTrustError::NothingToDecide)?;
+    if !trust::available_decisions(&prompt, false).contains(&decision.core()) {
+        return Err(WorkspaceTrustError::Unsupported(
+            decision.as_str().to_owned(),
+        ));
+    }
+    trust::apply_decision(&prompt, decision.core(), store).map_err(|error| match error {
+        TrustError::Io(source) => WorkspaceTrustError::Io(source),
+        TrustError::Unsupported(name) => WorkspaceTrustError::Unsupported(name.to_owned()),
     })?;
-    let decision = WorkspaceTrustDecision::parse(decision).ok_or_else(|| {
-        StartupHostError::InvalidTrustDecision(format!("`{decision}` is not a trust decision"))
-    })?;
-    host.decide_workspace_trust(&prompt, decision)?;
-    read_workspace_trust(vibe_home, cwd)
+    Ok(read_workspace_trust(store, &resolved))
+}
+
+/// Reference `read_untrusted_config_dirs`: the configuration directories a
+/// trusted `cwd` holds that are declined on their own, and where to undo it.
+#[must_use]
+pub fn read_untrusted_config_dirs(
+    store: &TrustStore,
+    cwd: &Path,
+) -> serde_json::Map<String, Value> {
+    let dirs = trust::find_untrusted_config_dirs(cwd, store)
+        .into_iter()
+        .map(|directory| directory.to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    let mut answer = serde_json::Map::new();
+    answer.insert("dirs".to_owned(), json!(dirs));
+    answer.insert("settingsPath".to_owned(), json!(store.settings_path()));
+    answer
 }
 
 #[derive(Debug, Error)]
@@ -246,8 +315,6 @@ pub enum StartupHostError {
         #[source]
         source: std::io::Error,
     },
-    #[error("invalid trusted folder settings at `{path}`: {message}")]
-    TrustSettings { path: PathBuf, message: String },
     #[error("invalid workspace trust decision: {0}")]
     InvalidTrustDecision(String),
     #[error(transparent)]
@@ -261,169 +328,6 @@ pub enum StartupHostError {
         delete: StorageError,
         rollback: ProjectsServiceError,
     },
-}
-
-#[derive(Debug, Default, Deserialize, Serialize)]
-#[serde(default, deny_unknown_fields)]
-struct TrustSettings {
-    trusted: Vec<String>,
-    untrusted: Vec<String>,
-}
-
-impl TrustSettings {
-    fn load(path: &Path) -> Result<Self, StartupHostError> {
-        match fs::read_to_string(path) {
-            Ok(text) => toml::from_str(&text).map_err(|error| StartupHostError::TrustSettings {
-                path: path.to_path_buf(),
-                message: error.to_string(),
-            }),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
-            Err(source) => Err(startup_io(path, source)),
-        }
-    }
-
-    fn save(&self, path: &Path) -> Result<(), StartupHostError> {
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(|source| startup_io(parent, source))?;
-        }
-        let encoded = toml::to_string(self).map_err(|error| StartupHostError::TrustSettings {
-            path: path.to_path_buf(),
-            message: error.to_string(),
-        })?;
-        let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let temporary = path.with_file_name(format!(
-            ".{}.tmp-{}-{sequence}",
-            path.file_name()
-                .and_then(|value| value.to_str())
-                .unwrap_or("trusted_folders.toml"),
-            std::process::id()
-        ));
-        fs::write(&temporary, encoded).map_err(|source| startup_io(&temporary, source))?;
-        fs::rename(&temporary, path).map_err(|source| {
-            let _ = fs::remove_file(&temporary);
-            startup_io(path, source)
-        })
-    }
-
-    fn closest(&self, path: &Path) -> Option<bool> {
-        path.ancestors().find_map(|candidate| {
-            let candidate = candidate.to_string_lossy();
-            if self.trusted.iter().any(|path| path == candidate.as_ref()) {
-                Some(true)
-            } else if self.untrusted.iter().any(|path| path == candidate.as_ref()) {
-                Some(false)
-            } else {
-                None
-            }
-        })
-    }
-
-    fn apply(&mut self, path: &Path, trusted: bool) {
-        let path = path.to_string_lossy().into_owned();
-        self.trusted.retain(|candidate| candidate != &path);
-        self.untrusted.retain(|candidate| candidate != &path);
-        if trusted {
-            self.trusted.push(path);
-        } else {
-            self.untrusted.push(path);
-        }
-    }
-}
-
-fn build_trust_prompt(
-    cwd: &Path,
-    settings: &TrustSettings,
-    settings_path: PathBuf,
-) -> Option<WorkspaceTrustPrompt> {
-    let home = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .and_then(|path| fs::canonicalize(path).ok());
-    if home.as_deref() == Some(cwd) {
-        return None;
-    }
-    let repo_root = find_repository_root(cwd, home.as_deref());
-    let detected_files = trustable_files(cwd);
-    let repo_detected_files = repo_root
-        .as_deref()
-        .map_or_else(Vec::new, |root| repository_trustable_files(cwd, root));
-    if detected_files.is_empty() && repo_detected_files.is_empty() {
-        return None;
-    }
-    let repo_explicitly_untrusted = repo_root
-        .as_deref()
-        .is_some_and(|root| settings.closest(root) == Some(false));
-    let offer_repo = repo_root
-        .as_deref()
-        .is_some_and(|root| root != cwd && settings.closest(root) != Some(true));
-    let mut decisions = Vec::new();
-    if offer_repo {
-        decisions.push(WorkspaceTrustDecision::TrustRepository);
-    }
-    decisions.extend([
-        WorkspaceTrustDecision::TrustDirectory,
-        WorkspaceTrustDecision::Decline,
-    ]);
-    Some(WorkspaceTrustPrompt {
-        cwd: cwd.to_path_buf(),
-        repo_root,
-        detected_files,
-        repo_detected_files,
-        repo_explicitly_untrusted,
-        settings_path,
-        decisions,
-    })
-}
-
-fn trustable_files(path: &Path) -> Vec<String> {
-    let mut found = BTreeSet::new();
-    if path.join("AGENTS.md").is_file() {
-        found.insert("AGENTS.md".to_owned());
-    }
-    let vibe = path.join(".vibe");
-    let vibe_has_content = ["tools", "skills", "agents", "prompts"]
-        .iter()
-        .any(|name| vibe.join(name).is_dir())
-        || vibe.join("config.toml").is_file();
-    if vibe.is_dir() && vibe_has_content {
-        found.insert(".vibe/".to_owned());
-    }
-    if path.join(".agents/skills").is_dir() {
-        found.insert(".agents/".to_owned());
-    }
-    found.into_iter().collect()
-}
-
-fn repository_trustable_files(cwd: &Path, repo_root: &Path) -> Vec<String> {
-    if cwd == repo_root || !cwd.starts_with(repo_root) {
-        return Vec::new();
-    }
-    let mut found = trustable_files(repo_root)
-        .into_iter()
-        .collect::<BTreeSet<_>>();
-    let mut current = cwd.parent();
-    while let Some(directory) = current {
-        if directory == repo_root {
-            break;
-        }
-        let agents = directory.join("AGENTS.md");
-        if agents.is_file()
-            && let Ok(relative) = agents.strip_prefix(repo_root)
-        {
-            found.insert(relative.to_string_lossy().replace('\\', "/"));
-        }
-        current = directory.parent();
-    }
-    found.into_iter().collect()
-}
-
-fn find_repository_root(cwd: &Path, home: Option<&Path>) -> Option<PathBuf> {
-    cwd.ancestors()
-        .take_while(|candidate| Some(*candidate) != home && candidate.parent().is_some())
-        .find(|candidate| {
-            let git = candidate.join(".git");
-            git.is_file() || (git.is_dir() && git.join("HEAD").is_file())
-        })
-        .map(Path::to_path_buf)
 }
 
 /// Reference `message_preview` over a saved session: its first user message
@@ -473,6 +377,8 @@ fn startup_io(path: &Path, source: std::io::Error) -> StartupHostError {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use vibe_core::storage::SessionStore;
 
     use super::*;
@@ -528,62 +434,57 @@ mod tests {
                 .expect("trust replaces decline")
         );
 
-        let settings = TrustSettings::load(&prompt.settings_path).expect("persisted settings");
+        let written = fs::read_to_string(&prompt.settings_path).expect("persisted settings");
         let cwd = fs::canonicalize(root.path()).expect("canonical workspace");
-        let cwd = cwd.to_string_lossy();
         assert_eq!(
-            settings
-                .trusted
-                .iter()
-                .filter(|candidate| candidate.as_str() == cwd)
-                .count(),
-            1
+            written,
+            format!(
+                "trusted = [\n    \"{}\",\n]\nuntrusted = []\n",
+                cwd.display()
+            )
         );
-        assert!(!settings.untrusted.iter().any(|candidate| candidate == &cwd));
     }
 
     #[test]
-    fn malformed_or_unwritable_trust_settings_fail_closed() {
+    fn a_malformed_trust_file_is_reset_and_an_unwritable_one_holds_for_the_process() {
         let malformed_root = tempfile::tempdir().expect("malformed workspace");
         fs::create_dir_all(malformed_root.path().join(".vibe/prompts")).expect("project config");
         let malformed_paths = paths(malformed_root.path());
         fs::create_dir_all(&malformed_paths.vibe_home).expect("vibe home");
-        fs::write(
-            malformed_paths.vibe_home.join("trusted_folders.toml"),
-            "unexpected = true\n",
-        )
-        .expect("malformed settings");
-        assert!(matches!(
-            StartupHost::new(malformed_paths).inspect_workspace_trust(),
-            Err(StartupHostError::TrustSettings { .. })
-        ));
+        let settings = malformed_paths.vibe_home.join("trusted_folders.toml");
+        fs::write(&settings, "trusted = [\n").expect("malformed settings");
+        let inspection = StartupHost::new(malformed_paths)
+            .inspect_workspace_trust()
+            .expect("a malformed file reads as empty");
+        assert!(inspection.prompt.is_some());
+        assert_eq!(
+            fs::read_to_string(&settings).expect("rewritten"),
+            "trusted = []\nuntrusted = []\n"
+        );
 
         let unwritable_root = tempfile::tempdir().expect("unwritable workspace");
         fs::create_dir_all(unwritable_root.path().join(".vibe/prompts")).expect("project config");
-        let host = StartupHost::new(paths(unwritable_root.path()));
+        let unwritable_paths = paths(unwritable_root.path());
+        fs::create_dir_all(
+            unwritable_paths
+                .vibe_home
+                .join("trusted_folders.toml/occupied"),
+        )
+        .expect("conflicting settings directory");
+        let host = StartupHost::new(unwritable_paths);
         let prompt = host
             .inspect_workspace_trust()
             .expect("trust inspection")
             .prompt
             .expect("trust prompt");
-        fs::create_dir_all(&prompt.settings_path).expect("conflicting settings directory");
-        assert!(matches!(
-            host.decide_workspace_trust(&prompt, WorkspaceTrustDecision::TrustDirectory),
-            Err(StartupHostError::Io { .. })
-        ));
-    }
-
-    #[test]
-    fn linked_worktree_metadata_is_recognized_as_a_repository_boundary() {
-        let root = tempfile::tempdir().expect("linked worktree");
-        fs::write(
-            root.path().join(".git"),
-            "gitdir: /tmp/repository/worktrees/test\n",
-        )
-        .expect("linked worktree metadata");
-        assert_eq!(
-            find_repository_root(root.path(), None).as_deref(),
-            Some(root.path())
+        assert!(
+            host.decide_workspace_trust(&prompt, WorkspaceTrustDecision::TrustDirectory)
+                .expect("the decision holds in memory")
+        );
+        assert!(
+            host.inspect_workspace_trust()
+                .expect("reinspection")
+                .trusted
         );
     }
 

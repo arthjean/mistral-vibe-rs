@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Trust folders the way the reference does. `trusted_folders.toml` is created
+  at startup readable by its owner only, reset when it cannot be parsed, and
+  shared by the app server, the ACP agent and the terminal, so a folder trusted
+  in one is trusted in the others. App-server and ACP sessions now honor it
+  instead of trusting the working directory, a project `.vibe/config.toml` is
+  read and written only when its own folder is trusted, and `workspace/trust/untrustedConfig`
+  lists the local config folders a trusted workspace skips. The two trust reads
+  refuse a `sessionId`; a decision naming a session is pinned to its folder
+  and refused while a turn runs. The terminal and `vibe -p` warn when they
+  skip project configuration.
+
 - Manage MCP servers the way the reference does. The app server answers the
   seven `mcp_catalog/*` methods and their `mcp/*` aliases with the reference's
   validation, targeting and answers, edits the user configuration when no

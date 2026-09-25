@@ -239,10 +239,6 @@ const UNDECLARED_METHODS: &[(&str, &str)] = &[
         "workspace/git/checkouts",
         "v2.25.7 declares it at vibe/app_server/protocol.py:233 and routes it at vibe/app_server/_host.py:471; SERVER_METHODS does not declare it and nothing here routes it",
     ),
-    (
-        "workspace/trust/untrustedConfig",
-        "v2.25.7 declares it at vibe/app_server/protocol.py:240 and routes it at vibe/app_server/_host.py:438; SERVER_METHODS does not declare it and nothing here routes it",
-    ),
 ];
 
 /// Methods `SERVER_METHODS` declares and routes that the reference retired,
@@ -443,9 +439,12 @@ fn probe_requests() -> Vec<(&'static str, Value)> {
             json!({"sessionId": PROBE_SESSION, "name": "probe", "properties": {}}),
         ),
         ("tools/list", session.clone()),
+        // Both trust reads answer from the host, about any directory, and
+        // refuse a `sessionId` as upstream's parameter models do.
+        ("workspace/trust/status", json!({"cwd": "/workspace"})),
         (
-            "workspace/trust/status",
-            json!({"sessionId": PROBE_SESSION, "cwd": "/workspace"}),
+            "workspace/trust/untrustedConfig",
+            json!({"cwd": "/workspace"}),
         ),
         // A path that is no repository answers an empty listing rather than
         // refusing, and one outside the managed root is kept as unmanaged,

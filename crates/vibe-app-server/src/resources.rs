@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 
 use crate::host::now_millis;
-use crate::params::{self, optional_string, required_string, usize_param};
+use crate::params::{self, required_string, usize_param};
 use crate::vocabulary::{McpSourceKind, McpSourceStatus};
 use serde_json::{Map, Value, json};
 use thiserror::Error;
@@ -25,7 +25,7 @@ use vibe_core::observability::{FileLog, LOG_DEFAULT_PAGE_LIMIT, LogLevel, entry_
 use vibe_core::platform::{Platform, parse_policy_path};
 use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PermissionMode,
-    PermissionStore, TrustDecision, TrustRootKind,
+    PermissionStore, TrustDecision,
 };
 use vibe_core::process::{ProcessSpec, TerminalManager};
 use vibe_core::shell::{ShellCommandLists, ShellConfig, ShellPolicyContext, analyze_shell};
@@ -95,8 +95,6 @@ pub const RESOURCE_METHODS: &[&str] = &[
     "stats/read",
     "telemetry/record",
     "tools/list",
-    "workspace/trust/decision",
-    "workspace/trust/status",
 ];
 
 pub const BACKEND_RESOURCE_METHODS: &[&str] = &[
@@ -342,8 +340,6 @@ impl ResourceService {
                 "tools",
                 self.tool_list(required_string(params, "sessionId")?)?,
             )])),
-            "workspace/trust/status" => self.trust_status(params),
-            "workspace/trust/decision" => self.trust_decision(params),
             _ => Err(ResourceError::MethodNotFound(method.to_owned())),
         }
     }
@@ -586,69 +582,6 @@ impl ResourceService {
             "summary",
             json!(source.chars().take(280).collect::<String>()),
         )]))
-    }
-
-    fn trust_status(
-        &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<ResourceDispatch, ResourceError> {
-        let cwd = optional_string(params, "cwd")?.unwrap_or(".");
-        let session_id = required_string(params, "sessionId")?;
-        let policy = self.policy_stores.get(session_id).ok_or_else(|| {
-            ResourceError::NotFound(format!("session `{session_id}` was not found"))
-        })?;
-        let status = match policy.try_trust_decision(cwd).map_err(policy_error)? {
-            Some(TrustDecision::Trusted) => "trusted",
-            Some(TrustDecision::SessionTrusted) => "session",
-            Some(TrustDecision::Untrusted) | None => "untrusted",
-        };
-        Ok(read_only([
-            ("status", json!(status)),
-            (
-                "details",
-                json!({
-                    "cwd": cwd,
-                    "repoRoot": null,
-                    "detectedFiles": [],
-                    "repoDetectedFiles": [],
-                    "repoExplicitlyUntrusted": status == "untrusted",
-                    "settingsPath": "",
-                    "availableDecisions": ["trust_repo", "trust_cwd", "decline"]
-                }),
-            ),
-        ]))
-    }
-
-    fn trust_decision(
-        &mut self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<ResourceDispatch, ResourceError> {
-        let cwd = optional_string(params, "cwd")?.unwrap_or(".");
-        let session_id = required_string(params, "sessionId")?;
-        let decision = required_string(params, "decision")?;
-        let (trust, kind) = match decision {
-            "trust_repo" => (TrustDecision::Trusted, TrustRootKind::Workspace),
-            "trust_cwd" => (TrustDecision::Trusted, TrustRootKind::Workspace),
-            "decline" => (TrustDecision::Untrusted, TrustRootKind::Workspace),
-            _ => {
-                return Err(ResourceError::InvalidParams(
-                    "unsupported trust decision".to_owned(),
-                ));
-            }
-        };
-        let policy = self.policy_stores.get(session_id).ok_or_else(|| {
-            ResourceError::NotFound(format!("session `{session_id}` was not found"))
-        })?;
-        policy
-            .try_set_trust(cwd, trust, kind)
-            .map_err(policy_error)?;
-        Ok(ResourceDispatch {
-            result: BTreeMap::new(),
-            signals: ResourceSignals {
-                runtime_updated: true,
-                ..ResourceSignals::default()
-            },
-        })
     }
 
     /// The session's tool surface as `ToolSummary` declares it: a name and

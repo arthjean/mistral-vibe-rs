@@ -7,6 +7,7 @@
 
 mod rewind;
 mod session;
+mod trust;
 mod turn;
 
 use super::*;
@@ -381,6 +382,9 @@ impl ServerConnection {
             "turn/interrupt" => self.turn_interrupt(request),
             "session/context/inject" => self.context_inject(request),
             "callback/respond" => self.callback_respond(request),
+            "workspace/trust/status"
+            | "workspace/trust/decision"
+            | "workspace/trust/untrustedConfig" => self.trust_request(request),
             method if crate::resources::mcp_catalog::handles(method) => {
                 self.mcp_catalog_request(request)
             }
@@ -593,43 +597,8 @@ impl ServerConnection {
 
     fn dispatch_resource(
         &mut self,
-        mut request: ServerRequest,
+        request: ServerRequest,
     ) -> Result<DispatchBatch, ProtocolFault> {
-        // Reference routes `workspace/trust/status` to its host handler, which
-        // answers without a session about the directory it names or the one
-        // the host runs in.
-        if request.method == "workspace/trust/status" && !request.params.contains_key("sessionId") {
-            let cwd = match request.params.get("cwd") {
-                Some(Value::String(cwd)) => std::path::PathBuf::from(cwd),
-                _ => self.server.workspace.working_directory().to_path_buf(),
-            };
-            return Ok(
-                match crate::startup::read_workspace_trust(self.server.workspace.vibe_home(), &cwd)
-                {
-                    Ok(answer) => DispatchBatch {
-                        outbound: vec![success_bytes(
-                            request.id,
-                            answer
-                                .as_object()
-                                .map(|answer| {
-                                    answer
-                                        .iter()
-                                        .map(|(key, value)| (key.clone(), value.clone()))
-                                        .collect()
-                                })
-                                .unwrap_or_default(),
-                        )],
-                        deferred: Vec::new(),
-                        close_after_flush: false,
-                    },
-                    Err(error) => error_batch(
-                        request.id,
-                        ProtocolErrorCode::InvalidParams,
-                        &error.to_string(),
-                    ),
-                },
-            );
-        }
         let session_id = request
             .params
             .get("sessionId")
@@ -638,11 +607,6 @@ impl ServerConnection {
             .map(str::to_owned)
             .ok_or_else(|| ProtocolFault::invalid_params("sessionId must be a non-empty string"))?;
         if let Some(batch) = self.attachment_error(request.id.clone(), &session_id) {
-            return Ok(batch);
-        }
-        if request.method.starts_with("workspace/trust/")
-            && let Some(batch) = self.confine_trust_request(&mut request, &session_id)
-        {
             return Ok(batch);
         }
         // The three live-state reads are composed here rather than inside the
@@ -702,78 +666,12 @@ impl ServerConnection {
                 close_after_flush: false,
             });
         }
-        // Reference `read_workspace_trust` and `decide_workspace_trust` answer
-        // from the trust file; the resource service keeps the session's own
-        // permission store in step with the decision.
-        let trust = if request.method.starts_with("workspace/trust/") {
-            let cwd = request
-                .params
-                .get("cwd")
-                .and_then(Value::as_str)
-                .map(std::path::PathBuf::from)
-                .unwrap_or_default();
-            let vibe_home = self.server.workspace.vibe_home().to_path_buf();
-            let answer = if request.method == "workspace/trust/decision" {
-                let decision = request
-                    .params
-                    .get("decision")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default();
-                crate::startup::decide_workspace_trust(&vibe_home, &cwd, decision)
-            } else {
-                crate::startup::read_workspace_trust(&vibe_home, &cwd)
-            };
-            match answer {
-                Ok(answer) => Some(answer),
-                Err(error) => {
-                    return Ok(error_batch(
-                        request.id,
-                        ProtocolErrorCode::InvalidParams,
-                        &error.to_string(),
-                    ));
-                }
-            }
-        } else {
-            None
-        };
-        let mut result = self
+        let result = self
             .server
             .resources
             .lock()
             .map_err(|_| ProtocolFault::internal("Resource state lock is poisoned"))?
             .dispatch(&request.method, &request.params, session_active);
-        if let (Some(answer), Ok(dispatch)) = (trust, result.as_mut()) {
-            let session_trusted =
-                dispatch.result.get("status").and_then(Value::as_str) == Some("session");
-            dispatch.result = answer
-                .as_object()
-                .map(|answer| {
-                    answer
-                        .iter()
-                        .map(|(key, value)| (key.clone(), value.clone()))
-                        .collect()
-                })
-                .unwrap_or_default();
-            if session_trusted {
-                dispatch
-                    .result
-                    .insert("status".to_owned(), json!("session"));
-                dispatch.result.insert("details".to_owned(), Value::Null);
-            }
-        }
-        // A granted trust decision reaches the live session too: the resource
-        // service records it on disk, and the intent the running session reads
-        // is the server's.
-        if request.method == "workspace/trust/decision" && result.is_ok() {
-            let trusted = request
-                .params
-                .get("decision")
-                .and_then(Value::as_str)
-                .is_some_and(|decision| matches!(decision, "trust_repo" | "trust_cwd"));
-            if let Some(session) = self.server.lock_sessions()?.get_mut(&session_id) {
-                session.intent.trusted = trusted;
-            }
-        }
         Ok(resource_result_batch(
             request.id,
             &self.server,
@@ -884,11 +782,6 @@ impl ServerConnection {
         Ok(success_batch(request.id, BTreeMap::new()))
     }
 
-    /// Pins a workspace-trust request to the attached session root.
-    ///
-    /// The request may omit `cwd`, in which case the session root is filled in;
-    /// naming any other directory is refused, so a connection cannot grant trust
-    /// outside the workspace it is attached to.
     /// Reference `_dispatch_feedback`: whether to ask for a rating, from the
     /// session's conversation and the timestamps in the shared cache, and the
     /// record of what the user did with the prompt.
@@ -956,44 +849,6 @@ impl ServerConnection {
         }
     }
 
-    fn confine_trust_request(
-        &self,
-        request: &mut ServerRequest,
-        session_id: &str,
-    ) -> Option<DispatchBatch> {
-        let working_directory = match self.server.lock_sessions() {
-            Ok(sessions) => sessions
-                .get(session_id)
-                .map(|session| session.working_directory.clone()),
-            Err(error) => return Some(internal_error_batch(request.id.clone(), &error)),
-        };
-        let Some(working_directory) = working_directory else {
-            return Some(error_batch(
-                request.id.clone(),
-                ProtocolErrorCode::NotFound,
-                "Session was not found",
-            ));
-        };
-        let requested = request
-            .params
-            .entry("cwd".to_owned())
-            .or_insert_with(|| json!(working_directory));
-        let Some(requested) = requested.as_str() else {
-            return Some(error_batch(
-                request.id.clone(),
-                ProtocolErrorCode::InvalidParams,
-                "cwd must be a string",
-            ));
-        };
-        (!same_filesystem_path(requested, &working_directory)).then(|| {
-            error_batch(
-                request.id.clone(),
-                ProtocolErrorCode::Forbidden,
-                "Workspace trust can only change the attached session root",
-            )
-        })
-    }
-
     fn attachment_error(&self, request_id: RequestId, session_id: &str) -> Option<DispatchBatch> {
         let sessions = match self.server.lock_sessions() {
             Ok(sessions) => sessions,
@@ -1009,13 +864,6 @@ impl ServerConnection {
                 "Session is not attached to this connection",
             )
         })
-    }
-}
-
-fn same_filesystem_path(left: &str, right: &str) -> bool {
-    match (std::fs::canonicalize(left), std::fs::canonicalize(right)) {
-        (Ok(left), Ok(right)) => left == right,
-        _ => left == right,
     }
 }
 

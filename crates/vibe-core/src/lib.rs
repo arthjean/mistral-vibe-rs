@@ -55,6 +55,7 @@ pub mod telemetry;
 pub mod text;
 pub mod tools;
 pub mod tracing;
+pub mod trust;
 pub mod updates;
 pub mod workspace;
 pub mod worktree;

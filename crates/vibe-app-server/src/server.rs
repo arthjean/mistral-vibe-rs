@@ -232,6 +232,7 @@ const IMPLEMENTED_METHODS: &[&str] = &[
     "turn/steer",
     "workspace/trust/decision",
     "workspace/trust/status",
+    "workspace/trust/untrustedConfig",
 ];
 
 struct DenyApproval;
@@ -542,6 +543,10 @@ impl AppServer {
             service.vibe_home(),
             LogSettings::from_environment().unwrap_or_default(),
         );
+        // Upstream loads its trust store when the module is imported, which
+        // writes an empty trust file into a home that has none; a host opens
+        // it here for the same reason, before any client asks.
+        let _ = vibe_core::trust::TrustStore::for_vibe_home(service.vibe_home());
         let mut server = self.logging_to(log);
         server.workspace = Arc::new(service);
         server

@@ -190,6 +190,15 @@ impl ProtocolFault {
         Self::Other { code, message }
     }
 
+    /// A refusal under `code` that carries no structured detail, whatever the
+    /// code: upstream raises some `invalid_params` by hand, with no issue list.
+    pub(crate) fn plain(code: ProtocolErrorCode, message: impl Into<String>) -> Self {
+        Self::Other {
+            code,
+            message: message.into(),
+        }
+    }
+
     pub(crate) fn invalid_params(message: impl Into<String>) -> Self {
         Self::InvalidParams(ParamsRejection::at_root(message.into()))
     }

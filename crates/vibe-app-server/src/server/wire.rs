@@ -116,6 +116,12 @@ pub struct SessionIntent {
     pub approval: AgentApproval,
     #[serde(default)]
     pub system_prompt_id: Option<String>,
+    /// Whether the project configuration file may be read, as the trust store
+    /// answered when the session started; `None` asks it on every load.
+    /// Upstream caches the verdict on the project layer, so a decision made
+    /// mid-session never reaches the file.
+    #[serde(skip)]
+    pub project_file_trust: Option<bool>,
     pub resume: Option<String>,
     #[serde(rename = "continue")]
     pub continue_session: bool,

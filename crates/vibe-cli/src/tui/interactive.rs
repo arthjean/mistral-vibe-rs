@@ -40,7 +40,9 @@ use super::runtime::{
 use super::session::{banner_metrics_from_workspace, start_runtime};
 use super::setup::{EnvironmentThemeDetector, ResolvedTheme, TerminalThemeDetector, Theme};
 use super::shell::{finish_shell, interrupt_shell};
-use super::state::{EntryStatus, ServerEvent, TuiState};
+use super::state::{
+    EntrySource, EntryStatus, ServerEvent, TranscriptEntry, TranscriptKind, TuiState,
+};
 use super::telemetry::{report_session_opened, report_startup};
 use super::terminal::{CrosstermOps, TerminalGuard};
 use super::turn::{
@@ -458,6 +460,13 @@ pub async fn run_interactive(
             .is_some_and(super::runtime::registry_skills_enabled);
     }
     announce_release_notes(&update_cache, &mut state);
+    if runtime.is_some() {
+        warn_about_untrusted_config(
+            &startup::vibe_home_directory(&arguments, &working_directory),
+            &working_directory,
+            &mut state,
+        );
+    }
     // Reference `on_mount`: the issue the harness selection raised is shown as
     // the TUI comes up, as a notice naming the input and what became of it
     // (`vibe/cli/textual_ui/app.py:1223-1224` and `:1593-1599`).
@@ -824,6 +833,43 @@ fn announce_release_notes(store: &UpdateCacheStore, state: &mut TuiState) {
         vibe_core::clock::now_seconds_signed(),
     );
     store.store(&seen);
+}
+
+/// Reference `_show_untrusted_config_warning`: a trusted workspace whose own
+/// `.vibe` or `.agents` is declined has that folder's configuration skipped,
+/// which is said once per folder so a deliberate decline does not nag.
+fn warn_about_untrusted_config(
+    vibe_home: &std::path::Path,
+    working_directory: &std::path::Path,
+    state: &mut TuiState,
+) {
+    let store = vibe_core::trust::TrustStore::for_vibe_home(vibe_home);
+    let dirs = vibe_core::trust::find_untrusted_config_dirs(working_directory, &store)
+        .into_iter()
+        .map(|directory| directory.display().to_string())
+        .collect::<Vec<_>>();
+    if !vibe_core::trust::untrusted_config_warning_due(vibe_home, &dirs) {
+        return;
+    }
+    let folders = dirs
+        .iter()
+        .map(|directory| format!("  • {directory}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let message = format!(
+        "⚠ Vibe is skipping these local config folders because they are marked untrusted:\n\n\
+         {folders}\n\nTo use them, take them out of the \"untrusted\" list in {}, or ask Vibe \
+         to do it for you.",
+        store.settings_path().display()
+    );
+    state.append_local(TranscriptEntry {
+        id: String::new(),
+        revision: 1,
+        kind: TranscriptKind::Notice,
+        text: message,
+        status: EntryStatus::Completed,
+        source: EntrySource::notice(vibe_core::events::PublicNoticeLevel::Warning),
+    });
 }
 
 /// A launch that failed before it mounted paints its error and then waits for

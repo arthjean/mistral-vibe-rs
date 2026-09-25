@@ -1,0 +1,2607 @@
+{
+  "note": "Captured by scripts/parity/workspace_trust.py from the pinned reference's vibe-app-server. Scenario inputs, paths as placeholders and the trust file as written; every other string the server authored is a length and a SHA-256.",
+  "reference": {
+    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+  },
+  "scenarios": [
+    {
+      "name": "status/nothing-to-decide",
+      "observed": [
+        {
+          "file": {
+            "content": "trusted = []\nuntrusted = []\n",
+            "exists": true,
+            "mode": "0o600"
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": null,
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "file": {
+            "content": "trusted = []\nuntrusted = []\n",
+            "exists": true,
+            "mode": "0o600"
+          }
+        }
+      ],
+      "scenario": {
+        "name": "status/nothing-to-decide",
+        "steps": [
+          {
+            "file": true
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS"
+              }
+            }
+          },
+          {
+            "file": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "status/agents-md",
+      "observed": [
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<ws>",
+                "detectedFiles": [
+                  "AGENTS.md"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": null,
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<ws>",
+                "detectedFiles": [
+                  "AGENTS.md"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": null,
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "file": {
+            "content": "trusted = []\nuntrusted = []\n",
+            "exists": true,
+            "mode": "0o600"
+          }
+        }
+      ],
+      "scenario": {
+        "name": "status/agents-md",
+        "steps": [
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {}
+            }
+          },
+          {
+            "file": true
+          }
+        ],
+        "tree": {
+          "$WS/AGENTS.md": "# notes\n"
+        }
+      }
+    },
+    {
+      "name": "status/config-directories",
+      "observed": [
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<ws>/plugins-only",
+                "detectedFiles": [
+                  ".vibe/"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": null,
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<ws>/prompts-only",
+                "detectedFiles": [
+                  ".vibe/"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": null,
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<ws>/config-only",
+                "detectedFiles": [
+                  ".vibe/"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": null,
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<ws>/tools-only",
+                "detectedFiles": [
+                  ".vibe/"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": null,
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": null,
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": null,
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<ws>/agents-skills",
+                "detectedFiles": [
+                  ".agents/"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": null,
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<ws>/both",
+                "detectedFiles": [
+                  ".agents/",
+                  ".vibe/",
+                  "AGENTS.md"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": null,
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        }
+      ],
+      "scenario": {
+        "name": "status/config-directories",
+        "steps": [
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS/plugins-only"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS/prompts-only"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS/config-only"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS/tools-only"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS/empty-vibe"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS/agents-without-skills"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS/agents-skills"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS/both"
+              }
+            }
+          }
+        ],
+        "tree": {
+          "$WS/agents-skills/.agents/skills/.keep": "",
+          "$WS/agents-without-skills/.agents/.keep": "",
+          "$WS/both/.agents/skills/.keep": "",
+          "$WS/both/.vibe/skills/.keep": "",
+          "$WS/both/AGENTS.md": "",
+          "$WS/config-only/.vibe/config.toml": "",
+          "$WS/empty-vibe/.vibe/.keep": "",
+          "$WS/plugins-only/.vibe/plugins/.keep": "",
+          "$WS/prompts-only/.vibe/prompts/.keep": "",
+          "$WS/tools-only/.vibe/tools/.keep": ""
+        }
+      }
+    },
+    {
+      "name": "status/repository",
+      "observed": [
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_repo",
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<ws>/pkg/sub",
+                "detectedFiles": [],
+                "repoDetectedFiles": [
+                  ".vibe/",
+                  "AGENTS.md",
+                  "pkg/AGENTS.md"
+                ],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": "<ws>",
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_repo",
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<ws>/pkg/sub/deeper",
+                "detectedFiles": [
+                  "AGENTS.md"
+                ],
+                "repoDetectedFiles": [
+                  ".vibe/",
+                  "AGENTS.md",
+                  "pkg/AGENTS.md"
+                ],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": "<ws>",
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<ws>",
+                "detectedFiles": [
+                  ".vibe/",
+                  "AGENTS.md"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": "<ws>",
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        }
+      ],
+      "scenario": {
+        "name": "status/repository",
+        "steps": [
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS/pkg/sub"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS/pkg/sub/deeper"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS"
+              }
+            }
+          }
+        ],
+        "tree": {
+          "$WS/.git/HEAD": "ref: refs/heads/main\n",
+          "$WS/.vibe/config.toml": "",
+          "$WS/AGENTS.md": "",
+          "$WS/pkg/AGENTS.md": "",
+          "$WS/pkg/sub/.keep": "",
+          "$WS/pkg/sub/deeper/AGENTS.md": ""
+        }
+      }
+    },
+    {
+      "name": "status/repository-markers",
+      "observed": [
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<ws>/linked/sub",
+                "detectedFiles": [
+                  "AGENTS.md"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": null,
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<ws>/headless/sub",
+                "detectedFiles": [
+                  "AGENTS.md"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": null,
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        }
+      ],
+      "scenario": {
+        "name": "status/repository-markers",
+        "steps": [
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS/linked/sub"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS/headless/sub"
+              }
+            }
+          }
+        ],
+        "tree": {
+          "$WS/headless/.git/.keep": "",
+          "$WS/headless/sub/AGENTS.md": "",
+          "$WS/linked/.git": "gitdir: /elsewhere/.git/worktrees/linked\n",
+          "$WS/linked/sub/AGENTS.md": ""
+        }
+      }
+    },
+    {
+      "name": "status/home-and-missing",
+      "observed": [
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": null,
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<home>/project",
+                "detectedFiles": [
+                  "AGENTS.md"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": null,
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": null,
+              "status": "untrusted"
+            }
+          }
+        }
+      ],
+      "scenario": {
+        "name": "status/home-and-missing",
+        "steps": [
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$HOME"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "~/project"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS/missing"
+              }
+            }
+          }
+        ],
+        "tree": {
+          "$HOME/AGENTS.md": "",
+          "$HOME/project/AGENTS.md": ""
+        }
+      }
+    },
+    {
+      "name": "status/closest-decision",
+      "observed": [
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": null,
+              "status": "trusted"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": null,
+              "status": "trusted"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<ws>/declined",
+                "detectedFiles": [
+                  "AGENTS.md"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": null,
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<ws>/declined/child",
+                "detectedFiles": [
+                  "AGENTS.md"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": null,
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        }
+      ],
+      "scenario": {
+        "name": "status/closest-decision",
+        "steps": [
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS/inner"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS/declined"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS/declined/child"
+              }
+            }
+          }
+        ],
+        "tree": {
+          "$WS/AGENTS.md": "",
+          "$WS/declined/AGENTS.md": "",
+          "$WS/declined/child/AGENTS.md": "",
+          "$WS/inner/AGENTS.md": ""
+        },
+        "trust": "trusted = [\"$WS\"]\nuntrusted = [\"$WS/declined\"]\n"
+      }
+    },
+    {
+      "name": "status/repository-untrust",
+      "observed": [
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_repo",
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<root>/outer/repo/sub",
+                "detectedFiles": [
+                  "AGENTS.md"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": "<root>/outer/repo",
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_repo",
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<root>/declined/sub",
+                "detectedFiles": [
+                  "AGENTS.md"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": true,
+                "repoRoot": "<root>/declined",
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        }
+      ],
+      "scenario": {
+        "name": "status/repository-untrust",
+        "steps": [
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$ROOT/outer/repo/sub"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$ROOT/declined/sub"
+              }
+            }
+          }
+        ],
+        "tree": {
+          "$ROOT/declined/.git/HEAD": "ref: refs/heads/main\n",
+          "$ROOT/declined/sub/AGENTS.md": "",
+          "$ROOT/outer/repo/.git/HEAD": "ref: refs/heads/main\n",
+          "$ROOT/outer/repo/sub/AGENTS.md": ""
+        },
+        "trust": "trusted = []\nuntrusted = [\"$ROOT/outer\", \"$ROOT/declined\"]\n"
+      }
+    },
+    {
+      "name": "status/refusals",
+      "observed": [
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 30,
+                      "sha256": "43386f74323f11d019208f474707b65e66ce1f7e1ad6741104a25ebcb263aac7"
+                    },
+                    "path": [
+                      "sessionId"
+                    ]
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 30,
+                      "sha256": "43386f74323f11d019208f474707b65e66ce1f7e1ad6741104a25ebcb263aac7"
+                    },
+                    "path": [
+                      "unexpected"
+                    ]
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 30,
+                      "sha256": "c5747bed94b82ebd7c52710b017a9fd9d3d0cc87ce4dc7588b951fb8ceb18c16"
+                    },
+                    "path": [
+                      "cwd"
+                    ]
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            }
+          }
+        }
+      ],
+      "scenario": {
+        "name": "status/refusals",
+        "steps": [
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS",
+                "sessionId": "missing"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS",
+                "unexpected": true
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": 7
+              }
+            }
+          }
+        ],
+        "tree": {
+          "$WS/AGENTS.md": ""
+        }
+      }
+    },
+    {
+      "name": "decision/trust-cwd",
+      "observed": [
+        {
+          "method": "workspace/trust/decision",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": null,
+              "status": "trusted"
+            }
+          }
+        },
+        {
+          "file": {
+            "content": "trusted = [\n    \"<ws>\",\n]\nuntrusted = []\n",
+            "exists": true,
+            "mode": "0o600"
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": null,
+              "status": "trusted"
+            }
+          }
+        }
+      ],
+      "scenario": {
+        "name": "decision/trust-cwd",
+        "steps": [
+          {
+            "send": {
+              "method": "workspace/trust/decision",
+              "params": {
+                "cwd": "$WS",
+                "decision": "trust_cwd"
+              }
+            }
+          },
+          {
+            "file": true
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS"
+              }
+            }
+          }
+        ],
+        "tree": {
+          "$WS/AGENTS.md": ""
+        }
+      }
+    },
+    {
+      "name": "decision/decline-then-trust",
+      "observed": [
+        {
+          "method": "workspace/trust/decision",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<ws>/a",
+                "detectedFiles": [
+                  "AGENTS.md"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": null,
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/decision",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<ws>/b",
+                "detectedFiles": [
+                  "AGENTS.md"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": null,
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "file": {
+            "content": "trusted = []\nuntrusted = [\n    \"<ws>/a\",\n    \"<ws>/b\",\n]\n",
+            "exists": true,
+            "mode": "0o600"
+          }
+        },
+        {
+          "method": "workspace/trust/decision",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<ws>/a",
+                "detectedFiles": [
+                  "AGENTS.md"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": null,
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "file": {
+            "content": "trusted = []\nuntrusted = [\n    \"<ws>/a\",\n    \"<ws>/b\",\n]\n",
+            "exists": true,
+            "mode": "0o600"
+          }
+        },
+        {
+          "method": "workspace/trust/decision",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": null,
+              "status": "trusted"
+            }
+          }
+        },
+        {
+          "file": {
+            "content": "trusted = [\n    \"<ws>/a\",\n]\nuntrusted = [\n    \"<ws>/b\",\n]\n",
+            "exists": true,
+            "mode": "0o600"
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": null,
+              "status": "trusted"
+            }
+          }
+        }
+      ],
+      "scenario": {
+        "name": "decision/decline-then-trust",
+        "steps": [
+          {
+            "send": {
+              "method": "workspace/trust/decision",
+              "params": {
+                "cwd": "$WS/a",
+                "decision": "decline"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/decision",
+              "params": {
+                "cwd": "$WS/b",
+                "decision": "decline"
+              }
+            }
+          },
+          {
+            "file": true
+          },
+          {
+            "send": {
+              "method": "workspace/trust/decision",
+              "params": {
+                "cwd": "$WS/a",
+                "decision": "decline"
+              }
+            }
+          },
+          {
+            "file": true
+          },
+          {
+            "send": {
+              "method": "workspace/trust/decision",
+              "params": {
+                "cwd": "$WS/a",
+                "decision": "trust_cwd"
+              }
+            }
+          },
+          {
+            "file": true
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS/a"
+              }
+            }
+          }
+        ],
+        "tree": {
+          "$WS/a/AGENTS.md": "",
+          "$WS/b/AGENTS.md": ""
+        }
+      }
+    },
+    {
+      "name": "decision/trust-repository",
+      "observed": [
+        {
+          "method": "workspace/trust/decision",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": null,
+              "message": {
+                "prose": 38,
+                "sha256": "9e5e900df74c17aa4b426630f9aa9f6ca4c392f21be6d3b8eb3422cf0aec1854"
+              }
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/decision",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": null,
+              "status": "trusted"
+            }
+          }
+        },
+        {
+          "file": {
+            "content": "trusted = [\n    \"<ws>\",\n]\nuntrusted = []\n",
+            "exists": true,
+            "mode": "0o600"
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": null,
+              "status": "trusted"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": null,
+              "status": "trusted"
+            }
+          }
+        }
+      ],
+      "scenario": {
+        "name": "decision/trust-repository",
+        "steps": [
+          {
+            "send": {
+              "method": "workspace/trust/decision",
+              "params": {
+                "cwd": "$WS",
+                "decision": "trust_repo"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/decision",
+              "params": {
+                "cwd": "$WS/sub",
+                "decision": "trust_repo"
+              }
+            }
+          },
+          {
+            "file": true
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS/sub"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS"
+              }
+            }
+          }
+        ],
+        "tree": {
+          "$WS/.git/HEAD": "ref: refs/heads/main\n",
+          "$WS/AGENTS.md": "",
+          "$WS/sub/AGENTS.md": ""
+        }
+      }
+    },
+    {
+      "name": "decision/refusals",
+      "observed": [
+        {
+          "method": "workspace/trust/decision",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": null,
+              "message": {
+                "prose": 40,
+                "sha256": "c79096f1a52aa1df352fd3de898a7593e305e430a9c55a499c65a450bc1ce64c"
+              }
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/decision",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 54,
+                      "sha256": "0714fa28f1eedd9691a7bb6418a680d84995e3e7ef55e827ec45041eca581e2d"
+                    },
+                    "path": [
+                      "decision"
+                    ]
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/decision",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 54,
+                      "sha256": "0714fa28f1eedd9691a7bb6418a680d84995e3e7ef55e827ec45041eca581e2d"
+                    },
+                    "path": [
+                      "decision"
+                    ]
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/decision",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "not_found",
+              "data": null,
+              "message": {
+                "prose": 26,
+                "sha256": "f50897d93c846a496e6125a3be39212e7f3b58b79a928a540250b1cddc13dfb8"
+              }
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/decision",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 14,
+                      "sha256": "71a96be9e2ce034f704c0b2a745894820fe1a61e86957cf734f99e08e0a2e338"
+                    },
+                    "path": [
+                      "decision"
+                    ]
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/decision",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 30,
+                      "sha256": "43386f74323f11d019208f474707b65e66ce1f7e1ad6741104a25ebcb263aac7"
+                    },
+                    "path": [
+                      "unexpected"
+                    ]
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            }
+          }
+        },
+        {
+          "file": {
+            "content": "trusted = []\nuntrusted = []\n",
+            "exists": true,
+            "mode": "0o600"
+          }
+        }
+      ],
+      "scenario": {
+        "name": "decision/refusals",
+        "steps": [
+          {
+            "send": {
+              "method": "workspace/trust/decision",
+              "params": {
+                "cwd": "$WS/plain",
+                "decision": "trust_cwd"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/decision",
+              "params": {
+                "cwd": "$WS",
+                "decision": "maybe"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/decision",
+              "params": {
+                "cwd": "$WS",
+                "decision": "trust_session"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/decision",
+              "params": {
+                "cwd": "$WS",
+                "decision": "trust_cwd",
+                "sessionId": "missing"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/decision",
+              "params": {
+                "cwd": "$WS"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/decision",
+              "params": {
+                "cwd": "$WS",
+                "decision": "trust_cwd",
+                "unexpected": true
+              }
+            }
+          },
+          {
+            "file": true
+          }
+        ],
+        "tree": {
+          "$WS/AGENTS.md": "",
+          "$WS/plain/.keep": ""
+        }
+      }
+    },
+    {
+      "name": "decision/default-cwd",
+      "observed": [
+        {
+          "method": "workspace/trust/decision",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<ws>",
+                "detectedFiles": [
+                  "AGENTS.md"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": null,
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "file": {
+            "content": "trusted = []\nuntrusted = [\n    \"<ws>\",\n]\n",
+            "exists": true,
+            "mode": "0o600"
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<ws>",
+                "detectedFiles": [
+                  "AGENTS.md"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": null,
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        }
+      ],
+      "scenario": {
+        "name": "decision/default-cwd",
+        "steps": [
+          {
+            "send": {
+              "method": "workspace/trust/decision",
+              "params": {
+                "decision": "decline"
+              }
+            }
+          },
+          {
+            "file": true
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {}
+            }
+          }
+        ],
+        "tree": {
+          "$WS/AGENTS.md": ""
+        }
+      }
+    },
+    {
+      "name": "decision/unusual-path",
+      "observed": [
+        {
+          "method": "workspace/trust/decision",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": null,
+              "status": "trusted"
+            }
+          }
+        },
+        {
+          "file": {
+            "content": "trusted = [\n    \"<ws>/q\\\"u\\\\ote\",\n]\nuntrusted = []\n",
+            "exists": true,
+            "mode": "0o600"
+          }
+        }
+      ],
+      "scenario": {
+        "name": "decision/unusual-path",
+        "steps": [
+          {
+            "send": {
+              "method": "workspace/trust/decision",
+              "params": {
+                "cwd": "$WS/q\"u\\ote",
+                "decision": "trust_cwd"
+              }
+            }
+          },
+          {
+            "file": true
+          }
+        ],
+        "tree": {
+          "$WS/q\"u\\ote/AGENTS.md": ""
+        }
+      }
+    },
+    {
+      "name": "file/mode-is-kept",
+      "observed": [
+        {
+          "file": {
+            "content": "trusted = []\nuntrusted = []\n",
+            "exists": true,
+            "mode": "0o644"
+          }
+        },
+        {
+          "method": "workspace/trust/decision",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": null,
+              "status": "trusted"
+            }
+          }
+        },
+        {
+          "file": {
+            "content": "trusted = [\n    \"<ws>\",\n]\nuntrusted = []\n",
+            "exists": true,
+            "mode": "0o644"
+          }
+        }
+      ],
+      "scenario": {
+        "name": "file/mode-is-kept",
+        "steps": [
+          {
+            "file": true
+          },
+          {
+            "send": {
+              "method": "workspace/trust/decision",
+              "params": {
+                "cwd": "$WS",
+                "decision": "trust_cwd"
+              }
+            }
+          },
+          {
+            "file": true
+          }
+        ],
+        "tree": {
+          "$WS/AGENTS.md": ""
+        },
+        "trust": "trusted = []\nuntrusted = []\n",
+        "trustMode": "0o644"
+      }
+    },
+    {
+      "name": "file/malformed-is-reset",
+      "observed": [
+        {
+          "file": {
+            "content": "trusted = []\nuntrusted = []\n",
+            "exists": true,
+            "mode": "0o600"
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<ws>",
+                "detectedFiles": [
+                  "AGENTS.md"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": null,
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "file": {
+            "content": "trusted = []\nuntrusted = []\n",
+            "exists": true,
+            "mode": "0o600"
+          }
+        }
+      ],
+      "scenario": {
+        "name": "file/malformed-is-reset",
+        "steps": [
+          {
+            "file": true
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS"
+              }
+            }
+          },
+          {
+            "file": true
+          }
+        ],
+        "tree": {
+          "$WS/AGENTS.md": ""
+        },
+        "trust": "trusted = [\n"
+      }
+    },
+    {
+      "name": "file/unknown-keys",
+      "observed": [
+        {
+          "file": {
+            "content": "extra = true\ntrusted = [\"<ws>\"]\n",
+            "exists": true,
+            "mode": "0o600"
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": null,
+              "status": "trusted"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/decision",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<root>/other",
+                "detectedFiles": [
+                  "AGENTS.md"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": null,
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "file": {
+            "content": "trusted = [\n    \"<ws>\",\n]\nuntrusted = [\n    \"<root>/other\",\n]\n",
+            "exists": true,
+            "mode": "0o600"
+          }
+        }
+      ],
+      "scenario": {
+        "name": "file/unknown-keys",
+        "steps": [
+          {
+            "file": true
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/decision",
+              "params": {
+                "cwd": "$ROOT/other",
+                "decision": "decline"
+              }
+            }
+          },
+          {
+            "file": true
+          }
+        ],
+        "tree": {
+          "$ROOT/other/AGENTS.md": "",
+          "$WS/AGENTS.md": ""
+        },
+        "trust": "extra = true\ntrusted = [\"$WS\"]\n"
+      }
+    },
+    {
+      "name": "file/unwritable",
+      "observed": [
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<ws>",
+                "detectedFiles": [
+                  "AGENTS.md"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": null,
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/decision",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": null,
+              "status": "trusted"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": null,
+              "status": "trusted"
+            }
+          }
+        }
+      ],
+      "scenario": {
+        "name": "file/unwritable",
+        "steps": [
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/decision",
+              "params": {
+                "cwd": "$WS",
+                "decision": "trust_cwd"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS"
+              }
+            }
+          }
+        ],
+        "tree": {
+          "$WS/AGENTS.md": ""
+        },
+        "trustDirectory": true
+      }
+    },
+    {
+      "name": "untrusted-config/listing",
+      "observed": [
+        {
+          "method": "workspace/trust/untrustedConfig",
+          "notifications": [],
+          "response": {
+            "result": {
+              "dirs": [
+                "<ws>/.agents",
+                "<ws>/.vibe"
+              ],
+              "settingsPath": "<vibe-home>/trusted_folders.toml"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/untrustedConfig",
+          "notifications": [],
+          "response": {
+            "result": {
+              "dirs": [
+                "<ws>/.agents",
+                "<ws>/.vibe"
+              ],
+              "settingsPath": "<vibe-home>/trusted_folders.toml"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/untrustedConfig",
+          "notifications": [],
+          "response": {
+            "result": {
+              "dirs": [],
+              "settingsPath": "<vibe-home>/trusted_folders.toml"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/untrustedConfig",
+          "notifications": [],
+          "response": {
+            "result": {
+              "dirs": [],
+              "settingsPath": "<vibe-home>/trusted_folders.toml"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/untrustedConfig",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 30,
+                      "sha256": "43386f74323f11d019208f474707b65e66ce1f7e1ad6741104a25ebcb263aac7"
+                    },
+                    "path": [
+                      "sessionId"
+                    ]
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            }
+          }
+        },
+        {
+          "file": {
+            "content": "trusted = [\"<ws>\"]\nuntrusted = [\"<ws>/.vibe\", \"<ws>/.agents\", \"<ws>/declined\"]\n",
+            "exists": true,
+            "mode": "0o600"
+          }
+        }
+      ],
+      "scenario": {
+        "name": "untrusted-config/listing",
+        "steps": [
+          {
+            "send": {
+              "method": "workspace/trust/untrustedConfig",
+              "params": {
+                "cwd": "$WS"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/untrustedConfig",
+              "params": {}
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/untrustedConfig",
+              "params": {
+                "cwd": "$WS/declined"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/untrustedConfig",
+              "params": {
+                "cwd": "$WS/inner"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/untrustedConfig",
+              "params": {
+                "cwd": "$WS",
+                "sessionId": "missing"
+              }
+            }
+          },
+          {
+            "file": true
+          }
+        ],
+        "tree": {
+          "$WS/.agents/skills/.keep": "",
+          "$WS/.vibe/config.toml": "",
+          "$WS/declined/.vibe/config.toml": "",
+          "$WS/inner/.vibe/config.toml": ""
+        },
+        "trust": "trusted = [\"$WS\"]\nuntrusted = [\"$WS/.vibe\", \"$WS/.agents\", \"$WS/declined\"]\n"
+      }
+    },
+    {
+      "name": "untrusted-config/content-and-session",
+      "observed": [
+        {
+          "method": "workspace/trust/untrustedConfig",
+          "notifications": [],
+          "response": {
+            "result": {
+              "dirs": [],
+              "settingsPath": "<vibe-home>/trusted_folders.toml"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/untrustedConfig",
+          "notifications": [],
+          "response": {
+            "result": {
+              "dirs": [],
+              "settingsPath": "<vibe-home>/trusted_folders.toml"
+            }
+          }
+        },
+        {
+          "start": {
+            "ok": true
+          }
+        },
+        {
+          "method": "workspace/trust/untrustedConfig",
+          "notifications": [],
+          "response": {
+            "result": {
+              "dirs": [
+                "<root>/other/.vibe"
+              ],
+              "settingsPath": "<vibe-home>/trusted_folders.toml"
+            }
+          }
+        }
+      ],
+      "scenario": {
+        "name": "untrusted-config/content-and-session",
+        "steps": [
+          {
+            "send": {
+              "method": "workspace/trust/untrustedConfig",
+              "params": {
+                "cwd": "$WS/bare"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/untrustedConfig",
+              "params": {
+                "cwd": "$ROOT/other"
+              }
+            }
+          },
+          {
+            "start": {
+              "cwd": "$ROOT/other",
+              "trustWorkspace": true
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/untrustedConfig",
+              "params": {
+                "cwd": "$ROOT/other"
+              }
+            }
+          }
+        ],
+        "tree": {
+          "$ROOT/other/.vibe/config.toml": "",
+          "$WS/bare/.vibe/.keep": ""
+        },
+        "trust": "trusted = [\"$WS/bare\"]\nuntrusted = [\"$WS/bare/.vibe\", \"$ROOT/other/.vibe\"]\n"
+      }
+    },
+    {
+      "name": "session/workspace-trust",
+      "observed": [
+        {
+          "start": {
+            "ok": true
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": null,
+              "status": "session"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": null,
+              "status": "session"
+            }
+          }
+        },
+        {
+          "file": {
+            "content": "trusted = []\nuntrusted = []\n",
+            "exists": true,
+            "mode": "0o600"
+          }
+        }
+      ],
+      "scenario": {
+        "name": "session/workspace-trust",
+        "steps": [
+          {
+            "start": {
+              "cwd": "$WS",
+              "trustWorkspace": true
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS/child"
+              }
+            }
+          },
+          {
+            "file": true
+          }
+        ],
+        "tree": {
+          "$WS/AGENTS.md": ""
+        }
+      }
+    },
+    {
+      "name": "session/untrusted",
+      "observed": [
+        {
+          "start": {
+            "ok": true
+          }
+        },
+        {
+          "method": "workspace/trust/status",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<ws>",
+                "detectedFiles": [
+                  "AGENTS.md"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": null,
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "file": {
+            "content": "trusted = []\nuntrusted = []\n",
+            "exists": true,
+            "mode": "0o600"
+          }
+        }
+      ],
+      "scenario": {
+        "name": "session/untrusted",
+        "steps": [
+          {
+            "start": {
+              "cwd": "$WS",
+              "trustWorkspace": false
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/status",
+              "params": {
+                "cwd": "$WS"
+              }
+            }
+          },
+          {
+            "file": true
+          }
+        ],
+        "tree": {
+          "$WS/AGENTS.md": ""
+        }
+      }
+    },
+    {
+      "name": "session/decision",
+      "observed": [
+        {
+          "start": {
+            "ok": true
+          }
+        },
+        {
+          "config": {
+            "ok": true,
+            "worktreeLimit": 15
+          }
+        },
+        {
+          "method": "workspace/trust/decision",
+          "notifications": [],
+          "response": {
+            "result": {
+              "details": {
+                "availableDecisions": [
+                  "trust_cwd",
+                  "decline"
+                ],
+                "cwd": "<ws>",
+                "detectedFiles": [
+                  ".vibe/",
+                  "AGENTS.md"
+                ],
+                "repoDetectedFiles": [],
+                "repoExplicitlyUntrusted": false,
+                "repoRoot": null,
+                "settingsPath": "<vibe-home>/trusted_folders.toml"
+              },
+              "status": "untrusted"
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/decision",
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": null,
+              "message": {
+                "prose": 69,
+                "sha256": "e300a0137b2a5b4b545b6e7e2a81c41edb08c50915bf991afde8e45be34ebfd6"
+              }
+            }
+          }
+        },
+        {
+          "method": "workspace/trust/decision",
+          "notifications": [
+            "runtime/updated"
+          ],
+          "response": {
+            "result": {
+              "details": null,
+              "status": "trusted"
+            }
+          }
+        },
+        {
+          "config": {
+            "ok": true,
+            "worktreeLimit": 15
+          }
+        },
+        {
+          "file": {
+            "content": "trusted = [\n    \"<ws>\",\n]\nuntrusted = []\n",
+            "exists": true,
+            "mode": "0o600"
+          }
+        }
+      ],
+      "scenario": {
+        "name": "session/decision",
+        "steps": [
+          {
+            "start": {
+              "cwd": "$WS",
+              "trustWorkspace": false
+            }
+          },
+          {
+            "config": "$S1"
+          },
+          {
+            "send": {
+              "method": "workspace/trust/decision",
+              "params": {
+                "decision": "decline",
+                "sessionId": "$S1"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/decision",
+              "params": {
+                "cwd": "$WS/elsewhere",
+                "decision": "trust_cwd",
+                "sessionId": "$S1"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/trust/decision",
+              "params": {
+                "cwd": "$WS",
+                "decision": "trust_cwd",
+                "sessionId": "$S1"
+              }
+            }
+          },
+          {
+            "config": "$S1"
+          },
+          {
+            "file": true
+          }
+        ],
+        "tree": {
+          "$WS/.vibe/config.toml": "worktree_limit = 7\n",
+          "$WS/AGENTS.md": ""
+        }
+      }
+    },
+    {
+      "name": "config/trusted-by-the-file",
+      "observed": [
+        {
+          "start": {
+            "ok": true
+          }
+        },
+        {
+          "config": {
+            "ok": true,
+            "worktreeLimit": 7
+          }
+        }
+      ],
+      "scenario": {
+        "name": "config/trusted-by-the-file",
+        "steps": [
+          {
+            "start": {
+              "cwd": "$WS",
+              "trustWorkspace": false
+            }
+          },
+          {
+            "config": "$S1"
+          }
+        ],
+        "tree": {
+          "$WS/.vibe/config.toml": "worktree_limit = 7\n"
+        },
+        "trust": "trusted = [\"$WS\"]\nuntrusted = []\n"
+      }
+    },
+    {
+      "name": "config/declined-config-directory",
+      "observed": [
+        {
+          "start": {
+            "ok": true
+          }
+        },
+        {
+          "config": {
+            "ok": true,
+            "worktreeLimit": 15
+          }
+        }
+      ],
+      "scenario": {
+        "name": "config/declined-config-directory",
+        "steps": [
+          {
+            "start": {
+              "cwd": "$WS",
+              "trustWorkspace": false
+            }
+          },
+          {
+            "config": "$S1"
+          }
+        ],
+        "tree": {
+          "$WS/.vibe/config.toml": "worktree_limit = 7\n"
+        },
+        "trust": "trusted = [\"$WS\"]\nuntrusted = [\"$WS/.vibe\"]\n"
+      }
+    },
+    {
+      "name": "config/parent-of-a-trusted-directory",
+      "observed": [
+        {
+          "start": {
+            "ok": true
+          }
+        },
+        {
+          "config": {
+            "ok": true,
+            "worktreeLimit": 15
+          }
+        }
+      ],
+      "scenario": {
+        "name": "config/parent-of-a-trusted-directory",
+        "steps": [
+          {
+            "start": {
+              "cwd": "$WS/sub",
+              "trustWorkspace": false
+            }
+          },
+          {
+            "config": "$S1"
+          }
+        ],
+        "tree": {
+          "$WS/.vibe/config.toml": "worktree_limit = 7\n",
+          "$WS/sub/.keep": ""
+        },
+        "trust": "trusted = [\"$WS/sub\"]\nuntrusted = []\n"
+      }
+    },
+    {
+      "name": "config/parent-of-a-session-trust",
+      "observed": [
+        {
+          "start": {
+            "ok": true
+          }
+        },
+        {
+          "config": {
+            "ok": true,
+            "worktreeLimit": 15
+          }
+        }
+      ],
+      "scenario": {
+        "name": "config/parent-of-a-session-trust",
+        "steps": [
+          {
+            "start": {
+              "cwd": "$WS/sub",
+              "trustWorkspace": true
+            }
+          },
+          {
+            "config": "$S1"
+          }
+        ],
+        "tree": {
+          "$WS/.vibe/config.toml": "worktree_limit = 7\n",
+          "$WS/sub/.keep": ""
+        }
+      }
+    },
+    {
+      "name": "config/trusted-parent",
+      "observed": [
+        {
+          "start": {
+            "ok": true
+          }
+        },
+        {
+          "config": {
+            "ok": true,
+            "worktreeLimit": 7
+          }
+        }
+      ],
+      "scenario": {
+        "name": "config/trusted-parent",
+        "steps": [
+          {
+            "start": {
+              "cwd": "$WS/sub",
+              "trustWorkspace": false
+            }
+          },
+          {
+            "config": "$S1"
+          }
+        ],
+        "tree": {
+          "$WS/.vibe/config.toml": "worktree_limit = 7\n",
+          "$WS/sub/.keep": ""
+        },
+        "trust": "trusted = [\"$WS\"]\nuntrusted = []\n"
+      }
+    }
+  ],
+  "schemaVersion": 1
+}

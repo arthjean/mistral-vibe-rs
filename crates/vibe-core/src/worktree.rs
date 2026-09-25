@@ -1063,7 +1063,7 @@ fn managed_worktree_root_in(
 /// The reference hashes `Path.resolve()`, which never carries the verbatim
 /// prefix; `fs::canonicalize` on Windows always does. On every other platform
 /// this is the identity.
-fn strip_verbatim_prefix(value: &str) -> String {
+pub(crate) fn strip_verbatim_prefix(value: &str) -> String {
     if let Some(remainder) = value.strip_prefix(VERBATIM_UNC_PREFIX) {
         format!(r"\\{remainder}")
     } else if let Some(remainder) = value.strip_prefix(VERBATIM_PREFIX) {
@@ -1076,7 +1076,7 @@ fn strip_verbatim_prefix(value: &str) -> String {
 /// The reference's non-strict `resolve` over a path that may not exist yet:
 /// the deepest existing ancestor is canonicalized and the remainder appended,
 /// so two spellings of one location compare equal.
-fn resolve_lenient(path: &Path) -> PathBuf {
+pub(crate) fn resolve_lenient(path: &Path) -> PathBuf {
     if let Ok(resolved) = fs::canonicalize(path) {
         return resolved;
     }

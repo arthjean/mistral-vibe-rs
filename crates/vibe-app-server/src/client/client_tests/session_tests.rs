@@ -74,7 +74,7 @@ command = "/must-not-run"
 }
 
 #[tokio::test]
-async fn trust_transition_rebinds_session_scoped_project_config_writes() {
+async fn a_mid_session_grant_keeps_the_project_file_verdict_for_writes() {
     let temporary = tempfile::tempdir().expect("runtime home");
     let workspace = temporary.path().join("workspace");
     std::fs::create_dir_all(workspace.join(".vibe")).expect("project config directory");
@@ -128,19 +128,58 @@ async fn trust_transition_rebinds_session_scoped_project_config_writes() {
         )
         .await
         .expect("workspace trust commits");
-    // Trust moved the selected target onto the project file, which the
-    // published field surface reports as the first writable target.
-    let trusted = service
+    // Reference `BaseConfigLayer` keeps the verdict the project layer was
+    // loaded with, so a mid-session grant reaches the project roots but not
+    // the project file: it is neither offered as a target nor written.
+    let granted = service
         .public_call("config/fields/read", json!({"sessionId": session_id}))
+        .expect("granted config reads");
+    assert!(
+        !granted["targets"]
+            .as_array()
+            .expect("targets")
+            .contains(&json!("project")),
+        "{granted:?}"
+    );
+    let granted_write = service.public_call(
+        "config/batchWrite",
+        json!({
+            "sessionId": session_id,
+            "writes": [{
+                "target": "project",
+                "mutations": [{"path": ["theme"], "value": "dark"}],
+            }],
+        }),
+    );
+    assert!(
+        granted_write.is_err(),
+        "the pinned verdict still refuses it"
+    );
+    assert_eq!(
+        std::fs::read_to_string(workspace.join(".vibe/config.toml")).expect("project config"),
+        ""
+    );
+
+    // A session that starts in the now trusted folder reads and writes it.
+    session_options.session_id = Some("trust-config-next".to_owned());
+    let next = service
+        .start_session(&session_options)
+        .expect("trusted session starts");
+    let trusted = service
+        .public_call("config/fields/read", json!({"sessionId": next}))
         .expect("trusted config reads");
-    assert_eq!(trusted["targets"][0], json!("project"));
-    // The write names no fingerprint: the server takes the one on disk
-    // inside the transaction that compares it.
+    assert!(
+        trusted["targets"]
+            .as_array()
+            .expect("targets")
+            .contains(&json!("project")),
+        "{trusted:?}"
+    );
     service
         .public_call(
             "config/batchWrite",
             json!({
-                "sessionId": session_id,
+                "sessionId": next,
                 "writes": [{
                     "target": "project",
                     "mutations": [{"path": ["theme"], "value": "dark"}],

@@ -175,8 +175,13 @@ where
         }
         let response = if method == "trust/status" {
             match &harness {
+                // Reference `trust_status` asks about the session's own
+                // directory when the client names none.
                 Some(harness) => self
-                    .call(harness, "workspace/trust/status", Value::Object(located))
+                    .call_unscoped(harness, "workspace/trust/status", {
+                        located.entry("cwd").or_insert_with(|| json!(harness.cwd));
+                        Value::Object(located)
+                    })
                     .await?
                     .into_iter()
                     .collect::<Map<_, _>>(),

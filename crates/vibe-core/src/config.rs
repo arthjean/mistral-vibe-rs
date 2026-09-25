@@ -452,6 +452,8 @@ pub struct LayeredConfig {
     agent: Table,
     environment: BTreeMap<String, String>,
     project_trusted: bool,
+    /// See [`HarnessFiles::with_project_file_trust`].
+    project_file_trust: Option<bool>,
     sources: BTreeSet<ConfigSource>,
     additional_roots: Vec<PathBuf>,
     /// The document behind [`ConfigTarget::Ephemeral`], shared by every clone of
@@ -486,6 +488,7 @@ impl LayeredConfig {
             agent: Table::new(),
             environment: BTreeMap::new(),
             project_trusted: false,
+            project_file_trust: None,
             sources: ConfigSource::all(),
             additional_roots: Vec::new(),
             ephemeral: Arc::new(Mutex::new(Table::new())),
@@ -537,6 +540,7 @@ impl LayeredConfig {
             self.additional_roots.clone(),
             self.project_trusted,
         )
+        .with_project_file_trust(self.project_file_trust)
     }
 
     /// Registers `callback` for the configuration keys it names, or for every
@@ -648,7 +652,27 @@ impl LayeredConfig {
         let mut scoped = self.clone();
         scoped.paths.working_directory = working_directory;
         scoped.project_trusted = project_trusted;
+        scoped.project_file_trust = None;
         scoped
+    }
+
+    /// Pins whether the project configuration file may be read, as a session
+    /// resolved it when it started, instead of asking the trust store on every
+    /// load. Reference `BaseConfigLayer` caches the verdict on the layer, so a
+    /// trust decision made mid-session reaches the project roots but not the
+    /// project file.
+    #[must_use]
+    pub fn with_project_file_trust(mut self, trust: Option<bool>) -> Self {
+        self.project_file_trust = trust;
+        self
+    }
+
+    /// Whether a write may land in the project file: the verdict a session
+    /// pinned for it when there is one, the workspace's trust otherwise. The
+    /// reference refuses a patch to a project layer it did not load, so a
+    /// file this configuration does not read is not written either.
+    fn project_writable(&self) -> bool {
+        self.project_file_trust.unwrap_or(self.project_trusted)
     }
 
     /// The document [`ConfigLayerKind::Discovered`] composes, and the single
@@ -693,12 +717,10 @@ impl LayeredConfig {
         } else {
             Table::new()
         };
-        let project_values =
-            if self.project_trusted && self.sources.contains(&ConfigSource::Project) {
-                read_table_optional(&project_path)?
-            } else {
-                Table::new()
-            };
+        let project_values = match harness.trusted_project_config() {
+            Some(trusted) => read_table_optional(&trusted)?,
+            None => Table::new(),
+        };
         let mut target_values = BTreeMap::from([
             (ConfigTarget::User, user_values),
             (ConfigTarget::Project, project_values),
@@ -830,7 +852,7 @@ impl LayeredConfig {
             if !targets.insert(write.target) {
                 return Err(ConfigError::DuplicateTarget(write.target));
             }
-            if write.target == ConfigTarget::Project && !self.project_trusted {
+            if write.target == ConfigTarget::Project && !self.project_writable() {
                 return Err(ConfigError::UntrustedProject);
             }
             // A source the session did not enable is never written to, which is
@@ -1026,7 +1048,7 @@ impl LayeredConfig {
             let target = operation.target.unwrap_or(before.selected_target);
             // Refused before anything is written, so a revoked workspace cannot
             // leave half a patch on disk.
-            if target == ConfigTarget::Project && !self.project_trusted {
+            if target == ConfigTarget::Project && !self.project_writable() {
                 return Err(ConfigError::UntrustedProject);
             }
             grouped
@@ -1090,7 +1112,7 @@ impl LayeredConfig {
         let mut targets = vec![snapshot.selected_target];
         for target in [ConfigTarget::User, ConfigTarget::Project] {
             let enabled = source_of(target).is_some_and(|source| self.sources.contains(&source));
-            let writable = enabled && (target != ConfigTarget::Project || self.project_trusted);
+            let writable = enabled && (target != ConfigTarget::Project || self.project_writable());
             if writable && !targets.contains(&target) {
                 targets.push(target);
             }

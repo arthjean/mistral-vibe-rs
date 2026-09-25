@@ -49,6 +49,18 @@ where
         Ok(harness.service.lock().await.public_call(method, params)?)
     }
 
+    /// Calls an app-server method that answers from the host rather than about
+    /// a session, through `harness`'s connection and naming no session: the
+    /// two trust reads refuse a `sessionId`, as upstream's parameter models do.
+    pub(crate) async fn call_unscoped(
+        &self,
+        harness: &AcpHarness<D>,
+        method: &str,
+        params: Value,
+    ) -> Result<BTreeMap<String, Value>, AcpError> {
+        Ok(harness.service.lock().await.public_call(method, params)?)
+    }
+
     /// [`Self::call`] for the methods the app server answers asynchronously,
     /// with the notifications they raised.
     pub(crate) async fn call_async(
@@ -206,7 +218,7 @@ where
         cwd: &str,
     ) -> Result<Value, AcpError> {
         let status = self
-            .call(harness, "workspace/trust/status", json!({"cwd": cwd}))
+            .call_unscoped(harness, "workspace/trust/status", json!({"cwd": cwd}))
             .await?;
         Ok(json!({
             "workspace_trust": {
