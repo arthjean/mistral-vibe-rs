@@ -101,6 +101,9 @@ UUID = re.compile(
 )
 #: An identifier pydantic elided in the middle when it quoted a rejected input.
 ELIDED_UUID = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]\.\.\.[0-9a-fA-F-]{4,}")
+#: The payload size a provider error summarizes, which moves with the calendar
+#: because the system prompt it counts names the weekday.
+APPROX_CHARS = re.compile(r'("approx_chars":)\d+')
 
 
 class OracleError(RuntimeError):
@@ -672,6 +675,7 @@ class Normalizer:
         value = SESSION_DIRECTORY.sub(r"\1<short>", value)
         value = UUID.sub(lambda match: self.identity(match.group(0)), value)
         value = ELIDED_UUID.sub("<elided-id>", value)
+        value = APPROX_CHARS.sub(r"\1<n>", value)
         return value
 
     def collect_ids(self, value: Any) -> None:
