@@ -885,10 +885,12 @@ fn count_user_messages(session: &super::SessionRuntime) -> usize {
                 matches!(
                     entry,
                     PublicHistoryEntry::Message {
+                        metadata,
                         role: PublicMessageRole::User,
                         source,
                         ..
                     } if *source != Some(PublicMessageSource::Harness)
+                        || metadata.turn_id.is_none()
                 )
             })
             .count();

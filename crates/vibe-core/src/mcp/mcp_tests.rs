@@ -267,12 +267,12 @@ async fn a_failed_call_keeps_the_server_published() {
 
     assert!(matches!(
         tools.invoke("flaky_search", invocation("first")).await,
-        Err(ToolError::Execution(_))
+        Err(ToolError::Approved { source, .. }) if matches!(*source, ToolError::Execution(_))
     ));
     assert_eq!(registry.read().await[0].status, McpServerStatus::Healthy);
     assert!(matches!(
         tools.invoke("flaky_search", invocation("second")).await,
-        Err(ToolError::Execution(_))
+        Err(ToolError::Approved { source, .. }) if matches!(*source, ToolError::Execution(_))
     ));
 }
 
@@ -514,7 +514,10 @@ async fn disabling_a_server_cancels_its_running_call() {
         .await
         .expect("the call ends once its server is disabled")
         .expect("the call task joins");
-    assert!(matches!(outcome, Err(ToolError::Unavailable(_))));
+    assert!(matches!(
+        outcome,
+        Err(ToolError::Approved { source, .. }) if matches!(*source, ToolError::Unavailable(_))
+    ));
     assert!(peer.closed.load(Ordering::Acquire));
 }
 

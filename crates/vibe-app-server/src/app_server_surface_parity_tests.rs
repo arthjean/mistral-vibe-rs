@@ -1868,6 +1868,7 @@ async fn every_effect_kind_publishes_an_entry_that_validates_against_the_census(
                 is_error: false,
                 cancelled: false,
                 skipped: false,
+                approval: None,
             },
         ]);
         let entry = history
@@ -1950,6 +1951,7 @@ fn every_settled_effect_state_carries_the_display_its_variant_declares() {
         is_error,
         cancelled,
         skipped: false,
+        approval: None,
     };
     let start = EngineEvent::UserMessage {
         attachments: Vec::new(),
@@ -2155,6 +2157,7 @@ fn every_callback_union_form_validates_against_the_census() {
                 )],
                 choices: ApprovalDecisionType::ALL.to_vec(),
                 related_entry_id: Some("entry-1".to_owned()),
+                reason: None,
             },
         ),
         (

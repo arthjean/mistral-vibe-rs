@@ -46,6 +46,8 @@ impl vibe_core::skills::InvokedSkillResolver for ProbeSkillResolver {
             loaded: ToolExecutionOutput {
                 skip: None,
                 turn_failure: None,
+                approval: None,
+                failure: None,
                 model_text: format!(
                     "name: probe\ncontent: {}\nDo the probing.\n</skill_content>\nskill_dir: None",
                     vibe_core::skills::skill_content_marker("probe")
@@ -58,6 +60,8 @@ impl vibe_core::skills::InvokedSkillResolver for ProbeSkillResolver {
             already_loaded: ToolExecutionOutput {
                 skip: None,
                 turn_failure: None,
+                approval: None,
+                failure: None,
                 model_text: "name: probe\ncontent: already loaded\nskill_dir: None".to_owned(),
                 typed_result: json!({"name": "probe"}),
                 display: json!({"kind": "skill", "name": "probe"}),

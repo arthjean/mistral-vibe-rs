@@ -107,7 +107,7 @@ pub use interactive::{InteractiveExit, run_interactive};
 
 const FRAME_INTERVAL: Duration = Duration::from_millis(16);
 const INITIAL_HISTORY_LIMIT: usize = 200;
-const DEFAULT_MODEL: &str = "mistral-medium-3.5";
+pub(crate) const DEFAULT_MODEL: &str = "mistral-medium-3.5";
 const DEFAULT_CONTEXT_WINDOW: u64 = 200_000;
 
 fn emit_attention(state: &mut TuiState, effect: &attention::AttentionEffect) {

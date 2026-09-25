@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Run `vibe -p` the way the reference does. The launch uses the configured
+  model on its configured provider, with that model's prices and a key from
+  the environment, the `.env` file in the Vibe home or the keyring, and a
+  missing key exits 1 after an `Error:` line. `--max-turns`, `--max-tokens`
+  and `--max-price` keep their sign, stop the session with the reference's
+  messages, and are no longer sent as a per-request `max_tokens`; with none
+  given nothing caps a run. `--auto-approve` without `--agent` selects the
+  `auto-approve` agent, every approval and question is refused as nobody is
+  there to answer, and a blank prompt runs. `json` and `streaming` print the
+  session's whole history in the reference's key order and JSON spelling,
+  settled tool calls carry `decision`, `approvalType` and `approvalSource`,
+  a resumed session keeps its earlier messages, and Ctrl-C prints `Bye!` and
+  exits 0. `--teleport` checks the model and the account before it reads the
+  repository. `--output ndjson` is no longer accepted.
+
 - Trust folders the way the reference does. `trusted_folders.toml` is created
   at startup readable by its owner only, reset when it cannot be parsed, and
   shared by the app server, the ACP agent and the terminal, so a folder trusted

@@ -125,6 +125,10 @@ pub enum EngineEvent {
         /// `ToolResultEvent.skipped`.
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         skipped: bool,
+        /// How the permission gate settled the call. Reference
+        /// `ToolResultEvent.decision`, `approval_type` and `approval_source`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        approval: Option<crate::tools::ToolApproval>,
     },
     CallbackRequested {
         callback_id: String,
@@ -370,14 +374,21 @@ pub enum PublicEffectState {
         #[serde(default)]
         duration_ms: u64,
         display: EffectResultDisplay,
+        #[serde(flatten)]
+        approval: EffectApproval,
     },
     Failed {
         error: PublicError,
+        /// Reference `FailedEffectState.output`, which no failure fills.
+        #[serde(default)]
+        output: Value,
         #[serde(default)]
         output_text: String,
         #[serde(default)]
         duration_ms: u64,
         display: EffectResultDisplay,
+        #[serde(flatten)]
+        approval: EffectApproval,
     },
     Cancelled {
         reason: String,
@@ -389,11 +400,40 @@ pub enum PublicEffectState {
         /// the one settled state the reference lets publish a null one.
         #[serde(default)]
         display: Option<EffectResultDisplay>,
+        #[serde(flatten)]
+        approval: EffectApproval,
     },
     Skipped {
         reason: String,
         display: EffectResultDisplay,
+        #[serde(flatten)]
+        approval: EffectApproval,
     },
+}
+
+/// How the permission gate settled a call, as every settled state publishes
+/// it: the three fields of reference `CompletedEffectState` and its siblings,
+/// each null when no gate answered (a replayed call, or one the turn closed
+/// under).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EffectApproval {
+    #[serde(default)]
+    pub decision: Option<crate::tools::ToolVerdict>,
+    #[serde(default)]
+    pub approval_type: Option<crate::tools::ToolApprovalType>,
+    #[serde(default)]
+    pub approval_source: Option<crate::tools::ToolApprovalSource>,
+}
+
+impl From<Option<crate::tools::ToolApproval>> for EffectApproval {
+    fn from(approval: Option<crate::tools::ToolApproval>) -> Self {
+        approval.map_or_else(Self::default, |approval| Self {
+            decision: Some(approval.decision),
+            approval_type: Some(approval.approval_type),
+            approval_source: Some(approval.approval_source),
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -564,7 +604,8 @@ impl PublicHistoryEntry {
         self.metadata_mut().session_id = session_id.into();
     }
 
-    fn metadata_mut(&mut self) -> &mut PublicEntryMetadata {
+    /// The fields every entry carries, to change in place.
+    pub fn metadata_mut(&mut self) -> &mut PublicEntryMetadata {
         match self {
             Self::Message { metadata, .. }
             | Self::Reasoning { metadata, .. }
@@ -943,6 +984,7 @@ mod tests {
                 is_error: false,
                 cancelled: false,
                 skipped: false,
+                approval: None,
             },
         )
         .expect_err("a result without its call is refused");
@@ -1425,6 +1467,7 @@ mod tests {
                     is_error: false,
                     cancelled: false,
                     skipped: false,
+                    approval: None,
                 },
             ),
         ] {
@@ -1595,6 +1638,7 @@ mod tests {
             is_error,
             cancelled: false,
             skipped: false,
+            approval: None,
         }
     }
 

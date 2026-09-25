@@ -1538,6 +1538,7 @@ async fn observe(
 /// the two sides compare a kind rather than a language's type name.
 fn error_type(error: &ToolError) -> &'static str {
     match error {
+        ToolError::Approved { source, .. } => error_type(source),
         ToolError::SchemaViolation { .. } => "ValidationError",
         _ => "ToolError",
     }

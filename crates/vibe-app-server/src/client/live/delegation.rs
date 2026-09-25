@@ -252,6 +252,8 @@ pub(crate) fn task_handler(
                 Ok(ToolExecutionOutput {
                     skip: None,
                     turn_failure: None,
+                    approval: None,
+                    failure: None,
                     model_text,
                     typed_result,
                     display: json!({"kind": "subagent", "effect": effect}),

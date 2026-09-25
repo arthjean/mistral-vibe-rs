@@ -445,9 +445,20 @@ impl ServerConnection {
                 // The checkpoint joins the history before the limit applies,
                 // as reference `_checkpoint_state` builds the whole history
                 // and `public_state` then keeps its tail.
-                snapshot
+                // Every replayed entry is stamped at the read plus its
+                // position, so the checkpoint is stamped no earlier than the
+                // last of them: a history ordered by time keeps it at the end.
+                let mut checkpoint = resume_checkpoint(&snapshot.session_id);
+                if let Some(last) = snapshot
                     .history
-                    .push(resume_checkpoint(&snapshot.session_id));
+                    .last()
+                    .map(|entry| entry.metadata().created_at)
+                {
+                    let metadata = checkpoint.metadata_mut();
+                    metadata.created_at = metadata.created_at.max(last.saturating_add(1));
+                    metadata.updated_at = metadata.created_at;
+                }
+                snapshot.history.push(checkpoint);
                 let excess = snapshot
                     .history
                     .len()

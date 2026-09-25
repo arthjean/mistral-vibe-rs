@@ -325,6 +325,7 @@ fn a_callback_detail_names_what_it_asks_for() {
         required_permissions: vec![PermissionRequirement::command("rm -rf /")],
         choices: ApprovalDecisionType::ALL.to_vec(),
         related_entry_id: Some("entry-1".to_owned()),
+        reason: None,
     };
     let wire = serde_json::to_value(&approval).expect("serializes");
     assert_eq!(wire["kind"], "approval");

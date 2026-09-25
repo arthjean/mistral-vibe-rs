@@ -40,7 +40,7 @@ async fn a_headless_launch_states_the_directive_and_an_interactive_one_does_not(
                 .filter(|message| matches!(
                     message,
                     ModelMessage::System { content }
-                        if content == vibe_core::prompt::HEADLESS_SECTION
+                        if content.ends_with(vibe_core::prompt::HEADLESS_SECTION)
                 ))
                 .count(),
             usize::from(headless),

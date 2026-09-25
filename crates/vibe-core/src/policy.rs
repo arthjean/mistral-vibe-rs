@@ -13,7 +13,8 @@ use crate::matching::pattern_matches;
 use crate::scratchpad::is_scratchpad_path;
 use crate::tools::config::{SharedToolConfig, ToolConfigResolver, permission_label};
 use crate::tools::{
-    ToolError, ToolExecutionOutput, ToolHandler, ToolInvocation, ToolOutputSink, ToolSkip,
+    ToolApproval, ToolApprovalSource, ToolApprovalType, ToolError, ToolExecutionOutput,
+    ToolHandler, ToolInvocation, ToolOutputSink, ToolSkip, ToolVerdict,
 };
 
 pub mod arity;
@@ -402,6 +403,14 @@ pub enum ApprovalDecision {
 
 pub trait ApprovalAgent: Send + Sync {
     fn request<'a>(&'a self, request: ApprovalRequest) -> ApprovalFuture<'a>;
+
+    /// Who answers for `tool` when this agent does. An agent that asks
+    /// somebody answers as the operator; one that approves without asking
+    /// stands for a configured permission or for a bypass of the gate, which
+    /// is what reference `_should_execute_tool` records as the source.
+    fn attribution(&self, _tool: &str) -> ToolApprovalSource {
+        ToolApprovalSource::User
+    }
 }
 
 /// What a tool family publishes its tools behind: the session's permission
@@ -501,6 +510,7 @@ impl ToolHandler for PolicyGuardedTool {
                     let mut output = ToolExecutionOutput::text(reason);
                     output.typed_result = Value::Null;
                     output.skip = Some(ToolSkip { cancelled });
+                    output.approval = Some(ToolApproval::declined());
                     return Ok(output);
                 }
                 Err(error) => return Err(ToolError::Execution(error.to_string())),
@@ -513,7 +523,16 @@ impl ToolHandler for PolicyGuardedTool {
             lease
                 .revalidate_locked(&state)
                 .map_err(|error| ToolError::Execution(error.to_string()))?;
-            inner.invoke(&invocation, output).await
+            match inner.invoke(&invocation, output).await {
+                Ok(mut result) => {
+                    result.approval.get_or_insert(lease.approval);
+                    Ok(result)
+                }
+                Err(source) => Err(ToolError::Approved {
+                    approval: lease.approval,
+                    source: Box::new(source),
+                }),
+            }
         })
     }
 }
@@ -847,11 +866,13 @@ impl PermissionStore {
         let context = Arc::new(context);
         let state = self.state.read().await;
         let resolution = resolve_locked(&state, tool, &context, &settings)?;
+        let attribution = approval.attribution(tool);
         match resolution.mode {
             PermissionMode::Always => {
                 let revision = state.revision;
                 drop(state);
-                Ok(self.lease(revision, tool, context, settings))
+                let granted = granted_without_asking(&resolution, attribution);
+                Ok(self.lease(revision, tool, context, settings, granted))
             }
             PermissionMode::Never => Err(PolicyError::Denied(resolution.rationale)),
             PermissionMode::Ask => {
@@ -861,7 +882,8 @@ impl PermissionStore {
                 let resolution = resolve_locked(&state, tool, &context, &settings)?;
                 match resolution.mode {
                     PermissionMode::Always => {
-                        return Ok(self.lease(state.revision, tool, context, settings));
+                        let granted = granted_without_asking(&resolution, attribution);
+                        return Ok(self.lease(state.revision, tool, context, settings, granted));
                     }
                     PermissionMode::Never => {
                         return Err(PolicyError::Denied(resolution.rationale));
@@ -883,6 +905,16 @@ impl PermissionStore {
                         call_id: context.call_id.clone(),
                     })
                     .await?;
+                // An agent that approves without asking answers as what it
+                // stands for; one that asked answers as the operator.
+                let answered = ToolApproval {
+                    decision: ToolVerdict::Execute,
+                    approval_type: match attribution {
+                        ToolApprovalSource::User => ToolApprovalType::Ask,
+                        _ => ToolApprovalType::Always,
+                    },
+                    approval_source: attribution,
+                };
                 match decision {
                     ApprovalDecision::ApproveOnce => {
                         let state = self.state.read().await;
@@ -892,7 +924,7 @@ impl PermissionStore {
                                 return Err(PolicyError::Denied(current.rationale));
                             }
                         }
-                        Ok(self.lease(state.revision, tool, context, settings))
+                        Ok(self.lease(state.revision, tool, context, settings, answered))
                     }
                     ApprovalDecision::ApproveForSession | ApprovalDecision::ApprovePermanently => {
                         let permanent = decision == ApprovalDecision::ApprovePermanently;
@@ -921,7 +953,7 @@ impl PermissionStore {
                                 .map(|requirement| requirement.approved_rule(tool, persistence)),
                         );
                         state.revision = state.revision.saturating_add(1);
-                        Ok(self.lease(state.revision, tool, context, settings))
+                        Ok(self.lease(state.revision, tool, context, settings, answered))
                     }
                     // Reference `get_user_cancellation_message(TOOL_SKIPPED)`.
                     ApprovalDecision::Deny => Err(PolicyError::Skipped {
@@ -973,6 +1005,7 @@ impl PermissionStore {
         tool: &str,
         context: Arc<PermissionContext>,
         settings: Arc<SharedToolConfig>,
+        approval: ToolApproval,
     ) -> PolicyLease {
         PolicyLease {
             store: self.clone(),
@@ -980,6 +1013,7 @@ impl PermissionStore {
             tool: tool.to_owned(),
             context,
             settings,
+            approval,
         }
     }
 }
@@ -993,9 +1027,17 @@ pub struct PolicyLease {
     /// rather than a newer one.
     context: Arc<PermissionContext>,
     settings: Arc<SharedToolConfig>,
+    /// How the gate settled the call this lease authorizes.
+    approval: ToolApproval,
 }
 
 impl PolicyLease {
+    /// How the gate settled the call, which the settled effect publishes.
+    #[must_use]
+    pub fn approval(&self) -> ToolApproval {
+        self.approval
+    }
+
     pub async fn revalidate(&self) -> Result<(), PolicyError> {
         let state = self.store.state.read().await;
         self.revalidate_locked(&state)
@@ -1050,6 +1092,27 @@ pub enum PolicyError {
     Skipped { reason: String, cancelled: bool },
     #[error("permission state is busy with an active side effect")]
     Busy,
+}
+
+/// The provenance of a call the gate let through without asking.
+///
+/// Reference `_should_execute_tool`: an agent that bypasses the gate answers
+/// first, then a call whose raised requirements stored rules already cover is
+/// the smart approval, and anything else the configured permission.
+fn granted_without_asking(
+    resolution: &PolicyResolution,
+    attribution: ToolApprovalSource,
+) -> ToolApproval {
+    let approval_source = match attribution {
+        ToolApprovalSource::Bypass => ToolApprovalSource::Bypass,
+        _ if resolution.matched_rule.is_some() => ToolApprovalSource::Smart,
+        _ => ToolApprovalSource::Config,
+    };
+    ToolApproval {
+        decision: ToolVerdict::Execute,
+        approval_type: ToolApprovalType::Always,
+        approval_source,
+    }
 }
 
 /// Resolves what a call may do, from the tool's own context and the stored

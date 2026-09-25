@@ -169,27 +169,28 @@ pub trait ConversationMiddleware: Send + Sync {
 
 /// Stops the turn once the step budget is spent.
 ///
-/// The comparison is this port's, not the reference's: `steps >= max_turns`
-/// where the reference writes `steps - 1 >= max_turns`, because the port counts
-/// a step on completion and the reference counts it on entry. The observable
-/// stop reason is the same, and the existing engine tests pin it.
+/// Reference `TurnLimitMiddleware`: the session counts a step for the
+/// operator's message and one for every model turn that ran to completion, and
+/// the budget is spent once `steps - 1` reaches it, so `--max-turns 1` lets one
+/// model turn and its tool calls run before the next cycle stops.
 #[derive(Debug, Clone, Copy)]
 pub struct TurnLimitMiddleware {
-    max_turns: u32,
+    max_turns: i64,
 }
 
 impl TurnLimitMiddleware {
     #[must_use]
-    pub fn new(max_turns: u32) -> Self {
+    pub fn new(max_turns: i64) -> Self {
         Self { max_turns }
     }
 }
 
 impl ConversationMiddleware for TurnLimitMiddleware {
     fn before_turn(&self, context: &ConversationContext<'_>) -> MiddlewareResult {
-        if context.stats.steps >= self.max_turns {
+        // Reference `steps - 1 >= max_turns`.
+        if i64::from(context.stats.steps) > self.max_turns {
             return MiddlewareResult::stop(
-                format!("turn limit of {} reached", self.max_turns),
+                format!("Turn limit of {} reached", self.max_turns),
                 TurnStopReason::MaxSteps,
             );
         }
@@ -200,23 +201,24 @@ impl ConversationMiddleware for TurnLimitMiddleware {
 /// Stops the turn once the session costs more than the operator allowed.
 #[derive(Debug, Clone, Copy)]
 pub struct PriceLimitMiddleware {
-    max_price_micros: u64,
+    max_price_micros: i64,
 }
 
 impl PriceLimitMiddleware {
     #[must_use]
-    pub fn new(max_price_micros: u64) -> Self {
+    pub fn new(max_price_micros: i64) -> Self {
         Self { max_price_micros }
     }
 }
 
 impl ConversationMiddleware for PriceLimitMiddleware {
     fn before_turn(&self, context: &ConversationContext<'_>) -> MiddlewareResult {
-        if context.price_micros > self.max_price_micros {
+        if i128::from(context.price_micros) > i128::from(self.max_price_micros) {
             return MiddlewareResult::stop(
                 format!(
-                    "price limit exceeded: {} > {} micros",
-                    context.price_micros, self.max_price_micros
+                    "Price limit exceeded: ${} > ${}",
+                    dollars(i128::from(context.price_micros), 4),
+                    dollars(i128::from(self.max_price_micros), 2)
                 ),
                 TurnStopReason::PriceLimit,
             );
@@ -228,12 +230,12 @@ impl ConversationMiddleware for PriceLimitMiddleware {
 /// Stops the turn once the session spent more tokens than the operator allowed.
 #[derive(Debug, Clone, Copy)]
 pub struct TokenLimitMiddleware {
-    max_total_tokens: u64,
+    max_total_tokens: i64,
 }
 
 impl TokenLimitMiddleware {
     #[must_use]
-    pub fn new(max_total_tokens: u64) -> Self {
+    pub fn new(max_total_tokens: i64) -> Self {
         Self { max_total_tokens }
     }
 }
@@ -245,14 +247,43 @@ impl ConversationMiddleware for TokenLimitMiddleware {
             .usage
             .input_tokens
             .saturating_add(context.stats.usage.output_tokens);
-        if spent > self.max_total_tokens {
+        if i128::from(spent) > i128::from(self.max_total_tokens) {
             return MiddlewareResult::stop(
-                format!("token limit exceeded: {spent} > {}", self.max_total_tokens),
+                format!(
+                    "Token limit exceeded: {} > {}",
+                    thousands(i128::from(spent)),
+                    thousands(i128::from(self.max_total_tokens))
+                ),
                 TurnStopReason::TokenLimit,
             );
         }
         MiddlewareResult::proceed()
     }
+}
+
+/// A price in micros as the reference formats dollars, `{:.N}`.
+fn dollars(micros: i128, precision: usize) -> String {
+    // The reference compares and prints floats; the micros this port counts
+    // in convert exactly for every price below 2^53 micros.
+    #[allow(clippy::cast_precision_loss)]
+    let value = micros as f64 / 1_000_000.0;
+    format!("{value:.precision$}")
+}
+
+/// An integer as Python's `{:,}` groups it.
+fn thousands(value: i128) -> String {
+    let digits = value.unsigned_abs().to_string();
+    let mut grouped = String::with_capacity(digits.len() + digits.len() / 3 + 1);
+    if value < 0 {
+        grouped.push('-');
+    }
+    for (index, digit) in digits.chars().enumerate() {
+        if index > 0 && (digits.len() - index).is_multiple_of(3) {
+            grouped.push(',');
+        }
+        grouped.push(digit);
+    }
+    grouped
 }
 
 /// Compacts the transcript once it reaches the configured threshold.
@@ -404,18 +435,21 @@ impl MiddlewarePipeline {
     /// registration order: turns, then price, then tokens.
     ///
     /// A policy is registered when its limit exists, which is what the
-    /// reference's `is not None` tests. This port collapses an absent price
-    /// limit to `u64::MAX`, so that value, and only that value, means absent;
-    /// the step and token limits have no absent representation and a zero there
-    /// is a real limit that stops the turn at once.
+    /// reference's `is not None` tests. This port collapses an absent limit to
+    /// the maximum of its type, so that value, and only that value, means
+    /// absent; a zero is a real limit that stops the turn at once.
     #[must_use]
     pub fn from_limits(limits: &EngineLimits) -> Self {
         let mut pipeline = Self::new();
-        pipeline.add(Arc::new(TurnLimitMiddleware::new(limits.max_steps)));
-        if limits.max_price_micros != u64::MAX {
+        if limits.max_steps != i64::MAX {
+            pipeline.add(Arc::new(TurnLimitMiddleware::new(limits.max_steps)));
+        }
+        if limits.max_price_micros != i64::MAX {
             pipeline.add(Arc::new(PriceLimitMiddleware::new(limits.max_price_micros)));
         }
-        pipeline.add(Arc::new(TokenLimitMiddleware::new(limits.max_total_tokens)));
+        if limits.max_total_tokens != i64::MAX {
+            pipeline.add(Arc::new(TokenLimitMiddleware::new(limits.max_total_tokens)));
+        }
         pipeline
     }
 

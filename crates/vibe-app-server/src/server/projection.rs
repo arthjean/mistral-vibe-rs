@@ -3,6 +3,7 @@
 use super::*;
 use crate::workspace::{history_entry_id, reference_message_index};
 use vibe_core::compaction::context::is_compaction_context_message;
+use vibe_core::events::EffectApproval;
 
 /// The session's status as the wire union publishes it.
 ///
@@ -51,16 +52,18 @@ pub(super) fn public_session_state(session: &SessionRuntime) -> Value {
         .unwrap_or_default();
     let status = public_session_status(session);
     // Reference `message_preview`: the first user message the operator typed,
-    // cut at 160 characters. Harness-written turns never name a session.
+    // cut at 160 characters. Context the harness injected during a turn never
+    // names a session; a replayed message, which carries no turn, does.
     let preview = history
         .iter()
         .find_map(|entry| match entry {
             PublicHistoryEntry::Message {
+                metadata,
                 role: PublicMessageRole::User,
                 content,
                 source,
                 ..
-            } if *source != Some(PublicMessageSource::Harness) => {
+            } if *source != Some(PublicMessageSource::Harness) || metadata.turn_id.is_none() => {
                 Some(content_text(content)).filter(|text| !text.is_empty())
             }
             _ => None,
@@ -209,7 +212,10 @@ pub(super) fn persisted_projection(
     // session sits now, which is the directory a live turn stamps as well.
     let working_directory = Some(Path::new(working_directory));
     let session_id = &hydrated.metadata.id;
-    let base_timestamp = hydrated.metadata.created_at_ms;
+    // Reference `project_message_history` stamps a replayed entry with the
+    // moment it was read back plus its position, so the replay orders before
+    // anything the reopened session goes on to add.
+    let base_timestamp = crate::host::now_millis();
     // The call's name and arguments are what the effect detail is rebuilt from,
     // so a resumed transcript renders through the same typed path a live turn
     // publishes rather than through a generic fallback.
@@ -274,7 +280,9 @@ pub(super) fn persisted_projection(
                 })
                 .chain(attachments.iter().cloned())
                 .collect(),
-                source: Some(PublicMessageSource::TurnStart),
+                // Reference `_history_user_message`: a replayed message is the
+                // harness's, whoever typed it first.
+                source: Some(PublicMessageSource::Harness),
                 user_display_content: None,
             }),
             ModelMessage::Assistant {
@@ -299,7 +307,7 @@ pub(super) fn persisted_projection(
                         content: vec![PublicContentBlock::Text {
                             text: content.clone(),
                         }],
-                        source: None,
+                        source: Some(PublicMessageSource::Harness),
                         user_display_content: None,
                     });
                 }
@@ -327,9 +335,11 @@ pub(super) fn persisted_projection(
                             code: Some("persisted_tool_error".to_owned()),
                             details: Value::Null,
                         },
+                        output: Value::Null,
                         output_text: content.clone(),
                         duration_ms: 0,
                         display: EffectResultDisplay::failed(&detail.display),
+                        approval: EffectApproval::default(),
                     }
                 } else {
                     let output = json!(content);
@@ -344,6 +354,7 @@ pub(super) fn persisted_projection(
                         output,
                         output_text: content.clone(),
                         duration_ms: 0,
+                        approval: EffectApproval::default(),
                     }
                 };
                 history.push(PublicHistoryEntry::Effect {
@@ -367,6 +378,7 @@ pub(super) fn persisted_projection(
             state: PublicEffectState::Skipped {
                 reason: "Persisted tool call has no recorded result".to_owned(),
                 display: EffectResultDisplay::skipped(&title),
+                approval: EffectApproval::default(),
             },
             title,
             tool_call_id: call_id,

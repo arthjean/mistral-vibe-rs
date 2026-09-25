@@ -19,10 +19,12 @@ use vibe_core::middleware::CompactionSettings;
 use vibe_core::provider::{ProviderError, Usage};
 use vibe_core::storage::{HydratedSession, SessionStore};
 use vibe_core::tools::ToolRegistry;
+pub use vibe_protocol::{
+    CallbackKind as ClientCallbackKind, ClientCapabilities, ClientEntrypoint, ClientInfo,
+};
 use vibe_protocol::{
-    CallbackKind as ClientCallbackKind, ClientCapabilities, ClientEntrypoint, ClientInfo, Envelope,
-    ErrorResponse, ProtocolError, RequestId, SuccessResponse, TerminalEmulator, TransportKind,
-    decode_frame,
+    Envelope, ErrorResponse, ProtocolError, RequestId, SuccessResponse, TerminalEmulator,
+    TransportKind, decode_frame,
 };
 
 pub use crate::images::PreparedImages;
@@ -160,11 +162,11 @@ pub struct SessionOptions {
     #[serde(default)]
     pub model: Option<String>,
     #[serde(default)]
-    pub max_turns: Option<u32>,
+    pub max_turns: Option<i64>,
     #[serde(default)]
-    pub max_tokens: Option<u64>,
+    pub max_tokens: Option<i64>,
     #[serde(default)]
-    pub max_price_micros: Option<u64>,
+    pub max_price_micros: Option<i64>,
     #[serde(default)]
     pub mode: Option<String>,
     #[serde(default)]
@@ -669,7 +671,9 @@ fn session_stats(metadata: &vibe_core::storage::SessionMetadata) -> SessionStats
     }
 }
 
-pub(crate) fn public_turn_error(reason: &PublicTurnStopReason) -> Option<PublicError> {
+/// The failure a turn that stopped for `reason` publishes, if it failed.
+#[must_use]
+pub fn public_turn_error(reason: &PublicTurnStopReason) -> Option<PublicError> {
     match reason {
         PublicTurnStopReason::Refusal => Some(public_turn_failure(
             TurnErrorCode::Refusal,

@@ -94,7 +94,8 @@ async fn live_driver_hydrates_and_extends_a_durable_resume() {
     assert_eq!(outcome.usage.input_tokens, 13);
     assert_eq!(outcome.usage.output_tokens, 6);
     assert_eq!(outcome.context_tokens, 5);
-    assert_eq!(outcome.steps, 3);
+    // The operator's message is a step, and so is the model turn answering it.
+    assert_eq!(outcome.steps, 4);
     let seen = seen.lock().expect("seen messages");
     assert!(matches!(
         seen.first(),
@@ -116,7 +117,7 @@ async fn live_driver_hydrates_and_extends_a_durable_resume() {
         6
     );
     assert_eq!(persisted.metadata.statistics["context_tokens"], 5);
-    assert_eq!(persisted.metadata.statistics["steps"], 3);
+    assert_eq!(persisted.metadata.statistics["steps"], 4);
 }
 
 /// US-157: the warning reaches the model itself, once, on the turn that
@@ -587,6 +588,8 @@ async fn live_driver_exposes_and_executes_the_session_tool_registry() {
                         Ok(ToolExecutionOutput {
                             skip: None,
                             turn_failure: None,
+                            approval: None,
+                            failure: None,
                             typed_result: json!({"echo": "rust"}),
                             model_text: "hello rust".to_owned(),
                             display: Value::Null,

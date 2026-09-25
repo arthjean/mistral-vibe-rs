@@ -247,12 +247,14 @@ fn every_registered_policy_receives_the_reset_reason() {
 fn each_limit_policy_names_its_public_stop_reason() {
     let compaction = CompactionSettings::default();
 
-    let at_the_step_limit = stats(3, 0, 0, 0);
+    // Reference `steps - 1 >= max_turns`: the operator's message is a step,
+    // so three model turns are spent at four steps.
+    let at_the_step_limit = stats(4, 0, 0, 0);
     let turns =
         TurnLimitMiddleware::new(3).before_turn(&context(&at_the_step_limit, 0, &compaction));
     assert_eq!(turns.action, MiddlewareAction::Stop);
     assert_eq!(turns.stop_reason, Some(TurnStopReason::MaxSteps));
-    let below = stats(2, 0, 0, 0);
+    let below = stats(3, 0, 0, 0);
     assert_eq!(
         TurnLimitMiddleware::new(3)
             .before_turn(&context(&below, 0, &compaction))
@@ -295,7 +297,7 @@ fn the_turn_limit_precedes_compaction_in_registration_order() {
     });
     pipeline.add(Scripted::new(MiddlewareResult::compact()) as Arc<dyn ConversationMiddleware>);
 
-    let at_the_limit = stats(1, 0, 0, 500_000);
+    let at_the_limit = stats(2, 0, 0, 500_000);
     let compaction = CompactionSettings {
         auto_compact_threshold: 1,
         ..CompactionSettings::default()
@@ -311,15 +313,15 @@ fn an_absent_price_limit_registers_no_policy() {
     let without = MiddlewarePipeline::from_limits(&EngineLimits::default());
     assert_eq!(
         without.len(),
-        2,
-        "the default price limit is absent, so only turns and tokens register"
+        0,
+        "every default limit is absent, so no budget policy registers"
     );
 
     let with = MiddlewarePipeline::from_limits(&EngineLimits {
         max_price_micros: 500,
         ..EngineLimits::default()
     });
-    assert_eq!(with.len(), 3);
+    assert_eq!(with.len(), 1);
 
     let idle = stats(0, 0, 0, 0);
     let compaction = CompactionSettings::default();
@@ -391,7 +393,7 @@ fn a_limit_and_the_threshold_in_one_cycle_resolve_to_stop() {
         ..CompactionSettings::default()
     };
 
-    let both = pipeline.before_turn(&context(&stats(1, 0, 0, 500_000), 0, &compaction));
+    let both = pipeline.before_turn(&context(&stats(2, 0, 0, 500_000), 0, &compaction));
     assert_eq!(both.action, MiddlewareAction::Stop);
     assert_eq!(both.stop_reason, Some(TurnStopReason::MaxSteps));
 

@@ -285,8 +285,10 @@ pub(super) fn reduce_event(
             is_error,
             cancelled,
             skipped,
+            approval,
         } => {
             require_active(state, "tool_result")?;
+            let approval = EffectApproval::from(*approval);
             let entry = effect_entry(state, call_id, "tool_result_without_call")?;
             if let PublicHistoryEntry::Effect {
                 metadata,
@@ -342,11 +344,13 @@ pub(super) fn reduce_event(
                         output_text: streamed,
                         duration_ms: *duration_ms,
                         display: Some(declined()),
+                        approval,
                     }
                 } else if *skipped {
                     PublicEffectState::Skipped {
                         reason: content.clone(),
                         display: declined(),
+                        approval,
                     }
                 } else if *cancelled {
                     PublicEffectState::Cancelled {
@@ -358,6 +362,7 @@ pub(super) fn reduce_event(
                             typed_result,
                             display,
                         ),
+                        approval,
                     }
                 } else if *is_error {
                     // Reference `project_effect_state`: the error is the
@@ -368,6 +373,7 @@ pub(super) fn reduce_event(
                             code: None,
                             details: Value::Null,
                         },
+                        output: Value::Null,
                         output_text: streamed,
                         duration_ms: *duration_ms,
                         display: match &detail.remote {
@@ -383,6 +389,7 @@ pub(super) fn reduce_event(
                             // as its own message.
                             None => failure_display(content),
                         },
+                        approval,
                     }
                 } else {
                     let output_text = if streamed.is_empty() && detail.kind == ToolEffectKind::Shell
@@ -409,6 +416,7 @@ pub(super) fn reduce_event(
                             ),
                         },
                         output,
+                        approval,
                     }
                 };
                 // The child session is named by the delegation the tool answers
@@ -755,6 +763,7 @@ fn settle_unfinished_effects(state: &mut ProjectionSnapshot, cancelled: bool, em
                 output_text,
                 duration_ms: 0,
                 display: Some(display),
+                approval: EffectApproval::default(),
             }
         } else {
             PublicEffectState::Failed {
@@ -763,9 +772,11 @@ fn settle_unfinished_effects(state: &mut ProjectionSnapshot, cancelled: bool, em
                     code: None,
                     details: Value::Null,
                 },
+                output: Value::Null,
                 output_text,
                 duration_ms: 0,
                 display,
+                approval: EffectApproval::default(),
             }
         };
         metadata.generation_status = PublicEntryGenerationStatus::Completed;
@@ -841,6 +852,7 @@ fn engine_callback_detail(kind: CallbackKind, prompt: &str) -> CallbackDetail {
             required_permissions: Vec::new(),
             choices: ApprovalDecisionType::ALL.to_vec(),
             related_entry_id: None,
+            reason: None,
         },
     }
 }

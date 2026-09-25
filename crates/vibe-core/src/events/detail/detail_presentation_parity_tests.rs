@@ -95,7 +95,6 @@ const KIND_HEADER_ROW: &str =
     "A call header comes from the effect kind, not from a per-tool UI class";
 const KIND_SETTLEMENT_ROW: &str =
     "A settled call repeats its subject instead of reading the result";
-const CALL_CONTENT_ROW: &str = "No call display carries a content preview";
 const INVALID_LABEL_ROW: &str = "The label an argument of the wrong class is answered with";
 const AUTHORED_CALL_TEXT_ROW: &str = "Authored call-display text in the plan and fetch tools";
 
@@ -139,8 +138,6 @@ const FETCH_SUMMARY: &str = "the reference renders the fetch target and its time
      authored; this port renders the target alone";
 const FETCH_STATUS: &str = "the reference names the fetch with a label it authored; this port \
      publishes its own";
-const CALL_CONTENT: &str = "the reference's edit and write displays publish a `content` preview \
-     of what the call would change; this port publishes null on every tool";
 const RESULT_SETTLEMENT: &str = "the reference settles the call from the tool's own result \
      display, which reads the returned payload; this port settles from the generic kind and \
      repeats the call subject, and where the reference's settled sentence is authored text \
@@ -192,24 +189,8 @@ const SELF_NAMED_VERB_TOOLS: [&str; 8] = [
 const NAME_ON_INVALID_SUMMARY: [&str; 2] = ["web_fetch", "web_search"];
 const NAME_ON_INVALID_MESSAGE: [&str; 3] = ["task", "web_fetch", "web_search"];
 
-/// The two builtins whose displays publish a `content` preview upstream.
-const CONTENT_TOOLS: [&str; 2] = ["edit", "write_file"];
-
 /// The three call cases every tool is driven through.
 const CALL_CASES: [&str; 3] = ["valid-arguments", "absent-arguments", "wrong-argument-type"];
-
-/// The call cases of the path family, one per path shape the capture drives
-/// the three file tools through (`PATH_SHAPES` in the capture script).
-const PATH_CALL_CASES: [&str; 8] = [
-    "path-inside-call",
-    "path-relative-call",
-    "path-the-directory-call",
-    "path-dotted-call",
-    "path-doubled-separator-call",
-    "path-sibling-prefix-call",
-    "path-outside-call",
-    "path-scratchpad-call",
-];
 
 const PLAN_TOOL: &str = "exit_plan_mode";
 const FETCH_TOOL: &str = "web_fetch";
@@ -341,18 +322,6 @@ fn ledger() -> Vec<Divergence> {
                 RECORDED,
                 why,
                 KIND_HEADER_ROW,
-            );
-        }
-    }
-    for tool in CONTENT_TOOLS {
-        for case in std::iter::once("valid-arguments").chain(PATH_CALL_CASES) {
-            add(
-                tool,
-                case,
-                "/display/content",
-                RECORDED,
-                CALL_CONTENT,
-                CALL_CONTENT_ROW,
             );
         }
     }

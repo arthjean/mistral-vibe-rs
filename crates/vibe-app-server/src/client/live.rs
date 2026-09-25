@@ -482,9 +482,11 @@ impl LiveTurnDriver {
             .clone()
             .unwrap_or_else(|| vibe_core::engine::DEFAULT_AGENT_PROFILE.to_owned());
         let limits = EngineLimits {
-            max_steps: reservation.intent.max_turns.unwrap_or(20),
-            max_total_tokens: reservation.intent.max_tokens.unwrap_or(200_000),
-            max_price_micros: reservation.intent.max_price_micros.unwrap_or(u64::MAX),
+            // An absent budget is no budget: the reference registers a limit
+            // policy only for a limit the session was given.
+            max_steps: reservation.intent.max_turns.unwrap_or(i64::MAX),
+            max_total_tokens: reservation.intent.max_tokens.unwrap_or(i64::MAX),
+            max_price_micros: reservation.intent.max_price_micros.unwrap_or(i64::MAX),
             input_price_per_million_micros: self.input_price_per_million_micros,
             output_price_per_million_micros: self.output_price_per_million_micros,
             ..EngineLimits::default()
@@ -567,11 +569,11 @@ impl LiveTurnDriver {
             thinking: reservation.intent.thinking,
             reasoning_effort: reservation.intent.reasoning_effort.clone(),
             headers: BTreeMap::new(),
+            // `--max-tokens` is a session budget (reference
+            // `max_session_tokens`), never a cap on one completion: the
+            // reference builds its policy with `max_tokens=None`.
             limits: RequestLimits {
-                max_tokens: reservation
-                    .intent
-                    .max_tokens
-                    .and_then(|value| u32::try_from(value).ok()),
+                max_tokens: None,
                 temperature_millis: None,
             },
             metadata: turn_metadata(reservation),
@@ -620,9 +622,15 @@ impl LiveTurnDriver {
         if reservation.injected {
             engine = engine.with_injected_prompt();
         }
-        if let Some(message_id) = &reservation.client_user_message_id {
-            engine = engine.with_user_message_id(message_id);
-        }
+        // Reference `LLMMessage.message_id` defaults to a fresh UUID, so the
+        // operator's message never shares an identity with one a resumed
+        // session replays from an earlier process.
+        engine = engine.with_user_message_id(
+            reservation
+                .client_user_message_id
+                .clone()
+                .unwrap_or_else(vibe_core::session_id::uuid_v4),
+        );
         engine = engine.with_user_attachments(user_attachments);
         engine
             .run_turn_controlled(
@@ -646,18 +654,20 @@ impl LiveTurnDriver {
         &self,
         reservation: &TurnReservation,
     ) -> Result<Vec<ModelMessage>, DriverError> {
-        let mut messages = vec![ModelMessage::System {
-            content: self.system_prompt.clone(),
-        }];
         // A launch that told the session nobody is behind it carries the
-        // directive the composed prompt carries for the same flag, so a
-        // headless run reads the same instruction either way
-        // (`vibe/core/system_prompt.py:358-368`).
-        if reservation.intent.headless {
-            messages.push(ModelMessage::System {
-                content: vibe_core::prompt::HEADLESS_SECTION.to_owned(),
-            });
-        }
+        // directive the composed prompt carries for the same flag, as a section
+        // of the one system message the reference sends
+        // (`vibe/core/system_prompt.py:386-396`).
+        let content = if reservation.intent.headless {
+            format!(
+                "{}\n\n{}",
+                self.system_prompt.trim_end(),
+                vibe_core::prompt::HEADLESS_SECTION
+            )
+        } else {
+            self.system_prompt.clone()
+        };
+        let mut messages = vec![ModelMessage::System { content }];
         if reservation.intent.mode.as_deref() == Some("plan") {
             let plan_path = self
                 .plan_directory()

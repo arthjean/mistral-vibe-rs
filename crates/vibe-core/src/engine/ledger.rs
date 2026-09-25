@@ -52,6 +52,12 @@ impl TurnLedger {
         }
     }
 
+    /// Counts the operator's message as a step, as the reference does when
+    /// it appends it.
+    pub(super) fn count_user_message(&mut self) {
+        self.steps = self.steps.saturating_add(1);
+    }
+
     pub(super) fn record_completion(&mut self, usage: &Usage, limits: &EngineLimits) {
         self.steps = self.steps.saturating_add(1);
         self.context_tokens = usage.input_tokens.saturating_add(usage.output_tokens);

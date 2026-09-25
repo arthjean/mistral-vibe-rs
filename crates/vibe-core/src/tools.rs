@@ -185,6 +185,67 @@ pub struct ToolExecutionOutput {
     /// (`vibe/app_server/_turns.py`) raises out of the tool and ends the turn.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub turn_failure: Option<String>,
+    /// How the permission gate settled the call, when one guarded it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval: Option<ToolApproval>,
+    /// Set when the call ran and failed after the gate let it through: the
+    /// error the model reads, carried here rather than as an `Err` so the
+    /// gate's answer still reaches the settled effect.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure: Option<String>,
+}
+
+/// How a call's permission was settled. Reference `ToolResultEvent.decision`,
+/// `approval_type` and `approval_source`, which `AgentLoop._should_execute_tool`
+/// records on every call it gates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolApproval {
+    pub decision: ToolVerdict,
+    pub approval_type: ToolApprovalType,
+    pub approval_source: ToolApprovalSource,
+}
+
+impl ToolApproval {
+    /// A call the operator declined when asked.
+    #[must_use]
+    pub fn declined() -> Self {
+        Self {
+            decision: ToolVerdict::Skip,
+            approval_type: ToolApprovalType::Ask,
+            approval_source: ToolApprovalSource::User,
+        }
+    }
+}
+
+/// Whether the gate let the call run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolVerdict {
+    Execute,
+    Skip,
+}
+
+/// The permission the call was held to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolApprovalType {
+    Always,
+    Never,
+    Ask,
+}
+
+/// What answered for the call: the tool's configuration, a rule an earlier
+/// approval stored, the operator, an agent that bypasses the gate, or a
+/// permission that refuses it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolApprovalSource {
+    Config,
+    Smart,
+    User,
+    Bypass,
+    Never,
 }
 
 /// A call the user declined. Reference `ToolResultEvent.skipped`: the reason
@@ -211,6 +272,8 @@ impl ToolExecutionOutput {
             chunks: Vec::new(),
             skip: None,
             turn_failure: None,
+            approval: None,
+            failure: None,
         }
     }
 
@@ -230,6 +293,8 @@ impl ToolExecutionOutput {
             chunks: Vec::new(),
             skip: None,
             turn_failure: None,
+            approval: None,
+            failure: None,
         }
     }
 
@@ -816,8 +881,21 @@ impl ToolExecutor for ToolRegistry {
             .or_else(|error| match error {
                 ToolError::TurnFailed(message) => Ok(ToolExecutionOutput {
                     turn_failure: Some(message.clone()),
+                    approval: None,
                     ..ToolExecutionOutput::text(message)
                 }),
+                ToolError::Approved { approval, source } => match *source {
+                    ToolError::TurnFailed(message) => Ok(ToolExecutionOutput {
+                        turn_failure: Some(message.clone()),
+                        approval: Some(approval),
+                        ..ToolExecutionOutput::text(message)
+                    }),
+                    source => Ok(ToolExecutionOutput {
+                        approval: Some(approval),
+                        failure: Some(source.to_string()),
+                        ..ToolExecutionOutput::text(String::new())
+                    }),
+                },
                 error => Err(error.to_string()),
             })
         })
@@ -835,6 +913,12 @@ pub enum RegistrationOutcome {
 pub enum ToolError {
     #[error("tool registry lock is poisoned")]
     RegistryPoisoned,
+    /// A call the permission gate let through and that then failed.
+    #[error("{source}")]
+    Approved {
+        approval: ToolApproval,
+        source: Box<ToolError>,
+    },
     /// The answer the call waited on was refused, which fails the turn.
     #[error("{0}")]
     TurnFailed(String),
@@ -1075,6 +1159,8 @@ mod tests {
                     Ok(ToolExecutionOutput {
                         skip: None,
                         turn_failure: None,
+                        approval: None,
+                        failure: None,
                         typed_result: json!({"content": content}),
                         model_text: content.to_owned(),
                         display: json!({"kind": "read"}),

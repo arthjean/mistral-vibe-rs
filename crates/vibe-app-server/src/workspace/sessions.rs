@@ -330,7 +330,13 @@ impl WorkspaceService {
                 optional_string(params, "systemPrompt")?.unwrap_or_default(),
                 config_map(params.get("config"))?,
             )
-            .map_err(storage_error)?;
+            .map_err(|error| match error {
+                // Reference `SavedSessions.resolve` (`vibe/core/session/saved_sessions.py`).
+                StorageError::SessionNotFound(selector) => {
+                    WorkspaceServiceError::NotFound(format!("Session not found: {selector}"))
+                }
+                other => storage_error(other),
+            })?;
         self.continuity
             .refresh(hydrated.clone())
             .map_err(|error| WorkspaceServiceError::Storage(error.to_string()))?;
@@ -375,7 +381,15 @@ impl WorkspaceService {
     /// working directory against `WORKTREES_DIR`
     /// (`vibe/app_server/_runtime.py:640-648`). The sentence is this port's own.
     fn continuation_error(&self, cwd: &str, error: StorageError) -> WorkspaceServiceError {
-        let mapped = storage_error(error);
+        // Reference `_resolve_continue_session_id` names where it looked and
+        // for which directory.
+        let mapped = match error {
+            StorageError::NoSessions => WorkspaceServiceError::NotFound(format!(
+                "No previous sessions found in {} for cwd={cwd}",
+                self.paths.session_root.display()
+            )),
+            other => storage_error(other),
+        };
         let WorkspaceServiceError::NotFound(message) = &mapped else {
             return mapped;
         };

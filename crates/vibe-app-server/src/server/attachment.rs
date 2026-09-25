@@ -16,12 +16,10 @@ pub(super) fn apply_persisted_session_settings(
     if let Some(value) = config.get("active_model").and_then(Value::as_str) {
         intent.model = Some(value.to_owned());
     }
-    if let Some(value) = config.get("maxTurns").and_then(Value::as_u64)
-        && let Ok(value) = u32::try_from(value)
-    {
+    if let Some(value) = config.get("maxTurns").and_then(Value::as_i64) {
         intent.max_turns = Some(value);
     }
-    if let Some(value) = config.get("maxTokens").and_then(Value::as_u64) {
+    if let Some(value) = config.get("maxTokens").and_then(Value::as_i64) {
         intent.max_tokens = Some(value);
     }
     if let Some(value) = config.get("mode").and_then(Value::as_str)

@@ -55,11 +55,11 @@ pub(crate) struct SessionStartParams {
     #[serde(default)]
     pub(crate) model: Option<String>,
     #[serde(default)]
-    pub(crate) max_turns: Option<u32>,
+    pub(crate) max_turns: Option<i64>,
     #[serde(default, rename = "maxSessionTokens", alias = "maxTokens")]
-    pub(crate) max_tokens: Option<u64>,
+    pub(crate) max_tokens: Option<i64>,
     #[serde(default)]
-    pub(crate) max_price_micros: Option<u64>,
+    pub(crate) max_price_micros: Option<i64>,
     #[serde(default)]
     pub(crate) max_price: Option<f64>,
     #[serde(default)]
@@ -100,9 +100,9 @@ pub struct SessionIntent {
     pub agent_permission_rules: Vec<PermissionRule>,
     pub mcp_servers: Vec<Value>,
     pub model: Option<String>,
-    pub max_turns: Option<u32>,
-    pub max_tokens: Option<u64>,
-    pub max_price_micros: Option<u64>,
+    pub max_turns: Option<i64>,
+    pub max_tokens: Option<i64>,
+    pub max_price_micros: Option<i64>,
     pub mode: Option<String>,
     pub thinking: bool,
     pub reasoning_effort: Option<String>,
@@ -159,6 +159,8 @@ pub(crate) struct TelemetryRecordParams {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub(crate) struct SessionSettingsUpdateParams {
     pub(crate) session_id: String,
+    // Reference `NonNegativeStrictInt`: a settings update never spends a
+    // budget in advance, which only a launch flag can.
     #[serde(default)]
     pub(crate) max_turns: Option<u32>,
     #[serde(default)]
@@ -200,8 +202,8 @@ pub(crate) struct SessionOverridesWriteParams {
 pub(crate) struct SessionSettings {
     pub(crate) session_id: String,
     pub(crate) model: Option<String>,
-    pub(crate) max_turns: Option<u32>,
-    pub(crate) max_tokens: Option<u64>,
+    pub(crate) max_turns: Option<i64>,
+    pub(crate) max_tokens: Option<i64>,
     pub(crate) mode: Option<String>,
     pub(crate) thinking: Option<bool>,
     pub(crate) reasoning_effort: Option<String>,
@@ -300,8 +302,10 @@ impl From<SessionSettingsUpdateParams> for SessionSettings {
     fn from(params: SessionSettingsUpdateParams) -> Self {
         Self {
             session_id: params.session_id,
-            max_turns: params.max_turns,
-            max_tokens: params.max_tokens,
+            max_turns: params.max_turns.map(i64::from),
+            max_tokens: params
+                .max_tokens
+                .map(|tokens| i64::try_from(tokens).unwrap_or(i64::MAX)),
             ..Self::default()
         }
     }
@@ -412,9 +416,9 @@ pub(crate) const fn default_true() -> bool {
     true
 }
 
-pub(crate) fn price_dollars_to_micros(price: f64) -> Option<u64> {
-    (price.is_finite() && price >= 0.0 && price <= u64::MAX as f64 / 1_000_000.0)
-        .then(|| (price * 1_000_000.0).round() as u64)
+pub(crate) fn price_dollars_to_micros(price: f64) -> Option<i64> {
+    (price.is_finite() && price >= 0.0 && price <= i64::MAX as f64 / 1_000_000.0)
+        .then(|| (price * 1_000_000.0).round() as i64)
 }
 
 pub(crate) fn review_message_index(

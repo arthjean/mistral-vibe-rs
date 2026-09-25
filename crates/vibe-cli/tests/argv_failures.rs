@@ -60,10 +60,10 @@ fn a_parse_failure_exits_two_under_a_usage_block_on_standard_error() {
 
 /// A prompt the parser accepted and the run cannot use exits 1, not 2, and is
 /// prefixed the way the reference prefixes it rather than with an error-kind
-/// name of this port's own.
+/// name of this port's own. The key is checked first, so the run has one.
 #[test]
 fn a_missing_programmatic_prompt_exits_one_under_the_reference_prefix() {
-    let output = launch(&["--prompt", "   "]);
+    let output = launch_with_key(&["--prompt", ""]);
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
     assert_eq!(output.status.code(), Some(1), "stderr: {stderr}");
@@ -99,18 +99,21 @@ fn the_help_and_the_version_exit_zero_on_standard_output() {
 }
 
 /// A budget the reference parses and finds already spent stops the run before
-/// its first request, with the limit answer and exit 1: a turn budget of zero
-/// or less, or a token or price budget below zero
+/// its first request, with the limit's stop event and exit 1: a turn budget of
+/// zero or less, or a token or price budget below zero
 /// (`vibe/core/middleware.py:48-96`, `vibe/cli/cli.py:214-216`). The provider
 /// address is a closed port, so a run that did reach the model would fail on
 /// the connection instead.
 #[test]
 fn a_budget_already_spent_stops_the_run_before_its_first_request() {
-    for budget in [
-        ["--max-turns", "-5"],
-        ["--max-turns", "0"],
-        ["--max-tokens", "-1"],
-        ["--max-price", "-2.5"],
+    for (budget, answer) in [
+        (["--max-turns", "-5"], "Turn limit of -5 reached"),
+        (["--max-turns", "0"], "Turn limit of 0 reached"),
+        (["--max-tokens", "-1"], "Token limit exceeded: 0 > -1"),
+        (
+            ["--max-price", "-2.5"],
+            "Price limit exceeded: $0.0000 > $-2.50",
+        ),
     ] {
         let mut argv = vec![
             "-p",
@@ -125,7 +128,7 @@ fn a_budget_already_spent_stops_the_run_before_its_first_request() {
         assert_eq!(output.status.code(), Some(1), "{budget:?} stderr: {stderr}");
         assert_eq!(
             stderr.lines().next_back(),
-            Some("The configured conversation limit was reached"),
+            Some(format!("<vibe_stop_event>{answer}</vibe_stop_event>").as_str()),
             "{budget:?} stderr: {stderr}"
         );
     }
@@ -156,7 +159,7 @@ fn the_harness_flags_start_a_programmatic_run() {
         assert_eq!(output.status.code(), Some(1), "{flags:?} stderr: {stderr}");
         assert_eq!(
             stderr.lines().next_back(),
-            Some("The configured conversation limit was reached"),
+            Some("<vibe_stop_event>Turn limit of 0 reached</vibe_stop_event>"),
             "{flags:?} stderr: {stderr}"
         );
     }

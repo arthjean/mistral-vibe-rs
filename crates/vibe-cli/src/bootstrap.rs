@@ -8,7 +8,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use vibe_app_server::client::{DriverError, LiveDriverConfig, SessionOptions};
+use vibe_app_server::client::{LiveDriverConfig, SessionOptions};
 use vibe_app_server::harness::HarnessSelection;
 use vibe_app_server::projects::{ProjectsService, VibeCodeCloudConfig};
 use vibe_app_server::resources::{
@@ -19,7 +19,7 @@ use vibe_app_server::server::{AppServer, WebSearchAccess};
 use vibe_app_server::workspace::WorkspaceService;
 use vibe_core::config::DotenvValues;
 use vibe_core::mcp::SamplingHandler;
-use vibe_core::provider::config::{ModelRouting, ProviderConfig};
+use vibe_core::provider::config::{BackendKind, ModelRouting, ProviderConfig};
 
 use secrecy::SecretString;
 use url::Url;
@@ -39,16 +39,6 @@ pub(crate) fn dotenv_values(arguments: &Arguments) -> DotenvValues {
         arguments,
         &working_directory,
     ))
-}
-
-/// The provider credential: the process environment first, then the global
-/// dotenv file.
-pub(crate) fn credential(arguments: &Arguments) -> Result<String, DriverError> {
-    dotenv_values(arguments)
-        .variable(&arguments.credential_environment)
-        .ok_or_else(|| {
-            DriverError::MissingCredentialEnvironment(arguments.credential_environment.clone())
-        })
 }
 
 /// The provider this launch sends turns to. See
@@ -81,6 +71,206 @@ pub(crate) fn model_routing(workspace: &WorkspaceService) -> Result<ModelRouting
         &snapshot.effective,
         snapshot.active_model_alias(),
     ))
+}
+
+/// The launch arguments this port declares at their defaults: the launch
+/// names no provider of its own, so the configuration decides.
+pub(crate) const DEFAULT_PROVIDER_STYLE: &str = "mistral";
+pub(crate) const DEFAULT_API_BASE: &str = "https://api.mistral.ai/v1";
+pub(crate) const DEFAULT_CREDENTIAL_ENVIRONMENT: &str = "MISTRAL_API_KEY";
+const DEFAULT_INPUT_PRICE: f64 = 1.5;
+const DEFAULT_OUTPUT_PRICE: f64 = 7.5;
+
+/// What a programmatic launch runs on.
+///
+/// Reference `get_active_model` and `get_provider_for_model`: the model is
+/// `active_model`, the provider is the entry that model names, and the prices
+/// the price budget counts in are the model's own. The port-only launch
+/// arguments still win when they are given, which is what the integration
+/// tests and the composite action's self-test point at a stand-in with.
+#[derive(Debug, Clone)]
+pub(crate) struct ProgrammaticRoute {
+    pub(crate) model: String,
+    pub(crate) provider: ProviderConfig,
+    pub(crate) input_price: f64,
+    pub(crate) output_price: f64,
+    /// Reference `get_mistral_provider`: the active provider when it is a
+    /// Mistral one, else the first Mistral provider configured. `web_search`
+    /// reaches the conversations API through it.
+    pub(crate) mistral: Option<ProviderConfig>,
+}
+
+/// Whether the launch named its provider through the port-only arguments.
+fn provider_arguments_given(arguments: &Arguments) -> bool {
+    arguments.provider_style != DEFAULT_PROVIDER_STYLE
+        || arguments.api_base != DEFAULT_API_BASE
+        || arguments.credential_environment != DEFAULT_CREDENTIAL_ENVIRONMENT
+}
+
+pub(crate) fn programmatic_route(
+    arguments: &Arguments,
+    workspace: &WorkspaceService,
+) -> Result<ProgrammaticRoute, CliError> {
+    let snapshot = workspace
+        .layered_config()
+        .load()
+        .map_err(|error| CliError::Configuration(error.to_string()))?;
+    let routing = ModelRouting::from_effective(&snapshot.effective, snapshot.active_model_alias());
+    let model = if arguments.model == crate::tui::DEFAULT_MODEL {
+        routing
+            .active_alias
+            .clone()
+            .unwrap_or_else(|| arguments.model.clone())
+    } else {
+        arguments.model.clone()
+    };
+    let configured = routing.model(Some(&model)).ok();
+    let configured_provider = configured
+        .as_ref()
+        .and_then(|entry| routing.provider_for(entry).ok());
+    let provider = match configured_provider {
+        Some(provider) if !provider_arguments_given(arguments) => provider,
+        _ => launch_provider(arguments, &routing)?,
+    };
+    let prices = configured
+        .as_ref()
+        .and_then(|entry| model_prices(&snapshot.effective, &entry.alias));
+    let default_prices = arguments.input_price == DEFAULT_INPUT_PRICE
+        && arguments.output_price == DEFAULT_OUTPUT_PRICE;
+    let (input_price, output_price) = match prices {
+        Some(prices) if default_prices => prices,
+        _ => (arguments.input_price, arguments.output_price),
+    };
+    let mistral = if provider.backend == BackendKind::Mistral {
+        Some(provider.clone())
+    } else {
+        routing
+            .providers
+            .iter()
+            .find(|candidate| candidate.backend == BackendKind::Mistral)
+            .cloned()
+    };
+    Ok(ProgrammaticRoute {
+        model,
+        provider,
+        input_price,
+        output_price,
+        mistral,
+    })
+}
+
+/// The per-million prices a configured model declares, which default to zero
+/// as `ModelConfig.input_price` and `output_price` do.
+fn model_prices(effective: &toml::Table, alias: &str) -> Option<(f64, f64)> {
+    let entry = match effective.get("models")? {
+        toml::Value::Table(models) => models.get(alias)?.as_table()?,
+        toml::Value::Array(models) => {
+            models
+                .iter()
+                .filter_map(toml::Value::as_table)
+                .find(|entry| {
+                    entry
+                        .get("alias")
+                        .or_else(|| entry.get("name"))
+                        .and_then(toml::Value::as_str)
+                        == Some(alias)
+                })?
+        }
+        _ => return None,
+    };
+    let price = |key: &str| {
+        entry
+            .get(key)
+            .and_then(|value| {
+                value
+                    .as_float()
+                    .or_else(|| value.as_integer().map(|n| n as f64))
+            })
+            .unwrap_or(0.0)
+    };
+    Some((price("input_price"), price("output_price")))
+}
+
+/// The provider's key, from the process environment, the global dotenv file,
+/// then the OS keyring, as reference `resolve_api_key` reads it after
+/// `load_dotenv_values`. A provider that names no variable needs none.
+///
+/// # Errors
+///
+/// Reference `require_active_provider_api_key`: a key none of the three
+/// holds refuses the launch.
+pub(crate) fn programmatic_credential(
+    arguments: &Arguments,
+    provider: &ProviderConfig,
+) -> Result<String, CliError> {
+    let variable = &provider.api_key_env_var;
+    if variable.is_empty() {
+        return Ok(String::new());
+    }
+    let working_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let vibe_home = crate::tui::startup::vibe_home_directory(arguments, &working_directory);
+    DotenvValues::global(&vibe_home)
+        .variable(variable)
+        .filter(|credential| !credential.is_empty())
+        .or_else(|| {
+            crate::tui::setup::PersistedCredentialStore::new(vibe_core::config::global_env_file(
+                &vibe_home,
+            ))
+            .resolve(variable)
+        })
+        .ok_or_else(|| CliError::MissingApiKey {
+            variable: variable.clone(),
+            provider: provider.name.clone(),
+        })
+}
+
+/// The driver a programmatic route runs turns through.
+pub(crate) fn route_driver_config(
+    arguments: &Arguments,
+    route: &ProgrammaticRoute,
+    workspace: &WorkspaceService,
+) -> Result<LiveDriverConfig, CliError> {
+    let routing = model_routing(workspace)?;
+    Ok(LiveDriverConfig {
+        compaction_prompts: workspace.compaction_prompts(),
+        provider: route.provider.clone(),
+        models: routing.models,
+        model: route.model.clone(),
+        api: routing.api,
+        system_prompt: SYSTEM_PROMPT.to_owned(),
+        session_root: arguments.session_root.clone(),
+        input_price_per_million_micros: price_per_million_micros(route.input_price)?,
+        output_price_per_million_micros: price_per_million_micros(route.output_price)?,
+    })
+}
+
+/// [`resource_server`] over the endpoint a programmatic route resolved.
+pub(crate) fn route_resource_server(
+    arguments: &Arguments,
+    workspace: WorkspaceService,
+    route: &ProgrammaticRoute,
+    credential: String,
+    sampling: Option<Arc<dyn SamplingHandler>>,
+) -> Result<AppServer, CliError> {
+    let mut launch = arguments.clone();
+    launch.api_base.clone_from(&route.provider.api_base);
+    // Reference `WebSearch.is_available`: the tool is published when the
+    // Mistral provider's key resolves, whichever provider runs the turns.
+    let web_search = match &route.mistral {
+        Some(mistral) if *mistral == route.provider => Some((mistral, credential.clone())),
+        Some(mistral) => programmatic_credential(arguments, mistral)
+            .ok()
+            .map(|key| (mistral, key)),
+        None => None,
+    }
+    .filter(|(_, key)| !key.is_empty())
+    .map(|(mistral, key)| {
+        let mut target = arguments.clone();
+        target.api_base.clone_from(&mistral.api_base);
+        web_search_access(&target, key)
+    });
+    Ok(resource_server(&launch, workspace, credential, sampling)?
+        .using_web_search_access(web_search))
 }
 
 pub(crate) fn live_driver_config(
@@ -199,6 +389,7 @@ pub(crate) fn session_options(
     } else {
         Budgets::default()
     };
+    let (agent, auto_approve) = agent_selection(arguments);
     SessionOptions {
         working_directory: working_directory.to_string_lossy().into_owned(),
         session_id: arguments.resume.clone(),
@@ -208,7 +399,7 @@ pub(crate) fn session_options(
             .map(|path| path.to_string_lossy().into_owned())
             .collect(),
         trusted: arguments.trust,
-        agent: arguments.agent.clone(),
+        agent,
         tool_filters: arguments.tool_filters.clone(),
         enabled_tools: arguments.enabled_tools.clone(),
         disabled_tools: disabled_tools(&arguments.disabled_tools, headless),
@@ -220,53 +411,45 @@ pub(crate) fn session_options(
         mode,
         thinking: reasoning_effort.is_some(),
         reasoning_effort,
-        auto_approve: arguments.auto_approve,
+        auto_approve,
         headless,
         resume: arguments.resume.clone(),
         continue_session: arguments.continue_session,
     }
 }
 
-/// The three programmatic budgets, in the unsigned units the engine counts in.
+/// Reference `_agent_selection`: `--auto-approve` without `--agent` selects
+/// the `auto-approve` profile rather than approving under the default one.
+fn agent_selection(arguments: &Arguments) -> (Option<String>, bool) {
+    if arguments.auto_approve && arguments.agent.is_none() {
+        return (Some("auto-approve".to_owned()), false);
+    }
+    (arguments.agent.clone(), arguments.auto_approve)
+}
+
+/// The three programmatic budgets, in the units the engine counts in.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Budgets {
-    pub(crate) max_turns: Option<u32>,
-    pub(crate) max_tokens: Option<u64>,
-    pub(crate) max_price_micros: Option<u64>,
+    pub(crate) max_turns: Option<i64>,
+    pub(crate) max_tokens: Option<i64>,
+    pub(crate) max_price_micros: Option<i64>,
 }
 
 impl Budgets {
     /// Reads the flags the way the reference's middleware compares them
-    /// (`vibe/core/middleware.py:48-96`).
-    ///
-    /// A turn budget of zero or less stops the session before its first turn,
-    /// which a zero turn budget does here as well. A token or price budget
-    /// below zero is already exceeded before anything is spent, because the
-    /// reference stops once the spend is strictly greater than the budget; the
-    /// unsigned units here cannot hold that budget, so it is expressed as the
-    /// turn budget that stops the session at the same point, with the same
-    /// "limit reached" answer. A price that is not a number never compares
-    /// greater, so it sets no budget, and an infinite one saturates into the
-    /// value that means none.
+    /// (`vibe/core/middleware.py:48-96`): signed, so a budget below zero is
+    /// one the session has spent before it starts. A price that is not a
+    /// number never compares greater, so it sets no budget, and an infinite
+    /// one saturates into the value that means none.
     pub(crate) fn of(arguments: &Arguments) -> Self {
-        let mut budgets = Self {
-            max_turns: arguments
-                .max_turns
-                .map(|turns| u32::try_from(turns.max(0)).unwrap_or(u32::MAX)),
-            max_tokens: arguments
-                .max_tokens
-                .and_then(|tokens| u64::try_from(tokens).ok()),
+        Self {
+            max_turns: arguments.max_turns,
+            max_tokens: arguments.max_tokens,
             max_price_micros: arguments
                 .max_price
-                .filter(|price| !price.is_nan() && *price >= 0.0)
-                .map(|price| (price * 1_000_000.0).round() as u64),
-        };
-        let spent_already = arguments.max_tokens.is_some_and(|tokens| tokens < 0)
-            || arguments.max_price.is_some_and(|price| price < 0.0);
-        if spent_already {
-            budgets.max_turns = Some(0);
+                .filter(|price| !price.is_nan())
+                .map(|price| (price * 1_000_000.0).round() as i64),
         }
-        budgets
     }
 }
 

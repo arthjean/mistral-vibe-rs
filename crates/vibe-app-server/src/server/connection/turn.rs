@@ -18,10 +18,9 @@ impl ServerConnection {
         let mut params = from_params::<TurnStartParams>(&request.params)?;
         let scheduled = scheduled_loop_turn(&params.user_display_content)
             .map_err(ProtocolFault::invalid_params)?;
+        // Reference `TurnStartParams` puts no floor under the message: a blank
+        // prompt is a turn like any other (`vibe -p "   "` runs one).
         let mut prompt = content_text(&params.input);
-        if scheduled.is_none() && prompt.trim().is_empty() {
-            return Err(ProtocolFault::invalid_params("Prompt must not be empty"));
-        }
         if let Some(batch) = self.attachment_error(request.id.clone(), &params.session_id) {
             return Ok(batch);
         }

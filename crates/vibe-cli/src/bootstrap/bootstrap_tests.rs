@@ -93,7 +93,7 @@ fn only_a_programmatic_launch_carries_the_budgets() {
 /// stops before the first turn, and so does a token or price budget below zero,
 /// which is already exceeded (`vibe/core/middleware.py:48-96`).
 #[test]
-fn a_budget_below_zero_stops_the_session_before_its_first_turn() {
+fn the_budgets_keep_their_sign_as_the_reference_compares_them() {
     let budgets = |turns, tokens, price| {
         let mut arguments = crate::arguments_for_test();
         arguments.max_turns = turns;
@@ -101,17 +101,16 @@ fn a_budget_below_zero_stops_the_session_before_its_first_turn() {
         arguments.max_price = price;
         Budgets::of(&arguments)
     };
-    assert_eq!(budgets(Some(-5), None, None).max_turns, Some(0));
-    assert_eq!(budgets(Some(0), None, None).max_turns, Some(0));
-    assert_eq!(
-        budgets(Some(i64::MAX), None, None).max_turns,
-        Some(u32::MAX)
-    );
+    // A budget below zero is one the session spent before it starts, which
+    // the middleware answers with its own limit rather than the turn budget.
+    assert_eq!(budgets(Some(-5), None, None).max_turns, Some(-5));
     let tokens = budgets(Some(7), Some(-1), None);
-    assert_eq!((tokens.max_turns, tokens.max_tokens), (Some(0), None));
+    assert_eq!((tokens.max_turns, tokens.max_tokens), (Some(7), Some(-1)));
     let price = budgets(None, None, Some(-2.5));
-    assert_eq!((price.max_turns, price.max_price_micros), (Some(0), None));
-    // A zero token or price budget is not exceeded until something is spent.
+    assert_eq!(
+        (price.max_turns, price.max_price_micros),
+        (None, Some(-2_500_000))
+    );
     let zero = budgets(None, Some(0), Some(0.0));
     assert_eq!(
         (zero.max_turns, zero.max_tokens, zero.max_price_micros),
@@ -122,6 +121,6 @@ fn a_budget_below_zero_stops_the_session_before_its_first_turn() {
     assert_eq!(budgets(None, None, Some(f64::NAN)).max_price_micros, None);
     assert_eq!(
         budgets(None, None, Some(f64::INFINITY)).max_price_micros,
-        Some(u64::MAX)
+        Some(i64::MAX)
     );
 }

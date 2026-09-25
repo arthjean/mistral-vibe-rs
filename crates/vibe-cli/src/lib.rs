@@ -13,6 +13,7 @@ pub mod argv;
 mod bootstrap;
 pub mod distribution;
 pub mod mcp_command;
+mod programmatic;
 pub mod tui;
 
 use std::collections::BTreeMap;
@@ -21,18 +22,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use clap::{ArgAction, Parser, ValueEnum};
-use serde::Serialize;
 use serde_json::Value;
 use thiserror::Error;
-use vibe_app_server::client::{
-    ClientError, HeadlessService, LiveTurnDriver, ProgrammaticTeleportEvent, ProgrammaticTurn,
-    ProgrammaticUpdate, PublicTurnStopReason, TurnDriver, programmatic_update_channel,
-};
-use vibe_app_server::experiments::SessionExperiments;
+use vibe_app_server::client::{ClientError, TurnDriver};
 use vibe_app_server::server::AppServer;
 use vibe_app_server::workspace::WorkspaceService;
 use vibe_core::auth::KeyringStore;
-use vibe_core::mcp::SamplingHandler;
 use vibe_core::observability::{self, init_file_logging};
 use vibe_core::telemetry::{
     ClientTelemetry, ExperimentExposures, LaunchContext, ReqwestTelemetryTransport,
@@ -267,82 +262,19 @@ pub enum OutputMode {
     #[default]
     Text,
     Json,
-    #[value(alias = "ndjson")]
     Streaming,
 }
 
+/// Programmatic mode: `vibe -p`. See [`programmatic`].
 pub async fn run(
     arguments: Arguments,
     stdout: &mut impl Write,
     stderr: &mut impl Write,
 ) -> Result<(), CliError> {
-    // The reference refuses an unusable programmatic argv before it builds
-    // anything, so the refusal reads the same whether or not a credential is
-    // in reach (`vibe/cli/cli.py:147-150`).
-    validate_arguments(&arguments)?;
-    if let Some(response) = &arguments.fake_response {
-        execute(
-            arguments.clone(),
-            vibe_app_server::client::EchoTurnDriver::new(response),
-            stdout,
-            stderr,
-        )
-        .await
-    } else {
-        let credential = bootstrap::credential(&arguments)?;
-        let workspace = WorkspaceService::default();
-        // The programmatic entry point starts here, so this is where an older
-        // configuration file is brought forward.
-        workspace
-            .migrate_configuration()
-            .map_err(|error| CliError::Configuration(error.to_string()))?;
-        let config = bootstrap::live_driver_config(&arguments, &arguments.model, &workspace)?;
-        let telemetry = telemetry_observer(&arguments, &workspace)?;
-        // The server takes ownership of the service, and the session census is
-        // read off the same one.
-        let census_service = workspace.clone();
-        let mut driver = LiveTurnDriver::from_credential(config, credential)?;
-        driver = driver.with_event_observer(telemetry.clone());
-        let server = production_server(
-            &arguments,
-            workspace,
-            Some(driver.sampling_handler(&arguments.model)),
-        )?
-        .using_client_telemetry(telemetry.clone());
-        let census = arguments
-            .workdir
-            .clone()
-            .or_else(|| std::env::current_dir().ok())
-            .map(|working_directory| {
-                session_census(&census_service, &working_directory, arguments.trust)
-            });
-        // Reference builds the manager with the loop and starts the lookup as a
-        // detached task once the session exists, so the programmatic path
-        // reports the same enrollment an interactive one does.
-        let experiments = Arc::new(SessionExperiments::new(
-            &census_service,
-            cli_credentials(&arguments),
-            Some(cli_launch_context()),
-            telemetry.exposures(),
-        ));
-        let result = execute_with_server(
-            arguments,
-            driver,
-            server,
-            Some(SessionTelemetry {
-                observer: telemetry.clone(),
-                census,
-                experiments: Some(experiments),
-            }),
-            stdout,
-            stderr,
-        )
-        .await;
-        telemetry.flush().await;
-        result
-    }
+    programmatic::run(arguments, stdout, stderr).await
 }
 
+/// Runs one programmatic launch with `driver` in place of a provider.
 pub async fn execute<D>(
     arguments: Arguments,
     driver: D,
@@ -352,334 +284,23 @@ pub async fn execute<D>(
 where
     D: TurnDriver,
 {
-    execute_with_server(
+    validate_arguments(&arguments)?;
+    let mut interrupt = programmatic::Interrupt::install();
+    programmatic::execute_with_server(
         arguments,
         driver,
         AppServer::default(),
         None,
+        &mut interrupt,
         stdout,
         stderr,
     )
     .await
 }
 
-/// What the programmatic path reports about the session it opens: the observer
-/// every event goes to, the census `vibe.new_session` carries, and the
-/// enrollment whose confirmed exposures every one of them reports.
-struct SessionTelemetry {
-    observer: Arc<CliTelemetryObserver>,
-    census: Option<vibe_core::telemetry::records::NewSession>,
-    experiments: Option<Arc<SessionExperiments>>,
-}
-
-async fn execute_with_server<D>(
-    arguments: Arguments,
-    driver: D,
-    server: AppServer,
-    telemetry: Option<SessionTelemetry>,
-    stdout: &mut impl Write,
-    stderr: &mut impl Write,
-) -> Result<(), CliError>
-where
-    D: TurnDriver,
-{
-    let prompt = arguments
-        .prompt
-        .clone()
-        .or_else(|| arguments.initial_prompt.clone())
-        .ok_or_else(|| {
-            CliError::InvalidArguments(
-                "programmatic mode requires --prompt or an initial prompt".to_owned(),
-            )
-        })?;
-    let working_directory = match arguments.workdir.clone() {
-        Some(path) => path,
-        None => std::env::current_dir().map_err(CliError::CurrentDirectory)?,
-    };
-    let options = bootstrap::session_options(
-        &arguments,
-        &working_directory,
-        arguments.model.clone(),
-        None,
-        None,
-        bootstrap::Launch::Programmatic,
-    );
-    let mut service = HeadlessService::new_shared_with_server(Arc::new(driver), server)?;
-    let session_id = service.start_session(&options)?;
-    warn_if_workspace_untrusted(
-        service.workspace_service().vibe_home(),
-        &working_directory,
-        stderr,
-    )?;
-    // Reference `emit_new_session_telemetry` and `emit_ready_telemetry`: the
-    // agent loop raises both once its initialization settles, whichever
-    // entrypoint launched it.
-    if let Some(telemetry) = telemetry.as_ref() {
-        if let Some(experiments) = telemetry.experiments.as_ref() {
-            experiments.start(&session_id);
-        }
-        if let Some(census) = telemetry.census.clone() {
-            let _ = telemetry
-                .observer
-                .enqueue(&TelemetryRecord::NewSession(census), Some(&session_id));
-        }
-        let _ = telemetry.observer.enqueue(
-            &TelemetryRecord::Ready {
-                init_duration_ms: since_process_start_ms(),
-            },
-            Some(&session_id),
-        );
-    }
-    let mut close_session_id = session_id.clone();
-    let execution = run_execution(
-        &arguments,
-        &mut service,
-        &session_id,
-        &prompt,
-        &working_directory,
-        stdout,
-    )
-    .await
-    .and_then(|outcome| {
-        if let Execution::Turn(turn) = &outcome {
-            close_session_id.clone_from(&turn.session_id);
-        }
-        report_execution(arguments.output, outcome, stdout, stderr)
-    });
-    // Reference `aclose` cancels the experiments task before it closes
-    // anything else, so a shutdown never waits on a lookup that is still going.
-    if let Some(experiments) = telemetry
-        .as_ref()
-        .and_then(|telemetry| telemetry.experiments.as_ref())
-    {
-        experiments.close().await;
-    }
-    // Reference `emit_session_closed_telemetry`, raised before the session is
-    // closed so the census still names it.
-    if let Some(telemetry) = telemetry.as_ref() {
-        let _ = telemetry
-            .observer
-            .enqueue(&TelemetryRecord::SessionClosed, Some(&close_session_id));
-    }
-    let close_result = service.close_session(&close_session_id).await;
-    let shutdown_result = service.shutdown();
-    execution?;
-    close_result?;
-    shutdown_result?;
-    Ok(())
-}
-
-/// Reference `_warn_if_workspace_untrusted` (`vibe/cli/programmatic.py`): a
-/// run in a folder nobody trusted, and that holds project configuration, says
-/// on stderr that the configuration is skipped and how to lift that.
-fn warn_if_workspace_untrusted(
-    vibe_home: &Path,
-    working_directory: &Path,
-    stderr: &mut impl Write,
-) -> Result<(), CliError> {
-    let store = vibe_core::trust::TrustStore::for_vibe_home(vibe_home);
-    let cwd = vibe_core::trust::resolve(working_directory);
-    if store.trust_status(&cwd) != vibe_core::trust::TrustStatus::Untrusted {
-        return Ok(());
-    }
-    let Some(prompt) = vibe_core::trust::build_trust_prompt(&cwd, true, &store) else {
-        return Ok(());
-    };
-    let mut files: Vec<&str> = Vec::new();
-    for file in prompt
-        .detected_files
-        .iter()
-        .chain(&prompt.repo_detected_files)
-    {
-        if !files.contains(&file.as_str()) {
-            files.push(file);
-        }
-    }
-    if files.is_empty() {
-        return Ok(());
-    }
-    writeln!(
-        stderr,
-        "Warning: {} is untrusted, so its project configuration ({}) is not loaded. \
-         Pass --trust to trust this folder for this run.",
-        prompt.cwd.display(),
-        files.join(", ")
-    )
-    .map_err(CliError::Stderr)
-}
-
-/// What a programmatic launch produced.
-///
-/// A Teleport is not a turn: it produces a run of published events and the
-/// history the session ended on, and none of a turn's usage, stop reason or
-/// step count. Naming the two outcomes separately is what keeps the reporting
-/// below from reading a turn's fields off a run that never had any.
-enum Execution {
-    Turn(Box<ProgrammaticTurn>),
-    Teleport {
-        events: Vec<ProgrammaticTeleportEvent>,
-        history: Vec<vibe_core::events::PublicHistoryEntry>,
-    },
-}
-
-/// Runs the launch the arguments asked for.
-async fn run_execution<D>(
-    arguments: &Arguments,
-    service: &mut HeadlessService<D>,
-    session_id: &str,
-    prompt: &str,
-    working_directory: &Path,
-    stdout: &mut impl Write,
-) -> Result<Execution, CliError>
-where
-    D: TurnDriver,
-{
-    if arguments.teleport {
-        let events = service
-            .teleport(
-                session_id,
-                &working_directory.to_string_lossy(),
-                prompt,
-                true,
-            )
-            .await
-            .map_err(|error| CliError::Teleport(error.to_string()))?;
-        let history = service
-            .session(session_id)
-            .map_err(CliError::Client)?
-            .snapshot
-            .map(|snapshot| snapshot.history)
-            .unwrap_or_default();
-        return Ok(Execution::Teleport { events, history });
-    }
-    if arguments.output != OutputMode::Streaming {
-        return service
-            .prompt(session_id, prompt)
-            .await
-            .map(|turn| Execution::Turn(Box::new(turn)))
-            .map_err(CliError::Client);
-    }
-    stream_turn(service, session_id, prompt, stdout)
-        .await
-        .map(|turn| Execution::Turn(Box::new(turn)))
-}
-
-/// Streams each history entry as the turn produces it, then answers the turn.
-async fn stream_turn<D>(
-    service: &mut HeadlessService<D>,
-    session_id: &str,
-    prompt: &str,
-    stdout: &mut impl Write,
-) -> Result<ProgrammaticTurn, CliError>
-where
-    D: TurnDriver,
-{
-    let (observer, mut updates) = programmatic_update_channel(session_id);
-    let prompt_future = service.prompt_observed(session_id, prompt, observer);
-    tokio::pin!(prompt_future);
-    let mut result = loop {
-        tokio::select! {
-            result = &mut prompt_future => break result.map_err(CliError::Client),
-            update = updates.recv() => {
-                let Some(ProgrammaticUpdate::HistoryEntry { entry, .. }) = update else {
-                    continue;
-                };
-                if let Err(error) = write_json_line(stdout, &entry)
-                    .and_then(|()| stdout.flush().map_err(CliError::Stdout))
-                {
-                    break Err(error);
-                }
-            }
-        }
-    };
-    if result.is_ok() {
-        // Every queued update is consumed: stopping at the first non-entry
-        // update would truncate the stream the turn already produced.
-        while let Ok(update) = updates.try_recv() {
-            let ProgrammaticUpdate::HistoryEntry { entry, .. } = update else {
-                continue;
-            };
-            if let Err(error) = write_json_line(stdout, &entry) {
-                result = Err(error);
-                break;
-            }
-        }
-    }
-    result
-}
-
-/// Writes what the launch produced, and answers the failure a limit, a refusal
-/// or a cancellation makes of it.
-fn report_execution(
-    mode: OutputMode,
-    execution: Execution,
-    stdout: &mut impl Write,
-    stderr: &mut impl Write,
-) -> Result<(), CliError> {
-    match execution {
-        Execution::Teleport { events, history } => {
-            let url = write_teleport_events(mode, &events, stdout)?;
-            write_teleport_result(mode, url.as_deref(), &history, stdout, stderr)
-        }
-        Execution::Turn(turn) => match turn.stop_reason {
-            PublicTurnStopReason::Complete => {
-                if mode == OutputMode::Streaming {
-                    Ok(())
-                } else {
-                    write_turn(mode, &turn, stdout, stderr)
-                }
-            }
-            PublicTurnStopReason::MaxSteps
-            | PublicTurnStopReason::TokenLimit
-            | PublicTurnStopReason::PriceLimit => {
-                Err(CliError::Limit(if turn.final_assistant.is_empty() {
-                    "The configured conversation limit was reached".to_owned()
-                } else {
-                    turn.final_assistant
-                }))
-            }
-            PublicTurnStopReason::ResponseLength => Err(CliError::TurnFailed(
-                "The model's response exceeded the maximum output token limit.".to_owned(),
-            )),
-            PublicTurnStopReason::Refusal => Err(CliError::TurnFailed(
-                "Provider refused the request".to_owned(),
-            )),
-            PublicTurnStopReason::Cancelled => {
-                Err(CliError::TurnFailed("Turn cancelled".to_owned()))
-            }
-            PublicTurnStopReason::Failed => Err(CliError::TurnFailed("Turn failed".to_owned())),
-        },
-    }
-}
-
-fn production_server(
-    arguments: &Arguments,
-    workspace: WorkspaceService,
-    sampling: Option<Arc<dyn SamplingHandler>>,
-) -> Result<AppServer, CliError> {
-    let credential = bootstrap::credential(arguments)?;
-    let server = bootstrap::resource_server(arguments, workspace, credential.clone(), sampling)?;
-    if !arguments.teleport {
-        return Ok(server);
-    }
-    Ok(server.using_projects_service(bootstrap::cloud_service(credential)?))
-}
-
-fn validate_arguments(arguments: &Arguments) -> Result<(), CliError> {
-    if arguments
-        .prompt
-        .as_deref()
-        .is_some_and(|prompt| prompt.trim().is_empty())
-    {
-        return Err(CliError::InvalidArguments(
-            "No prompt provided for programmatic mode".to_owned(),
-        ));
-    }
-    if arguments.resume.as_deref() == Some("") && arguments.prompt.is_some() {
-        return Err(CliError::InvalidArguments(
-            "--resume requires a session ID in programmatic mode".to_owned(),
-        ));
-    }
+/// The price arguments only this port declares, which the reference would
+/// have refused as unknown before anything else ran.
+fn validate_launch_prices(arguments: &Arguments) -> Result<(), CliError> {
     for (name, price) in [
         ("input-price", arguments.input_price),
         ("output-price", arguments.output_price),
@@ -693,6 +314,22 @@ fn validate_arguments(arguments: &Arguments) -> Result<(), CliError> {
     Ok(())
 }
 
+fn validate_arguments(arguments: &Arguments) -> Result<(), CliError> {
+    // Reference `args.prompt or stdin_prompt`: an empty prompt is refused,
+    // and a prompt of blanks is a prompt like any other.
+    if arguments.prompt.as_deref() == Some("") {
+        return Err(CliError::InvalidArguments(
+            "No prompt provided for programmatic mode".to_owned(),
+        ));
+    }
+    if arguments.resume.as_deref() == Some("") && arguments.prompt.is_some() {
+        return Err(CliError::InvalidArguments(
+            "--resume requires a session ID in programmatic mode".to_owned(),
+        ));
+    }
+    validate_launch_prices(arguments)
+}
+
 fn price_per_million_micros(price: f64) -> Result<u64, CliError> {
     if !price.is_finite() || price < 0.0 || price > u64::MAX as f64 / 1_000_000.0 {
         return Err(CliError::InvalidArguments(
@@ -700,106 +337,6 @@ fn price_per_million_micros(price: f64) -> Result<u64, CliError> {
         ));
     }
     Ok((price * 1_000_000.0).round() as u64)
-}
-
-/// Writes a completed turn: its final message in text mode, its history in
-/// JSON, and nothing in streaming mode, where each entry was already written.
-fn write_turn(
-    mode: OutputMode,
-    turn: &ProgrammaticTurn,
-    stdout: &mut impl Write,
-    stderr: &mut impl Write,
-) -> Result<(), CliError> {
-    match mode {
-        OutputMode::Text => {
-            writeln!(stdout, "{}", turn.final_assistant).map_err(CliError::Stdout)?;
-        }
-        OutputMode::Json => {
-            serde_json::to_writer_pretty(&mut *stdout, &turn.history).map_err(CliError::Json)?;
-            stdout.write_all(b"\n").map_err(CliError::Stdout)?;
-        }
-        OutputMode::Streaming => {}
-    }
-    flush(stdout, stderr)
-}
-
-/// Writes what a Teleport run ended on: the URL it published in text mode, and
-/// the history beside it in JSON.
-fn write_teleport_result(
-    mode: OutputMode,
-    url: Option<&str>,
-    history: &[vibe_core::events::PublicHistoryEntry],
-    stdout: &mut impl Write,
-    stderr: &mut impl Write,
-) -> Result<(), CliError> {
-    match mode {
-        OutputMode::Text => {
-            writeln!(stdout, "{}", url.unwrap_or_default()).map_err(CliError::Stdout)?;
-        }
-        OutputMode::Json => {
-            let payload = match url {
-                Some(url) => serde_json::json!({"history": history, "teleportUrl": url}),
-                None => serde_json::json!(history),
-            };
-            serde_json::to_writer_pretty(&mut *stdout, &payload).map_err(CliError::Json)?;
-            stdout.write_all(b"\n").map_err(CliError::Stdout)?;
-        }
-        OutputMode::Streaming => {}
-    }
-    flush(stdout, stderr)
-}
-
-fn flush(stdout: &mut impl Write, stderr: &mut impl Write) -> Result<(), CliError> {
-    stdout.flush().map_err(CliError::Stdout)?;
-    stderr.flush().map_err(CliError::Stderr)
-}
-
-fn write_teleport_events(
-    mode: OutputMode,
-    events: &[ProgrammaticTeleportEvent],
-    stdout: &mut impl Write,
-) -> Result<Option<String>, CliError> {
-    let mut completed_url = None;
-    for event in events {
-        if mode == OutputMode::Streaming {
-            write_json_line(stdout, event)?;
-            stdout.flush().map_err(CliError::Stdout)?;
-        } else if mode == OutputMode::Text {
-            let progress = match event {
-                ProgrammaticTeleportEvent::SummarizingContext { .. } => {
-                    Some("Summarizing context...")
-                }
-                ProgrammaticTeleportEvent::CheckingGit { .. } => Some("Preparing workspace..."),
-                ProgrammaticTeleportEvent::PushRequired { unpushed_count, .. } => {
-                    writeln!(stdout, "Pushing {unpushed_count} commit(s)...")
-                        .map_err(CliError::Stdout)?;
-                    None
-                }
-                ProgrammaticTeleportEvent::Pushing { .. } => Some("Syncing with remote..."),
-                ProgrammaticTeleportEvent::StartingWorkflow { .. } => Some("Teleporting..."),
-                ProgrammaticTeleportEvent::Complete { .. }
-                | ProgrammaticTeleportEvent::Failed { .. } => None,
-            };
-            if let Some(progress) = progress {
-                writeln!(stdout, "{progress}").map_err(CliError::Stdout)?;
-            }
-        }
-        match event {
-            ProgrammaticTeleportEvent::Complete { url, .. } => {
-                completed_url = Some(url.clone());
-            }
-            ProgrammaticTeleportEvent::Failed { error, .. } => {
-                return Err(CliError::Teleport(error.message.clone()));
-            }
-            _ => {}
-        }
-    }
-    Ok(completed_url)
-}
-
-fn write_json_line(writer: &mut impl Write, value: &impl Serialize) -> Result<(), CliError> {
-    serde_json::to_writer(&mut *writer, value).map_err(CliError::Json)?;
-    writer.write_all(b"\n").map_err(CliError::Stdout)
 }
 
 #[derive(Debug, Error)]
@@ -815,12 +352,28 @@ pub enum CliError {
     Stdout(std::io::Error),
     #[error("stderr write failed: {0}")]
     Stderr(std::io::Error),
+    /// Reference `ProgrammaticLimitError`: the last thing the assistant said,
+    /// alone on stderr.
     #[error("{0}")]
     Limit(String),
-    #[error("{0}")]
+    /// Reference `AppServerTurnError`, caught as a `RuntimeError`.
+    #[error("Error: {0}")]
     TurnFailed(String),
-    #[error("{0}")]
+    /// Reference `ProgrammaticTeleportError`.
+    #[error("Teleport error: {0}")]
     Teleport(String),
+    /// Reference `AppServerResponseError`: the server refused the session or
+    /// the turn.
+    #[error("Error: {0}")]
+    Session(String),
+    /// Reference `MissingAPIKeyError`, reported by `require_api_key_or_onboard`
+    /// for a launch that cannot onboard. The guidance after the first sentence
+    /// is this port's own.
+    #[error(
+        "Error: Missing {variable} environment variable for {provider} provider. Export it, \
+         add it to the .env file in your Vibe home, or store it once with `vibe --setup`."
+    )]
+    MissingApiKey { variable: String, provider: String },
     #[error("terminal UI failed: {0}")]
     Terminal(String),
     #[error(transparent)]
@@ -1033,9 +586,25 @@ pub(crate) fn cli_launch_context() -> LaunchContext {
     }
 }
 
-fn cli_telemetry_context(exposures: ExperimentExposures) -> TelemetryContext {
+/// What a programmatic launch reports about itself. Reference
+/// `_build_launch_context_from_services`, which reads the `ClientInfo`
+/// `_run_programmatic_mode` declared.
+pub(crate) fn programmatic_launch_context() -> LaunchContext {
+    LaunchContext {
+        agent_entrypoint: "programmatic".to_owned(),
+        agent_version: env!("CARGO_PKG_VERSION").to_owned(),
+        client_name: "vibe_programmatic".to_owned(),
+        client_version: env!("CARGO_PKG_VERSION").to_owned(),
+        terminal_emulator: Some(detect_terminal_emulator().to_owned()),
+    }
+}
+
+fn cli_telemetry_context(
+    launch: LaunchContext,
+    exposures: ExperimentExposures,
+) -> TelemetryContext {
     TelemetryContext {
-        launch: Some(cli_launch_context()),
+        launch: Some(launch),
         experiments: exposures,
         ..TelemetryContext::default()
     }
@@ -1142,6 +711,15 @@ pub(crate) fn telemetry_observer(
     arguments: &Arguments,
     workspace: &WorkspaceService,
 ) -> Result<Arc<CliTelemetryObserver>, CliError> {
+    telemetry_observer_for(arguments, workspace, cli_launch_context())
+}
+
+/// [`telemetry_observer`] for a launch that reports itself as `launch`.
+pub(crate) fn telemetry_observer_for(
+    arguments: &Arguments,
+    workspace: &WorkspaceService,
+    launch: LaunchContext,
+) -> Result<Arc<CliTelemetryObserver>, CliError> {
     let configuration = workspace.layered_config();
     let credentials = telemetry_credentials(
         bootstrap::dotenv_values(arguments).environment(),
@@ -1157,7 +735,7 @@ pub(crate) fn telemetry_observer(
     Ok(Arc::new(CliTelemetryObserver {
         events: TelemetryEventObserver::new(
             TelemetryClient::new(config, transport),
-            cli_telemetry_context(exposures.clone()),
+            cli_telemetry_context(launch, exposures.clone()),
         ),
         exposures,
     }))
@@ -1168,9 +746,6 @@ impl CliError {
     pub fn exit_code(&self) -> u8 {
         match self {
             Self::InvalidArguments(_) => 1,
-            Self::Driver(vibe_app_server::client::DriverError::MissingCredentialEnvironment(_)) => {
-                4
-            }
             _ => 1,
         }
     }
@@ -1182,14 +757,6 @@ mod tests {
 
     use super::*;
     use vibe_app_server::client::{DriverFuture, EchoTurnDriver, TurnReservation};
-
-    struct NeverTurnDriver;
-
-    impl TurnDriver for NeverTurnDriver {
-        fn run<'a>(&'a self, _reservation: &'a TurnReservation) -> DriverFuture<'a> {
-            panic!("Teleport must not run a model turn")
-        }
-    }
 
     struct BrokenStdout;
 
@@ -1302,6 +869,11 @@ mod tests {
     fn empty_programmatic_prompt_is_rejected() {
         let mut arguments = arguments(OutputMode::Text);
         arguments.prompt = Some("  ".to_owned());
+        assert!(
+            validate_arguments(&arguments).is_ok(),
+            "a blank prompt runs"
+        );
+        arguments.prompt = Some(String::new());
         assert!(matches!(
             validate_arguments(&arguments),
             Err(CliError::InvalidArguments(message))
@@ -1370,7 +942,7 @@ mod tests {
     /// vocabulary.
     #[test]
     fn the_launch_context_reports_the_cli_entrypoint() {
-        let context = cli_telemetry_context(ExperimentExposures::default());
+        let context = cli_telemetry_context(cli_launch_context(), ExperimentExposures::default());
         let launch = context.launch.expect("the CLI declares a launch context");
         assert_eq!(launch.agent_entrypoint, "cli");
         assert_eq!(launch.client_name, "vibe_cli");
@@ -1386,7 +958,7 @@ mod tests {
     #[test]
     fn a_rollout_resolved_after_the_client_reaches_the_next_event() {
         let exposures = ExperimentExposures::default();
-        let context = cli_telemetry_context(exposures.clone());
+        let context = cli_telemetry_context(cli_launch_context(), exposures.clone());
         assert!(
             !context
                 .base_metadata(None)
@@ -1413,14 +985,14 @@ mod tests {
         std::fs::write(project.join(".vibe/config.toml"), "").expect("config");
         std::fs::write(project.join("AGENTS.md"), "").expect("agents");
         let mut stderr = Vec::new();
-        warn_if_workspace_untrusted(&home, &project, &mut stderr).expect("warned");
+        programmatic::warn_if_workspace_untrusted(&home, &project, &mut stderr).expect("warned");
         let warning = String::from_utf8(stderr).expect("UTF-8");
         assert!(warning.contains("(.vibe/, AGENTS.md)"), "{warning}");
 
         let store = vibe_core::trust::TrustStore::for_vibe_home(&home);
         store.trust_for_session(&project);
         let mut stderr = Vec::new();
-        warn_if_workspace_untrusted(&home, &project, &mut stderr).expect("silent");
+        programmatic::warn_if_workspace_untrusted(&home, &project, &mut stderr).expect("silent");
         store.revoke_session_trust(&project);
         assert!(stderr.is_empty(), "a --trust run is not warned");
     }
@@ -1430,7 +1002,7 @@ mod tests {
         for (mode, expected) in [
             (OutputMode::Text, "world\n"),
             (OutputMode::Json, "\"role\": \"assistant\""),
-            (OutputMode::Streaming, "\"role\":\"assistant\""),
+            (OutputMode::Streaming, "\"role\": \"assistant\""),
         ] {
             let mut stdout = Vec::new();
             let mut stderr = Vec::new();
@@ -1536,84 +1108,31 @@ mod tests {
         assert_eq!(error.exit_code(), 1);
     }
 
-    #[tokio::test]
-    async fn teleport_flag_bypasses_the_model_and_reports_unavailable_git_context() {
-        let mut arguments = arguments(OutputMode::Text);
-        arguments.teleport = true;
-        let mut stdout = Vec::new();
-        let mut stderr = Vec::new();
-
-        let error = execute(arguments, NeverTurnDriver, &mut stdout, &mut stderr)
-            .await
-            .expect_err("default cloud backend is unavailable");
-
-        assert!(
-            matches!(
-                error,
-                CliError::Teleport(ref message)
-                    if message.contains("not an inspectable Git repository")
-            ),
-            "{error:?}"
-        );
-        assert!(stdout.is_empty());
-    }
-
-    #[test]
-    fn missing_provider_credentials_have_the_compatible_exit_code() {
-        let error = CliError::Driver(
-            vibe_app_server::client::DriverError::MissingCredentialEnvironment(
-                "MISSING_API_KEY".to_owned(),
-            ),
-        );
-        assert_eq!(error.exit_code(), 4);
-    }
-
-    #[test]
-    fn teleport_events_preserve_progress_and_json_result_url() {
-        let events = vec![
-            ProgrammaticTeleportEvent::CheckingGit {
-                operation_id: "teleport-1".to_owned(),
-            },
-            ProgrammaticTeleportEvent::Complete {
-                operation_id: "teleport-1".to_owned(),
-                url: "https://vibe.example/run".to_owned(),
-            },
-        ];
-        let mut progress = Vec::new();
-        let url = write_teleport_events(OutputMode::Text, &events, &mut progress)
-            .expect("teleport events");
-        assert_eq!(
-            String::from_utf8(progress).expect("UTF-8 progress"),
-            "Preparing workspace...\n"
-        );
-
-        let mut stdout = Vec::new();
-        let mut stderr = Vec::new();
-        write_teleport_result(
-            OutputMode::Json,
-            url.as_deref(),
-            &[],
-            &mut stdout,
-            &mut stderr,
-        )
-        .expect("JSON output");
-        assert_eq!(
-            serde_json::from_slice::<serde_json::Value>(&stdout).expect("JSON"),
-            serde_json::json!({
-                "history": [],
-                "teleportUrl": "https://vibe.example/run",
-            })
-        );
-    }
-
     /// The reference types `--max-price` as a plain float and compares it, so
     /// a negative budget is a budget already spent rather than a refusal.
     #[test]
-    fn a_negative_price_budget_is_accepted_and_spent_before_the_first_turn() {
+    fn a_negative_price_budget_is_accepted_as_it_was_given() {
         let mut arguments = arguments(OutputMode::Text);
         arguments.max_price = Some(-1.0);
         assert!(validate_arguments(&arguments).is_ok());
-        assert_eq!(bootstrap::Budgets::of(&arguments).max_turns, Some(0));
+        let budgets = bootstrap::Budgets::of(&arguments);
+        assert_eq!(budgets.max_price_micros, Some(-1_000_000));
+    }
+
+    /// Reference `run_cli` prints a missing key after `Error: ` and exits 1,
+    /// the code every other programmatic failure exits with.
+    #[test]
+    fn a_missing_key_is_an_error_line_and_exit_one() {
+        let error = CliError::MissingApiKey {
+            variable: "MISTRAL_API_KEY".to_owned(),
+            provider: "mistral".to_owned(),
+        };
+        assert!(
+            error
+                .to_string()
+                .starts_with("Error: Missing MISTRAL_API_KEY ")
+        );
+        assert_eq!(error.exit_code(), 1);
     }
 }
 

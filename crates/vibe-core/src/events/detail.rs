@@ -500,9 +500,11 @@ const fn remote_result_ok() -> bool {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EffectDetail {
-    pub kind: ToolEffectKind,
+    // Declared in the reference's order (`_EffectDetailBase` then each kind's
+    // own fields), which is the order a serialized entry names them in.
     pub tool_name: String,
     pub display: EffectCallDisplay,
+    pub kind: ToolEffectKind,
     /// The call arguments in the shape this kind declares. Never null: a
     /// generic effect publishes an object, which is what its variant requires.
     #[serde(default)]
@@ -880,7 +882,7 @@ fn call_display(
     };
     let mut display = EffectCallDisplay {
         summary,
-        content: None,
+        content: call_content(kind, arguments),
         suffix,
         verb,
         // A kind that names its own subject names it in both headers, which is
@@ -893,6 +895,24 @@ fn call_display(
     };
     display.fill_defaults();
     display
+}
+
+/// The body a call header shows under its summary. Reference
+/// `WriteFile.format_call_display` shows what is being written and
+/// `Edit.format_call_display` the two strings in Python's literal syntax;
+/// every other tool shows none. Arguments its model would refuse fall back to
+/// the generic display, which shows none either.
+fn call_content(kind: ToolEffectKind, arguments: &Value) -> Option<String> {
+    optional_string_argument(arguments, FILE_PATH_KEYS)?;
+    match kind {
+        ToolEffectKind::FileWrite => optional_string_argument(arguments, &["content"]),
+        ToolEffectKind::FileEdit => Some(format!(
+            "old_string: {}\nnew_string: {}",
+            python_string(&optional_string_argument(arguments, &["old_string"])?),
+            python_string(&optional_string_argument(arguments, &["new_string"])?)
+        )),
+        _ => None,
+    }
 }
 
 fn call_summary(
@@ -1577,6 +1597,11 @@ pub enum CallbackDetail {
         choices: Vec<ApprovalDecisionType>,
         #[serde(default)]
         related_entry_id: Option<String>,
+        /// Reference `ApprovalCallbackDetail.reason`: why an approval is asked
+        /// beyond the tool's own permission, which the static per-tool gate
+        /// never states.
+        #[serde(default)]
+        reason: Option<String>,
     },
     UserInput {
         request: UserQuestionRequest,

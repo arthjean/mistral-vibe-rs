@@ -516,6 +516,7 @@ fn tool_events(content: &str, is_error: bool) -> [EventEnvelope; 2] {
                 is_error,
                 cancelled: false,
                 skipped: false,
+                approval: None,
             },
         },
     ]

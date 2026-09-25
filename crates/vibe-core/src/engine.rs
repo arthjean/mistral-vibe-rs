@@ -190,20 +190,23 @@ impl TurnControlHandle {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EngineLimits {
-    pub max_steps: u32,
-    pub max_total_tokens: u64,
-    pub max_price_micros: u64,
+    pub max_steps: i64,
+    pub max_total_tokens: i64,
+    pub max_price_micros: i64,
     pub input_price_per_million_micros: u64,
     pub output_price_per_million_micros: u64,
     pub max_response_bytes: usize,
 }
 
+/// A limit at the maximum of its type is absent: the reference registers a
+/// budget policy only for a limit it was given, so nothing caps a turn by
+/// default.
 impl Default for EngineLimits {
     fn default() -> Self {
         Self {
-            max_steps: 20,
-            max_total_tokens: 200_000,
-            max_price_micros: u64::MAX,
+            max_steps: i64::MAX,
+            max_total_tokens: i64::MAX,
+            max_price_micros: i64::MAX,
             input_price_per_million_micros: 0,
             output_price_per_million_micros: 0,
             max_response_bytes: 2 * 1024 * 1024,
@@ -515,12 +518,9 @@ where
         // transcript that still overflows after a compaction is reported
         // instead of compacting again.
         let mut reactive_recovery_used = false;
-        // The budget policies answer twice per cycle: once at the top, where
-        // they are part of the full pipeline, and once mid-cycle, where a
-        // reached limit must not leave a tool call unanswered. Both readings
-        // come from the same middlewares, so there is one budget authority.
-        let budget = MiddlewarePipeline::from_limits(&self.settings.limits);
-        let mut pipeline = budget.clone();
+        // The budget policies answer at the top of every cycle, as part of the
+        // full pipeline.
+        let mut pipeline = MiddlewarePipeline::from_limits(&self.settings.limits);
         // Automatic compaction is registered after the budget policies and
         // before anything a caller added, which is the reference's order in
         // `_setup_middleware`: a cycle that reaches a limit and the threshold at
@@ -553,6 +553,9 @@ where
             recorder.last_history_entry_id()
         };
         if !self.settings.injected_prompt {
+            // Reference `_open_user_turn`: the operator's message is a step of
+            // the session, which is what the turn budget subtracts back out.
+            ledger.count_user_message();
             messages.push(ModelMessage::User {
                 content: prompt.clone(),
                 injected: false,
@@ -605,6 +608,16 @@ where
                 // A policy that stops without naming a public status ends the
                 // turn the way a finished conversation does.
                 MiddlewareAction::Stop => {
+                    // Reference `_handle_middleware_result`: the reason is
+                    // published as an assistant message wrapped in the stop
+                    // tag, which is what a programmatic run reports.
+                    if let Some(reason) = &policy.reason {
+                        let (text_id, _) = recorder.open_model_call();
+                        recorder.emit(EngineEvent::ModelText {
+                            text: format!("<vibe_stop_event>{reason}</vibe_stop_event>"),
+                            message_id: Some(text_id),
+                        })?;
+                    }
                     break policy.stop_reason.unwrap_or(TurnStopReason::Complete);
                 }
                 MiddlewareAction::Compact => {
@@ -742,14 +755,16 @@ where
                 reasoning_payloads: completion.reasoning_payloads.clone(),
                 tool_calls: completion.tool_calls.clone(),
             };
-            // A limit reached mid-cycle keeps a tool-free reply, but never a
-            // reply whose tool calls would be left unanswered.
-            if let Some(reason) = self.exhausted_budget(&budget, &messages, &ledger, &cancellation)
-            {
+            // The budgets answer at the top of the next cycle only, as
+            // reference `_conversation_loop` asks them: a reply's tool calls
+            // run before a limit it reached stops the turn. A cancellation
+            // still keeps a tool-free reply and drops one whose calls would be
+            // left unanswered.
+            if cancellation.is_cancelled() {
                 if completion.tool_calls.is_empty() {
                     messages.push(assistant_message);
                 }
-                break reason;
+                break TurnStopReason::Cancelled;
             }
             if completion.text.len() > self.settings.limits.max_response_bytes {
                 break TurnStopReason::ResponseLength;
@@ -827,33 +842,6 @@ where
             .or_else(|| self.provider.model().map(ToOwned::to_owned))
     }
 
-    /// Reports the limit that ends the turn, if any is already reached.
-    ///
-    /// The answer comes from the budget middlewares rather than from a second
-    /// copy of their arithmetic, so mid-cycle and top-of-cycle can never
-    /// disagree about whether a limit is reached.
-    fn exhausted_budget(
-        &self,
-        budget: &MiddlewarePipeline,
-        messages: &[ModelMessage],
-        ledger: &TurnLedger,
-        cancellation: &CancellationToken,
-    ) -> Option<TurnStopReason> {
-        if cancellation.is_cancelled() {
-            return Some(TurnStopReason::Cancelled);
-        }
-        let result = budget.before_turn(&ConversationContext {
-            messages,
-            stats: &ledger.session_stats(),
-            price_micros: ledger.price_micros,
-            compaction: &self.settings.compaction,
-        });
-        match result.action {
-            MiddlewareAction::Stop => result.stop_reason,
-            _ => None,
-        }
-    }
-
     /// Appends the synthetic `skill` call pair when the message is a slash
     /// invocation, reproducing reference `_inject_invoked_skill`: the model
     /// reads the same conversation whether the operator or one of its own tool
@@ -888,6 +876,7 @@ where
             is_error: false,
             cancelled: false,
             skipped: false,
+            approval: None,
         })?;
         Ok(())
     }
@@ -1371,6 +1360,7 @@ where
                 is_error: true,
                 cancelled: false,
                 skipped: false,
+                approval: None,
             })?;
             results[index] = Some((error, true));
         }
@@ -1458,6 +1448,16 @@ where
                             failure = output.turn_failure;
                             break;
                         }
+                        Ok(output) if output.failure.is_some() => {
+                            let message = output.failure.unwrap_or_default();
+                            let mut failed = ToolExecutionOutput::text(bounded_utf8(
+                                &message,
+                                MAX_TOOL_ERROR_BYTES,
+                                "…",
+                            ));
+                            failed.approval = output.approval;
+                            (failed, true)
+                        }
                         Ok(output) => {
                             if output.skip.is_some_and(|skip| skip.cancelled) {
                                 user_cancelled = true;
@@ -1483,6 +1483,7 @@ where
                         is_error,
                         cancelled: output.skip.is_some_and(|skip| skip.cancelled),
                         skipped: output.skip.is_some(),
+                        approval: output.approval,
                     })?;
                     results[index] = Some((output.model_text, is_error));
                 }
@@ -1509,6 +1510,7 @@ where
                 is_error: true,
                 cancelled: true,
                 skipped: false,
+                approval: None,
             })?;
             *result = Some((INTERRUPTED_TOOL_RESULT.to_owned(), true));
         }
@@ -2112,7 +2114,7 @@ mod tests {
             .await
             .expect("turn completes");
         assert_eq!(outcome.stop_reason, TurnStopReason::Complete);
-        assert_eq!(outcome.steps, 2);
+        assert_eq!(outcome.steps, 3);
         assert_eq!(outcome.usage.output_tokens, 6);
         assert!(matches!(
             outcome.messages.last(),
@@ -2315,7 +2317,7 @@ mod tests {
             .await
             .expect("compacted turn completes");
         assert_eq!(outcome.session_id, "session-2");
-        assert_eq!(outcome.steps, 1);
+        assert_eq!(outcome.steps, 2);
         assert!(
             outcome
                 .events
@@ -2365,7 +2367,10 @@ mod tests {
             32 + 16,
             "the price ceiling is evaluated against a total that includes the compaction"
         );
-        assert_eq!(outcome.steps, 1, "a compaction advances no step budget");
+        assert_eq!(
+            outcome.steps, 2,
+            "the user message and the one completion are the only steps"
+        );
         assert_eq!(
             outcome.context_tokens, 5,
             "the compaction zeroed the context size and the completion recomputed it"
@@ -2533,8 +2538,18 @@ mod tests {
 
     #[tokio::test]
     async fn limits_finish_with_typed_public_status() {
-        let provider = ScriptedProvider::new([Ok(completion("too costly", Vec::new()))]);
+        // Limits are read before each request, so the turn needs a second
+        // cycle for the first completion's usage to stop it.
+        let provider = ScriptedProvider::new([Ok(completion(
+            "too costly",
+            vec![ModelToolCall {
+                id: "call-1".to_owned(),
+                name: "read".to_owned(),
+                arguments: "{}".to_owned(),
+            }],
+        ))]);
         let outcome = ConversationEngine::new(provider)
+            .with_tools(FakeTools)
             .with_limits(EngineLimits {
                 max_total_tokens: 4,
                 ..EngineLimits::default()
@@ -2568,28 +2583,34 @@ mod tests {
             .expect("max steps is an outcome");
         assert_eq!(max_steps.stop_reason, TurnStopReason::MaxSteps);
 
-        let price =
-            ConversationEngine::new(ScriptedProvider::new([Ok(completion("cost", Vec::new()))]))
-                .with_limits(EngineLimits {
-                    max_price_micros: 4,
-                    input_price_per_million_micros: 1_000_000,
-                    output_price_per_million_micros: 1_000_000,
-                    ..EngineLimits::default()
-                })
-                .run_turn(
-                    "session-1",
-                    provider_input(),
-                    "hello",
-                    CancellationToken::default(),
-                )
-                .await
-                .expect("price limit is an outcome");
+        let price = ConversationEngine::new(ScriptedProvider::new([Ok(completion(
+            "cost",
+            vec![ModelToolCall {
+                id: "call-1".to_owned(),
+                name: "read".to_owned(),
+                arguments: "{}".to_owned(),
+            }],
+        ))]))
+        .with_tools(FakeTools)
+        .with_limits(EngineLimits {
+            max_price_micros: 4,
+            input_price_per_million_micros: 1_000_000,
+            output_price_per_million_micros: 1_000_000,
+            ..EngineLimits::default()
+        })
+        .run_turn(
+            "session-1",
+            provider_input(),
+            "hello",
+            CancellationToken::default(),
+        )
+        .await
+        .expect("price limit is an outcome");
         assert_eq!(price.stop_reason, TurnStopReason::PriceLimit);
         assert_eq!(price.price_micros, 5);
         assert_eq!(price.snapshot.lifecycle, LifecycleState::Completed);
-        assert!(matches!(
-            price.messages.last(),
-            Some(ModelMessage::Assistant { content, .. }) if content == "cost"
+        assert!(price.messages.iter().any(
+            |message| matches!(message, ModelMessage::Assistant { content, .. } if content == "cost")
         ));
 
         let refusal = ConversationEngine::new(ScriptedProvider::new([Err(
@@ -2652,7 +2673,7 @@ mod tests {
         assert_eq!(outcome.usage.input_tokens, 3);
         assert_eq!(outcome.usage.output_tokens, 2);
         assert_eq!(outcome.context_tokens, 5);
-        assert_eq!(outcome.steps, 1);
+        assert_eq!(outcome.steps, 2);
         assert_eq!(outcome.price_micros, 5);
         assert_eq!(outcome.snapshot.lifecycle, LifecycleState::Completed);
     }
@@ -2666,7 +2687,7 @@ mod tests {
             .await
             .expect("cancellation is an outcome");
         assert_eq!(outcome.stop_reason, TurnStopReason::Cancelled);
-        assert_eq!(outcome.steps, 0);
+        assert_eq!(outcome.steps, 1, "the user message is the only step");
         assert_eq!(outcome.snapshot.lifecycle, LifecycleState::Cancelled);
     }
 
@@ -3029,13 +3050,15 @@ mod tests {
             .expect("a policy stop is an outcome, not an error");
 
         assert_eq!(outcome.stop_reason, TurnStopReason::PriceLimit);
-        assert_eq!(outcome.steps, 0);
+        assert_eq!(outcome.steps, 1, "the user message is the only step");
         assert!(
-            !outcome
-                .events
-                .iter()
-                .any(|envelope| matches!(envelope.event, EngineEvent::ModelText { .. })),
-            "no request was built, so no model text was produced"
+            outcome.events.iter().all(|envelope| match &envelope.event {
+                EngineEvent::ModelText { text, .. } => {
+                    text == "<vibe_stop_event>policy said so</vibe_stop_event>"
+                }
+                _ => true,
+            }),
+            "no request was built, so the only model text is the stop event"
         );
     }
 

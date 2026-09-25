@@ -91,6 +91,12 @@ impl ApprovalAgent for ApproveInteractiveRequest {
     fn request<'a>(&'a self, _request: ApprovalRequest) -> ApprovalFuture<'a> {
         Box::pin(async { Ok(ApprovalDecision::ApproveOnce) })
     }
+
+    /// Reference `bypass_tool_permissions`: an auto-approving session never
+    /// consults the gate at all.
+    fn attribution(&self, _tool: &str) -> vibe_core::tools::ToolApprovalSource {
+        vibe_core::tools::ToolApprovalSource::Bypass
+    }
 }
 
 pub(super) struct InteractiveApprovalAgent {
@@ -198,8 +204,7 @@ pub(super) fn approval_callback_detail(
     // The approval presents the effect it is gating, so the detail carries the
     // same typed shape the effect entry will publish once the call is allowed,
     // its paths shown against the same session directory.
-    let mut effect = EffectDetail::for_call_at(&request.tool, &request.input, working_directory);
-    effect.display.content = Some(request.rationale.clone());
+    let effect = EffectDetail::for_call_at(&request.tool, &request.input, working_directory);
     json!({
         "kind": "approval",
         "effect": effect,
@@ -218,6 +223,9 @@ pub(super) fn approval_callback_detail(
         // Reference `ApprovalCallbackDetail.related_entry_id`: the effect the
         // approval gates, which is keyed on its tool call.
         "relatedEntryId": request.call_id,
+        // Reference `ApprovalCallbackDetail.reason` is left unset by the static
+        // per-tool gate, which is the only one this port raises.
+        "reason": null,
     })
 }
 
@@ -467,6 +475,8 @@ pub(super) fn question_tool_output(
         return Ok(ToolExecutionOutput {
             skip: None,
             turn_failure: None,
+            approval: None,
+            failure: None,
             typed_result: json!({"answers": [], "cancelled": true}),
             model_text: answer_model_text(&[], true),
             display: json!({"kind": "user_question"}),
@@ -504,6 +514,8 @@ pub(super) fn question_tool_output(
     Ok(ToolExecutionOutput {
         skip: None,
         turn_failure: None,
+        approval: None,
+        failure: None,
         typed_result: json!({
             "answers": published
                 .iter()
@@ -712,6 +724,8 @@ pub(super) async fn run_interactive_plan_review(
     Ok(ToolExecutionOutput {
         skip: None,
         turn_failure: None,
+        approval: None,
+        failure: None,
         typed_result: json!({"switched": switched, "message": message}),
         model_text,
         display: json!({"kind": "plan_review", "switched": switched}),
