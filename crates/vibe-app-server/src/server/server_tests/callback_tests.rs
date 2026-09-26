@@ -1107,11 +1107,13 @@ fn another_connection_cannot_mutate_an_unattached_session() {
         "session/read",
         json!({"sessionId": "session-1"}),
     ));
+    // Another connection's session is read from the saved sessions (reference
+    // `_host.py`), and one never saved is not among them.
     assert!(matches!(
-        decode_frame(&read.outbound[0]).expect("forbidden response"),
+        decode_frame(&read.outbound[0]).expect("refused response"),
         Envelope::Error(ErrorResponse {
             error: ProtocolError {
-                code: ProtocolErrorCode::Forbidden,
+                code: ProtocolErrorCode::NotFound,
                 ..
             },
             ..

@@ -89,7 +89,7 @@ pub(crate) async fn run(
     arguments.model.clone_from(&route.model);
     let credential = bootstrap::programmatic_credential(&arguments, &route.provider)?;
     crate::validate_arguments(&arguments)?;
-    let config = bootstrap::route_driver_config(&arguments, &route, &workspace)?;
+    let config = bootstrap::route_driver_config(&route, &workspace)?;
     let telemetry = crate::telemetry_observer_for(
         &arguments,
         &workspace,

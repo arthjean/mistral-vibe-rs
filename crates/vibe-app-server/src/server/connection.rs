@@ -7,6 +7,7 @@
 
 mod review_request;
 mod rewind;
+mod saved;
 mod session;
 mod trust;
 mod turn;
@@ -19,6 +20,12 @@ pub struct ServerConnection {
     pub(super) transport: TransportKind,
     pub(super) capabilities: ClientCapabilities,
     pub(super) attached_sessions: BTreeSet<String>,
+    /// The registry key of the session this connection opened first, which
+    /// answers the methods the reference routes to a connection's root.
+    pub(super) root: Option<String>,
+    /// How the client said it was launched, which decides whether its
+    /// sessions name themselves in the background.
+    pub(super) entrypoint: ClientEntrypoint,
     pub(super) pending_server_requests: HashMap<RequestId, CallbackRoute>,
 }
 
@@ -322,13 +329,28 @@ impl ServerConnection {
     }
 
     pub fn close(&mut self) {
+        let mut released = Vec::new();
         if let Ok(mut sessions) = self.server.lock_sessions() {
             for session_id in &self.attached_sessions {
                 if let Some(session) = sessions.get_mut(session_id) {
                     session.attachments = session.attachments.saturating_sub(1);
+                    if session.attachments == 0 && session.status != SessionStatus::Closed {
+                        released.push(session.id.clone());
+                    }
                 }
             }
         }
+        // A connection that goes away lets go of what it held, as the
+        // reference's backend shutdown does: the lease, and the terminal's
+        // pointer to the session it leaves.
+        for session_id in released {
+            self.server.release_lease(&session_id);
+            let _ = self
+                .server
+                .workspace
+                .close_saved_session(&session_id, now_millis());
+        }
+        self.root = None;
         self.attached_sessions.clear();
         self.pending_server_requests.clear();
         // A tool parked on a delegation would otherwise wait out its deadline
@@ -362,6 +384,13 @@ impl ServerConnection {
                 "Connection is not initialized",
             );
         }
+        if let Some(method) = internal_method(self.transport, &request.method) {
+            let request = ServerRequest {
+                method: method.to_owned(),
+                ..request
+            };
+            return self.workspace_request(request);
+        }
         if !is_dispatchable_method(&request.method) {
             return error_batch(
                 request.id,
@@ -371,7 +400,21 @@ impl ServerConnection {
         }
         match request.method.as_str() {
             "session/start" => self.session_start(request),
-            "session/read" => self.session_read(request),
+            "session/list"
+            | "session/read"
+            | "session/history/get"
+            | "session/history/list"
+            | "session/turns/list"
+            | "session/rename"
+            | "session/title/update"
+            | "session/pin"
+            | "session/relocate"
+            | "session/log/read"
+            | "session/resume"
+            | "session/continue"
+            | "session/fork"
+            | "session/delete"
+            | "session/history/clear" => self.saved_session_request(request),
             "session/close" => self.session_close(request),
             "session/compact/start" => self.session_compact_start(request),
             "session/settings/update" => self.session_settings_update(request),
@@ -443,6 +486,7 @@ impl ServerConnection {
             }
         };
         self.capabilities = params.capabilities;
+        self.entrypoint = params.client_info.entrypoint.clone();
         // Sessions started on this connection publish their tools against what
         // the handshake just declared, so the delegation is recorded before the
         // first `session/start` can read it.

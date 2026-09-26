@@ -254,7 +254,9 @@ async fn a_fatal_transport_failure_publishes_an_error_before_the_stream_ends() {
 #[tokio::test]
 async fn stdio_transport_loss_closes_orphaned_resource_sessions() {
     let backend = Arc::new(CleanupResourceBackend::default());
-    let (client, server_io) = duplex(4096);
+    // Room for every frame the server writes before the client hangs up, so
+    // the loss is the one the client causes and not a full pipe.
+    let (client, server_io) = duplex(64 * 1024);
     let (client_read, mut client_write) = tokio::io::split(client);
     let (server_read, server_write) = tokio::io::split(server_io);
     let server_task = tokio::spawn(serve_stdio(

@@ -148,10 +148,10 @@ fn overlay_latest_saved_history(
     // and the session record is what carries both that length and the context
     // accounting. `session/rewind/read` used to answer them, which it no longer
     // does: it answers what a rewind to one entry would restore.
-    let count = match runtime
-        .service
-        .public_call("session/log/read", json!({"sessionId": state.session_id}))
-    {
+    let count = match runtime.service.public_call(
+        "internal/session/log/read",
+        json!({"sessionId": state.session_id}),
+    ) {
         Ok(result) => {
             runtime.context_tokens = result
                 .get("metadata")
@@ -171,7 +171,7 @@ fn overlay_latest_saved_history(
     };
     let offset = message_count.saturating_sub(INITIAL_HISTORY_LIMIT);
     let result = runtime.service.public_call(
-        "history/list",
+        "internal/history/list",
         json!({
             "sessionId": state.session_id,
             "offset": offset,
@@ -234,7 +234,7 @@ pub(super) fn load_more_history(runtime: Option<&mut InteractiveRuntime>, state:
     let limit = before.min(LOAD_MORE_BATCH_SIZE);
     let offset = before.saturating_sub(limit);
     let result = runtime.service.public_call(
-        "history/list",
+        "internal/history/list",
         json!({
             "sessionId": state.session_id,
             "offset": offset,

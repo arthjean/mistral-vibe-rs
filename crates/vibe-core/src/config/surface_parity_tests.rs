@@ -199,11 +199,6 @@ const DEFAULT_DIVERGENCES: &[(&str, &str)] = &[
         "/providers/1/browser_auth_allow_origin_rewrite",
         ORIGIN_REWRITE,
     ),
-    (
-        "/session_logging/generate_titles",
-        "v2.24.4 adds `generate_titles` to SessionLoggingConfig, default false \
-         (models.py:79); the port's `session_logging` default carries no such key",
-    ),
 ];
 
 /// Pointers at which a merge scenario diverges, as `(scenario, pointer, reason)`.

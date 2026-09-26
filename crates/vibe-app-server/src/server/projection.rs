@@ -54,7 +54,18 @@ pub(super) fn public_session_state(session: &SessionRuntime) -> Value {
     // Reference `message_preview`: the first user message the operator typed,
     // cut at 160 characters. Context the harness injected during a turn never
     // names a session; a replayed message, which carries no turn, does.
+    // A cleared conversation starts over, so nothing said before the clear
+    // previews it: the reference reads the preview from the loop's messages,
+    // which the clear emptied.
+    let since_clear = history
+        .iter()
+        .rposition(
+            |entry| matches!(entry, PublicHistoryEntry::Checkpoint { kind, .. } if kind == "clear"),
+        )
+        .map_or(0, |index| index + 1);
     let preview = history
+        .get(since_clear..)
+        .unwrap_or_default()
         .iter()
         .find_map(|entry| match entry {
             PublicHistoryEntry::Message {

@@ -468,49 +468,49 @@ impl AppServer {
         }
     }
 
-    /// The session's logging state as `SessionLogSummary` declares it.
-    ///
-    /// A session the store never persisted reports its configured switch and
-    /// nothing else, which is what a client renders as "not being written".
+    /// The session's logging state as `SessionLogSummary` declares it
+    /// (reference `_session_log_summary`): a session is persisted once its
+    /// record is on disk, which is also when it has a path.
     pub(crate) fn session_log_summary(&self, session_id: &str) -> Value {
         let enabled = self.workspace.session_logging_enabled();
-        let Ok(sessions) = self.lock_sessions() else {
-            return json!({
-                "enabled": enabled,
-                "sessionId": null,
-                "persisted": false,
-                "path": null,
-                "title": null,
-                "needsInitialAutoTitle": false,
-            });
-        };
-        let session = sessions.get(session_id);
-        let persisted = session.and_then(|session| session.persisted.as_ref());
-        let title = session
-            .and_then(|session| {
-                session
-                    .snapshot
-                    .as_ref()
-                    .and_then(|snapshot| snapshot.title.clone())
+        let store = self.workspace.session_store();
+        let (held, snapshot_title) = self
+            .lock_sessions()
+            .ok()
+            .and_then(|sessions| {
+                sessions.get(session_id).map(|session| {
+                    (
+                        session.persisted.clone(),
+                        session
+                            .snapshot
+                            .as_ref()
+                            .and_then(|snapshot| snapshot.title.clone()),
+                    )
+                })
             })
-            .or_else(|| persisted.and_then(|hydrated| hydrated.metadata.title.clone()));
-        // A fork a rewind composed is named but not written until its first
-        // turn, which is what the reference's unsaved logger reports.
-        let written = persisted.filter(|hydrated| !self.workspace.is_draft(&hydrated.metadata.id));
+            .unwrap_or_default();
+        let metadata = store
+            .open(session_id)
+            .ok()
+            .or(held)
+            .map(|hydrated| hydrated.metadata);
+        let written = metadata.as_ref().filter(|metadata| {
+            !self.workspace.is_draft(&metadata.id) && metadata.is_persisted(&store)
+        });
+        let title = metadata
+            .as_ref()
+            .and_then(|metadata| metadata.title.clone())
+            .or(snapshot_title);
         json!({
             "enabled": enabled,
-            "sessionId": persisted.map(|hydrated| hydrated.metadata.id.clone()),
+            "sessionId": metadata.as_ref().map_or(session_id, |metadata| metadata.id.as_str()),
             "persisted": written.is_some(),
             "path": written
-                .map(|hydrated| hydrated.metadata.directory.as_str())
+                .map(|metadata| metadata.directory.as_str())
                 .filter(|directory| !directory.is_empty())
                 .map(|directory| self.workspace.session_path(directory)),
             "title": title,
-            // A persisted session whose title is still the one the store
-            // generated is waiting for its first real one.
-            "needsInitialAutoTitle": persisted.is_some_and(|hydrated| {
-                hydrated.metadata.title.is_none() && hydrated.metadata.title_source == "auto"
-            }),
+            "needsInitialAutoTitle": title.is_none(),
         })
     }
 

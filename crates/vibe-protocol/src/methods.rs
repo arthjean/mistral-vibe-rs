@@ -11,7 +11,7 @@
 /// Lifecycle methods (`initialize`, `initialized`, `shutdown`, `exit`) are
 /// deliberately absent: they are handled before method dispatch and are not
 /// part of the negotiated surface.
-pub const SERVER_METHODS: [&str; 102] = [
+pub const SERVER_METHODS: [&str; 107] = [
     "account/read",
     "agents/install",
     "agents/list",
@@ -32,7 +32,6 @@ pub const SERVER_METHODS: [&str; 102] = [
     "diagnostics/logs/read",
     "feedback/record",
     "feedback/shouldShow",
-    "history/list",
     "identity/read",
     "loops/clear",
     "loops/create",
@@ -76,17 +75,23 @@ pub const SERVER_METHODS: [&str; 102] = [
     "session/delete",
     "session/fork",
     "session/history/clear",
+    "session/history/get",
+    "session/history/list",
     "session/list",
     "session/log/read",
+    "session/pin",
     "session/read",
     "session/ready/read",
     "session/ready/wait",
+    "session/relocate",
+    "session/rename",
     "session/resume",
     "session/rewind",
     "session/rewind/read",
     "session/settings/update",
     "session/start",
     "session/title/update",
+    "session/turns/list",
     "shell/interrupt",
     "shell/run",
     "skills/list",

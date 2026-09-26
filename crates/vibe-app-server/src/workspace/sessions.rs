@@ -28,7 +28,7 @@ impl WorkspaceService {
         if let Some(draft) = self.lock_drafts()?.get(session_id) {
             return Ok(draft.clone());
         }
-        self.store.load(session_id).map_err(|error| match error {
+        self.store.open(session_id).map_err(|error| match error {
             StorageError::SessionNotFound(_) => {
                 WorkspaceServiceError::NotFound(format!("Session not found: {session_id}"))
             }
@@ -150,7 +150,7 @@ impl WorkspaceService {
         }
     }
 
-    fn lock_drafts(
+    pub(super) fn lock_drafts(
         &self,
     ) -> Result<std::sync::MutexGuard<'_, BTreeMap<String, HydratedSession>>, WorkspaceServiceError>
     {
@@ -164,10 +164,10 @@ impl WorkspaceService {
         session_id: &str,
         settings: &BTreeMap<String, Value>,
     ) -> Result<Option<HydratedSession>, WorkspaceServiceError> {
-        if !self.persist_runtime_sessions {
+        if !self.persists_runtime_sessions() {
             return Ok(None);
         }
-        let mut hydrated = self.store.load(session_id).map_err(storage_error)?;
+        let mut hydrated = self.store.open(session_id).map_err(storage_error)?;
         hydrated.metadata.config.extend(settings.clone());
         hydrated.metadata.updated_at_ms = now_millis();
         self.store
@@ -186,7 +186,7 @@ impl WorkspaceService {
         working_directory: &str,
         now_ms: u64,
     ) -> Result<HydratedSession, WorkspaceServiceError> {
-        match self.store.load(session_id) {
+        match self.store.open(session_id) {
             Ok(_) => {
                 return Err(WorkspaceServiceError::Storage(format!(
                     "session `{session_id}` already exists"
@@ -195,10 +195,15 @@ impl WorkspaceService {
             Err(StorageError::SessionNotFound(_)) => {}
             Err(error) => return Err(storage_error(error)),
         }
-        self.store
+        let metadata = self
+            .store
             .create(session_id, working_directory, None, now_ms)
             .map_err(storage_error)?;
-        let hydrated = self.store.load(session_id).map_err(storage_error)?;
+        let hydrated = HydratedSession {
+            metadata,
+            messages: Vec::new(),
+            current_config: BTreeMap::new(),
+        };
         self.continuity
             .refresh(hydrated.clone())
             .map_err(|error| WorkspaceServiceError::Storage(error.to_string()))?;
@@ -210,7 +215,7 @@ impl WorkspaceService {
         session_id: &str,
         name: &str,
     ) -> Result<Option<HydratedSession>, WorkspaceServiceError> {
-        if !self.persist_runtime_sessions {
+        if !self.persists_runtime_sessions() {
             return Ok(None);
         }
         self.set_session_agent(session_id, name)
@@ -224,70 +229,22 @@ impl WorkspaceService {
     ) -> Result<(), WorkspaceServiceError> {
         self.discard_draft(session_id);
         match self.store.close(session_id, now_ms) {
-            Ok(_) | Err(StorageError::SessionNotFound(_)) => Ok(()),
-            Err(error) => Err(storage_error(error)),
+            Ok(()) | Err(StorageError::SessionNotFound(_)) => {}
+            Err(error) => return Err(storage_error(error)),
         }
-    }
-
-    pub(super) fn session_list(
-        &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
-        let offset = usize_param(params, "offset", 0, 0, usize::MAX)?;
-        let limit = usize_param(params, "limit", 50, SESSION_PAGE_MIN, SESSION_PAGE_MAX)?;
-        let cwd = optional_string(params, "cwd")?;
-        // The legacy migration still runs before the page is read, so a store
-        // written by an older layout is listed; what it moved is not published,
-        // because `SessionListResponse` declares the page and nothing else.
-        self.store.migrate_legacy().map_err(storage_error)?;
-        let page = self.store.list(cwd, offset, limit).map_err(storage_error)?;
-        Ok(WorkspaceDispatch::result([(
-            "sessions",
-            serde_json::to_value(page.sessions)?,
-        )]))
-    }
-
-    pub(super) fn history_list(
-        &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
-        let session_id = required_string(params, "sessionId")?;
-        let offset = usize_param(params, "offset", 0, 0, usize::MAX)?;
-        let limit = usize_param(params, "limit", 100, SESSION_PAGE_MIN, SESSION_PAGE_MAX)?;
-        // A fork a rewind left unwritten is read where it is held.
-        let draft = self.lock_drafts()?.get(session_id).map(|draft| {
-            draft
-                .messages
-                .iter()
-                .skip(offset)
-                .take(limit)
-                .cloned()
-                .collect::<Vec<_>>()
-        });
-        let history = match draft {
-            Some(history) => history,
-            None => self
+        // Reference `_record_last_session`: the terminal's pointer names the
+        // session it closed, once that session was written at all.
+        if self.session_logging.enabled
+            && self
                 .store
-                .history(session_id, offset, limit)
-                .map_err(storage_error)?,
-        };
-        Ok(WorkspaceDispatch::result([(
-            "history",
-            serde_json::to_value(history)?,
-        )]))
-    }
-
-    pub(super) fn session_log(
-        &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
-        let session_id = required_string(params, "sessionId")?;
-        let draft = self.lock_drafts()?.get(session_id).cloned();
-        let hydrated = match draft {
-            Some(draft) => draft,
-            None => self.store.load(session_id).map_err(storage_error)?,
-        };
-        Ok(hydrated_result(&hydrated, None))
+                .open(session_id)
+                .is_ok_and(|hydrated| hydrated.metadata.is_persisted(&self.store))
+        {
+            self.store
+                .record_pointer(session_id)
+                .map_err(storage_error)?;
+        }
+        Ok(())
     }
 
     /// Refuses a `worktree` on a method that reopens a recorded session.
@@ -393,140 +350,81 @@ impl WorkspaceService {
         ))
     }
 
-    pub(super) fn fork(
+    /// Reference `SessionRuntime.fork`: the saved copy of `source` under
+    /// `new_id`, through the first `keep` messages when a turn anchors it,
+    /// naming `source` its parent and with nothing spent yet.
+    ///
+    /// # Errors
+    ///
+    /// Answers `NotFound` for a source nothing saved, and reports any other
+    /// storage failure.
+    pub(crate) fn fork_saved_session(
         &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
-        let source = required_string(params, "sessionId")?;
-        let keep_messages = match optional_string(params, "messageId")? {
-            Some(message_id) if !message_id.starts_with("history-") => {
-                let stored = self.store.load(source).map_err(storage_error)?;
-                Some(fork_point(&stored.messages, message_id)?)
+        source: &str,
+        new_id: &str,
+        keep: Option<usize>,
+    ) -> Result<HydratedSession, WorkspaceServiceError> {
+        let stored = self.store.load(source).map_err(|error| match error {
+            StorageError::SessionNotFound(_) => {
+                WorkspaceServiceError::NotFound(format!("Session not found: {source}"))
             }
-            _ => fork_keep_messages(params)?,
-        };
-        let new_id = match optional_string(params, "newSessionId")? {
-            Some(new_id) => new_id.to_owned(),
-            None => format!(
-                "session-{}-{}",
-                now_millis(),
-                self.next_session.fetch_add(1, Ordering::Relaxed)
-            ),
-        };
-        let mut hydrated = self
+            error => storage_error(error),
+        })?;
+        let keep = keep.unwrap_or(stored.messages.len());
+        let hydrated = self
             .store
-            .fork(
-                source,
-                &new_id,
-                optional_string(params, "systemPrompt")?.unwrap_or_default(),
-                config_map(params.get("config"))?,
-                now_millis(),
-            )
+            .fork_rewound(source, new_id, keep, BTreeMap::new(), now_millis())
             .map_err(storage_error)?;
-        // Reference `SessionRuntime.fork` saves the copy with fresh
-        // statistics: the fork has spent nothing yet.
-        if let Some(keep_messages) = keep_messages {
-            hydrated = self
-                .store
-                .rewind(
-                    &hydrated.metadata.id,
-                    keep_messages,
-                    BTreeMap::new(),
-                    now_millis(),
-                )
-                .map_err(storage_error)?;
-        } else {
-            hydrated.metadata.statistics = BTreeMap::new();
-            self.store
-                .update_metadata(&hydrated.metadata)
-                .map_err(storage_error)?;
-        }
         self.continuity
             .refresh(hydrated.clone())
             .map_err(|error| WorkspaceServiceError::Storage(error.to_string()))?;
-        Ok(hydrated_result(
-            &hydrated,
-            Some(runtime_attachment(&hydrated)),
-        ))
-    }
-
-    pub(super) fn title_update(
-        &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
-        let metadata = self
-            .store
-            .update_title(
-                required_string(params, "sessionId")?,
-                required_string(params, "title")?,
-                now_millis(),
-            )
-            .map_err(storage_error)?;
-        Ok(WorkspaceDispatch::result([(
-            "metadata",
-            serde_json::to_value(metadata)?,
-        )]))
-    }
-
-    pub(super) fn delete(
-        &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
-        let session_id = required_string(params, "sessionId")?;
-        let snapshot = match self.store.load(session_id) {
-            Ok(snapshot) => Some(snapshot),
-            Err(StorageError::SessionNotFound(_)) => None,
-            Err(error) => return Err(storage_error(error)),
-        };
-        self.continuity
-            .remove(session_id)
-            .map_err(|error| WorkspaceServiceError::Storage(error.to_string()))?;
-        match self.store.delete(session_id) {
-            Ok(()) | Err(StorageError::SessionNotFound(_)) => {}
-            Err(error) => {
-                if let Some(snapshot) = snapshot
-                    && let Err(rollback) = self.continuity.refresh(snapshot)
-                {
-                    return Err(WorkspaceServiceError::Storage(format!(
-                        "session delete failed ({error}); continuity rollback failed ({rollback})"
-                    )));
-                }
-                return Err(storage_error(error));
-            }
-        }
-        Ok(WorkspaceDispatch::result([("deleted", json!(true))]))
+        Ok(hydrated)
     }
 
     /// Reference `_history_clear`: the conversation continues under a rotated
-    /// identifier with nothing said yet, and the session it replaces is left on
-    /// disk untouched, so `vibe --resume` can still reach it. The new session
-    /// records no parent, because what it continues was discarded.
-    pub(super) fn history_clear(
+    /// identifier with nothing said yet and no parent, since what it continues
+    /// was discarded. Nothing is written until the next save, and the session
+    /// it replaces stays on disk, so `vibe --resume` can still reach it.
+    ///
+    /// # Errors
+    ///
+    /// Reports the storage failure.
+    pub(crate) fn clear_session(
         &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
-        let source = self
-            .store
-            .load(required_string(params, "sessionId")?)
-            .map_err(storage_error)?;
+        source: &HydratedSession,
+    ) -> Result<HydratedSession, WorkspaceServiceError> {
         let new_id = vibe_core::session_id::rotate_session_id(&source.metadata.id);
-        let now = now_millis();
         let mut metadata = self
             .store
-            .handoff_messages(&source.metadata, &new_id, &[], now, false)
+            .create(
+                &new_id,
+                &source.metadata.working_directory,
+                None,
+                now_millis(),
+            )
             .map_err(storage_error)?;
-        metadata.statistics = BTreeMap::new();
+        metadata
+            .agent_profile
+            .clone_from(&source.metadata.agent_profile);
+        metadata.config.clone_from(&source.metadata.config);
+        metadata
+            .tools_available
+            .clone_from(&source.metadata.tools_available);
+        metadata
+            .system_prompt
+            .clone_from(&source.metadata.system_prompt);
         self.store
             .update_metadata(&metadata)
             .map_err(storage_error)?;
-        let hydrated = self.store.load(&new_id).map_err(storage_error)?;
+        let hydrated = HydratedSession {
+            metadata,
+            messages: Vec::new(),
+            current_config: source.current_config.clone(),
+        };
         self.continuity
             .refresh(hydrated.clone())
             .map_err(|error| WorkspaceServiceError::Storage(error.to_string()))?;
-        Ok(hydrated_result(
-            &hydrated,
-            Some(runtime_attachment(&hydrated)),
-        ))
+        Ok(hydrated)
     }
 
     pub(super) fn set_session_agent(
@@ -535,91 +433,16 @@ impl WorkspaceService {
         name: &str,
     ) -> Result<(AgentProfile, HydratedSession), WorkspaceServiceError> {
         let profile = self.agent_profile(name)?;
-        let mut metadata = self.store.load(session_id).map_err(storage_error)?.metadata;
+        let mut metadata = self.store.open(session_id).map_err(storage_error)?.metadata;
         metadata.agent_profile = Some(serde_json::to_value(&profile)?);
         self.store
             .update_metadata(&metadata)
             .map_err(storage_error)?;
-        let hydrated = self.store.load(session_id).map_err(storage_error)?;
+        let hydrated = self.store.open(session_id).map_err(storage_error)?;
         self.continuity
             .refresh(hydrated.clone())
             .map_err(|error| WorkspaceServiceError::Storage(error.to_string()))?;
         Ok((profile, hydrated))
-    }
-}
-
-/// How many stored messages a fork anchored at the user message `message_id`
-/// keeps: that message and the turn it opened. Reference `_messages_for_fork`
-/// (`vibe/app_server/_runtime.py`).
-fn fork_point(messages: &[ModelMessage], message_id: &str) -> Result<usize, WorkspaceServiceError> {
-    let anchor = messages
-        .iter()
-        .position(|message| match message {
-            ModelMessage::User { message_id: id, .. } => id.as_deref() == Some(message_id),
-            ModelMessage::Assistant { message_id: id, .. } => id.as_deref() == Some(message_id),
-            _ => false,
-        })
-        .ok_or_else(|| {
-            WorkspaceServiceError::InvalidParams(format!(
-                "no message named `{message_id}` can anchor a fork"
-            ))
-        })?;
-    if !matches!(messages.get(anchor), Some(ModelMessage::User { .. })) {
-        return Err(WorkspaceServiceError::InvalidParams(
-            "a fork can only be anchored at a user message".to_owned(),
-        ));
-    }
-    Ok(messages
-        .iter()
-        .enumerate()
-        .skip(anchor + 1)
-        .find(|(_, message)| matches!(message, ModelMessage::User { .. }))
-        .map_or(messages.len(), |(index, _)| index))
-}
-
-pub(super) fn fork_keep_messages(
-    params: &BTreeMap<String, Value>,
-) -> Result<Option<usize>, WorkspaceServiceError> {
-    let explicit = params
-        .get("keepMessages")
-        .map(|value| {
-            value
-                .as_u64()
-                .and_then(|value| usize::try_from(value).ok())
-                .ok_or_else(|| {
-                    WorkspaceServiceError::InvalidParams(
-                        "keepMessages must be a non-negative integer".to_owned(),
-                    )
-                })
-        })
-        .transpose()?;
-    let anchored = params
-        .get("messageId")
-        .map(|value| {
-            let message_id = value.as_str().ok_or_else(|| {
-                WorkspaceServiceError::InvalidParams("messageId must be a string".to_owned())
-            })?;
-            let index = message_id
-                .strip_prefix("history-")
-                .and_then(|value| value.parse::<usize>().ok())
-                .ok_or_else(|| {
-                    WorkspaceServiceError::InvalidParams(
-                        "messageId must use the stable `history-N` form".to_owned(),
-                    )
-                })?;
-            index.checked_add(1).ok_or_else(|| {
-                WorkspaceServiceError::InvalidParams("messageId index is too large".to_owned())
-            })
-        })
-        .transpose()?;
-    match (explicit, anchored) {
-        (Some(explicit), Some(anchored)) if explicit != anchored => {
-            Err(WorkspaceServiceError::InvalidParams(
-                "keepMessages and messageId identify different fork anchors".to_owned(),
-            ))
-        }
-        (Some(value), _) | (_, Some(value)) => Ok(Some(value)),
-        (None, None) => Ok(None),
     }
 }
 
@@ -683,7 +506,7 @@ pub(super) fn hydrated_result(
     }
 }
 
-pub(super) fn runtime_attachment(hydrated: &HydratedSession) -> RuntimeAttachment {
+pub(crate) fn runtime_attachment(hydrated: &HydratedSession) -> RuntimeAttachment {
     let agent_profile: Option<AgentProfile> = hydrated
         .metadata
         .agent_profile

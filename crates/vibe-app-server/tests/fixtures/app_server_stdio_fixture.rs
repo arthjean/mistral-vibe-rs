@@ -35,8 +35,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let vibe_home = std::env::var_os("VIBE_HOME")
         .map(PathBuf::from)
         .ok_or("VIBE_HOME must name the fixture's vibe home")?;
-    let session_root = vibe_home.join("sessions");
     let working_directory = std::env::current_dir()?;
+    // The workspace resolves `session_logging` from the configuration, so the
+    // driver writes turns where the workspace lists and resumes them.
+    let workspace =
+        WorkspaceService::for_runtime_session_root(vibe_home.join("sessions"), &working_directory);
+    let session_root = workspace
+        .persists_runtime_sessions()
+        .then(|| workspace.session_root().to_path_buf());
     let dotenv = DotenvValues::global(&vibe_home);
     let style = dotenv
         .variable("VIBE_PROVIDER_STYLE")
@@ -54,12 +60,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .unwrap_or_else(|| "mistral-medium-3.5".to_owned()),
         api: ApiSettings::default(),
         system_prompt: "You are Mistral Vibe.".to_owned(),
-        session_root: Some(session_root.clone()),
+        session_root,
         input_price_per_million_micros: 1_500_000,
         output_price_per_million_micros: 7_500_000,
     };
     let driver = LiveTurnDriver::from_environment(config, &dotenv)?;
-    let workspace = WorkspaceService::for_runtime_session_root(session_root, &working_directory);
     let server = match std::env::var_os("VIBE_ORACLE_KEYRING") {
         Some(path) => {
             let store = McpOAuthStore::new(Arc::new(FileKeyring(PathBuf::from(path))), false);

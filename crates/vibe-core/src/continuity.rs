@@ -104,7 +104,12 @@ impl SessionContinuity {
         if let Some(snapshot) = self.find_snapshot(selector)? {
             return Ok(snapshot);
         }
-        let hydrated = self.store.load(selector)?;
+        // A saved session answers any selector; one held before its first
+        // save answers only its exact identifier.
+        let hydrated = match self.store.load(selector) {
+            Err(StorageError::SessionNotFound(_)) => self.store.open(selector)?,
+            loaded => loaded?,
+        };
         self.attach(hydrated)
     }
 
@@ -245,7 +250,7 @@ impl SessionContinuity {
                 actual: event_id,
             });
         }
-        let mut hydrated = self.store.load(&state.snapshot.session_id)?;
+        let mut hydrated = self.store.open(&state.snapshot.session_id)?;
         let mut persisted = state.snapshot.clone();
         persisted.watermark = event_id;
         persisted
@@ -360,7 +365,7 @@ fn persist_continuity_state(
     store: &SessionStore,
     state: &ContinuityState,
 ) -> Result<(), ContinuityError> {
-    let mut hydrated = store.load(&state.snapshot.session_id)?;
+    let mut hydrated = store.open(&state.snapshot.session_id)?;
     hydrated.metadata.config.insert(
         CONTINUITY_KEY.to_owned(),
         continuity_value(&state.snapshot, &state.aliases),

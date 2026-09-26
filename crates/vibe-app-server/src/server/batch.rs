@@ -258,6 +258,10 @@ impl From<WorkspaceServiceError> for ProtocolFault {
             WorkspaceServiceError::StatePoisoned | WorkspaceServiceError::Json(_) => {
                 Self::internal(error.to_string())
             }
+            WorkspaceServiceError::Rejected(issues) => {
+                Self::InvalidParams(ParamsRejection::with_issues(issues))
+            }
+            WorkspaceServiceError::Refused(code, message) => Self::plain(code, message),
         }
     }
 }

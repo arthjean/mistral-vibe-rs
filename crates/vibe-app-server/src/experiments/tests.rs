@@ -213,8 +213,9 @@ async fn a_resolved_rollout_reaches_the_configuration_the_census_and_the_session
     // The session: what it resolved is on disk under the reference's key.
     let metadata = service
         .session_store()
-        .metadata(&session_id)
-        .expect("the metadata reads back");
+        .open(&session_id)
+        .expect("the metadata reads back")
+        .metadata;
     assert_eq!(
         metadata
             .experiment_state
@@ -293,8 +294,18 @@ async fn a_forked_session_inherits_its_parent_state_without_a_request() {
         resolve_over(&root, &document(stub.port), Arc::clone(&identity) as _).await;
     assert_eq!(stub.count(), 1);
 
-    let child = service
-        .session_store()
+    // Only a saved session can be forked, and a session is saved with its
+    // first message.
+    let store = service.session_store();
+    let mut parent = store.open(&parent_id).expect("the parent is held").metadata;
+    store
+        .append_message(
+            &mut parent,
+            &vibe_core::events::ModelMessage::user("earlier"),
+            2,
+        )
+        .expect("the parent is saved");
+    let child = store
         .fork(&parent_id, "forked-session", "prompt", BTreeMap::new(), 2)
         .expect("the fork succeeds");
     assert_eq!(
@@ -357,8 +368,9 @@ async fn a_disabled_gate_issues_nothing_and_reports_nothing() {
         assert!(
             service
                 .session_store()
-                .metadata(&session_id)
+                .open(&session_id)
                 .expect("the metadata reads back")
+                .metadata
                 .experiment_state
                 .is_null(),
             "{gate} persists nothing"

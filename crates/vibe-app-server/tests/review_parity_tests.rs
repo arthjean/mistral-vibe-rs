@@ -18,8 +18,8 @@
 //!
 //! Every difference the replay finds has to fall under a `LEDGER` entry, and
 //! every entry has to still reproduce, so row 15 of `docs/parity.md` is a
-//! reading of the summary this file prints. No entry names row 15: what differs
-//! is a field another row owns, which a scenario only passes through.
+//! reading of the summary this file prints. No entry may name row 15, and a
+//! field another row owns that stops matching is ledgered under that row.
 
 #![cfg(feature = "test-fixtures")]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -57,14 +57,7 @@ struct Divergence {
     reason: &'static str,
 }
 
-const LEDGER: &[Divergence] = &[Divergence {
-    suffix: "/sessionLog/path",
-    row: "16",
-    reason: "the in-place rewind a scenario reviews after answers with the session's \
-                 directory, which follows this port's session layout, under `sessions/` with \
-                 the full identifier, where the reference writes `logs/session/` with a \
-                 short one",
-}];
+const LEDGER: &[Divergence] = &[];
 
 fn repository() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

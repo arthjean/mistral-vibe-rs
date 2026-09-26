@@ -99,7 +99,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             .unwrap_or_else(|| "mistral-medium-3.5".to_owned()),
         api: routing.api,
         system_prompt: "You are Mistral Vibe.".to_owned(),
-        session_root: Some(session_root.clone()),
+        // The configured save directory, read where the driver runs.
+        session_root: None,
         input_price_per_million_micros: price_from_dotenv(&dotenv, "VIBE_INPUT_PRICE", 1_500_000)?,
         output_price_per_million_micros: price_from_dotenv(
             &dotenv,

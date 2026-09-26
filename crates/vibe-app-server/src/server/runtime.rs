@@ -73,6 +73,14 @@ pub(crate) struct SessionRuntime {
     /// The worktree this session's start created, which closing the session
     /// takes back when no turn ever ran in it.
     pub(crate) created_worktree: Option<PreparedWorktree>,
+    /// Whether this session names itself in the background (reference
+    /// `auto_title_enabled`): a terminal or desktop client, with
+    /// `session_logging.generate_titles` on.
+    pub(crate) auto_title: bool,
+    /// When the next background title is due.
+    pub(crate) title_cadence: vibe_core::session_title::TitleCadence,
+    /// A title is being generated, so no other one starts.
+    pub(crate) title_in_flight: bool,
 }
 
 impl SessionRuntime {
@@ -122,6 +130,9 @@ impl SessionRuntime {
             persisted: None,
             review,
             created_worktree: None,
+            auto_title: false,
+            title_cadence: vibe_core::session_title::TitleCadence::default(),
+            title_in_flight: false,
         }
     }
 }

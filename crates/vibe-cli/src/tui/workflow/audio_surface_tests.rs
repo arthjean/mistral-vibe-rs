@@ -134,8 +134,15 @@ async fn confirm(runtime: &mut InteractiveRuntime, state: &mut TuiState) {
 
 /// `select_overlay_item` takes ownership of the runtime slot, so the caller
 /// hands it the real one and holds a throwaway in its place for the duration.
+/// Each throwaway opens its own session: the tests run side by side over one
+/// home, and an open session is leased to whoever opened it.
 fn placeholder() -> InteractiveRuntime {
-    interactive_test_runtime_with_server("audio-surface-placeholder", AppServer::default())
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let index = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    interactive_test_runtime_with_server(
+        &format!("audio-surface-placeholder-{index}"),
+        AppServer::default(),
+    )
 }
 
 /// The two entries are offered with the aliases the view publishes behind them.

@@ -496,6 +496,10 @@ pub struct PublicTurn {
     pub error: Option<PublicError>,
     #[serde(default)]
     pub stop_reason: Option<PublicTurnStopReason>,
+    /// The queued input the turn was started from. Reference `PublicTurn`
+    /// always publishes it, and this port starts no turn from a queue.
+    #[serde(default)]
+    pub queue_item_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

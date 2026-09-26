@@ -8,7 +8,8 @@
 use std::sync::{Arc, Mutex, OnceLock};
 
 use vibe_app_server::client::{
-    CompactionDriverFuture, DriverError, DriverFuture, EventObserver, TurnDriver, TurnReservation,
+    CompactionDriverFuture, DriverError, DriverFuture, EventObserver, TitleFuture, TurnDriver,
+    TurnReservation,
 };
 
 pub(crate) struct DeferredTurnDriver<D> {
@@ -112,5 +113,20 @@ where
     ) -> CompactionDriverFuture<'a> {
         let driver = self.resolve().cloned();
         Box::pin(async move { driver?.compact(session_id, extra_instructions).await })
+    }
+
+    fn title_model_is_fast(&self) -> Option<bool> {
+        self.resolve().ok()?.title_model_is_fast()
+    }
+
+    fn generate_title(
+        &self,
+        messages: Vec<vibe_core::events::ModelMessage>,
+        previous_title: Option<String>,
+    ) -> TitleFuture {
+        match self.resolve() {
+            Ok(driver) => driver.generate_title(messages, previous_title),
+            Err(_) => Box::pin(async { None }),
+        }
     }
 }

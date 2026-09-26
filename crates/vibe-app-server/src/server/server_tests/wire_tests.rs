@@ -697,10 +697,12 @@ fn runtime_read_reports_the_session_log_summary() {
         ]
     );
     // The default configuration writes sessions, so the switch is reported
-    // as on even though this in-memory session is not persisted.
+    // as on and the logger names the session before its first save
+    // (reference `project_session_log`).
     assert_eq!(log["enabled"], json!(true));
     assert_eq!(log["persisted"], json!(false));
-    assert_eq!(log["sessionId"], Value::Null);
+    assert_eq!(log["sessionId"], json!("session-1"));
+    assert_eq!(log["path"], Value::Null);
     assert_eq!(answer["ready"], json!(true));
 }
 
@@ -859,7 +861,7 @@ fn a_dispatcher_rejection_carries_the_same_structured_detail() {
     // One method per dispatcher family, each missing a required parameter.
     for (method, params) in [
         ("tools/list", json!({})),
-        ("session/title/update", json!({"sessionId": "session-1"})),
+        ("session/rename", json!({"sessionId": "session-1"})),
         ("loops/delete", json!({"sessionId": "session-1"})),
     ] {
         let batch = connection.dispatch(&request(5, method, params));
@@ -908,4 +910,37 @@ fn callback_kinds_share_one_wire_form() {
             "{engine:?} and {wire:?} must serialize identically"
         );
     }
+}
+
+/// The session shapes this port's own clients read predate the reference
+/// surface and are answered in process only: over stdio the name is as
+/// unknown as any other, and nothing under the prefix is advertised.
+#[test]
+fn an_internal_method_is_answered_in_process_only() {
+    let server = AppServer::default();
+    let mut stdio = server.connect(TransportKind::Stdio);
+    let advertised = initialize_with(&mut stdio, json!({}));
+    assert!(
+        advertised["capabilities"]["methods"]
+            .as_array()
+            .expect("a method list")
+            .iter()
+            .filter_map(Value::as_str)
+            .all(|method| !method.starts_with(INTERNAL_METHOD_PREFIX))
+    );
+    let batch = stdio.dispatch(&request(2, "internal/session/list", json!({})));
+    let Envelope::Error(ErrorResponse { error, .. }) =
+        decode_frame(&batch.outbound[0]).expect("an answer")
+    else {
+        unreachable!("a stdio client reached an internal method");
+    };
+    assert_eq!(error.code, ProtocolErrorCode::MethodNotFound);
+
+    let mut local = server.connect(TransportKind::InProcess);
+    initialize(&mut local);
+    let batch = local.dispatch(&request(2, "internal/session/list", json!({})));
+    let Envelope::Success(success) = decode_frame(&batch.outbound[0]).expect("an answer") else {
+        unreachable!("an in-process client was refused an internal method");
+    };
+    assert!(success.result["sessions"].is_array());
 }

@@ -142,7 +142,7 @@ impl ServerConnection {
     /// A removal that fails is published on `diagnostics/list` rather than
     /// replacing the error the client is owed, which is the one that failed the
     /// start (`vibe/core/session/worktrees.py:153-181`).
-    fn undo_worktree(&self, resolution: &WorktreeResolution) {
+    pub(super) fn undo_worktree(&self, resolution: &WorktreeResolution) {
         let Some(note) = self.session_worktrees().cleanup(
             resolution.prepared.as_ref(),
             resolution.pending_hold.as_ref(),
@@ -160,7 +160,28 @@ impl ServerConnection {
         params: &SessionStartParams,
         resolution: &mut WorktreeResolution,
     ) -> Result<DispatchBatch, ProtocolFault> {
+        let (session_id, state, mcp_configs) = self.open_resolved_session(params, resolution)?;
+        let mut batch = success_batch(request.id, result_map([("state", state)]));
+        batch.outbound.extend(self.attachment_frames(&session_id));
+        if !mcp_configs.is_empty() {
+            batch.deferred.push(DeferredWork::ConfigureMcp {
+                session_id,
+                configs: mcp_configs,
+            });
+        }
+        Ok(batch)
+    }
+
+    /// Registers the session a start resolved, and answers its identifier, its
+    /// state and the MCP servers it still has to connect. The first session a
+    /// connection opens becomes its root.
+    pub(super) fn open_resolved_session(
+        &mut self,
+        params: &SessionStartParams,
+        resolution: &mut WorktreeResolution,
+    ) -> Result<(String, Value, Vec<McpServerConfig>), ProtocolFault> {
         let opening = self.open_session(params)?;
+        self.server.acquire_lease(&opening.session_id)?;
         let lifecycle = self.session_worktrees();
         // A reopened session runs where its transcript was written, so a
         // retained worktree it stood in is put back before anything reads the
@@ -262,6 +283,11 @@ impl ServerConnection {
         session.aliases = aliases;
         if let Some(hydrated) = &persisted {
             session.stats = crate::server::runtime::SessionStats::restored(hydrated);
+            session.bumped_at = hydrated
+                .metadata
+                .bumped_at
+                .as_deref()
+                .and_then(vibe_core::storage::parse_iso_millis);
         }
         session.persisted = persisted;
         session.agent_summary = Some(crate::workspace::agent_summary(&agent_profile));
@@ -269,6 +295,12 @@ impl ServerConnection {
         session.active_model_alias = self.server.workspace.active_model_alias();
         session.compaction = self.server.workspace.compaction_settings();
         session.created_worktree = resolution.created().cloned();
+        // Reference `auto_title_enabled`: the legacy loop titles sessions for
+        // the terminal and desktop clients only.
+        session.auto_title = matches!(
+            self.entrypoint,
+            ClientEntrypoint::Cli | ClientEntrypoint::Desktop
+        ) && self.server.workspace.session_logging().generate_titles;
         sessions.insert(session);
         self.server.open_session_resources(
             &mut sessions,
@@ -296,15 +328,10 @@ impl ServerConnection {
                 &format!("Failed to hold the worktree of session {session_id}: {error}"),
             );
         }
-        let mut batch = success_batch(request.id, result_map([("state", state)]));
-        batch.outbound.extend(self.attachment_frames(&session_id));
-        if !mcp_configs.is_empty() {
-            batch.deferred.push(DeferredWork::ConfigureMcp {
-                session_id,
-                configs: mcp_configs,
-            });
+        if self.root.is_none() {
+            self.root = Some(session_id.clone());
         }
-        Ok(batch)
+        Ok((session_id, state, mcp_configs))
     }
 
     /// What a `session/start` resolves before anything is registered: the
@@ -503,36 +530,6 @@ impl ServerConnection {
             .attachment)
     }
 
-    pub(super) fn session_read(&mut self, request: ServerRequest) -> DispatchBatch {
-        let params = match from_params::<SessionParams>(&request.params) {
-            Ok(params) => params,
-            Err(rejection) => {
-                return invalid_params_batch(request.id, rejection);
-            }
-        };
-        if let Some(batch) = self.attachment_error(request.id.clone(), &params.session_id) {
-            return batch;
-        }
-        match self.server.session(&params.session_id) {
-            Ok(_) => match self.server.lock_sessions() {
-                Ok(sessions) => match sessions.get(&params.session_id) {
-                    Some(session) => success_batch(
-                        request.id,
-                        result_map([("state", public_session_state(session))]),
-                    ),
-                    None => {
-                        error_batch(request.id, ProtocolErrorCode::NotFound, "Session not found")
-                    }
-                },
-                Err(error) => internal_error_batch(request.id, &error),
-            },
-            Err(ServerError::SessionNotFound(_)) => {
-                error_batch(request.id, ProtocolErrorCode::NotFound, "Session not found")
-            }
-            Err(error) => internal_error_batch(request.id, &error),
-        }
-    }
-
     pub(super) fn session_close(&mut self, request: ServerRequest) -> DispatchBatch {
         let id = request.id.clone();
         answered(id, self.close_session(request))
@@ -604,6 +601,10 @@ impl ServerConnection {
         let unstarted_worktree =
             session.created_worktree.is_some() && session.latest_turn.is_none();
         drop(sessions);
+        self.server.release_lease(&session_id);
+        if self.root.as_deref() == Some(key.as_str()) {
+            self.root = None;
+        }
         self.release_worktree(&working_directory, &session_id, unstarted_worktree);
         if let Ok(mut resources) = self.server.resources.lock() {
             resources.close_session(&session_id);

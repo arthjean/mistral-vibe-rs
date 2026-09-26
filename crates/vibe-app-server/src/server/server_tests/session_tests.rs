@@ -344,7 +344,10 @@ fn deleting_a_saved_session_removes_its_loops_from_durable_restart_state() {
     let working_directory = temporary.path().join("workspace");
     let loop_path = temporary.path().join("loops.json");
     fs::create_dir_all(&working_directory).expect("workspace");
-    vibe_core::storage::SessionStore::new(&session_root)
+    let workspace =
+        WorkspaceService::for_runtime_session_root(session_root.clone(), working_directory.clone());
+    let store = workspace.session_store();
+    let mut saved = store
         .create(
             "deleted-session",
             &working_directory.to_string_lossy(),
@@ -352,8 +355,9 @@ fn deleting_a_saved_session_removes_its_loops_from_durable_restart_state() {
             1,
         )
         .expect("saved session");
-    let workspace =
-        WorkspaceService::for_runtime_session_root(session_root, working_directory.clone());
+    store
+        .append_message(&mut saved, &ModelMessage::user("earlier"), 1)
+        .expect("the session is saved");
     let projects = ProjectsService::default()
         .with_loop_store(loop_path.clone())
         .expect("loop store");
@@ -376,10 +380,10 @@ fn deleting_a_saved_session_removes_its_loops_from_durable_restart_state() {
         "session/delete",
         json!({"sessionId": "deleted-session"}),
     ));
+    // Reference `_host.py`: the host deletes and answers an empty result.
     assert!(matches!(
         decode_frame(&deleted.outbound[0]).expect("delete response"),
-        Envelope::Success(SuccessResponse { result, .. })
-            if result.get("deleted").and_then(Value::as_bool) == Some(true)
+        Envelope::Success(SuccessResponse { result, .. }) if result.is_empty()
     ));
 
     let restarted = ProjectsService::default()
@@ -401,7 +405,9 @@ fn rewind_read_and_restore_use_live_target_specific_checkpoints() {
     let working_directory = temporary.path().join("workspace");
     fs::create_dir_all(&working_directory).expect("workspace");
     fs::write(working_directory.join("main.txt"), "before\n").expect("workspace fixture");
-    let store = vibe_core::storage::SessionStore::new(&session_root);
+    let workspace =
+        WorkspaceService::for_runtime_session_root(session_root.clone(), working_directory.clone());
+    let store = workspace.session_store();
     let mut metadata = store
         .create(
             "source-session",
@@ -419,8 +425,6 @@ fn rewind_read_and_restore_use_live_target_specific_checkpoints() {
             )
             .expect("user message");
     }
-    let workspace =
-        WorkspaceService::for_runtime_session_root(session_root.clone(), working_directory.clone());
     let server = AppServer::with_workspace_service(workspace);
     let mut connection = server.connect(TransportKind::InProcess);
     initialize(&mut connection);
@@ -674,7 +678,9 @@ fn rewind_refuses_an_unknown_entry_and_honors_inplace_and_untouched_files() {
     let working_directory = temporary.path().join("workspace");
     fs::create_dir_all(&working_directory).expect("workspace");
     fs::write(working_directory.join("main.txt"), "before\n").expect("workspace fixture");
-    let store = vibe_core::storage::SessionStore::new(&session_root);
+    let workspace =
+        WorkspaceService::for_runtime_session_root(session_root.clone(), working_directory.clone());
+    let store = workspace.session_store();
     let mut metadata = store
         .create(
             "source-session",
@@ -692,8 +698,6 @@ fn rewind_refuses_an_unknown_entry_and_honors_inplace_and_untouched_files() {
             )
             .expect("user message");
     }
-    let workspace =
-        WorkspaceService::for_runtime_session_root(session_root.clone(), working_directory.clone());
     let server = AppServer::with_workspace_service(workspace);
     let mut connection = server.connect(TransportKind::InProcess);
     initialize(&mut connection);
@@ -788,11 +792,7 @@ fn rewind_refuses_an_unknown_entry_and_honors_inplace_and_untouched_files() {
         "a rewind told not to restore files leaves the workspace alone"
     );
     assert_eq!(
-        store
-            .list(None, 0, 100)
-            .expect("saved sessions")
-            .sessions
-            .len(),
+        store.sessions(None).expect("saved sessions").len(),
         1,
         "no session was forked"
     );
@@ -818,8 +818,10 @@ fn the_review_surface_answers_the_six_methods_from_the_session_engine() {
     let working_directory = temporary.path().join("workspace");
     fs::create_dir_all(&working_directory).expect("workspace");
     fs::write(working_directory.join("main.txt"), "one\n").expect("workspace fixture");
-    let store = vibe_core::storage::SessionStore::new(&session_root);
-    store
+    let workspace =
+        WorkspaceService::for_runtime_session_root(session_root.clone(), working_directory.clone());
+    let store = workspace.session_store();
+    let mut saved = store
         .create(
             "review-session",
             &working_directory.to_string_lossy(),
@@ -827,8 +829,9 @@ fn the_review_surface_answers_the_six_methods_from_the_session_engine() {
             1,
         )
         .expect("source session");
-    let workspace =
-        WorkspaceService::for_runtime_session_root(session_root, working_directory.clone());
+    store
+        .append_message(&mut saved, &ModelMessage::user("earlier"), 1)
+        .expect("the session is saved");
     let server = AppServer::with_workspace_service(workspace);
     let mut connection = server.connect(TransportKind::InProcess);
     initialize(&mut connection);
@@ -1048,8 +1051,10 @@ fn failed_durable_session_delete_keeps_the_saved_session() {
     let working_directory = temporary.path().join("workspace");
     let loop_path = temporary.path().join("loops.json");
     fs::create_dir_all(&working_directory).expect("workspace");
-    let store = vibe_core::storage::SessionStore::new(&session_root);
-    store
+    let workspace =
+        WorkspaceService::for_runtime_session_root(session_root.clone(), working_directory.clone());
+    let store = workspace.session_store();
+    let mut saved = store
         .create(
             "retained-session",
             &working_directory.to_string_lossy(),
@@ -1057,8 +1062,9 @@ fn failed_durable_session_delete_keeps_the_saved_session() {
             1,
         )
         .expect("saved session");
-    let workspace =
-        WorkspaceService::for_runtime_session_root(session_root, working_directory.clone());
+    store
+        .append_message(&mut saved, &ModelMessage::user("earlier"), 1)
+        .expect("the session is saved");
     let projects = ProjectsService::default()
         .with_loop_store(loop_path.clone())
         .expect("loop store");

@@ -56,6 +56,19 @@ impl StartupHost {
         TrustStore::for_vibe_home(&self.paths.vibe_home)
     }
 
+    /// The store sessions are saved in: where `session_logging` says, which a
+    /// trusted project's configuration may move (reference `VibeConfig`).
+    fn session_store(&self) -> SessionStore {
+        let trusted = self
+            .trust_store()
+            .trust_status(&trust::resolve(&self.paths.working_directory))
+            != TrustStatus::Untrusted;
+        WorkspaceService::new(self.paths.clone(), trusted).map_or_else(
+            |_| SessionStore::new(&self.paths.session_root),
+            |service| service.session_store(),
+        )
+    }
+
     /// Whether the working directory is trusted, and otherwise the prompt a
     /// client shows about it. Reference `_resolve_workspace_trust` over
     /// `read_workspace_trust`: a session grant counts as trust, and a folder
@@ -106,27 +119,28 @@ impl StartupHost {
         &self,
         limit: usize,
     ) -> Result<Vec<SavedSessionSummary>, StartupHostError> {
-        let store = SessionStore::new(&self.paths.session_root);
+        let store = self.session_store();
         store.migrate_legacy()?;
         let cwd = self.paths.working_directory.to_string_lossy();
-        let sessions = store.list(Some(&cwd), 0, limit)?.sessions;
+        let sessions = store.sessions(Some(&cwd))?;
         Ok(sessions
             .into_iter()
+            .take(limit)
             .map(|session| SavedSessionSummary {
-                preview: session_preview(&store, &session.id),
-                id: session.id,
+                preview: store.first_user_message(&session.session_id),
+                id: session.session_id,
                 end_time: session.end_time.unwrap_or_else(|| "unknown".to_owned()),
             })
             .collect())
     }
 
     pub fn delete_session(&self, session_id: &str) -> Result<(), StartupHostError> {
-        let store = SessionStore::new(&self.paths.session_root);
+        let store = self.session_store();
         let projects = ProjectsService::default()
             .with_loop_store(self.paths.vibe_home.join("scheduled-loops.json"))?;
         match delete_session_transactionally(&projects, session_id, || {
             match store.delete(session_id) {
-                Ok(()) | Err(StorageError::SessionNotFound(_)) => Ok(()),
+                Ok(_) | Err(StorageError::SessionNotFound(_)) => Ok(()),
                 Err(error) => Err(error),
             }
         }) {
@@ -350,24 +364,6 @@ pub fn saved_session_preview(session_root: &Path, session_id: &str) -> Option<St
         })
 }
 
-fn session_preview(store: &SessionStore, session_id: &str) -> String {
-    store
-        .load(session_id)
-        .ok()
-        .and_then(|session| {
-            session
-                .messages
-                .into_iter()
-                .find_map(|message| match message {
-                    ModelMessage::User { content, .. } if !content.is_empty() => {
-                        Some(content.chars().take(160).collect())
-                    }
-                    _ => None,
-                })
-        })
-        .unwrap_or_else(|| "(empty session)".to_owned())
-}
-
 fn startup_io(path: &Path, source: std::io::Error) -> StartupHostError {
     StartupHostError::Io {
         path: path.to_path_buf(),
@@ -378,8 +374,6 @@ fn startup_io(path: &Path, source: std::io::Error) -> StartupHostError {
 #[cfg(test)]
 mod tests {
     use std::fs;
-
-    use vibe_core::storage::SessionStore;
 
     use super::*;
 
@@ -492,7 +486,7 @@ mod tests {
     fn saved_session_summaries_include_the_first_user_message() {
         let root = tempfile::tempdir().expect("workspace");
         let paths = paths(root.path());
-        let store = SessionStore::new(&paths.session_root);
+        let store = StartupHost::new(paths.clone()).session_store();
         let mut metadata = store
             .create("preview", &root.path().to_string_lossy(), None, 1)
             .expect("session");
@@ -528,7 +522,7 @@ mod tests {
     fn startup_deletion_removes_owned_scheduled_loops() {
         let root = tempfile::tempdir().expect("workspace");
         let paths = paths(root.path());
-        let store = SessionStore::new(&paths.session_root);
+        let store = StartupHost::new(paths.clone()).session_store();
         let metadata = store
             .create("delete", &root.path().to_string_lossy(), None, 1)
             .expect("session");

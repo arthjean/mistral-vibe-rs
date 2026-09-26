@@ -1200,7 +1200,23 @@ mod tests {
         assert_eq!(attribute("gen_ai.tool.call.id"), Some("call".to_owned()));
     }
 
-    struct FakeSubagent;
+    /// Writes the child's prompt to its transcript, which is what a running
+    /// child does first and what saves its session.
+    fn record_prompt(store: &SessionStore, context: &ChildContext) {
+        let mut metadata = store
+            .open(&context.child_session_id)
+            .expect("the child is held")
+            .metadata;
+        store
+            .append_message(
+                &mut metadata,
+                &crate::events::ModelMessage::user(context.prompt.clone()),
+                10,
+            )
+            .expect("the child prompt is saved");
+    }
+
+    struct FakeSubagent(SessionStore);
 
     impl SubagentRunner for FakeSubagent {
         fn run<'a>(
@@ -1209,6 +1225,7 @@ mod tests {
             _cancellation: CancellationToken,
         ) -> SubagentFuture<'a> {
             Box::pin(async move {
+                record_prompt(&self.0, &context);
                 Ok(SubagentRun {
                     response: format!("{}:{}", context.agent.name, context.prompt),
                     turns_used: 1,
@@ -1310,16 +1327,18 @@ mod tests {
     }
 
     struct HangingSubagent {
+        store: SessionStore,
         entered: Arc<tokio::sync::Notify>,
     }
 
     impl SubagentRunner for HangingSubagent {
         fn run<'a>(
             &'a self,
-            _context: ChildContext,
+            context: ChildContext,
             _cancellation: CancellationToken,
         ) -> SubagentFuture<'a> {
             Box::pin(async move {
+                record_prompt(&self.store, &context);
                 self.entered.notify_one();
                 std::future::pending().await
             })
@@ -1335,7 +1354,7 @@ mod tests {
             .expect("parent session");
         parent.config.insert("model".to_owned(), json!("child"));
         store.update_metadata(&parent).expect("parent config");
-        let manager = SubagentManager::new(store.clone(), Arc::new(FakeSubagent));
+        let manager = SubagentManager::new(store.clone(), Arc::new(FakeSubagent(store.clone())));
         let agent = builtin_agent("explore", AgentKind::Subagent);
         let effect = manager
             .delegate(
@@ -1352,7 +1371,7 @@ mod tests {
         assert_eq!(effect.status, DelegationStatus::Completed);
         assert_ne!(effect.child_session_id, effect.parent_session_id);
         let child = store
-            .load(&effect.child_session_id)
+            .open(&effect.child_session_id)
             .expect("child persisted");
         assert_eq!(child.metadata.parent_session_id.as_deref(), Some("parent"));
         assert_eq!(child.metadata.config["model"], "child");
@@ -1375,16 +1394,15 @@ mod tests {
         assert_ne!(effect.child_session_id, second.child_session_id);
         assert_eq!(
             store
-                .list(None, 0, 10)
+                .sessions(None)
                 .expect("distinct child directories")
-                .sessions
                 .iter()
                 .filter(|session| session.parent_session_id.as_deref() == Some("parent"))
                 .count(),
             2
         );
 
-        let mut parent = store.load("parent").expect("parent loads").metadata;
+        let mut parent = store.open("parent").expect("parent loads").metadata;
         parent.agent_profile = Some(json!({"depth": MAX_DELEGATION_DEPTH}));
         store.update_metadata(&parent).expect("parent depth");
         assert!(matches!(
@@ -1414,6 +1432,7 @@ mod tests {
         let manager = SubagentManager::new(
             store.clone(),
             Arc::new(HangingSubagent {
+                store: store.clone(),
                 entered: entered.clone(),
             }),
         );
@@ -1443,7 +1462,7 @@ mod tests {
         assert_eq!(effect.status, DelegationStatus::Cancelled);
         assert!(
             store
-                .load(&effect.child_session_id)
+                .open(&effect.child_session_id)
                 .expect("child remains auditable")
                 .metadata
                 .end_time

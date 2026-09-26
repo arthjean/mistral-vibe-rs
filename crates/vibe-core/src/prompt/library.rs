@@ -31,6 +31,10 @@ pub enum UtilityPrompt {
     /// (`vibe/core/prompts/worktree_name.md` upstream; this text is this
     /// repository's own).
     WorktreeName,
+    /// The system message the session title model runs under
+    /// (`vibe/core/prompts/session_title.md` upstream; this text is this
+    /// repository's own).
+    SessionTitle,
 }
 
 impl UtilityPrompt {
@@ -42,6 +46,7 @@ impl UtilityPrompt {
             Self::CompactSystem => "compact_system",
             Self::CompactSummaryPrefix => "compact_summary_prefix",
             Self::WorktreeName => "worktree_name",
+            Self::SessionTitle => "session_title",
         }
     }
 
@@ -56,6 +61,7 @@ impl UtilityPrompt {
                 include_str!("assets/compact_summary_prefix.md").trim_ascii()
             }
             Self::WorktreeName => include_str!("assets/worktree_name.md").trim_ascii(),
+            Self::SessionTitle => include_str!("assets/session_title.md").trim_ascii(),
         }
     }
 }

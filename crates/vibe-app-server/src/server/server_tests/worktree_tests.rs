@@ -640,10 +640,12 @@ fn a_request_is_refused_on_resume_and_on_continue() {
             }),
         );
         assert_eq!(error.code, ProtocolErrorCode::InvalidParams, "{method}");
+        // Neither method declares a worktree, so the issues name it as a key
+        // the request may not carry.
+        let detail = serde_json::to_string(&error).expect("the refusal serializes");
         assert!(
-            error.message.contains("worktree"),
-            "{method} names what it refused: {}",
-            error.message
+            detail.contains("worktree"),
+            "{method} names what it refused: {detail}"
         );
     }
 }

@@ -261,7 +261,7 @@ pub(super) fn show_rewind(runtime: &mut InteractiveRuntime, state: &mut TuiState
     loop {
         let Some(history) = call_runtime(
             runtime,
-            "history/list",
+            "internal/history/list",
             json!({
                 "sessionId": runtime.session_id,
                 "offset": offset,
@@ -406,7 +406,7 @@ fn resume_selected_session(
     state.session_delete = None;
     let result = match runtime
         .service
-        .public_call("session/resume", json!({"sessionId": session_id}))
+        .public_call("internal/session/resume", json!({"sessionId": session_id}))
     {
         Ok(result) => result,
         Err(error) => {
@@ -433,7 +433,7 @@ fn delete_selected_session(
     };
     if let Err(error) = runtime
         .service
-        .public_call("session/delete", json!({"sessionId": session_id}))
+        .public_call("internal/session/delete", json!({"sessionId": session_id}))
     {
         state.session_delete = Some(SessionDeleteState::failure(session_id, error.to_string()));
         return;

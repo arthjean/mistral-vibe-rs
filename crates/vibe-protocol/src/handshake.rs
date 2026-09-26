@@ -11,6 +11,8 @@ pub enum ClientEntrypoint {
     Unknown,
     /// Interactive terminal client.
     Cli,
+    /// Desktop application.
+    Desktop,
     /// Agent Client Protocol bridge.
     Acp,
     /// Embedded or scripted client.

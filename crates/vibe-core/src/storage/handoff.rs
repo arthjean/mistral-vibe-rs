@@ -19,8 +19,8 @@ use std::sync::atomic::Ordering;
 use super::{
     FileLock, HANDOFF_JOURNAL_PREFIX, HANDOFF_LOCK_PREFIX, HandoffJournal, HandoffPlan,
     HydratedSession, LAST_SESSION_DIRECTORY, SessionMetadata, SessionStore, StorageError,
-    TEMP_SEQUENCE, ensure_private_directory, is_safe_handoff_component, session_directory_name,
-    sync_directory, validate_session_id,
+    TEMP_SEQUENCE, ensure_private_directory, is_safe_handoff_component, sync_directory,
+    validate_session_id,
 };
 use crate::atomic_file::write_atomically;
 use crate::events::ModelMessage;
@@ -156,23 +156,25 @@ impl SessionStore {
         let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
         let staging_directory = format!(".handoff-{sequence}-{new_id}");
         let staging_path = self.root.join(&staging_directory);
-        let destination_directory = session_directory_name(now_ms, new_id);
+        let destination_directory = self.free_directory_name(now_ms, new_id);
         let destination = self.root.join(&destination_directory);
         let mut journal_written = false;
         let result = (|| {
-            let mut child = self.initialize_session(
-                &staging_directory,
+            let mut child = self.compose_session(
                 new_id,
                 &parent.working_directory,
                 retain_parent.then(|| parent.id.clone()),
                 now_ms,
-            )?;
+            );
+            child.directory.clone_from(&staging_directory);
+            child.origin_directory.clone_from(&parent.origin_directory);
             child.statistics = parent.statistics.clone();
             child.experiment_state = parent.experiment_state.clone();
             child.config = current_config.clone();
             child.config.extend(config_overlay);
             child.agent_profile = parent.agent_profile.clone();
             child.tools_available = parent.tools_available.clone();
+            child.system_prompt = parent.system_prompt.clone();
             self.replace_messages(&mut child, &messages, now_ms)?;
             sync_directory(&self.root)?;
             if let Some(journal_path) = &journal_path {
@@ -260,7 +262,10 @@ impl SessionStore {
             .map_err(|_| StorageError::InvalidHandoffJournal(path.to_path_buf()))?;
         validate_session_id(&journal.session_id)?;
         if !is_safe_handoff_component(&journal.staging_directory, ".handoff-")
-            || !is_safe_handoff_component(&journal.destination_directory, "session_")
+            || !is_safe_handoff_component(
+                &journal.destination_directory,
+                &format!("{}_", self.prefix),
+            )
         {
             return Err(StorageError::InvalidHandoffJournal(path.to_path_buf()));
         }

@@ -46,6 +46,9 @@ pub use vibe_core::events::{
 
 pub type DriverFuture<'a> =
     Pin<Box<dyn Future<Output = Result<TurnOutcome, DriverError>> + Send + 'a>>;
+/// Owns what it needs, so a title can be generated after the turn that made
+/// it due has returned.
+pub type TitleFuture = Pin<Box<dyn Future<Output = Option<String>> + Send + 'static>>;
 pub type CompactionDriverFuture<'a> =
     Pin<Box<dyn Future<Output = Result<SessionCompaction, DriverError>> + Send + 'a>>;
 
@@ -119,6 +122,22 @@ pub trait TurnDriver: Send + Sync {
         _extra_instructions: &'a str,
     ) -> CompactionDriverFuture<'a> {
         Box::pin(async { Err(DriverError::UnsupportedControl("session/compact/start")) })
+    }
+
+    /// Whether background titles run on the fast utility model (reference
+    /// `is_fast_utility_model`), or `None` when this driver names no session.
+    fn title_model_is_fast(&self) -> Option<bool> {
+        None
+    }
+
+    /// Reference `generate_session_title`: a title for the conversation,
+    /// refining `previous_title`, or `None` when the model gives none.
+    fn generate_title(
+        &self,
+        _messages: Vec<ModelMessage>,
+        _previous_title: Option<String>,
+    ) -> TitleFuture {
+        Box::pin(async { None })
     }
 
     /// Queues a context clearing on a running turn.
@@ -557,7 +576,7 @@ impl TurnDriver for EchoTurnDriver {
             if let Some(session_root) = &self.session_root {
                 let store = SessionStore::new(session_root);
                 let timestamp = crate::host::now_millis();
-                let mut metadata = match store.load(&reservation.session_id) {
+                let mut metadata = match store.open(&reservation.session_id) {
                     Ok(hydrated) => hydrated.metadata,
                     Err(vibe_core::storage::StorageError::SessionNotFound(_)) => store
                         .create(

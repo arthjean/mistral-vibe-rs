@@ -274,7 +274,7 @@ impl SubagentRunner for ProviderSubagentRunner {
         Box::pin(async move {
             let metadata = self
                 .store
-                .load(&context.child_session_id)
+                .open(&context.child_session_id)
                 .map_err(|error| error.to_string())?
                 .metadata;
             let parent_executor = SessionToolExecutor::new(self.tools.clone(), &self.parent_intent);

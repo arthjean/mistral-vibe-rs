@@ -207,10 +207,7 @@ async fn the_context_warning_reaches_the_model_once_per_session() {
                     mention_stats: None,
                     working_directory: "/workspace".to_owned(),
                     compaction: compaction.clone(),
-                    intent: SessionIntent {
-                        resume: Some("warned".to_owned()),
-                        ..SessionIntent::default()
-                    },
+                    intent: SessionIntent::default(),
                     tools: guarded_registry("", ApprovalDecision::ApproveOnce).0,
                 })
                 .await

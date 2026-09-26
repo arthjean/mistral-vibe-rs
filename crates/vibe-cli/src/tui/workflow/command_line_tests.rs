@@ -298,10 +298,19 @@ async fn clearing_the_history_re_mounts_the_command_line_it_erased() {
     let temporary = tempfile::tempdir().expect("a temporary vibe home");
     let vibe_home = temporary.path().join("vibe-home");
     std::fs::create_dir_all(&vibe_home).expect("the vibe home is created");
-    let session_root = vibe_home.join("sessions");
+    let workspace = vibe_app_server::workspace::WorkspaceService::new(
+        vibe_app_server::workspace::WorkspacePaths {
+            session_root: vibe_home.join("sessions"),
+            working_directory: temporary.path().join("workspace"),
+            vibe_home,
+        },
+        true,
+    )
+    .expect("the workspace service builds");
     // The clear rotates a stored session, so one has to exist under the id the
-    // runtime attaches to.
-    vibe_core::storage::SessionStore::new(session_root.clone())
+    // runtime attaches to, in the directory the configuration saves under.
+    workspace
+        .session_store()
         .create(
             "clear-echo",
             &temporary.path().join("workspace").to_string_lossy(),
@@ -309,15 +318,6 @@ async fn clearing_the_history_re_mounts_the_command_line_it_erased() {
             1,
         )
         .expect("the session is stored");
-    let workspace = vibe_app_server::workspace::WorkspaceService::new(
-        vibe_app_server::workspace::WorkspacePaths {
-            session_root,
-            working_directory: temporary.path().join("workspace"),
-            vibe_home,
-        },
-        true,
-    )
-    .expect("the workspace service builds");
     let mut runtime = Some(interactive_test_runtime_with_server(
         "clear-echo",
         vibe_app_server::server::AppServer::with_workspace_service(workspace),

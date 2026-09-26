@@ -222,7 +222,8 @@ impl SessionExperiments {
 
     /// What the session already resolved, if it carries anything.
     fn persisted_state(&self, session_id: &str) -> Option<EvalResponse> {
-        let metadata = self.store.metadata(session_id).ok()?;
+        // `open`, not `metadata`: a session is held before its first save.
+        let metadata = self.store.open(session_id).ok()?.metadata;
         if metadata.experiment_state.is_null() {
             return None;
         }
@@ -284,7 +285,11 @@ struct MetadataSink {
 
 impl ExperimentStateSink for MetadataSink {
     fn persist(&self, state: &EvalResponse) {
-        let Ok(mut metadata) = self.store.metadata(&self.session_id) else {
+        let Ok(mut metadata) = self
+            .store
+            .open(&self.session_id)
+            .map(|hydrated| hydrated.metadata)
+        else {
             return;
         };
         let Ok(value) = serde_json::to_value(state) else {

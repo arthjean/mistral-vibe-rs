@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Save and list sessions the way the reference does. Sessions go to
+  `session_logging.save_dir` (`~/.vibe/logs/session` by default) under the
+  configured prefix, in directories named after their start time and short
+  identifier, and reach disk with their first message. `meta.json` carries the
+  reference's keys, a `.session_index.json` cache speeds up listings, an
+  `active/` lease stops a second process from opening a session already open,
+  and session logs are made readable by their owner only. `session/list`
+  answers pages of sessions with cursors and the session to continue;
+  `session/history/get`, `session/history/list`, `session/turns/list`,
+  `session/rename` and `session/relocate` are new, `session/pin` is declared
+  and refused as the reference's local backend refuses it, and `history/list`
+  is gone. Resuming, continuing, forking, clearing, renaming, deleting and
+  reading a session answer with the reference's shapes and errors, and a
+  terminal or desktop client with `session_logging.generate_titles` on gets a
+  generated session title. Sessions saved under `~/.vibe/sessions` by earlier
+  versions are no longer listed.
+
 - Answer the `review/*` methods the way the reference does. Files are keyed by
   their absolute path and turns by the reference's message numbering, a
   running turn's unsaved changes show as its own regions, reading the hunks of

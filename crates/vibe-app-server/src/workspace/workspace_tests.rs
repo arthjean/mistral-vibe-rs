@@ -877,7 +877,7 @@ fn switching_away_from_auto_approve_removes_its_permission_override() {
     service
         .create_runtime_session(session_id, &working_directory, 1)
         .expect("session");
-    let mut metadata = service.store.load(session_id).expect("metadata").metadata;
+    let mut metadata = service.store.open(session_id).expect("metadata").metadata;
     metadata
         .config
         .insert("active_model".to_owned(), json!("base-model"));
@@ -905,7 +905,7 @@ fn switching_away_from_auto_approve_removes_its_permission_override() {
         );
     }
 
-    let metadata = service.store.load(session_id).expect("metadata").metadata;
+    let metadata = service.store.open(session_id).expect("metadata").metadata;
     assert_eq!(
         metadata
             .agent_profile
@@ -1552,10 +1552,19 @@ fn an_unloadable_skill_is_published_as_an_issue() {
 #[test]
 fn app_server_advertises_and_dispatches_workspace_resources() {
     let (_temporary, service) = service();
+    let working_directory = service
+        .paths
+        .working_directory
+        .to_string_lossy()
+        .into_owned();
+    let mut saved = service
+        .store
+        .create("saved", &working_directory, None, 1)
+        .expect("saved session");
     service
         .store
-        .create("saved", "/workspace", None, 1)
-        .expect("saved session");
+        .append_message(&mut saved, &ModelMessage::user("earlier"), 1)
+        .expect("the session is saved");
     let server = AppServer::with_workspace_service(service);
     let mut connection = server.connect(TransportKind::InProcess);
     let initialized = connection.dispatch(
@@ -1574,8 +1583,8 @@ fn app_server_advertises_and_dispatches_workspace_resources() {
     );
     connection.dispatch(br#"{"jsonrpc":"2.0","method":"initialized","params":{}}"#);
     let resume = connection.dispatch(
-            br#"{"jsonrpc":"2.0","id":2,"method":"session/resume","params":{"sessionId":"saved","systemPrompt":"fresh","config":{}}}"#,
-        );
+        br#"{"jsonrpc":"2.0","id":2,"method":"session/resume","params":{"sessionId":"saved"}}"#,
+    );
     assert!(matches!(
         decode_frame(&resume.outbound[0]).expect("resume response"),
         Envelope::Success(_)

@@ -95,12 +95,12 @@ where
         let live = self.find_live_session(&session_id)?;
         let renamed = match &live {
             Some(harness) => self
-                .call_async(harness, "session/title/update", json!({"title": title}))
+                .call_async(harness, "session/rename", json!({"title": title}))
                 .await
                 .map(|dispatch| dispatch.result.into_iter().collect::<Map<_, _>>()),
             None => {
                 self.host_call(
-                    "session/title/update",
+                    "session/rename",
                     json!({"sessionId": session_id, "title": title}),
                 )
                 .await

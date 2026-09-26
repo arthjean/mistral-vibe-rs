@@ -728,20 +728,6 @@ where
             .map_err(ClientError::Server)
     }
 
-    pub fn finish_reserved(
-        &mut self,
-        reservation: &TurnReservation,
-        outcome: TurnOutcome,
-    ) -> Result<ProgrammaticTurn, ClientError> {
-        let result = self.client.finish_turn(reservation, outcome);
-        self.fail_interactive_callbacks(
-            Some(&reservation.session_id),
-            Some(&reservation.turn_id),
-            "turn completed before the callback was resolved",
-        );
-        result
-    }
-
     /// Ends a reserved turn as failed, publishing `code` as the reason a client
     /// branches on. [`turn_error_code`] classifies a driver failure into it.
     pub fn fail_reserved(
@@ -865,6 +851,48 @@ where
             self.fail_interactive_callbacks(None, None, "service was shut down");
         }
         result
+    }
+
+    pub fn finish_reserved(
+        &mut self,
+        reservation: &TurnReservation,
+        outcome: TurnOutcome,
+    ) -> Result<ProgrammaticTurn, ClientError> {
+        let result = self.client.finish_turn(reservation, outcome);
+        if result.is_ok() {
+            self.spawn_title(&reservation.session_id);
+        }
+        self.fail_interactive_callbacks(
+            Some(&reservation.session_id),
+            Some(&reservation.turn_id),
+            "turn completed before the callback was resolved",
+        );
+        result
+    }
+
+    /// Names the session in the background when the turn that just settled
+    /// made a title due (reference `_generate_title_task`). The title lands in
+    /// the store and the session's state; a process with no runtime to run it
+    /// on makes the next turn due instead.
+    fn spawn_title(&self, session_id: &str) {
+        let Some(periodic) = self.driver.title_model_is_fast() else {
+            return;
+        };
+        let server = self.client.server.clone();
+        let Some(job) = server.title_job(session_id, periodic) else {
+            return;
+        };
+        let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+            server.land_title(job, None);
+            return;
+        };
+        let title = self
+            .driver
+            .generate_title(job.messages.clone(), job.previous_title.clone());
+        runtime.spawn(async move {
+            let title = title.await;
+            server.land_title(job, title);
+        });
     }
 }
 

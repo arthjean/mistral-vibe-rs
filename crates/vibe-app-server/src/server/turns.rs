@@ -125,6 +125,7 @@ impl AppServer {
             completed_at: None,
             error: None,
             stop_reason: None,
+            queue_item_id: None,
         });
         session.bumped_at = Some(started_at);
         session.updated_at = started_at;
@@ -267,6 +268,7 @@ impl AppServer {
                 })
             }),
             stop_reason,
+            queue_item_id: None,
         };
         sessions.alias(&source_key, session_id);
         sessions.rename(&source_key, &target_session_id)?;
@@ -365,6 +367,7 @@ impl AppServer {
             completed_at: Some(now_millis()),
             error: Some(error.clone()),
             stop_reason: None,
+            queue_item_id: None,
         };
         session.record_turn(turn.clone());
         session.updated_at = turn.completed_at.unwrap_or(started_at);

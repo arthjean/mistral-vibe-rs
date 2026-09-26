@@ -46,7 +46,7 @@ impl WorkspaceService {
         }
         let profile = self.catalog().agents.remove(name).map_or_else(
             || {
-                if self.persist_runtime_sessions {
+                if self.persists_runtime_sessions() {
                     Err(WorkspaceServiceError::Extension(format!(
                         "agent `{name}` was not found"
                     )))
@@ -225,7 +225,7 @@ impl WorkspaceService {
             if let Some(session_id) = params.get("sessionId").and_then(Value::as_str)
                 && self
                     .store
-                    .load(session_id)
+                    .open(session_id)
                     .map_err(storage_error)?
                     .metadata
                     .agent_profile

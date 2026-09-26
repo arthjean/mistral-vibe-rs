@@ -67,13 +67,6 @@ const LEDGER: &[Divergence] = &[
                  branch for one",
     },
     Divergence {
-        scenario: "prompt/content-blocks",
-        pointer: "/2/stream/1/message/params/update/content/uri",
-        row: "16",
-        reason: "an attached image is snapshotted under the session directory, whose \
-                 location and name follow this port's session layout",
-    },
-    Divergence {
         scenario: "ext/config-schema",
         pointer: "/1/response/result",
         row: "30",

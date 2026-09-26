@@ -604,7 +604,7 @@ impl PtyProcess {
 }
 
 fn seed_session(vibe_home: &Path, workspace: &Path, id: &str, marker: &str, timestamp: u64) {
-    let store = SessionStore::new(vibe_home.join(".vibe/sessions"));
+    let store = SessionStore::new(vibe_home.join(".vibe/logs/session"));
     let mut metadata = store
         .create(id, &workspace.to_string_lossy(), None, timestamp)
         .expect("saved session");
@@ -848,12 +848,12 @@ fn trust_abort_restores_terminal_without_starting_session_discovery() {
     std::fs::write(workspace.join("AGENTS.md"), "fixture\n").expect("trust-sensitive fixture");
     let mut process = PtyProcess::spawn(&workspace, &home, &[]);
     process.wait_for(b"Trust", STEP);
-    assert!(!home.join(".vibe/sessions").exists());
+    assert!(!home.join(".vibe/logs/session").exists());
     process.write(b"\x03");
     let (status, transcript) = process.wait(STEP);
 
     assert!(status.success(), "trust cancellation exited with {status}");
-    assert!(!home.join(".vibe/sessions").exists());
+    assert!(!home.join(".vibe/logs/session").exists());
     // Reference `trusted_folders_manager` creates the file empty at import,
     // so an aborted prompt leaves it holding no decision.
     assert_eq!(
@@ -877,7 +877,7 @@ fn sensitive_location_abort_precedes_session_discovery_and_restores_terminal() {
     let home = tempfile::tempdir().expect("sensitive home");
     let mut process = PtyProcess::spawn(home.path(), home.path(), &[]);
     process.wait_for(b"WARNING:", STEP);
-    assert!(!home.path().join(".vibe/sessions").exists());
+    assert!(!home.path().join(".vibe/logs/session").exists());
     process.write(b"\x03");
     let (status, transcript) = process.wait(STEP);
 
@@ -885,7 +885,7 @@ fn sensitive_location_abort_precedes_session_discovery_and_restores_terminal() {
         status.success(),
         "location cancellation exited with {status}"
     );
-    assert!(!home.path().join(".vibe/sessions").exists());
+    assert!(!home.path().join(".vibe/logs/session").exists());
     assert!(
         transcript
             .windows(b"\x1b[?1049l".len())
@@ -952,9 +952,7 @@ fn bare_resume_opens_the_directory_scoped_picker_before_starting_new() {
     let home = temporary.path().join("home");
     std::fs::create_dir_all(&workspace).expect("workspace");
     std::fs::create_dir_all(&home).expect("home");
-    SessionStore::new(home.join(".vibe/sessions"))
-        .create("saved-session", &workspace.to_string_lossy(), None, 1)
-        .expect("saved session");
+    seed_session(&home, &workspace, "saved-session", "saved marker", 1);
     let mut process = PtyProcess::spawn(
         &workspace,
         &home,
@@ -987,10 +985,8 @@ fn bare_resume_deletes_only_after_confirmation_and_final_delete_starts_new() {
     let home = temporary.path().join("home");
     std::fs::create_dir_all(&workspace).expect("workspace");
     std::fs::create_dir_all(&home).expect("home");
-    let store = SessionStore::new(home.join(".vibe/sessions"));
-    store
-        .create("saved-session", &workspace.to_string_lossy(), None, 1)
-        .expect("saved session");
+    let store = SessionStore::new(home.join(".vibe/logs/session"));
+    seed_session(&home, &workspace, "saved-session", "saved marker", 1);
     let mut process = PtyProcess::spawn(
         &workspace,
         &home,
@@ -999,7 +995,7 @@ fn bare_resume_deletes_only_after_confirmation_and_final_delete_starts_new() {
     process.wait_for(b"Resume", STEP);
 
     process.write(b"d");
-    process.wait_for(b"Press d aga", STEP);
+    process.wait_for(b"d again to delete", STEP);
     assert!(store.load("saved-session").is_ok());
 
     process.write(b"d");
@@ -1256,7 +1252,7 @@ fn check_upgrade_reports_the_reference_failure_without_starting_a_session() {
         "the reference exits non-zero after a failed check"
     );
     assert!(
-        !home.join(".vibe/sessions").exists(),
+        !home.join(".vibe/logs/session").exists(),
         "check-upgrade started session discovery"
     );
 }

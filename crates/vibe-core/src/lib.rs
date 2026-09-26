@@ -47,6 +47,7 @@ mod remote_tools;
 pub mod schema;
 pub mod scratchpad;
 pub mod session_id;
+pub mod session_title;
 #[cfg(test)]
 mod setup_auth_parity_tests;
 pub mod shell;

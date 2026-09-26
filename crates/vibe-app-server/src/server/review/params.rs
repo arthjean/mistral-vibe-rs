@@ -22,6 +22,8 @@ use serde_json::{Map, Value};
 use vibe_core::checkpoints::{Owner, RegionId, ReviewTarget};
 use vibe_protocol::{InvalidParamsIssue, PathSegment};
 
+use crate::params::python_int;
+
 use std::collections::BTreeMap;
 
 /// One validated review request.
@@ -406,73 +408,4 @@ fn identifier(value: i128) -> u64 {
 /// A slot or ordinal position, on the same terms as [`identifier`].
 fn position(value: i128) -> usize {
     usize::try_from(value).unwrap_or(usize::MAX)
-}
-
-/// `value` read as pydantic's lax mode reads an `int`.
-fn python_int(value: &Value) -> Result<i128, &'static str> {
-    match value {
-        Value::Bool(flag) => Ok(i128::from(*flag)),
-        Value::Number(number) => {
-            if let Some(value) = number.as_i64() {
-                return Ok(i128::from(value));
-            }
-            if let Some(value) = number.as_u64() {
-                return Ok(i128::from(value));
-            }
-            let value = number.as_f64().unwrap_or(f64::NAN);
-            if !value.is_finite() {
-                return Err("Input should be a finite number");
-            }
-            if value.fract() != 0.0 {
-                return Err("Input should be a valid integer, got a number with a fractional part");
-            }
-            // An integer literal past the 64-bit range reaches this side of the
-            // envelope as a float, which is the only way to tell it holds no
-            // fraction; the saturation is the documented one above.
-            #[allow(clippy::cast_possible_truncation)]
-            Ok(value as i128)
-        }
-        Value::String(text) => parse_integer_text(text.trim())
-            .ok_or("Input should be a valid integer, unable to parse string as an integer"),
-        _ => Err("Input should be a valid integer"),
-    }
-}
-
-/// Decimal digits with an optional sign, single underscores between digits,
-/// and an optional fraction made only of zeros.
-fn parse_integer_text(text: &str) -> Option<i128> {
-    let (negative, body) = match text.as_bytes().first() {
-        Some(b'-') => (true, &text[1..]),
-        Some(b'+') => (false, &text[1..]),
-        _ => (false, text),
-    };
-    let (whole, fraction) = match body.split_once('.') {
-        Some((whole, fraction)) => (whole, Some(fraction)),
-        None => (body, None),
-    };
-    if fraction
-        .is_some_and(|fraction| fraction.is_empty() || fraction.bytes().any(|byte| byte != b'0'))
-    {
-        return None;
-    }
-    let mut value: i128 = 0;
-    let mut previous_underscore = true;
-    let mut digits = 0_usize;
-    for byte in whole.bytes() {
-        match byte {
-            b'0'..=b'9' => {
-                value = value
-                    .saturating_mul(10)
-                    .saturating_add(i128::from(byte - b'0'));
-                previous_underscore = false;
-                digits += 1;
-            }
-            b'_' if !previous_underscore => previous_underscore = true,
-            _ => return None,
-        }
-    }
-    if digits == 0 || previous_underscore {
-        return None;
-    }
-    Some(if negative { -value } else { value })
 }

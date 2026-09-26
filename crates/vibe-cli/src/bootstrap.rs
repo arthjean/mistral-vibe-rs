@@ -226,7 +226,6 @@ pub(crate) fn programmatic_credential(
 
 /// The driver a programmatic route runs turns through.
 pub(crate) fn route_driver_config(
-    arguments: &Arguments,
     route: &ProgrammaticRoute,
     workspace: &WorkspaceService,
 ) -> Result<LiveDriverConfig, CliError> {
@@ -238,7 +237,7 @@ pub(crate) fn route_driver_config(
         model: route.model.clone(),
         api: routing.api,
         system_prompt: SYSTEM_PROMPT.to_owned(),
-        session_root: arguments.session_root.clone(),
+        session_root: workspace.logged_session_root(),
         input_price_per_million_micros: price_per_million_micros(route.input_price)?,
         output_price_per_million_micros: price_per_million_micros(route.output_price)?,
     })
@@ -286,7 +285,7 @@ pub(crate) fn live_driver_config(
         model: model.to_owned(),
         api: routing.api,
         system_prompt: SYSTEM_PROMPT.to_owned(),
-        session_root: arguments.session_root.clone(),
+        session_root: workspace.logged_session_root(),
         input_price_per_million_micros: price_per_million_micros(arguments.input_price)?,
         output_price_per_million_micros: price_per_million_micros(arguments.output_price)?,
     })

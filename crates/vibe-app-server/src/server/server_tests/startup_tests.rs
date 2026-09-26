@@ -259,9 +259,6 @@ fn an_attached_runtime_session_carries_the_configured_tool_filters() {
         "disabled_tools = [\"serena_*\"]\n",
     )
     .expect("user tool filters");
-    vibe_core::storage::SessionStore::new(&session_root)
-        .create("attached", &working_directory.to_string_lossy(), None, 1)
-        .expect("persisted session");
     let workspace = WorkspaceService::new(
         crate::workspace::WorkspacePaths {
             vibe_home,
@@ -271,6 +268,10 @@ fn an_attached_runtime_session_carries_the_configured_tool_filters() {
         true,
     )
     .expect("workspace service");
+    workspace
+        .session_store()
+        .create("attached", &working_directory.to_string_lossy(), None, 1)
+        .expect("persisted session");
     let server = AppServer::with_workspace_service(workspace);
     let mut connection = server.connect(TransportKind::InProcess);
     initialize(&mut connection);
@@ -354,7 +355,16 @@ fn session_start_hydrates_bounded_public_resume_history() {
     let vibe_home = temporary.path().join("home");
     let session_root = temporary.path().join("sessions");
     fs::create_dir_all(&working_directory).expect("working directory");
-    let store = vibe_core::storage::SessionStore::new(&session_root);
+    let workspace = WorkspaceService::new(
+        crate::workspace::WorkspacePaths {
+            vibe_home,
+            working_directory: working_directory.clone(),
+            session_root,
+        },
+        false,
+    )
+    .expect("workspace service");
+    let store = workspace.session_store();
     let mut metadata = store
         .create(
             "durable-session",
@@ -399,15 +409,6 @@ fn session_start_hydrates_bounded_public_resume_history() {
             .append_message(&mut metadata, &message, timestamp)
             .expect("message persists");
     }
-    let workspace = WorkspaceService::new(
-        crate::workspace::WorkspacePaths {
-            vibe_home,
-            working_directory,
-            session_root,
-        },
-        false,
-    )
-    .expect("workspace service");
     let server = AppServer::with_workspace_service(workspace);
     let mut connection = server.connect(TransportKind::InProcess);
     initialize(&mut connection);

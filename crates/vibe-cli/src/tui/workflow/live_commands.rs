@@ -357,7 +357,7 @@ impl CommandBackend for LiveBackend<'_> {
     }
 
     async fn clear_history(&mut self) -> Result<(), String> {
-        let result = self.call("session/history/clear", json!({}))?;
+        let result = self.call("internal/session/history/clear", json!({}))?;
         let result = result
             .as_object()
             .map(|fields| fields.clone().into_iter().collect())
@@ -549,7 +549,7 @@ impl CommandBackend for LiveBackend<'_> {
     async fn saved_sessions(&mut self) -> usize {
         let cwd = self.working_directory.to_string_lossy().into_owned();
         let Ok(result) = self.call(
-            "session/list",
+            "internal/session/list",
             json!({"cwd": cwd, "offset": 0, "limit": 100}),
         ) else {
             return 0;
@@ -562,7 +562,7 @@ impl CommandBackend for LiveBackend<'_> {
     }
 
     async fn rename(&mut self, title: &str) -> Result<String, String> {
-        self.call("session/title/update", json!({"title": title}))?;
+        self.call("internal/session/title/update", json!({"title": title}))?;
         Ok(title.to_owned())
     }
 
@@ -701,7 +701,7 @@ impl CommandBackend for LiveBackend<'_> {
     async fn fork(&mut self) -> Result<String, String> {
         let source = self.session_id();
         let result = self.call(
-            "session/fork",
+            "internal/session/fork",
             json!({"newSessionId": vibe_core::session_id::rotate_session_id(&source)}),
         )?;
         let result = result

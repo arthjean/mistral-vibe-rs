@@ -1,10 +1,30 @@
+//! Saved sessions: one directory per session under the configured save
+//! directory, holding its metadata and an append-only message log.
+//!
+//! The layout is the reference's (`vibe/core/session/`), so a session either
+//! implementation wrote is one the other lists, resumes and appends to:
+//!
+//! - a session lives in `<save_dir>/<prefix>_<YYYYmmdd_HHMMSS>_<short id>`,
+//!   the short identifier being the first eight characters of the session's,
+//!   which is also how a lookup by identifier finds it
+//!   (`session_logger.py` `save_folder`, `session_loader.py`
+//!   `_find_session_dirs_by_short_id`);
+//! - `meta.json` carries the reference's `SessionMetadata` keys in its order,
+//!   and every key this port does not model is kept on rewrite;
+//! - nothing is written until the session holds a message, so a session that
+//!   was opened and never used leaves nothing behind (`save_interaction`);
+//! - `.session_index.json` caches the listing, `.last_session/<tty>` names the
+//!   session a terminal last used, and `active/<id>.lock` is held by the
+//!   process that has the session open ([`lease`]).
+
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, OnceLock};
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
@@ -15,11 +35,16 @@ use crate::text::hex_encode;
 
 mod canonical_json;
 mod handoff;
+pub mod index;
+pub mod lease;
 mod migration;
-mod time;
+pub mod permissions;
+pub(crate) mod time;
 
 use canonical_json::python_canonical_json;
-use time::{format_compact_timestamp, format_iso_timestamp, timestamp_sort_key};
+pub use index::SessionInfo;
+use time::{format_compact_timestamp, format_iso_timestamp};
+pub use time::{normalize_iso_utc, parse_iso_millis};
 
 pub(super) const METADATA_FILE: &str = "meta.json";
 pub(super) const MESSAGES_FILE: &str = "messages.jsonl";
@@ -28,54 +53,209 @@ pub(super) const HANDOFF_JOURNAL_PREFIX: &str = ".handoff-transaction-";
 pub(super) const HANDOFF_LOCK_PREFIX: &str = ".handoff-lock-";
 pub(super) const MIGRATION_LOCK_FILE: &str = ".migration.lock";
 pub(super) const MIGRATION_SUFFIX: &str = ".legacy.bak";
-pub(super) const CURRENT_FORMAT_VERSION: u32 = 2;
 pub(super) const MAX_MESSAGE_RECORD_BYTES: usize = 8 * 1024 * 1024;
 pub(super) static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(1);
 
+/// Reference `SessionLoggingConfig.session_prefix`'s default.
+pub const DEFAULT_SESSION_PREFIX: &str = "session";
+/// Reference `vibe/utils/session_id.py` `_SHORT_LEN`: how much of an
+/// identifier names its directory, and what a short selector spells.
+pub const SHORT_SESSION_ID_LENGTH: usize = 8;
+
+/// The prefix each save directory was configured with.
+///
+/// A store is opened from a directory in many places, most of which never see
+/// the configuration; the prefix is registered once where the configuration is
+/// resolved, the way the reference keys its listing index by save directory
+/// (`session_index.py` `session_index_for`).
+fn prefixes() -> &'static Mutex<BTreeMap<PathBuf, String>> {
+    static PREFIXES: OnceLock<Mutex<BTreeMap<PathBuf, String>>> = OnceLock::new();
+    PREFIXES.get_or_init(|| Mutex::new(BTreeMap::new()))
+}
+
+/// Records the `session_prefix` sessions under `root` are named with.
+pub fn register_session_prefix(root: &Path, prefix: &str) {
+    if let Ok(mut prefixes) = prefixes().lock() {
+        if prefix == DEFAULT_SESSION_PREFIX {
+            prefixes.remove(root);
+        } else {
+            prefixes.insert(root.to_path_buf(), prefix.to_owned());
+        }
+    }
+}
+
+fn registered_prefix(root: &Path) -> String {
+    prefixes()
+        .lock()
+        .ok()
+        .and_then(|prefixes| prefixes.get(root).cloned())
+        .unwrap_or_else(|| DEFAULT_SESSION_PREFIX.to_owned())
+}
+
+/// Sessions named but not yet written, keyed by save directory and identifier.
+///
+/// The reference keeps a new session's metadata on its logger until the first
+/// save; here the app server that opens a session and the driver that runs its
+/// turns hold separate stores, so what one records before the first save has to
+/// be where the other finds it.
+fn pending() -> &'static Mutex<BTreeMap<(PathBuf, String), SessionMetadata>> {
+    static PENDING: OnceLock<Mutex<BTreeMap<(PathBuf, String), SessionMetadata>>> = OnceLock::new();
+    PENDING.get_or_init(|| Mutex::new(BTreeMap::new()))
+}
+
+/// Reference `SessionLoggingConfig`, read from an effective configuration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionLogging {
+    pub enabled: bool,
+    pub save_dir: PathBuf,
+    pub session_prefix: String,
+    pub generate_titles: bool,
+}
+
+impl SessionLogging {
+    /// The `session_logging` table of `effective`, with the reference's
+    /// defaults for what it leaves out. An unset directory is the vibe home's
+    /// session log directory, which is where the configuration loader resolves
+    /// it too.
+    #[must_use]
+    pub fn from_effective(effective: &toml::Table, vibe_home: &Path) -> Self {
+        let table = effective
+            .get("session_logging")
+            .and_then(toml::Value::as_table);
+        let text = |key: &str| {
+            table
+                .and_then(|table| table.get(key))
+                .and_then(toml::Value::as_str)
+                .filter(|value| !value.is_empty())
+        };
+        let flag = |key: &str, default: bool| {
+            table
+                .and_then(|table| table.get(key))
+                .and_then(toml::Value::as_bool)
+                .unwrap_or(default)
+        };
+        Self {
+            enabled: flag("enabled", true),
+            save_dir: text("save_dir").map_or_else(|| default_save_dir(vibe_home), PathBuf::from),
+            session_prefix: text("session_prefix")
+                .unwrap_or(DEFAULT_SESSION_PREFIX)
+                .to_owned(),
+            generate_titles: flag("generate_titles", false),
+        }
+    }
+
+    /// The defaults, under `vibe_home`.
+    #[must_use]
+    pub fn defaults(vibe_home: &Path) -> Self {
+        Self::from_effective(&toml::Table::new(), vibe_home)
+    }
+
+    /// A store over the save directory, named with the configured prefix,
+    /// which it also registers for every other store opened over it.
+    #[must_use]
+    pub fn store(&self) -> SessionStore {
+        register_session_prefix(&self.save_dir, &self.session_prefix);
+        SessionStore::new(&self.save_dir)
+    }
+}
+
+/// Reference `SESSION_LOG_DIR`.
+#[must_use]
+pub fn default_save_dir(vibe_home: &Path) -> PathBuf {
+    vibe_home.join("logs").join("session")
+}
+
+/// Reference `shorten_session_id`.
+#[must_use]
+pub fn short_session_id(session_id: &str) -> &str {
+    session_id
+        .char_indices()
+        .nth(SHORT_SESSION_ID_LENGTH)
+        .map_or(session_id, |(end, _)| &session_id[..end])
+}
+
+/// Reference `SessionMetadata` (`vibe/core/types.py`), in its field order, plus
+/// the keys a full save appends and every key neither side models.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionMetadata {
-    #[serde(default = "current_format_version")]
-    pub format_version: u32,
     #[serde(rename = "session_id")]
     pub id: String,
-    #[serde(skip)]
-    pub directory: String,
+    #[serde(default)]
+    pub parent_session_id: Option<String>,
     pub start_time: String,
+    #[serde(default)]
     pub end_time: Option<String>,
+    #[serde(default)]
     pub git_commit: Option<String>,
+    #[serde(default)]
     pub git_branch: Option<String>,
+    #[serde(default, deserialize_with = "null_as_default")]
     pub environment: BTreeMap<String, Option<String>>,
+    /// Where the session began. `environment.working_directory` follows the
+    /// session when it moves; this stays, so the listing still offers it from
+    /// where the user started.
+    #[serde(default)]
+    pub origin_directory: Option<String>,
+    #[serde(default = "unknown_username")]
     pub username: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub child_sessions: Vec<Value>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub loops: Vec<Value>,
+    #[serde(default)]
     pub title: Option<String>,
     #[serde(default = "default_title_source")]
     pub title_source: String,
+    /// The latest accepted user interaction, as a UTC instant.
+    #[serde(default)]
+    pub bumped_at: Option<String>,
+    /// When the session was pinned, or `None` while it is not.
+    #[serde(default)]
+    pub pinned_at: Option<String>,
     #[serde(default, rename = "experiments")]
     pub experiment_state: Value,
-    #[serde(default, rename = "total_messages")]
-    pub message_count: u64,
-    pub last_message_fingerprint: Option<String>,
-    #[serde(default, rename = "stats")]
-    pub statistics: BTreeMap<String, Value>,
-    #[serde(default)]
-    pub tools_available: Vec<Value>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub config: BTreeMap<String, Value>,
+    #[serde(default)]
+    pub import_provenance: Option<Value>,
+    #[serde(default)]
+    pub created_worktree: Option<Value>,
+    #[serde(default, rename = "stats", deserialize_with = "null_as_default")]
+    pub statistics: BTreeMap<String, Value>,
+    #[serde(
+        default,
+        rename = "total_messages",
+        deserialize_with = "null_as_default"
+    )]
+    pub message_count: u64,
+    #[serde(default)]
+    pub last_message_fingerprint: Option<String>,
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub tools_available: Vec<Value>,
     #[serde(default)]
     pub agent_profile: Option<Value>,
     #[serde(default)]
     pub system_prompt: Option<Value>,
+    /// Keys neither implementation's model names, kept so a rewrite here never
+    /// drops what a newer writer added.
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, Value>,
+    #[serde(skip)]
+    pub directory: String,
     #[serde(skip)]
     pub created_at_ms: u64,
     #[serde(skip)]
     pub updated_at_ms: u64,
     #[serde(skip)]
     pub working_directory: String,
-    #[serde(default)]
-    pub parent_session_id: Option<String>,
+}
+
+impl SessionMetadata {
+    /// Whether this session has been written to disk.
+    #[must_use]
+    pub fn is_persisted(&self, store: &SessionStore) -> bool {
+        store.session_path(self).join(METADATA_FILE).is_file()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,25 +263,6 @@ pub struct HydratedSession {
     pub metadata: SessionMetadata,
     pub messages: Vec<ModelMessage>,
     pub current_config: BTreeMap<String, Value>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SessionSummary {
-    pub id: String,
-    pub title: Option<String>,
-    pub start_time: String,
-    pub end_time: Option<String>,
-    pub working_directory: String,
-    pub parent_session_id: Option<String>,
-    pub message_count: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SessionPage {
-    pub sessions: Vec<SessionSummary>,
-    pub next_offset: Option<usize>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -140,14 +301,18 @@ pub(super) struct HandoffPlan {
 pub struct SessionStore {
     root: PathBuf,
     pointer_key: Option<String>,
+    prefix: String,
 }
 
 impl SessionStore {
     #[must_use]
     pub fn new(root: impl Into<PathBuf>) -> Self {
+        let root = root.into();
+        let prefix = registered_prefix(&root);
         Self {
-            root: root.into(),
+            root,
             pointer_key: current_tty_key(),
+            prefix,
         }
     }
 
@@ -157,6 +322,28 @@ impl SessionStore {
         self
     }
 
+    #[must_use]
+    pub fn with_prefix(mut self, prefix: impl Into<String>) -> Self {
+        self.prefix = prefix.into();
+        self
+    }
+
+    /// The save directory.
+    #[must_use]
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    /// The prefix a session directory is named with.
+    #[must_use]
+    pub fn prefix(&self) -> &str {
+        &self.prefix
+    }
+
+    /// Names a new session without writing anything.
+    ///
+    /// The session reaches disk with its first message ([`Self::append_messages`]),
+    /// which is when the reference's `save_interaction` first writes one.
     pub fn create(
         &self,
         id: &str,
@@ -165,12 +352,47 @@ impl SessionStore {
         now_ms: u64,
     ) -> Result<SessionMetadata, StorageError> {
         validate_session_id(id)?;
-        ensure_private_directory(&self.root)?;
-        let directory = session_directory_name(now_ms, id);
-        let metadata =
-            self.initialize_session(&directory, id, working_directory, parent_session_id, now_ms)?;
-        self.write_pointer(id)?;
+        let metadata = self.compose_session(id, working_directory, parent_session_id, now_ms);
+        self.remember_pending(&metadata);
         Ok(metadata)
+    }
+
+    fn remember_pending(&self, metadata: &SessionMetadata) {
+        if let Ok(mut pending) = pending().lock() {
+            pending.insert((self.root.clone(), metadata.id.clone()), metadata.clone());
+        }
+    }
+
+    /// Forgets a session that was named and never written.
+    pub fn discard_pending(&self, session_id: &str) {
+        if let Ok(mut pending) = pending().lock() {
+            pending.remove(&(self.root.clone(), session_id.to_owned()));
+        }
+    }
+
+    /// The session recorded under exactly `session_id`, written or not: what a
+    /// process holding the session open reads, where [`Self::load`] reads only
+    /// what a later process could reopen.
+    pub fn open(&self, session_id: &str) -> Result<HydratedSession, StorageError> {
+        match self.load(session_id) {
+            Ok(hydrated) if hydrated.metadata.id == session_id => return Ok(hydrated),
+            Ok(_) | Err(StorageError::SessionNotFound(_)) => {}
+            Err(error) => return Err(error),
+        }
+        let metadata = pending()
+            .lock()
+            .ok()
+            .and_then(|pending| {
+                pending
+                    .get(&(self.root.clone(), session_id.to_owned()))
+                    .cloned()
+            })
+            .ok_or_else(|| StorageError::SessionNotFound(session_id.to_owned()))?;
+        Ok(HydratedSession {
+            metadata,
+            messages: Vec::new(),
+            current_config: BTreeMap::new(),
+        })
     }
 
     pub fn create_child(
@@ -181,7 +403,6 @@ impl SessionStore {
         now_ms: u64,
     ) -> Result<SessionMetadata, StorageError> {
         validate_session_id(id)?;
-        ensure_private_directory(&self.root)?;
         if self
             .valid_metadata()?
             .iter()
@@ -189,67 +410,92 @@ impl SessionStore {
         {
             return Err(StorageError::DuplicateSessionId(id.to_owned()));
         }
-        let directory = session_directory_name(now_ms, id);
-        self.initialize_session(
-            &directory,
-            id,
-            working_directory,
-            Some(parent_session_id),
-            now_ms,
-        )
+        Ok(self.compose_session(id, working_directory, Some(parent_session_id), now_ms))
     }
 
-    fn initialize_session(
+    /// Reference `SessionLogger._initialize_session_metadata`: what a new
+    /// session records before anything happens in it.
+    fn compose_session(
         &self,
-        directory: &str,
         id: &str,
         working_directory: &str,
         parent_session_id: Option<String>,
         now_ms: u64,
-    ) -> Result<SessionMetadata, StorageError> {
-        let session_path = self.root.join(directory);
-        create_private_directory(&session_path)?;
-        create_private_file(&session_path.join(MESSAGES_FILE)).map_err(|source| {
-            StorageError::Io {
-                path: session_path.join(MESSAGES_FILE),
-                source,
-            }
-        })?;
-        let start_time = format_iso_timestamp(now_ms);
+    ) -> SessionMetadata {
         let mut environment = BTreeMap::new();
         environment.insert(
             "working_directory".to_owned(),
             Some(working_directory.to_owned()),
         );
-        let metadata = SessionMetadata {
-            format_version: CURRENT_FORMAT_VERSION,
+        let (git_commit, git_branch) = git_metadata(Path::new(working_directory));
+        SessionMetadata {
             id: id.to_owned(),
-            directory: directory.to_owned(),
-            start_time,
+            parent_session_id,
+            start_time: format_iso_timestamp(now_ms),
             end_time: None,
-            git_commit: None,
-            git_branch: None,
+            git_commit,
+            git_branch,
             environment,
-            username: std::env::var("USER").unwrap_or_else(|_| "unknown".to_owned()),
+            origin_directory: Some(working_directory.to_owned()),
+            username: current_username(),
             child_sessions: Vec::new(),
             loops: Vec::new(),
             title: None,
             title_source: default_title_source(),
+            bumped_at: None,
+            pinned_at: None,
             experiment_state: Value::Null,
+            config: BTreeMap::new(),
+            import_provenance: None,
+            created_worktree: None,
+            statistics: BTreeMap::new(),
             message_count: 0,
             last_message_fingerprint: None,
-            statistics: BTreeMap::new(),
             tools_available: Vec::new(),
-            config: BTreeMap::new(),
             agent_profile: None,
             system_prompt: None,
+            extra: serde_json::Map::new(),
+            directory: self.free_directory_name(now_ms, id),
             created_at_ms: now_ms,
             updated_at_ms: now_ms,
             working_directory: working_directory.to_owned(),
-            parent_session_id,
-        };
-        self.write_metadata(&metadata)?;
-        Ok(metadata)
+        }
+    }
+
+    /// The directory a session created at `now_ms` is written to.
+    ///
+    /// Two sessions sharing a short identifier and a second would share a
+    /// name, so the stamp moves forward a second until the name is free: the
+    /// name keeps the layout a lookup by short identifier reads.
+    fn free_directory_name(&self, now_ms: u64, id: &str) -> String {
+        let mut stamp = now_ms;
+        loop {
+            let name = session_directory_name(&self.prefix, stamp, id);
+            if !self.root.join(&name).exists() {
+                return name;
+            }
+            stamp = stamp.saturating_add(1_000);
+        }
+    }
+
+    /// Creates the session's directory and its empty log, once.
+    fn materialize(&self, metadata: &SessionMetadata) -> Result<(), StorageError> {
+        let session_path = self.session_path(metadata);
+        if session_path.join(MESSAGES_FILE).is_file() {
+            return Ok(());
+        }
+        ensure_private_directory(&self.root)?;
+        if !session_path.is_dir() {
+            create_private_directory(&session_path)?;
+        }
+        match create_private_file(&session_path.join(MESSAGES_FILE)) {
+            Ok(_) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+            Err(source) => Err(StorageError::Io {
+                path: session_path.join(MESSAGES_FILE),
+                source,
+            }),
+        }
     }
 
     pub fn append_message(
@@ -264,7 +510,8 @@ impl SessionStore {
     /// Appends `messages` to the log, then writes metadata once.
     ///
     /// A system message never reaches the log: it is replaced wholesale in the
-    /// metadata, because only the current one is ever replayed.
+    /// metadata, because only the current one is ever replayed. A session with
+    /// nothing but a system message is not written at all.
     pub fn append_messages(
         &self,
         metadata: &mut SessionMetadata,
@@ -274,21 +521,24 @@ impl SessionStore {
         if messages.is_empty() {
             return Ok(());
         }
-        let path = self.session_path(metadata).join(MESSAGES_FILE);
         let mut encoded = Vec::new();
         let mut appended = 0_u64;
         let mut last = None;
         for message in messages {
             if matches!(message, ModelMessage::System { .. }) {
-                metadata.system_prompt =
-                    Some(serde_json::to_value(message).map_err(StorageError::Json)?);
+                metadata.system_prompt = Some(system_prompt_record(message)?);
                 continue;
             }
-            serde_json::to_writer(&mut encoded, message).map_err(StorageError::Json)?;
+            encoded.extend(encode_message(message)?);
             encoded.push(b'\n');
             appended = appended.saturating_add(1);
             last = Some(message);
         }
+        if encoded.is_empty() && !metadata.is_persisted(self) {
+            return Ok(());
+        }
+        self.materialize(metadata)?;
+        let path = self.session_path(metadata).join(MESSAGES_FILE);
         if !encoded.is_empty() {
             let mut file = OpenOptions::new()
                 .append(true)
@@ -334,28 +584,36 @@ impl SessionStore {
         Ok(metadata.last_message_fingerprint.as_deref() == Some(&message_fingerprint(boundary)?))
     }
 
+    /// Rewrites the whole log, writing the session even when nothing is left
+    /// in it: the reference's `allow_empty` save, which a rewind to the first
+    /// message makes.
     pub fn replace_messages(
         &self,
         metadata: &mut SessionMetadata,
         messages: &[ModelMessage],
         now_ms: u64,
     ) -> Result<(), StorageError> {
+        self.materialize(metadata)?;
         let path = self.session_path(metadata).join(MESSAGES_FILE);
         let mut encoded = Vec::new();
         for message in messages
             .iter()
             .filter(|message| !matches!(message, ModelMessage::System { .. }))
         {
-            serde_json::to_writer(&mut encoded, message).map_err(StorageError::Json)?;
+            encoded.extend(encode_message(message)?);
             encoded.push(b'\n');
         }
         write_atomically(&path, "messages", &encoded)?;
-        metadata.system_prompt = messages
+        // The reference's message list always opens with the system prompt; a
+        // list stored here without one keeps the prompt already recorded.
+        if let Some(record) = messages
             .iter()
             .find(|message| matches!(message, ModelMessage::System { .. }))
-            .map(serde_json::to_value)
-            .transpose()
-            .map_err(StorageError::Json)?;
+            .map(system_prompt_record)
+            .transpose()?
+        {
+            metadata.system_prompt = Some(record);
+        }
         let last = messages
             .iter()
             .rev()
@@ -373,6 +631,8 @@ impl SessionStore {
         self.write_metadata(metadata)
     }
 
+    /// Writes `metadata` over the session's record. A session not yet written
+    /// keeps the change in memory, where its first save picks it up.
     pub fn update_metadata(&self, metadata: &SessionMetadata) -> Result<(), StorageError> {
         self.write_metadata(metadata)
     }
@@ -417,6 +677,40 @@ impl SessionStore {
         Ok(hydrated)
     }
 
+    /// The session a `continue` in `working_directory` reopens.
+    ///
+    /// Reference `_find_session_to_continue`: the terminal's last-session
+    /// pointer when it names a loadable session reachable from here, and
+    /// otherwise the loadable session with the most recently written log.
+    pub fn continue_target(&self, working_directory: &str) -> Result<String, StorageError> {
+        if let Some(pointer) = self.read_pointer()?
+            && let Ok(metadata) = self.resolve(&pointer)
+            && session_reaches(&metadata, working_directory)
+            && self.read_messages(&metadata).is_ok()
+        {
+            return Ok(metadata.id);
+        }
+        let mut candidates = self
+            .session_directories()?
+            .into_iter()
+            .filter_map(|directory| {
+                let modified = fs::metadata(self.root.join(&directory).join(MESSAGES_FILE))
+                    .and_then(|item| item.modified())
+                    .ok()?;
+                Some((modified, directory))
+            })
+            .collect::<Vec<_>>();
+        candidates.sort_by_key(|candidate| std::cmp::Reverse(candidate.0));
+        candidates
+            .into_iter()
+            .filter_map(|(_, directory)| self.read_metadata_from_directory(&directory).ok())
+            .find(|metadata| {
+                session_reaches(metadata, working_directory) && self.read_messages(metadata).is_ok()
+            })
+            .map(|metadata| metadata.id)
+            .ok_or(StorageError::NoSessions)
+    }
+
     pub fn continue_session(
         &self,
         working_directory: &str,
@@ -427,110 +721,107 @@ impl SessionStore {
         if let Some(journal_path) = self.handoff_journal_path() {
             self.recover_handoff_locked(&journal_path)?;
         }
-        let prompt = current_system_prompt.into();
-        if let Some(pointer) = self.read_pointer()?
-            && let Ok(metadata) = self.resolve(&pointer)
-            && same_working_directory(&metadata.working_directory, working_directory)
-        {
-            return self.resume(&metadata.id, prompt, current_config);
-        }
-        let latest = self
-            .valid_metadata()?
-            .into_iter()
-            .filter(|metadata| {
-                same_working_directory(&metadata.working_directory, working_directory)
-            })
-            .max_by_key(|metadata| (metadata.updated_at_ms, metadata.created_at_ms))
-            .ok_or(StorageError::NoSessions)?;
-        self.resume(&latest.id, prompt, current_config)
+        let target = self.continue_target(working_directory)?;
+        self.resume(&target, current_system_prompt, current_config)
     }
 
-    pub fn list(
-        &self,
-        working_directory: Option<&str>,
-        offset: usize,
-        limit: usize,
-    ) -> Result<SessionPage, StorageError> {
-        if !(1..=500).contains(&limit) {
-            return Err(StorageError::InvalidPaginationLimit(limit));
-        }
-        let mut metadata = self.valid_metadata()?;
-        if let Some(working_directory) = working_directory {
-            metadata
-                .retain(|item| same_working_directory(&item.working_directory, working_directory));
-        }
-        metadata.sort_by(|left, right| {
-            (right.updated_at_ms, right.created_at_ms, &right.id).cmp(&(
-                left.updated_at_ms,
-                left.created_at_ms,
-                &left.id,
-            ))
-        });
-        let total = metadata.len();
-        let sessions = metadata
-            .into_iter()
-            .skip(offset)
-            .take(limit)
-            .map(|metadata| SessionSummary {
-                id: metadata.id,
-                title: metadata.title,
-                start_time: metadata.start_time,
-                end_time: metadata.end_time,
-                working_directory: metadata.working_directory,
-                parent_session_id: metadata.parent_session_id,
-                message_count: metadata.message_count,
-            })
-            .collect::<Vec<_>>();
-        let consumed = offset.saturating_add(sessions.len());
-        Ok(SessionPage {
-            sessions,
-            next_offset: (consumed < total).then_some(consumed),
-        })
+    /// Every listed session, most recently updated first, filtered to those
+    /// begun in or moved to `cwd` when one is given.
+    ///
+    /// Reference `SessionLoader.list_sessions` over the listing index.
+    pub fn sessions(&self, cwd: Option<&str>) -> Result<Vec<SessionInfo>, StorageError> {
+        index::list(self, cwd)
     }
 
-    pub fn history(
-        &self,
-        selector: &str,
-        offset: usize,
-        limit: usize,
-    ) -> Result<Vec<ModelMessage>, StorageError> {
-        if !(1..=500).contains(&limit) {
-            return Err(StorageError::InvalidPaginationLimit(limit));
-        }
-        Ok(self
-            .load(selector)?
-            .messages
-            .into_iter()
-            .skip(offset)
-            .take(limit)
-            .collect())
+    /// Reference `SessionLoader.get_first_user_message`: the label an untitled
+    /// session is shown by.
+    #[must_use]
+    pub fn first_user_message(&self, session_id: &str) -> String {
+        index::first_user_message(self, session_id)
     }
 
+    /// Reference `update_saved_session_title`: a rename is manual, and it is
+    /// what a later automatic title never overrides.
     pub fn update_title(
         &self,
-        selector: &str,
+        session_id: &str,
         title: &str,
-        now_ms: u64,
     ) -> Result<SessionMetadata, StorageError> {
         let title = title.trim();
-        if title.is_empty() || title.chars().count() > 200 {
+        if title.is_empty() {
             return Err(StorageError::InvalidTitle);
         }
-        let mut metadata = self.resolve(selector)?;
+        let mut metadata = self.resolve_exact(session_id)?;
         metadata.title = Some(title.to_owned());
-        metadata.title_source = "user".to_owned();
-        metadata.updated_at_ms = now_ms;
-        metadata.end_time = Some(format_iso_timestamp(now_ms));
+        "manual".clone_into(&mut metadata.title_source);
         self.write_metadata(&metadata)?;
         Ok(metadata)
     }
 
-    pub fn close(&self, selector: &str, now_ms: u64) -> Result<SessionMetadata, StorageError> {
-        let mut metadata = self.resolve(selector)?;
-        metadata.updated_at_ms = now_ms;
-        metadata.end_time = Some(format_iso_timestamp(now_ms));
+    /// Reference `refresh_auto_title`: a generated title replaces an earlier
+    /// generated one and never a manual rename. Answers whether it changed.
+    pub fn refresh_auto_title(
+        &self,
+        metadata: &mut SessionMetadata,
+        title: &str,
+    ) -> Result<bool, StorageError> {
+        let title = title.trim();
+        if metadata.title_source == "manual"
+            || title.is_empty()
+            || metadata.title.as_deref() == Some(title)
+        {
+            return Ok(false);
+        }
+        if let Ok(current) = self.resolve_exact(&metadata.id)
+            && current.title_source == "manual"
+        {
+            return Ok(false);
+        }
+        metadata.title = Some(title.to_owned());
+        "auto".clone_into(&mut metadata.title_source);
+        self.write_metadata(metadata)?;
+        Ok(true)
+    }
+
+    /// Reference `persist_bumped_at`: the latest accepted user interaction,
+    /// kept monotonic. Answers the instant the session now records, in
+    /// milliseconds.
+    pub fn persist_bumped_at(
+        &self,
+        metadata: &mut SessionMetadata,
+        now_ms: u64,
+    ) -> Result<u64, StorageError> {
+        if let Some(current) = metadata.bumped_at.as_deref().and_then(parse_iso_millis)
+            && current >= now_ms
+        {
+            return Ok(current);
+        }
+        metadata.bumped_at = Some(format_iso_timestamp(now_ms));
+        self.write_metadata(metadata)?;
+        Ok(now_ms)
+    }
+
+    /// Reference `relocate_saved_session`: the session now works in `cwd`, and
+    /// the place it began is kept, promoted from the environment entry when the
+    /// record predates the field.
+    pub fn relocate(&self, session_id: &str, cwd: &str) -> Result<SessionMetadata, StorageError> {
+        let mut metadata = self.resolve_exact(session_id)?;
+        relocate_metadata(&mut metadata, cwd);
         self.write_metadata(&metadata)?;
         Ok(metadata)
+    }
+
+    /// Stamps a delegated session's end. One that never wrote anything has no
+    /// record to stamp.
+    pub fn close(&self, selector: &str, now_ms: u64) -> Result<(), StorageError> {
+        let mut metadata = match self.resolve(selector) {
+            Ok(metadata) => metadata,
+            Err(StorageError::SessionNotFound(_)) => return Ok(()),
+            Err(error) => return Err(error),
+        };
+        metadata.updated_at_ms = now_ms;
+        metadata.end_time = Some(format_iso_timestamp(now_ms));
+        self.write_metadata(&metadata)
     }
 
     pub fn fork(
@@ -630,8 +921,18 @@ impl SessionStore {
         Ok(hydrated)
     }
 
-    pub fn delete(&self, selector: &str) -> Result<(), StorageError> {
-        let metadata = self.resolve(selector)?;
+    /// Reference `delete_saved_session`: removes the session this store holds
+    /// under exactly `session_id`, and forgets it in every terminal's pointer.
+    /// Answers whether one was there.
+    pub fn delete(&self, session_id: &str) -> Result<bool, StorageError> {
+        let metadata = match self.resolve_exact(session_id) {
+            Ok(metadata) => metadata,
+            Err(StorageError::SessionNotFound(_)) => {
+                self.clear_pointer_if_matches(session_id)?;
+                return Ok(false);
+            }
+            Err(error) => return Err(error),
+        };
         let session_path = self.session_path(&metadata);
         let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
         let tombstone = self
@@ -648,12 +949,19 @@ impl SessionStore {
             source,
         })?;
         self.clear_pointer_if_matches(&metadata.id)?;
-        sync_directory(&self.root)
+        sync_directory(&self.root)?;
+        Ok(true)
     }
 
     pub fn select_for_continue(&self, selector: &str) -> Result<(), StorageError> {
         let metadata = self.resolve(selector)?;
         self.write_pointer(&metadata.id)
+    }
+
+    /// Records `session_id` as the one this terminal last used, whether or not
+    /// it has been written yet (reference `last_session_pointer.record`).
+    pub fn record_pointer(&self, session_id: &str) -> Result<(), StorageError> {
+        self.write_pointer(session_id)
     }
 
     pub fn recover_interrupted_deletes(&self) -> Result<usize, StorageError> {
@@ -691,29 +999,47 @@ impl SessionStore {
         Ok(recovered)
     }
 
+    /// Brings sessions saved by an earlier format into directories: the
+    /// reference's single-file `<prefix>_*.json` sessions
+    /// (`session_migration.py`), and this port's own earlier files.
     pub fn migrate_legacy(&self) -> Result<MigrationReport, StorageError> {
-        ensure_private_directory(&self.root)?;
-        let lock_path = self.root.join(MIGRATION_LOCK_FILE);
-        let _lock = FileLock::try_acquire(&lock_path, StorageError::MigrationInProgress)?;
-        self.recover_migration_directories()?;
-        let entries = fs::read_dir(&self.root).map_err(|source| StorageError::Io {
-            path: self.root.clone(),
-            source,
-        })?;
-        let mut candidates = entries
-            .filter_map(Result::ok)
-            .map(|entry| entry.path())
-            .filter(|path| {
-                path.is_file()
-                    && path.extension().and_then(|extension| extension.to_str()) == Some("json")
-            })
-            .collect::<Vec<_>>();
-        candidates.sort();
         let mut report = MigrationReport {
             migrated: 0,
             skipped: 0,
             issues: Vec::new(),
         };
+        if !self.root.is_dir() {
+            return Ok(report);
+        }
+        let entries = fs::read_dir(&self.root).map_err(|source| StorageError::Io {
+            path: self.root.clone(),
+            source,
+        })?;
+        let mut interrupted = false;
+        let mut candidates = Vec::new();
+        for path in entries.filter_map(Result::ok).map(|entry| entry.path()) {
+            let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if name.starts_with(".migrating-") {
+                interrupted = true;
+            } else if path.is_file()
+                && path.extension().and_then(|extension| extension.to_str()) == Some("json")
+                && !name.starts_with('.')
+            {
+                candidates.push(path);
+            }
+        }
+        // A store with nothing to move is left exactly as it is: the reference
+        // writes no lock file into a save directory it only reads.
+        if candidates.is_empty() && !interrupted {
+            return Ok(report);
+        }
+        let lock_path = self.root.join(MIGRATION_LOCK_FILE);
+        let _lock = FileLock::try_acquire(&lock_path, StorageError::MigrationInProgress)?;
+        self.recover_migration_directories()?;
+        candidates.retain(|path| path.is_file());
+        candidates.sort();
         for path in candidates {
             match self.migrate_legacy_file(&path) {
                 Ok(MigrationOutcome::Migrated) => {
@@ -731,12 +1057,81 @@ impl SessionStore {
         Ok(report)
     }
 
+    /// The session `selector` names for reopening it.
+    ///
+    /// Reference `resolve_legacy_session_reference` then `find_session_by_id`:
+    /// the full identifier, or its first eight characters when exactly one
+    /// session shortens to them; among directories carrying that short
+    /// identifier, the one whose log was written last.
     fn resolve(&self, selector: &str) -> Result<SessionMetadata, StorageError> {
+        match self.resolve_exact(selector) {
+            Ok(metadata) => return Ok(metadata),
+            Err(StorageError::SessionNotFound(_)) => {}
+            Err(error) => return Err(error),
+        }
+        if selector.chars().count() != SHORT_SESSION_ID_LENGTH {
+            return Err(StorageError::SessionNotFound(selector.to_owned()));
+        }
+        let mut matches = self
+            .candidate_directories(selector)?
+            .into_iter()
+            .filter_map(|directory| self.read_metadata_from_directory(&directory).ok())
+            .filter(|metadata| short_session_id(&metadata.id) == selector)
+            .collect::<Vec<_>>();
+        matches.sort_by(|left, right| left.id.cmp(&right.id));
+        matches.dedup_by(|left, right| left.id == right.id);
+        match matches.len() {
+            0 => Err(StorageError::SessionNotFound(selector.to_owned())),
+            1 => self.resolve_exact(&matches.remove(0).id),
+            _ => Err(StorageError::AmbiguousSession(selector.to_owned())),
+        }
+    }
+
+    /// The session recorded under exactly `session_id`: among the directories
+    /// named by its short identifier, the most recently written one that
+    /// records it. A session whose directory predates that naming is found by
+    /// its metadata.
+    fn resolve_exact(&self, session_id: &str) -> Result<SessionMetadata, StorageError> {
+        if validate_session_id(session_id).is_err() {
+            return Err(StorageError::SessionNotFound(session_id.to_owned()));
+        }
+        let mut named = Vec::new();
+        for directory in self.candidate_directories(session_id)? {
+            match self.read_metadata_from_directory(&directory) {
+                Ok(metadata) if metadata.id == session_id => {
+                    let modified = fs::metadata(self.root.join(&directory).join(MESSAGES_FILE))
+                        .and_then(|item| item.modified())
+                        .ok();
+                    named.push((modified, metadata));
+                }
+                _ => {}
+            }
+        }
+        named.sort_by_key(|candidate| std::cmp::Reverse(candidate.0));
+        if let Some((_, metadata)) = named.into_iter().next() {
+            return Ok(metadata);
+        }
+        self.valid_metadata()?
+            .into_iter()
+            .find(|metadata| metadata.id == session_id)
+            .ok_or_else(|| StorageError::SessionNotFound(session_id.to_owned()))
+    }
+
+    /// The directories named after `selector`'s short identifier.
+    fn candidate_directories(&self, selector: &str) -> Result<Vec<String>, StorageError> {
+        let suffix = format!("_{}", short_session_id(selector));
+        Ok(self
+            .session_directories()?
+            .into_iter()
+            .filter(|directory| directory.ends_with(&suffix))
+            .collect())
+    }
+
+    /// Every directory under the root named with this store's prefix.
+    pub(super) fn session_directories(&self) -> Result<Vec<String>, StorageError> {
         let entries = match fs::read_dir(&self.root) {
             Ok(entries) => entries,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Err(StorageError::SessionNotFound(selector.to_owned()));
-            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
             Err(source) => {
                 return Err(StorageError::Io {
                     path: self.root.clone(),
@@ -744,58 +1139,20 @@ impl SessionStore {
                 });
             }
         };
-        let mut matches = Vec::new();
+        let prefix = format!("{}_", self.prefix);
+        let mut directories = Vec::new();
         for entry in entries {
             let entry = entry.map_err(|source| StorageError::Io {
                 path: self.root.clone(),
                 source,
             })?;
-            if !entry
-                .file_type()
-                .map_err(|source| StorageError::Io {
-                    path: entry.path(),
-                    source,
-                })?
-                .is_dir()
-            {
-                continue;
-            }
-            let directory = entry.file_name().to_string_lossy().into_owned();
-            if is_internal_directory(&directory) {
-                continue;
-            }
-            let exact_path = directory == selector;
-            let metadata = self.read_metadata_from_directory(&directory);
-            let exact_metadata = metadata
-                .as_ref()
-                .is_ok_and(|metadata| metadata.id == selector);
-            let candidate_by_metadata = metadata
-                .as_ref()
-                .is_ok_and(|metadata| exact_metadata || metadata.id.starts_with(selector));
-            let candidate_by_path = directory.ends_with(&format!("_{}", directory_id(selector)));
-            if exact_path || candidate_by_path || candidate_by_metadata {
-                matches.push((exact_path || exact_metadata, metadata));
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name.starts_with(&prefix) && entry.path().is_dir() {
+                directories.push(name);
             }
         }
-        let exact_matches = matches.iter().filter(|(exact, _)| *exact).count();
-        if exact_matches == 1 {
-            let position = matches
-                .iter()
-                .position(|(exact, _)| *exact)
-                .ok_or_else(|| StorageError::SessionNotFound(selector.to_owned()))?;
-            return matches.swap_remove(position).1;
-        }
-        if exact_matches > 1 {
-            return Err(StorageError::AmbiguousSession(selector.to_owned()));
-        }
-        match matches.len() {
-            0 => Err(StorageError::SessionNotFound(selector.to_owned())),
-            1 => matches
-                .pop()
-                .map(|(_, metadata)| metadata)
-                .ok_or_else(|| StorageError::SessionNotFound(selector.to_owned()))?,
-            _ => Err(StorageError::AmbiguousSession(selector.to_owned())),
-        }
+        directories.sort();
+        Ok(directories)
     }
 
     fn valid_metadata(&self) -> Result<Vec<SessionMetadata>, StorageError> {
@@ -851,30 +1208,27 @@ impl SessionStore {
                 source,
             })?;
         validate_session_id(&metadata.id)?;
-        if metadata.format_version > CURRENT_FORMAT_VERSION {
-            return Err(StorageError::UnsupportedFormat {
-                path,
-                version: metadata.format_version,
-            });
-        }
+        // This port's first layout versioned its records; the key means
+        // nothing to either implementation now.
+        metadata.extra.remove("format_version");
         metadata.directory = directory.to_owned();
         metadata.working_directory = metadata
             .environment
             .get("working_directory")
             .and_then(Clone::clone)
             .unwrap_or_default();
-        let modified_key = fs::metadata(self.root.join(directory).join(MESSAGES_FILE))
+        let modified = fs::metadata(self.root.join(directory).join(MESSAGES_FILE))
             .and_then(|item| item.modified())
             .ok()
             .and_then(|modified| modified.duration_since(std::time::UNIX_EPOCH).ok())
-            .and_then(|duration| u64::try_from(duration.as_nanos()).ok())
+            .and_then(|duration| u64::try_from(duration.as_millis()).ok())
             .unwrap_or_default();
-        metadata.created_at_ms = timestamp_sort_key(&metadata.start_time).unwrap_or(modified_key);
+        metadata.created_at_ms = parse_iso_millis(&metadata.start_time).unwrap_or(modified);
         metadata.updated_at_ms = metadata
             .end_time
             .as_deref()
-            .and_then(timestamp_sort_key)
-            .unwrap_or(modified_key);
+            .and_then(parse_iso_millis)
+            .unwrap_or(modified);
         Ok(metadata)
     }
 
@@ -920,11 +1274,11 @@ impl SessionStore {
                     message: "empty JSONL record".to_owned(),
                 });
             }
-            let message: ModelMessage =
-                serde_json::from_str(&line).map_err(|error| StorageError::CorruptMessages {
+            let message =
+                decode_message(&line).map_err(|message| StorageError::CorruptMessages {
                     path: path.clone(),
                     line: index,
-                    message: error.to_string(),
+                    message,
                 })?;
             if !matches!(message, ModelMessage::System { .. }) {
                 messages.push(message);
@@ -940,10 +1294,32 @@ impl SessionStore {
         Ok(messages)
     }
 
+    /// Writes `metadata` over its record: every key the record already holds
+    /// that the model does not name is kept, which is what the reference's
+    /// field patches do. A session not yet written stays unwritten.
     fn write_metadata(&self, metadata: &SessionMetadata) -> Result<(), StorageError> {
-        let path = self.session_path(metadata).join(METADATA_FILE);
-        let mut encoded = serde_json::to_vec_pretty(metadata).map_err(StorageError::Json)?;
-        encoded.push(b'\n');
+        let session_path = self.session_path(metadata);
+        if !session_path.join(MESSAGES_FILE).is_file() {
+            self.remember_pending(metadata);
+            return Ok(());
+        }
+        self.discard_pending(&metadata.id);
+        let path = session_path.join(METADATA_FILE);
+        let mut record = metadata.clone();
+        if let Ok(bytes) = fs::read(&path)
+            && let Ok(Value::Object(existing)) = serde_json::from_slice::<Value>(&bytes)
+        {
+            let known = serde_json::to_value(metadata)
+                .ok()
+                .and_then(|value| value.as_object().cloned())
+                .unwrap_or_default();
+            for (key, value) in existing {
+                if key != "format_version" && !known.contains_key(&key) {
+                    record.extra.entry(key).or_insert(value);
+                }
+            }
+        }
+        let encoded = serde_json::to_vec_pretty(&record).map_err(StorageError::Json)?;
         write_atomically(&path, "meta", &encoded).map_err(StorageError::from)
     }
 
@@ -982,36 +1358,50 @@ impl SessionStore {
         }
     }
 
+    /// The session the terminal's pointer names, if any.
+    pub fn pointer(&self) -> Option<String> {
+        self.read_pointer().ok().flatten()
+    }
+
     /// The directory a session is written under.
     pub fn session_directory(&self, selector: &str) -> Result<PathBuf, StorageError> {
         let metadata = self.resolve(selector)?;
         Ok(self.session_path(&metadata))
     }
 
-    fn session_path(&self, metadata: &SessionMetadata) -> PathBuf {
+    /// The directory `metadata` is, or will be, written under.
+    #[must_use]
+    pub fn session_path(&self, metadata: &SessionMetadata) -> PathBuf {
         self.root.join(&metadata.directory)
     }
 
+    /// Reference `last_session_pointer.clear_matching`: every terminal's
+    /// pointer that names the session is removed, not only this one's.
     fn clear_pointer_if_matches(&self, session_id: &str) -> Result<(), StorageError> {
-        let Some(pointer_key) = &self.pointer_key else {
+        let pointer_directory = self.root.join(LAST_SESSION_DIRECTORY);
+        let Ok(entries) = fs::read_dir(&pointer_directory) else {
             return Ok(());
         };
-        let path = self.root.join(LAST_SESSION_DIRECTORY).join(pointer_key);
-        match fs::read_to_string(&path) {
-            Ok(pointer) if pointer.trim() == session_id => {
-                fs::remove_file(&path).map_err(|source| StorageError::Io {
-                    path: path.clone(),
-                    source,
-                })?;
-                if let Some(parent) = path.parent() {
-                    sync_directory(parent)?;
-                }
-                Ok(())
+        let mut removed = false;
+        for entry in entries.filter_map(Result::ok) {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if !path.is_file()
+                || name.starts_with(HANDOFF_JOURNAL_PREFIX)
+                || name.starts_with(HANDOFF_LOCK_PREFIX)
+            {
+                continue;
             }
-            Ok(_) => Ok(()),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(source) => Err(StorageError::Io { path, source }),
+            if fs::read_to_string(&path).is_ok_and(|pointer| pointer.trim() == session_id)
+                && fs::remove_file(&path).is_ok()
+            {
+                removed = true;
+            }
         }
+        if removed {
+            sync_directory(&pointer_directory)?;
+        }
+        Ok(())
     }
 
     fn append_message_to_path(
@@ -1021,11 +1411,10 @@ impl SessionStore {
         message: &ModelMessage,
     ) -> Result<(), StorageError> {
         if matches!(message, ModelMessage::System { .. }) {
-            metadata.system_prompt =
-                Some(serde_json::to_value(message).map_err(StorageError::Json)?);
+            metadata.system_prompt = Some(system_prompt_record(message)?);
             return Ok(());
         }
-        let encoded = serde_json::to_vec(message).map_err(StorageError::Json)?;
+        let encoded = encode_message(message)?;
         let mut file = OpenOptions::new()
             .append(true)
             .open(path)
@@ -1044,6 +1433,34 @@ impl SessionStore {
         metadata.last_message_fingerprint = Some(message_fingerprint(message)?);
         Ok(())
     }
+}
+
+/// Reference `SessionLoader._session_reaches`: a session is offered from the
+/// directory it began in and from the one it now works in.
+fn session_reaches(metadata: &SessionMetadata, working_directory: &str) -> bool {
+    [
+        metadata.origin_directory.as_deref(),
+        Some(metadata.working_directory.as_str()),
+    ]
+    .into_iter()
+    .flatten()
+    .filter(|stored| !stored.is_empty())
+    .any(|stored| same_working_directory(stored, working_directory))
+}
+
+/// Reference `SessionLogger.relocated_to` and `relocate_saved_session_at_path`.
+pub fn relocate_metadata(metadata: &mut SessionMetadata, cwd: &str) {
+    if metadata.origin_directory.is_none() {
+        metadata.origin_directory = metadata
+            .environment
+            .get("working_directory")
+            .cloned()
+            .flatten();
+    }
+    metadata
+        .environment
+        .insert("working_directory".to_owned(), Some(cwd.to_owned()));
+    cwd.clone_into(&mut metadata.working_directory);
 }
 
 #[derive(Debug, Deserialize)]
@@ -1156,11 +1573,7 @@ pub enum StorageError {
         #[source]
         source: serde_json::Error,
     },
-    #[error("unsupported session format {version} at `{path}`")]
-    UnsupportedFormat { path: PathBuf, version: u32 },
-    #[error("pagination limit must be between 1 and 500, got {0}")]
-    InvalidPaginationLimit(usize),
-    #[error("session title must contain 1 to 200 characters")]
+    #[error("Session title cannot be empty.")]
     InvalidTitle,
     #[error("cannot rewind to {requested} messages; only {available} are available")]
     InvalidRewind { requested: usize, available: usize },
@@ -1215,14 +1628,8 @@ pub(super) fn validate_session_id(id: &str) -> Result<(), StorageError> {
     }
 }
 
-pub(super) const fn current_format_version() -> u32 {
-    CURRENT_FORMAT_VERSION
-}
-
 pub(super) fn is_internal_directory(directory: &str) -> bool {
-    directory.starts_with(".deleting-")
-        || directory.starts_with(".migrating-")
-        || directory.starts_with(".handoff-")
+    directory.starts_with('.') || directory == lease::ACTIVE_DIRECTORY
 }
 
 pub(super) fn is_safe_handoff_component(component: &str, prefix: &str) -> bool {
@@ -1233,21 +1640,17 @@ pub(super) fn is_safe_handoff_component(component: &str, prefix: &str) -> bool {
         && component != ".."
 }
 
-pub(super) fn session_directory_name(now_ms: u64, id: &str) -> String {
+/// Reference `SessionLogger.save_folder`.
+pub(super) fn session_directory_name(prefix: &str, now_ms: u64, id: &str) -> String {
     format!(
-        "session_{}_{}",
+        "{prefix}_{}_{}",
         format_compact_timestamp(now_ms),
-        directory_id(id)
+        short_session_id(id)
     )
 }
 
-pub(super) fn directory_id(id: &str) -> String {
-    let digest = Sha256::digest(id.as_bytes());
-    hex_encode(digest.get(..16).unwrap_or(&digest))
-}
-
 pub(super) fn message_fingerprint(message: &ModelMessage) -> Result<String, StorageError> {
-    let value = serde_json::to_value(message).map_err(StorageError::Json)?;
+    let value = message_record(message)?;
     Ok(hex_encode(&Sha256::digest(
         python_canonical_json(&value).as_bytes(),
     )))
@@ -1255,6 +1658,73 @@ pub(super) fn message_fingerprint(message: &ModelMessage) -> Result<String, Stor
 
 pub(super) fn default_title_source() -> String {
     "auto".to_owned()
+}
+
+fn unknown_username() -> String {
+    "unknown".to_owned()
+}
+
+/// Reads JSON `null` as the type's default, which is how a record written with
+/// an explicit `null` for an optional group loads.
+fn null_as_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Default + Deserialize<'de>,
+{
+    Ok(Option::<T>::deserialize(deserializer)?.unwrap_or_default())
+}
+
+/// The record a message is written to the log as.
+fn message_record(message: &ModelMessage) -> Result<Value, StorageError> {
+    serde_json::to_value(message).map_err(StorageError::Json)
+}
+
+fn encode_message(message: &ModelMessage) -> Result<Vec<u8>, StorageError> {
+    serde_json::to_vec(&message_record(message)?).map_err(StorageError::Json)
+}
+
+fn decode_message(line: &str) -> Result<ModelMessage, String> {
+    serde_json::from_str(line).map_err(|error| error.to_string())
+}
+
+/// What `meta.json` records as the system prompt.
+fn system_prompt_record(message: &ModelMessage) -> Result<Value, StorageError> {
+    message_record(message)
+}
+
+/// Reference `getpass.getuser`: the first of `LOGNAME`, `USER`, `LNAME` and
+/// `USERNAME` that is set.
+fn current_username() -> String {
+    ["LOGNAME", "USER", "LNAME", "USERNAME"]
+        .into_iter()
+        .find_map(|name| std::env::var(name).ok().filter(|value| !value.is_empty()))
+        .unwrap_or_else(unknown_username)
+}
+
+/// Reference `SessionLogger._fetch_git_metadata`: the commit and branch the
+/// working directory is on, when it is a git checkout.
+fn git_metadata(working_directory: &Path) -> (Option<String>, Option<String>) {
+    if !working_directory.is_dir() {
+        return (None, None);
+    }
+    let output = std::process::Command::new("git")
+        .args(["rev-parse", "HEAD", "--abbrev-ref", "HEAD"])
+        .current_dir(working_directory)
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output();
+    let Ok(output) = output else {
+        return (None, None);
+    };
+    if !output.status.success() {
+        return (None, None);
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut lines = text.trim().lines();
+    (
+        lines.next().map(ToOwned::to_owned),
+        lines.next().map(ToOwned::to_owned),
+    )
 }
 
 fn same_working_directory(stored: &str, current: &str) -> bool {
@@ -1273,15 +1743,29 @@ fn current_tty_key() -> Option<String> {
             let path = PathBuf::from("/proc/self/fd").join(descriptor);
             if let Ok(target) = fs::read_link(path)
                 && target.starts_with("/dev/")
+                && target != Path::new("/dev/null")
                 && let Some(name) = target.file_name().and_then(|name| name.to_str())
             {
                 return Some(sanitize_pointer_key(name));
             }
         }
+        None
     }
-    std::env::var("WT_SESSION")
-        .ok()
-        .map(|value| sanitize_pointer_key(&format!("wt-{value}")))
+    #[cfg(not(unix))]
+    {
+        // Reference `_windows_tty_key` without the console window handle,
+        // which needs a Win32 call this crate does not make: the Windows
+        // Terminal session, and otherwise the parent process.
+        Some(match std::env::var("WT_SESSION") {
+            Ok(value) => sanitize_pointer_key(&format!("wt-{value}")),
+            Err(_) => sanitize_pointer_key(&format!("ppid-{}", parent_process_id())),
+        })
+    }
+}
+
+#[cfg(not(unix))]
+fn parent_process_id() -> u32 {
+    std::process::id()
 }
 
 fn sanitize_pointer_key(raw: &str) -> String {
@@ -1304,529 +1788,10 @@ fn sanitize_pointer_key(raw: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn user(content: &str) -> ModelMessage {
-        ModelMessage::user(content.to_owned())
-    }
-
-    /// US-172: the synthetic pair a slash invocation appends is made of the
-    /// message shapes the store already persists, so it round-trips through a
-    /// session unchanged.
-    #[test]
-    fn the_invoked_skill_pair_round_trips_through_the_store() {
-        let temporary = tempfile::tempdir().expect("temporary session root");
-        let store = SessionStore::new(temporary.path());
-        let mut metadata = store
-            .create("session-skill", "/workspace", None, 10)
-            .expect("session creates");
-        let pair = [
-            user("/probe"),
-            ModelMessage::Assistant {
-                message_id: None,
-                reasoning_message_id: None,
-                content: String::new(),
-                reasoning: None,
-                reasoning_payloads: Vec::new(),
-                tool_calls: vec![crate::events::ModelToolCall {
-                    id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee".to_owned(),
-                    name: "skill".to_owned(),
-                    arguments: "{\"name\":\"probe\"}".to_owned(),
-                }],
-            },
-            ModelMessage::Tool {
-                call_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee".to_owned(),
-                content: format!(
-                    "name: probe\ncontent: {}\nBody\n</skill_content>\nskill_dir: None",
-                    crate::skills::skill_content_marker("probe")
-                ),
-                is_error: false,
-            },
-        ];
-        store
-            .append_messages(&mut metadata, &pair, 11)
-            .expect("the pair persists");
-
-        let hydrated = store.load("session-skill").expect("session loads");
-        assert_eq!(hydrated.messages, pair.to_vec());
-    }
-
-    #[test]
-    fn sessions_append_atomically_and_resume_with_current_system_context() {
-        let temporary = tempfile::tempdir().expect("temporary session root");
-        let store = SessionStore::new(temporary.path());
-        let mut metadata = store
-            .create("session-alpha", "/workspace", None, 10)
-            .expect("session creates");
-        store
-            .append_message(
-                &mut metadata,
-                &ModelMessage::System {
-                    content: "old system".to_owned(),
-                },
-                11,
-            )
-            .expect("system appends");
-        store
-            .append_message(&mut metadata, &user("hello"), 12)
-            .expect("user appends");
-        metadata
-            .statistics
-            .insert("tokens".to_owned(), Value::from(4));
-        metadata.experiment_state = serde_json::json!({"variant": "b"});
-        store
-            .update_metadata(&metadata)
-            .expect("metadata updates atomically");
-
-        let hydrated = store
-            .resume(
-                "session-alpha",
-                "current system",
-                BTreeMap::from([("model".to_owned(), Value::String("new".to_owned()))]),
-            )
-            .expect("session resumes");
-        assert_eq!(
-            hydrated.messages,
-            vec![
-                ModelMessage::System {
-                    content: "current system".to_owned()
-                },
-                user("hello")
-            ]
-        );
-        assert_eq!(hydrated.metadata.statistics["tokens"], 4);
-        assert_eq!(hydrated.current_config["model"], "new");
-    }
-
-    #[test]
-    fn continue_prefers_valid_pointer_then_latest_valid_session() {
-        let temporary = tempfile::tempdir().expect("temporary session root");
-        let store = SessionStore::new(temporary.path()).with_pointer_key("test-tty");
-        store
-            .create("older", "/workspace", None, 10)
-            .expect("older session");
-        store
-            .create("newer", "/workspace", None, 20)
-            .expect("newer session");
-        let continued = store
-            .continue_session("/workspace", "system", BTreeMap::new())
-            .expect("valid pointer");
-        assert_eq!(continued.metadata.id, "newer");
-
-        fs::write(
-            temporary
-                .path()
-                .join(LAST_SESSION_DIRECTORY)
-                .join("test-tty"),
-            "stale\n",
-        )
-        .expect("stale pointer fixture");
-        let fallback = store
-            .continue_session("/workspace", "system", BTreeMap::new())
-            .expect("latest fallback");
-        assert_eq!(fallback.metadata.id, "newer");
-    }
-
-    #[test]
-    fn exact_session_ids_win_over_longer_prefix_matches() {
-        let temporary = tempfile::tempdir().expect("temporary session root");
-        let store = SessionStore::new(temporary.path());
-        store
-            .create("session", "/workspace", None, 10)
-            .expect("exact session");
-        store
-            .create("session-longer", "/workspace", None, 1_020)
-            .expect("prefixed session");
-        assert_eq!(
-            store.load("session").expect("exact match").metadata.id,
-            "session"
-        );
-    }
-
-    #[test]
-    fn a_durable_log_record_ahead_of_metadata_is_recovered_in_memory() {
-        let temporary = tempfile::tempdir().expect("temporary session root");
-        let store = SessionStore::new(temporary.path());
-        let mut metadata = store
-            .create("session-recover", "/workspace", None, 10)
-            .expect("session creates");
-        let log = store.session_path(&metadata).join(MESSAGES_FILE);
-        let encoded = serde_json::to_string(&user("durable")).expect("message serializes");
-        fs::write(&log, format!("{encoded}\n")).expect("simulated durable append");
-
-        let recovered = store.load("session-recover").expect("record recovers");
-        assert_eq!(recovered.metadata.message_count, 1);
-        metadata = recovered.metadata;
-        store
-            .append_message(&mut metadata, &user("next"), 11)
-            .expect("metadata catches up");
-        assert_eq!(
-            store
-                .load("session-recover")
-                .expect("session remains loadable")
-                .messages
-                .len(),
-            2
-        );
-    }
-
-    #[test]
-    fn corruption_and_ambiguous_short_ids_never_overwrite_evidence() {
-        let temporary = tempfile::tempdir().expect("temporary session root");
-        let store = SessionStore::new(temporary.path());
-        let first = store
-            .create("prefix-one", "/workspace", None, 10)
-            .expect("first session");
-        store
-            .create("prefix-two", "/workspace", None, 20)
-            .expect("second session");
-        assert!(matches!(
-            store.load("prefix"),
-            Err(StorageError::AmbiguousSession(_))
-        ));
-
-        let log = store.session_path(&first).join(MESSAGES_FILE);
-        fs::write(&log, b"{\"role\":\"user\"").expect("truncate fixture log");
-        let before = fs::read(&log).expect("fixture remains readable");
-        assert!(matches!(
-            store.load("prefix-one"),
-            Err(StorageError::CorruptMessages { .. })
-        ));
-        assert_eq!(fs::read(log).expect("evidence preserved"), before);
-    }
-
-    #[test]
-    fn path_traversal_session_ids_are_rejected() {
-        let temporary = tempfile::tempdir().expect("temporary session root");
-        let store = SessionStore::new(temporary.path());
-        assert!(matches!(
-            store.create("../escape", "/workspace", None, 10),
-            Err(StorageError::InvalidSessionId(_))
-        ));
-        assert!(!temporary.path().join("escape").exists());
-    }
-
-    #[test]
-    fn lifecycle_operations_are_durable_paginated_and_parent_linked() {
-        let temporary = tempfile::tempdir().expect("temporary session root");
-        let store = SessionStore::new(temporary.path()).with_pointer_key("test");
-        let mut parent = store
-            .create("parent-session", "/workspace", None, 10)
-            .expect("parent session");
-        store
-            .append_message(&mut parent, &user("one"), 11)
-            .expect("first message");
-        store
-            .append_message(&mut parent, &user("two"), 12)
-            .expect("second message");
-        store
-            .update_title("parent-session", "Named session", 13)
-            .expect("title updates");
-
-        let child = store
-            .fork(
-                "parent-session",
-                "child-session",
-                "current prompt",
-                BTreeMap::from([("model".to_owned(), Value::String("current".to_owned()))]),
-                20,
-            )
-            .expect("session forks");
-        assert_eq!(
-            child.metadata.parent_session_id.as_deref(),
-            Some("parent-session")
-        );
-        assert_eq!(child.messages.len(), 3);
-        assert_eq!(child.current_config["model"], "current");
-
-        let page = store.list(Some("/workspace"), 0, 1).expect("list page");
-        assert_eq!(page.sessions.len(), 1);
-        assert_eq!(page.next_offset, Some(1));
-        assert_eq!(
-            store.history("parent-session", 1, 1).expect("history page"),
-            [user("two")]
-        );
-
-        let rewind = store
-            .rewind("parent-session", 1, BTreeMap::new(), 30)
-            .expect("session rewinds");
-        assert_eq!(rewind.messages, [user("one")]);
-        assert_eq!(
-            store
-                .load("parent-session")
-                .expect("rewind survives restart")
-                .messages,
-            [user("one")]
-        );
-        store
-            .close("parent-session", 31)
-            .expect("session closes durably");
-        store.delete("child-session").expect("child deletes");
-        assert!(matches!(
-            store.load("child-session"),
-            Err(StorageError::SessionNotFound(_))
-        ));
-    }
-
-    #[test]
-    fn rewound_fork_is_published_once_without_mutating_its_parent() {
-        let temporary = tempfile::tempdir().expect("temporary session root");
-        let store = SessionStore::new(temporary.path()).with_pointer_key("rewind-fork");
-        let mut parent = store
-            .create("parent", "/workspace", None, 10)
-            .expect("parent session");
-        parent
-            .config
-            .insert("model".to_owned(), Value::from("parent-model"));
-        store.update_metadata(&parent).expect("parent metadata");
-        for (index, message) in [user("one"), user("two"), user("three")]
-            .into_iter()
-            .enumerate()
-        {
-            store
-                .append_message(&mut parent, &message, 11 + index as u64)
-                .expect("parent message");
-        }
-
-        let child = store
-            .fork_rewound(
-                "parent",
-                "child",
-                2,
-                BTreeMap::from([("tokens".to_owned(), Value::from(42))]),
-                20,
-            )
-            .expect("rewound fork");
-
-        assert_eq!(child.metadata.parent_session_id.as_deref(), Some("parent"));
-        assert_eq!(child.messages, [user("one"), user("two")]);
-        assert_eq!(child.current_config["model"], "parent-model");
-        assert_eq!(child.metadata.statistics["tokens"], 42);
-        assert_eq!(
-            store
-                .load("parent")
-                .expect("parent remains intact")
-                .messages,
-            [user("one"), user("two"), user("three")]
-        );
-    }
-
-    #[test]
-    fn legacy_migration_is_versioned_retryable_and_isolates_bad_entries() {
-        let temporary = tempfile::tempdir().expect("temporary session root");
-        let store = SessionStore::new(temporary.path());
-        fs::write(
-            temporary.path().join("valid.json"),
-            serde_json::to_vec(&serde_json::json!({
-                "sessionId": "legacy-session",
-                "workingDirectory": "/workspace",
-                "messages": [
-                    {"role": "user", "content": "legacy"}
-                ],
-                "statistics": {"tokens": 2},
-                "experiments": {"variant": "a"},
-                "createdAtMs": 10,
-                "updatedAtMs": 11
-            }))
-            .expect("legacy serializes"),
-        )
-        .expect("legacy fixture");
-        fs::write(temporary.path().join("broken.json"), b"{").expect("broken legacy fixture");
-
-        let report = store.migrate_legacy().expect("migration completes");
-        assert_eq!(report.migrated, 1);
-        assert_eq!(report.issues.len(), 1);
-        let migrated = store
-            .load("legacy-session")
-            .expect("migrated session loads");
-        assert_eq!(migrated.metadata.format_version, CURRENT_FORMAT_VERSION);
-        assert_eq!(migrated.messages, [user("legacy")]);
-        assert!(temporary.path().join("valid.json.legacy.bak").is_file());
-
-        let retry = store.migrate_legacy().expect("migration retry completes");
-        assert_eq!(retry.migrated, 0);
-        assert_eq!(retry.issues.len(), 1);
-    }
-
-    #[test]
-    fn migration_lock_and_interrupted_delete_artifacts_fail_safe() {
-        let temporary = tempfile::tempdir().expect("temporary session root");
-        let store = SessionStore::new(temporary.path());
-        fs::create_dir_all(temporary.path()).expect("root exists");
-        let lock = FileLock::try_acquire(
-            &temporary.path().join(MIGRATION_LOCK_FILE),
-            StorageError::MigrationInProgress,
-        )
-        .expect("migration lock");
-        assert!(matches!(
-            store.migrate_legacy(),
-            Err(StorageError::MigrationInProgress)
-        ));
-        drop(lock);
-        fs::write(
-            temporary.path().join(MIGRATION_LOCK_FILE),
-            b"stale process marker",
-        )
-        .expect("stale lock fixture");
-        let recovered = FileLock::try_acquire(
-            &temporary.path().join(MIGRATION_LOCK_FILE),
-            StorageError::MigrationInProgress,
-        )
-        .expect("OS lock ignores stale file contents");
-        drop(recovered);
-
-        let tombstone = temporary.path().join(".deleting-1-stale");
-        fs::create_dir(&tombstone).expect("tombstone fixture");
-        fs::write(tombstone.join(METADATA_FILE), b"not a session").expect("tombstone content");
-        assert!(
-            store
-                .list(None, 0, 10)
-                .expect("listing")
-                .sessions
-                .is_empty()
-        );
-        assert_eq!(
-            store
-                .recover_interrupted_deletes()
-                .expect("delete recovers"),
-            1
-        );
-        assert!(!tombstone.exists());
-    }
-
-    #[test]
-    fn handoff_publishes_complete_hydration_before_pointer_switch() {
-        let temporary = tempfile::tempdir().expect("temporary session root");
-        let store = SessionStore::new(temporary.path()).with_pointer_key("handoff");
-        let mut parent = store
-            .create("parent", "/workspace", None, 1)
-            .expect("parent session");
-        parent
-            .config
-            .insert("model".to_owned(), Value::from("parent"));
-        parent.agent_profile = Some(serde_json::json!({"name": "reviewer"}));
-        parent.tools_available = vec![serde_json::json!({"name": "read_file"})];
-        store
-            .update_metadata(&parent)
-            .expect("parent hydration metadata");
-
-        let child = store
-            .handoff_messages(
-                &parent,
-                "child",
-                &[
-                    ModelMessage::System {
-                        content: "system".to_owned(),
-                    },
-                    user("complete"),
-                ],
-                2,
-                true,
-            )
-            .expect("handoff");
-        let hydrated = store.load("child").expect("published child loads");
-        assert_eq!(hydrated.messages, [user("complete")]);
-        assert_eq!(hydrated.metadata.config["model"], "parent");
-        assert_eq!(hydrated.metadata.agent_profile, parent.agent_profile);
-        assert_eq!(hydrated.metadata.tools_available, parent.tools_available);
-        assert_eq!(child.id, "child");
-        assert!(
-            fs::read_dir(temporary.path())
-                .expect("session root")
-                .filter_map(Result::ok)
-                .all(|entry| !entry.file_name().to_string_lossy().starts_with(".handoff-"))
-        );
-    }
-
-    #[test]
-    fn handoff_journal_rolls_forward_after_publication_before_pointer_switch() {
-        let temporary = tempfile::tempdir().expect("temporary session root");
-        let store = SessionStore::new(temporary.path()).with_pointer_key("recovery");
-        let mut parent = store
-            .create("parent", "/workspace", None, 1)
-            .expect("parent session");
-        parent
-            .config
-            .insert("model".to_owned(), serde_json::json!("parent"));
-        store.update_metadata(&parent).expect("parent metadata");
-
-        let staging_directory = ".handoff-crash-recovered";
-        let destination_directory = session_directory_name(2, "recovered");
-        let mut staged = store
-            .initialize_session(
-                staging_directory,
-                "recovered",
-                "/workspace",
-                Some("parent".to_owned()),
-                2,
-            )
-            .expect("staged child");
-        staged.config = parent.config.clone();
-        store
-            .replace_messages(&mut staged, &[user("durable")], 2)
-            .expect("complete staged transcript");
-        let journal_path = store.handoff_journal_path().expect("journal path");
-        store
-            .write_handoff_journal(
-                &journal_path,
-                &HandoffJournal {
-                    session_id: "recovered".to_owned(),
-                    staging_directory: staging_directory.to_owned(),
-                    destination_directory: destination_directory.clone(),
-                },
-            )
-            .expect("durable handoff intent");
-        fs::rename(
-            temporary.path().join(staging_directory),
-            temporary.path().join(&destination_directory),
-        )
-        .expect("directory was published before simulated crash");
-        sync_directory(temporary.path()).expect("published directory");
-        assert_eq!(
-            store.read_pointer().expect("stale pointer").as_deref(),
-            Some("parent")
-        );
-
-        let recovered = store
-            .handoff_messages(&parent, "recovered", &[user("replacement")], 2, true)
-            .expect("same handoff retry rolls forward");
-        assert_eq!(recovered.id, "recovered");
-        assert_eq!(
-            store.load("recovered").expect("recovered child").messages,
-            [user("durable")]
-        );
-        assert_eq!(
-            store.read_pointer().expect("recovered pointer").as_deref(),
-            Some("recovered")
-        );
-        assert!(!journal_path.exists());
-    }
-
-    #[test]
-    fn child_creation_rejects_an_id_left_by_a_previous_process() {
-        let temporary = tempfile::tempdir().expect("temporary session root");
-        let first_process = SessionStore::new(temporary.path());
-        first_process
-            .create_child("child-restart", "/workspace", "parent".to_owned(), 1)
-            .expect("first process child");
-        let restarted_process = SessionStore::new(temporary.path());
-        assert!(matches!(
-            restarted_process.create_child(
-                "child-restart",
-                "/workspace",
-                "parent".to_owned(),
-                2,
-            ),
-            Err(StorageError::DuplicateSessionId(id)) if id == "child-restart"
-        ));
-        assert_eq!(
-            restarted_process
-                .list(None, 0, 10)
-                .expect("unambiguous sessions")
-                .sessions
-                .len(),
-            1
-        );
-    }
-}
+mod index_tests;
+#[cfg(test)]
+mod lease_tests;
+#[cfg(test)]
+mod permissions_tests;
+#[cfg(test)]
+mod storage_tests;

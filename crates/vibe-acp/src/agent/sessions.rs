@@ -138,7 +138,7 @@ where
             params["messageId"] = json!(message_id);
         }
         let fork = self
-            .call(&source, "session/fork", params)
+            .call(&source, "internal/session/fork", params)
             .await
             .map_err(invalid_request)?;
         let fork_id = fork
@@ -195,8 +195,18 @@ where
             params["cwd"] = json!(cwd);
         }
         let listed = self.with_probe(&working_directory, &[], |probe| {
-            Ok(probe.public_call("session/list", params)?)
+            Ok(probe.public_call("internal/session/list", params)?)
         })?;
+        // The marker root names the vibe home; the transcripts live where its
+        // configuration saves them.
+        let save_dir = self.session_root.as_deref().map(|root| {
+            vibe_app_server::workspace::WorkspaceService::for_runtime_session_root(
+                root,
+                &working_directory,
+            )
+            .session_root()
+            .to_path_buf()
+        });
         let text = |session: &Value, key: &str| {
             session
                 .get(key)
@@ -215,7 +225,7 @@ where
             .map(|session| {
                 let id = text(session, "id").unwrap_or_default();
                 let title = text(session, "title").or_else(|| {
-                    self.session_root
+                    save_dir
                         .as_deref()
                         .and_then(|root| vibe_app_server::startup::saved_session_preview(root, &id))
                 });

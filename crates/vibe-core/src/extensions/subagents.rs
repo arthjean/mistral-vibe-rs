@@ -171,7 +171,7 @@ impl SubagentManager {
         if request.agent.kind != AgentKind::Subagent {
             return Err(ExtensionError::AgentNotSubagent(request.agent.name));
         }
-        let parent = self.store.load(&request.parent_session_id)?;
+        let parent = self.store.open(&request.parent_session_id)?;
         let parent_depth = parent
             .metadata
             .agent_profile

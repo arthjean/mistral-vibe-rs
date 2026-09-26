@@ -13,14 +13,16 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 mod account;
 mod agents;
 mod config;
+mod internal;
 mod sessions;
-pub(crate) use sessions::{history_entry_id, reference_message_index, rewind_entry_index};
+pub(crate) use sessions::{
+    history_entry_id, reference_message_index, rewind_entry_index, runtime_attachment,
+};
 mod worktrees;
 
 use crate::builtin_agents;
@@ -51,7 +53,7 @@ use vibe_core::prompt::{
     UserResource, prepare_user_resources,
 };
 use vibe_core::skills::{SearchInputs, SkillDiscovery, search_paths, skill_summary};
-use vibe_core::storage::{HydratedSession, SessionStore, StorageError};
+use vibe_core::storage::{HydratedSession, SessionLogging, SessionStore, StorageError};
 use vibe_core::tools::config::ToolConfigResolver;
 use vibe_core::tools::descriptions::{
     DirectoryDescriptions, SearchInputs as ToolSearchInputs, search_paths as tool_search_paths,
@@ -64,14 +66,6 @@ const MISTRAL_KEY: &str = "MISTRAL_API_KEY";
 /// The levels `config/thinking/write` accepts, as the wire literal declares
 /// them.
 const THINKING_LEVELS: [&str; 5] = ["off", "low", "medium", "high", "max"];
-
-/// The page a session or history listing may ask for.
-///
-/// [`SessionStore::list`] and [`SessionStore::history`] refuse anything outside
-/// this range, so the dispatchers refuse it first and answer `invalid_params`
-/// rather than letting a storage conflict name a parameter problem.
-const SESSION_PAGE_MIN: usize = 1;
-const SESSION_PAGE_MAX: usize = 500;
 
 pub const WORKSPACE_METHODS: &[&str] = &[
     "agents/install",
@@ -86,16 +80,7 @@ pub const WORKSPACE_METHODS: &[&str] = &[
     "config/reload",
     "config/schema",
     "config/thinking/write",
-    "history/list",
     "session/agent/update",
-    "session/continue",
-    "session/delete",
-    "session/fork",
-    "session/history/clear",
-    "session/list",
-    "session/log/read",
-    "session/resume",
-    "session/title/update",
     "skills/list",
     "workspace/git/worktrees/limit/update",
     "workspace/git/worktrees/list",
@@ -187,10 +172,10 @@ pub struct WorkspaceService {
     project_trusted: bool,
     allowed_roots: Vec<PathBuf>,
     agents: Arc<Mutex<AgentRegistry>>,
-    next_session: Arc<AtomicU64>,
     persist_runtime_sessions: bool,
     /// Forks a rewind composed and no turn has written yet, by identifier.
     drafts: Arc<Mutex<BTreeMap<String, HydratedSession>>>,
+    session_logging: SessionLogging,
 }
 
 /// The `VIBE_*` variables the environment layer composes: the process
@@ -252,14 +237,38 @@ impl Default for WorkspaceService {
     fn default() -> Self {
         let working_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         let vibe_home = crate::host::vibe_home();
-        Self::build(
+        let service = Self::build(
             WorkspacePaths {
                 session_root: vibe_home.join("sessions"),
                 vibe_home,
                 working_directory,
             },
             false,
-        )
+        );
+        // Unit tests share one home across threads, and a session lease is
+        // exclusive within a process as it is across processes: each service
+        // saves under its own directory so two tests opening `session-1` do
+        // not contend for it.
+        #[cfg(test)]
+        let service = service.with_isolated_session_root();
+        service
+    }
+}
+
+#[cfg(test)]
+impl WorkspaceService {
+    fn with_isolated_session_root(mut self) -> Self {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let index = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let root = self
+            .session_logging
+            .save_dir
+            .join(format!("isolated-{}-{index}", std::process::id()));
+        self.session_logging.save_dir.clone_from(&root);
+        self.paths.session_root = root;
+        self.store = self.session_logging.store();
+        self.continuity = SessionContinuity::new(self.store.clone());
+        self
     }
 }
 
@@ -285,7 +294,7 @@ impl WorkspaceService {
         &self.paths.working_directory
     }
 
-    fn build(paths: WorkspacePaths, project_trusted: bool) -> Self {
+    fn build(mut paths: WorkspacePaths, project_trusted: bool) -> Self {
         // The Defaults layer is the shipped document at every construction
         // site: a service built without it composes a configuration the
         // reference could never produce.
@@ -325,7 +334,17 @@ impl WorkspaceService {
         for profile in builtin_agents::profiles(&paths.vibe_home) {
             registry.register_builtin(profile);
         }
-        let store = SessionStore::new(&paths.session_root);
+        // Reference `SessionLoggingConfig`: sessions go where the configuration
+        // says, under the prefix it names, whatever directory a caller guessed.
+        let session_logging = config
+            .load()
+            .map(|snapshot| SessionLogging::from_effective(&snapshot.effective, &paths.vibe_home))
+            .unwrap_or_else(|_| SessionLogging::defaults(&paths.vibe_home));
+        paths.session_root.clone_from(&session_logging.save_dir);
+        let store = session_logging.store();
+        vibe_core::storage::permissions::start_restrict_session_log_permissions(
+            &session_logging.save_dir,
+        );
         Self {
             config,
             tool_config,
@@ -337,10 +356,31 @@ impl WorkspaceService {
             allowed_roots: vec![paths.working_directory.clone()],
             paths,
             agents: Arc::new(Mutex::new(registry)),
-            next_session: Arc::new(AtomicU64::new(1)),
             persist_runtime_sessions: false,
             drafts: Arc::new(Mutex::new(BTreeMap::new())),
+            session_logging,
         }
+    }
+
+    /// The session logging this workspace was opened under.
+    #[must_use]
+    pub fn session_logging(&self) -> &SessionLogging {
+        &self.session_logging
+    }
+
+    /// Where a turn writes its transcript, or `None` when the configuration
+    /// saves no session (reference `SessionLoggingConfig.enabled`).
+    #[must_use]
+    pub fn logged_session_root(&self) -> Option<PathBuf> {
+        self.session_logging
+            .enabled
+            .then(|| self.paths.session_root.clone())
+    }
+
+    /// The directory sessions are saved under.
+    #[must_use]
+    pub fn session_root(&self) -> &Path {
+        &self.paths.session_root
     }
 
     #[must_use]
@@ -512,7 +552,7 @@ impl WorkspaceService {
 
     #[must_use]
     pub const fn persists_runtime_sessions(&self) -> bool {
-        self.persist_runtime_sessions
+        self.persist_runtime_sessions && self.session_logging.enabled
     }
 
     /// The active model's prices, which `stats/read` publishes beside the
@@ -795,6 +835,13 @@ pub enum WorkspaceServiceError {
     StatePoisoned,
     #[error("JSON conversion failed: {0}")]
     Json(#[from] serde_json::Error),
+    /// Parameters the request's model refuses, every violation under its path.
+    #[error("invalid request parameters")]
+    Rejected(Vec<vibe_protocol::InvalidParamsIssue>),
+    /// A refusal under `code` that carries no structured detail, which is how
+    /// the reference answers a check it makes by hand.
+    #[error("{1}")]
+    Refused(vibe_protocol::ProtocolErrorCode, String),
 }
 
 #[cfg(test)]

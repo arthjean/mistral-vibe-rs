@@ -29,6 +29,7 @@ use vibe_core::extensions::{
     discover_extensions,
 };
 use vibe_core::llm::completion::LlmCompletion;
+use vibe_core::llm::utility::{self, UtilitySelection};
 use vibe_core::llm::{AmbientCredentials, BackendContext, Credentials, MapCredentials};
 use vibe_core::matching::NameFilter;
 use vibe_core::mcp::{
@@ -36,7 +37,7 @@ use vibe_core::mcp::{
 };
 use vibe_core::middleware::{CompactionSettings, ContextWarningMiddleware};
 use vibe_core::policy::{PolicyGuardedTool, resolve_task_tool_permission};
-use vibe_core::provider::config::{ApiSettings, ModelConfig, ProviderConfig};
+use vibe_core::provider::config::{ApiSettings, ModelConfig, ModelRouting, ProviderConfig};
 use vibe_core::provider::{
     ProviderError, ProviderInput, RequestLimits, ToolChoice, ToolDefinition,
 };
@@ -120,6 +121,10 @@ pub struct LiveTurnDriver {
     /// and the engine borrows it for the length of each one.
     context_warnings: Mutex<HashMap<String, Arc<ContextWarningMiddleware>>>,
     event_observer: Arc<dyn EventObserver>,
+    /// What background session titles run on (reference
+    /// `select_utility_model`), when this driver's configuration has a model
+    /// to run them on.
+    titles: Option<(UtilitySelection, BackendContext)>,
 }
 
 /// The provider-bound half of compaction: it binds the core manager to this
@@ -377,6 +382,7 @@ impl LiveTurnDriver {
             pending_context: Mutex::new(HashMap::new()),
             context_warnings: Mutex::new(HashMap::new()),
             event_observer: Arc::new(NoopEventObserver),
+            titles: None,
         }
     }
 
@@ -418,6 +424,12 @@ impl LiveTurnDriver {
         if !variable.is_empty() && credentials.resolve(variable).is_none() {
             return Err(DriverError::MissingCredentialEnvironment(variable.clone()));
         }
+        let titles = title_selection(&config, credentials.as_ref()).map(|selection| {
+            (
+                selection,
+                BackendContext::ambient(config.api, credentials.clone()),
+            )
+        });
         let context = BackendContext::ambient(config.api, credentials);
         let provider = LlmCompletion::new(config.provider, config.models, config.model, context)
             .map_err(|failure| {
@@ -440,6 +452,7 @@ impl LiveTurnDriver {
             pending_context: Mutex::new(HashMap::new()),
             context_warnings: Mutex::new(HashMap::new()),
             event_observer: Arc::new(NoopEventObserver),
+            titles,
         })
     }
 
@@ -736,11 +749,9 @@ impl LiveTurnDriver {
                     .map_err(DriverError::Storage)?,
             )
         } else {
-            match store.resume(
-                &reservation.session_id,
-                &self.system_prompt,
-                BTreeMap::new(),
-            ) {
+            // The session the server opened: written already, or named and
+            // waiting for its first save.
+            match store.open(&reservation.session_id) {
                 Ok(hydrated) => Some(hydrated),
                 Err(vibe_core::storage::StorageError::SessionNotFound(_)) => None,
                 Err(error) => return Err(DriverError::Storage(error)),
@@ -831,6 +842,30 @@ fn resource_contexts(reservation: &TurnReservation) -> Vec<String> {
 }
 
 impl TurnDriver for LiveTurnDriver {
+    fn title_model_is_fast(&self) -> Option<bool> {
+        self.titles
+            .as_ref()
+            .map(|(selection, _)| selection.is_fast())
+    }
+
+    fn generate_title(
+        &self,
+        messages: Vec<ModelMessage>,
+        previous_title: Option<String>,
+    ) -> super::TitleFuture {
+        let titles = self.titles.clone();
+        Box::pin(async move {
+            let (selection, context) = titles?;
+            vibe_core::session_title::generate_session_title(
+                &messages,
+                previous_title.as_deref(),
+                &selection,
+                &context,
+            )
+            .await
+        })
+    }
+
     fn plan_directory(&self) -> Option<PathBuf> {
         self.session_root
             .as_deref()
@@ -904,7 +939,7 @@ impl TurnDriver for LiveTurnDriver {
                     crate::host::now_millis(),
                 )
                 .map_err(DriverError::Storage)?;
-            let compacted = store.load(&metadata.id).map_err(DriverError::Storage)?;
+            let compacted = store.open(&metadata.id).map_err(DriverError::Storage)?;
             Ok(SessionCompaction {
                 summary: compaction.summary,
                 hydrated: compacted,
@@ -1055,6 +1090,31 @@ impl Drop for ControlRegistration<'_> {
         }
     }
 }
+/// Reference `select_utility_model` over the provider and model this driver
+/// runs turns on.
+fn title_selection(
+    config: &LiveDriverConfig,
+    credentials: &dyn Credentials,
+) -> Option<UtilitySelection> {
+    let mut models = config.models.clone();
+    if !models
+        .iter()
+        .any(|model| model.alias == config.model || model.name == config.model)
+    {
+        models.push(ModelConfig::new(&config.model, &config.provider.name));
+    }
+    let routing = ModelRouting {
+        providers: vec![config.provider.clone()],
+        models,
+        active_alias: Some(config.model.clone()),
+        allowed_models: Vec::new(),
+        api: config.api,
+    };
+    utility::select(&routing, credentials).ok()
+}
+
+/// Where the ambient configuration saves sessions, or `None` when it saves
+/// none (reference `SessionLoggingConfig.enabled`).
 fn default_session_root() -> Option<PathBuf> {
-    Some(crate::host::vibe_home().join("sessions"))
+    crate::workspace::WorkspaceService::default().logged_session_root()
 }

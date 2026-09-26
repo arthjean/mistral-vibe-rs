@@ -16,6 +16,7 @@ mod review;
 mod runtime;
 mod session_callbacks;
 mod session_management;
+mod titles;
 mod turns;
 mod wire;
 
@@ -85,7 +86,7 @@ use vibe_core::workspace::{ReviewManager, Workspace, WorkspaceTools};
 use vibe_core::worktree::lifecycle::SessionWorktrees;
 use vibe_core::worktree::{ManagedWorktree, PreparedWorktree, naming_model};
 use vibe_protocol::{
-    CallbackKind, ClientCapabilities, Envelope, ErrorResponse, InitializeParams,
+    CallbackKind, ClientCapabilities, ClientEntrypoint, Envelope, ErrorResponse, InitializeParams,
     InitializeResponse, InvalidParamsData, InvalidParamsIssue, JsonRpcVersion, Notification,
     PathSegment, ProtocolError, ProtocolErrorCode, ProtocolVersion, RequestId, ServerCapabilities,
     ServerInfo, ServerRequest, SuccessResponse, TransportKind, decode_frame, encode_frame,
@@ -179,6 +180,34 @@ pub(crate) fn notification_method(method: &str) -> &str {
     method
 }
 
+/// The namespace this port's own in-process clients address the session
+/// shapes they predate the reference surface with (`workspace/internal.rs`).
+///
+/// A method under it is answered only over [`TransportKind::InProcess`]: it is
+/// neither declared nor advertised, and a stdio client naming one is refused
+/// as for any unknown method.
+pub const INTERNAL_METHOD_PREFIX: &str = "internal/";
+
+/// The methods [`INTERNAL_METHOD_PREFIX`] reaches, by the name the workspace
+/// service dispatches them under.
+const INTERNAL_METHODS: &[&str] = &[
+    "history/list",
+    "session/continue",
+    "session/delete",
+    "session/fork",
+    "session/history/clear",
+    "session/list",
+    "session/log/read",
+    "session/resume",
+    "session/title/update",
+];
+
+/// The workspace method an in-process `method` addresses, if it names one.
+pub(crate) fn internal_method(transport: TransportKind, method: &str) -> Option<&str> {
+    let method = method.strip_prefix(INTERNAL_METHOD_PREFIX)?;
+    (transport == TransportKind::InProcess && INTERNAL_METHODS.contains(&method)).then_some(method)
+}
+
 const IMPLEMENTED_METHODS: &[&str] = &[
     "account/read",
     "callback/respond",
@@ -214,14 +243,28 @@ const IMPLEMENTED_METHODS: &[&str] = &[
     "session/close",
     "session/compact/start",
     "session/context/inject",
+    "session/continue",
+    "session/delete",
+    "session/fork",
+    "session/history/clear",
+    "session/history/get",
+    "session/history/list",
+    "session/list",
+    "session/log/read",
     "session/overrides/write",
+    "session/pin",
     "session/read",
     "session/ready/read",
     "session/ready/wait",
+    "session/relocate",
+    "session/rename",
+    "session/resume",
     "session/rewind",
     "session/rewind/read",
     "session/settings/update",
     "session/start",
+    "session/title/update",
+    "session/turns/list",
     "shell/interrupt",
     "shell/run",
     "stats/read",
@@ -486,6 +529,9 @@ pub struct AppServer {
     next_turn: Arc<AtomicU64>,
     next_callback: Arc<AtomicU64>,
     next_entry: Arc<AtomicU64>,
+    /// The sessions this process holds open, each under the lease that keeps a
+    /// second process from opening it too (reference `SessionLease`).
+    leases: Arc<Mutex<BTreeMap<String, vibe_core::storage::lease::SessionLease>>>,
 }
 
 impl Default for AppServer {
@@ -528,6 +574,7 @@ impl Default for AppServer {
             next_turn: Arc::new(AtomicU64::new(1)),
             next_callback: Arc::new(AtomicU64::new(1)),
             next_entry: Arc::new(AtomicU64::new(1)),
+            leases: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 }
@@ -681,6 +728,8 @@ impl AppServer {
             transport,
             capabilities: ClientCapabilities::default(),
             attached_sessions: BTreeSet::new(),
+            root: None,
+            entrypoint: ClientEntrypoint::Unknown,
             pending_server_requests: HashMap::new(),
         }
     }
@@ -898,8 +947,10 @@ fn object(value: Value) -> BTreeMap<String, Value> {
         .unwrap_or_default()
 }
 
-fn generated_session_id(sequence: u64) -> String {
-    format!("session-{}-{sequence}", now_millis())
+/// Reference `uuid4()`: a new session is named by a random UUID, whose first
+/// eight characters also name its directory.
+fn generated_session_id(_sequence: u64) -> String {
+    vibe_core::session_id::uuid_v4()
 }
 
 #[cfg(test)]

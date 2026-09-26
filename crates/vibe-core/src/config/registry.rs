@@ -425,7 +425,8 @@ const SESSION_LOGGING: &str = r#"{
     "properties": {
         "save_dir": {"type": "string"},
         "session_prefix": {"type": "string"},
-        "enabled": {"type": "boolean"}
+        "enabled": {"type": "boolean"},
+        "generate_titles": {"type": "boolean"}
     }
 }"#;
 
@@ -543,7 +544,7 @@ const DEFAULT_PROJECT_CONTEXT: &str = r#"{"default_commit_count": 5, "timeout_se
 /// `save_dir` is empty in the declaration and resolved under the vibe home when
 /// the configuration loads, as the reference resolves it from `SESSION_LOG_DIR`.
 const DEFAULT_SESSION_LOGGING: &str =
-    r#"{"save_dir": "", "session_prefix": "session", "enabled": true}"#;
+    r#"{"save_dir": "", "session_prefix": "session", "enabled": true, "generate_titles": false}"#;
 
 const DEFAULT_EXPERIMENTS: &str = r#"{
     "enable": true,

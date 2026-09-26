@@ -82,10 +82,21 @@ impl ServerConnection {
             completed_at: None,
             error: None,
             stop_reason: None,
+            queue_item_id: None,
         };
         session.record_turn(turn.clone());
         session.bumped_at = Some(started_at);
         session.updated_at = started_at;
+        // Reference `persist_bumped_at`: the accepted turn is recorded with the
+        // session, written or not, so a listing orders by it after a restart.
+        if self.server.workspace.persists_runtime_sessions() {
+            let store = self.server.workspace.session_store();
+            if let Ok(mut hydrated) = store.open(&canonical_session_id) {
+                store
+                    .persist_bumped_at(&mut hydrated.metadata, started_at)
+                    .map_err(|error| ProtocolFault::internal(error.to_string()))?;
+            }
+        }
         let mut outbound = vec![success_bytes(
             request.id,
             result_map([("turn", json!(turn))]),
@@ -274,6 +285,7 @@ impl ServerConnection {
             completed_at: Some(completed_at),
             error: None,
             stop_reason: None,
+            queue_item_id: None,
         });
         session.updated_at = completed_at;
         cancel_pending_callback(session, "Turn was interrupted");

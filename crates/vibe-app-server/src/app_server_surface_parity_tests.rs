@@ -128,28 +128,8 @@ const UNDECLARED_METHODS: &[(&str, &str)] = &[
         "v2.25.7 declares it at vibe/app_server/protocol.py:154 and routes it at vibe/app_server/plugin_catalog.py:72; SERVER_METHODS does not declare it and nothing here routes it",
     ),
     (
-        "session/history/get",
-        "v2.25.7 declares it at vibe/app_server/protocol.py:131 and routes it at vibe/app_server/_host.py:288; SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
         "session/compact",
         "v2.25.7 declares it at vibe/app_server/protocol.py:172 and routes it at vibe/app_server/_handler.py:530; SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
-        "session/history/list",
-        "v2.25.7 declares it at vibe/app_server/protocol.py:178 and routes it at vibe/app_server/_handler.py:541; SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
-        "session/pin",
-        "v2.25.7 declares it at vibe/app_server/protocol.py:181 and routes it at vibe/app_server/server.py:878; SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
-        "session/relocate",
-        "v2.25.7 declares it at vibe/app_server/protocol.py:185 and routes it at vibe/app_server/_handler.py:491; SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
-        "session/rename",
-        "v2.25.7 declares it at vibe/app_server/protocol.py:186 and routes it at vibe/app_server/_handler.py:524; SERVER_METHODS does not declare it and nothing here routes it",
     ),
     (
         "session/shellCommand",
@@ -158,10 +138,6 @@ const UNDECLARED_METHODS: &[(&str, &str)] = &[
     (
         "session/stop",
         "v2.25.7 declares it at vibe/app_server/protocol.py:193 and routes it at vibe/app_server/_handler.py:637; SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
-        "session/turns/list",
-        "v2.25.7 declares it at vibe/app_server/protocol.py:195 and routes it at vibe/app_server/_handler.py:547; SERVER_METHODS does not declare it and nothing here routes it",
     ),
     (
         "skills/catalog",
@@ -244,7 +220,7 @@ const UNDECLARED_METHODS: &[(&str, &str)] = &[
 /// Methods `SERVER_METHODS` declares and routes that the reference retired,
 /// each with what the reference did instead.
 ///
-/// All six were in the v2.24.0 inventory and are absent from the v2.25.7 one
+/// All five were in the v2.24.0 inventory and are absent from the v2.25.7 one
 /// (`vibe/app_server/protocol.py:105-242` at 4a96003). A method this build stops
 /// declaring while listed here fails the replay as a stale entry.
 const RETIRED_METHODS: &[(&str, &str)] = &[
@@ -259,10 +235,6 @@ const RETIRED_METHODS: &[(&str, &str)] = &[
     (
         "config/thinking/write",
         "v2.25.7 retired it from the inventory (v2.24.0 protocol.py:95) and deleted ConfigThinkingWriteParams; this port still declares and routes config/thinking/write",
-    ),
-    (
-        "history/list",
-        "v2.25.7 retired it from the inventory (v2.24.0 protocol.py:103) and deleted HistoryListParams and HistoryListResponse; the reference pages history through session/history/list (vibe/app_server/_handler.py:541); this port still declares and routes history/list",
     ),
     (
         "session/close",
@@ -368,10 +340,6 @@ const DIVERGENT_RESPONSES: &[(&str, &str)] = &[
     (
         "runtime/read",
         "US-142 and v2.25.7: /runtime/config diverges exactly as config/read's /config does (vibe/app_server/config.py:18,59-82); /runtime/baseConfig is no longer declared by RuntimeSnapshot (vibe/app_server/protocol.py:799)",
-    ),
-    (
-        "session/list",
-        "v2.25.7: SessionListResponse answers items, nextCursor, previousCursor and continueSessionId (vibe/app_server/protocol.py:496-503); this port still answers /sessions",
     ),
 ];
 

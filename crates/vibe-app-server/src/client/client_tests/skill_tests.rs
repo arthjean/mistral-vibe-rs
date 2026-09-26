@@ -346,14 +346,10 @@ async fn run_task_probe(
     let driver = LiveTurnDriver::from_provider_for_tests(provider.clone(), "system")
         .with_session_root_for_tests(sessions.map(Path::to_path_buf));
     let resume = sessions.map(|root| {
-        SessionStore::new(root)
-            .create(
-                "persisted-root",
-                &working_directory.to_string_lossy(),
-                None,
-                1,
-            )
-            .expect("durable parent");
+        save_parent(
+            &SessionStore::new(root),
+            &working_directory.to_string_lossy(),
+        );
         "persisted-root".to_owned()
     });
     let (tools, approval) = guarded_registry(settings, decision);
@@ -607,9 +603,8 @@ async fn a_subagent_publishes_task_and_is_refused_a_second_level_at_call_time() 
     // parent is the one the top-level call started.
     assert_eq!(
         SessionStore::new(temporary.path())
-            .list(None, 0, 10)
+            .sessions(None)
             .expect("the sessions list")
-            .sessions
             .iter()
             .filter(|session| session.parent_session_id.as_deref() == Some("persisted-root"))
             .count(),
@@ -632,14 +627,7 @@ async fn live_task_tool_runs_a_durable_child_session_through_the_provider() {
     let driver = LiveTurnDriver::from_provider_for_tests(provider.clone(), "system")
         .with_session_root_for_tests(Some(temporary.path().to_path_buf()));
     let store = SessionStore::new(temporary.path());
-    store
-        .create(
-            "persisted-root",
-            &temporary.path().to_string_lossy(),
-            None,
-            1,
-        )
-        .expect("durable parent");
+    save_parent(&store, &temporary.path().to_string_lossy());
     // The child inherits the parent's surface, so the guard the session's
     // builtin registration installs is what `task` is published behind here
     // too; `explore` is allowlisted by default, so nothing is asked.
@@ -738,16 +726,15 @@ async fn live_task_tool_runs_a_durable_child_session_through_the_provider() {
             .child_inherited_restrictions
             .load(Ordering::Acquire)
     );
-    let page = store.list(None, 0, 10).expect("sessions list");
-    assert_eq!(page.sessions.len(), 2);
+    let page = store.sessions(None).expect("sessions list");
+    assert_eq!(page.len(), 2);
     let child = page
-        .sessions
         .iter()
         .find(|session| session.parent_session_id.as_deref() == Some("persisted-root"))
         .expect("child session");
     assert_eq!(
         store
-            .load(&child.id)
+            .load(&child.session_id)
             .expect("child hydrates")
             .messages
             .iter()
@@ -772,4 +759,15 @@ async fn live_task_tool_runs_a_durable_child_session_through_the_provider() {
             .id,
         "persisted-root"
     );
+}
+
+/// Writes the parent a turn resumes: a session reaches disk with its first
+/// message, and only a saved session can be resumed.
+fn save_parent(store: &SessionStore, working_directory: &str) {
+    let mut metadata = store
+        .create("persisted-root", working_directory, None, 1)
+        .expect("durable parent");
+    store
+        .append_message(&mut metadata, &ModelMessage::user("earlier"), 1)
+        .expect("the parent is saved");
 }

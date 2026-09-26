@@ -504,6 +504,7 @@ async fn run_turn<D>(
             }
         }
     }
+    let settled = outcome.is_ok();
     let notification = match outcome {
         Ok(outcome) => {
             let stop_reason = matches!(
@@ -528,7 +529,21 @@ async fn run_turn<D>(
             public_driver_error(&error),
         ),
     };
+    let title = (settled && notification.is_ok())
+        .then(|| driver.title_model_is_fast())
+        .flatten()
+        .and_then(|periodic| server.title_job(&reservation.session_id, periodic));
     let _ = events.send(settle(notification));
+    // The title is generated after the turn is settled, so the client never
+    // waits on it (reference `_generate_title_task`).
+    if let Some(job) = title {
+        let title = driver
+            .generate_title(job.messages.clone(), job.previous_title.clone())
+            .await;
+        for frame in server.land_title(job, title) {
+            let _ = events.send(ServeEvent::Frame(frame));
+        }
+    }
 }
 
 /// Something the serve loop must act on once background work reports back.
