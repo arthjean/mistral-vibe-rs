@@ -45,7 +45,10 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts" / "parity"))
 
-from pin import EXPECTED_COMMIT  # noqa: E402  the path insert above enables it
+from pin import (  # noqa: E402  the path insert above enables it
+    DEFAULT_REFERENCE,
+    EXPECTED_COMMIT,
+)
 
 SOURCE_FILES = [
     "vibe/app_server/_patch.py",
@@ -472,7 +475,7 @@ async def capture() -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--reference", type=Path, default=Path("/home/arthur/dev/mistral-vibe"))
+    parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
     parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
     parser.add_argument("--output", type=Path, default=None)
     arguments = parser.parse_args()

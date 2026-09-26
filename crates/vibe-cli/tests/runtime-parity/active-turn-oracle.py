@@ -20,12 +20,16 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import time
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts" / "parity"))
 
-from pin import EXPECTED_COMMIT  # noqa: E402  the path insert above enables it
+from pin import (  # noqa: E402  the path insert above enables it
+    DEFAULT_REFERENCE,
+    EXPECTED_COMMIT,
+)
 
 # The approval fixture the corpus replays: one shell effect carrying a command
 # and one required permission.
@@ -655,10 +659,12 @@ async def capture(workdir: Path) -> dict[str, list[str]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--reference", type=Path, default=Path("/home/arthur/dev/mistral-vibe"))
+    parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
     parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
     parser.add_argument("--output", type=Path, default=None)
-    parser.add_argument("--workdir", type=Path, default=Path("/tmp/active-turn-oracle"))
+    parser.add_argument(
+        "--workdir", type=Path, default=Path(tempfile.gettempdir()) / "active-turn-oracle"
+    )
     arguments = parser.parse_args()
 
     commit = resolve_reference(arguments.reference, arguments.expected_commit)
