@@ -740,6 +740,7 @@ class Normalizer:
             if len(original) >= 8:
                 value = value.replace(original, placeholder)
         value = UUID.sub(lambda match: self.identity(match.group(0)), value)
+        value = acp.APPROX_CHARS.sub(r"\1<n>", value)
         return value
 
     def prose(self, value: str) -> Any:
