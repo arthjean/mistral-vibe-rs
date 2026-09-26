@@ -135,7 +135,11 @@ def reexecute_with_reference_interpreter(reference: Path, interpreter: Path | No
         return
     except ImportError:
         pass
-    candidate = interpreter or reference / ".venv/bin/python"
+    candidates = [interpreter] if interpreter else [
+        reference / ".venv/bin/python",
+        reference / ".venv/Scripts/python.exe",
+    ]
+    candidate = next((c for c in candidates if c.is_file()), candidates[0])
     if not candidate.is_file():
         raise OracleError(
             f"cannot import `vibe` and no reference interpreter at {candidate}"

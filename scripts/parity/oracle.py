@@ -254,7 +254,11 @@ def main(argv: list[str]) -> int:
 
     reference = arguments.reference.resolve()
     if not reference_environment_available():
-        interpreter = arguments.python or (reference / ".venv/bin/python")
+        candidates = [arguments.python] if arguments.python else [
+            reference / ".venv/bin/python",
+            reference / ".venv/Scripts/python.exe",
+        ]
+        interpreter = next((c for c in candidates if c.is_file()), candidates[0])
         if not interpreter.is_file():
             raise OracleError(
                 "reference Python environment is unavailable; pass --python with an "
