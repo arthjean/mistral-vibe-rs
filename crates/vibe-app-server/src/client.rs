@@ -119,6 +119,7 @@ pub trait TurnDriver: Send + Sync {
     fn compact<'a>(
         &'a self,
         _session_id: &'a str,
+        _working_directory: &'a str,
         _extra_instructions: &'a str,
     ) -> CompactionDriverFuture<'a> {
         Box::pin(async { Err(DriverError::UnsupportedControl("session/compact/start")) })
@@ -461,7 +462,7 @@ pub enum ProgrammaticUpdate {
 }
 
 const MAX_PROGRAMMATIC_UPDATES: usize = 1_024;
-const MAX_INTERACTIVE_CALLBACKS: usize = 8;
+pub(crate) const MAX_INTERACTIVE_CALLBACKS: usize = 8;
 const MAX_INTERACTIVE_QUESTIONS: usize = 16;
 const MAX_INTERACTIVE_OPTIONS_PER_QUESTION: usize = 32;
 const MAX_INTERACTIVE_REQUEST_BYTES: usize = 64 * 1_024;

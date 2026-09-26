@@ -148,6 +148,7 @@ fn stale_mutations_and_duplicate_callbacks_leave_runtime_unchanged() {
             "approve?",
         )
         .expect("callback request");
+    let callback_id_value = callback_id.clone();
     assert_eq!(
         server
             .lock_sessions()
@@ -155,7 +156,8 @@ fn stale_mutations_and_duplicate_callbacks_leave_runtime_unchanged() {
             .get("session-1")
             .expect("session")
             .event_watermark,
-        event_id_before_callback + 1
+        // The callback entry, then the blocked session.
+        event_id_before_callback + 2
     );
     let callback_request = decode_frame(callback_request.last().expect("callback delivery"))
         .expect("callback request frame");
@@ -207,7 +209,7 @@ fn stale_mutations_and_duplicate_callbacks_leave_runtime_unchanged() {
             .get("session-1")
             .expect("session")
             .event_watermark,
-        event_id_before_callback + 2
+        event_id_before_callback + 3
     );
     let after = server.session("session-1").expect("resolved session");
     assert!(after.snapshot.as_ref().is_some_and(|snapshot| {
@@ -225,7 +227,7 @@ fn stale_mutations_and_duplicate_callbacks_leave_runtime_unchanged() {
                         output: CallbackOutput::Approval { decision, feedback }
                     },
                     ..
-                } if callback_id == "callback-1"
+                } if *callback_id == callback_id_value
                     && decision.decision == ApprovalDecisionType::Approve
                     && feedback.as_deref() == Some("keep the scope tight")
             )
@@ -236,7 +238,7 @@ fn stale_mutations_and_duplicate_callbacks_leave_runtime_unchanged() {
         "callback/respond",
         json!({
             "sessionId": "session-1",
-            "callbackId": "callback-1",
+            "callbackId": callback_id,
             "output": {
                 "type": "approval",
                 "decision": {"type": "approve"},
@@ -279,7 +281,7 @@ fn stale_mutations_and_duplicate_callbacks_leave_runtime_unchanged() {
                         callback_id,
                         state: PublicCallbackState::Answered { .. },
                         ..
-                    } if callback_id == "callback-1"
+                    } if *callback_id == callback_id_value
                 )
             })
     }));
@@ -323,39 +325,19 @@ fn rejected_callback_delivery_cancels_the_owned_turn_once() {
     let batch = connection.dispatch(&rejection);
     assert_eq!(
         batch.deferred,
-        vec![
-            DeferredWork::ResolveCallback {
-                session_id: "session-1".to_owned(),
-                turn_id: "turn-1".to_owned(),
-                callback_id: "callback-1".to_owned(),
-                accepted: false,
-                value: Some("Client did not accept callback delivery".to_owned()),
-            },
-            DeferredWork::InterruptTurn {
-                session_id: "session-1".to_owned(),
-                turn_id: "turn-1".to_owned(),
-            },
-        ]
+        vec![DeferredWork::ResolveCallback {
+            session_id: "session-1".to_owned(),
+            turn_id: "turn-1".to_owned(),
+            callback_id: callback_id.clone(),
+            accepted: false,
+            value: Some("Client did not accept callback delivery".to_owned()),
+        },]
     );
-    let session = server.session("session-1").expect("cancelled session");
-    assert_eq!(session.status, SessionStatus::Cancelled);
+    // Reference `reject_callback`: the refusal settles the callback and the
+    // turn ends as failed once it stops, so nothing is published yet.
+    assert!(batch.outbound.is_empty());
+    let session = server.session("session-1").expect("session");
     assert_eq!(session.pending_callback, None);
-    assert!(session.snapshot.as_ref().is_some_and(|snapshot| {
-        snapshot.history.iter().any(|entry| {
-            matches!(
-                entry,
-                PublicHistoryEntry::Callback {
-                    metadata:
-                        PublicEntryMetadata {
-                            generation_status: PublicEntryGenerationStatus::Completed,
-                            ..
-                        },
-                    state: PublicCallbackState::Cancelled { reason },
-                    ..
-                } if reason == "Client did not accept callback delivery"
-            )
-        })
-    }));
 
     let duplicate = connection.dispatch(&rejection);
     assert!(duplicate.close_after_flush);
@@ -402,7 +384,7 @@ fn cancelled_user_input_is_answered_without_interrupting_the_turn() {
         "callback/respond",
         json!({
             "sessionId": "session-1",
-            "callbackId": "callback-1",
+            "callbackId": callback_id,
             "output": {
                 "type": "user_input",
                 "result": {"answers": [], "cancelled": true}
@@ -414,7 +396,7 @@ fn cancelled_user_input_is_answered_without_interrupting_the_turn() {
         vec![DeferredWork::ResolveCallback {
             session_id: "session-1".to_owned(),
             turn_id: "turn-1".to_owned(),
-            callback_id: "callback-1".to_owned(),
+            callback_id: callback_id.clone(),
             accepted: true,
             value: Some(
                 json!({
@@ -459,7 +441,7 @@ fn approval_denial_is_answered_and_only_cancel_turn_interrupts() {
         json!({"sessionId": "session-1", "message": [{"type": "text", "text": "hello"}]}),
     ));
 
-    connection
+    let (callback_id_value, _) = connection
         .request_callback(
             "session-1",
             "turn-1",
@@ -472,7 +454,7 @@ fn approval_denial_is_answered_and_only_cancel_turn_interrupts() {
         "callback/respond",
         json!({
             "sessionId": "session-1",
-            "callbackId": "callback-1",
+            "callbackId": callback_id_value,
             "output": {
                 "type": "approval",
                 "decision": {"type": "deny"}
@@ -484,7 +466,7 @@ fn approval_denial_is_answered_and_only_cancel_turn_interrupts() {
         vec![DeferredWork::ResolveCallback {
             session_id: "session-1".to_owned(),
             turn_id: "turn-1".to_owned(),
-            callback_id: "callback-1".to_owned(),
+            callback_id: callback_id_value.clone(),
             accepted: true,
             value: Some(
                 json!({
@@ -507,13 +489,13 @@ fn approval_denial_is_answered_and_only_cancel_turn_interrupts() {
                         output: CallbackOutput::Approval { decision, .. }
                     },
                     ..
-                } if callback_id == "callback-1"
+                } if *callback_id == callback_id_value
                     && decision.decision == ApprovalDecisionType::Deny
             )
         })
     }));
 
-    connection
+    let (second_id, _) = connection
         .request_callback(
             "session-1",
             "turn-1",
@@ -526,7 +508,7 @@ fn approval_denial_is_answered_and_only_cancel_turn_interrupts() {
         "callback/respond",
         json!({
             "sessionId": "session-1",
-            "callbackId": "callback-2",
+            "callbackId": second_id,
             "output": {
                 "type": "approval",
                 "decision": {"type": "cancel_turn"}
@@ -539,7 +521,7 @@ fn approval_denial_is_answered_and_only_cancel_turn_interrupts() {
             DeferredWork::ResolveCallback {
                 session_id: "session-1".to_owned(),
                 turn_id: "turn-1".to_owned(),
-                callback_id: "callback-2".to_owned(),
+                callback_id: second_id.clone(),
                 accepted: true,
                 value: Some(
                     json!({
@@ -568,7 +550,7 @@ fn approval_denial_is_answered_and_only_cancel_turn_interrupts() {
                         callback_id,
                         state: PublicCallbackState::Answered { .. },
                         ..
-                    } if callback_id == "callback-2"
+                    } if *callback_id == second_id
                 )
             }))
     );
@@ -585,7 +567,7 @@ fn answered_delivery_ignores_a_late_negative_acknowledgment() {
         "turn/start",
         json!({"sessionId": "session-1", "message": [{"type": "text", "text": "hello"}]}),
     ));
-    let (_, first_delivery) = connection
+    let (first_id, first_delivery) = connection
         .request_callback(
             "session-1",
             "turn-1",
@@ -604,14 +586,14 @@ fn answered_delivery_ignores_a_late_negative_acknowledgment() {
         "callback/respond",
         json!({
             "sessionId": "session-1",
-            "callbackId": "callback-1",
+            "callbackId": first_id,
             "output": {
                 "type": "approval",
                 "decision": {"type": "approve"}
             }
         }),
     ));
-    connection
+    let (second_id, _) = connection
         .request_callback(
             "session-1",
             "turn-1",
@@ -623,10 +605,7 @@ fn answered_delivery_ignores_a_late_negative_acknowledgment() {
     let late_rejection = encode_frame(&Envelope::Success(SuccessResponse {
         jsonrpc: JsonRpcVersion::V2,
         id: first_request_id,
-        result: result_map([
-            ("callbackId", json!("callback-1")),
-            ("accepted", json!(false)),
-        ]),
+        result: result_map([("callbackId", json!(first_id)), ("accepted", json!(false))]),
     }));
     assert_eq!(connection.dispatch(&late_rejection), DispatchBatch::empty());
     assert_eq!(connection.state(), ConnectionState::Ready);
@@ -635,7 +614,7 @@ fn answered_delivery_ignores_a_late_negative_acknowledgment() {
             .session("session-1")
             .expect("session")
             .pending_callback,
-        Some("callback-2".to_owned())
+        Some(second_id)
     );
 }
 
@@ -784,7 +763,7 @@ fn callback_requests_and_answers_are_validated_before_mutation() {
         );
     }
 
-    connection
+    let (callback_id, _) = connection
         .request_callback(
             "session-1",
             "turn-1",
@@ -828,7 +807,7 @@ fn callback_requests_and_answers_are_validated_before_mutation() {
             "callback/respond",
             json!({
                 "sessionId": "session-1",
-                "callbackId": "callback-1",
+                "callbackId": callback_id,
                 "output": output,
             }),
         ));
@@ -886,7 +865,7 @@ fn final_handoff_preserves_prior_turn_history_and_rebinds_callbacks() {
         "turn/start",
         json!({"sessionId": "session-1", "message": [{"type": "text", "text": "second"}]}),
     ));
-    connection
+    let (callback_id, _) = connection
         .request_callback(
             "session-1",
             "turn-2",
@@ -899,7 +878,7 @@ fn final_handoff_preserves_prior_turn_history_and_rebinds_callbacks() {
         "callback/respond",
         json!({
             "sessionId": "session-1",
-            "callbackId": "callback-1",
+            "callbackId": callback_id,
             "output": {
                 "type": "approval",
                 "decision": {"type": "approve"}
@@ -966,7 +945,7 @@ fn malformed_callback_outputs_fail_closed_without_settling_state() {
         "turn/start",
         json!({"sessionId": "session-1", "message": [{"type": "text", "text": "hello"}]}),
     ));
-    let (_, callback_request) = connection
+    let (callback_id, callback_request) = connection
         .request_callback(
             "session-1",
             "turn-1",
@@ -984,7 +963,7 @@ fn malformed_callback_outputs_fail_closed_without_settling_state() {
         jsonrpc: JsonRpcVersion::V2,
         id: request_id,
         result: result_map([
-            ("callbackId", json!("callback-1")),
+            ("callbackId", json!(callback_id)),
             ("accepted", json!(true)),
         ]),
     }));
@@ -1024,7 +1003,7 @@ fn malformed_callback_outputs_fail_closed_without_settling_state() {
             "callback/respond",
             json!({
                 "sessionId": "session-1",
-                "callbackId": "callback-1",
+                "callbackId": callback_id,
                 "output": output,
             }),
         ));

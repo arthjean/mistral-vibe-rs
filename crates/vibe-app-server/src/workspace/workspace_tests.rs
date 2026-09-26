@@ -1575,12 +1575,10 @@ fn app_server_advertises_and_dispatches_workspace_resources() {
     let Envelope::Success(response) = response else {
         return;
     };
-    assert!(
-        response.result["capabilities"]["methods"]
-            .as_array()
-            .expect("methods")
-            .contains(&json!("config/schema"))
-    );
+    // The reference handshake names the server and advertises no method
+    // list, so what is routed is read from the inventory instead.
+    assert!(response.result.contains_key("serverInfo"));
+    assert!(crate::server::routed_methods().contains("config/schema"));
     connection.dispatch(br#"{"jsonrpc":"2.0","method":"initialized","params":{}}"#);
     let resume = connection.dispatch(
         br#"{"jsonrpc":"2.0","id":2,"method":"session/resume","params":{"sessionId":"saved"}}"#,

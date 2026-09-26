@@ -109,10 +109,15 @@ where
     fn compact<'a>(
         &'a self,
         session_id: &'a str,
+        working_directory: &'a str,
         extra_instructions: &'a str,
     ) -> CompactionDriverFuture<'a> {
         let driver = self.resolve().cloned();
-        Box::pin(async move { driver?.compact(session_id, extra_instructions).await })
+        Box::pin(async move {
+            driver?
+                .compact(session_id, working_directory, extra_instructions)
+                .await
+        })
     }
 
     fn title_model_is_fast(&self) -> Option<bool> {

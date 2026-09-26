@@ -1425,7 +1425,7 @@ fn scheduled_loops_are_owned_persistent_and_retry_safe() {
             "loops/delete",
             &params(json!({"sessionId": "another", "loopId": loop_id}))
         ),
-        Err(ProjectsServiceError::NotFound(_))
+        Err(ProjectsServiceError::Loop(_))
     ));
 }
 

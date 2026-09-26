@@ -52,6 +52,26 @@ pub enum TerminalEmulator {
     WindowsTerminal,
 }
 
+impl TerminalEmulator {
+    /// Every value, in the order the reference declares them
+    /// (`vibe/utils/terminal.py`), which puts `unknown` last.
+    pub const ALL: [Self; 13] = [
+        Self::Vscode,
+        Self::VscodeInsiders,
+        Self::Cursor,
+        Self::Jetbrains,
+        Self::AppleTerminal,
+        Self::Iterm2,
+        Self::Wezterm,
+        Self::Ghostty,
+        Self::Alacritty,
+        Self::Kitty,
+        Self::Hyper,
+        Self::WindowsTerminal,
+        Self::Unknown,
+    ];
+}
+
 /// Identity the client declares during `initialize`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -152,41 +172,17 @@ pub enum TransportKind {
     Stdio,
 }
 
-/// What the server offers, reported during `initialize`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct ServerCapabilities {
-    /// Methods this build actually routes, a subset of
-    /// [`SERVER_METHODS`](crate::SERVER_METHODS).
-    #[serde(default)]
-    pub methods: Vec<String>,
-    /// Callback kinds this build can raise.
-    #[serde(default)]
-    pub callback_kinds: Vec<CallbackKind>,
-    /// Transport carrying this connection.
-    #[serde(default)]
-    pub transports: Vec<TransportKind>,
-}
-
-/// The only contract version this crate describes.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ProtocolVersion {
-    /// Serializes as `"1"`.
-    #[default]
-    #[serde(rename = "1")]
-    V1,
-}
-
 /// Result of the `initialize` request.
+///
+/// Reference `InitializeResponse` (`vibe/app_server/_connection_protocol.py`)
+/// carries the server's identity and nothing else, and the reference client
+/// validates it with unknown fields forbidden, so a field added here would make
+/// that client refuse the handshake.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct InitializeResponse {
     /// Who answered.
     pub server_info: ServerInfo,
-    /// Contract version spoken by the server.
-    pub protocol_version: ProtocolVersion,
-    /// What the server offers.
-    pub capabilities: ServerCapabilities,
 }
 
 #[cfg(test)]

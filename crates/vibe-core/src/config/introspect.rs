@@ -5,6 +5,8 @@
 //! addresses it by, the per-layer values behind it and whether the reference
 //! surfaces it first. Reference `vibe/app_server/_config_introspect.py`.
 
+use std::collections::BTreeMap;
+
 use serde::Serialize;
 use serde_json::Value as JsonValue;
 
@@ -45,6 +47,9 @@ pub struct ConfigFieldView {
     pub path: String,
     pub popular: bool,
     pub enum_choices: Vec<&'static str>,
+    /// Display labels for enum values. Reference `ConfigFieldWire.value_labels`
+    /// (`vibe/app_server/protocol.py:917`), which no field fills at the pin.
+    pub value_labels: BTreeMap<String, String>,
     /// Highest priority first, ending with the defaults layer.
     pub layer_values: Vec<ConfigLayerValue>,
 }
@@ -72,6 +77,7 @@ pub fn describe_fields(snapshot: &ConfigSnapshot) -> Vec<ConfigFieldView> {
             path: JsonPointer::from_segments([spec.name]).as_str().to_owned(),
             popular: spec.popular,
             enum_choices: spec.choices.to_vec(),
+            value_labels: BTreeMap::new(),
             layer_values: layer_values(snapshot, spec.name, spec.default),
         })
         .collect()

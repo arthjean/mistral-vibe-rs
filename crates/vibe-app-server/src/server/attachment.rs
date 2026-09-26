@@ -315,9 +315,106 @@ impl AppServer {
             let account = self.workspace.read_account().await;
             return success_batch(request_id, result_map([("account", account)]));
         }
+        if method.starts_with("connector_catalog/") || method.starts_with("connectors/") {
+            let mut params = params;
+            let root = params
+                .remove(CONNECTION_ROOT_PARAM)
+                .and_then(|root| root.as_str().map(str::to_owned));
+            return self
+                .execute_connector_call(request_id, &method, &params, root)
+                .await;
+        }
+        if method == "skills/catalog" {
+            let catalog = self.workspace.skills_catalog().await;
+            return success_batch(
+                request_id,
+                catalog
+                    .as_object()
+                    .cloned()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect(),
+            );
+        }
+        if method == "skills/updates" {
+            let updates = self.workspace.skills_updates().await;
+            return success_batch(
+                request_id,
+                updates
+                    .as_object()
+                    .cloned()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect(),
+            );
+        }
+        if method == "skills/versions" {
+            let skill_id = params
+                .get("skillId")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            let versions = self.workspace.skills_versions(skill_id).await;
+            return success_batch(request_id, object(versions));
+        }
+        if method == "skills/detail" {
+            let skill_id = params
+                .get("skillId")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            let version = params.get("version").and_then(Value::as_i64);
+            let detail = self.workspace.skills_detail(skill_id, version).await;
+            return success_batch(request_id, object(detail));
+        }
+        if crate::server::connection::SKILLS_MUTATIONS.contains(&method.as_str()) {
+            return self
+                .skills_mutation_batch(request_id, &method, params)
+                .await;
+        }
+        if method == "identity/read" {
+            let identity = self.workspace.read_identity().await;
+            return success_batch(request_id, result_map([("identity", identity)]));
+        }
         match self.projects.dispatch_deferred(&method, &params).await {
             Ok(dispatch) => projects_dispatch_batch(request_id, dispatch),
             Err(error) => projects_error_batch(request_id, error),
+        }
+    }
+
+    /// A skills mutation answered with the runtime it produced, then
+    /// published as `runtime/updated` (reference `SkillsController`).
+    async fn skills_mutation_batch(
+        &self,
+        request_id: RequestId,
+        method: &str,
+        mut params: BTreeMap<String, Value>,
+    ) -> DispatchBatch {
+        let root = params
+            .remove(CONNECTION_ROOT_PARAM)
+            .and_then(|root| root.as_str().map(str::to_owned))
+            .unwrap_or_default();
+        let params = params.into_iter().collect::<serde_json::Map<_, _>>();
+        let converted = match self.workspace.skills_mutation(method, &params).await {
+            Ok(converted) => converted,
+            Err((code, message)) => {
+                return ProtocolFault::plain(code, message).into_batch(request_id);
+            }
+        };
+        let runtime = self.runtime_snapshot(&root);
+        let mut result = result_map([("runtime", json!(runtime)), ("status", json!("applied"))]);
+        if let Some(converted) = converted {
+            result.insert("converted".to_owned(), json!(converted));
+        }
+        let mut outbound = vec![success_bytes(request_id, result)];
+        if let Some(runtime) = runtime {
+            outbound.push(encode_notification(
+                "runtime/updated",
+                result_map([("sessionId", json!(root)), ("runtime", runtime)]),
+            ));
+        }
+        DispatchBatch {
+            outbound,
+            deferred: Vec::new(),
+            close_after_flush: false,
         }
     }
 
@@ -391,17 +488,45 @@ impl AppServer {
     /// same composition the notification publishes.
     pub(crate) fn runtime_snapshot(&self, session_id: &str) -> Option<Value> {
         let mut snapshot = self.resources.lock().ok()?.runtime(session_id).ok()?;
-        let (active_agent, stats, context_window) = match self.lock_sessions() {
-            Ok(sessions) => {
-                let session = sessions.get(session_id);
-                (
-                    session.and_then(|session| session.intent.agent.clone()),
-                    public_stats(session),
-                    session.map_or(0, |session| session.context_window),
-                )
+        let settings = self
+            .workspace
+            .config_snapshot()
+            .map(|snapshot| crate::connector_catalog::connector_settings(&snapshot))
+            .unwrap_or_default();
+        let (active_agent, stats, context_window, pinned, connector_sources) =
+            match self.lock_sessions() {
+                Ok(sessions) => {
+                    let session = sessions.get(session_id);
+                    (
+                        session.and_then(|session| session.intent.agent.clone()),
+                        public_stats(session),
+                        session.map_or(0, |session| session.context_window),
+                        session.is_some_and(|session| session.pinned_model.is_some()),
+                        session.and_then(|session| session.connectors.mcp_sources(&settings)),
+                    )
+                }
+                Err(_) => (None, public_stats(None), 0, false, None),
+            };
+        // Once the session accepted a connector catalog, its connector rows are
+        // the ones the accepted catalog publishes.
+        if let Some(connector_sources) = connector_sources
+            && let Some(Value::Object(mcp)) = snapshot.get_mut("mcp")
+        {
+            let mut replaced = Vec::new();
+            if let Some(Value::Array(sources)) = mcp.get_mut("sources") {
+                sources.retain(|source| {
+                    let connector = source["kind"] == "connector";
+                    if connector && let Some(name) = source["name"].as_str() {
+                        replaced.push(name.to_owned());
+                    }
+                    !connector
+                });
+                sources.extend(connector_sources);
             }
-            Err(_) => (None, public_stats(None), 0),
-        };
+            if let Some(Value::Object(errors)) = mcp.get_mut("discoveryErrors") {
+                errors.retain(|name, _| !replaced.contains(name));
+            }
+        }
         let stats = priced(stats, self.workspace.active_model_pricing());
         let projection = self.workspace.runtime_projection(active_agent.as_deref());
         // Discovery issues and configuration diagnostics are the same fact to a
@@ -409,8 +534,19 @@ impl AppServer {
         if let Some(Value::Array(issues)) = snapshot.get_mut("issues") {
             issues.extend(projection.issues);
         }
-        snapshot.insert("config".to_owned(), projection.config);
-        snapshot.insert("baseConfig".to_owned(), projection.base_config);
+        let mut config = projection.config;
+        // Reference `active_model_is_pinned`: a session that pinned its model
+        // holds it in its overrides.
+        if pinned && let Some(fields) = config.as_object_mut() {
+            fields.insert("activeModelPinned".to_owned(), json!(true));
+        }
+        snapshot.insert("config".to_owned(), config);
+        snapshot.insert(
+            "bypassToolPermissions".to_owned(),
+            json!(projection.bypass_tool_permissions),
+        );
+        // This build runs the legacy harness only.
+        snapshot.insert("experimentalHarness".to_owned(), json!(false));
         snapshot.insert("activeAgent".to_owned(), projection.active_agent);
         snapshot.insert("agents".to_owned(), Value::Array(projection.agents));
         snapshot.insert("skills".to_owned(), Value::Array(projection.skills));
@@ -610,6 +746,7 @@ impl AppServer {
             .as_ref()
             .map(crate::workspace::agent_summary);
         session.context_window = self.workspace.context_window();
+        session.pricing = self.workspace.active_model_pricing();
         session.active_model_alias = self.workspace.active_model_alias();
         session.compaction = self.workspace.compaction_settings();
         sessions.insert(session);

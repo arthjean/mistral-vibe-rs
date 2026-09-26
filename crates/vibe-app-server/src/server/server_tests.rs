@@ -14,14 +14,8 @@ mod resource_tests;
 mod session_tests;
 mod startup_tests;
 mod turn_tests;
-/// `SERVER_METHODS` is the reference contract, not this build's routing
-/// table: a name belongs there whether or not this build answers it. What
-/// stays enforced here is the other direction, that nothing is routed
-/// outside the contract plus the declared local extensions, and that the
-/// advertised set is the routed reference subset.
-///
-/// Which reference methods are still unrouted is a moving backlog, so it is
-/// tracked where it is measured, in `app_server_surface_parity_tests`.
+/// `SERVER_METHODS` is the reference contract a stdio client speaks; the
+/// methods only this port's in-process clients call stay out of its reach.
 mod wire_tests;
 mod worktree_tests;
 
@@ -214,6 +208,15 @@ fn initialize_with(connection: &mut ServerConnection, capabilities: Value) -> Va
 /// Calls a session-scoped read and returns the result it answered with.
 fn call(connection: &mut ServerConnection, id: i64, method: &str) -> BTreeMap<String, Value> {
     call_for(connection, id, method, "session-1")
+}
+
+/// A call that names no session, as the host's own reads are sent.
+fn host_call(connection: &mut ServerConnection, id: i64, method: &str) -> BTreeMap<String, Value> {
+    let batch = connection.dispatch(&request(id, method, json!({})));
+    match decode_frame(&batch.outbound[0]).expect("an answer") {
+        Envelope::Success(SuccessResponse { result, .. }) => result,
+        other => unreachable!("{method} did not answer: {other:?}"),
+    }
 }
 
 fn call_for(

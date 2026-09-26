@@ -51,7 +51,7 @@ fn skill_root(root: &Path, skill_id: &str) -> Result<PathBuf, StoreError> {
 }
 
 /// Whether `id` names exactly one normal path component, spelled as itself.
-fn is_plain_component(id: &str) -> bool {
+pub(crate) fn is_plain_component(id: &str) -> bool {
     if id.is_empty() || id == "." || id == ".." {
         return false;
     }

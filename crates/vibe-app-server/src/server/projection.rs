@@ -44,16 +44,14 @@ pub(super) fn public_session_status(session: &SessionRuntime) -> Value {
     }
 }
 
-pub(super) fn public_session_state(session: &SessionRuntime) -> Value {
-    let history = session
-        .snapshot
-        .as_ref()
-        .map(|snapshot| snapshot.history.clone())
-        .unwrap_or_default();
-    let status = public_session_status(session);
+/// The session's preview: reference `message_preview`, over the projected
+/// history first and the stored transcript second.
+pub(super) fn session_preview(session: &SessionRuntime, history: &[PublicHistoryEntry]) -> String {
     // Reference `message_preview`: the first user message the operator typed,
     // cut at 160 characters. Context the harness injected during a turn never
-    // names a session; a replayed message, which carries no turn, does.
+    // names a session; a replayed message, which carries no turn, does, and
+    // so does a message injected between turns, which the reference's loop
+    // holds as an ordinary user message.
     // A cleared conversation starts over, so nothing said before the clear
     // previews it: the reference reads the preview from the loop's messages,
     // which the clear emptied.
@@ -63,7 +61,7 @@ pub(super) fn public_session_state(session: &SessionRuntime) -> Value {
             |entry| matches!(entry, PublicHistoryEntry::Checkpoint { kind, .. } if kind == "clear"),
         )
         .map_or(0, |index| index + 1);
-    let preview = history
+    history
         .get(since_clear..)
         .unwrap_or_default()
         .iter()
@@ -74,7 +72,12 @@ pub(super) fn public_session_state(session: &SessionRuntime) -> Value {
                 content,
                 source,
                 ..
-            } if *source != Some(PublicMessageSource::Harness) || metadata.turn_id.is_none() => {
+            } if *source != Some(PublicMessageSource::Harness)
+                || metadata
+                    .turn_id
+                    .as_deref()
+                    .is_none_or(|turn_id| turn_id.starts_with("injection:")) =>
+            {
                 Some(content_text(content)).filter(|text| !text.is_empty())
             }
             _ => None,
@@ -95,7 +98,17 @@ pub(super) fn public_session_state(session: &SessionRuntime) -> Value {
                 })
         })
         .map(|text| text.chars().take(160).collect::<String>())
+        .unwrap_or_default()
+}
+
+pub(super) fn public_session_state(session: &SessionRuntime) -> Value {
+    let history = session
+        .snapshot
+        .as_ref()
+        .map(|snapshot| snapshot.history.clone())
         .unwrap_or_default();
+    let status = public_session_status(session);
+    let preview = session_preview(session, &history);
     let parent_session_id = session
         .persisted
         .as_ref()
@@ -276,8 +289,20 @@ pub(super) fn persisted_projection(
                     details: json!({}),
                 });
             }
-            // Any other turn the harness wrote stays out of the history.
-            ModelMessage::User { injected: true, .. } => {}
+            // Reference `_append_injected_history`: a manual command reads as
+            // the effect it ran behind; any other turn the harness wrote
+            // stays out of the history.
+            ModelMessage::User {
+                injected: true,
+                manual_shell,
+                ..
+            } => {
+                if let Some(record) = manual_shell {
+                    history.push(super::manual_shell::restored_shell_entry(
+                        session_id, record,
+                    ));
+                }
+            }
             ModelMessage::User {
                 content,
                 message_id,

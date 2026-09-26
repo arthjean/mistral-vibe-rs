@@ -177,3 +177,142 @@ async fn fetch_whoami(console: &str, key: &str) -> Gateway {
         .await
         .map_or(Gateway::Unavailable, Gateway::Plan)
 }
+
+impl WorkspaceService {
+    /// Reference `IdentityController.read` (`vibe/app_server/_identity.py`):
+    /// who the Mistral key the session runs with belongs to, read from the
+    /// provider's `/users/me`, or nothing when the model is not Mistral's, no
+    /// key resolves, or the endpoint does not answer.
+    ///
+    /// Like the reference, a fresh read is not written to the cache: only the
+    /// identity another reader already stored is reused.
+    pub async fn read_identity(&self) -> Value {
+        let Ok(snapshot) = self.config.load() else {
+            return Value::Null;
+        };
+        let Some(provider) = snapshot.active_provider().filter(|provider| {
+            provider.get("backend").and_then(TomlValue::as_str) == Some("mistral")
+        }) else {
+            return Value::Null;
+        };
+        let text = |key: &str| {
+            provider
+                .get(key)
+                .and_then(TomlValue::as_str)
+                .unwrap_or_default()
+                .to_owned()
+        };
+        let base_url = text("api_base");
+        let environ = DotenvValues::global(&self.paths.vibe_home).environment();
+        let store = vibe_core::auth::KeyringStore::native();
+        let Some(key) =
+            vibe_core::auth::resolve_api_key(&text("api_key_env_var"), &environ, &store)
+                .filter(|key| !key.is_empty())
+        else {
+            return Value::Null;
+        };
+        let identity = match self.identity_cache.peek(&base_url, &key).await {
+            Some(cached) => Some(cached),
+            None => match vibe_core::identity::HttpIdentityGateway::production() {
+                Some(gateway) => {
+                    vibe_core::identity::fetch_identity(&gateway, &base_url, &key, None).await
+                }
+                None => None,
+            },
+        };
+        identity.map_or(Value::Null, |identity| identity_view(&identity))
+    }
+}
+
+/// Reference `IdentityView`, with every field it declares present.
+fn identity_view(identity: &vibe_core::identity::IdentityResult) -> Value {
+    let entity = |entity: &Option<vibe_core::identity::IdentityEntity>| {
+        entity.as_ref().map_or(
+            Value::Null,
+            |entity| json!({"id": entity.id, "name": entity.name}),
+        )
+    };
+    json!({
+        "id": identity.id,
+        "email": identity.email,
+        "firstName": identity.first_name,
+        "lastName": identity.last_name,
+        "workspace": entity(&identity.workspace),
+        "organization": entity(&identity.organization),
+    })
+}
+
+impl WorkspaceService {
+    /// Records a connector toggle in the file writes land in.
+    pub(crate) fn persist_connector_toggle(
+        &self,
+        name: &str,
+        disabled: bool,
+        tool_name: Option<&str>,
+    ) -> Result<(), vibe_core::config::ConfigError> {
+        self.config
+            .persist_connector_toggle(name, disabled, tool_name)
+            .map(|_| ())
+    }
+
+    /// The merged configuration as it stands now.
+    pub(crate) fn config_snapshot(&self) -> Option<vibe_core::config::ConfigSnapshot> {
+        self.config.load().ok()
+    }
+
+    /// The credential `variable` resolves to: the process environment with
+    /// the Vibe home's dotenv filling in, then the OS keyring.
+    pub(crate) fn resolve_credential(&self, variable: &str) -> Option<String> {
+        let environ = DotenvValues::global(&self.paths.vibe_home).environment();
+        let store = vibe_core::auth::KeyringStore::native();
+        vibe_core::auth::resolve_api_key(variable, &environ, &store).filter(|key| !key.is_empty())
+    }
+
+    /// Reference `_manage_connectors_url`: the console page managing the
+    /// caller's connectors, scoped to the organization and workspace the
+    /// Mistral provider's identity names, or `None` when that identity does
+    /// not resolve.
+    pub(crate) async fn connector_manage_url(
+        &self,
+        api_base: &str,
+        api_key: &str,
+    ) -> Option<String> {
+        let gateway = vibe_core::identity::HttpIdentityGateway::production()?;
+        let identity = self
+            .identity_cache
+            .resolve(&gateway, api_base, api_key, None)
+            .await?;
+        let organization = identity.organization.as_ref()?;
+        let workspace = identity.workspace.as_ref()?;
+        let share_context = vibe_core::mcp::authorization::python_json(&serde_json::json!({
+            "organizationId": organization.id,
+            "workspaceId": workspace.id,
+        }));
+        let console = self
+            .config
+            .load()
+            .ok()
+            .and_then(|snapshot| {
+                snapshot
+                    .effective
+                    .get("console_base_url")
+                    .and_then(TomlValue::as_str)
+                    .map(str::to_owned)
+            })
+            .unwrap_or_else(|| DEFAULT_CONSOLE_BASE_URL.to_owned());
+        let encoded = share_context
+            .bytes()
+            .map(|byte| {
+                if byte.is_ascii_alphanumeric() || b"_.-~".contains(&byte) {
+                    char::from(byte).to_string()
+                } else {
+                    format!("%{byte:02X}")
+                }
+            })
+            .collect::<String>();
+        Some(format!(
+            "{}/build/connectors?shareContext={encoded}",
+            console.trim_end_matches('/')
+        ))
+    }
+}

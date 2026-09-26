@@ -569,6 +569,25 @@ impl GitRepo {
         (!branch.is_empty()).then_some(branch)
     }
 
+    /// The repository this checkout points at, as reference
+    /// `find_remote_url` spells it (`vibe/core/git/remote.py:25-44`): the
+    /// first URL of the first remote that parses as a git URL, normalized to
+    /// https, or [`None`].
+    pub(crate) fn remote_url(&self) -> Option<String> {
+        let remotes = self.stdout(["remote"], "remote").ok()?;
+        remotes
+            .lines()
+            .map(str::trim)
+            .filter(|remote| !remote.is_empty())
+            .find_map(|remote| {
+                let key = format!("remote.{remote}.url");
+                let urls = self
+                    .stdout(["config", "--get-all", key.as_str()], "remote")
+                    .ok()?;
+                urls.lines().find_map(normalize_remote_url)
+            })
+    }
+
     /// A best-effort guess at the branch this work merges back into, without
     /// asking the network (`vibe/core/git/repo.py:292-327`).
     pub(crate) fn base_branch(&self) -> Option<String> {
@@ -718,4 +737,40 @@ pub(crate) fn parse_worktree_records(output: &str, separator: char) -> Vec<Workt
     }
     records.extend(current);
     records
+}
+
+/// Reference `normalise_remote_url` (`vibe/core/git/remote.py:47-55`): one
+/// spelling of the repository a remote URL names, `https://{host}/{path}.git`
+/// with every path segment between the owner and the repository kept, or
+/// [`None`] for a URL naming no host, owner and repository.
+pub(crate) fn normalize_remote_url(url: &str) -> Option<String> {
+    let url = url.trim();
+    let (host, path) = if let Some((_, rest)) = url.split_once("://") {
+        let (authority, path) = rest.split_once('/')?;
+        let host = authority
+            .rsplit_once('@')
+            .map_or(authority, |(_, host)| host);
+        (host.split(':').next().unwrap_or_default(), path)
+    } else {
+        let (authority, path) = url.split_once(':')?;
+        if authority.contains('/') {
+            return None;
+        }
+        (
+            authority
+                .rsplit_once('@')
+                .map_or(authority, |(_, host)| host),
+            path,
+        )
+    };
+    let path = path.trim_matches('/');
+    let path = path.strip_suffix(".git").unwrap_or(path);
+    let segments = path
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .collect::<Vec<_>>();
+    if host.is_empty() || segments.len() < 2 {
+        return None;
+    }
+    Some(format!("https://{host}/{}.git", segments.join("/")))
 }

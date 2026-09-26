@@ -538,11 +538,8 @@ class Run:
                     continue
                 if "start" in step:
                     options = self.substitute_value(step["start"])
-                    params = (
-                        {"agentConfig": {**options, "agent": "auto-approve"}}
-                        if self.dialect == "reference"
-                        else {**options, "agent": "auto-approve"}
-                    )
+                    # Both servers read `SessionStartParams.agentConfig`.
+                    params = {"agentConfig": {**options, "agent": "auto-approve"}}
                     response, _ = self.request(identifier, "session/start", params)
                     self.learn(response)
                     started: dict[str, Any] = {"ok": "result" in response}

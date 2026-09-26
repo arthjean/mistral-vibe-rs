@@ -324,6 +324,112 @@ fn removal(
 ///
 /// Neither reason is a client error: a directory outside a repository has no
 /// worktrees, and an app server is expected to run without git at all.
+/// What `workspace/git/checkouts` answers: every repository a project links,
+/// read as git (reference `git_checkouts_response`,
+/// `vibe/app_server/_host.py:929-1093`).
+///
+/// A path git knows nothing about is left out, a repository git cannot read
+/// is answered with the reason, and the repository holding `session_cwd`,
+/// the deepest one containing it or one of its checkouts, is marked primary
+/// and probed there rather than at its own root.
+pub(crate) fn checkouts_response(
+    repo_local_paths: &[String],
+    session_cwd: Option<&Path>,
+    managed: &ManagedRoot,
+) -> Value {
+    let mut opened = Vec::new();
+    for repo_local_path in repo_local_paths {
+        let read =
+            WorktreeRepository::open(Path::new(repo_local_path), managed).and_then(|repository| {
+                let linked = repository.linked()?;
+                let checkouts = repository.checkouts()?;
+                Ok((repository, linked, checkouts))
+            });
+        match read {
+            Err(WorktreeError::RepositoryRequired) => {}
+            other => opened.push((
+                repo_local_path.as_str(),
+                other.map_err(|error| error.to_string()),
+            )),
+        }
+    }
+    let session_cwd = session_cwd.map(resolve_request_path);
+    let home = session_cwd.as_deref().and_then(|cwd| {
+        let mut holder = None;
+        let mut depth = None;
+        for (repo_local_path, read) in &opened {
+            let roots = read
+                .as_ref()
+                .map(|(_, _, checkouts)| {
+                    checkouts
+                        .iter()
+                        .map(|(root, _)| root.clone())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+            for root in
+                std::iter::once(resolve_request_path(Path::new(repo_local_path))).chain(roots)
+            {
+                let length = root.to_string_lossy().len();
+                if cwd.starts_with(&root) && depth.is_none_or(|depth| length > depth) {
+                    holder = Some(*repo_local_path);
+                    depth = Some(length);
+                }
+            }
+        }
+        holder
+    });
+    let checkouts = opened
+        .iter()
+        .map(|(repo_local_path, read)| {
+            let is_primary = home == Some(*repo_local_path);
+            let (repository, linked, checkouts) = match read {
+                Ok(read) => read,
+                Err(message) => {
+                    return json!({
+                        "repoLocalPath": repo_local_path,
+                        "ok": false,
+                        "isPrimary": is_primary,
+                        "repoUrl": null,
+                        "root": null,
+                        "worktree": null,
+                        "branch": null,
+                        "baseBranch": null,
+                        "message": message,
+                    });
+                }
+            };
+            let probe = if is_primary {
+                session_cwd.clone()
+            } else {
+                None
+            }
+            .unwrap_or_else(|| resolve_request_path(Path::new(repo_local_path)));
+            let status = repository.status();
+            let holding = checkouts
+                .iter()
+                .filter(|(root, _)| probe.starts_with(root))
+                .max_by_key(|(root, _)| root.to_string_lossy().len());
+            let worktree = linked
+                .iter()
+                .find(|worktree| probe.starts_with(&worktree.root))
+                .map(|worktree| worktree.name.clone());
+            json!({
+                "repoLocalPath": repo_local_path,
+                "ok": true,
+                "isPrimary": is_primary,
+                "repoUrl": status.repo_url,
+                "root": path_string(holding.map_or(&status.root, |(root, _)| root)),
+                "worktree": worktree,
+                "branch": holding.map_or(status.branch.clone(), |(_, branch)| branch.clone()),
+                "baseBranch": status.base_branch,
+                "message": null,
+            })
+        })
+        .collect::<Vec<_>>();
+    json!({"checkouts": checkouts})
+}
+
 pub(crate) fn swallow_missing_checkout<T>(
     listing: Result<Option<T>, WorktreeError>,
 ) -> Result<Option<T>, WorktreeError> {

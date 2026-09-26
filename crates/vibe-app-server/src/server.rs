@@ -10,6 +10,8 @@ use attachment::apply_agent_profile_settings;
 mod callbacks;
 mod compaction;
 mod connection;
+mod connector_catalog;
+mod manual_shell;
 mod projection;
 mod registry;
 mod review;
@@ -17,9 +19,11 @@ mod runtime;
 mod session_callbacks;
 mod session_management;
 mod titles;
+mod turn_queue;
 mod turns;
 mod wire;
 
+pub(crate) use manual_shell::ShellOperation;
 pub use runtime::SessionView;
 pub(crate) use runtime::*;
 pub use wire::SessionIntent;
@@ -88,9 +92,8 @@ use vibe_core::worktree::{ManagedWorktree, PreparedWorktree, naming_model};
 use vibe_protocol::{
     CallbackKind, ClientCapabilities, ClientEntrypoint, Envelope, ErrorResponse, InitializeParams,
     InitializeResponse, InvalidParamsData, InvalidParamsIssue, JsonRpcVersion, Notification,
-    PathSegment, ProtocolError, ProtocolErrorCode, ProtocolVersion, RequestId, ServerCapabilities,
-    ServerInfo, ServerRequest, SuccessResponse, TransportKind, decode_frame, encode_frame,
-    is_dispatchable_method, is_server_method,
+    PathSegment, ProtocolError, ProtocolErrorCode, RequestId, ServerInfo, ServerRequest,
+    SuccessResponse, TransportKind, decode_frame, encode_frame, is_server_method,
 };
 
 const INITIALIZE_METHOD: &str = "initialize";
@@ -114,6 +117,9 @@ const MAX_CALLBACK_TEXT_BYTES: usize = 8 * 1024;
 /// app-server surface replay reads it to report notification conformance, and
 /// `docs/parity.md` records the names here that the reference does not declare.
 pub const EMITTED_NOTIFICATIONS: &[&str] = &[
+    "connector_catalog/authFailed",
+    "connector_catalog/authRequired",
+    "connector_catalog/authUrl",
     "error",
     "history/entryAdded",
     "history/entryUpdated",
@@ -127,6 +133,7 @@ pub const EMITTED_NOTIFICATIONS: &[&str] = &[
     "session/statsUpdated",
     "session/updated",
     "turn/completed",
+    "turn/queueUpdated",
     "turn/retrying",
     "turn/started",
     "vibeCode/teleport/event",
@@ -141,8 +148,17 @@ pub(crate) enum HandoffNotice {
     ContextCleared { plan_file_path: Option<String> },
 }
 
+/// A brokered connector authorization: session, connector, accepted revision
+/// and action.
+type ConnectorAuthRequest = (String, String, String, String);
+
+/// The parameter a routed connector call carries the connection's root in,
+/// which no client can send: the parameters were validated before it is added.
+pub(crate) const CONNECTION_ROOT_PARAM: &str = "\u{0}connectionRoot";
+
 /// Every method this build routes, sorted and unique, whether or not the
 /// reference declares it.
+#[cfg(test)]
 pub(crate) fn routed_methods() -> BTreeSet<&'static str> {
     IMPLEMENTED_METHODS
         .iter()
@@ -153,17 +169,25 @@ pub(crate) fn routed_methods() -> BTreeSet<&'static str> {
         .collect()
 }
 
-/// What `initialize` advertises: the methods this build routes, minus the local
-/// extensions.
-///
-/// A client written against the reference protocol must never learn a name only
-/// this implementation answers, so [`LOCAL_EXTENSION_METHODS`] stays out even
-/// though those methods are dispatched.
-fn advertised_methods() -> Vec<String> {
-    routed_methods()
-        .into_iter()
-        .filter(|method| is_server_method(method))
-        .map(ToOwned::to_owned)
+/// Every reference method a stdio client reaches an answer for: the ones a
+/// handler of this port serves, and the ones the reference routing answers by
+/// itself, as the reference does (`connection::route`).
+#[cfg(test)]
+pub(crate) fn stdio_routed_methods() -> BTreeSet<&'static str> {
+    let served = routed_methods();
+    vibe_protocol::SERVER_METHODS
+        .iter()
+        .copied()
+        .filter(|method| {
+            served.contains(method)
+                || !matches!(
+                    connection::route(method),
+                    connection::Route::Host
+                        | connection::Route::SessionOptional
+                        | connection::Route::Root
+                        | connection::Route::Catalog
+                )
+        })
         .collect()
 }
 
@@ -208,9 +232,16 @@ pub(crate) fn internal_method(transport: TransportKind, method: &str) -> Option<
     (transport == TransportKind::InProcess && INTERNAL_METHODS.contains(&method)).then_some(method)
 }
 
+/// The methods this port's own handlers answer, beside the service lists.
+#[cfg(test)]
 const IMPLEMENTED_METHODS: &[&str] = &[
     "account/read",
     "callback/respond",
+    "callback/result",
+    "connector_catalog/auth/request",
+    "connector_catalog/read",
+    "connector_catalog/refresh",
+    "connector_catalog/toggle",
     "connectors/auth/read",
     "connectors/read",
     "connectors/refresh",
@@ -241,6 +272,7 @@ const IMPLEMENTED_METHODS: &[&str] = &[
     "review/turnDiff",
     "runtime/read",
     "session/close",
+    "session/compact",
     "session/compact/start",
     "session/context/inject",
     "session/continue",
@@ -262,11 +294,30 @@ const IMPLEMENTED_METHODS: &[&str] = &[
     "session/rewind",
     "session/rewind/read",
     "session/settings/update",
+    "session/shellCommand",
     "session/start",
+    "session/stop",
     "session/title/update",
+    "session/turn/enqueue",
+    "session/turn/queue/read",
+    "session/turn/queue/remove",
+    "session/turn/queue/replace",
+    "session/turn/queue/resume",
     "session/turns/list",
     "shell/interrupt",
     "shell/run",
+    "skills/catalog",
+    "skills/convertLocal",
+    "skills/detail",
+    "skills/import",
+    "skills/installed",
+    "skills/remove",
+    "skills/setAlias",
+    "skills/setEnabled",
+    "skills/setLatest",
+    "skills/setVersion",
+    "skills/updates",
+    "skills/versions",
     "stats/read",
     "telemetry/record",
     "tools/list",
@@ -452,7 +503,26 @@ pub enum DeferredWork {
     CompactSession {
         request_id: RequestId,
         session_id: String,
+        /// Where the session is written when it has not been yet.
+        working_directory: String,
         extra_instructions: String,
+    },
+    /// A manual `!` command the connection reserved on its session, which
+    /// runs outside the request loop and answers once it settles.
+    ShellCommand {
+        request_id: RequestId,
+        session_id: String,
+        operation_id: String,
+        command: String,
+        cwd: String,
+        timeout_ms: u64,
+    },
+    /// An interrupt of a running manual command, answered once the command
+    /// has settled, as the reference's waits for the process to exit.
+    ShellInterrupt {
+        request_id: RequestId,
+        session_id: String,
+        operation_id: String,
     },
     CloseResources {
         session_id: String,
@@ -476,7 +546,7 @@ pub fn mcp_catalog_notifier(
     })
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DispatchBatch {
     pub outbound: Vec<Vec<u8>>,
     pub deferred: Vec<DeferredWork>,
@@ -528,10 +598,17 @@ pub struct AppServer {
     next_session: Arc<AtomicU64>,
     next_turn: Arc<AtomicU64>,
     next_callback: Arc<AtomicU64>,
-    next_entry: Arc<AtomicU64>,
     /// The sessions this process holds open, each under the lease that keeps a
     /// second process from opening it too (reference `SessionLease`).
     leases: Arc<Mutex<BTreeMap<String, vibe_core::storage::lease::SessionLease>>>,
+    /// The connector catalogs this process fetched or read back, by provider
+    /// fingerprint, with when each was stored (reference
+    /// `ConnectorCatalogService._memory`).
+    connector_catalogs:
+        Arc<Mutex<BTreeMap<String, (crate::connector_catalog::ResolvedCatalog, i64)>>>,
+    /// The connector authorizations being brokered, by session, connector,
+    /// accepted revision and action (reference `_auth_requests_seen`).
+    connector_auth_requests: Arc<Mutex<BTreeSet<ConnectorAuthRequest>>>,
 }
 
 impl Default for AppServer {
@@ -573,8 +650,9 @@ impl Default for AppServer {
             next_session: Arc::new(AtomicU64::new(1)),
             next_turn: Arc::new(AtomicU64::new(1)),
             next_callback: Arc::new(AtomicU64::new(1)),
-            next_entry: Arc::new(AtomicU64::new(1)),
             leases: Arc::new(Mutex::new(BTreeMap::new())),
+            connector_catalogs: Arc::new(Mutex::new(BTreeMap::new())),
+            connector_auth_requests: Arc::new(Mutex::new(BTreeSet::new())),
         }
     }
 }
@@ -669,6 +747,16 @@ impl AppServer {
     #[must_use]
     pub fn using_utility_provider(mut self, provider: Option<Arc<dyn CompletionProvider>>) -> Self {
         self.utility_provider = provider;
+        self
+    }
+
+    /// Installs what answers the approvals a session's tools ask for.
+    #[must_use]
+    pub(crate) fn using_approval_factory(
+        mut self,
+        approval_factory: Arc<dyn ApprovalAgentFactory>,
+    ) -> Self {
+        self.approval_factory = approval_factory;
         self
     }
 

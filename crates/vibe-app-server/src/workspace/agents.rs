@@ -47,9 +47,11 @@ impl WorkspaceService {
         let profile = self.catalog().agents.remove(name).map_or_else(
             || {
                 if self.persists_runtime_sessions() {
-                    Err(WorkspaceServiceError::Extension(format!(
-                        "agent `{name}` was not found"
-                    )))
+                    // Reference `AgentManager.get_agent`.
+                    Err(WorkspaceServiceError::Refused(
+                        vibe_protocol::ProtocolErrorCode::InternalError,
+                        format!("Agent '{name}' not found"),
+                    ))
                 } else {
                     Ok(AgentProfile {
                         name: name.to_owned(),
@@ -173,11 +175,18 @@ impl WorkspaceService {
                     .cloned()
             })
             .unwrap_or_else(builtin_agents::default_profile);
+        let configured_bypass = snapshot
+            .as_ref()
+            .and_then(|snapshot| snapshot.effective.get("bypass_tool_permissions"))
+            .and_then(toml::Value::as_bool)
+            .unwrap_or(false);
+        let agent_bypass = active
+            .overrides
+            .get("bypass_tool_permissions")
+            .and_then(toml::Value::as_bool)
+            .unwrap_or(false);
         RuntimeProjection {
-            // No agent overlay is applied to the published configuration here,
-            // so the two views are the same document, as the reference host
-            // path also answers with.
-            base_config: view.clone(),
+            bypass_tool_permissions: configured_bypass || agent_bypass,
             config: view,
             active_agent: agent_summary(&active),
             agents: profiles.iter().map(agent_summary).collect(),
@@ -257,11 +266,7 @@ impl WorkspaceService {
         name: &str,
         install: bool,
     ) -> Result<(), WorkspaceServiceError> {
-        if name != "lean" {
-            return Err(WorkspaceServiceError::InvalidParams(format!(
-                "unknown installable built-in agent `{name}`"
-            )));
-        }
+        // Reference `_agent_install` edits the list whatever the name.
         let snapshot = self.config.load().map_err(config_error)?;
         let mut installed = snapshot
             .effective
@@ -315,7 +320,12 @@ impl WorkspaceService {
         params: &BTreeMap<String, Value>,
     ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let session_id = required_string(params, "sessionId")?;
-        let name = required_string(params, "name")?;
+        // Reference `AgentSwitchParams` names it `agentName`; this port's own
+        // clients send `name`.
+        let name = match params.get("agentName") {
+            Some(_) => required_string(params, "agentName")?,
+            None => required_string(params, "name")?,
+        };
         let (profile, hydrated) = self.set_session_agent(session_id, name)?;
         Ok(WorkspaceDispatch {
             result: [("agent".to_owned(), serde_json::to_value(profile)?)]

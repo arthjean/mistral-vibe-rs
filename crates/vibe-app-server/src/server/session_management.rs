@@ -55,7 +55,12 @@ fn plan(method: &str) -> MethodPlan {
             dispatch: Dispatch::Plain,
             after: &[After::ActiveAgent],
         },
-        "config/read" | "config/patch" | "config/reload" | "config/thinking/write" => MethodPlan {
+        "config/read"
+        | "config/patch"
+        | "config/reload"
+        | "config/thinking/write"
+        | "config/write"
+        | "config/model/write" => MethodPlan {
             dispatch: Dispatch::SessionScoped,
             after: &[After::ConfigContext],
         },
@@ -108,7 +113,34 @@ pub(super) fn dispatch(connection: &mut ServerConnection, request: ServerRequest
             return internal_error_batch(request.id, &error);
         }
     }
+    // A read with no session is the host's, which also reports how the
+    // harness was chosen (`_read_config` in `vibe/app_server/_host.py`); the
+    // root's own read leaves both fields at their defaults.
+    if request.method == "config/read" && target_session_id.is_none() {
+        for (field, value) in connection.server.harness_selection().config_read_fields() {
+            dispatch.result.insert(field.to_owned(), value);
+        }
+    }
+    // A mutation that took effect is followed by the runtime it produced
+    // (`runtime_updated` in `_dispatch_backend_config`).
+    let runtime_updated = match request.method.as_str() {
+        "config/reload" => true,
+        "config/write" | "config/model/write" => {
+            dispatch.result.get("rejected") == Some(&Value::Bool(false))
+                && dispatch
+                    .result
+                    .get("failures")
+                    .and_then(Value::as_array)
+                    .is_some_and(Vec::is_empty)
+        }
+        _ => false,
+    };
     let mut batch = success_batch(request.id, dispatch.result);
+    if runtime_updated && let Some(session_id) = target_session_id.as_deref() {
+        batch
+            .outbound
+            .extend(connection.runtime_updated_frame(session_id));
+    }
     // The snapshot follows the answer rather than preceding it: the reference
     // flushes what attachment buffered once the response is on the wire, so the
     // client reads its state after the call it made.
@@ -333,15 +365,14 @@ fn enrich_config_response(
     dispatch: &mut WorkspaceDispatch,
 ) {
     // A read reports the configuration as it stands; a write also reports the
-    // runtime the write produced.
+    // runtime the write produced, which the legacy backend has always applied
+    // by the time it answers (`RuntimeMutationStatus.APPLIED`).
     let runtime = method != "config/read";
-    if !runtime {
-        for (field, value) in connection.server.harness_selection().config_read_fields() {
-            dispatch.result.insert(field.to_owned(), value);
-        }
-    }
     if runtime && let Some(snapshot) = connection.server.runtime_snapshot(session_id) {
         dispatch.result.insert("runtime".to_owned(), snapshot);
+        dispatch
+            .result
+            .insert("status".to_owned(), json!("applied"));
     }
     dispatch.result.insert(
         "strippedHistoryImages".to_owned(),

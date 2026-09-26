@@ -69,15 +69,6 @@ const DISCOVERY_PROJECT_SCOPE: &str = "OPEN: (row 28) v2.25.0 made the reference
      `scope: project`; the port's `discover_extensions` still publishes every disk skill as \
      `global` (`crates/vibe-core/src/extensions.rs:449`)";
 
-/// v2.25.0 and v2.25.5 widened the wire's `SkillSummary`.
-const PROJECTION_SUMMARY_FIELDS: &str = "OPEN: (row 28) the reference's `SkillSummary` gained \
-     `scope` and `registry` in v2.25.0 and `enabled` and `locked` in v2.25.5 \
-     (`vibe/app_server/models.py:593-602` at 4a96003186b1), and `_skill_summary` fills all \
-     four (`vibe/app_server/_projection.py:288-301`), so this summary carries \
-     `scope: global`, `registry: null`, `enabled: true` and `locked: false`; the port's \
-     `skill_summary` (`crates/vibe-core/src/skills.rs:180-188`) still emits only name, \
-     description, prompt, userInvocable and source";
-
 /// Cases where this port answers something other than the reference, each with
 /// the reason. A case that conforms while listed here fails the replay as a
 /// stale entry, and a case that diverges without an entry fails naming the
@@ -173,17 +164,6 @@ const DIVERGENCES: &[(&str, &str)] = &[
         "discovery/frontmatter-name-wins-over-directory",
         DISCOVERY_PROJECT_SCOPE,
     ),
-    ("projection/local-defaults", PROJECTION_SUMMARY_FIELDS),
-    ("projection/local-not-invocable", PROJECTION_SUMMARY_FIELDS),
-    ("projection/builtin-shape", PROJECTION_SUMMARY_FIELDS),
-    ("projection/registry-source", PROJECTION_SUMMARY_FIELDS),
-    ("projection/unicode-fields", PROJECTION_SUMMARY_FIELDS),
-    ("projection/empty-prompt", PROJECTION_SUMMARY_FIELDS),
-    (
-        "projection/rich-model-fields-do-not-reach-the-summary",
-        PROJECTION_SUMMARY_FIELDS,
-    ),
-    ("projection/multiline-prompt", PROJECTION_SUMMARY_FIELDS),
     (
         "store/prune-keeps-active",
         "OPEN: (row 28) v2.25.0 scoped the reference's `_prune` to the ids named in the \

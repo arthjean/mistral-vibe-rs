@@ -7,16 +7,41 @@
 use super::*;
 
 impl WorkspaceService {
-    /// The two configuration views `ConfigReadResponse` declares.
-    ///
-    /// No agent overlay is applied to the published configuration here, so both
-    /// views are the same document; the field stays on the wire because a
-    /// client renders "changed from the base" from it.
+    /// `ConfigReadResponse`: the configuration view and the counts a settings
+    /// screen summarizes (reference `_config_read`), with the harness fields
+    /// at their defaults for the server to fill in on the host's read.
     pub(super) fn config_read(&self) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
-        let view = self.config.load().map_err(config_error)?.config_view();
+        let snapshot = self.config.load().map_err(config_error)?;
+        let catalog = self.catalog();
+        let skills = catalog
+            .skills
+            .values()
+            .filter(|skill| skill.source != vibe_core::skills::SkillSource::Builtin)
+            .count();
+        let servers = snapshot
+            .effective
+            .get("mcp_servers")
+            .and_then(TomlValue::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let enabled = servers
+            .iter()
+            .filter(|server| {
+                !server
+                    .get("disabled")
+                    .and_then(TomlValue::as_bool)
+                    .unwrap_or(false)
+            })
+            .count();
         Ok(WorkspaceDispatch::result([
-            ("config", view.clone()),
-            ("baseConfig", view),
+            ("config", snapshot.config_view()),
+            ("startupIssue", Value::Null),
+            ("strippedHistoryImages", json!(0)),
+            ("skillsCount", json!(skills)),
+            ("hooksCount", json!(catalog.hooks.len())),
+            ("mcpServersTotal", json!(servers.len())),
+            ("mcpServersEnabled", json!(enabled)),
+            ("harnessSelectionSource", Value::Null),
         ]))
     }
 
@@ -46,6 +71,7 @@ impl WorkspaceService {
     pub(super) fn config_patch(
         &self,
         params: &BTreeMap<String, Value>,
+        default_reason: &str,
     ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
         let raw = params.get("ops").and_then(Value::as_array).ok_or_else(|| {
             WorkspaceServiceError::InvalidParams("ops must be an array".to_owned())
@@ -57,7 +83,7 @@ impl WorkspaceService {
         let reason = params
             .get("reason")
             .and_then(Value::as_str)
-            .unwrap_or("config screen edit");
+            .unwrap_or(default_reason);
         let outcome = match self.config.apply_patch(&operations, reason) {
             Ok(outcome) => outcome,
             Err(vibe_core::config::ConfigError::PatchRejected(_)) => {
@@ -72,6 +98,56 @@ impl WorkspaceService {
             ("rejected", Value::Bool(false)),
             ("failures", json!(outcome.failures)),
         ]))
+    }
+
+    /// Reference `config/model/write` on the legacy backend
+    /// (`_model_config_write_params` over `model_config_write_ops`,
+    /// `vibe/app_server/_config_write.py`): a model pick lowered onto the
+    /// generic write, pinning the alias and storing the reasoning effort under
+    /// the model the write leaves active.
+    pub(super) fn model_config_write(
+        &self,
+        params: &BTreeMap<String, Value>,
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
+        let snapshot = self.config.load().map_err(config_error)?;
+        let aliases = snapshot
+            .effective
+            .get("models")
+            .and_then(TomlValue::as_table)
+            .map(|models| models.keys().cloned().collect::<BTreeSet<_>>())
+            .unwrap_or_default();
+        let alias = params.get("modelAlias").and_then(Value::as_str);
+        let effort = params.get("reasoningEffort").and_then(Value::as_str);
+        if let Some(alias) = alias.filter(|alias| !alias.is_empty() && !aliases.contains(*alias)) {
+            return Err(WorkspaceServiceError::Refused(
+                vibe_protocol::ProtocolErrorCode::InvalidParams,
+                format!(
+                    "Unknown model: {alias}. Available: {}",
+                    aliases.iter().cloned().collect::<Vec<_>>().join(", ")
+                ),
+            ));
+        }
+        let mut ops = Vec::new();
+        if let Some(alias) = alias {
+            ops.push(json!({"op": "set", "path": "/active_model", "value": alias}));
+        }
+        if let Some(effort) = effort {
+            let target = match alias {
+                Some(alias) if !alias.is_empty() => alias.to_owned(),
+                Some(_) => vibe_core::config::default_model_alias(&snapshot.effective)
+                    .unwrap_or_default()
+                    .to_owned(),
+                None => snapshot.active_model_alias().unwrap_or_default().to_owned(),
+            };
+            let token = target.replace('~', "~0").replace('/', "~1");
+            ops.push(
+                json!({"op": "set", "path": format!("/models/{token}/thinking"), "value": effort}),
+            );
+        }
+        let mut lowered = BTreeMap::new();
+        lowered.insert("ops".to_owned(), Value::Array(ops));
+        lowered.insert("reason".to_owned(), json!("model configuration"));
+        self.config_patch(&lowered, "model configuration")
     }
 
     /// Describes every published field so a settings screen renders without

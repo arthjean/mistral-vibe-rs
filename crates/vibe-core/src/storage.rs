@@ -783,6 +783,24 @@ impl SessionStore {
         Ok(true)
     }
 
+    /// Reference `SessionLogger.persist_active_model`: the model a session
+    /// pinned when it first took a turn, under `config.active_model`.
+    /// Answers whether the record changed.
+    pub fn persist_active_model(
+        &self,
+        metadata: &mut SessionMetadata,
+        alias: &str,
+    ) -> Result<bool, StorageError> {
+        if metadata.config.get("active_model").and_then(Value::as_str) == Some(alias) {
+            return Ok(false);
+        }
+        metadata
+            .config
+            .insert("active_model".to_owned(), Value::String(alias.to_owned()));
+        self.write_metadata(metadata)?;
+        Ok(true)
+    }
+
     /// Reference `persist_bumped_at`: the latest accepted user interaction,
     /// kept monotonic. Answers the instant the session now records, in
     /// milliseconds.

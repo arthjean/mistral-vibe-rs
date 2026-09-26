@@ -412,11 +412,8 @@ class Run:
             for step in self.scenario["steps"]:
                 identifier += 1
                 if "start" in step:
-                    params = (
-                        {"agentConfig": {"cwd": str(self.world.workspace), "agent": "auto-approve"}}
-                        if self.dialect == "reference"
-                        else {"cwd": str(self.world.workspace), "agent": "auto-approve"}
-                    )
+                    # Both servers read `SessionStartParams.agentConfig`.
+                    params = {"agentConfig": {"cwd": str(self.world.workspace), "agent": "auto-approve"}}
                     self.server.send({"jsonrpc": "2.0", "id": identifier, "method": "session/start", "params": params})
                     observed = self.collect(identifier)
                     for message in observed:

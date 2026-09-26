@@ -174,8 +174,7 @@ pub fn apply_filters(skills: &mut BTreeMap<String, SkillDefinition>, discovery: 
 }
 
 /// One skill as the wire's `SkillSummary` declares it: the body travels as
-/// `prompt`, and the richer model fields stay off the summary, which carries
-/// exactly these five.
+/// `prompt`, and the richer model fields stay off the summary.
 #[must_use]
 pub fn skill_summary(skill: &SkillDefinition) -> Value {
     json!({
@@ -184,6 +183,13 @@ pub fn skill_summary(skill: &SkillDefinition) -> Value {
         "prompt": skill.body,
         "userInvocable": skill.user_invocable,
         "source": skill.source,
+        "scope": skill.scope,
+        // No discovered skill carries a registry reference here, and a
+        // published one is enabled and unlocked (reference `_skill_summary`
+        // defaults, `vibe/app_server/_projection.py:288-301`).
+        "registry": null,
+        "enabled": true,
+        "locked": false,
     })
 }
 

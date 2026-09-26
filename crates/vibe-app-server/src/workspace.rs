@@ -20,6 +20,7 @@ mod agents;
 mod config;
 mod internal;
 mod sessions;
+mod skills;
 pub(crate) use sessions::{
     history_entry_id, reference_message_index, rewind_entry_index, runtime_attachment,
 };
@@ -73,6 +74,7 @@ pub const WORKSPACE_METHODS: &[&str] = &[
     "agents/uninstall",
     "config/batchWrite",
     "config/fields/read",
+    "config/model/write",
     "config/patch",
     "config/proxy/read",
     "config/proxy/write",
@@ -80,8 +82,10 @@ pub const WORKSPACE_METHODS: &[&str] = &[
     "config/reload",
     "config/schema",
     "config/thinking/write",
+    "config/write",
     "session/agent/update",
     "skills/list",
+    "workspace/git/checkouts",
     "workspace/git/worktrees/limit/update",
     "workspace/git/worktrees/list",
     "workspace/git/worktrees/prune",
@@ -112,8 +116,9 @@ pub struct RuntimeAttachment {
 pub struct RuntimeProjection {
     /// A `ConfigView`.
     pub config: Value,
-    /// A `ConfigView`.
-    pub base_config: Value,
+    /// Reference `AgentLoop.bypass_tool_permissions`: the configuration's
+    /// switch, which the active agent's overrides can turn on.
+    pub bypass_tool_permissions: bool,
     /// An `AgentSummary`.
     pub active_agent: Value,
     /// `AgentSummary` entries.
@@ -176,6 +181,9 @@ pub struct WorkspaceService {
     /// Forks a rewind composed and no turn has written yet, by identifier.
     drafts: Arc<Mutex<BTreeMap<String, HydratedSession>>>,
     session_logging: SessionLogging,
+    /// The identities `identity/read` already resolved (reference
+    /// `AgentLoop.identity_cache`).
+    identity_cache: Arc<vibe_core::identity::IdentityCache>,
 }
 
 /// The `VIBE_*` variables the environment layer composes: the process
@@ -359,6 +367,7 @@ impl WorkspaceService {
             persist_runtime_sessions: false,
             drafts: Arc::new(Mutex::new(BTreeMap::new())),
             session_logging,
+            identity_cache: Arc::default(),
         }
     }
 
@@ -693,7 +702,11 @@ impl WorkspaceService {
             ])),
             // Reference `_config_patch`: the client addresses a field by
             // pointer and never names the file behind it.
-            "config/patch" => self.config_patch(params),
+            "config/patch" => self.config_patch(params, "config screen edit"),
+            // Reference `config/write`, the same pointer-addressed operations
+            // under the reference's name and default reason.
+            "config/write" => self.config_patch(params, "config write"),
+            "config/model/write" => self.model_config_write(params),
             "config/fields/read" => self.config_fields_read(),
             // Retained as a local alias over the same patch core so the callers
             // that predate `config/patch` keep working. Recorded as a
@@ -717,6 +730,7 @@ impl WorkspaceService {
             "session/agent/update" => self.agent_update(params),
             "skills/list" => self.skills_list(),
             "workspace/prompt/prepare" => self.prompt_prepare(params),
+            "workspace/git/checkouts" => self.git_checkouts(params),
             "workspace/git/worktrees/list" => self.worktrees_list(params),
             "workspace/git/worktrees/limit/update" => self.worktrees_limit_update(params),
             "workspace/git/worktrees/prune" => self.worktrees_prune(params),

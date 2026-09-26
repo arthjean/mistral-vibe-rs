@@ -1,6 +1,7 @@
 //! The `workspace/git/worktrees/*` host methods: the listing a worktree picker
 //! reads, the retention limit and its sweep, and the removal a client asks for
-//! once it deleted the session that ran in a worktree.
+//! once it deleted the session that ran in a worktree, plus
+//! `workspace/git/checkouts`, which reads every repository a project links.
 //!
 //! They sit on the workspace service because two of them read and write the
 //! configuration, and all four need the vibe home the managed root lives under
@@ -19,6 +20,14 @@ struct ListParams {
     cwd: String,
     #[serde(default)]
     include_details: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct CheckoutsParams {
+    repo_local_paths: Vec<String>,
+    #[serde(default)]
+    session_cwd: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -64,6 +73,22 @@ impl WorkspaceService {
     #[must_use]
     pub fn managed_worktrees(&self) -> ManagedRoot {
         ManagedRoot::for_vibe_home(&self.paths.vibe_home)
+    }
+
+    /// Every repository a project links, read as git.
+    pub(super) fn git_checkouts(
+        &self,
+        params: &BTreeMap<String, Value>,
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
+        let params: CheckoutsParams = parse(params)?;
+        let answer = crate::worktrees::checkouts_response(
+            &params.repo_local_paths,
+            params.session_cwd.as_deref().map(Path::new),
+            &self.managed_worktrees(),
+        );
+        Ok(WorkspaceDispatch::result(
+            answer.as_object().cloned().unwrap_or_default(),
+        ))
     }
 
     /// The configured retention limit, read on every call so a value written

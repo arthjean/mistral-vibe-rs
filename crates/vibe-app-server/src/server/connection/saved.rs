@@ -19,7 +19,7 @@ use vibe_core::worktree::WorktreeRepository;
 
 /// Reference `_open_initial_session_locked`: what a method needing a root
 /// answers without one.
-const NO_ROOT: &str = "Start, resume, or continue a session before using this method";
+pub(super) const NO_ROOT: &str = "Start, resume, or continue a session before using this method";
 
 /// Reference `SessionListParams.limit` and `PageRequest.limit` bounds.
 const PAGE_BOUNDS: (i64, i64) = (1, 500);
@@ -670,6 +670,11 @@ impl ServerConnection {
             .find_map(|key| agent_config.get(key).and_then(Value::as_str))
             .map(ToOwned::to_owned);
         let target = match reopen {
+            // Resuming the root reattaches it as it stands, saved or not
+            // (`_session_resume`).
+            Reopen::Resume if session_id.is_some() && self.root_id() == session_id => {
+                session_id.unwrap_or_default()
+            }
             Reopen::Resume => {
                 let selector = session_id.unwrap_or_default();
                 self.load_saved(&selector)?.metadata.id
@@ -712,7 +717,7 @@ impl ServerConnection {
             params.insert("agent".to_owned(), json!(agent));
         }
         let start = ServerRequest { params, ..request };
-        let opened = self.open_reopened(start);
+        let opened = self.open_reopened(start, true);
         if opened.is_err() {
             self.server.release_lease(&target);
         }
@@ -721,7 +726,14 @@ impl ServerConnection {
 
     /// Opens the session a reopening resolved, through the start path, and
     /// answers with the reference's reopening shape.
-    fn open_reopened(&mut self, request: ServerRequest) -> Result<DispatchBatch, ProtocolFault> {
+    ///
+    /// A reopening publishes the runtime it attached; a start does not
+    /// (`runtime_updated` in `_dispatch_backend_host_lifecycle_locked`).
+    pub(super) fn open_reopened(
+        &mut self,
+        request: ServerRequest,
+        publish_runtime: bool,
+    ) -> Result<DispatchBatch, ProtocolFault> {
         let id = request.id.clone();
         let mut params = from_params::<SessionStartParams>(&request.params)?;
         let mut resolution = self.resolve_worktree(&mut params)?;
@@ -738,9 +750,11 @@ impl ServerConnection {
             id,
             result_map([("state", state), ("lastEventId", event_id)]),
         );
-        batch
-            .outbound
-            .extend(self.runtime_updated_frame(&session_id));
+        if publish_runtime {
+            batch
+                .outbound
+                .extend(self.runtime_updated_frame(&session_id));
+        }
         if !mcp_configs.is_empty() {
             batch.deferred.push(DeferredWork::ConfigureMcp {
                 session_id,
@@ -1082,7 +1096,7 @@ impl ServerConnection {
 
     /// `runtime/updated` for `session_id`, which a reopening publishes once
     /// its answer is on the wire.
-    pub(super) fn runtime_updated_frame(&self, session_id: &str) -> Option<Vec<u8>> {
+    pub(crate) fn runtime_updated_frame(&self, session_id: &str) -> Option<Vec<u8>> {
         let runtime = self.server.runtime_snapshot(session_id)?;
         Some(encode_notification(
             "runtime/updated",
@@ -1206,7 +1220,7 @@ fn turns_window<'a, T>(
 
 /// The start parameters a reopening's `agentConfig` spells, in the names the
 /// start path reads.
-fn reopen_start_params(agent_config: &Map<String, Value>) -> BTreeMap<String, Value> {
+pub(super) fn reopen_start_params(agent_config: &Map<String, Value>) -> BTreeMap<String, Value> {
     const CARRIED: [&str; 12] = [
         "cwd",
         "workspaceRoots",

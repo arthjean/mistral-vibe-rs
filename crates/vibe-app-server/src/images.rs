@@ -245,6 +245,47 @@ fn validate_inline_image(media_type: &str, data: &str) -> Result<(), DriverError
     Ok(())
 }
 
+/// Reference `snapshot_image` (`vibe/core/session/image_snapshot.py`): an
+/// image a prompt mentions, copied under the session's `attachments`
+/// directory by the SHA-1 of its bytes, or kept inline when the session has
+/// no directory.
+pub(crate) fn snapshot_image_file(
+    path: &Path,
+    alias: &str,
+    session_dir: Option<&Path>,
+) -> Result<Value, String> {
+    let image = read_image(path).map_err(|error| error.to_string())?;
+    validate_image_size(image.bytes.len()).map_err(|error| error.to_string())?;
+    let mime_type = image.format.media_type();
+    let Some(session_dir) = session_dir else {
+        return Ok(json!({
+            "source": {"kind": "inline", "data": BASE64_STANDARD.encode(&image.bytes)},
+            "alias": alias,
+            "mimeType": mime_type,
+        }));
+    };
+    let extension = path
+        .extension()
+        .map(|extension| format!(".{}", extension.to_string_lossy().to_lowercase()))
+        .unwrap_or_default();
+    let digest = Sha1::digest(&image.bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    let directory = session_dir.join("attachments");
+    std::fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+    let destination = directory.join(format!("{digest}{extension}"));
+    if !destination.exists() {
+        std::fs::write(&destination, &image.bytes).map_err(|error| error.to_string())?;
+    }
+    let destination = std::fs::canonicalize(&destination).map_err(|error| error.to_string())?;
+    Ok(json!({
+        "source": {"kind": "file", "path": destination.to_string_lossy()},
+        "alias": alias,
+        "mimeType": mime_type,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

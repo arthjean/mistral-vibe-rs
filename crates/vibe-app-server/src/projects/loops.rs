@@ -61,17 +61,23 @@ pub(super) fn public_loop_value(scheduled: &ScheduledLoop) -> Value {
 }
 
 pub(super) fn parse_interval(value: &str) -> Result<u64, ProjectsServiceError> {
+    if value.is_empty() {
+        return Err(ProjectsServiceError::Loop(
+            "an interval is required".to_owned(),
+        ));
+    }
     let mut normalized = value.trim().to_ascii_lowercase();
     let unit = normalized.pop().ok_or_else(|| {
-        ProjectsServiceError::InvalidParams(
-            "interval must use `<digits><s|m|h|d>` syntax".to_owned(),
-        )
+        ProjectsServiceError::Loop("interval must use `<digits><s|m|h|d>` syntax".to_owned())
     })?;
     let digits = normalized;
-    let amount = digits.parse::<u64>().map_err(|_| {
-        ProjectsServiceError::InvalidParams(
+    if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err(ProjectsServiceError::Loop(
             "interval must use `<digits><s|m|h|d>` syntax".to_owned(),
-        )
+        ));
+    }
+    let amount = digits.parse::<u64>().map_err(|_| {
+        ProjectsServiceError::Loop("interval exceeds the supported range".to_owned())
     })?;
     let multiplier = match unit {
         's' => 1,
@@ -79,13 +85,13 @@ pub(super) fn parse_interval(value: &str) -> Result<u64, ProjectsServiceError> {
         'h' => 60 * 60,
         'd' => 24 * 60 * 60,
         _ => {
-            return Err(ProjectsServiceError::InvalidParams(
+            return Err(ProjectsServiceError::Loop(
                 "interval must use `<digits><s|m|h|d>` syntax".to_owned(),
             ));
         }
     };
     amount.checked_mul(multiplier).ok_or_else(|| {
-        ProjectsServiceError::InvalidParams("interval exceeds the supported range".to_owned())
+        ProjectsServiceError::Loop("interval exceeds the supported range".to_owned())
     })
 }
 
@@ -270,19 +276,34 @@ impl ProjectsService {
     ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         self.ensure_loop_store_ready()?;
         let session_id = required_string(params, "sessionId")?;
-        let prompt = required_string(params, "prompt")?;
-        if prompt.starts_with('/') {
-            return Err(ProjectsServiceError::InvalidParams(
-                "scheduled-loop prompts cannot start with `/`".to_owned(),
-            ));
-        }
-        let interval_seconds = parse_interval(required_string(params, "interval")?)?;
-        let now_seconds = optional_u64(params, "nowSeconds")?.unwrap_or_else(now_seconds);
+        // Reference `LoopManager.create`: the interval is read first, then
+        // the prompt, trimmed.
+        let interval = params
+            .get("interval")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let interval_seconds = parse_interval(interval)?;
         if interval_seconds < MIN_LOOP_INTERVAL_SECONDS {
-            return Err(ProjectsServiceError::InvalidParams(format!(
+            return Err(ProjectsServiceError::Loop(format!(
                 "intervalSeconds must be at least {MIN_LOOP_INTERVAL_SECONDS}"
             )));
         }
+        let prompt = params
+            .get("prompt")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .trim();
+        if prompt.is_empty() {
+            return Err(ProjectsServiceError::Loop(
+                "a prompt is required".to_owned(),
+            ));
+        }
+        if prompt.starts_with('/') {
+            return Err(ProjectsServiceError::Loop(
+                "scheduled-loop prompts cannot start with `/`".to_owned(),
+            ));
+        }
+        let now_seconds = optional_u64(params, "nowSeconds")?.unwrap_or_else(now_seconds);
         let mut loops = self.lock_loops()?;
         if loops
             .values()
@@ -290,7 +311,7 @@ impl ProjectsService {
             .count()
             >= MAX_LOOPS_PER_SESSION
         {
-            return Err(ProjectsServiceError::Conflict(format!(
+            return Err(ProjectsServiceError::Loop(format!(
                 "session `{session_id}` already owns {MAX_LOOPS_PER_SESSION} scheduled loops"
             )));
         }
@@ -365,14 +386,11 @@ impl ProjectsService {
         let loop_id = required_string(params, "loopId")?;
         let mut loops = self.lock_loops()?;
         let before = loops.clone();
-        let scheduled = loops.get(loop_id).ok_or_else(|| {
-            ProjectsServiceError::NotFound(format!("loop `{loop_id}` was not found"))
-        })?;
-        if scheduled.session_id != session_id {
-            return Err(ProjectsServiceError::NotFound(format!(
-                "loop `{loop_id}` is not owned by session `{session_id}`"
-            )));
-        }
+        // Reference `LoopManager.delete` sees only the session's own loops.
+        let scheduled = loops
+            .get(loop_id)
+            .filter(|scheduled| scheduled.session_id == session_id)
+            .ok_or_else(|| ProjectsServiceError::Loop(format!("loop `{loop_id}` was not found")))?;
         if scheduled.state == LoopState::Running {
             return Err(ProjectsServiceError::Conflict(format!(
                 "loop `{loop_id}` cannot be deleted while running"

@@ -21,6 +21,8 @@ pub enum ProtocolErrorCode {
     StaleTurn,
     /// The active turn cannot accept steering input.
     NotSteerable,
+    /// The callback being answered was already answered or withdrawn.
+    CallbackClosed,
     /// Compaction did not produce a usable session.
     CompactionFailed,
     /// Credentials are missing or rejected.
@@ -32,6 +34,8 @@ pub enum ProtocolErrorCode {
     /// The method exists but this server, or the part of it the call reaches,
     /// does not offer it.
     NotImplemented,
+    /// A replay cursor points at events the server no longer holds.
+    StaleCursor,
     /// The server failed for a reason the client cannot act on.
     InternalError,
 }

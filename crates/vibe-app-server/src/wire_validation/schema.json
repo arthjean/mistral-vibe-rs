@@ -1,0 +1,6743 @@
+{
+ "schemaVersion": 1,
+ "note": "Captured by scripts/parity/app_server_params.py from the pinned reference: the pydantic-core schema of every request parameter model, reduced to names, aliases, constraints, literal and enum values and validator names. No reference prose.",
+ "methods": {
+  "account/read": "AccountReadParams",
+  "agents/install": "AgentInstallParams",
+  "agents/list": "AgentsListParams",
+  "agents/uninstall": "AgentInstallParams",
+  "callback/result": "CallbackResultParams",
+  "config/fields/read": "ConfigFieldsReadParams",
+  "config/model/write": "ModelConfigWriteParams",
+  "config/proxy/read": "ConfigProxyReadParams",
+  "config/proxy/write": "ConfigProxyWriteParams",
+  "config/read": "ConfigReadParams",
+  "config/reload": "ConfigReloadParams",
+  "config/schema": "ConfigSchemaReadParams",
+  "config/write": "ConfigWriteParams",
+  "connector_catalog/auth/request": "ConnectorCatalogAuthRequestParams",
+  "connector_catalog/read": "ConnectorCatalogReadParams",
+  "connector_catalog/refresh": "ConnectorCatalogRefreshParams",
+  "connector_catalog/toggle": "ConnectorCatalogToggleParams",
+  "connectors/auth/read": "ConnectorAuthReadParams",
+  "connectors/read": "ConnectorsReadParams",
+  "connectors/refresh": "ConnectorRefreshParams",
+  "diagnostics/list": "DiagnosticsListParams",
+  "diagnostics/logs/read": "DiagnosticsLogsReadParams",
+  "events/read": "EventsReadParams",
+  "feedback/record": "FeedbackRecordParams",
+  "feedback/shouldShow": "FeedbackShouldShowParams",
+  "identity/read": "IdentityReadParams",
+  "loops/clear": "LoopsClearParams",
+  "loops/create": "LoopsCreateParams",
+  "loops/delete": "LoopsDeleteParams",
+  "loops/list": "LoopsListParams",
+  "mcp/add": "MCPAddParams",
+  "mcp/login": "MCPLoginParams",
+  "mcp/logout": "MCPLogoutParams",
+  "mcp/read": "MCPReadParams",
+  "mcp/refresh": "MCPRefreshParams",
+  "mcp/toggle": "MCPToggleParams",
+  "mcp_catalog/add": "MCPAddParams",
+  "mcp_catalog/login": "MCPLoginParams",
+  "mcp_catalog/logout": "MCPLogoutParams",
+  "mcp_catalog/read": "MCPReadParams",
+  "mcp_catalog/refresh": "MCPRefreshParams",
+  "mcp_catalog/remove": "MCPRemoveParams",
+  "mcp_catalog/toggle": "MCPToggleParams",
+  "narration/summarize": "NarrationSummarizeParams",
+  "plugin/info": "PluginInfoParams",
+  "plugin/reload": "PluginReloadParams",
+  "plugin_catalog/read": "PluginCatalogReadParams",
+  "plugins/read": "PluginCatalogReadParams",
+  "projectLinks/create": "ProjectLinksCreateParams",
+  "projectLinks/inspectRoot": "ProjectLinksInspectRootParams",
+  "projectLinks/link": "ProjectLinksLinkParams",
+  "projectLinks/list": "ProjectLinksListParams",
+  "projectLinks/picker/load": "ProjectLinksPickerLoadParams",
+  "projectLinks/picker/loadMore": "ProjectLinksPickerLoadMoreParams",
+  "projectLinks/resolveRoot": "ProjectLinksResolveRootParams",
+  "projectLinks/save": "ProjectLinksSaveParams",
+  "projectLinks/unlink": "ProjectLinksUnlinkParams",
+  "review/approve": "ReviewMutationParams",
+  "review/baseline": "ReviewBaselineParams",
+  "review/hunks": "ReviewHunksParams",
+  "review/revert": "ReviewMutationParams",
+  "review/state": "ReviewStateParams",
+  "review/turnDiff": "ReviewTurnDiffParams",
+  "runtime/read": "RuntimeReadParams",
+  "session/agent/update": "AgentSwitchParams",
+  "session/compact": "SessionCompactParams",
+  "session/context/inject": "ContextInjectParams",
+  "session/continue": "SessionContinueParams",
+  "session/delete": "SessionDeleteParams",
+  "session/fork": "SessionForkParams",
+  "session/history/clear": "SessionHistoryClearParams",
+  "session/history/get": "SessionHistoryGetParams",
+  "session/history/list": "SessionHistoryListParams",
+  "session/list": "SessionListParams",
+  "session/log/read": "SessionLogReadParams",
+  "session/pin": "SessionPinParams",
+  "session/read": "SessionReadParams",
+  "session/ready/read": "SessionReadyReadParams",
+  "session/ready/wait": "SessionReadyWaitParams",
+  "session/relocate": "SessionRelocateParams",
+  "session/rename": "SessionTitleUpdateParams",
+  "session/resume": "SessionResumeParams",
+  "session/rewind": "SessionRewindParams",
+  "session/rewind/read": "SessionRewindReadParams",
+  "session/settings/update": "SessionSettingsUpdateParams",
+  "session/shellCommand": "SessionShellCommandParams",
+  "session/start": "SessionStartParams",
+  "session/stop": "SessionStopParams",
+  "session/title/update": "SessionTitleUpdateParams",
+  "session/turn/enqueue": "TurnEnqueueParams",
+  "session/turn/queue/read": "TurnQueueReadParams",
+  "session/turn/queue/remove": "TurnQueueRemoveParams",
+  "session/turn/queue/replace": "TurnQueueReplaceParams",
+  "session/turn/queue/resume": "TurnQueueResumeParams",
+  "session/turn/queue/steer": "TurnQueueSteerParams",
+  "session/turns/list": "SessionTurnsListParams",
+  "shell/interrupt": null,
+  "shell/run": "ShellRunParams",
+  "skills/catalog": "SkillsCatalogParams",
+  "skills/convertLocal": "SkillsConvertLocalParams",
+  "skills/detail": "SkillsDetailParams",
+  "skills/import": "SkillsImportParams",
+  "skills/installed": "SkillsInstalledParams",
+  "skills/list": "SkillsListParams",
+  "skills/remove": "SkillsRemoveParams",
+  "skills/setAlias": "SkillsSetAliasParams",
+  "skills/setEnabled": "SkillsSetEnabledParams",
+  "skills/setLatest": "SkillsSetLatestParams",
+  "skills/setVersion": "SkillsSetVersionParams",
+  "skills/updates": "SkillsUpdatesParams",
+  "skills/versions": "SkillsVersionsParams",
+  "stats/read": "StatsReadParams",
+  "telemetry/record": "TelemetryRecordParams",
+  "tools/list": "ToolsListParams",
+  "turn/interrupt": "TurnInterruptParams",
+  "turn/start": "TurnStartParams",
+  "turn/steer": "TurnSteerParams",
+  "vibeCode/projects/cancel": "VibeCodeProjectCancelParams",
+  "vibeCode/projects/create": "VibeCodeProjectCreateParams",
+  "vibeCode/projects/loadMore": "VibeCodeProjectsLoadMoreParams",
+  "vibeCode/projects/open": "VibeCodeProjectsOpenParams",
+  "vibeCode/projects/recover": "VibeCodeProjectRecoverParams",
+  "vibeCode/projects/select": "VibeCodeProjectSelectParams",
+  "vibeCode/projects/unlink": "VibeCodeProjectUnlinkParams",
+  "vibeCode/teleport/cancel": "TeleportCancelParams",
+  "vibeCode/teleport/push/respond": "TeleportPushRespondParams",
+  "vibeCode/teleport/start": "TeleportStartParams",
+  "workspace/git/checkouts": "WorkspaceGitCheckoutsParams",
+  "workspace/git/worktrees/limit/update": "WorkspaceWorktreeLimitUpdateParams",
+  "workspace/git/worktrees/list": "WorkspaceWorktreeListParams",
+  "workspace/git/worktrees/prune": "WorkspaceWorktreePruneParams",
+  "workspace/git/worktrees/remove": "WorkspaceWorktreeRemoveParams",
+  "workspace/prompt/prepare": "WorkspacePromptPrepareParams",
+  "workspace/trust/decision": "WorkspaceTrustDecisionParams",
+  "workspace/trust/status": "WorkspaceTrustStatusParams",
+  "workspace/trust/untrustedConfig": "WorkspaceUntrustedConfigParams"
+ },
+ "lifecycle": {
+  "initialize": "InitializeParams"
+ },
+ "nested": {
+  "callback/result": "CallbackRespondParams"
+ },
+ "functions": [
+  "AgentConfig._reject_empty_cwd",
+  "SessionEmbeddedResourceContentBlock.validate_content",
+  "SessionSettingsUpdateParams.require_update",
+  "SessionShellCommandParams.validate_action",
+  "UserDisplayContent.strip_nonempty",
+  "_TurnQueueInputParams.validate_entries"
+ ],
+ "defs": {
+  "AccountReadParams": {
+   "type": "model",
+   "name": "AccountReadParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "AgentConfig": {
+   "type": "model",
+   "name": "AgentConfig",
+   "fields": [
+    {
+     "name": "completion",
+     "alias": "completion",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "ref",
+        "name": "CompletionConfig"
+       }
+      }
+     }
+    },
+    {
+     "name": "sandbox",
+     "alias": "sandbox",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "dict",
+        "keys": {
+         "type": "str"
+        },
+        "values": {
+         "type": "json-value"
+        }
+       }
+      }
+     }
+    },
+    {
+     "name": "instructions",
+     "alias": "instructions",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "str"
+      }
+     }
+    },
+    {
+     "name": "workdir",
+     "alias": "workdir",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "function-after",
+       "function": "AgentConfig._reject_empty_cwd",
+       "schema": {
+        "type": "nullable",
+        "schema": {
+         "type": "str"
+        }
+       }
+      }
+     }
+    },
+    {
+     "name": "tools",
+     "alias": "tools",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "list",
+       "items": {
+        "type": "ref",
+        "name": "ToolDefinition"
+       }
+      }
+     }
+    },
+    {
+     "name": "hooks",
+     "alias": "hooks",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "list",
+       "items": {
+        "type": "ref",
+        "name": "HookDefinition"
+       }
+      }
+     }
+    },
+    {
+     "name": "cwd",
+     "alias": "cwd",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "function-after",
+       "function": "AgentConfig._reject_empty_cwd",
+       "schema": {
+        "type": "nullable",
+        "schema": {
+         "type": "str"
+        }
+       }
+      }
+     }
+    },
+    {
+     "name": "workspace_roots",
+     "alias": "workspaceRoots",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "list",
+       "items": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "worktree",
+     "alias": "worktree",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "tagged-union",
+        "discriminator": "kind",
+        "choices": [
+         [
+          "existing",
+          {
+           "type": "ref",
+           "name": "ExistingWorktreeInput"
+          }
+         ],
+         [
+          "create",
+          {
+           "type": "ref",
+           "name": "NewWorktreeInput"
+          }
+         ],
+         [
+          "auto",
+          {
+           "type": "ref",
+           "name": "AutoWorktreeInput"
+          }
+         ]
+        ],
+        "strict": false,
+        "from_attributes": true
+       }
+      }
+     }
+    },
+    {
+     "name": "agent",
+     "alias": "agent",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "auto_approve",
+     "alias": "autoApprove",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    },
+    {
+     "name": "enabled_tools",
+     "alias": "enabledTools",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "list",
+        "items": {
+         "type": "str"
+        }
+       }
+      }
+     }
+    },
+    {
+     "name": "disabled_tools",
+     "alias": "disabledTools",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "list",
+       "items": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "max_turns",
+     "alias": "maxTurns",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "int"
+       }
+      }
+     }
+    },
+    {
+     "name": "max_price",
+     "alias": "maxPrice",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "float"
+       }
+      }
+     }
+    },
+    {
+     "name": "max_session_tokens",
+     "alias": "maxSessionTokens",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "int"
+       }
+      }
+     }
+    },
+    {
+     "name": "headless",
+     "alias": "headless",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    },
+    {
+     "name": "trust_workspace",
+     "alias": "trustWorkspace",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    },
+    {
+     "name": "mcp_servers",
+     "alias": "mcpServers",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "list",
+       "items": {
+        "type": "tagged-union",
+        "discriminator": "transport",
+        "choices": [
+         [
+          "http",
+          {
+           "type": "ref",
+           "name": "SessionMCPHttpServer"
+          }
+         ],
+         [
+          "streamable-http",
+          {
+           "type": "ref",
+           "name": "SessionMCPHttpServer"
+          }
+         ],
+         [
+          "stdio",
+          {
+           "type": "ref",
+           "name": "SessionMCPStdioServer"
+          }
+         ]
+        ],
+        "strict": false,
+        "from_attributes": true
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "AgentInstallParams": {
+   "type": "model",
+   "name": "AgentInstallParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "agent_name",
+     "alias": "agentName",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "AgentSwitchParams": {
+   "type": "model",
+   "name": "AgentSwitchParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "agent_name",
+     "alias": "agentName",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "AgentsListParams": {
+   "type": "model",
+   "name": "AgentsListParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ApprovalCallbackOutput": {
+   "type": "model",
+   "name": "ApprovalCallbackOutput",
+   "fields": [
+    {
+     "name": "type",
+     "alias": "type",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "approval"
+       ]
+      }
+     }
+    },
+    {
+     "name": "decision",
+     "alias": "decision",
+     "schema": {
+      "type": "ref",
+      "name": "ApprovalDecision"
+     }
+    },
+    {
+     "name": "feedback",
+     "alias": "feedback",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ApprovalDecision": {
+   "type": "model",
+   "name": "ApprovalDecision",
+   "fields": [
+    {
+     "name": "type",
+     "alias": "type",
+     "schema": {
+      "type": "enum",
+      "name": "ApprovalDecisionType",
+      "values": [
+       "approve",
+       "approve_for_session",
+       "approve_permanently",
+       "deny",
+       "cancel_turn"
+      ],
+      "sub_type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "AutoWorktreeInput": {
+   "type": "model",
+   "name": "AutoWorktreeInput",
+   "fields": [
+    {
+     "name": "kind",
+     "alias": "kind",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "auto"
+       ]
+      }
+     }
+    },
+    {
+     "name": "prompt",
+     "alias": "prompt",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "CallbackRespondParams": {
+   "type": "model",
+   "name": "CallbackRespondParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "callback_id",
+     "alias": "callbackId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "output",
+     "alias": "output",
+     "schema": {
+      "type": "tagged-union",
+      "discriminator": "type",
+      "choices": [
+       [
+        "approval",
+        {
+         "type": "ref",
+         "name": "ApprovalCallbackOutput"
+        }
+       ],
+       [
+        "user_input",
+        {
+         "type": "ref",
+         "name": "UserInputCallbackOutput"
+        }
+       ]
+      ],
+      "strict": false,
+      "from_attributes": true
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "CallbackResult": {
+   "type": "model",
+   "name": "CallbackResult",
+   "fields": [
+    {
+     "name": "callback_id",
+     "alias": "callbackId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "output",
+     "alias": "output",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "json-value"
+      }
+     }
+    },
+    {
+     "name": "error",
+     "alias": "error",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "ref",
+        "name": "CallbackResultError"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "CallbackResultError": {
+   "type": "model",
+   "name": "CallbackResultError",
+   "fields": [
+    {
+     "name": "message",
+     "alias": "message",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "code",
+     "alias": "code",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "details",
+     "alias": "details",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "json-value"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "CallbackResultParams": {
+   "type": "model",
+   "name": "CallbackResultParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "result",
+     "alias": "result",
+     "schema": {
+      "type": "ref",
+      "name": "CallbackResult"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ClientCapabilities": {
+   "type": "model",
+   "name": "ClientCapabilities",
+   "fields": [
+    {
+     "name": "callback_kinds",
+     "alias": "callbackKinds",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "list",
+       "items": {
+        "type": "literal",
+        "expected": [
+         "approval",
+         "user_input",
+         "connector_auth"
+        ]
+       }
+      }
+     }
+    },
+    {
+     "name": "client_tools",
+     "alias": "clientTools",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "list",
+       "items": {
+        "type": "literal",
+        "expected": [
+         "filesystem/read",
+         "filesystem/write",
+         "terminal"
+        ]
+       }
+      }
+     }
+    },
+    {
+     "name": "disabled_notifications",
+     "alias": "disabledNotifications",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "list",
+       "items": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ClientInfo": {
+   "type": "model",
+   "name": "ClientInfo",
+   "fields": [
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "version",
+     "alias": "version",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "title",
+     "alias": "title",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "entrypoint",
+     "alias": "entrypoint",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "cli",
+        "acp",
+        "desktop",
+        "programmatic",
+        "unknown"
+       ]
+      }
+     }
+    },
+    {
+     "name": "terminal_emulator",
+     "alias": "terminalEmulator",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "enum",
+       "name": "TerminalEmulator",
+       "values": [
+        "vscode",
+        "vscode_insiders",
+        "cursor",
+        "jetbrains",
+        "apple_terminal",
+        "iterm2",
+        "wezterm",
+        "ghostty",
+        "alacritty",
+        "kitty",
+        "hyper",
+        "windows_terminal",
+        "unknown"
+       ],
+       "sub_type": "str"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "CompletionConfig": {
+   "type": "model",
+   "name": "CompletionConfig",
+   "fields": [
+    {
+     "name": "type",
+     "alias": "type",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "str"
+      }
+     }
+    },
+    {
+     "name": "model",
+     "alias": "model",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "str"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ConfigFieldsReadParams": {
+   "type": "model",
+   "name": "ConfigFieldsReadParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ConfigProxyReadParams": {
+   "type": "model",
+   "name": "ConfigProxyReadParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ConfigProxyWriteParams": {
+   "type": "model",
+   "name": "ConfigProxyWriteParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "changes",
+     "alias": "changes",
+     "schema": {
+      "type": "dict",
+      "keys": {
+       "type": "str"
+      },
+      "values": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ConfigReadParams": {
+   "type": "model",
+   "name": "ConfigReadParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "cwd",
+     "alias": "cwd",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ConfigReloadParams": {
+   "type": "model",
+   "name": "ConfigReloadParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "reload_runtime",
+     "alias": "reloadRuntime",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ConfigSchemaReadParams": {
+   "type": "model",
+   "name": "ConfigSchemaReadParams",
+   "fields": [],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ConfigWriteOpWire": {
+   "type": "model",
+   "name": "ConfigWriteOpWire",
+   "fields": [
+    {
+     "name": "op",
+     "alias": "op",
+     "schema": {
+      "type": "literal",
+      "expected": [
+       "set",
+       "remove"
+      ]
+     }
+    },
+    {
+     "name": "path",
+     "alias": "path",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "value",
+     "alias": "value",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "json-value"
+      }
+     }
+    },
+    {
+     "name": "target_layer",
+     "alias": "targetLayer",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ConfigWriteParams": {
+   "type": "model",
+   "name": "ConfigWriteParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "ops",
+     "alias": "ops",
+     "schema": {
+      "type": "list",
+      "items": {
+       "type": "ref",
+       "name": "ConfigWriteOpWire"
+      }
+     }
+    },
+    {
+     "name": "reason",
+     "alias": "reason",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "str"
+      }
+     }
+    },
+    {
+     "name": "reload_runtime",
+     "alias": "reloadRuntime",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ConnectorAuthReadParams": {
+   "type": "model",
+   "name": "ConnectorAuthReadParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ConnectorCatalogAuthRequestParams": {
+   "type": "model",
+   "name": "ConnectorCatalogAuthRequestParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "alias",
+     "alias": "alias",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ConnectorCatalogReadParams": {
+   "type": "model",
+   "name": "ConnectorCatalogReadParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ConnectorCatalogRefreshParams": {
+   "type": "model",
+   "name": "ConnectorCatalogRefreshParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ConnectorCatalogToggleParams": {
+   "type": "model",
+   "name": "ConnectorCatalogToggleParams",
+   "fields": [
+    {
+     "name": "alias",
+     "alias": "alias",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "disabled",
+     "alias": "disabled",
+     "schema": {
+      "type": "bool"
+     }
+    },
+    {
+     "name": "tool_name",
+     "alias": "toolName",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ConnectorRefreshParams": {
+   "type": "model",
+   "name": "ConnectorRefreshParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ConnectorsReadParams": {
+   "type": "model",
+   "name": "ConnectorsReadParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ContextInjectParams": {
+   "type": "model",
+   "name": "ContextInjectParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "input",
+     "alias": "input",
+     "schema": {
+      "type": "list",
+      "items": {
+       "type": "tagged-union",
+       "discriminator": "type",
+       "choices": [
+        [
+         "text",
+         {
+          "type": "ref",
+          "name": "TextContentBlock"
+         }
+        ],
+        [
+         "image",
+         {
+          "type": "ref",
+          "name": "ImageContentBlock"
+         }
+        ],
+        [
+         "resource",
+         {
+          "type": "ref",
+          "name": "ResourceContentBlock"
+         }
+        ]
+       ],
+       "strict": false,
+       "from_attributes": true
+      }
+     }
+    },
+    {
+     "name": "as_message",
+     "alias": "asMessage",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    },
+    {
+     "name": "inject_invoked_skill",
+     "alias": "injectInvokedSkill",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    },
+    {
+     "name": "client_user_message_id",
+     "alias": "clientUserMessageId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "mention_stats",
+     "alias": "mentionStats",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "ref",
+        "name": "MentionStats"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "DiagnosticsListParams": {
+   "type": "model",
+   "name": "DiagnosticsListParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "DiagnosticsLogsReadParams": {
+   "type": "model",
+   "name": "DiagnosticsLogsReadParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "limit",
+     "alias": "limit",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "int",
+       "ge": 1,
+       "le": 500
+      }
+     }
+    },
+    {
+     "name": "offset",
+     "alias": "offset",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "int",
+       "ge": 0
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "EventsFilter": {
+   "type": "model",
+   "name": "EventsFilter",
+   "fields": [
+    {
+     "name": "session_ids",
+     "alias": "sessionIds",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "list",
+       "items": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "root_session_ids",
+     "alias": "rootSessionIds",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "list",
+       "items": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "parent_session_ids",
+     "alias": "parentSessionIds",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "list",
+       "items": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "event_types",
+     "alias": "eventTypes",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "list",
+       "items": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "EventsReadParams": {
+   "type": "model",
+   "name": "EventsReadParams",
+   "fields": [
+    {
+     "name": "after_event_id",
+     "alias": "afterEventId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "int"
+       }
+      }
+     }
+    },
+    {
+     "name": "filters",
+     "alias": "filters",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "ref",
+       "name": "EventsFilter"
+      }
+     }
+    },
+    {
+     "name": "batch_size",
+     "alias": "batchSize",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "int",
+       "ge": 1
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ExistingWorktreeInput": {
+   "type": "model",
+   "name": "ExistingWorktreeInput",
+   "fields": [
+    {
+     "name": "kind",
+     "alias": "kind",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "existing"
+       ]
+      }
+     }
+    },
+    {
+     "name": "cwd",
+     "alias": "cwd",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "FeedbackRecordParams": {
+   "type": "model",
+   "name": "FeedbackRecordParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "action",
+     "alias": "action",
+     "schema": {
+      "type": "literal",
+      "expected": [
+       "asked",
+       "given",
+       "snoozed"
+      ]
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "FeedbackShouldShowParams": {
+   "type": "model",
+   "name": "FeedbackShouldShowParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "pending_user_messages",
+     "alias": "pendingUserMessages",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "int"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "FileImageSource": {
+   "type": "model",
+   "name": "FileImageSource",
+   "fields": [
+    {
+     "name": "kind",
+     "alias": "kind",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "file"
+       ]
+      }
+     }
+    },
+    {
+     "name": "path",
+     "alias": "path",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "HookDefinition": {
+   "type": "model",
+   "name": "HookDefinition",
+   "fields": [
+    {
+     "name": "type",
+     "alias": "type",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "matcher",
+     "alias": "matcher",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "dict",
+       "keys": {
+        "type": "str"
+       },
+       "values": {
+        "type": "json-value"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "IdentityReadParams": {
+   "type": "model",
+   "name": "IdentityReadParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ImageAttachment": {
+   "type": "model",
+   "name": "ImageAttachment",
+   "fields": [
+    {
+     "name": "source",
+     "alias": "source",
+     "schema": {
+      "type": "tagged-union",
+      "discriminator": "kind",
+      "choices": [
+       [
+        "file",
+        {
+         "type": "ref",
+         "name": "FileImageSource"
+        }
+       ],
+       [
+        "inline",
+        {
+         "type": "ref",
+         "name": "InlineImageSource"
+        }
+       ]
+      ],
+      "strict": false,
+      "from_attributes": true
+     }
+    },
+    {
+     "name": "alias",
+     "alias": "alias",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "mime_type",
+     "alias": "mimeType",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ImageContentBlock": {
+   "type": "model",
+   "name": "ImageContentBlock",
+   "fields": [
+    {
+     "name": "type",
+     "alias": "type",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "image"
+       ]
+      }
+     }
+    },
+    {
+     "name": "attachment",
+     "alias": "attachment",
+     "schema": {
+      "type": "ref",
+      "name": "ImageAttachment"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "InitializeParams": {
+   "type": "model",
+   "name": "InitializeParams",
+   "fields": [
+    {
+     "name": "client_info",
+     "alias": "clientInfo",
+     "schema": {
+      "type": "ref",
+      "name": "ClientInfo"
+     }
+    },
+    {
+     "name": "capabilities",
+     "alias": "capabilities",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "ref",
+       "name": "ClientCapabilities"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "InlineImageSource": {
+   "type": "model",
+   "name": "InlineImageSource",
+   "fields": [
+    {
+     "name": "kind",
+     "alias": "kind",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "inline"
+       ]
+      }
+     }
+    },
+    {
+     "name": "data",
+     "alias": "data",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "LoopsClearParams": {
+   "type": "model",
+   "name": "LoopsClearParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "LoopsCreateParams": {
+   "type": "model",
+   "name": "LoopsCreateParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "interval",
+     "alias": "interval",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "prompt",
+     "alias": "prompt",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "LoopsDeleteParams": {
+   "type": "model",
+   "name": "LoopsDeleteParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "loop_id",
+     "alias": "loopId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "LoopsListParams": {
+   "type": "model",
+   "name": "LoopsListParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "MCPAddParams": {
+   "type": "model",
+   "name": "MCPAddParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "url",
+     "alias": "url",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "scopes",
+     "alias": "scopes",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "list",
+       "items": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "transport",
+     "alias": "transport",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "http",
+        "streamable-http"
+       ]
+      }
+     }
+    },
+    {
+     "name": "allow_insecure_http",
+     "alias": "allowInsecureHttp",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "MCPLoginParams": {
+   "type": "model",
+   "name": "MCPLoginParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "MCPLogoutParams": {
+   "type": "model",
+   "name": "MCPLogoutParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "MCPReadParams": {
+   "type": "model",
+   "name": "MCPReadParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "MCPRefreshParams": {
+   "type": "model",
+   "name": "MCPRefreshParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "MCPRemoveParams": {
+   "type": "model",
+   "name": "MCPRemoveParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "MCPToggleParams": {
+   "type": "model",
+   "name": "MCPToggleParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "source",
+     "alias": "source",
+     "schema": {
+      "type": "literal",
+      "expected": [
+       "server",
+       "connector"
+      ]
+     }
+    },
+    {
+     "name": "disabled",
+     "alias": "disabled",
+     "schema": {
+      "type": "bool"
+     }
+    },
+    {
+     "name": "tool_name",
+     "alias": "toolName",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "MentionStats": {
+   "type": "model",
+   "name": "MentionStats",
+   "fields": [
+    {
+     "name": "count",
+     "alias": "count",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "int"
+      }
+     }
+    },
+    {
+     "name": "context_types",
+     "alias": "contextTypes",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "dict",
+       "keys": {
+        "type": "str"
+       },
+       "values": {
+        "type": "int"
+       }
+      }
+     }
+    },
+    {
+     "name": "file_extensions",
+     "alias": "fileExtensions",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "dict",
+       "keys": {
+        "type": "str"
+       },
+       "values": {
+        "type": "int"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "MessageAnnotations": {
+   "type": "model",
+   "name": "MessageAnnotations",
+   "fields": [
+    {
+     "name": "vibe_user_display_content",
+     "alias": "vibe.userDisplayContent",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "ref",
+        "name": "UserDisplayContent"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ModelConfigWriteParams": {
+   "type": "model",
+   "name": "ModelConfigWriteParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "model_alias",
+     "alias": "modelAlias",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "reasoning_effort",
+     "alias": "reasoningEffort",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "NarrationSummarizeParams": {
+   "type": "model",
+   "name": "NarrationSummarizeParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "user_message",
+     "alias": "userMessage",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "assistant_text",
+     "alias": "assistantText",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "error",
+     "alias": "error",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "message_id",
+     "alias": "messageId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "NewWorktreeInput": {
+   "type": "model",
+   "name": "NewWorktreeInput",
+   "fields": [
+    {
+     "name": "kind",
+     "alias": "kind",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "create"
+       ]
+      }
+     }
+    },
+    {
+     "name": "branch",
+     "alias": "branch",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    },
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "PageRequest": {
+   "type": "model",
+   "name": "PageRequest",
+   "fields": [
+    {
+     "name": "cursor",
+     "alias": "cursor",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "limit",
+     "alias": "limit",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "int",
+       "ge": 1,
+       "le": 500
+      }
+     }
+    },
+    {
+     "name": "direction",
+     "alias": "direction",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "forward",
+        "backward"
+       ]
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "PluginCatalogReadParams": {
+   "type": "model",
+   "name": "PluginCatalogReadParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "PluginInfoParams": {
+   "type": "model",
+   "name": "PluginInfoParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "PluginReloadParams": {
+   "type": "model",
+   "name": "PluginReloadParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ProjectLinksCreateParams": {
+   "type": "model",
+   "name": "ProjectLinksCreateParams",
+   "fields": [
+    {
+     "name": "root_path",
+     "alias": "rootPath",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    },
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    },
+    {
+     "name": "default_branch",
+     "alias": "defaultBranch",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ProjectLinksInspectRootParams": {
+   "type": "model",
+   "name": "ProjectLinksInspectRootParams",
+   "fields": [
+    {
+     "name": "root_path",
+     "alias": "rootPath",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ProjectLinksLinkParams": {
+   "type": "model",
+   "name": "ProjectLinksLinkParams",
+   "fields": [
+    {
+     "name": "root_path",
+     "alias": "rootPath",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    },
+    {
+     "name": "project_id",
+     "alias": "projectId",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    },
+    {
+     "name": "project_name",
+     "alias": "projectName",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ProjectLinksListParams": {
+   "type": "model",
+   "name": "ProjectLinksListParams",
+   "fields": [],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ProjectLinksPickerLoadMoreParams": {
+   "type": "model",
+   "name": "ProjectLinksPickerLoadMoreParams",
+   "fields": [
+    {
+     "name": "root_path",
+     "alias": "rootPath",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    },
+    {
+     "name": "cursor",
+     "alias": "cursor",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ProjectLinksPickerLoadParams": {
+   "type": "model",
+   "name": "ProjectLinksPickerLoadParams",
+   "fields": [
+    {
+     "name": "root_path",
+     "alias": "rootPath",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ProjectLinksResolveRootParams": {
+   "type": "model",
+   "name": "ProjectLinksResolveRootParams",
+   "fields": [
+    {
+     "name": "root_path",
+     "alias": "rootPath",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ProjectLinksSaveParams": {
+   "type": "model",
+   "name": "ProjectLinksSaveParams",
+   "fields": [
+    {
+     "name": "root_path",
+     "alias": "rootPath",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    },
+    {
+     "name": "project_id",
+     "alias": "projectId",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    },
+    {
+     "name": "project_name",
+     "alias": "projectName",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    },
+    {
+     "name": "expected_github_repo_url",
+     "alias": "expectedGithubRepoUrl",
+     "schema": {
+      "type": "nullable",
+      "schema": {
+       "type": "str"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ProjectLinksUnlinkParams": {
+   "type": "model",
+   "name": "ProjectLinksUnlinkParams",
+   "fields": [
+    {
+     "name": "root_path",
+     "alias": "rootPath",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ResourceContentBlock": {
+   "type": "model",
+   "name": "ResourceContentBlock",
+   "fields": [
+    {
+     "name": "type",
+     "alias": "type",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "resource"
+       ]
+      }
+     }
+    },
+    {
+     "name": "resource",
+     "alias": "resource",
+     "schema": {
+      "type": "tagged-union",
+      "discriminator": "kind",
+      "choices": [
+       [
+        "text",
+        {
+         "type": "ref",
+         "name": "UserTextResource"
+        }
+       ],
+       [
+        "blob",
+        {
+         "type": "ref",
+         "name": "UserBlobResource"
+        }
+       ],
+       [
+        "link",
+        {
+         "type": "ref",
+         "name": "UserResourceLink"
+        }
+       ]
+      ],
+      "strict": false,
+      "from_attributes": true
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ReviewAgentOwner": {
+   "type": "model",
+   "name": "ReviewAgentOwner",
+   "fields": [
+    {
+     "name": "kind",
+     "alias": "kind",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "agent"
+       ]
+      }
+     }
+    },
+    {
+     "name": "turn_id",
+     "alias": "turnId",
+     "schema": {
+      "type": "int"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ReviewAllTarget": {
+   "type": "model",
+   "name": "ReviewAllTarget",
+   "fields": [
+    {
+     "name": "kind",
+     "alias": "kind",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "all"
+       ]
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ReviewBaselineParams": {
+   "type": "model",
+   "name": "ReviewBaselineParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "path",
+     "alias": "path",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ReviewFileTarget": {
+   "type": "model",
+   "name": "ReviewFileTarget",
+   "fields": [
+    {
+     "name": "kind",
+     "alias": "kind",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "file"
+       ]
+      }
+     }
+    },
+    {
+     "name": "path",
+     "alias": "path",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ReviewHunksParams": {
+   "type": "model",
+   "name": "ReviewHunksParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "path",
+     "alias": "path",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "owner",
+     "alias": "owner",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "tagged-union",
+        "discriminator": "kind",
+        "choices": [
+         [
+          "agent",
+          {
+           "type": "ref",
+           "name": "ReviewAgentOwner"
+          }
+         ],
+         [
+          "manual",
+          {
+           "type": "ref",
+           "name": "ReviewManualOwner"
+          }
+         ]
+        ],
+        "strict": false,
+        "from_attributes": true
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ReviewLastTurnsTarget": {
+   "type": "model",
+   "name": "ReviewLastTurnsTarget",
+   "fields": [
+    {
+     "name": "kind",
+     "alias": "kind",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "lastTurns"
+       ]
+      }
+     }
+    },
+    {
+     "name": "count",
+     "alias": "count",
+     "schema": {
+      "type": "int"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ReviewManualOwner": {
+   "type": "model",
+   "name": "ReviewManualOwner",
+   "fields": [
+    {
+     "name": "kind",
+     "alias": "kind",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "manual"
+       ]
+      }
+     }
+    },
+    {
+     "name": "index",
+     "alias": "index",
+     "schema": {
+      "type": "int"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ReviewMutationParams": {
+   "type": "model",
+   "name": "ReviewMutationParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "target",
+     "alias": "target",
+     "schema": {
+      "type": "tagged-union",
+      "discriminator": "kind",
+      "choices": [
+       [
+        "region",
+        {
+         "type": "ref",
+         "name": "ReviewRegionTarget"
+        }
+       ],
+       [
+        "regions",
+        {
+         "type": "ref",
+         "name": "ReviewRegionsTarget"
+        }
+       ],
+       [
+        "scope",
+        {
+         "type": "ref",
+         "name": "ReviewScopeTarget"
+        }
+       ],
+       [
+        "scopeFile",
+        {
+         "type": "ref",
+         "name": "ReviewScopeFileTarget"
+        }
+       ],
+       [
+        "file",
+        {
+         "type": "ref",
+         "name": "ReviewFileTarget"
+        }
+       ],
+       [
+        "all",
+        {
+         "type": "ref",
+         "name": "ReviewAllTarget"
+        }
+       ],
+       [
+        "lastTurns",
+        {
+         "type": "ref",
+         "name": "ReviewLastTurnsTarget"
+        }
+       ]
+      ],
+      "strict": false,
+      "from_attributes": true
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ReviewRegionRef": {
+   "type": "model",
+   "name": "ReviewRegionRef",
+   "fields": [
+    {
+     "name": "version_index",
+     "alias": "versionIndex",
+     "schema": {
+      "type": "int",
+      "ge": 0
+     }
+    },
+    {
+     "name": "ordinal",
+     "alias": "ordinal",
+     "schema": {
+      "type": "int",
+      "ge": 0
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ReviewRegionTarget": {
+   "type": "model",
+   "name": "ReviewRegionTarget",
+   "fields": [
+    {
+     "name": "kind",
+     "alias": "kind",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "region"
+       ]
+      }
+     }
+    },
+    {
+     "name": "path",
+     "alias": "path",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "version_index",
+     "alias": "versionIndex",
+     "schema": {
+      "type": "int"
+     }
+    },
+    {
+     "name": "ordinal",
+     "alias": "ordinal",
+     "schema": {
+      "type": "int"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ReviewRegionsTarget": {
+   "type": "model",
+   "name": "ReviewRegionsTarget",
+   "fields": [
+    {
+     "name": "kind",
+     "alias": "kind",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "regions"
+       ]
+      }
+     }
+    },
+    {
+     "name": "path",
+     "alias": "path",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "regions",
+     "alias": "regions",
+     "schema": {
+      "type": "list",
+      "items": {
+       "type": "ref",
+       "name": "ReviewRegionRef"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ReviewScopeFileTarget": {
+   "type": "model",
+   "name": "ReviewScopeFileTarget",
+   "fields": [
+    {
+     "name": "kind",
+     "alias": "kind",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "scopeFile"
+       ]
+      }
+     }
+    },
+    {
+     "name": "owner",
+     "alias": "owner",
+     "schema": {
+      "type": "tagged-union",
+      "discriminator": "kind",
+      "choices": [
+       [
+        "agent",
+        {
+         "type": "ref",
+         "name": "ReviewAgentOwner"
+        }
+       ],
+       [
+        "manual",
+        {
+         "type": "ref",
+         "name": "ReviewManualOwner"
+        }
+       ]
+      ],
+      "strict": false,
+      "from_attributes": true
+     }
+    },
+    {
+     "name": "path",
+     "alias": "path",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ReviewScopeTarget": {
+   "type": "model",
+   "name": "ReviewScopeTarget",
+   "fields": [
+    {
+     "name": "kind",
+     "alias": "kind",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "scope"
+       ]
+      }
+     }
+    },
+    {
+     "name": "owner",
+     "alias": "owner",
+     "schema": {
+      "type": "tagged-union",
+      "discriminator": "kind",
+      "choices": [
+       [
+        "agent",
+        {
+         "type": "ref",
+         "name": "ReviewAgentOwner"
+        }
+       ],
+       [
+        "manual",
+        {
+         "type": "ref",
+         "name": "ReviewManualOwner"
+        }
+       ]
+      ],
+      "strict": false,
+      "from_attributes": true
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ReviewStateParams": {
+   "type": "model",
+   "name": "ReviewStateParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ReviewTurnDiffParams": {
+   "type": "model",
+   "name": "ReviewTurnDiffParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "path",
+     "alias": "path",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "owner",
+     "alias": "owner",
+     "schema": {
+      "type": "tagged-union",
+      "discriminator": "kind",
+      "choices": [
+       [
+        "agent",
+        {
+         "type": "ref",
+         "name": "ReviewAgentOwner"
+        }
+       ],
+       [
+        "manual",
+        {
+         "type": "ref",
+         "name": "ReviewManualOwner"
+        }
+       ]
+      ],
+      "strict": false,
+      "from_attributes": true
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "RuntimeReadParams": {
+   "type": "model",
+   "name": "RuntimeReadParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionCompactParams": {
+   "type": "model",
+   "name": "SessionCompactParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "extra_instructions",
+     "alias": "extraInstructions",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "str"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionContinueParams": {
+   "type": "model",
+   "name": "SessionContinueParams",
+   "fields": [
+    {
+     "name": "agent_config",
+     "alias": "agentConfig",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "ref",
+       "name": "AgentConfig"
+      }
+     }
+    },
+    {
+     "name": "history_limit",
+     "alias": "historyLimit",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "int",
+       "ge": 1,
+       "le": 500
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionDeleteParams": {
+   "type": "model",
+   "name": "SessionDeleteParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionEmbeddedResourceContentBlock": {
+   "type": "model",
+   "name": "SessionEmbeddedResourceContentBlock",
+   "fields": [
+    {
+     "name": "type",
+     "alias": "type",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "embedded_resource"
+       ]
+      }
+     }
+    },
+    {
+     "name": "uri",
+     "alias": "uri",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "media_type",
+     "alias": "mediaType",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "text",
+     "alias": "text",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "blob",
+     "alias": "blob",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true,
+   "validators": [
+    {
+     "mode": "function-after",
+     "function": "SessionEmbeddedResourceContentBlock.validate_content"
+    }
+   ]
+  },
+  "SessionForkParams": {
+   "type": "model",
+   "name": "SessionForkParams",
+   "fields": [
+    {
+     "name": "idempotency_key",
+     "alias": "idempotencyKey",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "source_session_id",
+     "alias": "sourceSessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "entry_id",
+     "alias": "entryId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "agent_config",
+     "alias": "agentConfig",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "ref",
+        "name": "AgentConfig"
+       }
+      }
+     }
+    },
+    {
+     "name": "after_turn_id",
+     "alias": "afterTurnId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "history_limit",
+     "alias": "historyLimit",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "int",
+       "ge": 1,
+       "le": 500
+      }
+     }
+    },
+    {
+     "name": "attach",
+     "alias": "attach",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionHistoryClearParams": {
+   "type": "model",
+   "name": "SessionHistoryClearParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionHistoryGetParams": {
+   "type": "model",
+   "name": "SessionHistoryGetParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "history_limit",
+     "alias": "historyLimit",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "int",
+       "ge": 1,
+       "le": 500
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionHistoryListParams": {
+   "type": "model",
+   "name": "SessionHistoryListParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "turn_id",
+     "alias": "turnId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "page",
+     "alias": "page",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "ref",
+       "name": "PageRequest"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionImageContentBlock": {
+   "type": "model",
+   "name": "SessionImageContentBlock",
+   "fields": [
+    {
+     "name": "type",
+     "alias": "type",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "image"
+       ]
+      }
+     }
+    },
+    {
+     "name": "uri",
+     "alias": "uri",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "media_type",
+     "alias": "mediaType",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "alt_text",
+     "alias": "altText",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionListParams": {
+   "type": "model",
+   "name": "SessionListParams",
+   "fields": [
+    {
+     "name": "cursor",
+     "alias": "cursor",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "limit",
+     "alias": "limit",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "int",
+       "ge": 1,
+       "le": 500
+      }
+     }
+    },
+    {
+     "name": "root_session_id",
+     "alias": "rootSessionId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "parent_session_id",
+     "alias": "parentSessionId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "cwd",
+     "alias": "cwd",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "cwds",
+     "alias": "cwds",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "list",
+        "items": {
+         "type": "str"
+        }
+       }
+      }
+     }
+    },
+    {
+     "name": "pinned",
+     "alias": "pinned",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "bool"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionLogReadParams": {
+   "type": "model",
+   "name": "SessionLogReadParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionMCPHttpServer": {
+   "type": "model",
+   "name": "SessionMCPHttpServer",
+   "fields": [
+    {
+     "name": "transport",
+     "alias": "transport",
+     "schema": {
+      "type": "literal",
+      "expected": [
+       "http",
+       "streamable-http"
+      ]
+     }
+    },
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "url",
+     "alias": "url",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "headers",
+     "alias": "headers",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "dict",
+       "keys": {
+        "type": "str"
+       },
+       "values": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionMCPStdioServer": {
+   "type": "model",
+   "name": "SessionMCPStdioServer",
+   "fields": [
+    {
+     "name": "transport",
+     "alias": "transport",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "stdio"
+       ]
+      }
+     }
+    },
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "command",
+     "alias": "command",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "args",
+     "alias": "args",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "list",
+       "items": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "env",
+     "alias": "env",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "dict",
+       "keys": {
+        "type": "str"
+       },
+       "values": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "cwd",
+     "alias": "cwd",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionPinParams": {
+   "type": "model",
+   "name": "SessionPinParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "pinned",
+     "alias": "pinned",
+     "schema": {
+      "type": "bool"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionReadParams": {
+   "type": "model",
+   "name": "SessionReadParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "history",
+     "alias": "history",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "ref",
+        "name": "PageRequest"
+       }
+      }
+     }
+    },
+    {
+     "name": "turns",
+     "alias": "turns",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "ref",
+        "name": "PageRequest"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionReadyReadParams": {
+   "type": "model",
+   "name": "SessionReadyReadParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionReadyWaitParams": {
+   "type": "model",
+   "name": "SessionReadyWaitParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionRelocateParams": {
+   "type": "model",
+   "name": "SessionRelocateParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "cwd",
+     "alias": "cwd",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionResourceLinkContentBlock": {
+   "type": "model",
+   "name": "SessionResourceLinkContentBlock",
+   "fields": [
+    {
+     "name": "type",
+     "alias": "type",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "resource_link"
+       ]
+      }
+     }
+    },
+    {
+     "name": "uri",
+     "alias": "uri",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "title",
+     "alias": "title",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "description",
+     "alias": "description",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "media_type",
+     "alias": "mediaType",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "size",
+     "alias": "size",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "int",
+        "ge": 0
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionResumeParams": {
+   "type": "model",
+   "name": "SessionResumeParams",
+   "fields": [
+    {
+     "name": "agent_config",
+     "alias": "agentConfig",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "ref",
+       "name": "AgentConfig"
+      }
+     }
+    },
+    {
+     "name": "history_limit",
+     "alias": "historyLimit",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "int",
+       "ge": 1,
+       "le": 500
+      }
+     }
+    },
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionRewindParams": {
+   "type": "model",
+   "name": "SessionRewindParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "entry_id",
+     "alias": "entryId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "restore_files",
+     "alias": "restoreFiles",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    },
+    {
+     "name": "inplace",
+     "alias": "inplace",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionRewindReadParams": {
+   "type": "model",
+   "name": "SessionRewindReadParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "entry_id",
+     "alias": "entryId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionSettingsUpdateParams": {
+   "type": "model",
+   "name": "SessionSettingsUpdateParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "max_turns",
+     "alias": "maxTurns",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "int",
+        "strict": true,
+        "ge": 0
+       }
+      }
+     }
+    },
+    {
+     "name": "max_tokens",
+     "alias": "maxTokens",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "int",
+        "strict": true,
+        "ge": 0
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true,
+   "validators": [
+    {
+     "mode": "function-after",
+     "function": "SessionSettingsUpdateParams.require_update"
+    }
+   ]
+  },
+  "SessionShellCommandParams": {
+   "type": "model",
+   "name": "SessionShellCommandParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "command",
+     "alias": "command",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "cwd",
+     "alias": "cwd",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "timeout_seconds",
+     "alias": "timeoutSeconds",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "float",
+        "gt": 0,
+        "le": 600
+       }
+      }
+     }
+    },
+    {
+     "name": "operation_id",
+     "alias": "operationId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "action",
+     "alias": "action",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "run",
+        "interrupt"
+       ]
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true,
+   "validators": [
+    {
+     "mode": "function-after",
+     "function": "SessionShellCommandParams.validate_action"
+    }
+   ]
+  },
+  "SessionStartParams": {
+   "type": "model",
+   "name": "SessionStartParams",
+   "fields": [
+    {
+     "name": "agent_config",
+     "alias": "agentConfig",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "ref",
+       "name": "AgentConfig"
+      }
+     }
+    },
+    {
+     "name": "history_limit",
+     "alias": "historyLimit",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "int",
+       "ge": 1,
+       "le": 500
+      }
+     }
+    },
+    {
+     "name": "idempotency_key",
+     "alias": "idempotencyKey",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "kind",
+     "alias": "kind",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "enum",
+       "name": "SessionKind",
+       "values": [
+        "normal",
+        "ephemeral"
+       ],
+       "sub_type": "str"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionStopParams": {
+   "type": "model",
+   "name": "SessionStopParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "reason",
+     "alias": "reason",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionTextContentBlock": {
+   "type": "model",
+   "name": "SessionTextContentBlock",
+   "fields": [
+    {
+     "name": "type",
+     "alias": "type",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "text"
+       ]
+      }
+     }
+    },
+    {
+     "name": "text",
+     "alias": "text",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "str"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionTitleUpdateParams": {
+   "type": "model",
+   "name": "SessionTitleUpdateParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "title",
+     "alias": "title",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionTurnsListParams": {
+   "type": "model",
+   "name": "SessionTurnsListParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "page",
+     "alias": "page",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "ref",
+       "name": "PageRequest"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ShellRunParams": {
+   "type": "model",
+   "name": "ShellRunParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "operation_id",
+     "alias": "operationId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "command",
+     "alias": "command",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "timeout_seconds",
+     "alias": "timeoutSeconds",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "float",
+       "gt": 0,
+       "le": 600
+      }
+     }
+    },
+    {
+     "name": "cwd",
+     "alias": "cwd",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SkillsCatalogParams": {
+   "type": "model",
+   "name": "SkillsCatalogParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SkillsConvertLocalParams": {
+   "type": "model",
+   "name": "SkillsConvertLocalParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "scope",
+     "alias": "scope",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "str"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SkillsDetailParams": {
+   "type": "model",
+   "name": "SkillsDetailParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "skill_id",
+     "alias": "skillId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "version",
+     "alias": "version",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "int"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SkillsImportParams": {
+   "type": "model",
+   "name": "SkillsImportParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "skill_id",
+     "alias": "skillId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "version",
+     "alias": "version",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "int"
+       }
+      }
+     }
+    },
+    {
+     "name": "alias",
+     "alias": "alias",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "scope",
+     "alias": "scope",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "str"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SkillsInstalledParams": {
+   "type": "model",
+   "name": "SkillsInstalledParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SkillsListParams": {
+   "type": "model",
+   "name": "SkillsListParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SkillsRemoveParams": {
+   "type": "model",
+   "name": "SkillsRemoveParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "scope",
+     "alias": "scope",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "str"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SkillsSetAliasParams": {
+   "type": "model",
+   "name": "SkillsSetAliasParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "alias",
+     "alias": "alias",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "scope",
+     "alias": "scope",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "str"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SkillsSetEnabledParams": {
+   "type": "model",
+   "name": "SkillsSetEnabledParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "enabled",
+     "alias": "enabled",
+     "schema": {
+      "type": "bool"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SkillsSetLatestParams": {
+   "type": "model",
+   "name": "SkillsSetLatestParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "scope",
+     "alias": "scope",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "str"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SkillsSetVersionParams": {
+   "type": "model",
+   "name": "SkillsSetVersionParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "version",
+     "alias": "version",
+     "schema": {
+      "type": "int"
+     }
+    },
+    {
+     "name": "scope",
+     "alias": "scope",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "str"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SkillsUpdatesParams": {
+   "type": "model",
+   "name": "SkillsUpdatesParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SkillsVersionsParams": {
+   "type": "model",
+   "name": "SkillsVersionsParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "skill_id",
+     "alias": "skillId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "StatsReadParams": {
+   "type": "model",
+   "name": "StatsReadParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "TelemetryRecordParams": {
+   "type": "model",
+   "name": "TelemetryRecordParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "properties",
+     "alias": "properties",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "dict",
+       "keys": {
+        "type": "str"
+       },
+       "values": {
+        "type": "json-value"
+       }
+      }
+     }
+    },
+    {
+     "name": "correlate_last_request",
+     "alias": "correlateLastRequest",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "TeleportCancelParams": {
+   "type": "model",
+   "name": "TeleportCancelParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "operation_id",
+     "alias": "operationId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "TeleportPushRespondParams": {
+   "type": "model",
+   "name": "TeleportPushRespondParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "operation_id",
+     "alias": "operationId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "approved",
+     "alias": "approved",
+     "schema": {
+      "type": "bool"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "TeleportStartParams": {
+   "type": "model",
+   "name": "TeleportStartParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "picker_id",
+     "alias": "pickerId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "operation_id",
+     "alias": "operationId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "prompt",
+     "alias": "prompt",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "project_id",
+     "alias": "projectId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "TextContentBlock": {
+   "type": "model",
+   "name": "TextContentBlock",
+   "fields": [
+    {
+     "name": "type",
+     "alias": "type",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "text"
+       ]
+      }
+     }
+    },
+    {
+     "name": "text",
+     "alias": "text",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ToolDefinition": {
+   "type": "model",
+   "name": "ToolDefinition",
+   "fields": [
+    {
+     "name": "type",
+     "alias": "type",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "client_tool"
+       ]
+      }
+     }
+    },
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "description",
+     "alias": "description",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "str"
+      }
+     }
+    },
+    {
+     "name": "input_schema",
+     "alias": "inputSchema",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "dict",
+       "keys": {
+        "type": "str"
+       },
+       "values": {
+        "type": "json-value"
+       }
+      }
+     }
+    },
+    {
+     "name": "output_schema",
+     "alias": "outputSchema",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "dict",
+       "keys": {
+        "type": "str"
+       },
+       "values": {
+        "type": "json-value"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "ToolsListParams": {
+   "type": "model",
+   "name": "ToolsListParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "TurnContextInputEntry": {
+   "type": "model",
+   "name": "TurnContextInputEntry",
+   "fields": [
+    {
+     "name": "role",
+     "alias": "role",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "context"
+       ]
+      }
+     }
+    },
+    {
+     "name": "entry_id",
+     "alias": "entryId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "content",
+     "alias": "content",
+     "schema": {
+      "type": "list",
+      "items": {
+       "type": "tagged-union",
+       "discriminator": "type",
+       "choices": [
+        [
+         "text",
+         {
+          "type": "ref",
+          "name": "SessionTextContentBlock"
+         }
+        ],
+        [
+         "image",
+         {
+          "type": "ref",
+          "name": "SessionImageContentBlock"
+         }
+        ],
+        [
+         "resource_link",
+         {
+          "type": "ref",
+          "name": "SessionResourceLinkContentBlock"
+         }
+        ],
+        [
+         "embedded_resource",
+         {
+          "type": "ref",
+          "name": "SessionEmbeddedResourceContentBlock"
+         }
+        ]
+       ],
+       "strict": false,
+       "from_attributes": true
+      },
+      "min_length": 1
+     }
+    },
+    {
+     "name": "annotations",
+     "alias": "annotations",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "ref",
+       "name": "MessageAnnotations"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "TurnEnqueueParams": {
+   "type": "model",
+   "name": "TurnEnqueueParams",
+   "fields": [
+    {
+     "name": "idempotency_key",
+     "alias": "idempotencyKey",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "entries",
+     "alias": "entries",
+     "schema": {
+      "type": "list",
+      "items": {
+       "type": "tagged-union",
+       "discriminator": "role",
+       "choices": [
+        [
+         "context",
+         {
+          "type": "ref",
+          "name": "TurnContextInputEntry"
+         }
+        ],
+        [
+         "user",
+         {
+          "type": "ref",
+          "name": "TurnUserInputEntry"
+         }
+        ]
+       ],
+       "strict": false,
+       "from_attributes": true
+      },
+      "min_length": 1
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true,
+   "validators": [
+    {
+     "mode": "function-after",
+     "function": "_TurnQueueInputParams.validate_entries"
+    }
+   ]
+  },
+  "TurnInterruptParams": {
+   "type": "model",
+   "name": "TurnInterruptParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "expected_turn_id",
+     "alias": "expectedTurnId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "TurnQueueReadParams": {
+   "type": "model",
+   "name": "TurnQueueReadParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "TurnQueueRemoveParams": {
+   "type": "model",
+   "name": "TurnQueueRemoveParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "queue_item_id",
+     "alias": "queueItemId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "TurnQueueReplaceParams": {
+   "type": "model",
+   "name": "TurnQueueReplaceParams",
+   "fields": [
+    {
+     "name": "idempotency_key",
+     "alias": "idempotencyKey",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "entries",
+     "alias": "entries",
+     "schema": {
+      "type": "list",
+      "items": {
+       "type": "tagged-union",
+       "discriminator": "role",
+       "choices": [
+        [
+         "context",
+         {
+          "type": "ref",
+          "name": "TurnContextInputEntry"
+         }
+        ],
+        [
+         "user",
+         {
+          "type": "ref",
+          "name": "TurnUserInputEntry"
+         }
+        ]
+       ],
+       "strict": false,
+       "from_attributes": true
+      },
+      "min_length": 1
+     }
+    },
+    {
+     "name": "queue_item_id",
+     "alias": "queueItemId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true,
+   "validators": [
+    {
+     "mode": "function-after",
+     "function": "_TurnQueueInputParams.validate_entries"
+    }
+   ]
+  },
+  "TurnQueueResumeParams": {
+   "type": "model",
+   "name": "TurnQueueResumeParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "TurnQueueSteerParams": {
+   "type": "model",
+   "name": "TurnQueueSteerParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "queue_item_id",
+     "alias": "queueItemId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "expected_turn_id",
+     "alias": "expectedTurnId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "TurnStartParams": {
+   "type": "model",
+   "name": "TurnStartParams",
+   "fields": [
+    {
+     "name": "idempotency_key",
+     "alias": "idempotencyKey",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "message",
+     "alias": "message",
+     "schema": {
+      "type": "list",
+      "items": {
+       "type": "tagged-union",
+       "discriminator": "type",
+       "choices": [
+        [
+         "text",
+         {
+          "type": "ref",
+          "name": "TextContentBlock"
+         }
+        ],
+        [
+         "image",
+         {
+          "type": "ref",
+          "name": "ImageContentBlock"
+         }
+        ],
+        [
+         "resource",
+         {
+          "type": "ref",
+          "name": "ResourceContentBlock"
+         }
+        ]
+       ],
+       "strict": false,
+       "from_attributes": true
+      }
+     }
+    },
+    {
+     "name": "injected",
+     "alias": "injected",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    },
+    {
+     "name": "client_user_message_id",
+     "alias": "clientUserMessageId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "auto_title",
+     "alias": "autoTitle",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "user_display_content",
+     "alias": "userDisplayContent",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "ref",
+        "name": "UserDisplayContent"
+       }
+      }
+     }
+    },
+    {
+     "name": "mention_stats",
+     "alias": "mentionStats",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "ref",
+        "name": "MentionStats"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "TurnSteerParams": {
+   "type": "model",
+   "name": "TurnSteerParams",
+   "fields": [
+    {
+     "name": "idempotency_key",
+     "alias": "idempotencyKey",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "expected_turn_id",
+     "alias": "expectedTurnId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "message",
+     "alias": "message",
+     "schema": {
+      "type": "list",
+      "items": {
+       "type": "tagged-union",
+       "discriminator": "type",
+       "choices": [
+        [
+         "text",
+         {
+          "type": "ref",
+          "name": "TextContentBlock"
+         }
+        ],
+        [
+         "image",
+         {
+          "type": "ref",
+          "name": "ImageContentBlock"
+         }
+        ],
+        [
+         "resource",
+         {
+          "type": "ref",
+          "name": "ResourceContentBlock"
+         }
+        ]
+       ],
+       "strict": false,
+       "from_attributes": true
+      }
+     }
+    },
+    {
+     "name": "client_user_message_id",
+     "alias": "clientUserMessageId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "user_display_content",
+     "alias": "userDisplayContent",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "ref",
+        "name": "UserDisplayContent"
+       }
+      }
+     }
+    },
+    {
+     "name": "inject_invoked_skill",
+     "alias": "injectInvokedSkill",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    },
+    {
+     "name": "mention_stats",
+     "alias": "mentionStats",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "ref",
+        "name": "MentionStats"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "TurnUserInputEntry": {
+   "type": "model",
+   "name": "TurnUserInputEntry",
+   "fields": [
+    {
+     "name": "role",
+     "alias": "role",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "user"
+       ]
+      }
+     }
+    },
+    {
+     "name": "entry_id",
+     "alias": "entryId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "content",
+     "alias": "content",
+     "schema": {
+      "type": "list",
+      "items": {
+       "type": "tagged-union",
+       "discriminator": "type",
+       "choices": [
+        [
+         "text",
+         {
+          "type": "ref",
+          "name": "SessionTextContentBlock"
+         }
+        ],
+        [
+         "image",
+         {
+          "type": "ref",
+          "name": "SessionImageContentBlock"
+         }
+        ],
+        [
+         "resource_link",
+         {
+          "type": "ref",
+          "name": "SessionResourceLinkContentBlock"
+         }
+        ],
+        [
+         "embedded_resource",
+         {
+          "type": "ref",
+          "name": "SessionEmbeddedResourceContentBlock"
+         }
+        ]
+       ],
+       "strict": false,
+       "from_attributes": true
+      },
+      "min_length": 1
+     }
+    },
+    {
+     "name": "annotations",
+     "alias": "annotations",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "ref",
+       "name": "MessageAnnotations"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "UserAnswer": {
+   "type": "model",
+   "name": "UserAnswer",
+   "fields": [
+    {
+     "name": "question",
+     "alias": "question",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "answer",
+     "alias": "answer",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "is_other",
+     "alias": "isOther",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "UserBlobResource": {
+   "type": "model",
+   "name": "UserBlobResource",
+   "fields": [
+    {
+     "name": "uri",
+     "alias": "uri",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    },
+    {
+     "name": "media_type",
+     "alias": "mediaType",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "kind",
+     "alias": "kind",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "blob"
+       ]
+      }
+     }
+    },
+    {
+     "name": "blob",
+     "alias": "blob",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "UserDisplayContent": {
+   "type": "model",
+   "name": "UserDisplayContent",
+   "fields": [
+    {
+     "name": "version",
+     "alias": "version",
+     "schema": {
+      "type": "function-after",
+      "function": "UserDisplayContent.strip_nonempty",
+      "schema": {
+       "type": "str",
+       "min_length": 1
+      }
+     }
+    },
+    {
+     "name": "host",
+     "alias": "host",
+     "schema": {
+      "type": "function-after",
+      "function": "UserDisplayContent.strip_nonempty",
+      "schema": {
+       "type": "str",
+       "min_length": 1
+      }
+     }
+    },
+    {
+     "name": "content",
+     "alias": "content",
+     "schema": {
+      "type": "list",
+      "items": {
+       "type": "dict",
+       "keys": {
+        "type": "str"
+       },
+       "values": {
+        "type": "json-value"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": false,
+   "allowInfNan": false
+  },
+  "UserInputCallbackOutput": {
+   "type": "model",
+   "name": "UserInputCallbackOutput",
+   "fields": [
+    {
+     "name": "type",
+     "alias": "type",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "user_input"
+       ]
+      }
+     }
+    },
+    {
+     "name": "result",
+     "alias": "result",
+     "schema": {
+      "type": "ref",
+      "name": "UserQuestionResult"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "UserQuestionResult": {
+   "type": "model",
+   "name": "UserQuestionResult",
+   "fields": [
+    {
+     "name": "answers",
+     "alias": "answers",
+     "schema": {
+      "type": "list",
+      "items": {
+       "type": "ref",
+       "name": "UserAnswer"
+      }
+     }
+    },
+    {
+     "name": "cancelled",
+     "alias": "cancelled",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "UserResourceLink": {
+   "type": "model",
+   "name": "UserResourceLink",
+   "fields": [
+    {
+     "name": "uri",
+     "alias": "uri",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    },
+    {
+     "name": "media_type",
+     "alias": "mediaType",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "kind",
+     "alias": "kind",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "link"
+       ]
+      }
+     }
+    },
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "title",
+     "alias": "title",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "description",
+     "alias": "description",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "size",
+     "alias": "size",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "int",
+        "ge": 0
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "UserTextResource": {
+   "type": "model",
+   "name": "UserTextResource",
+   "fields": [
+    {
+     "name": "uri",
+     "alias": "uri",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    },
+    {
+     "name": "media_type",
+     "alias": "mediaType",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "kind",
+     "alias": "kind",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "text"
+       ]
+      }
+     }
+    },
+    {
+     "name": "text",
+     "alias": "text",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "VibeCodeProjectCancelParams": {
+   "type": "model",
+   "name": "VibeCodeProjectCancelParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "picker_id",
+     "alias": "pickerId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "VibeCodeProjectCreateParams": {
+   "type": "model",
+   "name": "VibeCodeProjectCreateParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "picker_id",
+     "alias": "pickerId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "default_branch",
+     "alias": "defaultBranch",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "VibeCodeProjectRecoverParams": {
+   "type": "model",
+   "name": "VibeCodeProjectRecoverParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "picker_id",
+     "alias": "pickerId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "VibeCodeProjectSelectParams": {
+   "type": "model",
+   "name": "VibeCodeProjectSelectParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "picker_id",
+     "alias": "pickerId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "project_id",
+     "alias": "projectId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "VibeCodeProjectUnlinkParams": {
+   "type": "model",
+   "name": "VibeCodeProjectUnlinkParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "picker_id",
+     "alias": "pickerId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "VibeCodeProjectsLoadMoreParams": {
+   "type": "model",
+   "name": "VibeCodeProjectsLoadMoreParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "picker_id",
+     "alias": "pickerId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "VibeCodeProjectsOpenParams": {
+   "type": "model",
+   "name": "VibeCodeProjectsOpenParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "purpose",
+     "alias": "purpose",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "literal",
+       "expected": [
+        "configure",
+        "teleport"
+       ]
+      }
+     }
+    },
+    {
+     "name": "prompt",
+     "alias": "prompt",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "WorkspaceGitCheckoutsParams": {
+   "type": "model",
+   "name": "WorkspaceGitCheckoutsParams",
+   "fields": [
+    {
+     "name": "repo_local_paths",
+     "alias": "repoLocalPaths",
+     "schema": {
+      "type": "list",
+      "items": {
+       "type": "str"
+      }
+     }
+    },
+    {
+     "name": "session_cwd",
+     "alias": "sessionCwd",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "WorkspacePromptPrepareParams": {
+   "type": "model",
+   "name": "WorkspacePromptPrepareParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "message",
+     "alias": "message",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "title_content",
+     "alias": "titleContent",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "list",
+        "items": {
+         "type": "tagged-union",
+         "discriminator": "type",
+         "choices": [
+          [
+           "text",
+           {
+            "type": "ref",
+            "name": "TextContentBlock"
+           }
+          ],
+          [
+           "image",
+           {
+            "type": "ref",
+            "name": "ImageContentBlock"
+           }
+          ],
+          [
+           "resource",
+           {
+            "type": "ref",
+            "name": "ResourceContentBlock"
+           }
+          ]
+         ],
+         "strict": false,
+         "from_attributes": true
+        }
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "WorkspaceTrustDecisionParams": {
+   "type": "model",
+   "name": "WorkspaceTrustDecisionParams",
+   "fields": [
+    {
+     "name": "decision",
+     "alias": "decision",
+     "schema": {
+      "type": "literal",
+      "expected": [
+       "trust_repo",
+       "trust_cwd",
+       "decline"
+      ]
+     }
+    },
+    {
+     "name": "cwd",
+     "alias": "cwd",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "WorkspaceTrustStatusParams": {
+   "type": "model",
+   "name": "WorkspaceTrustStatusParams",
+   "fields": [
+    {
+     "name": "cwd",
+     "alias": "cwd",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "WorkspaceUntrustedConfigParams": {
+   "type": "model",
+   "name": "WorkspaceUntrustedConfigParams",
+   "fields": [
+    {
+     "name": "cwd",
+     "alias": "cwd",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "WorkspaceWorktreeLimitUpdateParams": {
+   "type": "model",
+   "name": "WorkspaceWorktreeLimitUpdateParams",
+   "fields": [
+    {
+     "name": "limit",
+     "alias": "limit",
+     "schema": {
+      "type": "int",
+      "ge": 0,
+      "le": 100
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "WorkspaceWorktreeListParams": {
+   "type": "model",
+   "name": "WorkspaceWorktreeListParams",
+   "fields": [
+    {
+     "name": "cwd",
+     "alias": "cwd",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    },
+    {
+     "name": "include_details",
+     "alias": "includeDetails",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "WorkspaceWorktreePruneParams": {
+   "type": "model",
+   "name": "WorkspaceWorktreePruneParams",
+   "fields": [],
+   "extra": "forbid",
+   "byName": true
+  },
+  "WorkspaceWorktreeRemoveParams": {
+   "type": "model",
+   "name": "WorkspaceWorktreeRemoveParams",
+   "fields": [
+    {
+     "name": "cwd",
+     "alias": "cwd",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  }
+ },
+ "reference": {
+  "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+ }
+}

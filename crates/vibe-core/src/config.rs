@@ -1041,6 +1041,7 @@ impl LayeredConfig {
         let simulated =
             patch::apply_all(&before.effective, &mutations).map_err(|error| reject(&error))?;
         validate_table(&simulated).map_err(|error| reject(&error))?;
+        registry::validate_field_types(&simulated).map_err(|error| reject(&error))?;
         require_configured_model(&simulated).map_err(|error| reject(&error))?;
 
         let mut grouped: BTreeMap<ConfigTarget, Vec<ConfigMutation>> = BTreeMap::new();

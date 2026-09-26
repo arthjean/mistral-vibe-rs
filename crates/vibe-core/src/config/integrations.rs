@@ -472,6 +472,118 @@ impl super::LayeredConfig {
         Ok(())
     }
 
+    /// Switches a connector, or one of its tools, off or back on.
+    ///
+    /// Reference `_persist_connector_toggle`: the entry named `name` in the
+    /// file writes land in changes only the field the toggle is about, and a
+    /// name no entry carries gains an entry of its own. Answers the snapshot
+    /// the write produced.
+    pub fn persist_connector_toggle(
+        &self,
+        name: &str,
+        disabled: bool,
+        tool_name: Option<&str>,
+    ) -> Result<ConfigSnapshot, ConfigError> {
+        let snapshot = self.load()?;
+        let collection = IntegrationCollection::Connectors;
+        let target = snapshot.selected_target;
+        let mut entries = config_array_for_target(&snapshot, target, collection)?;
+        let existing = entries
+            .iter_mut()
+            .filter_map(Value::as_table_mut)
+            .find(|entry| entry.get("name").and_then(Value::as_str) == Some(name));
+        match (existing, tool_name) {
+            (Some(entry), Some(tool_name)) => {
+                let mut tools = entry
+                    .get("disabled_tools")
+                    .and_then(Value::as_array)
+                    .map(|tools| {
+                        tools
+                            .iter()
+                            .filter_map(Value::as_str)
+                            .map(str::to_owned)
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                if disabled {
+                    if !tools.iter().any(|tool| tool == tool_name) {
+                        tools.push(tool_name.to_owned());
+                    }
+                } else {
+                    tools.retain(|tool| tool != tool_name);
+                }
+                entry.insert(
+                    "disabled_tools".to_owned(),
+                    Value::Array(tools.into_iter().map(Value::String).collect()),
+                );
+            }
+            (Some(entry), None) => {
+                entry.insert("disabled".to_owned(), Value::Boolean(disabled));
+            }
+            (None, tool_name) => {
+                let mut entry = toml::Table::new();
+                entry.insert("name".to_owned(), Value::String(name.to_owned()));
+                match tool_name {
+                    Some(tool_name) => {
+                        let tools = if disabled {
+                            vec![Value::String(tool_name.to_owned())]
+                        } else {
+                            Vec::new()
+                        };
+                        entry.insert("disabled_tools".to_owned(), Value::Array(tools));
+                    }
+                    None => {
+                        entry.insert("disabled".to_owned(), Value::Boolean(disabled));
+                    }
+                }
+                entries.push(Value::Table(entry));
+            }
+        }
+        self.replace_array_cas(
+            target,
+            snapshot.fingerprints.get(&target).cloned().flatten(),
+            collection.key(),
+            entries,
+        )
+    }
+
+    /// Reference `SkillsController._set_enabled`: `name` removed from, or
+    /// appended once to, the `disabled_skills` of the file writes land in.
+    pub fn persist_skill_toggle(
+        &self,
+        name: &str,
+        enabled: bool,
+    ) -> Result<ConfigSnapshot, ConfigError> {
+        let snapshot = self.load()?;
+        let target = snapshot.selected_target;
+        let mut names = snapshot
+            .target_values
+            .get(&target)
+            .and_then(|table| table.get("disabled_skills"))
+            .and_then(Value::as_array)
+            .map(|names| {
+                names
+                    .iter()
+                    .map(|name| {
+                        name.as_str()
+                            .map_or_else(|| name.to_string(), str::to_owned)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        if enabled {
+            names.retain(|existing| existing != name);
+        } else if !names.iter().any(|existing| existing == name) {
+            names.push(name.to_owned());
+        }
+        self.replace_array_cas(
+            target,
+            snapshot.fingerprints.get(&target).cloned().flatten(),
+            "disabled_skills",
+            names.into_iter().map(Value::String).collect(),
+        )
+    }
+
     /// Drops the entry named `name` from the file writes land in.
     ///
     /// A name no entry carries is reported as not removed rather than raised:

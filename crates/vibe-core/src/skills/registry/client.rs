@@ -34,12 +34,22 @@ const CATALOG_FIELDS: &str =
 #[error("{reason}")]
 pub struct RegistrySkillsError {
     pub reason: String,
+    /// The HTTP status the registry answered, when it answered one.
+    pub status: Option<u16>,
 }
 
 impl RegistrySkillsError {
     fn new(reason: impl Into<String>) -> Self {
         Self {
             reason: reason.into(),
+            status: None,
+        }
+    }
+
+    fn with_status(reason: impl Into<String>, status: u16) -> Self {
+        Self {
+            reason: reason.into(),
+            status: Some(status),
         }
     }
 }
@@ -166,16 +176,17 @@ impl<T: RegistryTransport> RegistrySkillsClient<T> {
         })?;
         match response.status {
             401 | 403 => {
-                return Err(RegistrySkillsError::new(format!(
-                    "unauthorized ({})",
-                    response.status
-                )));
+                return Err(RegistrySkillsError::with_status(
+                    format!("unauthorized ({})", response.status),
+                    response.status,
+                ));
             }
-            404 => return Err(RegistrySkillsError::new("not found (404)")),
+            404 => return Err(RegistrySkillsError::with_status("not found (404)", 404)),
             status if !(200..300).contains(&status) => {
-                return Err(RegistrySkillsError::new(format!(
-                    "unexpected status {status}"
-                )));
+                return Err(RegistrySkillsError::with_status(
+                    format!("unexpected status {status}"),
+                    status,
+                ));
             }
             _ => {}
         }

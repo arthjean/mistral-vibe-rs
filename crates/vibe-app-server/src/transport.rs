@@ -7,11 +7,16 @@ use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 
+use crate::client::interactive::InteractiveCallbackRequest;
 use crate::client::{
     DriverError, TurnDriver, TurnReservation, public_driver_error, public_turn_error,
 };
 use crate::live_projection::{app_server_notification, app_server_update_channel_for_turn};
 use crate::server::{AppServer, DeferredWork, ServerError, server_error_frame};
+
+mod callbacks;
+
+use callbacks::{StdioApprovalFactory, StdioCallbacks, TurnRoutes};
 
 pub const MAX_FRAME_BYTES: usize = 8 * 1024 * 1024;
 const TASK_CLEANUP_GRACE: Duration = Duration::from_secs(5);
@@ -104,6 +109,13 @@ where
     W: AsyncWrite + Unpin,
     D: TurnDriver + 'static,
 {
+    // A tool that needs approval asks the client through its turn and the
+    // loop, as a `callback/call`, rather than being refused.
+    let routes = TurnRoutes::default();
+    let server = server.using_approval_factory(Arc::new(StdioApprovalFactory {
+        routes: Arc::clone(&routes),
+    }));
+    let mut callbacks = StdioCallbacks::default();
     let mut connection = server.connect(vibe_protocol::TransportKind::Stdio);
     let (events, mut incoming_events) = mpsc::unbounded_channel::<ServeEvent>();
     // A delegated `clientTool/*` request is raised by a tool running on a turn
@@ -130,7 +142,7 @@ where
                         }
                     }
                     ServeEvent::TurnSettled { session_id, turn_id, notification } => {
-                        active.remove(&(session_id, turn_id));
+                        active.remove(&(session_id.clone(), turn_id));
                         match notification {
                             Ok(frames) => {
                                 for bytes in frames {
@@ -144,6 +156,45 @@ where
                             }
                             Err(error) => {
                                 failure = Some(TransportError::Server(error));
+                                break 'serve;
+                            }
+                        }
+                        // A settled turn frees its session for the next
+                        // queued one (reference `_after_turn_terminal`).
+                        let batch = connection.after_turn_settled(&session_id);
+                        let mut frames = batch.outbound;
+                        for work in batch.deferred {
+                            match dispatch_deferred_work(
+                                work,
+                                &server,
+                                &driver,
+                                &events,
+                                &routes,
+                                &mut tasks,
+                                &mut active,
+                            )
+                            .await
+                            {
+                                Ok(more) => frames.extend(more),
+                                Err(error) => {
+                                    failure = Some(error);
+                                    break 'serve;
+                                }
+                            }
+                        }
+                        for bytes in frames {
+                            if connection.delivers(&bytes)
+                                && let Err(error) = transport.send(&bytes).await
+                            {
+                                failure = Some(error);
+                                break 'serve;
+                            }
+                        }
+                    }
+                    ServeEvent::Callback(request) => {
+                        for bytes in callbacks.raise(&mut connection, &server, driver.as_ref(), Some(request)) {
+                            if let Err(error) = transport.send(&bytes).await {
+                                failure = Some(error);
                                 break 'serve;
                             }
                         }
@@ -184,12 +235,28 @@ where
                     }
                 }
                 let close_after_work = batch.close_after_flush;
-                for work in batch.deferred {
+                let settled = batch.deferred.len();
+                let deferred = batch
+                    .deferred
+                    .into_iter()
+                    .filter_map(|work| callbacks.settle(work))
+                    .collect::<Vec<_>>();
+                // A settled callback frees its session for the next question.
+                if deferred.len() != settled {
+                    for bytes in callbacks.raise(&mut connection, &server, driver.as_ref(), None) {
+                        if let Err(error) = transport.send(&bytes).await {
+                            failure = Some(error);
+                            break 'serve;
+                        }
+                    }
+                }
+                for work in deferred {
                     match dispatch_deferred_work(
                         work,
                         &server,
                         &driver,
                         &events,
+                        &routes,
                         &mut tasks,
                         &mut active,
                     )
@@ -219,12 +286,18 @@ where
     }
     // The client is told why the stream stops before it does, which is what the
     // reference sends ahead of dropping a connection its background work broke.
-    if let Some(error) = &failure {
+    // A blank line is a frame that is not JSON-RPC, which the reference drops
+    // the connection over without a word, as it does any other.
+    if let Some(error) = failure
+        .as_ref()
+        .filter(|error| !matches!(error, TransportError::EmptyFrame))
+    {
         let _ = transport
             .send(&server_error_frame(&error.to_string()))
             .await;
     }
     let detached_sessions = connection.attached_session_ids();
+    callbacks.close();
     connection.close();
     for (session_id, turn_id) in active {
         let _ = driver.interrupt(&session_id, &turn_id);
@@ -268,6 +341,7 @@ async fn dispatch_deferred_work<D>(
     server: &AppServer,
     driver: &Arc<D>,
     events: &mpsc::UnboundedSender<ServeEvent>,
+    routes: &TurnRoutes,
     tasks: &mut JoinSet<()>,
     active: &mut BTreeSet<(String, String)>,
 ) -> Result<Vec<Vec<u8>>, TransportError>
@@ -281,7 +355,8 @@ where
             let server = server.clone();
             let driver = Arc::clone(driver);
             let events = events.clone();
-            tasks.spawn(async move { run_turn(server, driver, reservation, events).await });
+            let routes = Arc::clone(routes);
+            tasks.spawn(async move { run_turn(server, driver, reservation, events, routes).await });
             Ok(Vec::new())
         }
         DeferredWork::InterruptTurn {
@@ -362,6 +437,64 @@ where
             });
             Ok(Vec::new())
         }
+        DeferredWork::ShellCommand {
+            request_id,
+            session_id,
+            operation_id,
+            command,
+            cwd,
+            timeout_ms,
+        } => {
+            let server = server.clone();
+            let driver = Arc::clone(driver);
+            let live = events.clone();
+            spawn_frames(tasks, events.clone(), async move {
+                let completed = server
+                    .execute_shell_command(
+                        request_id,
+                        session_id,
+                        operation_id,
+                        command,
+                        cwd,
+                        timeout_ms,
+                        move |frame| {
+                            let _ = live.send(ServeEvent::Frame(frame));
+                        },
+                    )
+                    .await;
+                // A session that saves nothing hands the result to its driver,
+                // before the command is answered.
+                for work in completed.deferred {
+                    if let DeferredWork::InjectContext {
+                        session_id,
+                        content,
+                        as_message,
+                        inject_invoked_skill,
+                    } = work
+                    {
+                        driver
+                            .inject_context(&session_id, &content, as_message, inject_invoked_skill)
+                            .map_err(TransportError::Driver)?;
+                    }
+                }
+                Ok(completed.outbound)
+            });
+            Ok(Vec::new())
+        }
+        DeferredWork::ShellInterrupt {
+            request_id,
+            session_id,
+            operation_id,
+        } => {
+            let server = server.clone();
+            spawn_frames(tasks, events.clone(), async move {
+                Ok(server
+                    .answer_shell_interrupt(request_id, session_id, operation_id)
+                    .await
+                    .outbound)
+            });
+            Ok(Vec::new())
+        }
         DeferredWork::CloudRequest {
             request_id,
             method,
@@ -389,12 +522,16 @@ where
         DeferredWork::CompactSession {
             request_id,
             session_id,
+            working_directory,
             extra_instructions,
         } => {
             let server = server.clone();
             let driver = Arc::clone(driver);
             spawn_frames(tasks, events.clone(), async move {
-                let batch = match driver.compact(&session_id, &extra_instructions).await {
+                let batch = match driver
+                    .compact(&session_id, &working_directory, &extra_instructions)
+                    .await
+                {
                     Ok(compaction) => server.complete_manual_compaction(
                         request_id,
                         &session_id,
@@ -449,6 +586,7 @@ async fn run_turn<D>(
     driver: Arc<D>,
     reservation: TurnReservation,
     events: mpsc::UnboundedSender<ServeEvent>,
+    routes: TurnRoutes,
 ) where
     D: TurnDriver + 'static,
 {
@@ -472,10 +610,32 @@ async fn run_turn<D>(
         reservation.session_id.clone(),
         reservation.turn_id.clone(),
     );
+    // The turn's questions come through here, so what the turn emitted before
+    // asking reaches the client first.
+    let (questions, mut asked) = mpsc::unbounded_channel();
+    if let Ok(mut routes) = routes.lock() {
+        routes.insert(reservation.session_id.clone(), questions);
+    }
     let mut turn = Box::pin(driver.run_observed(&reservation, observer));
     let outcome = loop {
         tokio::select! {
             outcome = &mut turn => break outcome,
+            question = asked.recv() => {
+                let Some(question) = question else { continue };
+                while let Ok(update) = updates.try_recv() {
+                    match app_server_notification(&server, update) {
+                        Ok(Some(bytes)) => {
+                            let _ = events.send(ServeEvent::Frame(bytes));
+                        }
+                        Ok(None) => {}
+                        Err(error) => {
+                            let _ = events.send(settle(Err(error)));
+                            return;
+                        }
+                    }
+                }
+                let _ = events.send(ServeEvent::Callback(question));
+            }
             update = updates.recv() => {
                 let Some(update) = update else { continue };
                 match app_server_notification(&server, update) {
@@ -503,6 +663,9 @@ async fn run_turn<D>(
                 return;
             }
         }
+    }
+    if let Ok(mut routes) = routes.lock() {
+        routes.remove(&reservation.session_id);
     }
     let settled = outcome.is_ok();
     let notification = match outcome {
@@ -550,6 +713,8 @@ async fn run_turn<D>(
 enum ServeEvent {
     /// A frame to flush to the client.
     Frame(Vec<u8>),
+    /// A question a running turn asks the client.
+    Callback(InteractiveCallbackRequest),
     /// A turn reached a terminal state; its completion frame is attached.
     TurnSettled {
         session_id: String,
@@ -590,7 +755,13 @@ async fn fail_deferred(server: &AppServer, deferred: &[DeferredWork], message: &
             | DeferredWork::ResourceRequest { .. }
             | DeferredWork::McpCatalog { .. }
             | DeferredWork::CloudRequest { .. }
-            | DeferredWork::ConfigureMcp { .. } => {}
+            | DeferredWork::ConfigureMcp { .. }
+            | DeferredWork::ShellInterrupt { .. } => {}
+            DeferredWork::ShellCommand {
+                session_id,
+                operation_id,
+                ..
+            } => server.release_shell_operation(session_id, operation_id),
             DeferredWork::CompactSession {
                 request_id,
                 session_id,

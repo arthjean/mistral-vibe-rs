@@ -259,26 +259,33 @@ fn compaction_rebinds_history_and_resets_the_new_session_watermark() {
                 .map(|bytes| decode_frame(&bytes).expect("notification decodes"))
         })
         .collect::<Vec<_>>();
-    assert_eq!(notifications.len(), 4);
+    // The turn's start published its status and its accounting, so the
+    // user message is the fifth event, followed by the status it moves to.
+    assert_eq!(notifications.len(), 5);
     assert!(matches!(
         &notifications[0],
         Envelope::Notification(Notification { method, params, .. })
-            if method == "history/entryAdded" && params["eventId"] == 4
+            if method == "history/entryAdded" && params["eventId"] == 5
     ));
     assert!(matches!(
         &notifications[1],
         Envelope::Notification(Notification { method, params, .. })
-            if method == "history/entryAdded" && params["eventId"] == 5
+            if method == "session/updated" && params["eventId"] == 6
+    ));
+    assert!(matches!(
+        &notifications[2],
+        Envelope::Notification(Notification { method, params, .. })
+            if method == "history/entryAdded" && params["eventId"] == 7
     ));
     // The end event patches the entry the start added rather than adding a
     // second one, which is what a client renders in place.
     assert!(matches!(
-        &notifications[2],
+        &notifications[3],
         Envelope::Notification(Notification { method, params, .. })
-            if method == "history/entryUpdated" && params["eventId"] == 6
+            if method == "history/entryUpdated" && params["eventId"] == 8
     ));
     assert!(matches!(
-        &notifications[3],
+        &notifications[4],
         Envelope::Notification(Notification { method, params, .. })
             if method == "session/compacted"
                 && params["eventId"] == 1

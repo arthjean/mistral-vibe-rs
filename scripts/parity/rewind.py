@@ -245,9 +245,10 @@ class Session:
 
 
 def render_start(dialect: str, workspace: Path, agent: str) -> dict[str, Any]:
-    if dialect == "reference":
-        return {"agentConfig": {"cwd": str(workspace), "agent": agent}}
-    return {"cwd": str(workspace), "agent": agent}
+    # Both servers read `SessionStartParams.agentConfig` over stdio
+    # (vibe/app_server/protocol.py).
+    del dialect
+    return {"agentConfig": {"cwd": str(workspace), "agent": agent}}
 
 
 def render_turn(dialect: str, session_id: str, text: str) -> dict[str, Any]:

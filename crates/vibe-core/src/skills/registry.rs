@@ -14,6 +14,8 @@
 pub mod client;
 pub mod manifest;
 pub mod models;
+pub mod pins;
+pub mod service;
 pub mod store;
 
 #[cfg(test)]

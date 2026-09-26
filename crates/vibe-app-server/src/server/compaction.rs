@@ -52,6 +52,20 @@ impl AppServer {
                 ));
             }
             session.status = SessionStatus::Idle;
+            // The written totals carry the summarization's usage.
+            let written = |key: &str| {
+                hydrated
+                    .metadata
+                    .statistics
+                    .get(key)
+                    .and_then(Value::as_u64)
+            };
+            if let Some(prompt) = written("session_prompt_tokens") {
+                session.stats.session_prompt_tokens = prompt;
+            }
+            if let Some(completion) = written("session_completion_tokens") {
+                session.stats.session_completion_tokens = completion;
+            }
             session.persisted = Some(hydrated);
             session.updated_at = now_millis();
             // Reference `replace_idle`: the history is kept and closed by the
@@ -62,11 +76,12 @@ impl AppServer {
                 "Context compacted",
                 json!({"summaryLength": summary.chars().count()}),
             );
-            if let Some(snapshot) = session.snapshot.as_mut() {
-                snapshot.turn_id = None;
-                snapshot.lifecycle = LifecycleState::Idle;
-                snapshot.history.push(checkpoint);
-            }
+            // A session no turn has run yet holds no snapshot, and the
+            // checkpoint opens its history.
+            let snapshot = super::manual_shell::session_snapshot(session);
+            snapshot.turn_id = None;
+            snapshot.lifecycle = LifecycleState::Idle;
+            snapshot.history.push(checkpoint);
             session.turns.clear();
             session.latest_turn = None;
             (public_session_state(session), session.id.clone())

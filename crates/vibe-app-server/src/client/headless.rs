@@ -594,12 +594,16 @@ where
         session_id: &str,
         extra_instructions: &str,
     ) -> Result<BTreeMap<String, Value>, ClientError> {
-        let (request_id, canonical_session_id) = self
+        let (request_id, canonical_session_id, working_directory) = self
             .client
             .reserve_compaction(session_id, extra_instructions)?;
         let result = self
             .driver
-            .compact(&canonical_session_id, extra_instructions)
+            .compact(
+                &canonical_session_id,
+                &working_directory,
+                extra_instructions,
+            )
             .await;
         self.client
             .finish_compaction(request_id, &canonical_session_id, result)
@@ -822,10 +826,12 @@ where
     /// Hands `text` to the model as context for the next turn of an idle
     /// session, without a user message of its own.
     pub fn inject_context(&mut self, session_id: &str, text: &str) -> Result<(), ClientError> {
-        let (content, as_message, inject_invoked_skill) =
-            self.client.inject_context(session_id, text)?;
-        self.driver
-            .inject_context(session_id, &content, as_message, inject_invoked_skill)?;
+        if let Some((content, as_message, inject_invoked_skill)) =
+            self.client.inject_context(session_id, text)?
+        {
+            self.driver
+                .inject_context(session_id, &content, as_message, inject_invoked_skill)?;
+        }
         Ok(())
     }
 

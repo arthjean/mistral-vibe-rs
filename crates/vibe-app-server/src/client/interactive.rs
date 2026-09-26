@@ -57,7 +57,7 @@ pub(crate) enum InteractiveCallbackRequest {
     },
 }
 
-pub(super) enum InteractiveCallbackResponse {
+pub(crate) enum InteractiveCallbackResponse {
     Approval(tokio::sync::oneshot::Sender<ApprovalDecision>),
     Tool(tokio::sync::oneshot::Sender<Result<Value, String>>),
 }
@@ -85,7 +85,7 @@ impl ApprovalAgentFactory for InteractiveApprovalFactory {
     }
 }
 
-pub(super) struct ApproveInteractiveRequest;
+pub(crate) struct ApproveInteractiveRequest;
 
 impl ApprovalAgent for ApproveInteractiveRequest {
     fn request<'a>(&'a self, _request: ApprovalRequest) -> ApprovalFuture<'a> {
@@ -197,7 +197,7 @@ pub(super) struct InteractiveQuestionOption {
     #[serde(default)]
     description: String,
 }
-pub(super) fn approval_callback_detail(
+pub(crate) fn approval_callback_detail(
     request: &ApprovalRequest,
     working_directory: Option<&std::path::Path>,
 ) -> Value {
@@ -235,7 +235,7 @@ pub(super) fn approval_callback_detail(
 const OPERATION_CANCELLED: &str =
     "<user_cancellation>The user declined this call.</user_cancellation>";
 
-pub(super) fn approval_decision_from_output(
+pub(crate) fn approval_decision_from_output(
     output: &Value,
 ) -> Result<ApprovalDecision, ClientError> {
     if output.get("type").and_then(Value::as_str) != Some("approval") {
@@ -274,7 +274,7 @@ pub(super) fn interactive_request_session_id(request: &InteractiveCallbackReques
     }
 }
 
-pub(super) fn reject_interactive_request(request: InteractiveCallbackRequest, message: &str) {
+pub(crate) fn reject_interactive_request(request: InteractiveCallbackRequest, message: &str) {
     match request {
         InteractiveCallbackRequest::Approval { response, .. } => {
             let _ = response.send(ApprovalDecision::CancelTurn);
@@ -308,7 +308,7 @@ pub(super) fn fail_pending_interactive_callback(
     }
 }
 
-pub(super) fn fail_interactive_response(response: InteractiveCallbackResponse, message: &str) {
+pub(crate) fn fail_interactive_response(response: InteractiveCallbackResponse, message: &str) {
     match response {
         InteractiveCallbackResponse::Approval(response) => {
             let _ = response.send(ApprovalDecision::CancelTurn);

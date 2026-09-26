@@ -75,6 +75,14 @@ async fn stdio_transport_rejects_oversized_frames_before_decoding() {
     ));
 }
 
+/// The identifier a `session/start` answer names, which the server assigns.
+fn started_session_id(answer: &serde_json::Value) -> String {
+    answer["result"]["state"]["session"]["id"]
+        .as_str()
+        .expect("the start names its session")
+        .to_owned()
+}
+
 #[tokio::test]
 async fn stdio_server_flushes_turn_response_before_deferred_notification() {
     let (client, server_io) = duplex(4096);
@@ -89,8 +97,7 @@ async fn stdio_server_flushes_turn_response_before_deferred_notification() {
     for request in [
         r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"test","version":"1","entrypoint":"programmatic","terminalEmulator":"unknown"},"capabilities":{}}}"#,
         r#"{"jsonrpc":"2.0","method":"initialized","params":{}}"#,
-        r#"{"jsonrpc":"2.0","id":2,"method":"session/start","params":{"sessionId":"session-1","workingDirectory":"/workspace"}}"#,
-        r#"{"jsonrpc":"2.0","id":3,"method":"turn/start","params":{"sessionId":"session-1","message":[{"type":"text","text":"hello"}]}}"#,
+        r#"{"jsonrpc":"2.0","id":2,"method":"session/start","params":{"agentConfig":{"cwd":"/workspace"}}}"#,
     ] {
         client_write
             .write_all(request.as_bytes())
@@ -113,6 +120,23 @@ async fn stdio_server_flushes_turn_response_before_deferred_notification() {
             .expect("frame");
         let frame = serde_json::from_str::<serde_json::Value>(&frame).expect("frame JSON");
         let completed = frame["method"] == "turn/completed";
+        // The server names the session it starts, so the turn is sent once
+        // the start is answered.
+        if frame["id"] == 2 {
+            let turn = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "turn/start",
+                "params": {
+                    "sessionId": started_session_id(&frame),
+                    "message": [{"type": "text", "text": "hello"}],
+                },
+            });
+            client_write
+                .write_all(format!("{turn}\n").as_bytes())
+                .await
+                .expect("turn bytes");
+        }
         if frame["method"].is_string() {
             notifications.push(frame);
         } else {
@@ -139,10 +163,11 @@ async fn stdio_server_flushes_turn_response_before_deferred_notification() {
             .map(|notification| notification["method"].as_str().unwrap_or_default())
             .collect::<Vec<_>>(),
         vec![
-            "session/snapshot",
             "turn/started",
             "session/updated",
+            "session/statsUpdated",
             "history/entryAdded",
+            "session/updated",
             "history/entryAdded",
             "history/entryUpdated",
             "session/statsUpdated",
@@ -151,36 +176,29 @@ async fn stdio_server_flushes_turn_response_before_deferred_notification() {
         ]
     );
     // The client's own projection raises on a gap, so the sequence has to
-    // run from one without one.
+    // run on without one.
+    let event_ids = notifications
+        .iter()
+        .map(|notification| notification["params"]["eventId"].as_u64())
+        .collect::<Option<Vec<_>>>()
+        .expect("every notification is sequenced");
+    assert!(event_ids.windows(2).all(|pair| pair[1] == pair[0] + 1));
     assert_eq!(
-        notifications
-            .iter()
-            .map(|notification| notification["params"]["eventId"].as_u64())
-            .collect::<Vec<_>>(),
-        (1..=9).map(Some).collect::<Vec<_>>()
-    );
-    // The snapshot names its own watermark, which is what the reference
-    // projection asserts before it adopts the state.
-    assert_eq!(
-        notifications[0]["params"]["state"]["eventId"],
-        notifications[0]["params"]["eventId"]
-    );
-    assert_eq!(
-        notifications[2]["params"]["patch"][0]["value"]["type"],
+        notifications[1]["params"]["patch"][0]["value"]["type"],
         "running"
     );
     assert_eq!(
-        notifications[7]["params"]["patch"][0]["value"]["type"],
+        notifications[8]["params"]["patch"][0]["value"]["type"],
         "idle"
     );
     // The settled turn publishes its accounting before its status.
-    let stats = &notifications[6]["params"];
+    let stats = &notifications[7]["params"];
     assert_eq!(stats["stats"]["steps"], 1);
     assert!(stats["contextWindow"].is_u64());
-    let assistant = &notifications[4]["params"]["entry"];
+    let assistant = &notifications[5]["params"]["entry"];
     assert_eq!(assistant["role"], "assistant");
     assert_eq!(assistant["generationStatus"], "in_progress");
-    let completion_patch = notifications[5]["params"]["patch"]
+    let completion_patch = notifications[6]["params"]["patch"]
         .as_array()
         .expect("completion patch");
     assert!(completion_patch.iter().any(|operation| {
@@ -209,22 +227,23 @@ async fn a_fatal_transport_failure_publishes_an_error_before_the_stream_ends() {
         Arc::new(EchoTurnDriver::new("answer")),
     ));
     let mut responses = BufReader::new(client_read).lines();
-    for request in [
-        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"test","version":"1","entrypoint":"programmatic","terminalEmulator":"unknown"},"capabilities":{}}}"#,
-        r#"{"jsonrpc":"2.0","method":"initialized","params":{}}"#,
-        // An empty frame is unreadable rather than merely invalid, which is
-        // what the transport reports as fatal.
-        "",
-    ] {
+    // A frame past the size limit is unreadable rather than merely invalid,
+    // which is what the transport reports as fatal. The writer runs apart
+    // because the server stops reading before the frame ends.
+    let writer = tokio::spawn(async move {
+        for request in [
+            r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"test","version":"1","entrypoint":"programmatic","terminalEmulator":"unknown"},"capabilities":{}}}"#.to_owned(),
+            r#"{"jsonrpc":"2.0","method":"initialized","params":{}}"#.to_owned(),
+            "x".repeat(MAX_FRAME_BYTES + 1),
+        ] {
+            if client_write.write_all(request.as_bytes()).await.is_err()
+                || client_write.write_all(b"\n").await.is_err()
+            {
+                break;
+            }
+        }
         client_write
-            .write_all(request.as_bytes())
-            .await
-            .expect("request bytes");
-        client_write
-            .write_all(b"\n")
-            .await
-            .expect("request newline");
-    }
+    });
     assert!(responses.next_line().await.expect("initialize").is_some());
     let frame = responses
         .next_line()
@@ -243,8 +262,8 @@ async fn a_fatal_transport_failure_publishes_an_error_before_the_stream_ends() {
     assert!(frame["params"]["error"]["details"].is_null());
     // The stream stops right after, which is the point of sending it.
     assert!(responses.next_line().await.expect("stream end").is_none());
-    drop(client_write);
     drop(responses);
+    drop(writer.await.expect("writer joins"));
     assert!(
         server_task.await.expect("server task joins").is_err(),
         "the connection ends on the failure it published"
@@ -268,7 +287,7 @@ async fn stdio_transport_loss_closes_orphaned_resource_sessions() {
     for request in [
         r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"test","version":"1","entrypoint":"programmatic","terminalEmulator":"unknown"},"capabilities":{}}}"#,
         r#"{"jsonrpc":"2.0","method":"initialized","params":{}}"#,
-        r#"{"jsonrpc":"2.0","id":2,"method":"session/start","params":{"sessionId":"session-1","workingDirectory":"/workspace"}}"#,
+        r#"{"jsonrpc":"2.0","id":2,"method":"session/start","params":{"agentConfig":{"cwd":"/workspace"}}}"#,
     ] {
         client_write
             .write_all(request.as_bytes())
@@ -315,7 +334,7 @@ async fn stdio_server_carries_a_client_tool_delegation_and_its_answer() {
             r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"editor","version":"1"},"capabilities":{"clientTools":["filesystem/read"]}}}"#.to_owned(),
             r#"{"jsonrpc":"2.0","method":"initialized","params":{}}"#.to_owned(),
             format!(
-                r#"{{"jsonrpc":"2.0","id":2,"method":"session/start","params":{{"sessionId":"session-1","workingDirectory":{},"trusted":true,"autoApprove":true}}}}"#,
+                r#"{{"jsonrpc":"2.0","id":2,"method":"session/start","params":{{"agentConfig":{{"cwd":{},"trustWorkspace":true,"autoApprove":true}}}}}}"#,
                 serde_json::Value::String(directory.path().to_string_lossy().into_owned())
             ),
         ] {
@@ -329,13 +348,20 @@ async fn stdio_server_carries_a_client_tool_delegation_and_its_answer() {
                 .expect("request newline");
         }
     assert!(frames.next_line().await.expect("initialize").is_some());
-    assert!(frames.next_line().await.expect("session").is_some());
+    let started = frames
+        .next_line()
+        .await
+        .expect("session")
+        .expect("the start is answered");
+    let session_id =
+        started_session_id(&serde_json::from_str(&started).expect("session start JSON"));
 
     let reader = server.clone();
+    let tool_session = session_id.clone();
     let call = tokio::spawn(async move {
         reader
             .invoke_tool(
-                "session-1",
+                &tool_session,
                 "read_file",
                 vibe_core::tools::ToolInvocation {
                     call_id: "read-1".to_owned(),
@@ -359,7 +385,7 @@ async fn stdio_server_carries_a_client_tool_delegation_and_its_answer() {
         }
     };
     assert_eq!(delegated["method"], "clientTool/readTextFile");
-    assert_eq!(delegated["params"]["sessionId"], "session-1");
+    assert_eq!(delegated["params"]["sessionId"], session_id.as_str());
     assert_eq!(
         delegated["params"]["path"],
         serde_json::Value::String(

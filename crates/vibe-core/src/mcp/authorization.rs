@@ -880,11 +880,20 @@ pub fn server_fingerprint(server: &McpServerConfig) -> String {
 #[must_use]
 pub fn python_json(value: &Value) -> String {
     let mut rendered = String::new();
-    write_python_json(value, &mut rendered);
+    write_python_json(value, &mut rendered, true);
     rendered
 }
 
-fn write_python_json(value: &Value, rendered: &mut String) {
+/// The same spelling with `ensure_ascii=False`: characters outside ASCII are
+/// written as themselves rather than escaped.
+#[must_use]
+pub fn python_json_unicode(value: &Value) -> String {
+    let mut rendered = String::new();
+    write_python_json(value, &mut rendered, false);
+    rendered
+}
+
+fn write_python_json(value: &Value, rendered: &mut String, ascii: bool) {
     match value {
         Value::Null => rendered.push_str("null"),
         Value::Bool(flag) => rendered.push_str(if *flag { "true" } else { "false" }),
@@ -901,14 +910,14 @@ fn write_python_json(value: &Value, rendered: &mut String) {
                 rendered.push_str(&number.to_string());
             }
         }
-        Value::String(text) => write_python_string(text, rendered),
+        Value::String(text) => write_python_string(text, rendered, ascii),
         Value::Array(items) => {
             rendered.push('[');
             for (index, item) in items.iter().enumerate() {
                 if index > 0 {
                     rendered.push(',');
                 }
-                write_python_json(item, rendered);
+                write_python_json(item, rendered, ascii);
             }
             rendered.push(']');
         }
@@ -920,10 +929,10 @@ fn write_python_json(value: &Value, rendered: &mut String) {
                 if index > 0 {
                     rendered.push(',');
                 }
-                write_python_string(key, rendered);
+                write_python_string(key, rendered, ascii);
                 rendered.push(':');
                 if let Some(field) = fields.get(key) {
-                    write_python_json(field, rendered);
+                    write_python_json(field, rendered, ascii);
                 }
             }
             rendered.push('}');
@@ -931,7 +940,7 @@ fn write_python_json(value: &Value, rendered: &mut String) {
     }
 }
 
-fn write_python_string(text: &str, rendered: &mut String) {
+fn write_python_string(text: &str, rendered: &mut String, ascii: bool) {
     rendered.push('"');
     for character in text.chars() {
         match character {
@@ -943,6 +952,7 @@ fn write_python_string(text: &str, rendered: &mut String) {
             '\u{8}' => rendered.push_str("\\b"),
             '\u{c}' => rendered.push_str("\\f"),
             printable if (' '..='~').contains(&printable) => rendered.push(printable),
+            wide if !ascii && wide > '~' => rendered.push(wide),
             other => {
                 let mut units = [0_u16; 2];
                 for unit in other.encode_utf16(&mut units) {

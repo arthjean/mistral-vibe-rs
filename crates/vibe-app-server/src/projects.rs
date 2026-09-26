@@ -606,6 +606,11 @@ pub enum ProjectsServiceError {
     NotFound(String),
     #[error("{0}")]
     Conflict(String),
+    /// A scheduled loop the request cannot make or name: reference
+    /// `LoopError`, which its handler answers as `invalid_params` with no
+    /// issue list.
+    #[error("{0}")]
+    Loop(String),
     #[error(transparent)]
     Cloud(CloudError),
     /// A Vibe Code call that failed for a reason the caller cannot act on.

@@ -902,6 +902,7 @@ impl TurnDriver for LiveTurnDriver {
     fn compact<'a>(
         &'a self,
         session_id: &'a str,
+        working_directory: &'a str,
         extra_instructions: &'a str,
     ) -> CompactionDriverFuture<'a> {
         Box::pin(async move {
@@ -910,13 +911,33 @@ impl TurnDriver for LiveTurnDriver {
                 .as_ref()
                 .ok_or(DriverError::UnsupportedControl("session/compact/start"))?;
             let store = SessionStore::new(root);
-            let hydrated = store
-                .resume(
-                    session_id,
-                    &self.system_prompt,
-                    BTreeMap::<String, Value>::new(),
-                )
-                .map_err(DriverError::Storage)?;
+            // A session no turn has written yet compacts the conversation it
+            // would open with, and is written by the compaction, as the
+            // reference's agent loop holds its system prompt from the start.
+            let hydrated = match store.resume(
+                session_id,
+                &self.system_prompt,
+                BTreeMap::<String, Value>::new(),
+            ) {
+                Ok(hydrated) => hydrated,
+                Err(vibe_core::storage::StorageError::SessionNotFound(_)) => {
+                    vibe_core::storage::HydratedSession {
+                        metadata: store
+                            .create(
+                                session_id,
+                                working_directory,
+                                None,
+                                crate::host::now_millis(),
+                            )
+                            .map_err(DriverError::Storage)?,
+                        messages: vec![ModelMessage::System {
+                            content: self.system_prompt.clone(),
+                        }],
+                        current_config: BTreeMap::new(),
+                    }
+                }
+                Err(error) => return Err(DriverError::Storage(error)),
+            };
             let compaction = self
                 .compactor
                 .compact_with_instructions(
@@ -927,8 +948,22 @@ impl TurnDriver for LiveTurnDriver {
                 .await
                 .map_err(|failure| DriverError::Compaction(failure.message))?;
             // The conversation is kept and the envelope written after it,
-            // under the same session.
+            // under the same session, and the summarization's usage counts
+            // toward the session's own, as every model call of the reference
+            // agent loop does.
             let mut metadata = hydrated.metadata.clone();
+            for (key, spent) in [
+                ("session_prompt_tokens", compaction.usage.input_tokens),
+                ("session_completion_tokens", compaction.usage.output_tokens),
+            ] {
+                let total = metadata
+                    .statistics
+                    .get(key)
+                    .and_then(Value::as_u64)
+                    .unwrap_or_default()
+                    .saturating_add(spent);
+                metadata.statistics.insert(key.to_owned(), json!(total));
+            }
             store
                 .append_messages(
                     &mut metadata,

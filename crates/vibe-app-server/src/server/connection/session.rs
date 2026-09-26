@@ -180,6 +180,7 @@ impl ServerConnection {
         params: &SessionStartParams,
         resolution: &mut WorktreeResolution,
     ) -> Result<(String, Value, Vec<McpServerConfig>), ProtocolFault> {
+        let started = std::time::Instant::now();
         let opening = self.open_session(params)?;
         self.server.acquire_lease(&opening.session_id)?;
         let lifecycle = self.session_worktrees();
@@ -288,10 +289,18 @@ impl ServerConnection {
                 .bumped_at
                 .as_deref()
                 .and_then(vibe_core::storage::parse_iso_millis);
+            session.pinned_model = hydrated
+                .metadata
+                .config
+                .get("active_model")
+                .and_then(Value::as_str)
+                .filter(|alias| !alias.is_empty())
+                .map(ToOwned::to_owned);
         }
         session.persisted = persisted;
         session.agent_summary = Some(crate::workspace::agent_summary(&agent_profile));
         session.context_window = self.server.workspace.context_window();
+        session.pricing = self.server.workspace.active_model_pricing();
         session.active_model_alias = self.server.workspace.active_model_alias();
         session.compaction = self.server.workspace.compaction_settings();
         session.created_worktree = resolution.created().cloned();
@@ -319,6 +328,12 @@ impl ServerConnection {
             .map(public_session_state)
             .unwrap_or(Value::Null);
         drop(sessions);
+        // Reference `init_duration_ms`, which `session/ready/wait` answers: how
+        // long the session took to become usable.
+        if let Ok(mut resources) = self.server.resources.lock() {
+            let elapsed = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+            resources.record_init_duration(&session_id, elapsed);
+        }
         // The session stands in its directory from here on, so the attachment
         // hold becomes its own and a sweep reads the worktree as occupied.
         let pending_hold = resolution.pending_hold.take();
@@ -745,13 +760,15 @@ impl ServerConnection {
             }
             session.compaction_pending = true;
             session.updated_at = now_millis();
-            session.id.clone()
+            (session.id.clone(), session.working_directory.clone())
         };
+        let (canonical_session_id, working_directory) = canonical_session_id;
         Ok(DispatchBatch {
             outbound: Vec::new(),
             deferred: vec![DeferredWork::CompactSession {
                 request_id: request.id,
                 session_id: canonical_session_id,
+                working_directory,
                 extra_instructions: params.extra_instructions,
             }],
             close_after_flush: false,

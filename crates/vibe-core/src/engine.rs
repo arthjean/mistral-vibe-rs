@@ -561,6 +561,7 @@ where
                 injected: false,
                 message_id: message_id.clone(),
                 attachments: self.settings.user_attachments.clone(),
+                manual_shell: None,
             });
             // Reference `prepare_prompt_from_context` leaves the title unset:
             // a turn names its session only through a generated or supplied
@@ -3696,6 +3697,7 @@ mod tests {
                 injected: false,
                 message_id: Some("entry-1".to_owned()),
                 attachments: Vec::new(),
+                manual_shell: None,
             },
             "the trailing text stays the operator's message, under its entry's identity"
         );

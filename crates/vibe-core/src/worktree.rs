@@ -179,6 +179,16 @@ pub struct PreparedWorktree {
     pub pending_hold: Option<PendingSessionHold>,
 }
 
+/// A repository's own checkout, as reference `GitStatus` describes it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CheckoutStatus {
+    pub root: PathBuf,
+    pub branch: Option<String>,
+    pub base_branch: Option<String>,
+    /// [`None`] when no remote parses as a git URL.
+    pub repo_url: Option<String>,
+}
+
 /// A linked worktree of a checkout, as enumeration reports it.
 ///
 /// Deliberately not a [`PreparedWorktree`]: nothing here was created by this
@@ -539,6 +549,18 @@ impl WorktreeRepository {
         let record = WorktreeRecord::new(&name, &branch, &repo_root, true);
         record_starting_claim(&claim, &record, &target)?;
         self.create(&claim, &record, &target, true, None)
+    }
+
+    /// This repository's own checkout: its root, branch, base branch and
+    /// remote (`vibe/core/git/repo.py:190-215`).
+    #[must_use]
+    pub fn status(&self) -> CheckoutStatus {
+        CheckoutStatus {
+            root: resolve_lenient(self.git.working_dir()),
+            branch: self.git.branch(),
+            base_branch: self.git.base_branch(),
+            repo_url: self.git.remote_url(),
+        }
     }
 
     /// Every checkout git reports for this repository, resolved, with its

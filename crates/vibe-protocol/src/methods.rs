@@ -1,35 +1,39 @@
-//! The method names the contract declares, and the predicates that answer
-//! whether a name belongs to one of them.
+//! The method names the contract declares, and the predicate that answers
+//! whether a name belongs to it.
 
 /// Every method the reference declares, sorted and unique.
 ///
-/// This is the contract, not the routing table: a name belongs here because the
-/// reference declares it, whether or not this build answers it yet. What a build
-/// actually routes is what it advertises in
-/// [`ServerCapabilities::methods`](crate::ServerCapabilities::methods).
+/// Reference `SERVER_METHODS` (`vibe/app_server/protocol.py`). A name belongs
+/// here because the reference declares it; a request naming anything else is
+/// answered `method_not_found`, as the reference answers it.
 ///
-/// Lifecycle methods (`initialize`, `initialized`, `shutdown`, `exit`) are
+/// The lifecycle frames (`initialize` and the `initialized` notification) are
 /// deliberately absent: they are handled before method dispatch and are not
 /// part of the negotiated surface.
-pub const SERVER_METHODS: [&str; 107] = [
+pub const SERVER_METHODS: [&str; 136] = [
     "account/read",
     "agents/install",
     "agents/list",
     "agents/uninstall",
-    "callback/respond",
+    "callback/result",
     "config/fields/read",
-    "config/patch",
+    "config/model/write",
     "config/proxy/read",
     "config/proxy/write",
     "config/read",
     "config/reload",
     "config/schema",
-    "config/thinking/write",
+    "config/write",
+    "connector_catalog/auth/request",
+    "connector_catalog/read",
+    "connector_catalog/refresh",
+    "connector_catalog/toggle",
     "connectors/auth/read",
     "connectors/read",
     "connectors/refresh",
     "diagnostics/list",
     "diagnostics/logs/read",
+    "events/read",
     "feedback/record",
     "feedback/shouldShow",
     "identity/read",
@@ -51,6 +55,10 @@ pub const SERVER_METHODS: [&str; 107] = [
     "mcp_catalog/remove",
     "mcp_catalog/toggle",
     "narration/summarize",
+    "plugin/info",
+    "plugin/reload",
+    "plugin_catalog/read",
+    "plugins/read",
     "projectLinks/create",
     "projectLinks/inspectRoot",
     "projectLinks/link",
@@ -68,8 +76,7 @@ pub const SERVER_METHODS: [&str; 107] = [
     "review/turnDiff",
     "runtime/read",
     "session/agent/update",
-    "session/close",
-    "session/compact/start",
+    "session/compact",
     "session/context/inject",
     "session/continue",
     "session/delete",
@@ -89,12 +96,32 @@ pub const SERVER_METHODS: [&str; 107] = [
     "session/rewind",
     "session/rewind/read",
     "session/settings/update",
+    "session/shellCommand",
     "session/start",
+    "session/stop",
     "session/title/update",
+    "session/turn/enqueue",
+    "session/turn/queue/read",
+    "session/turn/queue/remove",
+    "session/turn/queue/replace",
+    "session/turn/queue/resume",
+    "session/turn/queue/steer",
     "session/turns/list",
     "shell/interrupt",
     "shell/run",
+    "skills/catalog",
+    "skills/convertLocal",
+    "skills/detail",
+    "skills/import",
+    "skills/installed",
     "skills/list",
+    "skills/remove",
+    "skills/setAlias",
+    "skills/setEnabled",
+    "skills/setLatest",
+    "skills/setVersion",
+    "skills/updates",
+    "skills/versions",
     "stats/read",
     "telemetry/record",
     "tools/list",
@@ -111,6 +138,7 @@ pub const SERVER_METHODS: [&str; 107] = [
     "vibeCode/teleport/cancel",
     "vibeCode/teleport/push/respond",
     "vibeCode/teleport/start",
+    "workspace/git/checkouts",
     "workspace/git/worktrees/limit/update",
     "workspace/git/worktrees/list",
     "workspace/git/worktrees/prune",
@@ -121,36 +149,10 @@ pub const SERVER_METHODS: [&str; 107] = [
     "workspace/trust/untrustedConfig",
 ];
 
-/// Methods this port routes that the reference does not declare, sorted and
-/// unique.
-///
-/// They stay routable for the clients already calling them, and stay out of
-/// [`SERVER_METHODS`] and out of the advertised capabilities, so a client
-/// written against the reference protocol never learns a name only this
-/// implementation answers. Each one has a row in the Accepted divergences table
-/// of `docs/parity.md`.
-pub const LOCAL_EXTENSION_METHODS: [&str; 3] = [
-    "config/batchWrite",
-    "connectors/toggle",
-    "session/overrides/write",
-];
-
 /// Reports whether `method` is part of the negotiated surface.
 #[must_use]
 pub fn is_server_method(method: &str) -> bool {
     SERVER_METHODS.binary_search(&method).is_ok()
-}
-
-/// Reports whether `method` is one of this port's local extensions.
-pub(crate) fn is_local_extension_method(method: &str) -> bool {
-    LOCAL_EXTENSION_METHODS.binary_search(&method).is_ok()
-}
-
-/// Reports whether `method` may be dispatched at all: the reference surface plus
-/// the local extensions.
-#[must_use]
-pub fn is_dispatchable_method(method: &str) -> bool {
-    is_server_method(method) || is_local_extension_method(method)
 }
 
 #[cfg(test)]

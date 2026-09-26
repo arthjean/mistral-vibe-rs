@@ -11,26 +11,7 @@ fn method_inventory_is_sorted_and_unique() {
     for method in ["initialize", "initialized", "shutdown", "exit"] {
         assert!(
             !is_server_method(method),
-            "{method} is a lifecycle method and must stay out of the inventory"
+            "{method} is a lifecycle frame and must stay out of the inventory"
         );
     }
-}
-
-#[test]
-fn local_extensions_stay_outside_the_reference_inventory() {
-    assert!(
-        LOCAL_EXTENSION_METHODS.is_sorted_by(|left, right| left < right),
-        "LOCAL_EXTENSION_METHODS must stay sorted and duplicate-free for binary_search"
-    );
-    for method in LOCAL_EXTENSION_METHODS {
-        assert!(
-            !is_server_method(method),
-            "{method} is a local extension and must stay out of SERVER_METHODS"
-        );
-        assert!(is_local_extension_method(method));
-        assert!(is_dispatchable_method(method));
-    }
-    assert!(!is_local_extension_method("turn/start"));
-    assert!(is_dispatchable_method("turn/start"));
-    assert!(!is_dispatchable_method("turn/unknown"));
 }

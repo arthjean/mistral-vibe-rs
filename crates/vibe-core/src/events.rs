@@ -621,6 +621,34 @@ impl PublicHistoryEntry {
     }
 }
 
+/// Reference `ManualShellContext`: a command the user ran with `!`, as the
+/// injected turn that reports it records it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ManualShellRecord {
+    pub operation_id: String,
+    pub command: String,
+    pub cwd: String,
+    #[serde(default)]
+    pub stdout: String,
+    #[serde(default)]
+    pub stderr: String,
+    #[serde(default)]
+    pub output_text: String,
+    pub exit_code: i64,
+    #[serde(default)]
+    pub timed_out: bool,
+    #[serde(default)]
+    pub interrupted: bool,
+    /// Milliseconds, fractional as the reference measures them.
+    #[serde(default = "zero_duration")]
+    pub duration_ms: serde_json::Number,
+    pub created_at: u64,
+}
+
+fn zero_duration() -> serde_json::Number {
+    serde_json::Number::from(0)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "role", rename_all = "snake_case")]
 pub enum ModelMessage {
@@ -648,6 +676,11 @@ pub enum ModelMessage {
         /// shows them. Reference `LLMMessage.images` and `resources`.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         attachments: Vec<PublicContentBlock>,
+        /// The command an injected turn reports, when the user ran one with
+        /// `!`: what a reload rebuilds its shell effect from. Reference
+        /// `LLMMessage.manual_shell`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        manual_shell: Option<Box<ManualShellRecord>>,
     },
     Assistant {
         /// Reference `LLMMessage.message_id`.
@@ -685,6 +718,7 @@ impl ModelMessage {
             injected: false,
             message_id: None,
             attachments: Vec::new(),
+            manual_shell: None,
         }
     }
 
@@ -697,6 +731,7 @@ impl ModelMessage {
             injected: true,
             message_id: None,
             attachments: Vec::new(),
+            manual_shell: None,
         }
     }
 

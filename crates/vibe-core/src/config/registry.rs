@@ -1220,3 +1220,58 @@ fn parse_schema_extra(spec: &FieldSpec) -> Map<String, JsonValue> {
         Ok(_) | Err(_) => Map::new(),
     }
 }
+
+/// Reference `VibeConfig` validation of a patched document: a top-level
+/// field whose value its declared type cannot take refuses the whole patch.
+///
+/// Only what pydantic's lax mode would refuse is refused: a string field
+/// takes nothing but a string, a boolean a boolean or one of the spellings
+/// lax mode reads as one, a number a number or a numeric string, and a list
+/// an array. Fields this registry does not type are left to their readers.
+pub fn validate_field_types(table: &toml::Table) -> Result<(), String> {
+    for (name, value) in table {
+        let Some(spec) = field(name) else {
+            continue;
+        };
+        let accepted = match spec.kind {
+            FieldKind::Str | FieldKind::Enum => value.is_str(),
+            FieldKind::Bool => match value {
+                toml::Value::Boolean(_) => true,
+                toml::Value::Integer(number) => matches!(number, 0 | 1),
+                toml::Value::Float(number) => *number == 0.0 || *number == 1.0,
+                toml::Value::String(text) => matches!(
+                    text.trim().to_ascii_lowercase().as_str(),
+                    "0" | "1"
+                        | "f"
+                        | "t"
+                        | "n"
+                        | "y"
+                        | "no"
+                        | "yes"
+                        | "off"
+                        | "on"
+                        | "true"
+                        | "false"
+                ),
+                _ => false,
+            },
+            FieldKind::Int => match value {
+                toml::Value::Integer(_) | toml::Value::Boolean(_) => true,
+                toml::Value::Float(number) => number.fract() == 0.0,
+                toml::Value::String(text) => text.trim().parse::<i64>().is_ok(),
+                _ => false,
+            },
+            FieldKind::Float => match value {
+                toml::Value::Integer(_) | toml::Value::Float(_) | toml::Value::Boolean(_) => true,
+                toml::Value::String(text) => text.trim().parse::<f64>().is_ok(),
+                _ => false,
+            },
+            FieldKind::List => value.is_array(),
+            FieldKind::Complex => true,
+        };
+        if !accepted {
+            return Err(format!("`{name}` cannot take the value it was given"));
+        }
+    }
+    Ok(())
+}

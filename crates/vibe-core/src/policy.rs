@@ -399,6 +399,9 @@ pub enum ApprovalDecision {
     /// Refused with the reason the model is told instead of the result.
     Reject(String),
     CancelTurn,
+    /// The question itself was refused, which fails the turn with this
+    /// message (reference `CallbackRejectedError`).
+    Fail(String),
 }
 
 pub trait ApprovalAgent: Send + Sync {
@@ -512,6 +515,9 @@ impl ToolHandler for PolicyGuardedTool {
                     output.skip = Some(ToolSkip { cancelled });
                     output.approval = Some(ToolApproval::declined());
                     return Ok(output);
+                }
+                Err(PolicyError::TurnFailed(message)) => {
+                    return Err(ToolError::TurnFailed(message));
                 }
                 Err(error) => return Err(ToolError::Execution(error.to_string())),
             };
@@ -967,6 +973,7 @@ impl PermissionStore {
                         reason: feedback,
                     }),
                     ApprovalDecision::CancelTurn => Err(PolicyError::TurnCancelled),
+                    ApprovalDecision::Fail(message) => Err(PolicyError::TurnFailed(message)),
                 }
             }
         }
@@ -1076,6 +1083,8 @@ pub enum PolicyError {
     StaleApproval,
     #[error("turn cancelled during approval")]
     TurnCancelled,
+    #[error("{0}")]
+    TurnFailed(String),
     #[error("cannot trust filesystem root `{0}`")]
     UnsafeTrustRoot(PathBuf),
     #[error("cannot resolve policy path `{path}`: {source}")]

@@ -135,3 +135,30 @@ impl AgentSafety {
         }
     }
 }
+
+/// Whether a runtime mutation already runs in the session (reference
+/// `RuntimeMutationStatus`). The legacy harness applies every mutation before
+/// it answers, so this port only ever answers `Applied`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeMutationStatus {
+    Applied,
+    Pending,
+}
+
+impl RuntimeMutationStatus {
+    pub const ALL: [Self; 2] = [Self::Applied, Self::Pending];
+}
+
+/// The lifecycle role a `session/start` names (reference `SessionKind`): a
+/// session a user opened, or a throwaway one warming the runtime up.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionKind {
+    Normal,
+    Ephemeral,
+}
+
+impl SessionKind {
+    pub const ALL: [Self; 2] = [Self::Normal, Self::Ephemeral];
+}

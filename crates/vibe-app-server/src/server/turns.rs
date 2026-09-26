@@ -5,6 +5,7 @@
 //! reads next. The scheduled-loop half is included, because a loop fire is a
 //! turn the server started on the session's behalf rather than the client's.
 
+use super::session_callbacks::finalize_turn_entries;
 use super::*;
 
 impl AppServer {
@@ -40,6 +41,12 @@ impl AppServer {
             .ok_or_else(|| ServerError::StaleTurn(turn_id.to_owned()))?;
         let turn = turn.clone();
         session.stats.begin_turn();
+        let history = session
+            .snapshot
+            .as_ref()
+            .map(|snapshot| snapshot.history.clone())
+            .unwrap_or_default();
+        session.preview_pending = super::projection::session_preview(session, &history).is_empty();
         let event_id = next_event_id(session);
         let started = encode_notification(
             "turn/started",
@@ -50,7 +57,11 @@ impl AppServer {
                 ("emittedAt", json!(now_millis())),
             ]),
         );
-        Ok(vec![started, session_updated_frame(session)])
+        // Reference `_announce_turn_started`: the running status, then the
+        // accounting the turn starts from.
+        let status = session_updated_frame(session);
+        let stats = stats_updated_frame(session);
+        Ok(vec![started, status, stats])
     }
 
     pub fn reserve_due_loop(
@@ -211,7 +222,7 @@ impl AppServer {
             .key(session_id)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?
             .to_owned();
-        let (was_closed, started_at, active_scheduled_loop, review) = {
+        let (was_closed, started_at, active_scheduled_loop, review, queue_item_id, rejection) = {
             let session = sessions
                 .get(&source_key)
                 .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
@@ -223,6 +234,8 @@ impl AppServer {
                 session.active_turn_started_at.unwrap_or_default(),
                 session.active_scheduled_loop.clone(),
                 session.review.clone(),
+                queued_turn_item(session, turn_id),
+                session.callback_rejection.clone(),
             )
         };
         if !matches!(
@@ -239,10 +252,19 @@ impl AppServer {
             return Err(ServerError::SessionConflict(target_session_id));
         }
         let status = match snapshot.lifecycle {
+            // A turn stopped over a refused callback failed with the refusal
+            // (reference `CallbackRejectedError`).
+            LifecycleState::Cancelled if rejection.is_some() => PublicTurnStatus::Failed,
             LifecycleState::Completed => PublicTurnStatus::Completed,
             LifecycleState::Cancelled => PublicTurnStatus::Interrupted,
             LifecycleState::Failed => PublicTurnStatus::Failed,
             _ => return Err(ServerError::NonTerminalCompletion(snapshot.lifecycle)),
+        };
+        let error = match rejection {
+            Some(message) if status == PublicTurnStatus::Failed => {
+                Some(public_turn_failure(TurnErrorCode::InternalError, &message))
+            }
+            _ => error,
         };
         let completed_at = now_millis();
         if let Some(loop_id) = &active_scheduled_loop {
@@ -268,38 +290,40 @@ impl AppServer {
                 })
             }),
             stop_reason,
-            queue_item_id: None,
+            queue_item_id,
         };
         sessions.alias(&source_key, session_id);
         sessions.rename(&source_key, &target_session_id)?;
         let session = sessions
             .get_mut(&source_key)
             .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
+        // Reference `_finalize_turn`: what the turn left open is closed, and
+        // the session is idle whatever the turn's outcome.
+        let cancelled = status == PublicTurnStatus::Interrupted;
+        let mut frames = finalize_turn_entries(session, turn_id, cancelled);
         cancel_pending_callback(session, "Turn completed before callback was answered");
+        session.callback_rejection = None;
         session.active_turn = None;
         session.active_turn_started_at = None;
         session.active_scheduled_loop = None;
         session.status = if was_closed {
             SessionStatus::Closed
         } else {
-            match snapshot.lifecycle {
-                LifecycleState::Completed => SessionStatus::Idle,
-                LifecycleState::Cancelled => SessionStatus::Cancelled,
-                LifecycleState::Failed => SessionStatus::Failed,
-                _ => SessionStatus::Idle,
-            }
+            SessionStatus::Idle
         };
         session.snapshot = Some(merge_server_callback_history(
             session.snapshot.as_ref(),
             snapshot.clone(),
         ));
+        // The terminal snapshot closes the same entries, unpublished.
+        finalize_turn_entries(session, turn_id, cancelled);
         session.record_turn(turn.clone());
         session.updated_at = completed_at;
         session.stats.finish_turn();
-        let stats = stats_updated_frame(session);
-        let status = session_updated_frame(session);
+        frames.push(stats_updated_frame(session));
+        frames.push(session_updated_frame(session));
         let event_id = next_event_id(session);
-        let completed = encode_notification(
+        frames.push(encode_notification(
             "turn/completed",
             result_map([
                 ("eventId", json!(event_id)),
@@ -307,8 +331,8 @@ impl AppServer {
                 ("turn", json!(turn)),
                 ("emittedAt", json!(now_millis())),
             ]),
-        );
-        Ok(vec![stats, status, completed])
+        ));
+        Ok(frames)
     }
 
     pub fn fail_turn(
@@ -329,7 +353,6 @@ impl AppServer {
         turn_id: &str,
         error: PublicError,
     ) -> Result<Vec<Vec<u8>>, ServerError> {
-        let message = error.message.as_str();
         let mut sessions = self.lock_sessions()?;
         let session = sessions
             .get_mut(session_id)
@@ -337,8 +360,15 @@ impl AppServer {
         if session.active_turn.as_deref() != Some(turn_id) {
             return Err(ServerError::StaleTurn(turn_id.to_owned()));
         }
+        // A turn failed over a refused callback reports the refusal.
+        let error = match session.callback_rejection.take() {
+            Some(rejection) => public_turn_failure(TurnErrorCode::InternalError, &rejection),
+            None => error,
+        };
+        let message = error.message.as_str();
         let was_closed = session.status == SessionStatus::Closed;
         let started_at = session.active_turn_started_at.unwrap_or_default();
+        let queue_item_id = queued_turn_item(session, turn_id);
         if let Some(loop_id) = &session.active_scheduled_loop {
             self.projects
                 .finish_loop_fire(loop_id, now_millis() / 1_000)
@@ -350,14 +380,16 @@ impl AppServer {
                 .map_err(|error| ServerError::Resource(error.to_string()))?;
             self.publish_retention_notice(review);
         }
+        let mut frames = finalize_turn_entries(session, turn_id, false);
         session.active_turn = None;
         session.active_turn_started_at = None;
         session.active_scheduled_loop = None;
         cancel_pending_callback(session, message);
+        session.callback_rejection = None;
         session.status = if was_closed {
             SessionStatus::Closed
         } else {
-            SessionStatus::Failed
+            SessionStatus::Idle
         };
         let turn = PublicTurn {
             id: turn_id.to_owned(),
@@ -367,15 +399,15 @@ impl AppServer {
             completed_at: Some(now_millis()),
             error: Some(error.clone()),
             stop_reason: None,
-            queue_item_id: None,
+            queue_item_id,
         };
         session.record_turn(turn.clone());
         session.updated_at = turn.completed_at.unwrap_or(started_at);
         session.stats.abandon_turn();
-        let stats = stats_updated_frame(session);
-        let status = session_updated_frame(session);
+        frames.push(stats_updated_frame(session));
+        frames.push(session_updated_frame(session));
         let event_id = next_event_id(session);
-        let completed = encode_notification(
+        frames.push(encode_notification(
             "turn/completed",
             result_map([
                 ("eventId", json!(event_id)),
@@ -383,18 +415,12 @@ impl AppServer {
                 ("turn", json!(turn)),
                 ("emittedAt", json!(now_millis())),
             ]),
-        );
-        Ok(vec![stats, status, completed])
+        ));
+        Ok(frames)
     }
 
-    /// Records the usage one provider round trip reported, and publishes it
-    /// when the context size moved.
-    ///
-    /// The engine reports usage while the turn runs, which is what lets a client
-    /// show context pressure before the turn settles rather than after. The
-    /// reference turn loop (`vibe/app_server/_turns.py`) emits
-    /// `session/statsUpdated` only when `context_tokens` differs from the last
-    /// value it published, so a round trip that leaves it unchanged is silent.
+    /// Records the usage one provider round trip reported. The accounting is
+    /// published later, by [`Self::check_turn_stats`].
     pub fn record_turn_stats(
         &self,
         session_id: &str,
@@ -402,6 +428,28 @@ impl AppServer {
         context_tokens: u64,
         input_tokens: u64,
         output_tokens: u64,
+    ) -> Result<(), ServerError> {
+        let mut sessions = self.lock_sessions()?;
+        let session = sessions
+            .get_mut(session_id)
+            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
+        if session.active_turn.as_deref() != Some(turn_id) {
+            return Err(ServerError::StaleTurn(turn_id.to_owned()));
+        }
+        session
+            .stats
+            .observe(context_tokens, input_tokens, output_tokens);
+        Ok(())
+    }
+
+    /// Publishes the accounting when the context size moved since it was
+    /// last published. The reference turn loop (`vibe/app_server/_turns.py`)
+    /// compares `context_tokens` with the value it published last, so a round
+    /// trip that leaves it unchanged is silent.
+    pub(crate) fn check_turn_stats(
+        &self,
+        session_id: &str,
+        turn_id: &str,
     ) -> Result<Option<Vec<u8>>, ServerError> {
         let mut sessions = self.lock_sessions()?;
         let session = sessions
@@ -410,11 +458,30 @@ impl AppServer {
         if session.active_turn.as_deref() != Some(turn_id) {
             return Err(ServerError::StaleTurn(turn_id.to_owned()));
         }
-        let published = session.stats.context_tokens;
-        session
-            .stats
-            .observe(context_tokens, input_tokens, output_tokens);
-        Ok((session.stats.context_tokens != published).then(|| stats_updated_frame(session)))
+        Ok(
+            (session.stats.context_tokens != session.stats.published_context_tokens)
+                .then(|| stats_updated_frame(session)),
+        )
+    }
+
+    /// Publishes the operator's first message as the preview of a session
+    /// that had none when the turn started.
+    pub(crate) fn publish_turn_preview(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        text: &str,
+    ) -> Result<Option<Vec<u8>>, ServerError> {
+        let mut sessions = self.lock_sessions()?;
+        let session = sessions
+            .get_mut(session_id)
+            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
+        if session.active_turn.as_deref() != Some(turn_id)
+            || !std::mem::take(&mut session.preview_pending)
+        {
+            return Ok(None);
+        }
+        Ok(Some(preview_updated_frame(session, text)))
     }
 
     /// Publishes the handoff of a session running a turn, under the name its
@@ -545,6 +612,15 @@ impl AppServer {
     }
 }
 
+/// The queued item a running turn was promoted from.
+fn queued_turn_item(session: &SessionRuntime, turn_id: &str) -> Option<String> {
+    session
+        .latest_turn
+        .as_ref()
+        .filter(|turn| turn.id == turn_id)
+        .and_then(|turn| turn.queue_item_id.clone())
+}
+
 pub(super) fn scheduled_loop_turn(
     user_display_content: &Option<Value>,
 ) -> Result<Option<(String, u64)>, &'static str> {
@@ -564,4 +640,23 @@ pub(super) fn scheduled_loop_turn(
         .and_then(Value::as_u64)
         .ok_or("scheduled loop turn requires integer firedAt")?;
     Ok(Some((loop_id.to_owned(), fired_at)))
+}
+
+/// The sequenced `session/updated` that gives a session its preview, the
+/// first 160 characters of `text`.
+pub(super) fn preview_updated_frame(session: &mut SessionRuntime, text: &str) -> Vec<u8> {
+    let preview = text.chars().take(160).collect::<String>();
+    let event_id = next_event_id(session);
+    encode_notification(
+        "session/updated",
+        result_map([
+            ("eventId", json!(event_id)),
+            ("sessionId", json!(session.id)),
+            (
+                "patch",
+                json!([{"op": "replace", "path": "/preview", "value": preview}]),
+            ),
+            ("emittedAt", json!(now_millis())),
+        ]),
+    )
 }

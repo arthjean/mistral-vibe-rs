@@ -174,6 +174,13 @@ pub(crate) enum ProtocolFault {
         code: ProtocolErrorCode,
         message: String,
     },
+    /// A refusal that names what it refused in `data`, as the reference
+    /// attaches the conflicting key or the missing item.
+    WithData {
+        code: ProtocolErrorCode,
+        message: String,
+        data: Value,
+    },
 }
 
 impl ProtocolFault {
@@ -199,6 +206,18 @@ impl ProtocolFault {
         }
     }
 
+    pub(crate) fn with_data(
+        code: ProtocolErrorCode,
+        message: impl Into<String>,
+        data: Value,
+    ) -> Self {
+        Self::WithData {
+            code,
+            message: message.into(),
+            data,
+        }
+    }
+
     pub(crate) fn invalid_params(message: impl Into<String>) -> Self {
         Self::InvalidParams(ParamsRejection::at_root(message.into()))
     }
@@ -214,6 +233,22 @@ impl ProtocolFault {
         match self {
             Self::InvalidParams(rejection) => invalid_params_batch(id, rejection),
             Self::Other { code, message } => plain_error_batch(id, code, &message),
+            Self::WithData {
+                code,
+                message,
+                data,
+            } => DispatchBatch {
+                outbound: vec![encode_frame(&Envelope::Error(ErrorResponse {
+                    jsonrpc: JsonRpcVersion::V2,
+                    id,
+                    error: ProtocolError {
+                        code,
+                        message,
+                        data,
+                    },
+                }))],
+                ..DispatchBatch::default()
+            },
         }
     }
 }
@@ -279,8 +314,17 @@ impl From<ProjectsServiceError> for ProtocolFault {
             ProjectsServiceError::Conflict(message) => {
                 Self::new(ProtocolErrorCode::Conflict, message)
             }
+            ProjectsServiceError::Loop(message) => {
+                Self::plain(ProtocolErrorCode::InvalidParams, message)
+            }
             ProjectsServiceError::Cloud(crate::projects::CloudError::Unauthorized(message)) => {
                 Self::new(ProtocolErrorCode::Unauthorized, message)
+            }
+            // A checkout the reference cannot read is a `VibeCodeError`, which
+            // its handler answers as `invalid_params` with no issue list
+            // (`vibe/app_server/_handler.py:284`).
+            ProjectsServiceError::Cloud(error @ crate::projects::CloudError::Git(_)) => {
+                Self::plain(ProtocolErrorCode::InvalidParams, error.to_string())
             }
             ProjectsServiceError::Cloud(error) => {
                 Self::new(ProtocolErrorCode::Conflict, error.to_string())

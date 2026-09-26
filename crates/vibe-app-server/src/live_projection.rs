@@ -53,14 +53,25 @@ pub(crate) enum AppServerUpdate {
         category: String,
         detail: String,
     },
-    /// Usage the engine reported mid-turn, so context pressure is published as
-    /// it builds rather than once the turn settles.
+    /// Usage the engine reported mid-turn, recorded without a frame.
     Stats {
         session_id: String,
         turn_id: String,
         context_tokens: u64,
         input_tokens: u64,
         output_tokens: u64,
+    },
+    /// The point where the reference looks at the context size again: after
+    /// the first event its loop yields once a round trip's usage landed
+    /// (`_run_turn`), which publishes the accounting when the size moved.
+    StatsCheck { session_id: String, turn_id: String },
+    /// The operator's message of a session that had no preview yet, which
+    /// the reference publishes as the session's preview (`EventProjector.
+    /// _project_user_message`).
+    Preview {
+        session_id: String,
+        turn_id: String,
+        text: String,
     },
 }
 
@@ -75,6 +86,8 @@ struct AppServerProjection {
     reducer: ProjectionReducer,
     entries: BTreeMap<String, PublicHistoryEntry>,
     summary_length: usize,
+    /// Usage landed since the reference last looked at the context size.
+    stats_pending: bool,
 }
 
 struct AppServerEventObserver {
@@ -96,6 +109,7 @@ pub(crate) fn app_server_update_channel_for_turn(
                 reducer: ProjectionReducer::for_turn(session_id, turn_id),
                 entries: BTreeMap::new(),
                 summary_length: 0,
+                stats_pending: false,
             }),
             sender,
         }),
@@ -156,6 +170,7 @@ impl EventObserver for AppServerEventObserver {
                     output_tokens,
                 })
                 .map_err(|_| "app-server update receiver is closed".to_owned())?;
+            projection.stats_pending = true;
             return Ok(());
         }
         if let EngineEvent::SessionHandoff {
@@ -216,7 +231,7 @@ impl EventObserver for AppServerEventObserver {
                     })
                     .map_err(|_| "app-server update receiver is closed".to_owned())?,
                 Some(previous) if previous != entry => {
-                    let patch = history_entry_patch(previous, entry)?;
+                    let patch = history_entry_patch(previous, entry, event.emitted_at)?;
                     self.sender
                         .send(AppServerUpdate::HistoryUpdated {
                             session_id: snapshot.session_id.clone(),
@@ -231,6 +246,36 @@ impl EventObserver for AppServerEventObserver {
                 Some(_) => {}
             }
         }
+        if let EngineEvent::UserMessage { content, .. } = &event.event
+            && !content.is_empty()
+        {
+            self.sender
+                .send(AppServerUpdate::Preview {
+                    session_id: snapshot.session_id.clone(),
+                    turn_id: turn_id.clone(),
+                    text: content.clone(),
+                })
+                .map_err(|_| "app-server update receiver is closed".to_owned())?;
+        }
+        // The reference announces a call and settles its own turn outside the
+        // loop that looks at the context size, and announces calls while the
+        // reply streams, before its usage lands.
+        let checks_stats = !matches!(
+            event.event,
+            EngineEvent::ToolCallAnnounced { .. }
+                | EngineEvent::ToolCallUnresolved { .. }
+                | EngineEvent::Lifecycle { .. }
+                | EngineEvent::RequestSent { .. }
+                | EngineEvent::CompactionOutcome { .. }
+        );
+        if checks_stats && std::mem::take(&mut projection.stats_pending) {
+            self.sender
+                .send(AppServerUpdate::StatsCheck {
+                    session_id: snapshot.session_id.clone(),
+                    turn_id: turn_id.clone(),
+                })
+                .map_err(|_| "app-server update receiver is closed".to_owned())?;
+        }
         projection.entries = snapshot
             .history
             .into_iter()
@@ -240,76 +285,136 @@ impl EventObserver for AppServerEventObserver {
     }
 }
 
+/// The patch the reference sends for an entry that changed.
+///
+/// The reference projector names its operations by the event that caused
+/// them (`vibe/app_server/_projector.py`): streamed text and tool output are
+/// appended, anything else replaces the top-level field it changed whole, and
+/// every patch ends by stamping `/updatedAt`. Diffing the two shapes by
+/// top-level field reproduces those operations in the order the projector
+/// writes them.
 fn history_entry_patch(
     previous: &PublicHistoryEntry,
     current: &PublicHistoryEntry,
+    emitted_at: u64,
 ) -> Result<Vec<JsonPatchOperation>, String> {
     let previous = serde_json::to_value(previous).map_err(|error| error.to_string())?;
     let current = serde_json::to_value(current).map_err(|error| error.to_string())?;
+    let (Value::Object(previous), Value::Object(current)) = (previous, current) else {
+        return Err("a history entry is not an object".to_owned());
+    };
+    let mut keys = FIELD_ORDER
+        .iter()
+        .map(|key| (*key).to_owned())
+        .collect::<Vec<_>>();
+    keys.extend(
+        previous
+            .keys()
+            .chain(current.keys())
+            .filter(|key| !FIELD_ORDER.contains(&key.as_str()) && key.as_str() != "updatedAt")
+            .cloned()
+            .collect::<BTreeSet<_>>(),
+    );
     let mut patch = Vec::new();
-    diff_json("", &previous, &current, &mut patch);
+    for key in keys {
+        let (before, after) = (previous.get(&key), current.get(&key));
+        if before == after {
+            continue;
+        }
+        let path = format!("/{}", escape_json_pointer(&key));
+        let Some(after) = after else {
+            patch.push(JsonPatchOperation {
+                op: "remove",
+                path,
+                value: Value::Null,
+            });
+            continue;
+        };
+        let appended = before.and_then(|before| match key.as_str() {
+            "content" => appended_at(before, after, &["0", "text"]),
+            "text" => appended_at(before, after, &[]),
+            "state" => appended_at(before, after, &["outputText"]),
+            _ => None,
+        });
+        patch.push(match appended {
+            Some((suffix, text)) => JsonPatchOperation {
+                op: "append",
+                path: format!("{path}{suffix}"),
+                value: Value::String(text),
+            },
+            None => JsonPatchOperation {
+                op: "replace",
+                path,
+                value: after.clone(),
+            },
+        });
+    }
+    if !patch.is_empty() {
+        let stamp = current
+            .get("updatedAt")
+            .filter(|stamp| previous.get("updatedAt") != Some(*stamp))
+            .cloned()
+            .unwrap_or_else(|| Value::from(emitted_at));
+        patch.push(JsonPatchOperation {
+            op: "replace",
+            path: "/updatedAt".to_owned(),
+            value: stamp,
+        });
+    }
     Ok(patch)
 }
 
-fn diff_json(path: &str, previous: &Value, current: &Value, patch: &mut Vec<JsonPatchOperation>) {
-    if previous == current {
-        return;
+/// The top-level fields in the order the reference projector patches them.
+const FIELD_ORDER: [&str; 7] = [
+    "content",
+    "text",
+    "detail",
+    "message",
+    "details",
+    "state",
+    "generationStatus",
+];
+
+/// The text appended at `pointer` below a field, when that string grew and
+/// nothing else in the field changed.
+fn appended_at(before: &Value, after: &Value, pointer: &[&str]) -> Option<(String, String)> {
+    let mut before = before.clone();
+    let mut after = after.clone();
+    let mut previous = &mut before;
+    let mut current = &mut after;
+    for segment in pointer {
+        previous = match previous {
+            Value::Object(fields) => fields.get_mut(*segment)?,
+            Value::Array(items) => items.get_mut(segment.parse::<usize>().ok()?)?,
+            _ => return None,
+        };
+        current = match current {
+            Value::Object(fields) => fields.get_mut(*segment)?,
+            Value::Array(items) => items.get_mut(segment.parse::<usize>().ok()?)?,
+            _ => return None,
+        };
     }
-    match (previous, current) {
-        (Value::Object(previous), Value::Object(current)) => {
-            let keys = previous
-                .keys()
-                .chain(current.keys())
-                .cloned()
-                .collect::<BTreeSet<_>>();
-            for key in keys {
-                let child_path = format!("{path}/{}", escape_json_pointer(&key));
-                match (previous.get(&key), current.get(&key)) {
-                    (Some(previous), Some(current)) => {
-                        diff_json(&child_path, previous, current, patch);
-                    }
-                    (None, Some(value)) => patch.push(JsonPatchOperation {
-                        op: "add",
-                        path: child_path,
-                        value: value.clone(),
-                    }),
-                    (Some(_), None) => patch.push(JsonPatchOperation {
-                        op: "remove",
-                        path: child_path,
-                        value: Value::Null,
-                    }),
-                    (None, None) => {}
-                }
-            }
-        }
-        (Value::Array(previous), Value::Array(current)) if previous.len() == current.len() => {
-            for (index, (previous, current)) in previous.iter().zip(current).enumerate() {
-                diff_json(&format!("{path}/{index}"), previous, current, patch);
-            }
-        }
-        (Value::String(previous), Value::String(current))
-            if is_append_path(path) && current.starts_with(previous) =>
-        {
-            patch.push(JsonPatchOperation {
-                op: "append",
-                path: path.to_owned(),
-                value: Value::String(current[previous.len()..].to_owned()),
-            });
-        }
-        _ => patch.push(JsonPatchOperation {
-            op: "replace",
-            path: path.to_owned(),
-            value: current.clone(),
-        }),
+    let (Value::String(old), Value::String(new)) = (&*previous, &*current) else {
+        return None;
+    };
+    let text = new.strip_prefix(old.as_str())?.to_owned();
+    if text.is_empty() {
+        return None;
     }
+    // Everything but the grown string has to be unchanged.
+    *previous = Value::Null;
+    *current = Value::Null;
+    (before == after).then(|| {
+        let suffix = pointer
+            .iter()
+            .map(|segment| format!("/{}", escape_json_pointer(segment)))
+            .collect::<String>();
+        (suffix, text)
+    })
 }
 
 fn escape_json_pointer(segment: &str) -> String {
     segment.replace('~', "~0").replace('/', "~1")
-}
-
-fn is_append_path(path: &str) -> bool {
-    path == "/state/outputText" || path.ends_with("/text")
 }
 
 /// The frame one update publishes, or `None` for an update the reference
@@ -379,14 +484,24 @@ pub(crate) fn app_server_notification(
             input_tokens,
             output_tokens,
         } => {
-            return server.record_turn_stats(
+            server.record_turn_stats(
                 &session_id,
                 &turn_id,
                 context_tokens,
                 input_tokens,
                 output_tokens,
-            );
+            )?;
+            return Ok(None);
         }
+        AppServerUpdate::StatsCheck {
+            session_id,
+            turn_id,
+        } => return server.check_turn_stats(&session_id, &turn_id),
+        AppServerUpdate::Preview {
+            session_id,
+            turn_id,
+            text,
+        } => return server.publish_turn_preview(&session_id, &turn_id, &text),
         AppServerUpdate::SessionHandoff {
             old_session_id,
             new_session_id,

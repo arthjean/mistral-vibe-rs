@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Answer every app-server method the reference declares, the way its legacy
+  backend does. Parameters are validated centrally with the reference's
+  issues, requests are routed to the host or the session as upstream routes
+  them, and the handshake, errors and notifications take the reference's
+  shapes. New: `session/shellCommand` runs a manual `!` command on the server
+  and streams its output into the history, `session/stop` closes the server,
+  `session/compact` works on a session no turn has written yet, the
+  `connector_catalog/*` methods read, refresh, toggle and authorize connectors
+  from the account's bootstrap (published in the runtime's MCP sources), the
+  twelve `skills/*` methods browse the skill registry and import, repin,
+  remove, convert and toggle skills, and `workspace/git/checkouts` reads every
+  repository a project links. A failed turn now leaves its session idle, a
+  refused callback fails its turn once the turn stops, and a connector or
+  skill mutation is followed by `runtime/updated`.
+
 - Save and list sessions the way the reference does. Sessions go to
   `session_logging.save_dir` (`~/.vibe/logs/session` by default) under the
   configured prefix, in directories named after their start time and short

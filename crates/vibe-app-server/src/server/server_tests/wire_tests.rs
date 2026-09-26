@@ -3,37 +3,34 @@
 
 use super::*;
 
-#[test]
-fn every_routed_method_is_declared_or_a_local_extension() {
-    let routed = routed_methods();
-    let undeclared = routed
-        .iter()
-        .filter(|method| !is_dispatchable_method(method))
-        .copied()
-        .collect::<Vec<_>>();
-    assert_eq!(
-        undeclared,
-        Vec::<&str>::new(),
-        "routed but neither declared by the reference nor a local extension"
-    );
+/// The methods only this port's in-process clients call: routed for them,
+/// and unknown to a stdio client, which speaks the reference protocol.
+fn port_only_methods() -> Vec<&'static str> {
+    routed_methods()
+        .into_iter()
+        .filter(|method| !is_server_method(method))
+        .collect()
+}
 
-    let advertised = advertised_methods();
-    for method in vibe_protocol::LOCAL_EXTENSION_METHODS {
-        assert!(
-            routed.contains(method),
-            "{method} is a local extension but is routed nowhere"
-        );
-        assert!(
-            !advertised.contains(&method.to_owned()),
-            "{method} is a local extension and must not be advertised"
+#[test]
+fn a_stdio_client_cannot_reach_a_port_only_method() {
+    let server = AppServer::default();
+    let mut connection = server.connect(TransportKind::Stdio);
+    initialize(&mut connection);
+    assert!(!port_only_methods().is_empty());
+    for method in port_only_methods() {
+        let batch = connection.dispatch(&request(9, method, json!({})));
+        let frame = decode_frame(&batch.outbound[0]).expect("an answer");
+        let code = match frame {
+            Envelope::Error(ErrorResponse { error, .. }) => Some(error.code),
+            _ => None,
+        };
+        assert_eq!(
+            code,
+            Some(ProtocolErrorCode::MethodNotFound),
+            "{method} answered a stdio client"
         );
     }
-    assert!(advertised.iter().all(|method| is_server_method(method)));
-    assert_eq!(
-        advertised.len(),
-        routed.len() - vibe_protocol::LOCAL_EXTENSION_METHODS.len(),
-        "the advertised set is the routed methods minus the local extensions"
-    );
 }
 
 /// A client library written against the reference protocol always may send
@@ -53,22 +50,10 @@ fn the_handshake_accepts_the_reference_capability_set() {
         }),
     );
     assert_eq!(connection.state(), ConnectionState::Ready);
-
-    let advertised = response["capabilities"]["methods"]
-        .as_array()
-        .expect("the handshake advertises a method list")
-        .iter()
-        .filter_map(|method| method.as_str())
-        .collect::<BTreeSet<_>>();
-    for method in vibe_protocol::LOCAL_EXTENSION_METHODS {
-        assert!(
-            !advertised.contains(method),
-            "{method} is a local extension and must stay unadvertised"
-        );
-    }
-    assert!(
-        advertised.iter().all(|method| is_server_method(method)),
-        "the handshake advertises a name the reference does not declare"
+    assert_eq!(
+        response,
+        json!({"serverInfo": {"name": "vibe-app-server", "version": env!("CARGO_PKG_VERSION")}}),
+        "the handshake answers the server's identity and nothing else"
     );
 
     // A capability the reference does not declare still fails, which is
@@ -183,7 +168,7 @@ fn a_muted_notification_is_dropped_and_a_sequenced_event_is_not() {
 }
 
 /// The status a `session/updated` publishes is the one a client renders,
-/// so each transition has to name what it is waiting on or what broke.
+/// so each transition has to name what it is waiting on.
 #[test]
 fn session_updated_names_the_turn_the_callback_and_the_failure() {
     let patch_status = |frame: &[u8]| -> Value {
@@ -225,8 +210,10 @@ fn session_updated_names_the_turn_the_callback_and_the_failure() {
             "May I run this?",
         )
         .expect("the callback is delivered");
+    // The callback entry is published first and the question last, with
+    // the blocked status just before it.
     assert_eq!(
-        patch_status(&delivery[0]),
+        patch_status(&delivery[delivery.len() - 2]),
         json!({
             "type": "blocked",
             "activeTurnId": "turn-1",
@@ -261,9 +248,21 @@ fn session_updated_names_the_turn_the_callback_and_the_failure() {
             TurnErrorCode::Refusal,
         )
         .expect("the turn fails");
+    let status = failed
+        .iter()
+        .find(|frame| {
+            matches!(
+                decode_frame(frame),
+                Ok(Envelope::Notification(Notification { ref method, .. }))
+                    if method == "session/updated"
+            )
+        })
+        .expect("the failure publishes a status");
     assert_eq!(
-        patch_status(&failed[1]),
-        json!({"type": "failed", "message": "the provider refused"})
+        patch_status(status),
+        // The reference session returns to idle once a failed turn has
+        // settled; the failure itself is carried by `turn/completed`.
+        json!({"type": "idle"})
     );
 }
 
@@ -283,9 +282,12 @@ fn stats_updated_carries_the_whole_snapshot_and_the_session_token_usage() {
     server
         .turn_started("session-1", "turn-1")
         .expect("the turn starts");
-    let frame = server
+    server
         .record_turn_stats("session-1", "turn-1", 1_200, 900, 300)
-        .expect("the usage is recorded")
+        .expect("the usage is recorded");
+    let frame = server
+        .check_turn_stats("session-1", "turn-1")
+        .expect("the usage is checked")
         .expect("a new context size publishes");
     let Envelope::Notification(Notification { method, params, .. }) =
         decode_frame(&frame).expect("stats notification")
@@ -460,7 +462,7 @@ fn runtime_read_reports_the_live_catalogs_configuration_and_accounting() {
 
     // The configuration is a real view rather than an empty document, and
     // the hook count is counted rather than hard-coded.
-    assert_eq!(runtime["config"], runtime["baseConfig"]);
+    assert!(runtime.get("baseConfig").is_none());
     assert!(
         runtime["config"]["activeModel"]["name"]
             .as_str()
@@ -583,7 +585,9 @@ fn config_read_reports_the_harness_fallback_a_launch_resolved() {
     initialize(&mut connection);
     start_session(&mut connection);
 
-    let read = call(&mut connection, 10, "config/read");
+    // The host's read, which names no session, is the one that reports the
+    // harness decision (`_read_config` in `vibe/app_server/_host.py`).
+    let read = host_call(&mut connection, 10, "config/read");
     assert_eq!(read["harnessSelectionSource"], json!("flag"));
     assert_eq!(
         read["startupIssue"]["file"],
@@ -618,24 +622,30 @@ fn the_configuration_envelopes_are_the_reference_shapes() {
     assert_eq!(
         read.keys().map(String::as_str).collect::<Vec<_>>(),
         [
-            "baseConfig",
             "config",
             "harnessSelectionSource",
+            "hooksCount",
+            "mcpServersEnabled",
+            "mcpServersTotal",
+            "skillsCount",
             "startupIssue",
             "strippedHistoryImages"
         ]
     );
-    assert_eq!(read["config"], read["baseConfig"]);
-    // A server built without a harness decision runs the default legacy
-    // harness, which raises no issue (`vibe/app_server/protocol.py:970-978`).
-    assert_eq!(read["harnessSelectionSource"], json!("default"));
-    assert!(read["startupIssue"].is_null());
+    // A session's read leaves the harness fields at their defaults; the
+    // host's reports that a server built without a harness decision runs
+    // the default legacy harness, which raises no issue
+    // (`vibe/app_server/protocol.py:970-978`).
+    assert!(read["harnessSelectionSource"].is_null());
+    let host = host_call(&mut connection, 13, "config/read");
+    assert_eq!(host["harnessSelectionSource"], json!("default"));
+    assert!(host["startupIssue"].is_null());
     assert_eq!(
         read["config"]
             .as_object()
             .expect("the view is an object")
             .len(),
-        19,
+        29,
         "the view is the whole `ConfigView`"
     );
     assert!(read["strippedHistoryImages"].is_u64());
@@ -645,7 +655,7 @@ fn the_configuration_envelopes_are_the_reference_shapes() {
     let reload = call(&mut connection, 11, "config/reload");
     assert_eq!(
         reload.keys().map(String::as_str).collect::<Vec<_>>(),
-        ["runtime", "strippedHistoryImages"]
+        ["runtime", "status", "strippedHistoryImages"]
     );
     assert!(reload["runtime"]["config"]["activeModel"].is_object());
 
@@ -664,7 +674,13 @@ fn the_configuration_envelopes_are_the_reference_shapes() {
     };
     assert_eq!(
         result.keys().map(String::as_str).collect::<Vec<_>>(),
-        ["failures", "rejected", "runtime", "strippedHistoryImages"]
+        [
+            "failures",
+            "rejected",
+            "runtime",
+            "status",
+            "strippedHistoryImages"
+        ]
     );
     assert_eq!(result["rejected"], json!(false));
     assert_eq!(result["failures"], json!([]));
@@ -775,7 +791,7 @@ fn a_local_extension_stays_routable() {
     let mut connection = server.connect(TransportKind::InProcess);
     initialize(&mut connection);
     start_session(&mut connection);
-    for method in vibe_protocol::LOCAL_EXTENSION_METHODS {
+    for method in port_only_methods() {
         let batch = connection.dispatch(&request(9, method, json!({"sessionId": "session-1"})));
         let frame = decode_frame(&batch.outbound[0]).expect("extension answer");
         if let Envelope::Error(ErrorResponse { error, .. }) = frame {
@@ -914,20 +930,12 @@ fn callback_kinds_share_one_wire_form() {
 
 /// The session shapes this port's own clients read predate the reference
 /// surface and are answered in process only: over stdio the name is as
-/// unknown as any other, and nothing under the prefix is advertised.
+/// unknown as any other.
 #[test]
 fn an_internal_method_is_answered_in_process_only() {
     let server = AppServer::default();
     let mut stdio = server.connect(TransportKind::Stdio);
-    let advertised = initialize_with(&mut stdio, json!({}));
-    assert!(
-        advertised["capabilities"]["methods"]
-            .as_array()
-            .expect("a method list")
-            .iter()
-            .filter_map(Value::as_str)
-            .all(|method| !method.starts_with(INTERNAL_METHOD_PREFIX))
-    );
+    initialize(&mut stdio);
     let batch = stdio.dispatch(&request(2, "internal/session/list", json!({})));
     let Envelope::Error(ErrorResponse { error, .. }) =
         decode_frame(&batch.outbound[0]).expect("an answer")

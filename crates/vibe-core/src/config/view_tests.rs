@@ -42,14 +42,25 @@ fn the_view_carries_every_field_the_wire_declares() {
         keys,
         [
             "activeModel",
+            "activeModelPinned",
             "askConfirmationOnExit",
             "autocopyToClipboard",
+            "awaitingExperimentModel",
+            "defaultAgent",
+            "defaultModelAlias",
             "disableWelcomeBannerAnimation",
             "enableNotifications",
+            "enableTelemetry",
             "enableUpdateChecks",
+            "experimentalEnableRegistrySkills",
+            "experimentalEnableTabStatus",
             "fileWatcherForAutocomplete",
+            "imagesSupported",
+            "logLevel",
             "models",
             "narratorEnabled",
+            "showGreeting",
+            "showSubagentStatusList",
             "showThinkingNodes",
             "speech",
             "theme",
@@ -57,11 +68,10 @@ fn the_view_carries_every_field_the_wire_declares() {
             "transcription",
             "ttsModels",
             "validationWarnings",
-            "vibeCodeEnabled",
             "voiceModeEnabled",
             "worktreeLimit",
         ],
-        "the view is exactly the 19 fields this port publishes"
+        "the view is exactly the fields reference `ConfigView` declares"
     );
 }
 
@@ -261,14 +271,12 @@ fn an_audio_entry_without_an_alias_is_refused_and_a_repeated_alias_is_one_entry(
 
 #[test]
 fn the_toggles_come_from_the_effective_table() {
-    let (_temporary, snapshot) = loaded(
-        "theme = \"nord\"\nvoice_mode_enabled = true\nask_confirmation_on_exit = false\nvibe_code_enabled = true\n",
-    );
+    let (_temporary, snapshot) =
+        loaded("theme = \"nord\"\nvoice_mode_enabled = true\nask_confirmation_on_exit = false\n");
     let view = snapshot.config_view();
     assert_eq!(view["theme"], "nord");
     assert_eq!(view["voiceModeEnabled"], true);
     assert_eq!(view["askConfirmationOnExit"], false);
-    assert_eq!(view["vibeCodeEnabled"], true);
     // Unset in the fixture, so the view publishes the shipped default rather
     // than omitting the field.
     assert_eq!(view["showThinkingNodes"], false);

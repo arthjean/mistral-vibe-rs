@@ -213,6 +213,7 @@ fn manual_compaction_reserves_exclusive_session_work_and_failure_releases_it() {
         vec![DeferredWork::CompactSession {
             request_id: RequestId::Integer(3),
             session_id: "session-1".to_owned(),
+            working_directory: "/workspace".to_owned(),
             extra_instructions: "preserve decisions".to_owned(),
         }]
     );

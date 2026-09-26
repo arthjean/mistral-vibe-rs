@@ -137,8 +137,7 @@ impl EventObserver for ServerProjectionObserver {
             output_tokens,
         } = event.event
         {
-            let published = self
-                .server
+            self.server
                 .record_turn_stats(
                     &self.session_id,
                     &self.turn_id,
@@ -146,6 +145,10 @@ impl EventObserver for ServerProjectionObserver {
                     input_tokens,
                     output_tokens,
                 )
+                .map_err(|error| error.to_string())?;
+            let published = self
+                .server
+                .check_turn_stats(&self.session_id, &self.turn_id)
                 .map_err(|error| error.to_string())?;
             if published.is_some() {
                 forward_stats(&self.sender, event)?;
@@ -603,12 +606,13 @@ impl InProcessClient {
 
     /// Sends `session/context/inject` for an idle session and returns the text
     /// the driver is to hold for the next turn, once the canonical session has
-    /// recorded it.
+    /// recorded it. A session saved with the context already holds it, and the
+    /// driver then has nothing to hold.
     pub fn inject_context(
         &mut self,
         session_id: &str,
         text: &str,
-    ) -> Result<(String, bool, bool), ClientError> {
+    ) -> Result<Option<(String, bool, bool)>, ClientError> {
         let request_id = self.take_request_id();
         let request = request_bytes(
             request_id.clone(),
@@ -628,7 +632,8 @@ impl InProcessClient {
                     inject_invoked_skill,
                     ..
                 },
-            ] => Ok((content.clone(), *as_message, *inject_invoked_skill)),
+            ] => Ok(Some((content.clone(), *as_message, *inject_invoked_skill))),
+            [] => Ok(None),
             _ => Err(ClientError::InvalidResponse(
                 "context injection did not schedule delivery".to_owned(),
             )),
@@ -801,7 +806,7 @@ impl InProcessClient {
         &mut self,
         session_id: &str,
         extra_instructions: &str,
-    ) -> Result<(RequestId, String), ClientError> {
+    ) -> Result<(RequestId, String, String), ClientError> {
         let request_id = self.take_request_id();
         let request = request_bytes(
             request_id.clone(),
@@ -822,9 +827,12 @@ impl InProcessClient {
                 DeferredWork::CompactSession {
                     request_id: deferred_id,
                     session_id,
+                    working_directory,
                     ..
                 },
-            ] if deferred_id == &request_id => Ok((request_id, session_id.clone())),
+            ] if deferred_id == &request_id => {
+                Ok((request_id, session_id.clone(), working_directory.clone()))
+            }
             _ => Err(ClientError::InvalidResponse(
                 "compaction omitted deferred work".to_owned(),
             )),

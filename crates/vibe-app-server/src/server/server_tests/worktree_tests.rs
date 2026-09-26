@@ -291,22 +291,16 @@ fn a_host_without_git_lists_nothing_rather_than_refusing() {
 }
 
 #[test]
-fn the_worktree_methods_are_advertised_and_the_retired_listing_is_not() {
-    let server = AppServer::default();
-    let mut connection = server.connect(TransportKind::InProcess);
-    let response = initialize_with(&mut connection, json!({}));
-    let methods = response["capabilities"]["methods"]
-        .as_array()
-        .expect("the handshake advertises its methods");
+fn the_worktree_methods_are_declared_and_the_retired_listing_is_not() {
     for method in [
         "workspace/git/worktrees/limit/update",
         "workspace/git/worktrees/list",
         "workspace/git/worktrees/prune",
         "workspace/git/worktrees/remove",
     ] {
-        assert!(methods.contains(&json!(method)), "{method}");
+        assert!(is_server_method(method), "{method}");
     }
-    assert!(!methods.contains(&json!("workspace/worktrees/list")));
+    assert!(!is_server_method("workspace/worktrees/list"));
 }
 
 // --------------------------------------------------------------------------

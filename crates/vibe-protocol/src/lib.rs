@@ -30,9 +30,6 @@ pub use error::{
 };
 pub use handshake::{
     CallbackKind, ClientCapabilities, ClientEntrypoint, ClientInfo, ClientToolCapability,
-    InitializeParams, InitializeResponse, ProtocolVersion, ServerCapabilities, ServerInfo,
-    TerminalEmulator, TransportKind,
+    InitializeParams, InitializeResponse, ServerInfo, TerminalEmulator, TransportKind,
 };
-pub use methods::{
-    LOCAL_EXTENSION_METHODS, SERVER_METHODS, is_dispatchable_method, is_server_method,
-};
+pub use methods::{SERVER_METHODS, is_server_method};

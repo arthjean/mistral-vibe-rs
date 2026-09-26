@@ -80,6 +80,7 @@ pub const RESOURCE_METHODS: &[&str] = &[
     "diagnostics/logs/read",
     "feedback/record",
     "feedback/shouldShow",
+    "identity/read",
     "narration/summarize",
     "review/approve",
     "review/baseline",
@@ -292,9 +293,18 @@ pub struct ResourceService {
     mcp: BTreeMap<String, McpSource>,
     policy_stores: BTreeMap<String, PermissionStore>,
     tool_registries: BTreeMap<String, ToolRegistry>,
+    /// How long each session took to open, which `session/ready/wait`
+    /// reports.
+    init_durations: BTreeMap<String, u64>,
 }
 
 impl ResourceService {
+    /// Records how long `session_id` took to open.
+    pub fn record_init_duration(&mut self, session_id: &str, milliseconds: u64) {
+        self.init_durations
+            .insert(session_id.to_owned(), milliseconds);
+    }
+
     /// The log file this service records to and answers `diagnostics/logs/read`
     /// from. Reference builds its `LogReader` over `LOG_FILE` directly; the
     /// path is passed in here so a test, and a second server in the same
@@ -333,8 +343,16 @@ impl ResourceService {
                 json!(self.feedback_actions.is_empty()),
             )])),
             "narration/summarize" => self.narration(params),
-            "session/ready/read" | "session/ready/wait" => {
-                Ok(read_only([("ready", json!(self.ready))]))
+            "session/ready/read" => Ok(read_only([("ready", json!(self.ready))])),
+            "session/ready/wait" => {
+                let duration = params
+                    .get("sessionId")
+                    .and_then(Value::as_str)
+                    .and_then(|session_id| self.init_durations.get(session_id));
+                Ok(read_only([
+                    ("ready", json!(self.ready)),
+                    ("initDurationMs", json!(duration)),
+                ]))
             }
             "tools/list" => Ok(read_only([(
                 "tools",
@@ -444,6 +462,7 @@ impl ResourceService {
         self.backend_integrations.remove(session_id);
         self.policy_stores.remove(session_id);
         self.tool_registries.remove(session_id);
+        self.init_durations.remove(session_id);
         self.ready = !self.policy_stores.is_empty();
     }
 

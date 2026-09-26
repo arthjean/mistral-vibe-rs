@@ -30,6 +30,14 @@ pub(crate) struct SessionRuntime {
     pub(crate) compaction_pending: bool,
     pub(crate) pending_callback: Option<PendingCallback>,
     pub(crate) resolved_callbacks: BTreeMap<String, ResolvedCallback>,
+    /// Why a client refused the callback its running turn waits on, which
+    /// ends that turn as failed with this message.
+    pub(crate) callback_rejection: Option<String>,
+    /// The manual command running in this session, which nothing else may
+    /// run beside.
+    pub(crate) shell_operation: Option<ShellOperation>,
+    /// The connector catalog this session accepted and its route revision.
+    pub(crate) connectors: crate::connector_catalog::SessionConnectors,
     pub(crate) context: Vec<String>,
     pub(crate) steering: Vec<String>,
     pub(crate) snapshot: Option<ProjectionSnapshot>,
@@ -51,6 +59,9 @@ pub(crate) struct SessionRuntime {
     /// opens, which `PublicSession.model` falls back to when the intent names
     /// none.
     pub(crate) active_model_alias: Option<String>,
+    /// The model the session pinned when it first took a turn, or the one
+    /// its record stored. Reference `_pin_session_active_model`.
+    pub(crate) pinned_model: Option<String>,
     /// The agent profile this session runs, projected as `AgentSummary`.
     ///
     /// The intent carries the name; a client renders the profile, so the
@@ -62,6 +73,13 @@ pub(crate) struct SessionRuntime {
     /// The active model's compaction threshold, read once when the session
     /// opens. Zero means no model declares one.
     pub(crate) context_window: u64,
+    /// The active model's prices, read with the threshold: every published
+    /// accounting carries them (reference `_apply_active_model_pricing`).
+    pub(crate) pricing: (f64, f64, Option<f64>),
+    /// Whether the running turn started on a session with no preview, whose
+    /// first message then becomes it.
+    pub(crate) preview_pending: bool,
+    pub(crate) turn_queue: super::turn_queue::TurnQueue,
     /// The five compaction keys, read once when the session opens, beside the
     /// threshold the client renders. A turn carries them to the engine, where
     /// the policy layer and the reactive recovery both read them.
@@ -108,6 +126,9 @@ impl SessionRuntime {
             compaction_pending: false,
             pending_callback: None,
             resolved_callbacks: BTreeMap::new(),
+            callback_rejection: None,
+            shell_operation: None,
+            connectors: Default::default(),
             context: Vec::new(),
             steering: Vec::new(),
             snapshot: None,
@@ -121,9 +142,13 @@ impl SessionRuntime {
             turns: Vec::new(),
             bumped_at: None,
             active_model_alias: None,
+            pinned_model: None,
             event_watermark: 0,
             stats: SessionStats::default(),
             context_window: 0,
+            pricing: (0.0, 0.0, None),
+            preview_pending: false,
+            turn_queue: super::turn_queue::TurnQueue::default(),
             compaction: CompactionSettings::default(),
             policy,
             tools,
@@ -178,6 +203,8 @@ pub(crate) struct SessionStats {
     pub(crate) session_completion_tokens: u64,
     pub(crate) session_cached_tokens: u64,
     pub(crate) context_tokens: u64,
+    /// The context size the last published accounting carried.
+    pub(crate) published_context_tokens: u64,
     /// The last provider round trip's usage and duration, which is what the
     /// reference means by the last turn (`AgentLoop._update_stats`).
     pub(crate) last_turn_prompt_tokens: u64,
@@ -384,7 +411,8 @@ pub(crate) fn server_error_frame(message: &str) -> Vec<u8> {
 
 /// Publishes the session's accounting as a sequenced `session/statsUpdated`.
 pub(crate) fn stats_updated_frame(session: &mut SessionRuntime) -> Vec<u8> {
-    let stats = public_stats(Some(session));
+    session.stats.published_context_tokens = session.stats.context_tokens;
+    let stats = priced(public_stats(Some(session)), session.pricing);
     let context_window = session.context_window;
     let event_id = next_event_id(session);
     encode_notification(

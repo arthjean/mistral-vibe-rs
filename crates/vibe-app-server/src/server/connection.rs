@@ -5,14 +5,22 @@
 //! server-to-client requests are still outstanding. Every routed method is
 //! answered here, against the server above.
 
+mod queue;
 mod review_request;
 mod rewind;
+mod route;
 mod saved;
 mod session;
 mod trust;
 mod turn;
 
 use super::*;
+use crate::params::object_of;
+use crate::wire_validation;
+
+pub(crate) use route::SKILLS_MUTATIONS;
+#[cfg(test)]
+pub(crate) use route::{Route, route};
 
 pub struct ServerConnection {
     pub(super) server: AppServer,
@@ -48,7 +56,14 @@ impl ServerConnection {
             }
         };
         let mut batch = match frame {
-            Envelope::Request(request) => self.handle_request(request),
+            Envelope::Request(request) => {
+                // A stdio client's extra keys are reported in the order it
+                // wrote them, which the envelope's sorted map has lost.
+                let ordered = (self.transport == TransportKind::Stdio)
+                    .then(|| wire_validation::ordered_params(bytes))
+                    .flatten();
+                self.handle_request(request, ordered)
+            }
             Envelope::Notification(notification) => self.handle_notification(notification),
             Envelope::Success(response) => self.handle_server_success(response),
             Envelope::Error(response) => self.handle_server_error(response),
@@ -370,18 +385,22 @@ impl ServerConnection {
         self.attached_sessions.iter().cloned().collect()
     }
 
-    fn handle_request(&mut self, request: ServerRequest) -> DispatchBatch {
+    fn handle_request(
+        &mut self,
+        request: ServerRequest,
+        ordered: Option<wire_validation::Json>,
+    ) -> DispatchBatch {
         if request.method == INITIALIZE_METHOD {
-            return self.initialize(request);
+            return self.initialize(request, ordered);
         }
-        if request.method == SHUTDOWN_METHOD {
+        if self.transport == TransportKind::InProcess && request.method == SHUTDOWN_METHOD {
             return self.shutdown(request);
         }
         if self.state != ConnectionState::Ready {
             return error_batch(
                 request.id,
                 ProtocolErrorCode::NotInitialized,
-                "Connection is not initialized",
+                "initialize must be the first request",
             );
         }
         if let Some(method) = internal_method(self.transport, &request.method) {
@@ -391,13 +410,22 @@ impl ServerConnection {
             };
             return self.workspace_request(request);
         }
-        if !is_dispatchable_method(&request.method) {
-            return error_batch(
-                request.id,
-                ProtocolErrorCode::MethodNotFound,
-                "Unknown app-server method",
-            );
+        if self.transport == TransportKind::InProcess {
+            return self.port_request(request);
         }
+        if !is_server_method(&request.method) {
+            let id = request.id.clone();
+            return route::method_not_found(&request.method).into_batch(id);
+        }
+        self.reference_request(request, ordered)
+    }
+
+    /// Answers a request with this port's own handlers.
+    ///
+    /// In-process clients reach every method this way, including the shapes
+    /// only this port speaks; a stdio request reaches it once the reference
+    /// routing has validated it ([`Self::reference_request`]).
+    fn port_request(&mut self, request: ServerRequest) -> DispatchBatch {
         match request.method.as_str() {
             "session/start" => self.session_start(request),
             "session/list"
@@ -416,7 +444,7 @@ impl ServerConnection {
             | "session/delete"
             | "session/history/clear" => self.saved_session_request(request),
             "session/close" => self.session_close(request),
-            "session/compact/start" => self.session_compact_start(request),
+            "session/compact" | "session/compact/start" => self.session_compact_start(request),
             "session/settings/update" => self.session_settings_update(request),
             "session/overrides/write" => self.session_overrides_write(request),
             "session/rewind/read" => self.session_rewind_read(request),
@@ -424,6 +452,11 @@ impl ServerConnection {
             "turn/start" => self.turn_start(request),
             "turn/steer" => self.turn_steer(request),
             "turn/interrupt" => self.turn_interrupt(request),
+            "session/turn/enqueue"
+            | "session/turn/queue/read"
+            | "session/turn/queue/remove"
+            | "session/turn/queue/replace"
+            | "session/turn/queue/resume" => self.turn_queue_request(request),
             "session/context/inject" => self.context_inject(request),
             "callback/respond" => self.callback_respond(request),
             "workspace/trust/status"
@@ -436,41 +469,46 @@ impl ServerConnection {
             method if RESOURCE_METHODS.contains(&method) => self.resource_request(request),
             method if WORKSPACE_METHODS.contains(&method) => self.workspace_request(request),
             method if PROJECTS_METHODS.contains(&method) => self.projects_request(request),
-            _ => error_batch(
-                request.id,
-                ProtocolErrorCode::MethodNotFound,
-                "Method is not implemented in this release",
-            ),
+            method => {
+                let id = request.id.clone();
+                route::method_not_found(method).into_batch(id)
+            }
         }
     }
 
+    /// A notification the connection does not expect ends it, as the
+    /// reference's `_handle_notification` ends the connection it arrived on.
     fn handle_notification(&mut self, notification: Notification) -> DispatchBatch {
         match notification.method.as_str() {
             INITIALIZED_NOTIFICATION if self.state == ConnectionState::AwaitingInitialized => {
                 self.state = ConnectionState::Ready;
                 DispatchBatch::empty()
             }
-            INITIALIZED_NOTIFICATION => {
-                self.state = ConnectionState::Closed;
-                DispatchBatch {
-                    outbound: Vec::new(),
-                    deferred: Vec::new(),
-                    close_after_flush: true,
-                }
+            // This port's in-process clients end a connection with `shutdown`
+            // and `exit`, and send nothing else the server has to refuse; the
+            // reference protocol has neither, so over stdio `exit` is one
+            // more notification the server does not know.
+            EXIT_NOTIFICATION
+                if self.transport == TransportKind::InProcess
+                    && self.state == ConnectionState::ShuttingDown =>
+            {
+                self.close_for_protocol_error()
             }
-            EXIT_NOTIFICATION if self.state == ConnectionState::ShuttingDown => {
-                self.state = ConnectionState::Closed;
-                DispatchBatch {
-                    outbound: Vec::new(),
-                    deferred: Vec::new(),
-                    close_after_flush: true,
-                }
+            method
+                if self.transport == TransportKind::InProcess
+                    && method != INITIALIZED_NOTIFICATION =>
+            {
+                DispatchBatch::empty()
             }
-            _ => DispatchBatch::empty(),
+            _ => self.close_for_protocol_error(),
         }
     }
 
-    fn initialize(&mut self, request: ServerRequest) -> DispatchBatch {
+    fn initialize(
+        &mut self,
+        request: ServerRequest,
+        ordered: Option<wire_validation::Json>,
+    ) -> DispatchBatch {
         if self.state != ConnectionState::New {
             return error_batch(
                 request.id,
@@ -478,7 +516,20 @@ impl ServerConnection {
                 "initialize may only be called once",
             );
         }
-        let parsed = from_params::<InitializeParams>(&request.params);
+        let params = ordered.unwrap_or_else(|| {
+            wire_validation::Json::from_value(&Value::Object(object_of(&request.params)))
+        });
+        let validated = match wire_validation::validate_lifecycle(INITIALIZE_METHOD, &params) {
+            Ok(validated) => validated,
+            Err(issues) => {
+                return self
+                    .rejected(INITIALIZE_METHOD, &issues)
+                    .into_batch(request.id);
+            }
+        };
+        let parsed = serde_json::from_value::<InitializeParams>(validated).map_err(|error| {
+            ParamsRejection::at_root(format!("Invalid request parameters: {error}"))
+        });
         let params = match parsed {
             Ok(params) => params,
             Err(rejection) => {
@@ -498,12 +549,6 @@ impl ServerConnection {
             server_info: ServerInfo {
                 name: "vibe-app-server".to_owned(),
                 version: env!("CARGO_PKG_VERSION").to_owned(),
-            },
-            protocol_version: ProtocolVersion::V1,
-            capabilities: ServerCapabilities {
-                methods: advertised_methods(),
-                callback_kinds: vec![CallbackKind::Approval, CallbackKind::UserInput],
-                transports: vec![self.transport],
             },
         };
         success_batch(
@@ -749,8 +794,9 @@ impl ServerConnection {
                 let stats = priced(stats, self.server.workspace.active_model_pricing());
                 result_map([("stats", stats), ("contextWindow", json!(context_window))])
             }
-            // The plan comes from the console, so the answer waits on I/O.
-            "account/read" => {
+            // The plan comes from the console and the identity from the
+            // provider, so both answers wait on I/O.
+            "account/read" | "identity/read" => {
                 return Some(DispatchBatch {
                     outbound: Vec::new(),
                     deferred: vec![DeferredWork::CloudRequest {

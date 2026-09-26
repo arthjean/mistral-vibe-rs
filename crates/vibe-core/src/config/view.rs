@@ -38,23 +38,41 @@ const SPEECH_API_BASE: &str = "https://api.mistral.ai";
 const THINKING_LEVELS: [&str; 5] = ["off", "low", "medium", "high", "max"];
 
 impl ConfigSnapshot {
-    /// The 19-field `ConfigView` the app-server publishes.
+    /// The `ConfigView` the app-server publishes (reference
+    /// `project_config_view`, `vibe/app_server/_projection.py`), every field
+    /// the reference declares and no other.
     #[must_use]
     pub fn config_view(&self) -> JsonValue {
+        let active_model = self.active_model_view();
+        let images_supported = active_model
+            .get("supportsImages")
+            .and_then(JsonValue::as_bool)
+            .unwrap_or(false);
         json!({
-            "activeModel": self.active_model_view(),
+            "activeModel": active_model,
+            "activeModelPinned": self.active_model_pinned(),
+            "imagesSupported": images_supported,
+            "awaitingExperimentModel": false,
+            "defaultModelAlias": super::effective::default_model_alias(&self.effective)
+                .unwrap_or(super::registry::DEFAULT_ACTIVE_MODEL_ALIAS),
+            "defaultAgent": self.string_field("default_agent", "accept-edits"),
             "theme": self.string_field("theme", "default"),
+            "logLevel": self.effective.get("log_level").and_then(Value::as_str),
             "disableWelcomeBannerAnimation": self.bool_field("disable_welcome_banner_animation", false),
-            "autocopyToClipboard": self.bool_field("autocopy_to_clipboard", false),
-            "fileWatcherForAutocomplete": self.bool_field("file_watcher_for_autocomplete", false),
+            "showGreeting": self.bool_field("show_greeting", true),
+            "autocopyToClipboard": self.bool_field("autocopy_to_clipboard", true),
+            "fileWatcherForAutocomplete": self.bool_field("file_watcher_for_autocomplete", true),
             "askConfirmationOnExit": self.bool_field("ask_confirmation_on_exit", true),
             "voiceModeEnabled": self.bool_field("voice_mode_enabled", false),
             "narratorEnabled": self.bool_field("narrator_enabled", false),
-            "showThinkingNodes": self.bool_field("show_thinking_nodes", true),
+            "showThinkingNodes": self.bool_field("show_thinking_nodes", false),
+            "showSubagentStatusList": self.bool_field("show_subagent_status_list", true),
             "worktreeLimit": self.worktree_limit(),
             "enableUpdateChecks": self.bool_field("enable_update_checks", true),
-            "enableNotifications": self.bool_field("enable_notifications", false),
-            "vibeCodeEnabled": self.bool_field("vibe_code_enabled", false),
+            "enableNotifications": self.bool_field("enable_notifications", true),
+            "experimentalEnableTabStatus": self.bool_field("experimental_enable_tab_status", true),
+            "enableTelemetry": self.bool_field("enable_telemetry", true),
+            "experimentalEnableRegistrySkills": self.bool_field("experimental_enable_registry_skills", false),
             "models": self.model_views(),
             "transcribeModels": self.audio_aliases("transcribe_models"),
             "ttsModels": self.audio_aliases("tts_models"),
@@ -74,6 +92,25 @@ impl ConfigSnapshot {
             },
             "validationWarnings": self.validation_warnings,
         })
+    }
+
+    /// Reference `active_model_is_pinned`: a model is pinned when the
+    /// effective document names one and the operator's own file or the
+    /// session's overrides wrote it, rather than a default or an experiment.
+    fn active_model_pinned(&self) -> bool {
+        let named = |values: &Table| {
+            values
+                .get("active_model")
+                .and_then(Value::as_str)
+                .is_some_and(|alias| alias != super::registry::UNPINNED_ACTIVE_MODEL)
+        };
+        named(&self.effective)
+            && self.layer_values.iter().any(|layer| {
+                matches!(
+                    layer.kind,
+                    super::ConfigLayerKind::SelectedToml | super::ConfigLayerKind::Runtime
+                ) && named(&layer.values)
+            })
     }
 
     /// How many inactive managed worktrees are kept before the oldest are
@@ -324,7 +361,7 @@ impl ConfigSnapshot {
     }
 
     /// The tables of a top-level array key, skipping anything that is not one.
-    fn entries(&self, key: &str) -> Vec<Table> {
+    pub fn entries(&self, key: &str) -> Vec<Table> {
         self.effective
             .get(key)
             .and_then(Value::as_array)
