@@ -140,7 +140,20 @@ impl ToolHandler for ShellPolicyGuard {
         Box::pin(async move {
             let analysis = self.policy.analysis(&invocation.arguments)?;
             match analysis.mode {
-                PermissionMode::Always => self.inner.invoke(invocation, output).await,
+                PermissionMode::Always => {
+                    let approval = self.guarded.allowed_outright();
+                    crate::tools::mark_call_started();
+                    match self.inner.invoke(invocation, output).await {
+                        Ok(mut result) => {
+                            result.approval.get_or_insert(approval);
+                            Ok(result)
+                        }
+                        Err(source) => Err(ToolError::Approved {
+                            approval,
+                            source: Box::new(source),
+                        }),
+                    }
+                }
                 PermissionMode::Ask => self.guarded.invoke(invocation, output).await,
                 // The rationale travels with the refusal: a model that learns
                 // why can propose something else instead of retrying.

@@ -68,6 +68,7 @@ async fn live_driver_hydrates_and_extends_a_durable_resume() {
     .with_session_root_for_tests(Some(temporary.path().to_path_buf()));
     let outcome = driver
         .run(&TurnReservation {
+            hooks: Default::default(),
             session_id: "session-resume".to_owned(),
             turn_id: "turn-1".to_owned(),
             prompt: "new question".to_owned(),
@@ -193,6 +194,7 @@ async fn the_context_warning_reaches_the_model_once_per_session() {
         for turn in ["turn-1", "turn-2"] {
             driver
                 .run(&TurnReservation {
+                    hooks: Default::default(),
                     session_id: "warned".to_owned(),
                     turn_id: turn.to_owned(),
                     prompt: "question".to_owned(),
@@ -608,6 +610,7 @@ async fn live_driver_exposes_and_executes_the_session_tool_registry() {
     );
     let outcome = driver
         .run(&TurnReservation {
+            hooks: Default::default(),
             session_id: "session-1".to_owned(),
             turn_id: "turn-1".to_owned(),
             prompt: "use MCP".to_owned(),

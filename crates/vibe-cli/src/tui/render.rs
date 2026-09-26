@@ -229,12 +229,15 @@ fn draw_transcript(
     let mut action_rows = Vec::new();
     let mut rendered_chars = 0usize;
     let mut history_truncated = false;
-    let visible = state
-        .entries
-        .iter()
-        .skip(state.hidden_history())
-        .filter(|entry| entry.kind != TranscriptKind::Reasoning || state.show_reasoning)
-        .collect::<Vec<_>>();
+    let visible = transcript::place_hook_lines(
+        state
+            .entries
+            .iter()
+            .skip(state.hidden_history())
+            .filter(|entry| entry.kind != TranscriptKind::Reasoning || state.show_reasoning)
+            .filter(|entry| transcript::is_drawn(entry))
+            .collect::<Vec<_>>(),
+    );
     // Reference `ToolGroup`: a run of tool calls, their reasoning and hook
     // notices folds under one summary; anything else stands alone.
     let mut blocks: Vec<Vec<&TranscriptEntry>> = Vec::new();

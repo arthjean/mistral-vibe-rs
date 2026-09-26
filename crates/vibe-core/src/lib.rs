@@ -24,6 +24,7 @@ pub mod experiments;
 mod experiments_parity_tests;
 pub mod extensions;
 pub mod feedback;
+pub mod hooks;
 pub mod http_trust;
 pub mod identity;
 pub mod images;

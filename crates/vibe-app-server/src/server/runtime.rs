@@ -86,6 +86,9 @@ pub(crate) struct SessionRuntime {
     pub(crate) compaction: CompactionSettings,
     pub(crate) policy: PermissionStore,
     pub(crate) tools: ToolRegistry,
+    /// The hooks the session loaded when it opened or last reloaded its
+    /// runtime.
+    pub(crate) hooks: crate::session_hooks::SessionHooks,
     pub(crate) persisted: Option<HydratedSession>,
     pub(crate) review: Option<Arc<ReviewManager>>,
     /// The worktree this session's start created, which closing the session
@@ -152,6 +155,7 @@ impl SessionRuntime {
             compaction: CompactionSettings::default(),
             policy,
             tools,
+            hooks: crate::session_hooks::SessionHooks::default(),
             persisted: None,
             review,
             created_worktree: None,

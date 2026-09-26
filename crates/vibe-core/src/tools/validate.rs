@@ -77,7 +77,15 @@ pub fn validate_arguments(arguments: &Value, schema: &Value) -> Result<(), Vec<S
 /// Fills every absent property that declares a `default`, so a handler reads the
 /// same value the reference model would have materialized.
 pub fn apply_defaults(arguments: &mut Value, schema: &Value) {
-    fill_defaults(arguments, schema, schema, 0);
+    fill_defaults(arguments, schema, schema, 0, false);
+}
+
+/// The arguments as the reference's validated model dumps them: every default
+/// filled in and every property the schema does not declare dropped, which is
+/// what Pydantic's default `extra="ignore"` does to an object whose schema
+/// leaves `additionalProperties` unset.
+pub fn dump_validated(arguments: &mut Value, schema: &Value) {
+    fill_defaults(arguments, schema, schema, 0, true);
 }
 
 /// Rewrites scalars the reference model would have accepted in a looser form,
@@ -572,7 +580,7 @@ fn validate_bounds(
     Ok(())
 }
 
-fn fill_defaults(value: &mut Value, schema: &Value, root: &Value, depth: usize) {
+fn fill_defaults(value: &mut Value, schema: &Value, root: &Value, depth: usize, prune: bool) {
     if depth > MAX_SCHEMA_DEPTH {
         return;
     }
@@ -581,7 +589,7 @@ fn fill_defaults(value: &mut Value, schema: &Value, root: &Value, depth: usize) 
     };
     if let Some(reference) = schema.get("$ref").and_then(Value::as_str) {
         if let Some(target) = resolve_reference(reference, root) {
-            fill_defaults(value, target, root, depth + 1);
+            fill_defaults(value, target, root, depth + 1, prune);
         }
         return;
     }
@@ -590,7 +598,7 @@ fn fill_defaults(value: &mut Value, schema: &Value, root: &Value, depth: usize) 
             .iter()
             .find(|variant| declares_type_of(variant, value, root))
         {
-            fill_defaults(value, variant, root, depth + 1);
+            fill_defaults(value, variant, root, depth + 1, prune);
         }
         return;
     }
@@ -598,7 +606,7 @@ fn fill_defaults(value: &mut Value, schema: &Value, root: &Value, depth: usize) 
         Value::Array(items) => {
             if let Some(item_schema) = schema.get("items") {
                 for item in items {
-                    fill_defaults(item, item_schema, root, depth + 1);
+                    fill_defaults(item, item_schema, root, depth + 1, prune);
                 }
             }
         }
@@ -606,9 +614,12 @@ fn fill_defaults(value: &mut Value, schema: &Value, root: &Value, depth: usize) 
             let Some(properties) = schema.get("properties").and_then(Value::as_object) else {
                 return;
             };
+            if prune && !schema.contains_key("additionalProperties") {
+                object.retain(|field, _| properties.contains_key(field));
+            }
             for (field, field_schema) in properties {
                 match object.get_mut(field) {
-                    Some(present) => fill_defaults(present, field_schema, root, depth + 1),
+                    Some(present) => fill_defaults(present, field_schema, root, depth + 1, prune),
                     None => {
                         if let Some(default) = field_schema.get("default") {
                             object.insert(field.clone(), default.clone());

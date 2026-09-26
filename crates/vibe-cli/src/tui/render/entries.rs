@@ -66,6 +66,12 @@ pub(super) fn semantic_lines(
             prefixed_lines(&message, "  ⎔ ", width, theme.muted(), theme, entry)
         }
         transcript::Region::Hook { icon, line } => {
+            // Reference `.hook-severity-*`: the icon takes the severity's color.
+            let icon_style = match icon {
+                "✓" => theme.success(),
+                "✗" => theme.error(),
+                _ => theme.warning(),
+            };
             let content_width = usize::from(width.saturating_sub(4).max(1));
             wrapped_terminal_lines(&line, content_width)
                 .into_iter()
@@ -78,7 +84,7 @@ pub(super) fn semantic_lines(
                             } else {
                                 "  ".to_owned()
                             },
-                            theme.warning(),
+                            icon_style,
                         ),
                         Span::styled(text, theme.muted()),
                     ])
@@ -154,7 +160,7 @@ pub(super) fn fold_keys(block: &[&TranscriptEntry], tools_collapsed: bool) -> Ve
     if let [first, ..] = block
         && transcript::keeps_tool_group(first)
     {
-        keys.push((group_key(first), true));
+        keys.push((group_key(block), true));
     }
     for entry in block {
         match entry.kind {
@@ -207,8 +213,14 @@ impl Painted {
 
 /// The key a tool group folds under: the entry it opens with.
 #[must_use]
-pub(super) fn group_key(first: &TranscriptEntry) -> String {
-    format!("group:{}", first.id)
+/// A group is named after its first call or reasoning: a hook line placed
+/// ahead of the call it guards joins the group without renaming it.
+pub(super) fn group_key(block: &[&TranscriptEntry]) -> String {
+    let named = block
+        .iter()
+        .find(|entry| entry.kind != crate::tui::state::TranscriptKind::Notice)
+        .or(block.first());
+    format!("group:{}", named.map_or("", |entry| entry.id.as_str()))
 }
 
 /// Reference `PulseSpinner`, which every running status indicator animates
@@ -254,10 +266,10 @@ pub(super) fn tool_group(
     width: u16,
     theme: ResolvedTheme,
 ) -> Painted {
-    let Some(first) = members.first() else {
+    if members.is_empty() {
         return Painted::default();
-    };
-    let key = group_key(first);
+    }
+    let key = group_key(members);
     let collapsed = folding.collapsed(&key);
     let mut kinds = Vec::new();
     let mut reasoning = false;

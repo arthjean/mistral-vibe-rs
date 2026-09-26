@@ -482,6 +482,22 @@ impl PolicyGuardedTool {
             inner,
         }
     }
+
+    /// The provenance of a call its own policy allows outright, which never
+    /// reaches the store: the bypass when the agent bypasses the gate, and the
+    /// configured permission otherwise (reference `_should_execute_tool`).
+    #[must_use]
+    pub fn allowed_outright(&self) -> ToolApproval {
+        let approval_source = match self.approval.attribution(&self.name) {
+            ToolApprovalSource::Bypass => ToolApprovalSource::Bypass,
+            _ => ToolApprovalSource::Config,
+        };
+        ToolApproval {
+            decision: ToolVerdict::Execute,
+            approval_type: ToolApprovalType::Always,
+            approval_source,
+        }
+    }
 }
 
 impl ToolHandler for PolicyGuardedTool {
@@ -529,6 +545,7 @@ impl ToolHandler for PolicyGuardedTool {
             lease
                 .revalidate_locked(&state)
                 .map_err(|error| ToolError::Execution(error.to_string()))?;
+            crate::tools::mark_call_started();
             match inner.invoke(&invocation, output).await {
                 Ok(mut result) => {
                     result.approval.get_or_insert(lease.approval);

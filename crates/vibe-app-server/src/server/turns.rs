@@ -598,6 +598,7 @@ impl AppServer {
             intent: session.intent.clone(),
             compaction: session.compaction.clone(),
             tools: session.tools.clone(),
+            hooks: session.hooks.clone(),
             session_id,
             turn_id,
             prompt,

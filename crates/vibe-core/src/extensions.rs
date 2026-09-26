@@ -13,21 +13,18 @@ use crate::skills::{SkillDiscovery, SkillScope, SkillSource};
 use crate::storage::StorageError;
 
 mod agents;
-mod hooks;
 mod subagents;
 
 #[cfg(test)]
 use agents::{auto_approves_edits, canonical_tool_name, profile_permission_scope};
 
 pub use agents::{AgentApproval, AgentKind, AgentProfile, AgentRegistry};
-pub use hooks::{HookInvocation, HookManager};
 pub use subagents::{
     ChildContext, ChildLoggingPolicy, DelegationRequest, DelegationStatus, SubagentFuture,
     SubagentManager, SubagentRun, SubagentRunner,
 };
 
 const MAX_EXTENSION_FILE_BYTES: u64 = 2 * 1024 * 1024;
-const MAX_HOOK_OUTPUT_BYTES: usize = 1024 * 1024;
 const MAX_DELEGATION_RESULT_BYTES: usize = 64 * 1024;
 /// One level of delegation.
 ///
@@ -85,41 +82,6 @@ pub struct TextExtension {
     pub path: PathBuf,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum HookKind {
-    PreTool,
-    PostTool,
-    PostAgent,
-}
-
-impl HookKind {
-    /// The kind as a hook file writes it, which is also what a hook span names
-    /// itself after. Reference `hook_span(hook_type=...)`.
-    #[must_use]
-    pub const fn label(self) -> &'static str {
-        match self {
-            Self::PreTool => "pre_tool",
-            Self::PostTool => "post_tool",
-            Self::PostAgent => "post_agent",
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct HookSpec {
-    pub name: String,
-    pub kind: HookKind,
-    pub program: PathBuf,
-    pub args: Vec<String>,
-    pub matcher: Option<String>,
-    pub timeout_ms: u64,
-    pub retries: u8,
-    pub strict: bool,
-    pub source: ExtensionSource,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DiscoveryIssue {
@@ -133,7 +95,6 @@ pub struct DiscoveryIssue {
 pub struct ExtensionCatalog {
     pub agents: BTreeMap<String, AgentProfile>,
     pub skills: BTreeMap<String, SkillDefinition>,
-    pub hooks: Vec<HookSpec>,
     pub prompts: BTreeMap<String, TextExtension>,
     pub commands: BTreeMap<String, TextExtension>,
     pub issues: Vec<DiscoveryIssue>,
@@ -188,7 +149,6 @@ pub fn discover_extensions(
     let mut catalog = ExtensionCatalog {
         agents: builtin_agents,
         skills: builtin_skills,
-        hooks: Vec::new(),
         prompts: builtin_prompts,
         commands: BTreeMap::new(),
         issues: Vec::new(),
@@ -219,22 +179,7 @@ pub fn discover_extensions(
             source,
             &root.join("commands"),
         );
-        discover_hooks(&mut catalog, source, &root.join("hooks.toml"));
     }
-    catalog.hooks.sort_by(|left, right| {
-        (
-            left.kind,
-            source_priority(left.source),
-            &left.name,
-            &left.program,
-        )
-            .cmp(&(
-                right.kind,
-                source_priority(right.source),
-                &right.name,
-                &right.program,
-            ))
-    });
     catalog
 }
 
@@ -337,52 +282,6 @@ fn discover_text_extensions(
     }
 }
 
-fn discover_hooks(catalog: &mut ExtensionCatalog, source: ExtensionSource, path: &Path) {
-    let contents = match read_bounded_text(path) {
-        Ok(contents) => contents,
-        Err(ExtensionError::Io { source, .. }) if source.kind() == io::ErrorKind::NotFound => {
-            return;
-        }
-        Err(error) => {
-            catalog.issues.push(DiscoveryIssue {
-                mechanism: "hooks".to_owned(),
-                path: path.to_path_buf(),
-                message: error.to_string(),
-            });
-            return;
-        }
-    };
-    let parsed = match contents.parse::<Table>() {
-        Ok(parsed) => parsed,
-        Err(error) => {
-            catalog.issues.push(DiscoveryIssue {
-                mechanism: "hooks".to_owned(),
-                path: path.to_path_buf(),
-                message: error.to_string(),
-            });
-            return;
-        }
-    };
-    let Some(hooks) = parsed.get("hooks").and_then(toml::Value::as_array) else {
-        catalog.issues.push(DiscoveryIssue {
-            mechanism: "hooks".to_owned(),
-            path: path.to_path_buf(),
-            message: "hooks.toml must contain [[hooks]] entries".to_owned(),
-        });
-        return;
-    };
-    for (index, value) in hooks.iter().enumerate() {
-        match parse_hook(value, source) {
-            Ok(hook) => catalog.hooks.push(hook),
-            Err(error) => catalog.issues.push(DiscoveryIssue {
-                mechanism: "hooks".to_owned(),
-                path: path.to_path_buf(),
-                message: format!("hook {index}: {error}"),
-            }),
-        }
-    }
-}
-
 pub(super) fn parse_agent(
     path: &Path,
     source: ExtensionSource,
@@ -459,87 +358,6 @@ fn parse_skill(path: &Path) -> Result<SkillDefinition, ExtensionError> {
     })
 }
 
-fn parse_hook(value: &toml::Value, source: ExtensionSource) -> Result<HookSpec, ExtensionError> {
-    let table = value
-        .as_table()
-        .ok_or_else(|| ExtensionError::InvalidHook("entry must be a table".to_owned()))?;
-    let required = |key: &str| {
-        table
-            .get(key)
-            .and_then(toml::Value::as_str)
-            .filter(|value| !value.trim().is_empty())
-            .map(ToOwned::to_owned)
-            .ok_or_else(|| ExtensionError::InvalidHook(format!("`{key}` is required")))
-    };
-    let name = required("name")?;
-    let kind = match required("type")?.as_str() {
-        "pre_tool" => HookKind::PreTool,
-        "post_tool" => HookKind::PostTool,
-        "post_agent" => HookKind::PostAgent,
-        value => {
-            return Err(ExtensionError::InvalidHook(format!(
-                "unknown type `{value}`"
-            )));
-        }
-    };
-    let program = PathBuf::from(required("program")?);
-    let args = table
-        .get("args")
-        .and_then(toml::Value::as_array)
-        .into_iter()
-        .flatten()
-        .map(|value| {
-            value
-                .as_str()
-                .map(ToOwned::to_owned)
-                .ok_or_else(|| ExtensionError::InvalidHook("args must be strings".to_owned()))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let timeout_ms = table
-        .get("timeout_ms")
-        .and_then(toml::Value::as_integer)
-        .and_then(|value| u64::try_from(value).ok())
-        .unwrap_or(60_000);
-    if timeout_ms == 0 || timeout_ms > 300_000 {
-        return Err(ExtensionError::InvalidHook(
-            "timeout_ms must be between 1 and 300000".to_owned(),
-        ));
-    }
-    let retries = table
-        .get("retries")
-        .and_then(toml::Value::as_integer)
-        .and_then(|value| u8::try_from(value).ok())
-        .unwrap_or_default();
-    if retries > 3 {
-        return Err(ExtensionError::InvalidHook(
-            "retries must be between 0 and 3".to_owned(),
-        ));
-    }
-    let strict = table
-        .get("strict")
-        .and_then(toml::Value::as_bool)
-        .unwrap_or(false);
-    if kind == HookKind::PostAgent && strict {
-        return Err(ExtensionError::InvalidHook(
-            "strict is unavailable for post_agent hooks".to_owned(),
-        ));
-    }
-    Ok(HookSpec {
-        name,
-        kind,
-        program,
-        args,
-        matcher: table
-            .get("match")
-            .and_then(toml::Value::as_str)
-            .map(ToOwned::to_owned),
-        timeout_ms,
-        retries,
-        strict,
-        source,
-    })
-}
-
 impl crate::tracing::TracedError for ExtensionError {
     fn error_type(&self) -> &'static str {
         "ExtensionError"
@@ -610,15 +428,6 @@ fn title_from_name(name: &str) -> String {
     title
 }
 
-pub(super) const fn source_priority(source: ExtensionSource) -> u8 {
-    match source {
-        ExtensionSource::Builtin => 0,
-        ExtensionSource::Configured => 1,
-        ExtensionSource::Project => 2,
-        ExtensionSource::User => 3,
-    }
-}
-
 #[derive(Debug, Error)]
 pub enum ExtensionError {
     #[error("extension state lock is poisoned")]
@@ -643,8 +452,6 @@ pub enum ExtensionError {
     InvalidAgentKind(String),
     #[error("invalid skill: {0}")]
     InvalidSkill(String),
-    #[error("invalid hook: {0}")]
-    InvalidHook(String),
     #[error("agent `{0}` was not found")]
     MissingAgent(String),
     #[error("agent `{0}` is not owned by the user install directory")]
@@ -655,18 +462,6 @@ pub enum ExtensionError {
     DelegationDepth { maximum: u8 },
     #[error("could not allocate a unique child session ID")]
     ChildIdExhausted,
-    #[error("hook `{0}` timed out")]
-    HookTimeout(String),
-    #[error("hook `{0}` exceeded its output limit")]
-    HookOutputLimit(String),
-    #[error("hook `{name}` failed with status {status:?}: {stderr}")]
-    HookFailed {
-        name: String,
-        status: Option<i32>,
-        stderr: String,
-    },
-    #[error("hook protocol error: {0}")]
-    HookProtocol(String),
     #[error("process `{program}` failed: {source}")]
     Process {
         program: PathBuf,
@@ -686,7 +481,6 @@ mod tests {
     use std::sync::Arc;
 
     use super::agents::AgentKind;
-    use super::hooks::{HookInvocation, HookManager};
     use super::subagents::{
         ChildContext, ChildLoggingPolicy, DelegationRequest, DelegationStatus, SubagentFuture,
         SubagentManager, SubagentRun, SubagentRunner,
@@ -988,7 +782,6 @@ mod tests {
         )
         .expect("good skill");
         fs::write(user.join("skills/bad/SKILL.md"), "no frontmatter").expect("bad skill");
-        fs::write(user.join("hooks.toml"), "[[hooks]]\nname = \"bad\"\n").expect("bad hook");
         let catalog = discover_extensions(
             &DiscoveryRoots {
                 user: vec![user.clone()],
@@ -1003,201 +796,7 @@ mod tests {
             BTreeMap::new(),
         );
         assert!(catalog.skills.contains_key("good"));
-        assert_eq!(catalog.issues.len(), 3);
-    }
-
-    #[tokio::test]
-    async fn hooks_apply_typed_rewrite_replacement_and_failure_isolation() {
-        let temporary = tempfile::tempdir().expect("temporary root");
-        #[cfg(unix)]
-        let (program, args) = (
-            PathBuf::from("/bin/sh"),
-            vec![
-                "-c".to_owned(),
-                "printf '%s' '{\"decision\":\"allow\",\"system_message\":\"notice\",\"hook_specific_output\":{\"tool_input\":{\"rewritten\":true},\"additional_context\":\"extra\"}}'"
-                    .to_owned(),
-            ],
-        );
-        #[cfg(windows)]
-        let (program, args) = (
-            PathBuf::from("cmd.exe"),
-            vec![
-                "/C".to_owned(),
-                "echo {\"decision\":\"allow\",\"system_message\":\"notice\",\"hook_specific_output\":{\"tool_input\":{\"rewritten\":true},\"additional_context\":\"extra\"}}"
-                    .to_owned(),
-            ],
-        );
-        let manager = HookManager::new(
-            vec![
-                HookSpec {
-                    name: "rewrite".to_owned(),
-                    kind: HookKind::PreTool,
-                    program,
-                    args,
-                    matcher: Some("read_*".to_owned()),
-                    // Generous, because this hook is measured for the rewrite
-                    // it applies and not for a deadline: a short budget makes
-                    // the assertion read the spawn latency of a loaded machine
-                    // rather than the chain's semantics. The `missing` hook
-                    // below keeps a short one, which is what times out on
-                    // purpose.
-                    timeout_ms: 30_000,
-                    retries: 0,
-                    strict: false,
-                    source: ExtensionSource::User,
-                },
-                HookSpec {
-                    name: "missing".to_owned(),
-                    kind: HookKind::PreTool,
-                    program: temporary.path().join("missing"),
-                    args: Vec::new(),
-                    matcher: Some("*".to_owned()),
-                    timeout_ms: 100,
-                    retries: 1,
-                    strict: false,
-                    source: ExtensionSource::User,
-                },
-            ],
-            temporary.path().to_path_buf(),
-        );
-        let result = manager
-            .run(HookInvocation {
-                kind: HookKind::PreTool,
-                session_id: "session".to_owned(),
-                parent_session_id: None,
-                tool_name: Some("read_file".to_owned()),
-                tool_call_id: Some("call".to_owned()),
-                payload: json!({"old": true}),
-                output_text: "base".to_owned(),
-            })
-            .await
-            .expect("hook chain completes");
-        assert_eq!(result.invocation.payload, json!({"rewritten": true}));
-        assert_eq!(result.invocation.output_text, "base\nextra");
-        assert_eq!(result.notices.len(), 2);
-        assert!(result.denied.is_none());
-    }
-
-    /// A hook that closes its stdin without reading it is still honored.
-    ///
-    /// Reference `_run_process` swallows `BrokenPipeError` and
-    /// `ConnectionResetError` around the stdin write, because a hook answers
-    /// through its stdout and its exit status and is under no obligation to
-    /// consume the invocation. The payload here is deliberately larger than a
-    /// pipe buffer, so the write cannot quietly fit into a buffer nobody reads:
-    /// it reaches the closed read end every time, on every machine.
-    ///
-    /// POSIX only: the case is built on `exec 0<&-`, and the behavior under
-    /// test is the parent's, not the shell's.
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn a_hook_that_never_reads_its_stdin_is_still_honored() {
-        let temporary = tempfile::tempdir().expect("temporary root");
-        let manager = HookManager::new(
-            vec![HookSpec {
-                name: "deaf".to_owned(),
-                kind: HookKind::PreTool,
-                program: PathBuf::from("/bin/sh"),
-                args: vec![
-                    "-c".to_owned(),
-                    "exec 0<&-; printf '%s' \
-                     '{\"decision\":\"allow\",\"hook_specific_output\":{\"tool_input\":{\"rewritten\":true}}}'"
-                        .to_owned(),
-                ],
-                matcher: Some("*".to_owned()),
-                timeout_ms: 30_000,
-                retries: 0,
-                strict: false,
-                source: ExtensionSource::User,
-            }],
-            temporary.path().to_path_buf(),
-        );
-        let result = manager
-            .run(HookInvocation {
-                kind: HookKind::PreTool,
-                session_id: "session".to_owned(),
-                parent_session_id: None,
-                tool_name: Some("read_file".to_owned()),
-                tool_call_id: Some("call".to_owned()),
-                payload: json!({"old": true}),
-                // Past any platform's pipe buffer, so the write has to reach
-                // the read end the hook already closed.
-                output_text: "x".repeat(256 * 1024),
-            })
-            .await
-            .expect("the hook chain completes");
-        assert_eq!(
-            result.invocation.payload,
-            json!({"rewritten": true}),
-            "a broken stdin pipe swallowed the hook's rewrite: {:?}",
-            result.notices
-        );
-        assert!(result.notices.is_empty(), "{:?}", result.notices);
-        assert!(result.denied.is_none());
-    }
-
-    /// US-016: one hook run is one span, named after the kind and the hook and
-    /// carrying the tool it guards. Reference `hooks/manager.py` opens
-    /// `hook_span` around the run, so a chain of two hooks is two spans.
-    #[tokio::test]
-    async fn every_hook_run_opens_its_own_span() {
-        let _exclusive = crate::tracing::harness::exclusive();
-        let harness = crate::tracing::harness::Harness::install();
-        let temporary = tempfile::tempdir().expect("temporary root");
-        #[cfg(unix)]
-        let (program, args) = (
-            PathBuf::from("/bin/sh"),
-            vec![
-                "-c".to_owned(),
-                "printf '%s' '{\"decision\":\"allow\"}'".to_owned(),
-            ],
-        );
-        #[cfg(windows)]
-        let (program, args) = (
-            PathBuf::from("cmd.exe"),
-            vec!["/C".to_owned(), "echo {\"decision\":\"allow\"}".to_owned()],
-        );
-        let manager = HookManager::new(
-            vec![HookSpec {
-                name: "guard".to_owned(),
-                kind: HookKind::PreTool,
-                program,
-                args,
-                matcher: Some("read_*".to_owned()),
-                timeout_ms: 30_000,
-                retries: 0,
-                strict: false,
-                source: ExtensionSource::User,
-            }],
-            temporary.path().to_path_buf(),
-        );
-        manager
-            .run(HookInvocation {
-                kind: HookKind::PreTool,
-                session_id: "session".to_owned(),
-                parent_session_id: None,
-                tool_name: Some("read_file".to_owned()),
-                tool_call_id: Some("call".to_owned()),
-                payload: json!({}),
-                output_text: String::new(),
-            })
-            .await
-            .expect("hook chain completes");
-        let spans = harness.drain();
-        drop(harness);
-        let span = spans
-            .iter()
-            .find(|span| span.name == "hook pre_tool guard")
-            .expect("the hook run opened a span");
-        let attribute = |key: &str| {
-            span.attributes
-                .iter()
-                .find(|attribute| attribute.key.as_str() == key)
-                .map(|attribute| attribute.value.to_string())
-        };
-        assert_eq!(attribute("vibe.hook.type"), Some("pre_tool".to_owned()));
-        assert_eq!(attribute("gen_ai.tool.name"), Some("read_file".to_owned()));
-        assert_eq!(attribute("gen_ai.tool.call.id"), Some("call".to_owned()));
+        assert_eq!(catalog.issues.len(), 2);
     }
 
     /// Writes the child's prompt to its transcript, which is what a running

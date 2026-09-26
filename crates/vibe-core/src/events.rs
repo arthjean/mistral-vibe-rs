@@ -141,9 +141,10 @@ pub enum EngineEvent {
         #[serde(default)]
         value: Option<String>,
     },
+    /// One step of a hook run. Reference `HookEvent`, which the app-server
+    /// projects as a notice.
     Hook {
-        name: String,
-        message: String,
+        event: crate::hooks::HookEvent,
     },
     /// A finished compaction, as this port published it before it emitted the
     /// reference's pair.

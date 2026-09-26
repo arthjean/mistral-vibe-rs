@@ -399,6 +399,10 @@ impl AppServer {
                 return ProtocolFault::plain(code, message).into_batch(request_id);
             }
         };
+        // Reference `_refreshed` rebuilds the runtime with `reload_hooks=True`.
+        if !root.is_empty() {
+            let _ = self.reload_session_hooks(&root);
+        }
         let runtime = self.runtime_snapshot(&root);
         let mut result = result_map([("runtime", json!(runtime)), ("status", json!("applied"))]);
         if let Some(converted) = converted {
@@ -493,7 +497,7 @@ impl AppServer {
             .config_snapshot()
             .map(|snapshot| crate::connector_catalog::connector_settings(&snapshot))
             .unwrap_or_default();
-        let (active_agent, stats, context_window, pinned, connector_sources) =
+        let (active_agent, stats, context_window, pinned, connector_sources, hooks) =
             match self.lock_sessions() {
                 Ok(sessions) => {
                     let session = sessions.get(session_id);
@@ -503,9 +507,12 @@ impl AppServer {
                         session.map_or(0, |session| session.context_window),
                         session.is_some_and(|session| session.pinned_model.is_some()),
                         session.and_then(|session| session.connectors.mcp_sources(&settings)),
+                        session
+                            .map(|session| session.hooks.clone())
+                            .unwrap_or_default(),
                     )
                 }
-                Err(_) => (None, public_stats(None), 0, false, None),
+                Err(_) => (None, public_stats(None), 0, false, None, Default::default()),
             };
         // Once the session accepted a connector catalog, its connector rows are
         // the ones the accepted catalog publishes.
@@ -531,7 +538,11 @@ impl AppServer {
         let projection = self.workspace.runtime_projection(active_agent.as_deref());
         // Discovery issues and configuration diagnostics are the same fact to a
         // client: a file the session could not read cleanly.
+        // Reference `project_diagnostics` lists the hook issues first.
         if let Some(Value::Array(issues)) = snapshot.get_mut("issues") {
+            let mut hook_issues: Vec<Value> = hooks.issues();
+            hook_issues.append(issues);
+            *issues = hook_issues;
             issues.extend(projection.issues);
         }
         let mut config = projection.config;
@@ -550,7 +561,7 @@ impl AppServer {
         snapshot.insert("activeAgent".to_owned(), projection.active_agent);
         snapshot.insert("agents".to_owned(), Value::Array(projection.agents));
         snapshot.insert("skills".to_owned(), Value::Array(projection.skills));
-        snapshot.insert("hooksCount".to_owned(), json!(projection.hooks_count));
+        snapshot.insert("hooksCount".to_owned(), json!(hooks.count()));
         snapshot.insert("stats".to_owned(), stats);
         snapshot.insert("contextWindow".to_owned(), json!(context_window));
         Some(Value::Object(snapshot))
@@ -749,6 +760,11 @@ impl AppServer {
         session.pricing = self.workspace.active_model_pricing();
         session.active_model_alias = self.workspace.active_model_alias();
         session.compaction = self.workspace.compaction_settings();
+        session.hooks = self.workspace.session_hooks(
+            Path::new(&session.working_directory),
+            session.intent.trusted,
+            &session.intent.add_directories,
+        );
         sessions.insert(session);
         self.open_session_resources(
             &mut sessions,
@@ -917,6 +933,29 @@ impl AppServer {
                 )));
             }
             return Err(error);
+        }
+        Ok(())
+    }
+
+    /// Reads the session's hook files again. Reference
+    /// `reload_with_initial_messages(reload_hooks=True)`.
+    pub(crate) fn reload_session_hooks(&self, session_id: &str) -> Result<(), ServerError> {
+        let (working_directory, trusted, add_directories) = {
+            let sessions = self.lock_sessions()?;
+            let session = sessions
+                .get(session_id)
+                .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
+            (
+                session.working_directory.clone(),
+                session.intent.trusted,
+                session.intent.add_directories.clone(),
+            )
+        };
+        let hooks =
+            self.workspace
+                .session_hooks(Path::new(&working_directory), trusted, &add_directories);
+        if let Some(session) = self.lock_sessions()?.get_mut(session_id) {
+            session.hooks = hooks;
         }
         Ok(())
     }

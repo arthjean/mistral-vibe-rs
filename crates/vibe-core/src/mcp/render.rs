@@ -163,6 +163,11 @@ impl Ordered {
     }
 }
 
+/// Python's `repr` of the value `json.loads` parses this JSON into.
+pub(crate) fn python_repr_of_json(value: &Value) -> String {
+    Ordered::from_value(value).repr()
+}
+
 /// Python's `repr` of a float: the shortest text that reads back as the same
 /// value, fixed-point between `1e-4` and `1e16` and scientific outside.
 pub(crate) fn python_float(value: f64) -> String {

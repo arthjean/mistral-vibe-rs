@@ -733,12 +733,32 @@ impl ServerConnection {
                 close_after_flush: false,
             });
         }
-        let result = self
+        let mut result = self
             .server
             .resources
             .lock()
             .map_err(|_| ProtocolFault::internal("Resource state lock is poisoned"))?
             .dispatch(&request.method, &request.params, session_active);
+        // Reference `project_diagnostics`: the hooks the session loaded, and
+        // why the rest did not load, ahead of every other issue.
+        if request.method == "diagnostics/list"
+            && let Ok(dispatch) = result.as_mut()
+        {
+            let hooks = self
+                .server
+                .lock_sessions()?
+                .get(&session_id)
+                .map(|session| session.hooks.clone())
+                .unwrap_or_default();
+            dispatch
+                .result
+                .insert("hooksCount".to_owned(), json!(hooks.count()));
+            if let Some(Value::Array(issues)) = dispatch.result.get_mut("issues") {
+                let mut listed = hooks.issues();
+                listed.append(issues);
+                *issues = listed;
+            }
+        }
         Ok(resource_result_batch(
             request.id,
             &self.server,

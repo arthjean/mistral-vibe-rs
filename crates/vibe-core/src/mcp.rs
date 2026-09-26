@@ -25,7 +25,7 @@ use crate::tools::{
 mod auth;
 pub mod authorization;
 pub mod descriptor_cache;
-mod render;
+pub(crate) mod render;
 mod session;
 
 use render::McpToolResult;

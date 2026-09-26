@@ -9,8 +9,8 @@
 
 use serde_json::Value;
 use vibe_app_server::client::{
-    EffectDetail, EffectResultDisplay, HookNotice, HookSeverity, NoticeDetail, PublicEffectState,
-    PublicHistoryEntry, PublicNoticeLevel, ToolEffectKind,
+    EffectDetail, EffectResultDisplay, HookNotice, HookScope, HookSeverity, NoticeDetail,
+    PublicEffectState, PublicHistoryEntry, PublicNoticeLevel, ToolEffectKind,
 };
 
 use super::state::{EntrySource, EntryStatus, TranscriptEntry, TranscriptKind};
@@ -220,11 +220,21 @@ pub fn region(entry: &TranscriptEntry) -> Region {
 }
 
 /// Reference loading status: the newest unsettled effect names what the
-/// runtime is doing, reasoning reads as thinking, and anything else falls back
-/// to the default generation status.
+/// runtime is doing, reasoning reads as thinking, a hook that started and has
+/// not completed names itself (`_handle_hook_notice`), and anything else falls
+/// back to the default generation status.
 #[must_use]
 pub fn activity_status(entries: &[TranscriptEntry]) -> String {
     for entry in entries.iter().rev() {
+        match notice_detail(entry) {
+            Some(NoticeDetail::HookStarted(hook)) => {
+                return format!("Running hook {}", hook.hook_name.as_deref().unwrap_or(""))
+                    .trim_end()
+                    .to_owned();
+            }
+            Some(NoticeDetail::HookCompleted(_)) => break,
+            _ => {}
+        }
         if entry.status.is_terminal() {
             continue;
         }
@@ -235,6 +245,81 @@ pub fn activity_status(entries: &[TranscriptEntry]) -> String {
         }
     }
     super::diagnostics::DEFAULT_ACTIVITY_STATUS.to_owned()
+}
+
+/// Reference `_handle_hook_notice`: of the four notices a hook run raises,
+/// only a completion that has something to say is drawn, as one line of its
+/// run's container; the other three only open, name and close that container.
+#[must_use]
+pub fn is_drawn(entry: &TranscriptEntry) -> bool {
+    match notice_detail(entry) {
+        Some(NoticeDetail::HookCompleted(hook)) => {
+            hook.hook_name.is_some() && hook.content.as_deref().is_some_and(|text| !text.is_empty())
+        }
+        Some(detail) => !is_hook(detail),
+        None => true,
+    }
+}
+
+/// The tool call a drawn hook line belongs beside: before it for a pre-tool
+/// run, after it for a post-tool run. A post-agent run has no anchor.
+fn hook_anchor(entry: &TranscriptEntry) -> Option<(HookScope, &str)> {
+    match notice_detail(entry)? {
+        NoticeDetail::HookCompleted(hook) if hook.scope != HookScope::PostAgent => {
+            Some((hook.scope, hook.tool_call_id.as_deref()?))
+        }
+        _ => None,
+    }
+}
+
+/// The tool call an effect entry answers: the one it names, else its own
+/// identifier, which the server gives the call's.
+fn effect_call_id(entry: &TranscriptEntry) -> Option<&str> {
+    if entry.kind != TranscriptKind::Effect {
+        return None;
+    }
+    match entry.source.server() {
+        Some(PublicHistoryEntry::Effect { tool_call_id, .. }) if !tool_call_id.is_empty() => {
+            Some(tool_call_id)
+        }
+        _ => Some(&entry.id),
+    }
+}
+
+/// Reference `_handle_hook_run_start`: a pre-tool run's container mounts
+/// before the call it guards and a post-tool run's after it, or after the
+/// container a previous post-tool run of the same call left there; a run whose
+/// call is not on screen, and every post-agent run, mounts at the end.
+#[must_use]
+pub fn place_hook_lines(entries: Vec<&TranscriptEntry>) -> Vec<&TranscriptEntry> {
+    let mut placed: Vec<&TranscriptEntry> = Vec::with_capacity(entries.len());
+    for entry in entries {
+        let Some((scope, call_id)) = hook_anchor(entry) else {
+            placed.push(entry);
+            continue;
+        };
+        let Some(call) = placed
+            .iter()
+            .position(|other| effect_call_id(other) == Some(call_id))
+        else {
+            placed.push(entry);
+            continue;
+        };
+        let at = if scope == HookScope::PreTool {
+            call
+        } else {
+            let mut after = call + 1;
+            while placed
+                .get(after)
+                .is_some_and(|other| hook_anchor(other) == Some((scope, call_id)))
+            {
+                after += 1;
+            }
+            after
+        };
+        placed.insert(at, entry);
+    }
+    placed
 }
 
 /// Reference `entry_keeps_tool_group` (`vibe/cli/textual_ui/widgets/tools.py`):
@@ -1589,6 +1674,77 @@ mod tests {
             Region::Notice {
                 level: NoticeLevel::Error,
                 message: "message body".to_owned()
+            }
+        );
+    }
+
+    #[test]
+    fn a_hook_run_draws_only_what_its_completions_say_beside_the_call() {
+        let hook = |id: &str, detail: Value| {
+            crate::tui::hydration::published_fixture(
+                id,
+                json!({"type": "notice", "level": "info", "message": "notice", "detail": detail}),
+            )
+        };
+        let mut call = effect(
+            "bash",
+            json!({"command": "ls"}),
+            json!({"status": "running"}),
+        );
+        call.id = "call_1".to_owned();
+        let opened = hook(
+            "opened",
+            json!({"kind": "hook_run_started", "scope": "pre_tool", "toolCallId": "call_1"}),
+        );
+        let started = hook(
+            "started",
+            json!({"kind": "hook_started", "scope": "pre_tool", "toolCallId": "call_1", "hookName": "guard"}),
+        );
+        let quiet = hook(
+            "quiet",
+            json!({"kind": "hook_completed", "scope": "pre_tool", "toolCallId": "call_1", "hookName": "guard", "status": "ok"}),
+        );
+        let guard = hook(
+            "guard",
+            json!({"kind": "hook_completed", "scope": "pre_tool", "toolCallId": "call_1", "hookName": "guard", "status": "warning", "content": "checked"}),
+        );
+        let audit = hook(
+            "audit",
+            json!({"kind": "hook_completed", "scope": "post_tool", "toolCallId": "call_1", "hookName": "audit", "status": "ok", "content": "logged"}),
+        );
+        let review = hook(
+            "review",
+            json!({"kind": "hook_completed", "scope": "post_agent", "hookName": "review", "status": "error", "content": "retry"}),
+        );
+        let answer = crate::tui::hydration::published_fixture(
+            "answer",
+            json!({"type": "message", "role": "assistant", "content": [{"type": "text", "text": "done"}]}),
+        );
+        assert!(!is_drawn(&opened) && !is_drawn(&started) && !is_drawn(&quiet));
+        assert!(is_drawn(&guard) && is_drawn(&call));
+
+        assert_eq!(
+            activity_status(&[call.clone(), started.clone()]),
+            "Running hook guard"
+        );
+        assert_eq!(
+            activity_status(&[call.clone(), started, quiet]),
+            crate::tui::diagnostics::DEFAULT_ACTIVITY_STATUS
+        );
+
+        let placed = place_hook_lines(vec![&call, &answer, &guard, &audit, &review]);
+        assert_eq!(
+            placed
+                .iter()
+                .map(|entry| entry.id.as_str())
+                .collect::<Vec<_>>(),
+            ["guard", "call_1", "audit", "answer", "review"]
+        );
+        assert_eq!(
+            region(&review),
+            Region::Hook {
+                icon: "✗",
+                line: "[review] retry".to_owned()
             }
         );
     }

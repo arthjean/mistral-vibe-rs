@@ -203,6 +203,11 @@ impl ServerConnection {
         self.server
             .refresh_session_workspace_tools(session_id)
             .map_err(|error| ProtocolFault::internal(error.to_string()))?;
+        // Reference `_workspace_trust_decision` reloads with `reload_hooks=True`,
+        // so a project's hooks run once its directory is trusted.
+        self.server
+            .reload_session_hooks(session_id)
+            .map_err(|error| ProtocolFault::internal(error.to_string()))?;
         let mut batch = success_batch(id, answer.into_iter().collect());
         batch.outbound.extend(signal_frames(
             &self.server,

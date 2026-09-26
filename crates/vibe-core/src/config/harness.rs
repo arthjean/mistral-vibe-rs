@@ -210,6 +210,23 @@ impl HarnessFiles {
         }
     }
 
+    /// The hook files a session loads, in the order their names are claimed:
+    /// every open project's `.vibe/hooks.toml`, then the user's
+    /// `{vibe_home}/hooks.toml` once the user source is enabled. Reference
+    /// `hook_files`, which lists them whether or not they exist.
+    #[must_use]
+    pub fn hook_files(&self) -> Vec<PathBuf> {
+        let mut files = self
+            .project_roots()
+            .into_iter()
+            .map(|root| root.join(PROJECT_DIRECTORY).join(crate::hooks::HOOKS_FILE))
+            .collect::<Vec<_>>();
+        if self.sources.contains(&ConfigSource::User) {
+            files.push(self.paths.vibe_home.join(crate::hooks::HOOKS_FILE));
+        }
+        files
+    }
+
     /// Whether a write may reach the user file. Reference `persist_allowed`.
     #[must_use]
     pub fn persist_allowed(&self) -> bool {

@@ -201,7 +201,6 @@ impl WorkspaceService {
                     })
                 })
                 .collect(),
-            hooks_count: catalog.hooks.len(),
         }
     }
 

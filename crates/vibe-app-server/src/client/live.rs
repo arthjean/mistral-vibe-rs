@@ -313,6 +313,10 @@ impl ToolExecutor for SessionToolExecutor {
         self.tools.remote_origin(name)
     }
 
+    fn prepare_arguments(&self, name: &str, arguments: &str) -> Result<serde_json::Value, String> {
+        ToolExecutor::prepare_arguments(&self.tools, name, arguments)
+    }
+
     fn execute<'a>(&'a self, name: &'a str, arguments: &'a str) -> ToolFuture<'a> {
         if !self.permits(name) {
             return Box::pin(
@@ -645,6 +649,19 @@ impl LiveTurnDriver {
                 .unwrap_or_else(vibe_core::session_id::uuid_v4),
         );
         engine = engine.with_user_attachments(user_attachments);
+        // Reference `_hook_session_context`: the transcript is the session's
+        // resolved `messages.jsonl` when it is logged, and empty otherwise.
+        let transcript_path = session_dir
+            .as_deref()
+            .map(crate::session_hooks::transcript_path)
+            .unwrap_or_default();
+        if let Some(hooks) = reservation.hooks.turn_hooks(
+            transcript_path,
+            reservation.working_directory.clone(),
+            None,
+        ) {
+            engine = engine.with_hooks(hooks);
+        }
         engine
             .run_turn_controlled(
                 engine_session_id,

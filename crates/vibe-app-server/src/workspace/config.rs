@@ -38,7 +38,9 @@ impl WorkspaceService {
             ("startupIssue", Value::Null),
             ("strippedHistoryImages", json!(0)),
             ("skillsCount", json!(skills)),
-            ("hooksCount", json!(catalog.hooks.len())),
+            // The server fills this in: a session's read reports the hooks
+            // its runtime loaded, the host's read counts the files afresh.
+            ("hooksCount", json!(0)),
             ("mcpServersTotal", json!(servers.len())),
             ("mcpServersEnabled", json!(enabled)),
             ("harnessSelectionSource", Value::Null),

@@ -127,7 +127,6 @@ pub struct RuntimeProjection {
     pub skills: Vec<Value>,
     /// `ConfigIssue` entries raised while the extensions were discovered.
     pub issues: Vec<Value>,
-    pub hooks_count: usize,
 }
 
 /// One agent profile as `AgentSummary` declares it.
@@ -661,6 +660,34 @@ impl WorkspaceService {
             .persist_provider(provider)
             .map(|written| written.is_some())
             .map_err(config_error)
+    }
+
+    /// The hooks a session in `working_directory` loads: every open project's
+    /// `.vibe/hooks.toml`, then the user's. Reference `load_hooks_from_fs`
+    /// over the session's `HarnessFilesManager`.
+    #[must_use]
+    pub fn session_hooks(
+        &self,
+        working_directory: &Path,
+        project_trusted: bool,
+        add_directories: &[String],
+    ) -> crate::session_hooks::SessionHooks {
+        // The directory the server runs in is an authorized root, not an
+        // opened project: only its trust makes it one.
+        let mut roots = self
+            .allowed_roots
+            .iter()
+            .filter(|root| **root != self.paths.working_directory)
+            .cloned()
+            .collect::<Vec<_>>();
+        roots.extend(add_directories.iter().map(PathBuf::from));
+        let files = self
+            .config
+            .scoped_to_working_directory(working_directory.to_path_buf(), project_trusted)
+            .with_additional_roots(roots)
+            .harness_files()
+            .hook_files();
+        crate::session_hooks::SessionHooks::load(&files, working_directory)
     }
 
     /// Opens `roots` alongside the working directory.

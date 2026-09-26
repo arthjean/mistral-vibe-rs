@@ -62,6 +62,9 @@ pub(super) struct ProviderSubagentRunner {
     input_price_per_million_micros: u64,
     output_price_per_million_micros: u64,
     parent_intent: SessionIntent,
+    /// The parent's hooks, which a child loads as its own (reference
+    /// `hook_config_result` handed to the child loop).
+    hooks: crate::session_hooks::SessionHooks,
 }
 
 /// Answers an MCP sampling request with the provider this driver already runs
@@ -111,6 +114,7 @@ impl LiveTurnDriver {
             input_price_per_million_micros: self.input_price_per_million_micros,
             output_price_per_million_micros: self.output_price_per_million_micros,
             parent_intent: reservation.intent.clone(),
+            hooks: reservation.hooks.clone(),
         });
         let manager = Arc::new(SubagentManager::new(store, runner));
         // `task` is published behind the same composition as every other
@@ -354,7 +358,10 @@ impl SubagentRunner for ProviderSubagentRunner {
                 headers: BTreeMap::new(),
                 limits: RequestLimits::default(),
                 metadata: BTreeMap::from([
-                    ("parent_session_id".to_owned(), context.parent_session_id),
+                    (
+                        "parent_session_id".to_owned(),
+                        context.parent_session_id.clone(),
+                    ),
                     ("agent".to_owned(), context.agent.name),
                     (
                         "working_directory".to_owned(),
@@ -362,7 +369,23 @@ impl SubagentRunner for ProviderSubagentRunner {
                     ),
                 ]),
             };
-            let outcome = ConversationEngine::new(self.provider.clone())
+            // Reference: the child loop builds its own `HooksManager` from the
+            // parent's hooks, and its invocations name the parent session.
+            let transcript_path = if context.logging == ChildLoggingPolicy::Disabled {
+                String::new()
+            } else {
+                crate::session_hooks::transcript_path(&self.store.session_path(&metadata))
+            };
+            let hooks = crate::session_hooks::SessionHooks::from_config(
+                self.hooks.config().clone(),
+                std::path::Path::new(&context.working_directory),
+            )
+            .turn_hooks(
+                transcript_path,
+                context.working_directory.clone(),
+                Some(context.parent_session_id.clone()),
+            );
+            let mut engine = ConversationEngine::new(self.provider.clone())
                 .with_tools(executor)
                 .with_working_directory(context.working_directory)
                 .with_sink(SessionTranscriptSink::new(self.store.clone(), metadata))
@@ -370,7 +393,11 @@ impl SubagentRunner for ProviderSubagentRunner {
                     input_price_per_million_micros: self.input_price_per_million_micros,
                     output_price_per_million_micros: self.output_price_per_million_micros,
                     ..EngineLimits::default()
-                })
+                });
+            if let Some(hooks) = hooks {
+                engine = engine.with_hooks(hooks);
+            }
+            let outcome = engine
                 .run_turn(
                     context.child_session_id,
                     input,

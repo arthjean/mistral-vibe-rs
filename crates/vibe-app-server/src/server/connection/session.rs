@@ -303,6 +303,11 @@ impl ServerConnection {
         session.pricing = self.server.workspace.active_model_pricing();
         session.active_model_alias = self.server.workspace.active_model_alias();
         session.compaction = self.server.workspace.compaction_settings();
+        session.hooks = self.server.workspace.session_hooks(
+            Path::new(&session.working_directory),
+            session.intent.trusted,
+            &session.intent.add_directories,
+        );
         session.created_worktree = resolution.created().cloned();
         // Reference `auto_title_enabled`: the legacy loop titles sessions for
         // the terminal and desktop clients only.

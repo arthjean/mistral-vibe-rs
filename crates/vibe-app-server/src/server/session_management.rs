@@ -120,6 +120,33 @@ pub(super) fn dispatch(connection: &mut ServerConnection, request: ServerRequest
         for (field, value) in connection.server.harness_selection().config_read_fields() {
             dispatch.result.insert(field.to_owned(), value);
         }
+        // It also counts the hooks a session opened at `cwd` would load, under
+        // that directory's trust as it stands now.
+        let cwd = request
+            .params
+            .get("cwd")
+            .and_then(Value::as_str)
+            .map_or_else(|| PathBuf::from("."), PathBuf::from);
+        let cwd = vibe_core::trust::resolve(&cwd);
+        let workspace = &connection.server.workspace;
+        let trusted = vibe_core::trust::TrustStore::for_vibe_home(workspace.vibe_home())
+            .is_trusted(&cwd)
+            == Some(true);
+        dispatch.result.insert(
+            "hooksCount".to_owned(),
+            json!(workspace.session_hooks(&cwd, trusted, &[]).count()),
+        );
+    }
+    // A session's read reports the hooks its runtime loaded (reference
+    // `_config_read` over `project_diagnostics`), not the files as they stand.
+    if request.method == "config/read"
+        && let Some(session_id) = target_session_id.as_deref()
+        && let Ok(sessions) = connection.server.lock_sessions()
+        && let Some(session) = sessions.get(session_id)
+    {
+        dispatch
+            .result
+            .insert("hooksCount".to_owned(), json!(session.hooks.count()));
     }
     // A mutation that took effect is followed by the runtime it produced
     // (`runtime_updated` in `_dispatch_backend_config`).
@@ -135,6 +162,28 @@ pub(super) fn dispatch(connection: &mut ServerConnection, request: ServerRequest
         }
         _ => false,
     };
+    // Reference `_config_reload` and `_config_write` rebuild the runtime with
+    // `reload_hooks=True` when the request asks for a runtime reload, which a
+    // reload does unless told otherwise, a write only when told to, and a
+    // model pick always.
+    let reload_runtime = request.params.get("reloadRuntime").and_then(Value::as_bool);
+    let reload_hooks = match request.method.as_str() {
+        "config/reload" => reload_runtime != Some(false),
+        "config/write" => runtime_updated && reload_runtime == Some(true),
+        "config/model/write" => runtime_updated,
+        _ => false,
+    };
+    if reload_hooks && let Some(session_id) = target_session_id.as_deref() {
+        if let Err(error) = connection.server.reload_session_hooks(session_id) {
+            return internal_error_batch(request.id, &error);
+        }
+        // The answer carries the runtime the reload produced.
+        if dispatch.result.contains_key("runtime")
+            && let Some(snapshot) = connection.server.runtime_snapshot(session_id)
+        {
+            dispatch.result.insert("runtime".to_owned(), snapshot);
+        }
+    }
     let mut batch = success_batch(request.id, dispatch.result);
     if runtime_updated && let Some(session_id) = target_session_id.as_deref() {
         batch

@@ -502,8 +502,9 @@ pub(super) fn reduce_event(
                 LifecycleState::Cancelled
             };
         }
-        EngineEvent::Hook { name, message } => {
+        EngineEvent::Hook { event } => {
             require_active(state, "hook")?;
+            let (message, detail) = hook_notice(event);
             state.history.push(PublicHistoryEntry::Notice {
                 metadata: entry_metadata(
                     state,
@@ -512,12 +513,8 @@ pub(super) fn reduce_event(
                     PublicEntryGenerationStatus::Completed,
                 ),
                 level: PublicNoticeLevel::Info,
-                message: message.clone(),
-                detail: NoticeDetail::HookCompleted(HookNotice {
-                    hook_name: Some(name.clone()),
-                    content: Some(message.clone()),
-                    ..HookNotice::default()
-                }),
+                message,
+                detail,
             });
         }
         EngineEvent::Compaction { summary } => {
@@ -923,8 +920,73 @@ fn claim_identity(state: &ProjectionSnapshot, entry: &mut PublicHistoryEntry, id
     entry.metadata_mut().id = id.to_owned();
 }
 
+/// The notice a hook event publishes. Reference `_project_hook`.
+fn hook_notice(event: &crate::hooks::HookEvent) -> (String, NoticeDetail) {
+    use crate::hooks::HookEvent;
+    match event {
+        HookEvent::RunStarted {
+            scope,
+            tool_name,
+            tool_call_id,
+        } => (
+            "Running hooks".to_owned(),
+            NoticeDetail::HookRunStarted(HookNotice {
+                scope: (*scope).into(),
+                tool_name: tool_name.clone(),
+                tool_call_id: tool_call_id.clone(),
+                ..HookNotice::default()
+            }),
+        ),
+        HookEvent::RunCompleted {
+            scope,
+            tool_call_id,
+        } => (
+            "Hooks completed".to_owned(),
+            NoticeDetail::HookRunCompleted(HookNotice {
+                scope: (*scope).into(),
+                tool_call_id: tool_call_id.clone(),
+                ..HookNotice::default()
+            }),
+        ),
+        HookEvent::Started {
+            hook_name,
+            scope,
+            tool_call_id,
+        } => (
+            format!("Running hook {hook_name}"),
+            NoticeDetail::HookStarted(HookNotice {
+                scope: (*scope).into(),
+                tool_call_id: tool_call_id.clone(),
+                hook_name: Some(hook_name.clone()),
+                ..HookNotice::default()
+            }),
+        ),
+        HookEvent::Completed {
+            hook_name,
+            status,
+            content,
+            scope,
+            tool_call_id,
+        } => (
+            content
+                .clone()
+                .filter(|content| !content.is_empty())
+                .unwrap_or_else(|| format!("Hook {hook_name} completed")),
+            NoticeDetail::HookCompleted(HookNotice {
+                scope: (*scope).into(),
+                tool_name: None,
+                tool_call_id: tool_call_id.clone(),
+                hook_name: Some(hook_name.clone()),
+                status: Some(*status),
+                content: content.clone(),
+            }),
+        ),
+    }
+}
+
 /// Reference `TaggedText.from_string(...).message`: the text with every known
-/// tag pair replaced by its content.
+/// tag pair replaced by its content, and nothing trimmed, so a hook denial
+/// with an empty reason keeps the space after its colon.
 fn untagged(text: &str) -> String {
     const TAGS: [&str; 4] = [
         "user_cancellation",
@@ -943,7 +1005,7 @@ fn untagged(text: &str) -> String {
             result.replace_range(start..start + open.len() + end + close.len(), &inner);
         }
     }
-    result.trim().to_owned()
+    result
 }
 
 /// The metadata of an effect, which the reference keys on its tool call

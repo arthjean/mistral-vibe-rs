@@ -180,6 +180,16 @@ pub trait ToolExecutor: Send + Sync {
         true
     }
 
+    /// The arguments a call to `name` runs with once validated: coerced and
+    /// completed with the schema's defaults, without running anything.
+    ///
+    /// A pre-tool hook reads this document, and a hook's rewrite is validated
+    /// through it. Reference `validated_args.model_dump(mode="json")`. An
+    /// executor that validates nothing answers the parsed arguments.
+    fn prepare_arguments(&self, _name: &str, arguments: &str) -> Result<serde_json::Value, String> {
+        serde_json::from_str(arguments).map_err(|error| format!("invalid tool arguments: {error}"))
+    }
+
     fn execute<'a>(&'a self, name: &'a str, arguments: &'a str) -> ToolFuture<'a>;
 
     fn execute_stream<'a>(

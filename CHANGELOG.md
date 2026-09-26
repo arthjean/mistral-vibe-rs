@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- Run hooks. The `[[hooks]]` of the trusted project's `.vibe/hooks.toml`, of
+  every added directory and of `~/.vibe/hooks.toml` now run around tool calls
+  and turns with the reference's schema and semantics: a `pre_tool` hook can
+  deny a call or rewrite its arguments, a `post_tool` hook can replace or
+  extend what the model reads, and a `post_agent` hook can send the model back
+  up to three times a turn. A hook reads the reference's invocation on stdin,
+  strict hooks fail closed, timeouts stop the hook's whole process group, and
+  subagents run their parent's hooks. A session reads its hook files when it
+  starts and again on `config/reload`, a reloading `config/write`,
+  `config/model/write`, a trust grant, a skill change or a relocation;
+  `hooksCount` and the hook issues on `runtime/read`, `diagnostics/list` and
+  `config/read` follow. The terminal shows what hooks report beside the call
+  they guard, and names the hook that is running. An entry written for
+  earlier versions (`program`, `args`, `timeout_ms`) no longer counts: it
+  reports its missing `command` as an issue.
+
+- Show a failed tool call to the model as the reference does, under the
+  tool's name and the error tag.
+
 - Answer every app-server method the reference declares, the way its legacy
   backend does. Parameters are validated centrally with the reference's
   issues, requests are routed to the host or the session as upstream routes

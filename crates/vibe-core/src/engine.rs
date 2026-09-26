@@ -17,6 +17,7 @@ use crate::events::{
     EngineEvent, EventEnvelope, LifecycleState, ModelMessage, ModelToolCall, ProjectionError,
     ProjectionSnapshot, PublicContentBlock, SessionHandoffCause,
 };
+use crate::hooks::{HookInvocation, HookSessionContext, HookYield, HooksManager, ToolStatus};
 use crate::middleware::{
     AutoCompactMiddleware, CompactionSettings, ConversationContext, ConversationMiddleware,
     MiddlewareAction, MiddlewarePipeline, ResetReason,
@@ -288,6 +289,32 @@ struct TurnSettings {
     agent_profile: String,
     /// The session's directory, stamped on every event this turn emits.
     working_directory: Option<PathBuf>,
+    /// The hooks this turn runs, when the session loaded any.
+    hooks: Option<TurnHooks>,
+}
+
+/// The hooks a turn runs, and the session fields every invocation carries.
+/// Reference `AgentLoopHooksMixin`, whose session context is read per
+/// invocation.
+#[derive(Clone)]
+pub struct TurnHooks {
+    pub manager: Arc<HooksManager>,
+    /// The session's resolved `messages.jsonl`, or empty when it is not
+    /// logged.
+    pub transcript_path: String,
+    pub cwd: String,
+    pub parent_session_id: Option<String>,
+}
+
+impl TurnHooks {
+    fn context(&self, session_id: &str) -> HookSessionContext {
+        HookSessionContext {
+            session_id: session_id.to_owned(),
+            transcript_path: self.transcript_path.clone(),
+            cwd: self.cwd.clone(),
+            parent_session_id: self.parent_session_id.clone(),
+        }
+    }
 }
 
 impl Default for TurnSettings {
@@ -304,6 +331,7 @@ impl Default for TurnSettings {
             user_attachments: Vec::new(),
             agent_profile: DEFAULT_AGENT_PROFILE.to_owned(),
             working_directory: None,
+            hooks: None,
         }
     }
 }
@@ -435,6 +463,13 @@ impl<P, T, C, S> ConversationEngine<P, T, C, S> {
     /// Names the directory the session sits in, which every event this turn
     /// emits carries. Absent, a file path is displayed against the process
     /// directory.
+    /// Runs the session's hooks around this turn's tool calls and at its end.
+    #[must_use]
+    pub fn with_hooks(mut self, hooks: TurnHooks) -> Self {
+        self.settings.hooks = Some(hooks);
+        self
+    }
+
     #[must_use]
     pub fn with_working_directory(mut self, directory: impl Into<PathBuf>) -> Self {
         self.settings.working_directory = Some(directory.into());
@@ -578,6 +613,11 @@ where
                 persist(&self.sink, &messages, recorder.state()).await?;
                 return Err(EngineError::ToolFailure(message));
             }
+        }
+        // Reference `_open_user_turn`: every user turn starts with its full
+        // allowance of post-agent retries.
+        if let Some(hooks) = &self.settings.hooks {
+            hooks.manager.reset_retry_count();
         }
         persist(&self.sink, &messages, recorder.state()).await?;
         checkpoints = checkpoints.saturating_add(1);
@@ -772,6 +812,15 @@ where
             }
             messages.push(assistant_message);
             if completion.tool_calls.is_empty() {
+                // Reference `_conversation_loop`: a turn about to end runs the
+                // post-agent hooks, and one that denies sends the model back
+                // with its reason as an injected user message.
+                if let Some(retry) = self.run_post_agent_hooks(&mut recorder).await? {
+                    messages.push(ModelMessage::injected_user(retry));
+                    persist(&self.sink, &messages, recorder.state()).await?;
+                    checkpoints = checkpoints.saturating_add(1);
+                    continue;
+                }
                 break TurnStopReason::Complete;
             }
 
@@ -781,8 +830,12 @@ where
             {
                 ToolRound::Settled {
                     results,
+                    patched,
                     user_cancelled,
-                } => (results, user_cancelled),
+                } => {
+                    patch_tool_call_arguments(&mut messages, &completion.tool_calls, &patched);
+                    (results, user_cancelled)
+                }
                 ToolRound::Failed(message) => {
                     recorder.emit(EngineEvent::Lifecycle {
                         state: LifecycleState::Failed,
@@ -937,7 +990,10 @@ where
                 .execute_tool_calls(recorder, &calls, cancellation, false)
                 .await?
             {
-                ToolRound::Settled { results, .. } => {
+                ToolRound::Settled {
+                    results, patched, ..
+                } => {
+                    patch_tool_call_arguments(messages, &calls, &patched);
                     for (call, (content, is_error)) in calls.into_iter().zip(results) {
                         messages.push(ModelMessage::Tool {
                             call_id: call.id,
@@ -1339,6 +1395,7 @@ where
         // Reference `_emit_failed_tool_events`: a call naming no available
         // tool settles first, as an error the model reads, and never runs.
         let mut results = vec![None; tool_calls.len()];
+        let mut patched = vec![None; tool_calls.len()];
         for (index, call) in tool_calls.iter().enumerate() {
             if resolved[index] {
                 continue;
@@ -1380,48 +1437,42 @@ where
                 remote: self.tools.remote_origin(&call.name),
             })?;
         }
+        let session_id = recorder.state().session_id.clone();
         let mut pending = FuturesUnordered::new();
         let (stream_tx, mut stream_rx) = tokio::sync::mpsc::channel(TOOL_STREAM_CAPACITY);
+        // What a call reports before it settles: its hook events and its
+        // result event, in the order it produced them.
+        let (signal_tx, mut signal_rx) = mpsc::unbounded_channel::<CallSignal>();
+        let started_flags = tool_calls
+            .iter()
+            .map(|_| Arc::new(AtomicBool::new(false)))
+            .collect::<Vec<_>>();
+        let mut prepared_inputs: Vec<Option<Value>> = vec![None; tool_calls.len()];
         for (index, call) in tool_calls.iter().enumerate() {
             if !resolved[index] {
                 continue;
             }
-            let started = Instant::now();
             let sender = stream_tx.clone();
             let output: ToolStreamSink = Arc::new(move |chunk| {
                 sender
                     .try_send((index, chunk))
                     .map_err(|error| format!("tool output backpressure: {error}"))
             });
+            let signals = signal_tx.clone();
+            let started = Arc::clone(&started_flags[index]);
+            let session_id = session_id.clone();
             pending.push(
                 async move {
-                    // Reference `_loop.py` opens `tool_span` around the
-                    // execution itself, so a tool that streams for a minute is
-                    // one span rather than a point in the parent's timeline.
-                    let result = tool_span(
-                        ToolSpan {
-                            tool_name: &call.name,
-                            call_id: &call.id,
-                            arguments: &call.arguments,
-                        },
-                        async {
-                            let result = self
-                                .tools
-                                .execute_call(&call.id, &call.name, &call.arguments, output)
-                                .await;
-                            if let Ok(output) = &result {
-                                set_tool_result(&output.model_text);
-                            }
-                            result
-                        },
-                    )
-                    .await;
-                    (index, started, result)
+                    let settled = self
+                        .run_tool_call(index, call, output, &signals, started, &session_id)
+                        .await;
+                    (index, settled)
                 }
                 .boxed(),
             );
         }
         drop(stream_tx);
+        drop(signal_tx);
 
         // Reference `is_user_cancellation_event`: a call the user declined
         // without a reason ends the turn once this round settles.
@@ -1437,68 +1488,51 @@ where
                         })?;
                     }
                 }
+                signal = signal_rx.recv() => {
+                    if let Some(signal) = signal {
+                        drain_tool_stream(recorder, tool_calls, &mut stream_rx)?;
+                        apply_signal(recorder, signal, &mut results, &mut prepared_inputs)?;
+                    }
+                }
                 next = pending.next() => {
-                    let Some((index, started, result)) = next else {
+                    let Some((index, settled)) = next else {
                         break;
                     };
                     drain_tool_stream(recorder, tool_calls, &mut stream_rx)?;
-                    let duration_ms =
-                        u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
-                    let (output, is_error) = match result {
-                        Ok(output) if output.turn_failure.is_some() => {
-                            failure = output.turn_failure;
+                    while let Ok(signal) = signal_rx.try_recv() {
+                        apply_signal(recorder, signal, &mut results, &mut prepared_inputs)?;
+                    }
+                    match settled {
+                        CallSettled::TurnFailure(message) => {
+                            failure = Some(message);
                             break;
                         }
-                        Ok(output) if output.failure.is_some() => {
-                            let message = output.failure.unwrap_or_default();
-                            let mut failed = ToolExecutionOutput::text(bounded_utf8(
-                                &message,
-                                MAX_TOOL_ERROR_BYTES,
-                                "…",
-                            ));
-                            failed.approval = output.approval;
-                            (failed, true)
+                        CallSettled::Answered {
+                            content,
+                            is_error,
+                            user_cancelled: cancelled,
+                            arguments,
+                        } => {
+                            user_cancelled |= cancelled;
+                            results[index] = Some((content, is_error));
+                            patched[index] = arguments;
                         }
-                        Ok(output) => {
-                            if output.skip.is_some_and(|skip| skip.cancelled) {
-                                user_cancelled = true;
-                            }
-                            (output, false)
-                        }
-                        Err(message) => (
-                            ToolExecutionOutput::text(bounded_utf8(
-                                &message,
-                                MAX_TOOL_ERROR_BYTES,
-                                "…",
-                            )),
-                            true,
-                        ),
-                    };
-                    recorder.emit(EngineEvent::ToolResult {
-                        call_id: tool_calls[index].id.clone(),
-                        content: output.model_text.clone(),
-                        typed_result: output.typed_result,
-                        projected_result: output.projected_result,
-                        display: output.display,
-                        duration_ms,
-                        is_error,
-                        cancelled: output.skip.is_some_and(|skip| skip.cancelled),
-                        skipped: output.skip.is_some(),
-                        approval: output.approval,
-                    })?;
-                    results[index] = Some((output.model_text, is_error));
+                    }
                 }
                 () = cancellation.cancelled() => break,
             }
         }
         drop(pending);
         drain_tool_stream(recorder, tool_calls, &mut stream_rx)?;
+        while let Ok(signal) = signal_rx.try_recv() {
+            apply_signal(recorder, signal, &mut results, &mut prepared_inputs)?;
+        }
         if let Some(message) = failure {
             return Ok(ToolRound::Failed(message));
         }
 
-        for (index, result) in results.iter_mut().enumerate() {
-            if result.is_some() {
+        for index in 0..results.len() {
+            if results[index].is_some() {
                 continue;
             }
             recorder.emit(EngineEvent::ToolResult {
@@ -1513,28 +1547,472 @@ where
                 skipped: false,
                 approval: None,
             })?;
-            *result = Some((INTERRUPTED_TOOL_RESULT.to_owned(), true));
+            let mut content = INTERRUPTED_TOOL_RESULT.to_owned();
+            // Reference `_finalize_cancelled_tool`: a call whose body started
+            // is still shown to the post-tool hooks, shielded from the
+            // cancellation, and one cancelled before it ran is not.
+            if let (Some(hooks), Some(tool_input)) = (
+                self.settings.hooks.as_ref(),
+                prepared_inputs[index]
+                    .take()
+                    .filter(|_| started_flags[index].load(Ordering::SeqCst)),
+            ) {
+                let call = &tool_calls[index];
+                // Only the text survives: the reference yields the chain's
+                // events from a generator its interrupted consumer has left,
+                // so no client ever reads them.
+                hooks
+                    .manager
+                    .run(
+                        HookInvocation::PostTool {
+                            context: hooks.context(&session_id),
+                            tool_name: call.name.clone(),
+                            tool_call_id: call.id.clone(),
+                            tool_input,
+                            tool_status: ToolStatus::Cancelled,
+                            tool_output: None,
+                            tool_output_text: content.clone(),
+                            tool_error: Some(content.clone()),
+                            duration_ms: 0.0,
+                        },
+                        |item| {
+                            if let HookYield::TextReplacement(text) = item {
+                                content = text;
+                            }
+                            std::ops::ControlFlow::Continue(())
+                        },
+                    )
+                    .await;
+            }
+            results[index] = Some((content, true));
         }
         Ok(ToolRound::Settled {
             results: results
                 .into_iter()
                 .map(|result| result.unwrap_or_else(|| (INTERRUPTED_TOOL_RESULT.to_owned(), true)))
                 .collect(),
+            patched,
             user_cancelled,
         })
+    }
+
+    /// One call, from its pre-tool hooks to its post-tool hooks. Reference
+    /// `_execute_tool_call`.
+    ///
+    /// Everything the call reports before it settles travels through
+    /// `signals`, so its hook events and its result event reach the transcript
+    /// in the order the call produced them while other calls run beside it.
+    async fn run_tool_call(
+        &self,
+        index: usize,
+        call: &ModelToolCall,
+        output: ToolStreamSink,
+        signals: &mpsc::UnboundedSender<CallSignal>,
+        started: Arc<AtomicBool>,
+        session_id: &str,
+    ) -> CallSettled {
+        let emit = |event: EngineEvent| {
+            let _ = signals.send(CallSignal::Event(event));
+        };
+        let hooks = self.settings.hooks.as_ref();
+        let mut arguments = call.arguments.clone();
+        let mut rewritten = None;
+        // Reference `_serialize_tool_input`: the validated arguments, with
+        // every default filled in. A call whose arguments do not validate
+        // fails before any hook sees it, as the reference fails it while
+        // resolving the call.
+        let mut tool_input = hooks.and_then(|_| {
+            self.tools
+                .prepare_arguments(&call.name, &call.arguments)
+                .ok()
+        });
+        if let (Some(hooks), Some(validated)) = (hooks, tool_input.clone()) {
+            let pipeline = self
+                .run_pre_tool_hooks(hooks, call, validated, session_id)
+                .await;
+            // Reference `_run_pre_tool_pipeline` buffers the chain's events
+            // and yields them before the denial or the call.
+            for event in pipeline.events {
+                emit(EngineEvent::Hook { event });
+            }
+            if let Some((hook_name, content)) = pipeline.denial {
+                let denial = format!(
+                    "<tool_error>Tool '{}' was denied by hook '{hook_name}': {content}</tool_error>",
+                    call.name
+                );
+                emit(EngineEvent::ToolResult {
+                    call_id: call.id.clone(),
+                    content: denial.clone(),
+                    typed_result: Value::Null,
+                    projected_result: Value::Null,
+                    display: Value::Null,
+                    duration_ms: 0,
+                    is_error: false,
+                    cancelled: false,
+                    skipped: true,
+                    approval: None,
+                });
+                let _ = signals.send(CallSignal::Settled {
+                    index,
+                    content: denial.clone(),
+                    is_error: false,
+                });
+                return CallSettled::Answered {
+                    content: denial,
+                    is_error: false,
+                    user_cancelled: false,
+                    arguments: None,
+                };
+            }
+            if pipeline.rewritten {
+                arguments = crate::hooks::python_json_dumps(&pipeline.tool_input);
+                rewritten = Some(arguments.clone());
+            }
+            tool_input = Some(pipeline.tool_input);
+        }
+        if let Some(tool_input) = &tool_input {
+            let _ = signals.send(CallSignal::Prepared {
+                index,
+                tool_input: tool_input.clone(),
+            });
+        }
+        let started_at = Instant::now();
+        let result = crate::tools::track_call_start(
+            Arc::clone(&started),
+            // Reference `_loop.py` opens `tool_span` around the execution
+            // itself, so a tool that streams for a minute is one span rather
+            // than a point in the parent's timeline.
+            tool_span(
+                ToolSpan {
+                    tool_name: &call.name,
+                    call_id: &call.id,
+                    arguments: &arguments,
+                },
+                async {
+                    let result = self
+                        .tools
+                        .execute_call(&call.id, &call.name, &arguments, output)
+                        .await;
+                    if let Ok(output) = &result {
+                        set_tool_result(&output.model_text);
+                    }
+                    result
+                },
+            ),
+        )
+        .await;
+        let elapsed = started_at.elapsed();
+        let duration_ms = u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX);
+        // What the post-tool hooks are shown, when the call ran: reference
+        // `_invoke_tool` and the failure branch of `_execute_tool_call`.
+        let mut ran = None;
+        let (output, is_error) = match result {
+            Ok(output) if output.turn_failure.is_some() => {
+                return CallSettled::TurnFailure(output.turn_failure.unwrap_or_default());
+            }
+            Ok(output) if output.failure.is_some() => {
+                let message = output.failure.unwrap_or_default();
+                // Reference `_execute_tool_call`: the model reads the error
+                // under the tool's name and the error tag, a post-tool hook
+                // reads it bare.
+                let mut failed = ToolExecutionOutput::text(format!(
+                    "<tool_error>{} failed: {}</tool_error>",
+                    call.name,
+                    bounded_utf8(&message, MAX_TOOL_ERROR_BYTES, "…")
+                ));
+                failed.approval = output.approval;
+                ran = Some((ToolStatus::Failure, None, Some(message)));
+                (failed, true)
+            }
+            Ok(output) => {
+                if output.skip.is_none() {
+                    let cancelled =
+                        output.typed_result.get("cancelled") == Some(&Value::Bool(true));
+                    let status = if cancelled {
+                        ToolStatus::Cancelled
+                    } else {
+                        ToolStatus::Success
+                    };
+                    let typed = output
+                        .typed_result
+                        .is_object()
+                        .then(|| output.typed_result.clone());
+                    ran = Some((status, typed, None));
+                }
+                (output, false)
+            }
+            Err(message) => (
+                ToolExecutionOutput::text(bounded_utf8(&message, MAX_TOOL_ERROR_BYTES, "…")),
+                true,
+            ),
+        };
+        let user_cancelled = output.skip.is_some_and(|skip| skip.cancelled);
+        emit(EngineEvent::ToolResult {
+            call_id: call.id.clone(),
+            content: output.model_text.clone(),
+            typed_result: output.typed_result,
+            projected_result: output.projected_result,
+            display: output.display,
+            duration_ms,
+            is_error,
+            cancelled: user_cancelled,
+            skipped: output.skip.is_some(),
+            approval: output.approval,
+        });
+        let mut content = output.model_text;
+        let _ = signals.send(CallSignal::Settled {
+            index,
+            content: content.clone(),
+            is_error,
+        });
+        if let (Some(hooks), Some(tool_input), Some((tool_status, tool_output, tool_error))) =
+            (hooks, tool_input, ran)
+        {
+            // Reference `_run_post_tool_and_finalize`: the events stream as
+            // the chain runs, and the last replacement is what the model reads.
+            hooks
+                .manager
+                .run(
+                    HookInvocation::PostTool {
+                        context: hooks.context(session_id),
+                        tool_name: call.name.clone(),
+                        tool_call_id: call.id.clone(),
+                        tool_input,
+                        tool_status,
+                        tool_output,
+                        tool_output_text: content.clone(),
+                        tool_error,
+                        duration_ms: elapsed.as_secs_f64() * 1000.0,
+                    },
+                    |item| {
+                        match item {
+                            HookYield::Event(event) => emit(EngineEvent::Hook { event }),
+                            HookYield::TextReplacement(text) => content = text,
+                            _ => {}
+                        }
+                        std::ops::ControlFlow::Continue(())
+                    },
+                )
+                .await;
+        }
+        CallSettled::Answered {
+            content,
+            is_error,
+            user_cancelled,
+            arguments: rewritten,
+        }
+    }
+
+    /// Reference `_run_pre_tool_pipeline`: each rewrite is validated against
+    /// the tool's arguments as it arrives, and the first one that fails ends
+    /// the chain as a denial.
+    async fn run_pre_tool_hooks(
+        &self,
+        hooks: &TurnHooks,
+        call: &ModelToolCall,
+        tool_input: Value,
+        session_id: &str,
+    ) -> PreToolPipeline {
+        let mut pipeline = PreToolPipeline {
+            events: Vec::new(),
+            denial: None,
+            tool_input: tool_input.clone(),
+            rewritten: false,
+        };
+        hooks
+            .manager
+            .run(
+                HookInvocation::PreTool {
+                    context: hooks.context(session_id),
+                    tool_name: call.name.clone(),
+                    tool_call_id: call.id.clone(),
+                    tool_input,
+                },
+                |item| match item {
+                    HookYield::Event(event) => {
+                        pipeline.events.push(event);
+                        std::ops::ControlFlow::Continue(())
+                    }
+                    HookYield::ToolDenial { hook_name, content } => {
+                        pipeline.denial = Some((hook_name, content));
+                        std::ops::ControlFlow::Break(())
+                    }
+                    HookYield::ToolInputRewrite {
+                        hook_name,
+                        tool_input,
+                    } => match self
+                        .tools
+                        .prepare_arguments(&call.name, &tool_input.to_string())
+                    {
+                        Ok(validated) => {
+                            pipeline.tool_input = validated;
+                            pipeline.rewritten = true;
+                            std::ops::ControlFlow::Continue(())
+                        }
+                        // Reference `_apply_tool_input_rewrite`.
+                        Err(error) => {
+                            pipeline.denial = Some((
+                                hook_name.clone(),
+                                format!(
+                                    "Hook '{hook_name}' rewrote tool_input but the result failed validation against {}: {error}",
+                                    call.name
+                                ),
+                            ));
+                            std::ops::ControlFlow::Break(())
+                        }
+                    },
+                    _ => std::ops::ControlFlow::Continue(()),
+                },
+            )
+            .await;
+        pipeline
+    }
+
+    /// Reference `_dispatch_post_turn_hooks`: the post-agent chain's events,
+    /// published once it ends, and the message a denying hook sends the model
+    /// back with.
+    async fn run_post_agent_hooks(
+        &self,
+        recorder: &mut TurnRecorder<'_>,
+    ) -> Result<Option<String>, EngineError> {
+        let Some(hooks) = self.settings.hooks.as_ref() else {
+            return Ok(None);
+        };
+        let session_id = recorder.state().session_id.clone();
+        let mut events = Vec::new();
+        let mut retry = None;
+        hooks
+            .manager
+            .run(
+                HookInvocation::PostAgent {
+                    context: hooks.context(&session_id),
+                },
+                |item| {
+                    match item {
+                        HookYield::Event(event) => events.push(event),
+                        HookYield::UserMessage(content) => retry = Some(content),
+                        _ => {}
+                    }
+                    std::ops::ControlFlow::Continue(())
+                },
+            )
+            .await;
+        for event in events {
+            recorder.emit(EngineEvent::Hook { event })?;
+        }
+        Ok(retry)
+    }
+}
+
+/// What a pre-tool chain left the call to do.
+struct PreToolPipeline {
+    events: Vec<crate::hooks::HookEvent>,
+    /// The hook that denied the call and why.
+    denial: Option<(String, String)>,
+    /// The arguments the call runs with, rewritten or not.
+    tool_input: Value,
+    rewritten: bool,
+}
+
+/// What a running call reports before it settles.
+enum CallSignal {
+    Event(EngineEvent),
+    /// The validated arguments a cancelled call is shown to its post-tool
+    /// hooks with.
+    Prepared {
+        index: usize,
+        tool_input: Value,
+    },
+    /// The answer as the result event published it, which stands if the turn
+    /// is cancelled while its post-tool hooks run.
+    Settled {
+        index: usize,
+        content: String,
+        is_error: bool,
+    },
+}
+
+/// How one call settled.
+enum CallSettled {
+    Answered {
+        content: String,
+        is_error: bool,
+        user_cancelled: bool,
+        /// The arguments a hook rewrote the call to, as the assistant message
+        /// is patched to carry them.
+        arguments: Option<String>,
+    },
+    /// The call's answer failed the turn.
+    TurnFailure(String),
+}
+
+fn apply_signal(
+    recorder: &mut TurnRecorder<'_>,
+    signal: CallSignal,
+    results: &mut [Option<(String, bool)>],
+    prepared: &mut [Option<Value>],
+) -> Result<(), EngineError> {
+    match signal {
+        CallSignal::Event(event) => recorder.emit(event),
+        CallSignal::Prepared { index, tool_input } => {
+            if let Some(slot) = prepared.get_mut(index) {
+                *slot = Some(tool_input);
+            }
+            Ok(())
+        }
+        CallSignal::Settled {
+            index,
+            content,
+            is_error,
+        } => {
+            if let Some(slot) = results.get_mut(index) {
+                *slot = Some((content, is_error));
+            }
+            Ok(())
+        }
     }
 }
 
 /// How one round of tool calls ended.
 enum ToolRound {
-    /// Every call answered, in call order, with whether the user's decline
-    /// of one of them ends the turn.
+    /// Every call answered, in call order, with the arguments a hook rewrote
+    /// each call to and whether the user's decline of one of them ends the
+    /// turn.
     Settled {
         results: Vec<(String, bool)>,
+        patched: Vec<Option<String>>,
         user_cancelled: bool,
     },
     /// A call's answer failed the turn.
     Failed(String),
+}
+
+/// Reference `_patch_assistant_tool_call_args`: the assistant message that
+/// asked for a call a hook rewrote carries the arguments it ran with, so the
+/// transcript and the next request show what actually ran.
+fn patch_tool_call_arguments(
+    messages: &mut [ModelMessage],
+    calls: &[ModelToolCall],
+    patched: &[Option<String>],
+) {
+    for (call, arguments) in calls.iter().zip(patched) {
+        let Some(arguments) = arguments else {
+            continue;
+        };
+        if call.id.is_empty() {
+            continue;
+        }
+        'messages: for message in messages.iter_mut().rev() {
+            if let ModelMessage::Assistant { tool_calls, .. } = message {
+                for tool_call in tool_calls.iter_mut() {
+                    if tool_call.id == call.id {
+                        tool_call.arguments.clone_from(arguments);
+                        break 'messages;
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Projects every chunk a tool emitted before its result arrived.

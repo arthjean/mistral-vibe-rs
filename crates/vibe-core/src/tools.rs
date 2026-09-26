@@ -324,6 +324,29 @@ impl ToolExecutionOutput {
     }
 }
 
+tokio::task_local! {
+    /// Set once the call being polled passed its permission gate and its body
+    /// started. Reference `tool_started` in `_execute_tool_call`, which decides
+    /// whether a cancelled call is shown to the post-tool hooks.
+    static CALL_STARTED: Arc<std::sync::atomic::AtomicBool>;
+}
+
+/// Records that the call being polled started running. A call polled outside
+/// [`track_call_start`] records nothing.
+pub fn mark_call_started() {
+    let _ = CALL_STARTED.try_with(|started| {
+        started.store(true, std::sync::atomic::Ordering::SeqCst);
+    });
+}
+
+/// Polls `future` with `started` as the flag [`mark_call_started`] sets.
+pub async fn track_call_start<F: std::future::Future>(
+    started: Arc<std::sync::atomic::AtomicBool>,
+    future: F,
+) -> F::Output {
+    CALL_STARTED.scope(started, future).await
+}
+
 pub trait ToolHandler: Send + Sync {
     fn invoke<'a>(
         &'a self,
@@ -824,6 +847,30 @@ impl ToolRegistry {
 }
 
 impl ToolExecutor for ToolRegistry {
+    fn prepare_arguments(&self, name: &str, arguments: &str) -> Result<Value, String> {
+        let mut arguments: Value = serde_json::from_str(arguments)
+            .map_err(|error| format!("invalid tool arguments: {error}"))?;
+        let schema = {
+            let tools = self
+                .tools
+                .read()
+                .map_err(|_| ToolError::RegistryPoisoned.to_string())?;
+            tools
+                .get(name)
+                .map(|registered| registered.spec.input_schema.clone())
+                .ok_or_else(|| ToolError::Unavailable(name.to_owned()).to_string())?
+        };
+        coerce_and_validate(name, &mut arguments, &schema).map_err(|error| error.to_string())?;
+        // A remote tool's arguments model keeps what it does not declare
+        // (reference `_OpenArgs`); a built-in one ignores it.
+        if Self::remote_origin(self, name).is_some() {
+            apply_defaults(&mut arguments, &schema);
+        } else {
+            validate::dump_validated(&mut arguments, &schema);
+        }
+        Ok(arguments)
+    }
+
     fn remote_origin(&self, name: &str) -> Option<RemoteToolOrigin> {
         Self::remote_origin(self, name)
     }

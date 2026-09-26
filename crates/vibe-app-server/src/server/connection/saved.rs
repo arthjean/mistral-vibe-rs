@@ -628,8 +628,16 @@ impl ServerConnection {
             session.latest_turn = None;
             session.updated_at = now_millis();
         }
+        let moved = target != previous;
         let state = public_session_state(session);
         drop(sessions);
+        // Reference `relocate` rebuilds the runtime with `reload_hooks=True`, so
+        // the destination's hooks are the ones that run.
+        if moved {
+            self.server
+                .reload_session_hooks(session_id)
+                .map_err(|error| ProtocolFault::internal(error.to_string()))?;
+        }
         let mut batch = success_batch(request.id.clone(), result_map([("state", state)]));
         batch
             .outbound

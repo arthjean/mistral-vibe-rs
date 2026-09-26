@@ -1271,14 +1271,14 @@ fn an_added_directory_contributes_its_own_extension_root() {
         "Cut a release build.\n",
     )
     .expect("command fixture");
-    let hook = "[[hooks]]\nname = \"%NAME%\"\ntype = \"pre_tool\"\nprogram = \"echo\"\n";
+    let hook = "[[hooks]]\nname = \"%NAME%\"\ntype = \"pre_tool\"\ncommand = \"echo\"\n";
     std::fs::write(
         added.join(".vibe/hooks.toml"),
         hook.replace("%NAME%", "project-hook"),
     )
     .expect("project hook fixture");
     std::fs::write(
-        vibe_home.join("extensions/hooks.toml"),
+        vibe_home.join("hooks.toml"),
         hook.replace("%NAME%", "user-hook"),
     )
     .expect("user hook fixture");
@@ -1307,8 +1307,10 @@ fn an_added_directory_contributes_its_own_extension_root() {
         catalog.commands.contains_key("release"),
         "the added directory's commands are discovered"
     );
+    let hooks = service.session_hooks(&service.paths.working_directory, true, &[]);
     assert_eq!(
-        catalog
+        hooks
+            .config()
             .hooks
             .iter()
             .map(|hook| hook.name.as_str())

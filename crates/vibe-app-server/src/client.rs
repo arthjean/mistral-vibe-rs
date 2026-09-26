@@ -38,7 +38,7 @@ pub use vibe_core::engine::EventObserver;
 pub use vibe_core::engine::TurnOutcome as PublicTurnOutcome;
 pub use vibe_core::engine::TurnStopReason as PublicTurnStopReason;
 pub use vibe_core::events::{
-    ApprovalDecisionType, CallbackDetail, EffectDetail, EffectResultDisplay, HookNotice,
+    ApprovalDecisionType, CallbackDetail, EffectDetail, EffectResultDisplay, HookNotice, HookScope,
     HookSeverity, NoticeDetail, PublicCallbackState, PublicContentBlock, PublicEffectState,
     PublicEntryGenerationStatus, PublicEntryMetadata, PublicError, PublicHistoryEntry,
     PublicMessageRole, PublicNoticeLevel, ToolEffectKind, TurnErrorCode, UserQuestionRequest,
@@ -231,6 +231,8 @@ pub struct TurnReservation {
     /// hands to its policy layer and its reactive recovery.
     pub compaction: CompactionSettings,
     pub tools: ToolRegistry,
+    /// The hooks the session loaded, which the turn runs.
+    pub hooks: crate::session_hooks::SessionHooks,
 }
 
 #[derive(Debug, Clone)]

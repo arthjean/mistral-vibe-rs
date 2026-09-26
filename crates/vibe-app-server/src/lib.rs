@@ -15,6 +15,7 @@ mod params;
 pub mod projects;
 pub mod resources;
 pub mod server;
+pub mod session_hooks;
 mod session_lifecycle;
 pub mod startup;
 #[cfg(test)]
