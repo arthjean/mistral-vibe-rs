@@ -24,6 +24,9 @@ enum Dispatch {
     /// The service answers against the attached session's directory and trust,
     /// so a project file the session can see participates in the layering.
     SessionScoped,
+    /// The service answers with the agents the addressed session sees, or the
+    /// ones a session opened in the server's directory would.
+    AgentScoped,
 }
 
 /// One step the server applies to a workspace answer.
@@ -44,15 +47,15 @@ enum After {
 fn plan(method: &str) -> MethodPlan {
     match method {
         "session/agent/update" => MethodPlan {
-            dispatch: Dispatch::Plain,
+            dispatch: Dispatch::AgentScoped,
             after: &[After::PersistAgent],
         },
         "session/history/clear" => MethodPlan {
             dispatch: Dispatch::Plain,
             after: &[After::ClearCheckpointLog],
         },
-        "agents/list" | "agents/install" => MethodPlan {
-            dispatch: Dispatch::Plain,
+        "agents/list" | "agents/install" | "agents/uninstall" => MethodPlan {
+            dispatch: Dispatch::AgentScoped,
             after: &[After::ActiveAgent],
         },
         "config/read"
@@ -224,6 +227,29 @@ fn dispatch_workspace(
             // read, so the process configuration answers on its own.
             None => workspace.dispatch(&request.method, &request.params),
         },
+        Dispatch::AgentScoped => {
+            let scoped = match target_session_id {
+                Some(session_id) => connection.server.lock_sessions().ok().and_then(|sessions| {
+                    sessions
+                        .get(session_id)
+                        .map(|session| connection.server.agent_workspace(session))
+                }),
+                // Reference `_list_agents` reads the host's directory under
+                // the trust it holds now.
+                None => {
+                    let cwd = vibe_core::trust::resolve(workspace.working_directory());
+                    let trusted =
+                        vibe_core::trust::TrustStore::for_vibe_home(workspace.vibe_home())
+                            .is_trusted(&cwd)
+                            == Some(true);
+                    Some(workspace.scoped_to_agents(cwd, trusted, &[], None, &[]))
+                }
+            };
+            scoped
+                .as_ref()
+                .unwrap_or(workspace)
+                .dispatch(&request.method, &request.params)
+        }
     }
 }
 
@@ -454,20 +480,25 @@ pub(super) fn reset_checkpoint_log(
 fn update_runtime_agent(connection: &ServerConnection, request: &ServerRequest) {
     let (Some(session_id), Some(agent)) = (
         request.params.get("sessionId").and_then(Value::as_str),
-        request.params.get("name").and_then(Value::as_str),
+        request
+            .params
+            .get("agentName")
+            .or_else(|| request.params.get("name"))
+            .and_then(Value::as_str),
     ) else {
         return;
     };
-    let summary = connection
-        .server
-        .workspace
-        .agent_profile(agent)
-        .ok()
-        .as_ref()
-        .map(crate::workspace::agent_summary);
     if let Ok(mut sessions) = connection.server.lock_sessions()
         && let Some(session) = sessions.get_mut(session_id)
+        && session.intent.agent.as_deref() != Some(agent)
     {
+        let summary = connection
+            .server
+            .agent_workspace(session)
+            .agent_profile(agent)
+            .ok()
+            .as_ref()
+            .map(crate::workspace::agent_summary);
         session.intent.agent = Some(agent.to_owned());
         session.agent_summary = summary;
         session.updated_at = now_millis();

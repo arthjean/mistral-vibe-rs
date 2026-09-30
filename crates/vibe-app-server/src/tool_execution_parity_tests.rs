@@ -1126,8 +1126,14 @@ fn spawn_interactive_responder(
                 InteractiveCallbackRequest::Approval { response, .. } => {
                     let _ = response.send(ApprovalDecision::ApproveOnce);
                 }
-                InteractiveCallbackRequest::ClearContext { response, .. } => {
+                InteractiveCallbackRequest::ClearContext { response, .. }
+                | InteractiveCallbackRequest::SwitchAgent { response, .. } => {
                     let _ = response.send(Ok(()));
+                }
+                // The reference oracle runs the plan review from the plan
+                // profile, the only one it answers in.
+                InteractiveCallbackRequest::ActiveAgent { response, .. } => {
+                    let _ = response.send(Some("plan".to_owned()));
                 }
                 InteractiveCallbackRequest::Tool {
                     detail, response, ..
@@ -1381,7 +1387,7 @@ async fn harness_for(
                 directory
             });
         InteractiveSessionToolFactory {
-            sender,
+            sender: crate::client::interactive::CallbackChannel::Shared(sender),
             plan_directory,
         }
         .register("session-1", &registry)

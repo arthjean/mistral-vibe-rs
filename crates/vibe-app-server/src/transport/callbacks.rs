@@ -8,10 +8,9 @@
 //! (`vibe/app_server/server.py`).
 
 use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use serde_json::Value;
-use tokio::sync::mpsc;
 use vibe_core::events::CallbackKind as EngineCallbackKind;
 use vibe_core::policy::{
     ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PolicyError,
@@ -20,14 +19,12 @@ use vibe_core::policy::{
 use crate::client::interactive::{
     ApproveInteractiveRequest, InteractiveCallbackRequest, InteractiveCallbackResponse,
     approval_callback_detail, approval_decision_from_output, fail_interactive_response,
-    reject_interactive_request,
+    reject_interactive_request, settle_turn_control,
 };
 use crate::client::{MAX_INTERACTIVE_CALLBACKS, TurnDriver};
 use crate::server::{AppServer, ApprovalAgentFactory, DeferredWork, ServerConnection};
 
-/// The channel each running turn takes its questions on, by session.
-pub(super) type TurnRoutes =
-    Arc<Mutex<HashMap<String, mpsc::UnboundedSender<InteractiveCallbackRequest>>>>;
+pub(super) use crate::client::interactive::TurnRoutes;
 
 pub(super) struct StdioApprovalFactory {
     pub(super) routes: TurnRoutes,
@@ -95,11 +92,13 @@ impl StdioCallbacks {
         requests.extend(request);
         let mut frames = Vec::new();
         for request in requests {
-            let session_id = match &request {
-                InteractiveCallbackRequest::Approval { session_id, .. }
-                | InteractiveCallbackRequest::Tool { session_id, .. }
-                | InteractiveCallbackRequest::ClearContext { session_id, .. } => session_id.clone(),
-            };
+            // A control occupies no callback slot: it names the running turn
+            // and is settled at once, whatever callback is open.
+            if request.is_turn_control() {
+                settle_turn_control(server, driver, request);
+                continue;
+            }
+            let session_id = request.session_id().to_owned();
             let Ok(session) = server.session(&session_id) else {
                 reject_interactive_request(request, "session is no longer available");
                 continue;
@@ -109,23 +108,6 @@ impl StdioCallbacks {
                 continue;
             };
             let (title, detail, kind) = match request {
-                InteractiveCallbackRequest::ClearContext {
-                    continuation,
-                    plan_file_path,
-                    response,
-                    ..
-                } => {
-                    let outcome = driver
-                        .clear_context(
-                            &session_id,
-                            &turn_id,
-                            &continuation,
-                            plan_file_path.as_deref(),
-                        )
-                        .map_err(|error| error.to_string());
-                    let _ = response.send(outcome);
-                    continue;
-                }
                 request if session.pending_callback.is_some() => {
                     if self.backlog.len() < MAX_INTERACTIVE_CALLBACKS {
                         self.backlog.push_back(request);
@@ -163,6 +145,10 @@ impl StdioCallbacks {
                         InteractiveCallbackResponse::Tool(response),
                     ),
                 ),
+                request => {
+                    settle_turn_control(server, driver, request);
+                    continue;
+                }
             };
             let (kind, response) = kind;
             match connection.request_callback_with_detail(

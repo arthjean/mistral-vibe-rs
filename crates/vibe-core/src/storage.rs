@@ -49,6 +49,8 @@ pub use time::{normalize_iso_utc, parse_iso_millis};
 pub(super) const METADATA_FILE: &str = "meta.json";
 pub(super) const MESSAGES_FILE: &str = "messages.jsonl";
 pub(super) const LAST_SESSION_DIRECTORY: &str = ".last_session";
+/// The directory under a session's own that its subagents' sessions live in.
+pub const CHILD_SESSIONS_DIRECTORY: &str = "agents";
 pub(super) const HANDOFF_JOURNAL_PREFIX: &str = ".handoff-transaction-";
 pub(super) const HANDOFF_LOCK_PREFIX: &str = ".handoff-lock-";
 pub(super) const MIGRATION_LOCK_FILE: &str = ".migration.lock";
@@ -411,6 +413,49 @@ impl SessionStore {
             return Err(StorageError::DuplicateSessionId(id.to_owned()));
         }
         Ok(self.compose_session(id, working_directory, Some(parent_session_id), now_ms))
+    }
+
+    /// The store a subagent of `parent` saves its session in: the parent's own
+    /// `agents` directory, each child named after the agent it runs.
+    /// Reference `create_child`, which roots the child's logger at
+    /// `<parent session>/agents` under the agent's name as its prefix.
+    #[must_use]
+    pub fn child_store(&self, parent: &SessionMetadata, agent: &str) -> Self {
+        Self {
+            root: self.session_path(parent).join(CHILD_SESSIONS_DIRECTORY),
+            pointer_key: None,
+            prefix: agent.to_owned(),
+        }
+    }
+
+    /// Records `link` among `parent_session_id`'s child sessions, once per tool
+    /// call. Reference `record_child_session`.
+    pub fn record_child_session(
+        &self,
+        parent_session_id: &str,
+        link: Value,
+    ) -> Result<(), StorageError> {
+        let mut metadata = self.open(parent_session_id)?.metadata;
+        let tool_call_id = link.get("tool_call_id").cloned();
+        if metadata
+            .child_sessions
+            .iter()
+            .any(|existing| existing.get("tool_call_id").cloned() == tool_call_id)
+        {
+            return Ok(());
+        }
+        metadata.child_sessions.push(link);
+        self.write_metadata(&metadata)
+    }
+
+    /// Writes the session with an empty log, which is how a subagent's session
+    /// exists before its first message. Reference `persist_empty_session`.
+    pub fn persist_empty(
+        &self,
+        metadata: &mut SessionMetadata,
+        now_ms: u64,
+    ) -> Result<(), StorageError> {
+        self.replace_messages(metadata, &[], now_ms)
     }
 
     /// Reference `SessionLogger._initialize_session_metadata`: what a new
@@ -1332,7 +1377,16 @@ impl SessionStore {
                 .and_then(|value| value.as_object().cloned())
                 .unwrap_or_default();
             for (key, value) in existing {
-                if key != "format_version" && !known.contains_key(&key) {
+                if key == "child_sessions" {
+                    // A child links itself into its parent's record while the
+                    // parent's own writer holds an older copy, so a link on
+                    // disk is kept rather than overwritten.
+                    for link in value.as_array().into_iter().flatten() {
+                        if !record.child_sessions.contains(link) {
+                            record.child_sessions.push(link.clone());
+                        }
+                    }
+                } else if key != "format_version" && !known.contains_key(&key) {
                     record.extra.entry(key).or_insert(value);
                 }
             }

@@ -141,7 +141,7 @@ pub fn search_paths(inputs: &SearchInputs<'_>) -> Vec<PathBuf> {
 /// Reference `_expand_paths`: a leading `~` becomes the home directory and a
 /// relative entry is anchored, so both spellings name one directory rather than
 /// one directory per process that reads them.
-fn anchor(entry: &str, home: Option<&Path>, working_directory: &Path) -> PathBuf {
+pub(crate) fn anchor(entry: &str, home: Option<&Path>, working_directory: &Path) -> PathBuf {
     let path = Path::new(entry);
     let expanded = path.strip_prefix("~").map_or_else(
         |_| path.to_path_buf(),

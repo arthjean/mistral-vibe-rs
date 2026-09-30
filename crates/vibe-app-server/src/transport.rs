@@ -7,7 +7,9 @@ use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
 
-use crate::client::interactive::InteractiveCallbackRequest;
+use crate::client::interactive::{
+    CallbackChannel, InteractiveCallbackRequest, InteractiveSessionToolFactory,
+};
 use crate::client::{
     DriverError, TurnDriver, TurnReservation, public_driver_error, public_turn_error,
 };
@@ -112,9 +114,17 @@ where
     // A tool that needs approval asks the client through its turn and the
     // loop, as a `callback/call`, rather than being refused.
     let routes = TurnRoutes::default();
-    let server = server.using_approval_factory(Arc::new(StdioApprovalFactory {
-        routes: Arc::clone(&routes),
-    }));
+    // The questions and the plan review a model asks take the same route,
+    // so every session publishes the interactive tools a stdio client can
+    // answer, as the reference's tool manager always does.
+    let server = server
+        .using_approval_factory(Arc::new(StdioApprovalFactory {
+            routes: Arc::clone(&routes),
+        }))
+        .using_session_tool_factory(Arc::new(InteractiveSessionToolFactory {
+            sender: CallbackChannel::Routed(Arc::clone(&routes)),
+            plan_directory: driver.plan_directory(),
+        }));
     let mut callbacks = StdioCallbacks::default();
     let mut connection = server.connect(vibe_protocol::TransportKind::Stdio);
     let (events, mut incoming_events) = mpsc::unbounded_channel::<ServeEvent>();

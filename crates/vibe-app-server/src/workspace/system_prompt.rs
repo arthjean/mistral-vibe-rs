@@ -16,6 +16,7 @@ use toml::Value as TomlValue;
 use vibe_core::config::{ConfigError, LayeredConfig};
 use vibe_core::extensions::{AgentKind, AgentProfile, DiscoveryRoots, discover_extensions};
 use vibe_core::prompt::library::PromptFileError;
+use vibe_core::provider::config::{ModelConfig, ModelRouting};
 use vibe_core::system_prompt::{
     DEFAULT_SYSTEM_PROMPT, ProjectContextSettings, ProjectInputs, PromptSkill, PromptSubagent,
     SYSTEM_PROMPT_SETTING, ShellEnvironment, SystemPromptInputs, load_system_prompt,
@@ -113,9 +114,9 @@ impl WorkspaceService {
         // itself, so it is reported before anything else reads it.
         self.config.load().map_err(SystemPromptError::from)?;
         let agents = self
-            .available_agents()
+            .prompt_agents(scope)
             .map_err(|error| SystemPromptError::Config(error.to_string()))?;
-        let config = self.session_prompt_config(scope, &agents)?;
+        let config = self.session_prompt_config(scope)?;
         let snapshot = config.load().map_err(SystemPromptError::from)?;
         let effective = &snapshot.effective;
         let flag = |key: &str| {
@@ -182,13 +183,62 @@ impl WorkspaceService {
         &self,
         scope: &SessionPromptScope,
     ) -> Result<toml::Table, SystemPromptError> {
-        let agents = self
-            .available_agents()
-            .map_err(|error| SystemPromptError::Config(error.to_string()))?;
-        self.session_prompt_config(scope, &agents)?
+        self.session_prompt_config(scope)?
             .load()
             .map(|snapshot| snapshot.effective)
             .map_err(SystemPromptError::from)
+    }
+
+    /// The agents a session in `scope` sees, which name its subagents.
+    fn scope_agents(&self, scope: &SessionPromptScope) -> WorkspaceService {
+        self.scoped_to_agents(
+            scope.working_directory.clone(),
+            scope.trusted,
+            &scope.add_directories,
+            scope.project_file_trust,
+            &[],
+        )
+    }
+
+    pub(crate) fn prompt_agents(
+        &self,
+        scope: &SessionPromptScope,
+    ) -> Result<Vec<AgentProfile>, super::WorkspaceServiceError> {
+        self.scope_agents(scope).available_agents()
+    }
+
+    /// The model a session in `scope` runs, from its configuration with its
+    /// agent's overrides applied: the one `scope.model` names by alias or by
+    /// name, else the active one. Reference `get_active_model` over the
+    /// orchestrator the agent's profile layer was installed on. `None` when
+    /// the configuration declares neither.
+    ///
+    /// # Errors
+    ///
+    /// A configuration that does not load.
+    pub fn session_model(
+        &self,
+        scope: &SessionPromptScope,
+    ) -> Result<Option<ModelConfig>, SystemPromptError> {
+        let snapshot = self
+            .session_prompt_config(scope)?
+            .load()
+            .map_err(SystemPromptError::from)?;
+        let routing =
+            ModelRouting::from_effective(&snapshot.effective, snapshot.active_model_alias());
+        let find = |wanted: &str| {
+            routing
+                .models
+                .iter()
+                .find(|model| model.alias == wanted)
+                .or_else(|| routing.models.iter().find(|model| model.name == wanted))
+                .cloned()
+        };
+        Ok(scope
+            .model
+            .as_deref()
+            .and_then(find)
+            .or_else(|| routing.active_alias.as_deref().and_then(find)))
     }
 
     /// The layered configuration of `scope`: its directory, trust and roots,
@@ -196,7 +246,6 @@ impl WorkspaceService {
     fn session_prompt_config(
         &self,
         scope: &SessionPromptScope,
-        agents: &[AgentProfile],
     ) -> Result<LayeredConfig, SystemPromptError> {
         let agent_name = match &scope.agent {
             Some(agent) => agent.clone(),
@@ -204,10 +253,14 @@ impl WorkspaceService {
                 .default_agent_name()
                 .map_err(|error| SystemPromptError::Config(error.to_string()))?,
         };
-        let overrides = agents
-            .iter()
-            .find(|profile| profile.name == agent_name)
-            .map(|profile| profile.overrides.clone())
+        // The profile the session runs applies whether or not the catalog
+        // still offers it, as the reference's installed profile layer does.
+        let overrides = self
+            .scope_agents(scope)
+            .catalog()
+            .agents
+            .remove(&agent_name)
+            .map(|profile| profile.overrides)
             .unwrap_or_default();
         // The directory the server runs in is an authorized root, not an
         // opened project: only its trust makes it one, as `session_hooks`

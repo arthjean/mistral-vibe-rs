@@ -1,33 +1,28 @@
 //! Delegation: a turn that runs another turn.
 //!
-//! A subagent is a child session with its own identifier, its own transcript
-//! and a bounded budget: a depth ceiling so delegation cannot recurse without
-//! end, a duration ceiling, and a result size the parent will accept. The
-//! finalizer is what makes a dropped parent still settle its child, so a
-//! cancelled turn never leaves a delegation recorded as running.
+//! A subagent is a child session with its own identifier and its own
+//! transcript, saved beneath its parent's (reference `create_child` roots the
+//! child's logger at `<parent session>/agents`) and linked into the parent's
+//! record. A depth ceiling keeps delegation from recursing, and the finalizer
+//! is what makes a dropped parent still settle its child, so a cancelled turn
+//! never leaves a delegation recorded as running. The reference bounds neither
+//! how long a child runs nor how long its answer is, so neither is bounded
+//! here.
 
 use std::collections::BTreeMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use serde_json::Value;
-use tokio::time::timeout;
 
 use super::agents::{AgentKind, AgentProfile};
-use super::{
-    ExtensionError, MAX_CHILD_ID_ATTEMPTS, MAX_DELEGATION_DEPTH, MAX_DELEGATION_DURATION,
-    MAX_DELEGATION_RESULT_BYTES,
-};
+use super::{ExtensionError, MAX_DELEGATION_DEPTH};
 use crate::engine::CancellationToken;
-
-static CHILD_SEQUENCE: AtomicU64 = AtomicU64::new(1);
-use crate::storage::{SessionStore, StorageError};
-use crate::text::bounded_utf8;
+use crate::storage::{CHILD_SESSIONS_DIRECTORY, SessionStore, StorageError};
 
 /// What a delegated run produced.
 ///
@@ -74,24 +69,65 @@ pub enum ChildLoggingPolicy {
     Disabled,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+/// What a running delegation reports to the call that started it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DelegationUpdate {
+    /// The child session exists and its parent's record links it.
+    Linked(String),
+    /// One line of progress: a tool the child ran, and what it answered.
+    /// Reference `SubagentRunAccumulator.observe`.
+    Progress(String),
+}
+
+/// Where a delegation's updates go.
+pub type DelegationSignal = Arc<dyn Fn(DelegationUpdate) + Send + Sync>;
+
+#[derive(Clone)]
 pub struct DelegationRequest {
     pub parent_session_id: String,
+    /// The call that asked for the delegation, which the parent's record
+    /// links the child under.
+    pub tool_call_id: String,
     pub agent: AgentProfile,
     pub prompt: String,
     pub logging: ChildLoggingPolicy,
+    pub signal: Option<DelegationSignal>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+impl std::fmt::Debug for DelegationRequest {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("DelegationRequest")
+            .field("parent_session_id", &self.parent_session_id)
+            .field("tool_call_id", &self.tool_call_id)
+            .field("agent", &self.agent.name)
+            .field("prompt", &self.prompt)
+            .finish_non_exhaustive()
+    }
+}
+
+#[derive(Clone)]
 pub struct ChildContext {
     pub parent_session_id: String,
     pub child_session_id: String,
+    /// The store the child's session is saved in, beneath its parent's.
+    pub store: SessionStore,
     pub depth: u8,
     pub agent: AgentProfile,
     pub prompt: String,
     pub config: BTreeMap<String, Value>,
     pub logging: ChildLoggingPolicy,
     pub working_directory: String,
+    pub signal: Option<DelegationSignal>,
+}
+
+impl ChildContext {
+    /// Reports `update` to the call that started the delegation.
+    pub fn report(&self, update: DelegationUpdate) {
+        if let Some(signal) = &self.signal {
+            signal(update);
+        }
+    }
 }
 
 impl ChildContext {
@@ -186,30 +222,16 @@ impl SubagentManager {
                 maximum: MAX_DELEGATION_DEPTH,
             });
         }
-        let (child_session_id, mut metadata) = {
-            let mut created = None;
-            for _ in 0..MAX_CHILD_ID_ATTEMPTS {
-                let sequence = CHILD_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-                let candidate = format!(
-                    "child-{now_ms:016x}-{:08x}-{sequence:016x}",
-                    std::process::id()
-                );
-                match self.store.create_child(
-                    &candidate,
-                    &parent.metadata.working_directory,
-                    request.parent_session_id.clone(),
-                    now_ms,
-                ) {
-                    Ok(metadata) => {
-                        created = Some((candidate, metadata));
-                        break;
-                    }
-                    Err(StorageError::DuplicateSessionId(_)) => {}
-                    Err(error) => return Err(error.into()),
-                }
-            }
-            created.ok_or(ExtensionError::ChildIdExhausted)?
-        };
+        let child_store = self
+            .store
+            .child_store(&parent.metadata, &request.agent.name);
+        let child_session_id = crate::session_id::uuid_v4();
+        let mut metadata = child_store.create(
+            &child_session_id,
+            &parent.metadata.working_directory,
+            Some(request.parent_session_id.clone()),
+            now_ms,
+        )?;
         metadata.config = parent.metadata.config.clone();
         metadata.agent_profile = Some(json!({
             "name": request.agent.name,
@@ -217,14 +239,25 @@ impl SubagentManager {
             "depth": depth,
             "logging": request.logging,
         }));
-        self.store.update_metadata(&metadata)?;
+        // Reference `run`: the child's session is written empty, then linked
+        // into its parent's record, before its turn starts.
+        child_store.persist_empty(&mut metadata, now_ms)?;
+        self.store.record_child_session(
+            &request.parent_session_id,
+            json!({
+                "session_id": child_session_id,
+                "tool_call_id": request.tool_call_id,
+                "agent": request.agent.name,
+                "relative_path": format!("{CHILD_SESSIONS_DIRECTORY}/{}", metadata.directory),
+            }),
+        )?;
         let cancellation = CancellationToken::default();
         self.active.lock().await.insert(
             child_session_id.clone(),
             (request.parent_session_id.clone(), cancellation.clone()),
         );
         let finalizer = DelegationFinalizer::new(
-            self.store.clone(),
+            child_store.clone(),
             self.active.clone(),
             request.parent_session_id.clone(),
             child_session_id.clone(),
@@ -234,13 +267,16 @@ impl SubagentManager {
         let context = ChildContext {
             parent_session_id: request.parent_session_id.clone(),
             child_session_id: child_session_id.clone(),
+            store: child_store,
             depth,
             agent: request.agent,
             prompt: request.prompt,
             config: parent.metadata.config,
             logging: request.logging,
             working_directory: parent.metadata.working_directory,
+            signal: request.signal,
         };
+        context.report(DelegationUpdate::Linked(child_session_id.clone()));
         let (status, run) = tokio::select! {
             biased;
             () = cancellation.cancelled() => {
@@ -249,37 +285,10 @@ impl SubagentManager {
                     SubagentRun::unfinished("Subagent cancelled".to_owned()),
                 )
             }
-            outcome = timeout(
-                MAX_DELEGATION_DURATION,
-                self.runner.run(context, cancellation.clone()),
-            ) => {
+            outcome = self.runner.run(context, cancellation.clone()) => {
                 match outcome {
-                    Ok(Ok(run)) => (
-                        DelegationStatus::Completed,
-                        SubagentRun {
-                            response: bounded_utf8(
-                                &run.response,
-                                MAX_DELEGATION_RESULT_BYTES,
-                                "…[truncated]",
-                            ),
-                            ..run
-                        },
-                    ),
-                    Ok(Err(error)) => (
-                        DelegationStatus::Failed,
-                        SubagentRun::unfinished(bounded_utf8(
-                            &error,
-                            MAX_DELEGATION_RESULT_BYTES,
-                            "…[truncated]",
-                        )),
-                    ),
-                    Err(_) => {
-                        cancellation.cancel();
-                        (
-                            DelegationStatus::Failed,
-                            SubagentRun::unfinished("Subagent timed out".to_owned()),
-                        )
-                    }
+                    Ok(run) => (DelegationStatus::Completed, run),
+                    Err(error) => (DelegationStatus::Failed, SubagentRun::unfinished(error)),
                 }
             }
         };

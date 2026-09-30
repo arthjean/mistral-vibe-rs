@@ -171,11 +171,14 @@ pub(super) fn cycle_agent(
         state.push_diagnostic("No agent profiles are available");
         return;
     }
-    let current = agents
+    // Reference `AgentManager.next_agent`: an agent missing from the order
+    // (a subagent, or one the configuration stopped offering) counts as the
+    // position before the first, so the cycle restarts at the top.
+    let next = agents
         .iter()
         .position(|agent| *agent == runtime.agent_name)
-        .unwrap_or_default();
-    let next = agents[(current + 1) % agents.len()].to_owned();
+        .map_or(0, |current| (current + 1) % agents.len());
+    let next = agents[next].to_owned();
     switching::request(runtime, composer, state, SwitchRequest::Agent(next));
 }
 

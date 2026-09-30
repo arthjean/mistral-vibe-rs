@@ -452,6 +452,7 @@ fn build_input(
         turn_id: None,
         session_id: plan.session_id.clone(),
         model_override: plan.model.clone(),
+        model: None,
         messages,
         stream: false,
         images: Vec::new(),

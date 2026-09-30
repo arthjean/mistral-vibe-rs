@@ -538,7 +538,7 @@ async fn published_registry_hosting(
         .expect("the shell family registers");
     let (sender, _receiver) = tokio::sync::mpsc::channel(1);
     InteractiveSessionToolFactory {
-        sender,
+        sender: crate::client::interactive::CallbackChannel::Shared(sender),
         plan_directory: Some(directory.path().to_path_buf()),
     }
     .register("session-1", &registry)

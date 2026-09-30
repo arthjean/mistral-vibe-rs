@@ -105,6 +105,11 @@ pub enum EngineEvent {
         call_id: String,
         chunk: String,
     },
+    /// The session a running delegation opened, named on its call's effect.
+    ToolChildSession {
+        call_id: String,
+        child_session_id: String,
+    },
     ToolResult {
         call_id: String,
         content: String,
@@ -194,6 +199,12 @@ pub enum EngineEvent {
     },
     Title {
         title: String,
+    },
+    /// The session moved to another agent profile under its running turn,
+    /// which the next request already runs with. Reference
+    /// `AgentProfileChangedEvent`.
+    AgentChanged {
+        agent_name: String,
     },
     SessionHandoff {
         from_session_id: String,

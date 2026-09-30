@@ -122,15 +122,30 @@ fn a_cleared_context_publishes_session_context_cleared() {
                 .map(|bytes| decode_frame(&bytes).expect("notification decodes"))
         })
         .collect::<Vec<_>>();
-    assert!(matches!(
-        notifications.last(),
-        Some(Envelope::Notification(_))
-    ));
-    let Some(Envelope::Notification(Notification { method, params, .. })) = notifications.last()
-    else {
+    let methods = notifications
+        .iter()
+        .filter_map(|envelope| match envelope {
+            Envelope::Notification(Notification { method, .. }) => Some(method.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    // The clearing notice the handoff records reaches the history after the
+    // session it belongs to is announced.
+    assert_eq!(
+        methods.last_chunk(),
+        Some(&["session/contextCleared", "history/entryAdded"]),
+        "{methods:?}"
+    );
+    let Some(params) = notifications.iter().find_map(|envelope| match envelope {
+        Envelope::Notification(Notification { method, params, .. })
+            if method == "session/contextCleared" =>
+        {
+            Some(params)
+        }
+        _ => None,
+    }) else {
         return;
     };
-    assert_eq!(method, "session/contextCleared");
     assert_eq!(params["sessionId"], "session-1-cleared");
     assert_eq!(params["oldSessionId"], "session-1");
     assert_eq!(params["planFilePath"], "/plans/session-1.md");

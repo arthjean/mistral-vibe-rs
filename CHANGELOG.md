@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Run agents, subagents and delegation the way the reference does. Profiles
+  are read from `agent_paths`, the project's `.vibe/agents` and
+  `~/.vibe/agents` with the reference's precedence; an invalid file is
+  skipped and a legacy one migrated. `enabled_agents`, `disabled_agents`,
+  `installed_agents`, `default_agent`, `smart_approve_available` and
+  `smart_approve_default` decide which profiles a session is offered, starts
+  under or switches to, and a profile now overrides the model, its sampling
+  and the tools like any other configuration layer. `task` saves its child
+  session under the parent's `agents/` directory and links it, reports one
+  line per tool call the child settles, keeps what the child answered when it
+  fails, and names the parent's scratchpad to the child. Accepting a plan in
+  `exit_plan_mode` now moves the session to `accept-edits` or `ask` within the
+  same turn, so the model's next request already runs under that profile, and
+  the plan file is named like the reference's under `~/.vibe/plans`. In the
+  terminal, cycling agents from a profile that is no longer offered starts at
+  the first one.
+
 - Compose the system prompt the way the reference does. Every session and
   subagent now opens on one system message built from the configured
   `system_prompt_id` (project and user `.vibe/prompts` files, the builtins

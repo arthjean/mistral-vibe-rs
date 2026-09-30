@@ -55,6 +55,76 @@ pub(crate) enum InteractiveCallbackRequest {
         plan_file_path: Option<String>,
         response: tokio::sync::oneshot::Sender<Result<(), String>>,
     },
+    /// A tool asking which agent profile the session runs, which
+    /// `exit_plan_mode` reads before it asks the user anything.
+    ActiveAgent {
+        session_id: String,
+        response: tokio::sync::oneshot::Sender<Option<String>>,
+    },
+    /// A tool moving the session to another agent profile, which the running
+    /// turn's next request already runs under (reference
+    /// `InvokeContext.switch_agent_callback`).
+    SwitchAgent {
+        session_id: String,
+        agent_name: String,
+        response: tokio::sync::oneshot::Sender<Result<(), String>>,
+    },
+}
+
+impl InteractiveCallbackRequest {
+    pub(crate) fn session_id(&self) -> &str {
+        match self {
+            Self::Approval { session_id, .. }
+            | Self::Tool { session_id, .. }
+            | Self::ClearContext { session_id, .. }
+            | Self::ActiveAgent { session_id, .. }
+            | Self::SwitchAgent { session_id, .. } => session_id,
+        }
+    }
+
+    /// Whether the request only reads or steers the running turn, which
+    /// occupies no callback slot and so never waits behind an open one.
+    pub(crate) fn is_turn_control(&self) -> bool {
+        matches!(
+            self,
+            Self::ClearContext { .. } | Self::ActiveAgent { .. } | Self::SwitchAgent { .. }
+        )
+    }
+}
+
+/// The channel each running turn takes its questions on, by session.
+pub(crate) type TurnRoutes = Arc<
+    std::sync::Mutex<
+        std::collections::HashMap<
+            String,
+            tokio::sync::mpsc::UnboundedSender<InteractiveCallbackRequest>,
+        >,
+    >,
+>;
+
+/// Where an interactive tool sends what it asks the client.
+#[derive(Clone)]
+pub(crate) enum CallbackChannel {
+    /// One queue every session of an in-process client shares.
+    Shared(tokio::sync::mpsc::Sender<InteractiveCallbackRequest>),
+    /// The route of the session's running turn, which a stdio client answers.
+    Routed(TurnRoutes),
+}
+
+impl CallbackChannel {
+    pub(crate) async fn send(&self, request: InteractiveCallbackRequest) -> Result<(), ()> {
+        match self {
+            Self::Shared(sender) => sender.send(request).await.map_err(drop),
+            Self::Routed(routes) => {
+                let route = routes
+                    .lock()
+                    .ok()
+                    .and_then(|routes| routes.get(request.session_id()).cloned())
+                    .ok_or(())?;
+                route.send(request).map_err(drop)
+            }
+        }
+    }
 }
 
 pub(crate) enum InteractiveCallbackResponse {
@@ -122,7 +192,7 @@ impl ApprovalAgent for InteractiveApprovalAgent {
 }
 
 pub(crate) struct InteractiveSessionToolFactory {
-    pub(crate) sender: tokio::sync::mpsc::Sender<InteractiveCallbackRequest>,
+    pub(crate) sender: CallbackChannel,
     pub(crate) plan_directory: Option<PathBuf>,
 }
 
@@ -267,10 +337,67 @@ pub(crate) fn approval_decision_from_output(
 }
 
 pub(super) fn interactive_request_session_id(request: &InteractiveCallbackRequest) -> &str {
+    request.session_id()
+}
+
+/// Settles a request that reads or steers the running turn rather than
+/// asking the client anything: the server answers what it knows of the
+/// session, and the driver takes the control into the turn.
+pub(crate) fn settle_turn_control<D: super::TurnDriver + ?Sized>(
+    server: &crate::server::AppServer,
+    driver: &D,
+    request: InteractiveCallbackRequest,
+) {
+    let session_id = request.session_id().to_owned();
+    let active_turn = || {
+        server
+            .session(&session_id)
+            .map_err(|error| error.to_string())?
+            .active_turn
+            .ok_or_else(|| "turn is no longer active".to_owned())
+    };
     match request {
-        InteractiveCallbackRequest::Approval { session_id, .. }
-        | InteractiveCallbackRequest::Tool { session_id, .. }
-        | InteractiveCallbackRequest::ClearContext { session_id, .. } => session_id,
+        InteractiveCallbackRequest::ActiveAgent { response, .. } => {
+            let agent = server
+                .session(&session_id)
+                .ok()
+                .and_then(|session| session.intent.agent);
+            let _ = response.send(agent);
+        }
+        InteractiveCallbackRequest::ClearContext {
+            continuation,
+            plan_file_path,
+            response,
+            ..
+        } => {
+            let outcome = active_turn().and_then(|turn_id| {
+                driver
+                    .clear_context(
+                        &session_id,
+                        &turn_id,
+                        &continuation,
+                        plan_file_path.as_deref(),
+                    )
+                    .map_err(|error| error.to_string())
+            });
+            let _ = response.send(outcome);
+        }
+        InteractiveCallbackRequest::SwitchAgent {
+            agent_name,
+            response,
+            ..
+        } => {
+            let outcome = active_turn().and_then(|turn_id| {
+                let (profile, intent, tools) = server
+                    .switch_agent_in_turn(&session_id, &agent_name)
+                    .map_err(|error| error.to_string())?;
+                driver
+                    .switch_agent(&session_id, &turn_id, &profile, &intent, &tools)
+                    .map_err(|error| error.to_string())
+            });
+            let _ = response.send(outcome);
+        }
+        request => reject_interactive_request(request, "not a turn control"),
     }
 }
 
@@ -282,8 +409,12 @@ pub(crate) fn reject_interactive_request(request: InteractiveCallbackRequest, me
         InteractiveCallbackRequest::Tool { response, .. } => {
             let _ = response.send(Err(message.to_owned()));
         }
-        InteractiveCallbackRequest::ClearContext { response, .. } => {
+        InteractiveCallbackRequest::ClearContext { response, .. }
+        | InteractiveCallbackRequest::SwitchAgent { response, .. } => {
             let _ = response.send(Err(message.to_owned()));
+        }
+        InteractiveCallbackRequest::ActiveAgent { response, .. } => {
+            let _ = response.send(None);
         }
     }
 }
@@ -320,7 +451,7 @@ pub(crate) fn fail_interactive_response(response: InteractiveCallbackResponse, m
 }
 
 pub(super) async fn run_interactive_questions(
-    sender: tokio::sync::mpsc::Sender<InteractiveCallbackRequest>,
+    sender: CallbackChannel,
     session_id: String,
     call_id: String,
     arguments: Value,
@@ -413,7 +544,7 @@ pub(super) fn validate_interactive_question_request(
 }
 
 pub(super) async fn request_interactive_tool_callback(
-    sender: tokio::sync::mpsc::Sender<InteractiveCallbackRequest>,
+    sender: CallbackChannel,
     session_id: String,
     title: String,
     detail: Value,
@@ -440,7 +571,7 @@ pub(super) async fn request_interactive_tool_callback(
 /// Waiting is what makes the answer honest: the tool reports a cleared context
 /// only once the turn actually holds the control that clears it.
 pub(super) async fn request_context_clearing(
-    sender: tokio::sync::mpsc::Sender<InteractiveCallbackRequest>,
+    sender: CallbackChannel,
     session_id: String,
     continuation: String,
     plan_file_path: Option<String>,
@@ -458,6 +589,46 @@ pub(super) async fn request_context_clearing(
     receiver
         .await
         .map_err(|_| ToolError::Execution("context clearing was abandoned".to_owned()))?
+        .map_err(ToolError::Execution)
+}
+
+/// Asks the surface driving the turn which agent profile the session runs.
+async fn request_active_agent(
+    sender: &CallbackChannel,
+    session_id: String,
+) -> Result<Option<String>, ToolError> {
+    let (response, receiver) = tokio::sync::oneshot::channel();
+    sender
+        .send(InteractiveCallbackRequest::ActiveAgent {
+            session_id,
+            response,
+        })
+        .await
+        .map_err(|_| ToolError::Execution("interactive callback queue closed".to_owned()))?;
+    receiver
+        .await
+        .map_err(|_| ToolError::Execution("agent lookup was abandoned".to_owned()))
+}
+
+/// Moves the session to `agent_name` and waits until the running turn holds
+/// the switch, so the tool never reports a profile the next request lacks.
+async fn request_agent_switch(
+    sender: &CallbackChannel,
+    session_id: String,
+    agent_name: &str,
+) -> Result<(), ToolError> {
+    let (response, receiver) = tokio::sync::oneshot::channel();
+    sender
+        .send(InteractiveCallbackRequest::SwitchAgent {
+            session_id,
+            agent_name: agent_name.to_owned(),
+            response,
+        })
+        .await
+        .map_err(|_| ToolError::Execution("interactive callback queue closed".to_owned()))?;
+    receiver
+        .await
+        .map_err(|_| ToolError::Execution("agent switch was abandoned".to_owned()))?
         .map_err(ToolError::Execution)
 }
 
@@ -604,13 +775,38 @@ pub(super) fn validate_interactive_answer(
     Ok(())
 }
 
+/// The labels a client answers the plan review with. They are the answer
+/// values the reference matches on (`vibe/core/tools/builtins/exit_plan_mode.py`),
+/// so they are the protocol rather than prose.
+const PLAN_CLEAR_AUTO: &str = "Yes, clear context and auto approve edits";
+const PLAN_AUTO: &str = "Yes, and auto approve edits";
+const PLAN_MANUAL: &str = "Yes, and request approval for edits";
+const PLAN_STAY: &str = "No";
+
+/// The profile a plan review may only run under, and the two it hands off to.
+const PLAN_AGENT: &str = "plan";
+const EDITING_AGENT: &str = "accept-edits";
+const ASKING_AGENT: &str = "ask";
+
 pub(super) async fn run_interactive_plan_review(
-    sender: tokio::sync::mpsc::Sender<InteractiveCallbackRequest>,
+    sender: CallbackChannel,
     session_id: String,
     call_id: String,
     plan_path: PathBuf,
 ) -> Result<ToolExecutionOutput, ToolError> {
     const QUESTION: &str = "Plan is complete. Switch to code mode and start implementing?";
+    // Reference `ExitPlanMode.run` refuses outside the plan profile before it
+    // asks anything, so a profile that enables the tool cannot leave a mode it
+    // is not in.
+    if request_active_agent(&sender, session_id.clone())
+        .await?
+        .as_deref()
+        != Some(PLAN_AGENT)
+    {
+        return Err(ToolError::Execution(
+            "exit_plan_mode only answers while the session runs the plan agent".to_owned(),
+        ));
+    }
     let detail = json!({
         "kind": "user_input",
         "request": {
@@ -621,7 +817,10 @@ pub(super) async fn run_interactive_plan_review(
                 "multiSelect": false,
                 "hideOther": false,
             }],
-            "footerNote": null,
+            "footerNote": format!(
+                "Plan file: {} (Ctrl+G opens it for editing)",
+                plan_path.display()
+            ),
         },
         "planReview": true,
         "filePath": plan_path,
@@ -635,84 +834,77 @@ pub(super) async fn run_interactive_plan_review(
     )
     .await?;
     let (answers, cancelled) = user_input_result(&output)?;
-    let (switched, clear_context, message) = if cancelled {
-        if !answers.is_empty() {
-            return Err(ToolError::Execution(
-                "cancelled plan review included an answer".to_owned(),
-            ));
-        }
-        (
-            false,
+    // Reference `ExitPlanMode.run` matches the first answer's label without
+    // regard to case, reads a free-text answer as feedback, and stays in plan
+    // mode for anything else.
+    let first = answers.first().filter(|_| !cancelled);
+    let verdict = first.map(|answer| {
+        let value = answer
+            .get("answer")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let other = answer.get("isOther").and_then(Value::as_bool) == Some(true);
+        (value.to_lowercase(), value.to_owned(), other)
+    });
+    let (target, clear_context, message) = match &verdict {
+        None => (
+            None,
             false,
             "User cancelled. Staying in plan mode.".to_owned(),
-        )
-    } else {
-        if answers.len() != 1 {
-            return Err(ToolError::Execution(
-                "plan review requires exactly one answer".to_owned(),
-            ));
-        }
-        let answer = &answers[0];
-        if required_output_string(answer, "question")? != QUESTION {
-            return Err(ToolError::Execution(
-                "plan review answer does not match the request".to_owned(),
-            ));
-        }
-        let value = required_output_string(answer, "answer")?;
-        if answer.get("isOther").and_then(Value::as_bool) == Some(true) {
-            if value.trim().is_empty() {
-                return Err(ToolError::Execution(
-                    "plan feedback must not be empty".to_owned(),
-                ));
-            }
-            (
-                false,
-                false,
-                format!("Stay in plan mode and incorporate this feedback: {value}"),
-            )
-        } else {
-            match value {
-                "Yes, clear context and auto approve edits" => (
-                    true,
-                    true,
-                    "Plan approved. Switch to code mode, clear planning context, and auto approve \
-                     edits."
-                        .to_owned(),
-                ),
-                "Yes, and auto approve edits" => (
-                    true,
-                    false,
-                    "Plan approved. Switch to code mode and auto approve edits.".to_owned(),
-                ),
-                "Yes, and request approval for edits" => (
-                    true,
-                    false,
-                    "Plan approved. Switch to code mode and request approval for edits.".to_owned(),
-                ),
-                "No" => (
-                    false,
-                    false,
-                    "Plan rejected. Stay in plan mode and continue refining it.".to_owned(),
-                ),
-                _ => {
-                    return Err(ToolError::Execution(
-                        "plan review selected an invalid option".to_owned(),
-                    ));
-                }
-            }
-        }
+        ),
+        Some((lower, _, _)) if lower == &PLAN_CLEAR_AUTO.to_lowercase() => (
+            Some(EDITING_AGENT),
+            true,
+            "Now in accept-edits mode. The planning context is being cleared, and \
+             implementation starts from the approved plan."
+                .to_owned(),
+        ),
+        Some((lower, _, _)) if lower == &PLAN_AUTO.to_lowercase() => (
+            Some(EDITING_AGENT),
+            false,
+            "Now in accept-edits mode: go ahead and implement the plan.".to_owned(),
+        ),
+        Some((lower, _, _)) if lower == &PLAN_MANUAL.to_lowercase() => (
+            Some(ASKING_AGENT),
+            false,
+            "Now in ask mode: every edit waits for the user's approval.".to_owned(),
+        ),
+        Some((_, value, true)) => (
+            None,
+            false,
+            format!("Still planning. The user's feedback: {value}"),
+        ),
+        Some(_) => (
+            None,
+            false,
+            "Still planning: keep refining the plan.".to_owned(),
+        ),
     };
-    if clear_context {
-        // The clearing lands at the next cycle boundary, so the message this
-        // tool answers with is also the only instruction that survives it.
-        request_context_clearing(
-            sender,
-            session_id,
-            message.clone(),
-            plan_path.to_str().map(str::to_owned),
-        )
-        .await?;
+    if let Some(target) = target {
+        request_agent_switch(&sender, session_id.clone(), target).await?;
     }
+    if clear_context {
+        // Reference `_clear_context_after_plan_accept` re-seeds the cleared
+        // conversation with the approved plan, and with nothing when the plan
+        // file is empty or missing, which is also when no path is named.
+        let plan = tokio::fs::read_to_string(&plan_path)
+            .await
+            .unwrap_or_default();
+        let (continuation, plan_file_path) = if plan.is_empty() {
+            (String::new(), None)
+        } else {
+            (
+                format!(
+                    "<{tag}>The conversation was cleared once the plan was approved. \
+                     Carry out the approved plan below; it is authoritative.\n\n{plan}</{tag}>",
+                    tag = vibe_core::workspace::WARNING_TAG
+                ),
+                plan_path.to_str().map(str::to_owned),
+            )
+        };
+        request_context_clearing(sender, session_id, continuation, plan_file_path).await?;
+    }
+    let switched = target.is_some();
     // Reference `ExitPlanModeResult`
     // (`vibe/core/tools/builtins/exit_plan_mode.py:34`) declares `switched` then
     // `message`, and the agent loop renders one field per line, so the decision
@@ -724,28 +916,52 @@ pub(super) async fn run_interactive_plan_review(
     Ok(ToolExecutionOutput {
         skip: None,
         turn_failure: None,
-        approval: None,
+        // Reference `ExitPlanModeConfig.permission` is `always`, so the call
+        // runs on the configuration's say.
+        approval: Some(vibe_core::tools::ToolApproval {
+            decision: vibe_core::tools::ToolVerdict::Execute,
+            approval_type: vibe_core::tools::ToolApprovalType::Always,
+            approval_source: vibe_core::tools::ToolApprovalSource::Config,
+        }),
         failure: None,
         typed_result: json!({"switched": switched, "message": message}),
         model_text,
-        display: json!({"kind": "plan_review", "switched": switched}),
+        // Reference `ExitPlanMode.format_result_display`: the verdict is the
+        // header, and a plan that stays reads as unsuccessful.
+        display: json!({
+            "success": switched,
+            "verb": "",
+            "message": message,
+            "warnings": [],
+            "approvalNote": null,
+            "suffix": "",
+        }),
         projected_result: serde_json::Value::Null,
         chunks: Vec::new(),
     })
 }
 
+/// Where a session's plan lives: reference `PlanSession.plan_file_path`, a
+/// Unix timestamp and a random slug drawn once per session and kept for the
+/// life of the process.
 pub(super) fn plan_file_path(plan_directory: &Path, session_id: &str) -> PathBuf {
-    let safe_session = session_id
-        .chars()
-        .map(|character| {
-            if character.is_ascii_alphanumeric() || matches!(character, '-' | '_') {
-                character
-            } else {
-                '_'
-            }
-        })
-        .collect::<String>();
-    plan_directory.join(format!("{safe_session}.md"))
+    static NAMES: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, String>>> =
+        std::sync::OnceLock::new();
+    let draw = || {
+        let seconds = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_secs());
+        format!("{seconds}-{}.md", vibe_core::worktree::random_slug())
+    };
+    let name = match NAMES.get_or_init(Default::default).lock() {
+        Ok(mut names) => names
+            .entry(session_id.to_owned())
+            .or_insert_with(draw)
+            .clone(),
+        // A poisoned memo still names a plan, only not the one drawn before.
+        Err(_) => draw(),
+    };
+    plan_directory.join(name)
 }
 
 pub(super) fn user_input_result(output: &Value) -> Result<(&[Value], bool), ToolError> {
@@ -782,18 +998,12 @@ pub(super) fn required_output_string<'a>(
 pub(super) fn interactive_plan_options() -> Vec<Value> {
     [
         (
-            "Yes, clear context and auto approve edits",
+            PLAN_CLEAR_AUTO,
             "Clear planning context, switch to code mode, and auto approve edits",
         ),
-        (
-            "Yes, and auto approve edits",
-            "Switch to code mode with auto-approved edits",
-        ),
-        (
-            "Yes, and request approval for edits",
-            "Switch to code mode and keep edit approvals",
-        ),
-        ("No", "Stay in plan mode and continue planning"),
+        (PLAN_AUTO, "Switch to code mode with auto-approved edits"),
+        (PLAN_MANUAL, "Switch to code mode and keep edit approvals"),
+        (PLAN_STAY, "Keep planning and refine the plan further"),
     ]
     .into_iter()
     .map(|(label, description)| json!({"label": label, "description": description}))

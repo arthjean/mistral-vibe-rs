@@ -643,6 +643,14 @@ impl AppServer {
                 text
             }
         };
+        let model = self
+            .workspace
+            .session_model(&scope)
+            .map_err(|error| ServerError::Resource(error.to_string()))?;
+        let agents = self
+            .workspace
+            .prompt_agents(&scope)
+            .map_err(|error| ServerError::Resource(error.to_string()))?;
         let workspace = Arc::clone(&self.workspace);
         // Reference `_create_subagent_loop`: the child keeps the parent's
         // directory, roots and headless flag, runs its own profile, and has no
@@ -653,24 +661,34 @@ impl AppServer {
             scratchpad: None,
             ..scope
         };
+        let child_scope = move |profile: &vibe_core::extensions::AgentProfile| SessionPromptScope {
+            agent: Some(profile.name.clone()),
+            ..child.clone()
+        };
+        let model_scope = child_scope.clone();
+        let model_workspace = Arc::clone(&workspace);
         reservation.system_prompt = Some(SessionSystemPrompt {
             text,
             subagent: Arc::new(move |profile| {
-                let scope = SessionPromptScope {
-                    agent: Some(profile.name.clone()),
-                    ..child.clone()
-                };
                 workspace
-                    .session_system_prompt(&scope)
+                    .session_system_prompt(&child_scope(profile))
                     .map_err(|error| error.to_string())
             }),
+            model,
+            subagent_model: Arc::new(move |profile| {
+                model_workspace
+                    .session_model(&model_scope(profile))
+                    .ok()
+                    .flatten()
+            }),
+            agents,
         });
         Ok(reservation)
     }
 }
 
 /// What the session's system message is composed for.
-fn prompt_scope(session: &SessionRuntime) -> SessionPromptScope {
+pub(crate) fn prompt_scope(session: &SessionRuntime) -> SessionPromptScope {
     SessionPromptScope {
         working_directory: PathBuf::from(&session.working_directory),
         trusted: session.intent.trusted,

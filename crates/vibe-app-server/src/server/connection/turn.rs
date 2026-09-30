@@ -198,7 +198,17 @@ impl ServerConnection {
         if !self.server.workspace.persists_runtime_sessions() {
             return Ok(false);
         }
-        let Some(alias) = self.server.workspace.active_model_alias() else {
+        // The model the session's own configuration runs, its agent's
+        // overrides applied, which is what the reference pins.
+        let Some(alias) = self
+            .server
+            .workspace
+            .session_model(&crate::server::turns::prompt_scope(session))
+            .ok()
+            .flatten()
+            .map(|model| model.alias)
+            .or_else(|| self.server.workspace.active_model_alias())
+        else {
             return Ok(false);
         };
         if session.pinned_model.as_deref() == Some(alias.as_str()) {

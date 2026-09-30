@@ -258,7 +258,7 @@ impl ServerConnection {
             && let Some(hydrated) = self
                 .server
                 .workspace
-                .update_runtime_agent(&session_id, &agent_profile.name)?
+                .update_runtime_agent(&session_id, &agent_profile)?
         {
             persisted = Some(hydrated);
         }
@@ -421,13 +421,30 @@ impl ServerConnection {
                     .and_then(|attachment| attachment.agent_profile.clone())
             })
             .flatten();
-        let agent_profile = match saved_profile {
-            Some(profile) => profile,
-            None => self.server.workspace.agent_profile(&selected_agent)?,
-        };
         let (trusted, project_file_trust) = self
             .server
             .session_trust(Path::new(&working_directory), params.trusted);
+        let mut forced_agents = Vec::new();
+        let agent_profile = match saved_profile {
+            Some(profile) => profile,
+            None => {
+                let (profile, forced) = self
+                    .server
+                    .workspace
+                    .scoped_to_agents(
+                        PathBuf::from(&working_directory),
+                        trusted,
+                        &params.add_directories,
+                        project_file_trust,
+                        &[],
+                    )
+                    .initial_agent(&selected_agent)?;
+                if forced {
+                    forced_agents.push(profile.name.clone());
+                }
+                profile
+            }
+        };
         let (config_enabled_tools, config_disabled_tools) = self
             .server
             .workspace
@@ -468,6 +485,7 @@ impl ServerConnection {
                 .map(|attachment| attachment.id.clone())
                 .or_else(|| params.resume.clone()),
             continue_session: params.continue_session && attachment.is_none(),
+            forced_agents,
         };
         intent
             .requested_enabled_tools

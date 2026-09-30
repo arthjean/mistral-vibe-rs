@@ -65,6 +65,9 @@ fn compaction_handoff_details(
 /// fail. [`ProjectionReducer::apply`] reduces in place and relies on that, so
 /// an arm that grows a check after a mutation silently makes a rejected event
 /// leave debris behind.
+/// The tool whose settlement ends a plan review.
+const EXIT_PLAN_MODE: &str = "exit_plan_mode";
+
 pub(super) fn reduce_event(
     state: &mut ProjectionSnapshot,
     event_id: u64,
@@ -275,6 +278,20 @@ pub(super) fn reduce_event(
                 metadata.updated_at = emitted_at;
             }
         }
+        EngineEvent::ToolChildSession {
+            call_id,
+            child_session_id,
+        } => {
+            require_active(state, "tool_child_session")?;
+            let entry = effect_entry(state, call_id, "tool_child_session_without_call")?;
+            if let PublicHistoryEntry::Effect {
+                metadata, detail, ..
+            } = entry
+            {
+                detail.child_session_id = Some(child_session_id.clone());
+                metadata.updated_at = emitted_at;
+            }
+        }
         EngineEvent::ToolResult {
             call_id,
             content,
@@ -419,15 +436,45 @@ pub(super) fn reduce_event(
                         approval,
                     }
                 };
-                // The child session is named by the delegation the tool answers
-                // with, which is the earliest this projection learns it: the
-                // engine raises no event when the child opens.
-                if detail.kind == ToolEffectKind::Subagent {
+                // A delegation that never announced its child still names it
+                // in the answer it settles with.
+                if detail.kind == ToolEffectKind::Subagent && detail.child_session_id.is_none() {
                     detail.child_session_id = subagent_child_session(display);
                 }
                 metadata.updated_at = emitted_at;
                 metadata.generation_status = PublicEntryGenerationStatus::Completed;
+                // Reference `_handle_session_plan_events`: whatever the verdict,
+                // a settled `exit_plan_mode` closes the plan review it opened.
+                if detail.tool_name == EXIT_PLAN_MODE {
+                    state.history.push(PublicHistoryEntry::Notice {
+                        metadata: entry_metadata(
+                            state,
+                            event_id,
+                            emitted_at,
+                            PublicEntryGenerationStatus::Completed,
+                        ),
+                        level: PublicNoticeLevel::Info,
+                        message: "Plan review closed".to_owned(),
+                        detail: NoticeDetail::PlanReviewEnded,
+                    });
+                }
             }
+        }
+        EngineEvent::AgentChanged { agent_name } => {
+            require_active(state, "agent_changed")?;
+            state.history.push(PublicHistoryEntry::Notice {
+                metadata: entry_metadata(
+                    state,
+                    event_id,
+                    emitted_at,
+                    PublicEntryGenerationStatus::Completed,
+                ),
+                level: PublicNoticeLevel::Info,
+                message: format!("Now running the {agent_name} agent"),
+                detail: NoticeDetail::AgentChanged {
+                    agent_name: agent_name.clone(),
+                },
+            });
         }
         EngineEvent::CallbackRequested {
             callback_id,

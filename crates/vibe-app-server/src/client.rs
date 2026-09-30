@@ -154,6 +154,19 @@ pub trait TurnDriver: Send + Sync {
     ) -> Result<(), DriverError> {
         Err(DriverError::UnsupportedControl("session/context/clear"))
     }
+
+    /// The turn moves to `profile` at its next cycle boundary: the next
+    /// request offers the tools `intent` and `tools` publish for it.
+    fn switch_agent(
+        &self,
+        _session_id: &str,
+        _turn_id: &str,
+        _profile: &vibe_core::extensions::AgentProfile,
+        _intent: &SessionIntent,
+        _tools: &ToolRegistry,
+    ) -> Result<(), DriverError> {
+        Err(DriverError::UnsupportedControl("agent switch"))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -243,11 +256,26 @@ pub struct TurnReservation {
 pub type SubagentPromptComposer =
     Arc<dyn Fn(&vibe_core::extensions::AgentProfile) -> Result<String, String> + Send + Sync>;
 
+/// Resolves the model a subagent of a session runs, for the agent profile
+/// the child runs.
+pub type SubagentModelResolver = Arc<
+    dyn Fn(&vibe_core::extensions::AgentProfile) -> Option<vibe_core::provider::config::ModelConfig>
+        + Send
+        + Sync,
+>;
+
 /// A session's composed system message, with what composes its children's.
 #[derive(Clone)]
 pub struct SessionSystemPrompt {
     pub text: String,
     pub subagent: SubagentPromptComposer,
+    /// The model the session's configuration, its agent's overrides applied,
+    /// runs the turn on; the driver's own list decides when `None`.
+    pub model: Option<vibe_core::provider::config::ModelConfig>,
+    pub subagent_model: SubagentModelResolver,
+    /// The agents the session is offered, which `task` resolves its `agent`
+    /// argument against.
+    pub agents: Vec<vibe_core::extensions::AgentProfile>,
 }
 
 impl std::fmt::Debug for SessionSystemPrompt {

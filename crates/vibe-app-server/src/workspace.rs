@@ -174,6 +174,9 @@ pub struct WorkspaceService {
     project_trusted: bool,
     allowed_roots: Vec<PathBuf>,
     agents: Arc<Mutex<AgentRegistry>>,
+    /// The profiles a session's start selected past the rollout gate, which
+    /// stay offered to it. Empty outside [`Self::scoped_to_agents`].
+    forced_agents: BTreeSet<String>,
     persist_runtime_sessions: bool,
     /// Forks a rewind composed and no turn has written yet, by identifier.
     drafts: Arc<Mutex<BTreeMap<String, HydratedSession>>>,
@@ -329,6 +332,9 @@ impl WorkspaceService {
             // root keeps what this port installs there.
             user: vec![paths.vibe_home.clone(), user_extensions.clone()],
             project_trusted,
+            // The agent directories are resolved per catalog build, under the
+            // scope of the session that reads them.
+            agents: Vec::new(),
             // The skill roots are resolved per catalog build rather than
             // stored, so a `skill_paths` written between two builds changes
             // what the next one publishes.
@@ -363,6 +369,7 @@ impl WorkspaceService {
             allowed_roots: vec![paths.working_directory.clone()],
             paths,
             agents: Arc::new(Mutex::new(registry)),
+            forced_agents: BTreeSet::new(),
             persist_runtime_sessions: false,
             drafts: Arc::new(Mutex::new(BTreeMap::new())),
             session_logging,
@@ -740,7 +747,7 @@ impl WorkspaceService {
             "session/title/update" => self.title_update(params),
             "session/delete" => self.delete(params),
             "session/history/clear" => self.history_clear(params),
-            "agents/list" => self.agents_list(),
+            "agents/list" => self.agents_list(params),
             "agents/install" => self.agent_install(params),
             "agents/uninstall" => self.agent_uninstall(params),
             "session/agent/update" => self.agent_update(params),

@@ -24,6 +24,10 @@ const PROMPTS_DIRECTORY: &str = "prompts";
 /// tool directories: `{root}/.vibe/tools` and `{vibe_home}/tools`.
 const TOOLS_DIRECTORY: &str = "tools";
 
+/// The directory under a project's `.vibe`, and under the vibe home, that holds
+/// agent profiles.
+const AGENTS_DIRECTORY: &str = "agents";
+
 /// The instruction file a directory carries. Reference `AGENTS_MD_FILENAME`.
 pub const AGENTS_FILE: &str = "AGENTS.md";
 
@@ -206,6 +210,38 @@ impl HarnessFiles {
             return Vec::new();
         }
         let directory = self.paths.vibe_home.join(TOOLS_DIRECTORY);
+        if directory.is_dir() {
+            vec![directory]
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// The vibe home the user files hang off.
+    #[must_use]
+    pub fn vibe_home(&self) -> &Path {
+        &self.paths.vibe_home
+    }
+
+    /// The project agent directories: every open root's `.vibe/agents` that
+    /// is a directory. Reference `project_agents_dirs`.
+    #[must_use]
+    pub fn project_agents_dirs(&self) -> Vec<PathBuf> {
+        self.project_roots()
+            .into_iter()
+            .map(|root| root.join(PROJECT_DIRECTORY).join(AGENTS_DIRECTORY))
+            .filter(|directory| directory.is_dir())
+            .collect()
+    }
+
+    /// The user agent directory, `{vibe_home}/agents`, once the user source is
+    /// enabled and the directory exists. Reference `user_agents_dirs`.
+    #[must_use]
+    pub fn user_agents_dirs(&self) -> Vec<PathBuf> {
+        if !self.sources.contains(&ConfigSource::User) {
+            return Vec::new();
+        }
+        let directory = self.paths.vibe_home.join(AGENTS_DIRECTORY);
         if directory.is_dir() {
             vec![directory]
         } else {

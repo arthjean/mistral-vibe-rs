@@ -142,9 +142,9 @@ async fn a_failing_provider_fails_the_sampling_request() {
 /// The preamble a turn runs under survives the transcript it resumes.
 ///
 /// The store strips every system entry and reinserts only the process
-/// prompt, so a plan-mode directive composed before the hydration used to
-/// reach the model on the session's first cycle and on no other. Both
-/// cycles are asserted here, because only the second one regresses.
+/// prompt, so the plan directive rides in the injected reminder the plan
+/// agent middleware adds on entry, which the transcript keeps. Both cycles
+/// are asserted here, because only the second one regresses.
 #[tokio::test]
 async fn plan_mode_states_its_directive_on_every_cycle_of_a_persisted_session() {
     let temporary = tempfile::tempdir().expect("temporary sessions");
@@ -185,7 +185,8 @@ async fn plan_mode_states_its_directive_on_every_cycle_of_a_persisted_session() 
         assert!(
             seen.iter().any(|message| matches!(
                 message,
-                ModelMessage::System { content } if content.contains("Plan mode is active")
+                ModelMessage::User { content, injected: true, .. }
+                    if content.contains("You are in plan mode")
             )),
             "{label} carries the plan directive: {seen:?}"
         );

@@ -3,26 +3,10 @@ use std::path::Path;
 use toml::{Table, Value as TomlValue};
 use vibe_core::extensions::{AgentKind, AgentProfile, ExtensionSource};
 
-/// The builtin profile that stays out of the picker unless a session was
-/// started under it (`vibe/core/agents/manager.py:37-56` and `:96-107`).
+/// The builtin profile that stays out of the picker until the configuration
+/// offers it or a session is started under it
+/// (`vibe/core/agents/manager.py:37-56` and `:96-107`).
 pub(crate) const SMART_APPROVE: &str = "smart-approve";
-
-/// Whether a builtin profile is offered to a session running `active`.
-///
-/// `lean` needs installing first. Smart approve ships dark upstream, offered
-/// only to a rollout cohort this port has no configuration for, so it is
-/// offered only to the session that selected it explicitly.
-pub(crate) fn offered(
-    name: &str,
-    installed: &std::collections::BTreeSet<String>,
-    active: Option<&str>,
-) -> bool {
-    match name {
-        "lean" => installed.contains("lean"),
-        SMART_APPROVE => active == Some(SMART_APPROVE),
-        _ => true,
-    }
-}
 
 /// Where a builtin sits in reference `BUILTIN_AGENTS`, and after every
 /// builtin for any other name. The sort that uses it is stable, so agents of
@@ -158,7 +142,10 @@ pub(crate) fn profiles(vibe_home: &Path) -> Vec<AgentProfile> {
             AgentKind::Subagent,
             "safe",
             toml_table([
-                ("enabled_tools", string_array(["grep", "read_file"])),
+                (
+                    "enabled_tools",
+                    string_array(["grep", "read_file", "skill"]),
+                ),
                 ("system_prompt_id", TomlValue::String("explore".to_owned())),
             ]),
         ),
@@ -171,13 +158,52 @@ pub(crate) fn profiles(vibe_home: &Path) -> Vec<AgentProfile> {
             toml_table([
                 ("system_prompt_id", TomlValue::String("lean".to_owned())),
                 ("active_model", TomlValue::String("leanstral".to_owned())),
+                ("allowed_models", string_array(["leanstral"])),
+                (
+                    "providers",
+                    TomlValue::Array(vec![TomlValue::Table(toml_table([
+                        ("name", TomlValue::String("mistral-testing".to_owned())),
+                        (
+                            "api_base",
+                            TomlValue::String("https://api.mistral.ai/v1".to_owned()),
+                        ),
+                        (
+                            "api_key_env_var",
+                            TomlValue::String("MISTRAL_API_KEY".to_owned()),
+                        ),
+                        ("backend", TomlValue::String("mistral".to_owned())),
+                    ]))]),
+                ),
                 (
                     "models",
                     TomlValue::Array(vec![TomlValue::Table(toml_table([
                         ("name", TomlValue::String("labs-leanstral-1-5".to_owned())),
+                        ("provider", TomlValue::String("mistral-testing".to_owned())),
                         ("alias", TomlValue::String("leanstral".to_owned())),
                         ("thinking", TomlValue::String("high".to_owned())),
+                        ("temperature", TomlValue::Float(1.0)),
+                        ("auto_compact_threshold", TomlValue::Integer(200_000)),
                     ]))]),
+                ),
+                (
+                    "compaction_model",
+                    TomlValue::Table(toml_table([
+                        ("name", TomlValue::String("mistral-small-latest".to_owned())),
+                        ("provider", TomlValue::String("mistral-testing".to_owned())),
+                        ("alias", TomlValue::String("devstral-compact".to_owned())),
+                        ("temperature", TomlValue::Float(0.2)),
+                        ("thinking", TomlValue::String("off".to_owned())),
+                    ])),
+                ),
+                (
+                    "tools",
+                    TomlValue::Table(toml_table([(
+                        "bash",
+                        TomlValue::Table(toml_table([(
+                            "default_timeout",
+                            TomlValue::Integer(1200),
+                        )])),
+                    )])),
                 ),
                 ("disabled_tools", string_array(["exit_plan_mode"])),
             ]),

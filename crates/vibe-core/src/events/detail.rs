@@ -497,7 +497,7 @@ const fn remote_result_ok() -> bool {
 /// One struct rather than twelve: the variants differ only by `kind`, by the
 /// shape `input` takes and by the subagent's child session, so the union is
 /// discriminated on the wire without twelve near-identical Rust declarations.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EffectDetail {
     // Declared in the reference's order (`_EffectDetailBase` then each kind's
@@ -510,8 +510,9 @@ pub struct EffectDetail {
     #[serde(default)]
     pub input: Value,
     /// Only the subagent variant declares it, so it stays off every other kind's
-    /// wire form rather than being published as a surplus null.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// wire form rather than being published as a surplus null, and a
+    /// subagent's publishes null until its child session opens.
+    #[serde(default)]
     pub child_session_id: Option<String>,
     /// The remote this call is proxied to, absent for a tool the session
     /// implements itself. It routes the call header, the status text and the
@@ -519,6 +520,43 @@ pub struct EffectDetail {
     /// re-derived from the published name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote: Option<RemoteToolOrigin>,
+}
+
+impl Serialize for EffectDetail {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(None)?;
+        map.serialize_entry("toolName", &self.tool_name)?;
+        map.serialize_entry("display", &self.display)?;
+        map.serialize_entry("kind", &self.kind)?;
+        map.serialize_entry("input", &self.input)?;
+        if self.kind == ToolEffectKind::Subagent || self.child_session_id.is_some() {
+            map.serialize_entry("childSessionId", &self.child_session_id)?;
+        }
+        if let Some(remote) = &self.remote {
+            map.serialize_entry("remote", remote)?;
+        }
+        map.end()
+    }
+}
+
+/// The tool that hands a finished plan to the user for a verdict.
+const EXIT_PLAN_MODE: &str = "exit_plan_mode";
+
+/// What a client shows while the plan waits on the user's verdict. Reference
+/// `ExitPlanMode.get_status_text`, in this port's own words (`NOTICE`).
+const PLAN_REVIEW_STATUS: &str = "Awaiting the user's verdict";
+
+/// Reference `ExitPlanMode.format_call_display`: the call reads as a request
+/// to leave planning rather than as a tool running, in this port's own words.
+fn plan_review_header(display: &mut EffectCallDisplay) {
+    const REQUEST: &str = "leave plan mode";
+    "The plan is ready for review".clone_into(&mut display.summary);
+    "Requesting".clone_into(&mut display.verb);
+    display.message = Some(REQUEST.to_owned());
+    "Requested".clone_into(&mut display.settled_verb);
+    display.settled_message = Some(REQUEST.to_owned());
+    PLAN_REVIEW_STATUS.clone_into(&mut display.status_text);
 }
 
 impl EffectDetail {
@@ -544,6 +582,7 @@ impl EffectDetail {
         // A caller holding a decoded object holds no order to keep: the map it
         // read them from iterates lexicographically already.
         Self::for_decoded_call(tool_name, arguments, &[], None, working_directory)
+            .reviewing_plan(arguments.is_object())
     }
 
     /// The shared constructor, told which order the arguments arrived in,
@@ -562,17 +601,18 @@ impl EffectDetail {
         } else {
             ToolEffectKind::from_tool_name(tool_name)
         };
+        let display = call_display(
+            kind,
+            tool_name,
+            arguments,
+            remote,
+            wire_order,
+            working_directory,
+        );
         Self {
             kind,
             tool_name: tool_name.to_owned(),
-            display: call_display(
-                kind,
-                tool_name,
-                arguments,
-                remote,
-                wire_order,
-                working_directory,
-            ),
+            display,
             input: project_input(kind, arguments),
             child_session_id: None,
             remote: remote.cloned(),
@@ -597,6 +637,18 @@ impl EffectDetail {
             ),
             ..EffectCallDisplay::default()
         };
+        // Reference `Task.get_call_display` presents a call it cannot read yet
+        // as the subagent it will start rather than by the tool's name.
+        if kind == ToolEffectKind::Subagent && remote.is_none() {
+            display.summary = kind.status_text().to_owned();
+            display.verb = "Running".to_owned();
+            display.message = Some(kind.label().to_owned());
+            display.settled_verb = "Ran".to_owned();
+            display.settled_message = Some(kind.label().to_owned());
+        }
+        if remote.is_none() && tool_name == EXIT_PLAN_MODE {
+            PLAN_REVIEW_STATUS.clone_into(&mut display.status_text);
+        }
         display.fill_defaults();
         Self {
             kind,
@@ -670,6 +722,18 @@ impl EffectDetail {
             None,
             working_directory,
         )
+        .reviewing_plan(
+            serde_json::from_str::<Value>(arguments).is_ok_and(|value| value.is_object()),
+        )
+    }
+
+    /// Reference `ExitPlanModeArgs` accepts any object; arguments that are
+    /// absent or not an object fall back to the generic header.
+    fn reviewing_plan(mut self, valid_arguments: bool) -> Self {
+        if valid_arguments && self.remote.is_none() && self.tool_name == EXIT_PLAN_MODE {
+            plan_review_header(&mut self.display);
+        }
+        self
     }
 }
 
@@ -1284,6 +1348,34 @@ impl EffectResultDisplay {
             message,
             suffix,
         } = completed_header(kind, call, output, working_directory);
+        // Reference `Task.get_result_display`: the header counts the child's
+        // turns, and a child that did not run to its end reads as interrupted.
+        if kind == ToolEffectKind::Subagent
+            && let Some(completed) = output.get("completed").and_then(Value::as_bool)
+        {
+            let turns = ["turnsUsed", "turns_used"]
+                .iter()
+                .find_map(|key| output.get(*key).and_then(Value::as_u64))
+                .unwrap_or(0);
+            let unit = if turns == 1 { "turn" } else { "turns" };
+            return Self {
+                success: completed,
+                verb: if completed {
+                    "Completed"
+                } else {
+                    "Interrupted"
+                }
+                .to_owned(),
+                message: if completed {
+                    format!("in {turns} {unit}")
+                } else {
+                    format!("after {turns} {unit}")
+                },
+                warnings,
+                approval_note: None,
+                suffix: String::new(),
+            };
+        }
         if kind == ToolEffectKind::UserQuestion
             && output
                 .get("cancelled")

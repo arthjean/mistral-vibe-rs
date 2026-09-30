@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use thiserror::Error;
 
-use crate::engine::{ToolExecutor, ToolFuture, ToolStreamSink};
+use crate::engine::{ToolExecutor, ToolFuture, ToolStreamItem, ToolStreamSink};
 use crate::events::RemoteToolOrigin;
 use crate::matching::NameFilter;
 use crate::text::truncate_utf8;
@@ -79,7 +79,17 @@ impl ToolOutputSink {
             });
         }
         if let Some(stream) = &self.stream {
-            stream(chunk).map_err(ToolError::Execution)?;
+            stream(ToolStreamItem::Output(chunk)).map_err(ToolError::Execution)?;
+        }
+        Ok(())
+    }
+
+    /// Names the session a delegation opened for this call, which its effect
+    /// carries from then on.
+    pub fn link_child_session(&self, child_session_id: &str) -> Result<(), ToolError> {
+        if let Some(stream) = &self.stream {
+            stream(ToolStreamItem::ChildSession(child_session_id.to_owned()))
+                .map_err(ToolError::Execution)?;
         }
         Ok(())
     }

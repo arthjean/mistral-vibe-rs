@@ -167,6 +167,13 @@ impl ServerConnection {
             }
             // A session-optional method naming a session is the root's, and
             // the host refuses any other (`_read_config`, `_list_agents`).
+            // Reference `SessionCoordinator.turns` also lists the turns of a
+            // subagent the root delegated to.
+            Route::Root
+                if method == "session/turns/list"
+                    && named
+                        .as_deref()
+                        .is_some_and(|id| matches!(self.child_turns(id), Ok(Some(_)))) => {}
             Route::Catalog | Route::Root | Route::SessionOptional => {
                 self.require_named_root(named.as_deref())?;
             }

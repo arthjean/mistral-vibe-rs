@@ -239,6 +239,11 @@ pub trait TranscriptSink: Send + Sync {
     fn persist_stats<'a>(&'a self, _stats: &'a SessionStats) -> PersistenceFuture<'a> {
         Box::pin(async { Ok(()) })
     }
+
+    /// The session now runs `profile`, which the next write records. A switch
+    /// in the middle of a turn saves the session's record beside this writer,
+    /// whose copy would otherwise put the previous profile back.
+    fn record_agent(&self, _profile: &serde_json::Value) {}
 }
 
 pub trait EventObserver: Send + Sync {
@@ -336,6 +341,12 @@ impl<S: TranscriptSink> TranscriptSink for Option<S> {
             None => Box::pin(async { Ok(()) }),
         }
     }
+
+    fn record_agent(&self, profile: &serde_json::Value) {
+        if let Some(sink) = self {
+            sink.record_agent(profile);
+        }
+    }
 }
 
 pub struct SessionTranscriptSink {
@@ -354,6 +365,16 @@ impl SessionTranscriptSink {
 }
 
 impl TranscriptSink for SessionTranscriptSink {
+    fn record_agent(&self, profile: &serde_json::Value) {
+        if let Ok(mut metadata) = self.metadata.lock() {
+            metadata.agent_profile = Some(profile.clone());
+            // Written at once rather than at the next checkpoint: a clearing
+            // may be what comes next, and it moves on to a new record without
+            // rewriting this one.
+            let _ = self.store.update_metadata(&metadata);
+        }
+    }
+
     fn persist<'a>(
         &'a self,
         messages: &'a [ModelMessage],

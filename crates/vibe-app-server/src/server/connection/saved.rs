@@ -440,13 +440,18 @@ impl ServerConnection {
         check.finish().map_err(rejected)?;
         let session_id = session_id.unwrap_or_default();
         let page = page.unwrap_or_default();
-        self.require_root(&session_id)?;
-        let turns = {
-            let sessions = self.server.lock_sessions()?;
-            sessions
-                .get(&session_id)
-                .map(|session| session.turns.clone())
-                .unwrap_or_default()
+        let turns = match self.require_root(&session_id) {
+            Ok(_) => {
+                let sessions = self.server.lock_sessions()?;
+                sessions
+                    .get(&session_id)
+                    .map(|session| session.turns.clone())
+                    .unwrap_or_default()
+            }
+            // Reference `SessionCoordinator.turns` also answers for a subagent
+            // the root session started, while `session/history/get` and
+            // `runtime/read` stay with the root alone.
+            Err(fault) => self.child_turns(&session_id)?.ok_or(fault)?,
         };
         let turns: Vec<&PublicTurn> = turns.iter().collect();
         let (items, next, previous) = turns_window(&turns, &page, |turn| turn.id.clone());
@@ -458,6 +463,78 @@ impl ServerConnection {
                 ("previousCursor", json!(previous)),
             ]),
         ))
+    }
+
+    /// The turns of a subagent the root session delegated to, read off the
+    /// `task` effect that started it: the child runs one turn, in the driver
+    /// rather than in this server, and the effect is where its end is recorded.
+    /// `None` when no delegation of the root names `child_session_id`.
+    pub(super) fn child_turns(
+        &self,
+        child_session_id: &str,
+    ) -> Result<Option<Vec<PublicTurn>>, ProtocolFault> {
+        let Some(root) = self.root_key() else {
+            return Ok(None);
+        };
+        let sessions = self.server.lock_sessions()?;
+        let Some(snapshot) = sessions
+            .get(&root)
+            .and_then(|session| session.snapshot.as_ref())
+        else {
+            return Ok(None);
+        };
+        Ok(snapshot.history.iter().find_map(|entry| {
+            let PublicHistoryEntry::Effect {
+                metadata,
+                detail,
+                state,
+                ..
+            } = entry
+            else {
+                return None;
+            };
+            if detail.kind != vibe_core::events::ToolEffectKind::Subagent
+                || detail.child_session_id.as_deref() != Some(child_session_id)
+            {
+                return None;
+            }
+            let (status, error) = match state {
+                PublicEffectState::Completed { output, .. } => {
+                    let response = output
+                        .get("response")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default();
+                    match response.rfind(SUBAGENT_ERROR_MARKER) {
+                        Some(start) => (
+                            PublicTurnStatus::Failed,
+                            Some(PublicError {
+                                message: response[start + SUBAGENT_ERROR_MARKER.len()..]
+                                    .trim_end_matches(']')
+                                    .to_owned(),
+                                code: None,
+                                details: Value::Null,
+                            }),
+                        ),
+                        None => (PublicTurnStatus::Completed, None),
+                    }
+                }
+                PublicEffectState::Failed { .. } | PublicEffectState::Cancelled { .. } => {
+                    (PublicTurnStatus::Interrupted, None)
+                }
+                _ => (PublicTurnStatus::InProgress, None),
+            };
+            let settled = status != PublicTurnStatus::InProgress;
+            Some(vec![PublicTurn {
+                id: format!("{child_session_id}-turn"),
+                session_id: child_session_id.to_owned(),
+                status,
+                started_at: metadata.created_at,
+                completed_at: settled.then_some(metadata.updated_at),
+                error,
+                stop_reason: None,
+                queue_item_id: None,
+            }])
+        }))
     }
 
     // ------------------------------------------------------------ titles
@@ -1552,6 +1629,10 @@ fn rename_live(
     store.update_metadata(&metadata)?;
     Ok(metadata)
 }
+
+/// What a failed subagent's answer carries its error under, as
+/// `client::live::delegation` appends it (reference `SubagentRunAccumulator`).
+const SUBAGENT_ERROR_MARKER: &str = "\n[Subagent error: ";
 
 fn not_found(session_id: &str) -> ProtocolFault {
     ProtocolFault::plain(

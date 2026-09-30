@@ -29,6 +29,12 @@ pub struct ProviderInput {
     pub session_id: Option<String>,
     #[serde(skip)]
     pub model_override: Option<String>,
+    /// The model the session's configuration resolved for this request, which
+    /// a provider runs as given instead of looking `model_override` up in the
+    /// list it was built with: an agent profile can declare models that list
+    /// never held.
+    #[serde(skip)]
+    pub model: Option<config::ModelConfig>,
     pub messages: Vec<ModelMessage>,
     #[serde(default = "default_streaming")]
     pub stream: bool,

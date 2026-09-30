@@ -178,13 +178,6 @@ const LEDGER: &[Divergence] = &[
                  here, where the reference leaves the call unanswered until its next request \
                  fills it in",
     },
-    Divergence {
-        scenario: "subagent/inherits-hooks",
-        pointer: "/stdin/",
-        row: "20",
-        reason: "a child's `transcript_path` names where this port logs the child, a session \
-                 directory of its own, where the reference nests it under the parent's `agents/`",
-    },
 ];
 
 fn repository() -> PathBuf {

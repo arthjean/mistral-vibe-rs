@@ -22,11 +22,11 @@ use vibe_core::engine::{
     SessionTranscriptSink, ToolExecutor, ToolFuture, ToolStreamSink, TurnControl,
     TurnControlHandle, TurnOutcome, TurnStopReason,
 };
-use vibe_core::events::{ModelMessage, RemoteToolOrigin};
+use vibe_core::events::{ModelMessage, ProjectionReducer, RemoteToolOrigin};
 use vibe_core::extensions::{
-    AgentKind, AgentProfile, ChildContext, ChildLoggingPolicy, DelegationRequest, DiscoveryRoots,
-    ExtensionSource, SubagentFuture, SubagentManager, SubagentRun, SubagentRunner,
-    discover_extensions,
+    AgentKind, AgentProfile, ChildContext, ChildLoggingPolicy, DelegationRequest, DelegationSignal,
+    DelegationUpdate, ExtensionSource, SubagentFuture, SubagentManager, SubagentRun,
+    SubagentRunner,
 };
 use vibe_core::llm::completion::LlmCompletion;
 use vibe_core::llm::utility::{self, UtilitySelection};
@@ -35,7 +35,7 @@ use vibe_core::matching::NameFilter;
 use vibe_core::mcp::{
     McpError, McpFuture, SamplingHandler, SamplingRequest, SamplingResponse, SamplingRole,
 };
-use vibe_core::middleware::{CompactionSettings, ContextWarningMiddleware};
+use vibe_core::middleware::{CompactionSettings, ContextWarningMiddleware, PlanAgentMiddleware};
 use vibe_core::policy::{PolicyGuardedTool, resolve_task_tool_permission};
 use vibe_core::provider::config::{ApiSettings, ModelConfig, ModelRouting, ProviderConfig};
 use vibe_core::provider::{
@@ -46,8 +46,8 @@ use vibe_core::session_id::rotate_session_id;
 use vibe_core::storage::SessionStore;
 use vibe_core::tools::config::SharedToolConfig;
 use vibe_core::tools::{
-    OwnedToolHandlerFuture, ToolAvailability, ToolExecutionOutput, ToolHandler,
-    ToolPresentationKind, ToolRegistry, ToolSource, ToolSpec, reference_text,
+    OwnedToolHandlerFuture, ToolAvailability, ToolExecutionOutput, ToolHandler, ToolRegistry,
+    ToolSource, ToolSpec, reference_text,
 };
 
 pub(crate) mod delegation;
@@ -122,6 +122,11 @@ pub struct LiveTurnDriver {
     /// session cannot live on it. It lives here, where it outlives the turns,
     /// and the engine borrows it for the length of each one.
     context_warnings: Mutex<HashMap<String, Arc<ContextWarningMiddleware>>>,
+    /// The plan-agent reminder each session latches, kept across its turns.
+    plan_agents: Mutex<HashMap<String, Arc<PlanAgentMiddleware>>>,
+    /// The tool surface each session's running turn publishes, which an agent
+    /// switch retargets in place.
+    turn_tools: Mutex<HashMap<String, SessionToolExecutor>>,
     event_observer: Arc<dyn EventObserver>,
     /// What background session titles run on (reference
     /// `select_utility_model`), when this driver's configuration has a model
@@ -236,14 +241,9 @@ impl Compactor for ProviderSessionCompactor {
 #[derive(Clone)]
 pub(super) struct SessionToolExecutor {
     tools: ToolRegistry,
-    /// Absent when the session wrote no `enabled_tools`, which is the only
-    /// state that publishes everything. A list that carries entries narrows
-    /// even when none of them compiles into a usable pattern, because the
-    /// reference gates on the written list and matches with `name_matches`,
-    /// which skips a blank entry and an uncompilable expression rather than
-    /// widening the surface back out.
-    enabled: Option<NameFilter>,
-    disabled: NameFilter,
+    /// The session's two lists, shared by every clone so an agent switch in
+    /// the middle of a turn reaches the executor the engine already holds.
+    filters: Arc<std::sync::RwLock<SessionToolFilters>>,
     allowed: Option<BTreeSet<String>>,
     /// Tools this executor publishes but refuses to run, with the reason the
     /// model reads. A withheld tool and a refused one are different answers:
@@ -252,16 +252,52 @@ pub(super) struct SessionToolExecutor {
     refused: BTreeMap<String, String>,
 }
 
+/// Which tools a session's configuration publishes.
+#[derive(Clone)]
+struct SessionToolFilters {
+    /// Absent when the session wrote no `enabled_tools`, which is the only
+    /// state that publishes everything. A list that carries entries narrows
+    /// even when none of them compiles into a usable pattern, because the
+    /// reference gates on the written list and matches with `name_matches`,
+    /// which skips a blank entry and an uncompilable expression rather than
+    /// widening the surface back out.
+    enabled: Option<NameFilter>,
+    disabled: NameFilter,
+}
+
+impl SessionToolFilters {
+    fn of(intent: &SessionIntent) -> Self {
+        Self {
+            enabled: (!intent.enabled_tools.is_empty())
+                .then(|| NameFilter::new(&intent.enabled_tools)),
+            disabled: NameFilter::new(&intent.disabled_tools),
+        }
+    }
+}
+
 impl SessionToolExecutor {
     pub(super) fn new(tools: ToolRegistry, intent: &SessionIntent) -> Self {
         Self {
             tools,
-            enabled: (!intent.enabled_tools.is_empty())
-                .then(|| NameFilter::new(&intent.enabled_tools)),
-            disabled: NameFilter::new(&intent.disabled_tools),
+            filters: Arc::new(std::sync::RwLock::new(SessionToolFilters::of(intent))),
             allowed: None,
             refused: BTreeMap::new(),
         }
+    }
+
+    /// Publishes what `intent` enables from now on, in this executor and in
+    /// every clone of it.
+    fn retarget(&self, intent: &SessionIntent) {
+        if let Ok(mut filters) = self.filters.write() {
+            *filters = SessionToolFilters::of(intent);
+        }
+    }
+
+    fn filters(&self) -> SessionToolFilters {
+        self.filters.read().map_or_else(
+            |poisoned| poisoned.into_inner().clone(),
+            |filters| filters.clone(),
+        )
     }
 
     pub(super) fn with_allowed_tools(mut self, allowed: BTreeSet<String>) -> Self {
@@ -282,10 +318,12 @@ impl SessionToolExecutor {
     }
 
     fn permits(&self, name: &str) -> bool {
-        self.enabled
+        let filters = self.filters();
+        filters
+            .enabled
             .as_ref()
             .is_none_or(|enabled| enabled.matches(name))
-            && !self.disabled.matches(name)
+            && !filters.disabled.matches(name)
             && self
                 .allowed
                 .as_ref()
@@ -293,8 +331,9 @@ impl SessionToolExecutor {
     }
 
     pub(super) fn definitions(&self) -> Result<Vec<ToolDefinition>, DriverError> {
+        let filters = self.filters();
         self.tools
-            .available(self.enabled.as_ref(), &self.disabled)
+            .available(filters.enabled.as_ref(), &filters.disabled)
             .map_err(|error| DriverError::Tool(error.to_string()))
             .map(|definitions| {
                 definitions
@@ -387,6 +426,8 @@ impl LiveTurnDriver {
             controls: Mutex::new(HashMap::new()),
             pending_context: Mutex::new(HashMap::new()),
             context_warnings: Mutex::new(HashMap::new()),
+            plan_agents: Mutex::new(HashMap::new()),
+            turn_tools: Mutex::new(HashMap::new()),
             event_observer: Arc::new(NoopEventObserver),
             titles: None,
         }
@@ -457,6 +498,8 @@ impl LiveTurnDriver {
             controls: Mutex::new(HashMap::new()),
             pending_context: Mutex::new(HashMap::new()),
             context_warnings: Mutex::new(HashMap::new()),
+            plan_agents: Mutex::new(HashMap::new()),
+            turn_tools: Mutex::new(HashMap::new()),
             event_observer: Arc::new(NoopEventObserver),
             titles,
         })
@@ -570,10 +613,18 @@ impl LiveTurnDriver {
             snapshot_attachments(&reservation.input, session_dir.as_deref()).await?;
         let session_tools =
             SessionToolExecutor::new(reservation.tools.clone(), &reservation.intent);
+        self.turn_tools
+            .lock()
+            .map_err(|_| DriverError::StatePoisoned)?
+            .insert(reservation.session_id.clone(), session_tools.clone());
         let input = ProviderInput {
             turn_id: Some(reservation.turn_id.clone()),
             session_id: None,
             model_override: reservation.intent.model.clone(),
+            model: reservation
+                .system_prompt
+                .as_ref()
+                .and_then(|prompt| prompt.model.clone()),
             messages,
             stream: true,
             images: match &reservation.prepared_images {
@@ -635,6 +686,8 @@ impl LiveTurnDriver {
         {
             engine = engine.with_middleware(warning);
         }
+        // Registered last, as `_setup_middleware` adds `ReadOnlyAgentMiddleware`.
+        engine = engine.with_middleware(self.plan_agent(reservation, &input.tools)?);
         if let Some(resolver) = reservation.tools.invoked_skills() {
             engine = engine.with_invoked_skills(resolver);
         }
@@ -699,8 +752,8 @@ impl LiveTurnDriver {
             ),
             None => self.system_prompt.clone(),
         };
-        let mut messages = vec![ModelMessage::System { content }];
-        if reservation.intent.mode.as_deref() == Some("plan") {
+        let messages = vec![ModelMessage::System { content }];
+        if runs_plan_agent(reservation) {
             let plan_path = self
                 .plan_directory()
                 .map(|directory| plan_file_path(&directory, &reservation.session_id))
@@ -717,14 +770,6 @@ impl LiveTurnDriver {
                 .open(&plan_path)
                 .await
                 .map_err(|error| DriverError::Tool(error.to_string()))?;
-            messages.push(ModelMessage::System {
-                content: format!(
-                    "Plan mode is active. Inspect and reason, but do not mutate the workspace. \
-                     Keep the live plan at {} updated as you plan. That plan file is the only \
-                     file you may write while plan mode is active.",
-                    plan_path.display()
-                ),
-            });
         }
         Ok(messages)
     }
@@ -875,10 +920,12 @@ impl TurnDriver for LiveTurnDriver {
         })
     }
 
+    /// Reference `PLANS_DIR`: `plans` under the vibe home, which is also
+    /// where the plan profile's allowlist lets it write.
     fn plan_directory(&self) -> Option<PathBuf> {
         self.session_root
-            .as_deref()
-            .map(|root| root.parent().unwrap_or(root).join("plans"))
+            .as_ref()
+            .map(|_| crate::host::vibe_home().join("plans"))
     }
 
     fn run<'a>(&'a self, reservation: &'a TurnReservation) -> DriverFuture<'a> {
@@ -1060,6 +1107,46 @@ impl TurnDriver for LiveTurnDriver {
         )
     }
 
+    fn switch_agent(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        profile: &AgentProfile,
+        intent: &SessionIntent,
+        tools: &ToolRegistry,
+    ) -> Result<(), DriverError> {
+        let agent_name = profile.name.as_str();
+        let definitions = SessionToolExecutor::new(tools.clone(), intent).definitions()?;
+        if let Some(executor) = self
+            .turn_tools
+            .lock()
+            .map_err(|_| DriverError::StatePoisoned)?
+            .get(session_id)
+        {
+            executor.retarget(intent);
+        }
+        // Reference `ReadOnlyAgentMiddleware` reads the active profile at the
+        // top of the next cycle, which is where leaving plan mode is announced.
+        if let Some(plan) = self
+            .plan_agents
+            .lock()
+            .map_err(|_| DriverError::StatePoisoned)?
+            .get(session_id)
+        {
+            plan.set_active(agent_name == PLAN_AGENT);
+        }
+        self.send_control(
+            session_id,
+            turn_id,
+            TurnControl::SwitchAgent {
+                agent_name: agent_name.to_owned(),
+                tools: definitions,
+                profile: serde_json::to_value(profile)
+                    .map_err(|error| DriverError::Tool(error.to_string()))?,
+            },
+        )
+    }
+
     fn clear_context(
         &self,
         session_id: &str,
@@ -1067,6 +1154,19 @@ impl TurnDriver for LiveTurnDriver {
         continuation: &str,
         plan_file_path: Option<&str>,
     ) -> Result<(), DriverError> {
+        // Reference `clear_history` resets the middleware, so a cleared
+        // conversation hears nothing about the plan mode it left.
+        if let Some(plan) = self
+            .plan_agents
+            .lock()
+            .map_err(|_| DriverError::StatePoisoned)?
+            .get(session_id)
+        {
+            vibe_core::middleware::ConversationMiddleware::reset(
+                plan.as_ref(),
+                vibe_core::middleware::ResetReason::Compact,
+            );
+        }
         self.send_control(
             session_id,
             turn_id,
@@ -1101,6 +1201,35 @@ impl LiveTurnDriver {
         Ok(Some(Arc::clone(
             warnings.entry(session_id.to_owned()).or_default(),
         )))
+    }
+
+    /// The plan-agent reminder of this session, told which agent the turn
+    /// runs and what the reminder names.
+    fn plan_agent(
+        &self,
+        reservation: &TurnReservation,
+        tools: &[vibe_core::provider::ToolDefinition],
+    ) -> Result<Arc<PlanAgentMiddleware>, DriverError> {
+        let middleware = Arc::clone(
+            self.plan_agents
+                .lock()
+                .map_err(|_| DriverError::StatePoisoned)?
+                .entry(reservation.session_id.clone())
+                .or_default(),
+        );
+        let published = |name: &str| tools.iter().any(|tool| tool.name == name);
+        let plan_file = self
+            .plan_directory()
+            .map(|directory| plan_file_path(&directory, &reservation.session_id))
+            .map(|path| path.display().to_string())
+            .unwrap_or_default();
+        middleware.set_reminder(vibe_core::middleware::plan_agent_reminder(
+            &plan_file,
+            published("ask_user_question"),
+            published("exit_plan_mode"),
+        ));
+        middleware.set_active(runs_plan_agent(reservation));
+        Ok(middleware)
     }
 
     fn send_control(
@@ -1161,4 +1290,13 @@ fn title_selection(
 /// none (reference `SessionLoggingConfig.enabled`).
 fn default_session_root() -> Option<PathBuf> {
     crate::workspace::WorkspaceService::default().logged_session_root()
+}
+
+/// The builtin agent plan mode is. Reference `BuiltinAgentName.PLAN`.
+pub(crate) const PLAN_AGENT: &str = "plan";
+
+/// Whether the turn runs the plan agent, or the port's own plan mode.
+fn runs_plan_agent(reservation: &TurnReservation) -> bool {
+    reservation.intent.agent.as_deref() == Some(PLAN_AGENT)
+        || reservation.intent.mode.as_deref() == Some("plan")
 }

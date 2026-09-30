@@ -84,14 +84,6 @@ const UNDECLARED_FIELDS: &[(&str, &str)] = &[
         "vision_model",
         "v2.25.7 vision model (vibe_schema.py:347), unported; the registry declares no such key",
     ),
-    (
-        "smart_approve_available",
-        "v2.25.1 smart approve (vibe_schema.py:475), unported; the registry declares no such key",
-    ),
-    (
-        "smart_approve_default",
-        "v2.25.1 smart approve (vibe_schema.py:482), unported; the registry declares no such key",
-    ),
 ];
 
 /// The sentinel v2.24.0 ships for `active_model`, meaning "not pinned": both

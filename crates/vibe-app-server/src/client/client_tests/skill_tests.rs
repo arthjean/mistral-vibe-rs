@@ -333,6 +333,37 @@ async fn run_task_probe(
     settings: &str,
     decision: ApprovalDecision,
 ) -> TaskProbe {
+    run_task_probe_offering(
+        sessions,
+        agent,
+        settings,
+        decision,
+        vec![crate::client::live::delegation::built_in_subagent()],
+    )
+    .await
+}
+
+/// The system prompt of a session offered `agents`, composing every prompt
+/// as the driver's own.
+fn offering(agents: Vec<vibe_core::extensions::AgentProfile>) -> SessionSystemPrompt {
+    SessionSystemPrompt {
+        text: "system".to_owned(),
+        subagent: Arc::new(|_| Ok("system".to_owned())),
+        model: None,
+        subagent_model: Arc::new(|_| None),
+        agents,
+    }
+}
+
+/// [`run_task_probe`] for a session offered `agents`, the catalog the server
+/// resolves from the workspace and `task` resolves its argument against.
+async fn run_task_probe_offering(
+    sessions: Option<&Path>,
+    agent: &str,
+    settings: &str,
+    decision: ApprovalDecision,
+    agents: Vec<vibe_core::extensions::AgentProfile>,
+) -> TaskProbe {
     let temporary = tempfile::tempdir().expect("temporary workspace");
     let working_directory = sessions.unwrap_or_else(|| temporary.path());
     let provider = Arc::new(TaskProbeProvider {
@@ -358,7 +389,7 @@ async fn run_task_probe(
     driver
         .run(&TurnReservation {
             hooks: Default::default(),
-            system_prompt: None,
+            system_prompt: Some(offering(agents)),
             session_id: "probe".to_owned(),
             turn_id: "probe-turn".to_owned(),
             prompt: "delegate".to_owned(),
@@ -397,10 +428,10 @@ async fn task_is_withheld_when_no_subagent_runner_backs_the_session() {
     );
 }
 
-/// US-249: an agent name nothing answers to is refused with the names that do
-/// exist, so a model that guessed can correct itself.
+/// US-249: an agent name nothing answers to is refused by name, as reference
+/// `Task.run` refuses what its `AgentManager` does not hold.
 #[tokio::test]
-async fn an_unknown_subagent_is_refused_with_the_available_names() {
+async fn an_unknown_subagent_is_refused_by_name() {
     let temporary = tempfile::tempdir().expect("temporary sessions");
     let probe = run_task_probe(
         Some(temporary.path()),
@@ -420,7 +451,6 @@ async fn an_unknown_subagent_is_refused_with_the_available_names() {
         .refusal()
         .expect("the delegation failed back to the model");
     assert!(refused.contains("ghost"), "{refused}");
-    assert!(refused.contains("explore"), "{refused}");
     assert!(
         !probe.provider.delegated(),
         "no child runs for a name nothing answers to"
@@ -568,17 +598,20 @@ async fn an_unlisted_subagent_the_operator_approves_still_delegates() {
 #[tokio::test]
 async fn a_subagent_publishes_task_and_is_refused_a_second_level_at_call_time() {
     let temporary = tempfile::tempdir().expect("temporary sessions");
-    std::fs::create_dir_all(temporary.path().join(".vibe/agents")).expect("agent directory");
-    std::fs::write(
-        temporary.path().join(".vibe/agents/deputy.toml"),
-        "description = \"a subagent that may act\"\nagent_type = \"subagent\"\nsafety = \"neutral\"\n",
-    )
-    .expect("project subagent");
-    let probe = run_task_probe(
+    let deputy = vibe_core::extensions::AgentProfile {
+        name: "deputy".to_owned(),
+        display_name: "Deputy".to_owned(),
+        description: "a subagent that may act".to_owned(),
+        safety: "neutral".to_owned(),
+        source: vibe_core::extensions::ExtensionSource::Project,
+        ..crate::client::live::delegation::built_in_subagent()
+    };
+    let probe = run_task_probe_offering(
         Some(temporary.path()),
         "deputy",
         "[task]\nallowlist = [\"*\"]\n",
         ApprovalDecision::Deny,
+        vec![deputy],
     )
     .await;
     assert!(
@@ -605,8 +638,11 @@ async fn a_subagent_publishes_task_and_is_refused_a_second_level_at_call_time() 
     );
     // A child forks nothing, so the only child directory under the durable
     // parent is the one the top-level call started.
+    let store = SessionStore::new(temporary.path());
+    let parent = store.open("persisted-root").expect("the parent").metadata;
     assert_eq!(
-        SessionStore::new(temporary.path())
+        store
+            .child_store(&parent, "deputy")
             .sessions(None)
             .expect("the sessions list")
             .iter()
@@ -669,10 +705,16 @@ async fn live_task_tool_runs_a_durable_child_session_through_the_provider() {
             )
             .expect("test tool");
     }
+    // `explore` narrows its child to what it enables, as the builtin profile
+    // does with the read tools under their reference names.
+    let explore = vibe_core::extensions::AgentProfile {
+        overrides: toml::toml! { enabled_tools = ["read"] },
+        ..crate::client::live::delegation::built_in_subagent()
+    };
     let outcome = driver
         .run(&TurnReservation {
             hooks: Default::default(),
-            system_prompt: None,
+            system_prompt: Some(offering(vec![explore])),
             session_id: "runtime-alias".to_owned(),
             turn_id: "root-turn".to_owned(),
             prompt: "delegate".to_owned(),
@@ -721,9 +763,9 @@ async fn live_task_tool_runs_a_durable_child_session_through_the_provider() {
             "additionalProperties": false,
         })
     );
-    // `task` is no longer withheld from a child by name, but `explore` is
-    // read-only and `task` is not a read tool, so this child still does not see
-    // it. A subagent that may act does, which
+    // `task` is no longer withheld from a child by name, but `explore` enables
+    // only `read`, so this child still does not see it. A subagent that may act
+    // does, which
     // `a_subagent_publishes_task_and_is_refused_a_second_level_at_call_time`
     // covers.
     assert!(provider.child_hid_task_definition.load(Ordering::Acquire));
@@ -732,14 +774,17 @@ async fn live_task_tool_runs_a_durable_child_session_through_the_provider() {
             .child_inherited_restrictions
             .load(Ordering::Acquire)
     );
-    let page = store.sessions(None).expect("sessions list");
-    assert_eq!(page.len(), 2);
+    // The child is saved beneath its parent, under the agent it ran.
+    assert_eq!(store.sessions(None).expect("sessions list").len(), 1);
+    let parent = store.open("persisted-root").expect("the parent").metadata;
+    let children = store.child_store(&parent, "explore");
+    let page = children.sessions(None).expect("child sessions list");
     let child = page
         .iter()
         .find(|session| session.parent_session_id.as_deref() == Some("persisted-root"))
         .expect("child session");
     assert_eq!(
-        store
+        children
             .load(&child.session_id)
             .expect("child hydrates")
             .messages

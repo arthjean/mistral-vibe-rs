@@ -60,7 +60,9 @@ pub(super) struct ProviderSubagentRunner {
     /// Composes the child's own system message, when the server composed the
     /// parent's; `system_prompt` stands in for it otherwise.
     subagent_prompt: Option<crate::client::SubagentPromptComposer>,
-    store: SessionStore,
+    /// Resolves the model the child's own configuration runs, when the server
+    /// composed the parent's prompt; the parent's model stands in otherwise.
+    subagent_model: Option<crate::client::SubagentModelResolver>,
     tools: ToolRegistry,
     input_price_per_million_micros: u64,
     output_price_per_million_micros: u64,
@@ -88,26 +90,15 @@ impl LiveTurnDriver {
         store: SessionStore,
         parent_session_id: String,
     ) -> Result<(), DriverError> {
-        let built_in = built_in_subagent();
-        let vibe_home = crate::host::vibe_home();
-        let catalog = discover_extensions(
-            &DiscoveryRoots {
-                configured: Vec::new(),
-                project: vec![PathBuf::from(&reservation.working_directory).join(".vibe")],
-                user: vec![vibe_home.clone(), vibe_home.join("extensions")],
-                project_trusted: reservation.intent.trusted,
-                // Only the agent profiles are read here, so no skill root is
-                // resolved and no skill is walked.
-                ..DiscoveryRoots::default()
-            },
-            BTreeMap::from([(built_in.name.clone(), built_in)]),
-            BTreeMap::new(),
-            BTreeMap::new(),
-        );
-        let subagents = catalog
-            .agents
+        // Reference `Task.run` resolves the name through the session's own
+        // `AgentManager`, so what `task` may start is what the session is
+        // offered: primary agents included, which the handler then refuses.
+        let agents = reservation
+            .system_prompt
+            .as_ref()
+            .map_or_else(|| vec![built_in_subagent()], |prompt| prompt.agents.clone())
             .into_iter()
-            .filter(|(_, profile)| profile.kind == AgentKind::Subagent)
+            .map(|profile| (profile.name.clone(), profile))
             .collect::<BTreeMap<_, _>>();
         let runner = Arc::new(ProviderSubagentRunner {
             provider: self.provider.clone(),
@@ -116,7 +107,10 @@ impl LiveTurnDriver {
                 .system_prompt
                 .as_ref()
                 .map(|prompt| Arc::clone(&prompt.subagent)),
-            store: store.clone(),
+            subagent_model: reservation
+                .system_prompt
+                .as_ref()
+                .map(|prompt| Arc::clone(&prompt.subagent_model)),
             tools: reservation.tools.clone(),
             input_price_per_million_micros: self.input_price_per_million_micros,
             output_price_per_million_micros: self.output_price_per_million_micros,
@@ -149,7 +143,7 @@ impl LiveTurnDriver {
                             &settings.view::<SharedToolConfig>("task"),
                         ))
                     }),
-                    task_handler(manager, subagents, parent_session_id),
+                    task_handler(manager, agents, parent_session_id),
                 )),
             )
             .map(drop)
@@ -186,8 +180,8 @@ pub(crate) fn built_in_subagent() -> AgentProfile {
     }
 }
 
-/// The `task` handler, over the delegation manager and the subagent catalog the
-/// `agent` argument is resolved against.
+/// The `task` handler, over the delegation manager and the agents the `agent`
+/// argument is resolved against.
 ///
 /// It is a free function rather than a closure built inside the registration
 /// because the delegation oracle
@@ -196,19 +190,18 @@ pub(crate) fn built_in_subagent() -> AgentProfile {
 /// live provider could not be measured against the reference.
 pub(crate) fn task_handler(
     manager: Arc<SubagentManager>,
-    subagents: BTreeMap<String, AgentProfile>,
+    agents: BTreeMap<String, AgentProfile>,
     parent_session_id: String,
 ) -> Arc<dyn ToolHandler> {
-    let subagent_names = Arc::new(subagents.keys().cloned().collect::<Vec<_>>());
     Arc::new(
         move |invocation: &vibe_core::tools::ToolInvocation,
-              _output: vibe_core::tools::ToolOutputSink|
+              output: vibe_core::tools::ToolOutputSink|
               -> OwnedToolHandlerFuture {
             let manager = manager.clone();
-            let subagents = subagents.clone();
-            let subagent_names = subagent_names.clone();
+            let agents = agents.clone();
             let parent_session_id = parent_session_id.clone();
             let arguments = invocation.arguments.clone();
+            let tool_call_id = invocation.call_id.clone();
             Box::pin(async move {
                 let agent_name = requested_agent(&arguments);
                 let task = arguments
@@ -219,25 +212,41 @@ pub(crate) fn task_handler(
                         path: "/task".to_owned(),
                         message: "must be a non-empty string".to_owned(),
                     })?;
-                let agent = subagents.get(agent_name).cloned().ok_or_else(|| {
-                    // A model that guessed the name corrects itself from
-                    // the list rather than from a bare refusal.
+                // Reference `Task.run`: a name the session is not offered is
+                // unknown, and a primary agent is refused, so a delegated run
+                // never starts a second top-level loop.
+                let agent = agents.get(agent_name).cloned().ok_or_else(|| {
                     vibe_core::tools::ToolError::Unavailable(format!(
-                        "subagent `{agent_name}` is unavailable; available agents: {}",
-                        if subagent_names.is_empty() {
-                            "none".to_owned()
-                        } else {
-                            subagent_names.join(", ")
-                        }
+                        "no agent named `{agent_name}` can be delegated to"
                     ))
                 })?;
+                if agent.kind != AgentKind::Subagent {
+                    return Err(vibe_core::tools::ToolError::Unavailable(format!(
+                        "`{agent_name}` is a primary agent, and `task` only starts subagents: \
+                         a delegated run may not open another top-level loop"
+                    )));
+                }
+                // The child's identifier reaches the parent's effect as soon as
+                // the child is saved, and each call the child settles reaches it
+                // as a progress line, as reference `link_subagent` and the
+                // `ToolStreamEvent`s of `SubagentRunAccumulator` do.
+                let signal: DelegationSignal = Arc::new(move |update| {
+                    // A projection that is gone has no one left to inform, so
+                    // a failed forward is dropped rather than failing the run.
+                    let _ = match update {
+                        DelegationUpdate::Linked(child) => output.link_child_session(&child),
+                        DelegationUpdate::Progress(line) => output.emit(line),
+                    };
+                });
                 let effect = manager
                     .delegate(
                         DelegationRequest {
                             parent_session_id,
+                            tool_call_id,
                             agent,
                             prompt: task.to_owned(),
                             logging: ChildLoggingPolicy::SummaryOnly,
+                            signal: Some(signal),
                         },
                         crate::host::now_millis(),
                     )
@@ -276,6 +285,73 @@ pub(crate) fn task_handler(
     )
 }
 
+/// The first message a child reads: where its parent's scratchpad is, then
+/// the task (reference `prepare_subagent_prompt`, in this port's own words).
+fn subagent_prompt(task: &str, scratchpad: Option<&Path>) -> String {
+    match scratchpad {
+        Some(directory) => format!(
+            "Your parent session's scratchpad is {}; files there can be read and written \
+             without asking.\n\n{task}",
+            directory.display()
+        ),
+        None => task.to_owned(),
+    }
+}
+
+/// Watches a child's events for what its parent is told while it runs:
+/// reference `SubagentRunAccumulator.observe`, which reports each call the
+/// child settles as `{tool}: {result header}` and marks the run unfinished
+/// when a call was skipped.
+struct SubagentProgress {
+    reducer: Mutex<ProjectionReducer>,
+    signal: Option<DelegationSignal>,
+    skipped: std::sync::atomic::AtomicBool,
+}
+
+impl EventObserver for SubagentProgress {
+    fn observe(&self, envelope: &vibe_core::events::EventEnvelope) -> Result<(), String> {
+        let mut reducer = self
+            .reducer
+            .lock()
+            .map_err(|_| "subagent progress lock is poisoned".to_owned())?;
+        // The engine already validated the stream; a refusal here only means
+        // this watcher cannot render the header, never that the run failed.
+        let _ = reducer.apply(envelope);
+        let vibe_core::events::EngineEvent::ToolResult {
+            call_id, skipped, ..
+        } = &envelope.event
+        else {
+            return Ok(());
+        };
+        if *skipped {
+            self.skipped
+                .store(true, std::sync::atomic::Ordering::Release);
+            return Ok(());
+        }
+        let line = reducer
+            .state()
+            .history
+            .iter()
+            .find_map(|entry| match entry {
+                vibe_core::events::PublicHistoryEntry::Effect {
+                    metadata,
+                    detail,
+                    state: vibe_core::events::PublicEffectState::Completed { display, .. },
+                    ..
+                } if metadata.id == *call_id => Some(format!(
+                    "{}: {}",
+                    detail.tool_name,
+                    format!("{} {}", display.verb, display.message).trim()
+                )),
+                _ => None,
+            });
+        if let (Some(line), Some(signal)) = (line, &self.signal) {
+            signal(DelegationUpdate::Progress(line));
+        }
+        Ok(())
+    }
+}
+
 impl SubagentRunner for ProviderSubagentRunner {
     fn run<'a>(
         &'a self,
@@ -283,7 +359,7 @@ impl SubagentRunner for ProviderSubagentRunner {
         cancellation: CancellationToken,
     ) -> SubagentFuture<'a> {
         Box::pin(async move {
-            let metadata = self
+            let metadata = context
                 .store
                 .open(&context.child_session_id)
                 .map_err(|error| error.to_string())?
@@ -319,11 +395,6 @@ impl SubagentRunner for ProviderSubagentRunner {
                         && enabled_by_agent
                             .as_ref()
                             .is_none_or(|enabled| enabled.matches(&spec.name))
-                        && (context.agent.safety != "read_only"
-                            || matches!(
-                                spec.presentation,
-                                ToolPresentationKind::Read | ToolPresentationKind::Search
-                            ))
                 })
                 .map(|spec| spec.name)
                 .collect();
@@ -345,10 +416,15 @@ impl SubagentRunner for ProviderSubagentRunner {
                 None => self.system_prompt.clone(),
             };
             let messages = vec![ModelMessage::System { content }];
+            let model = self
+                .subagent_model
+                .as_ref()
+                .and_then(|resolve| resolve(&context.agent));
             let input = ProviderInput {
                 turn_id: Some(format!("{}-turn", context.child_session_id)),
                 session_id: None,
                 model_override: settings.model,
+                model,
                 messages,
                 stream: true,
                 images: Vec::new(),
@@ -363,7 +439,7 @@ impl SubagentRunner for ProviderSubagentRunner {
                         "parent_session_id".to_owned(),
                         context.parent_session_id.clone(),
                     ),
-                    ("agent".to_owned(), context.agent.name),
+                    ("agent".to_owned(), context.agent.name.clone()),
                     (
                         "working_directory".to_owned(),
                         context.working_directory.clone(),
@@ -375,7 +451,7 @@ impl SubagentRunner for ProviderSubagentRunner {
             let transcript_path = if context.logging == ChildLoggingPolicy::Disabled {
                 String::new()
             } else {
-                crate::session_hooks::transcript_path(&self.store.session_path(&metadata))
+                crate::session_hooks::transcript_path(&context.store.session_path(&metadata))
             };
             let hooks = crate::session_hooks::SessionHooks::from_config(
                 self.hooks.config().clone(),
@@ -386,10 +462,16 @@ impl SubagentRunner for ProviderSubagentRunner {
                 context.working_directory.clone(),
                 Some(context.parent_session_id.clone()),
             );
+            let progress = Arc::new(SubagentProgress {
+                reducer: Mutex::new(ProjectionReducer::new(context.child_session_id.clone())),
+                signal: context.signal.clone(),
+                skipped: std::sync::atomic::AtomicBool::new(false),
+            });
             let mut engine = ConversationEngine::new(self.provider.clone())
                 .with_tools(executor)
                 .with_working_directory(context.working_directory)
-                .with_sink(SessionTranscriptSink::new(self.store.clone(), metadata))
+                .with_sink(SessionTranscriptSink::new(context.store.clone(), metadata))
+                .with_observer(progress.clone())
                 .with_limits(EngineLimits {
                     input_price_per_million_micros: self.input_price_per_million_micros,
                     output_price_per_million_micros: self.output_price_per_million_micros,
@@ -398,39 +480,59 @@ impl SubagentRunner for ProviderSubagentRunner {
             if let Some(hooks) = hooks {
                 engine = engine.with_hooks(hooks);
             }
+            // Reference `prepare_subagent_prompt` names the parent's
+            // scratchpad before the task, so the child can hand files back.
+            let scratchpad = vibe_core::scratchpad::init_scratchpad(&context.parent_session_id);
+            let prompt = subagent_prompt(&context.prompt, scratchpad.as_deref());
             let outcome = engine
                 .run_turn(
-                    context.child_session_id,
+                    context.child_session_id.clone(),
                     input,
-                    context.prompt,
+                    prompt,
                     cancellation,
                 )
-                .await
-                .map_err(|error| error.to_string())?;
-            // Reference `_sessions.py:322` counts one turn per assistant message
-            // in the child transcript and calls the run complete only when the
-            // child turn reached its own end, which is what the stop reason
-            // reports here.
-            let turns_used = outcome
-                .messages
+                .await;
+            // Reference `SessionRuntimeRegistry.run` reads the child's
+            // transcript whatever the turn ended with: a failed turn still
+            // hands back what the child said before it failed, followed by the
+            // error, and never counts as complete.
+            let (messages, completed, error) = match outcome {
+                Ok(outcome) => (
+                    outcome.messages,
+                    outcome.stop_reason == TurnStopReason::Complete,
+                    None,
+                ),
+                Err(error) => (
+                    context
+                        .store
+                        .open(&context.child_session_id)
+                        .map(|session| session.messages)
+                        .unwrap_or_default(),
+                    false,
+                    Some(error.to_string()),
+                ),
+            };
+            // Reference `_sessions.py` counts one turn per assistant message in
+            // the child transcript, and `SubagentRunAccumulator`
+            // (`vibe/core/subagents.py:41`) joins the content of every
+            // assistant message in order with no separator, so the narration
+            // around the child's tool calls reaches the parent with its answer.
+            let assistant = messages
                 .iter()
-                .filter(|message| matches!(message, ModelMessage::Assistant { .. }))
-                .count();
-            // Reference `SubagentRunAccumulator` (`vibe/core/subagents.py:41`)
-            // joins the content of every assistant message the child produced,
-            // in order and with no separator, so the narration around the
-            // child's tool calls reaches the parent with its final answer.
+                .filter_map(|message| match message {
+                    ModelMessage::Assistant { content, .. } => Some(content.as_str()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            let mut response = assistant.concat();
+            if let Some(error) = &error {
+                response.push_str(&format!("\n[Subagent error: {error}]"));
+            }
             Ok(SubagentRun {
-                response: outcome
-                    .messages
-                    .iter()
-                    .filter_map(|message| match message {
-                        ModelMessage::Assistant { content, .. } => Some(content.as_str()),
-                        _ => None,
-                    })
-                    .collect(),
-                turns_used: u32::try_from(turns_used).unwrap_or(u32::MAX),
-                completed: outcome.stop_reason == TurnStopReason::Complete,
+                response,
+                turns_used: u32::try_from(assistant.len()).unwrap_or(u32::MAX),
+                completed: completed
+                    && !progress.skipped.load(std::sync::atomic::Ordering::Acquire),
             })
         })
     }
@@ -443,6 +545,7 @@ impl SamplingHandler for ProviderSamplingHandler {
                 turn_id: None,
                 session_id: None,
                 model_override: None,
+                model: None,
                 messages: request
                     .messages
                     .into_iter()

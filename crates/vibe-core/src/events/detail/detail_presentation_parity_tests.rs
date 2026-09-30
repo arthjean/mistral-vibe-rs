@@ -129,9 +129,9 @@ const INVALID_ARGUMENTS_NAME: &str = "the reference answers arguments of the wro
 const PLAN_DISPLAY: &str = "the reference's `exit_plan_mode` publishes a call display it authored \
      the sentences of; this port renders its own, and reaching those digests would mean copying \
      them";
-const PLAN_VERBS: &str = "the reference's `exit_plan_mode` publishes the running verbs, which the \
-     corpus records in the clear; this port publishes the plan kind's own, so what stands here is \
-     the vocabulary decision and not the prose one";
+const PLAN_VERBS: &str = "the reference's wrong-class branch falls back to the running verbs; \
+     `exit_plan_mode` accepts any object, so the stand-in this port is fed is valid for it and \
+     keeps the review's own verbs";
 const PLAN_STATUS: &str = "the reference names the plan-mode wait with a sentence it authored; \
      this port publishes its own label";
 const FETCH_SUMMARY: &str = "the reference renders the fetch target and its timeout in a form it \
@@ -194,7 +194,6 @@ const CALL_CASES: [&str; 3] = ["valid-arguments", "absent-arguments", "wrong-arg
 
 const PLAN_TOOL: &str = "exit_plan_mode";
 const FETCH_TOOL: &str = "web_fetch";
-const TASK_TOOL: &str = "task";
 
 /// The divergences this port still carries, each with what closes it.
 ///
@@ -365,22 +364,16 @@ fn ledger() -> Vec<Divergence> {
             AUTHORED_CALL_TEXT_ROW,
         );
     }
-    add(
-        PLAN_TOOL,
-        "valid-arguments",
-        "/display/verb",
-        RECORDED,
-        PLAN_VERBS,
-        KIND_HEADER_ROW,
-    );
-    add(
-        PLAN_TOOL,
-        "valid-arguments",
-        "/display/settledVerb",
-        RECORDED,
-        PLAN_VERBS,
-        KIND_HEADER_ROW,
-    );
+    for pointer in ["/display/verb", "/display/settledVerb"] {
+        add(
+            PLAN_TOOL,
+            "wrong-argument-type",
+            pointer,
+            RECORDED,
+            PLAN_VERBS,
+            KIND_HEADER_ROW,
+        );
+    }
     add(
         PLAN_TOOL,
         "successful-result",
@@ -393,14 +386,6 @@ fn ledger() -> Vec<Divergence> {
         PLAN_TOOL,
         "successful-result",
         "/display/verb",
-        RECORDED,
-        RESULT_SETTLEMENT,
-        KIND_SETTLEMENT_ROW,
-    );
-    add(
-        TASK_TOOL,
-        "successful-result",
-        "/display/message",
         RECORDED,
         RESULT_SETTLEMENT,
         KIND_SETTLEMENT_ROW,

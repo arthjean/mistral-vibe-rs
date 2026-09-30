@@ -778,6 +778,16 @@ pub static FIELDS: &[FieldSpec] = &[
             "Agent profile used when none is requested on the command line.",
             "",
         ),
+    FieldSpec::declared("smart_approve_available", FieldKind::Bool, REPLACE).published(
+        FieldDefault::Bool(false),
+        "Offer the smart-approve agent in the agent picker and cycle.",
+        "",
+    ),
+    FieldSpec::declared("smart_approve_default", FieldKind::Bool, REPLACE).published(
+        FieldDefault::Bool(false),
+        "Start sessions under the smart-approve agent, which also offers it.",
+        "",
+    ),
     // Skills
     FieldSpec::declared("skill_paths", FieldKind::List, CONCAT).published(
         FieldDefault::Strings(&[]),

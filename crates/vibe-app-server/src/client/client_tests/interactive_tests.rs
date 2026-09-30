@@ -54,7 +54,7 @@ async fn a_raised_clearing_reaches_the_driver_with_the_reserved_turn() {
             sender: sender.clone(),
         }),
         Arc::new(InteractiveSessionToolFactory {
-            sender: sender.clone(),
+            sender: crate::client::interactive::CallbackChannel::Shared(sender.clone()),
             plan_directory: None,
         }),
     );
@@ -270,7 +270,7 @@ async fn interactive_approval_callback_returns_the_exact_policy_decision() {
             sender: sender.clone(),
         }),
         Arc::new(InteractiveSessionToolFactory {
-            sender: sender.clone(),
+            sender: crate::client::interactive::CallbackChannel::Shared(sender.clone()),
             plan_directory: driver.plan_directory(),
         }),
     );

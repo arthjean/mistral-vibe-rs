@@ -61,7 +61,23 @@ fn retrying(reason: crate::llm::retry::RetryReason) -> EngineEvent {
 
 pub type ToolFuture<'a> =
     Pin<Box<dyn Future<Output = Result<ToolExecutionOutput, String>> + Send + 'a>>;
-pub type ToolStreamSink = Arc<dyn Fn(String) -> Result<(), String> + Send + Sync>;
+/// What a running tool reports before it settles.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ToolStreamItem {
+    /// Output text, appended to what the call has shown so far.
+    Output(String),
+    /// The session a delegation opened for the call, which its effect names
+    /// from then on. Reference `TurnController.link_subagent`.
+    ChildSession(String),
+}
+
+impl From<String> for ToolStreamItem {
+    fn from(chunk: String) -> Self {
+        Self::Output(chunk)
+    }
+}
+
+pub type ToolStreamSink = Arc<dyn Fn(ToolStreamItem) -> Result<(), String> + Send + Sync>;
 pub type CompactionFuture<'a> =
     Pin<Box<dyn Future<Output = Result<CompactionResult, CompactionFailure>> + Send + 'a>>;
 pub type PersistenceFuture<'a> = Pin<Box<dyn Future<Output = Result<(), String>> + Send + 'a>>;
@@ -131,7 +147,7 @@ impl CancellationToken {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TurnControl {
     Steer {
         content: String,
@@ -149,10 +165,20 @@ pub enum TurnControl {
         value: Option<String>,
     },
     /// Drops the transcript and rotates the session at the next cycle boundary,
-    /// leaving the turn to continue from `continuation` alone.
+    /// leaving the turn to continue from `continuation` alone, or from nothing
+    /// but the system prompt when it is empty.
     ClearContext {
         continuation: String,
         plan_file_path: Option<String>,
+    },
+    /// Moves the turn to another agent profile at the next cycle boundary:
+    /// the next request offers `tools`. Reference `AgentLoop.switch_agent`,
+    /// which reloads the tool manager in the middle of a turn.
+    SwitchAgent {
+        agent_name: String,
+        tools: Vec<crate::provider::ToolDefinition>,
+        /// The profile as the session's record stores it.
+        profile: serde_json::Value,
     },
 }
 
@@ -628,7 +654,7 @@ where
             if cancellation.is_cancelled() {
                 break TurnStopReason::Cancelled;
             }
-            match self.apply_controls(&mut recorder, &mut messages, &controls)? {
+            match self.apply_controls(&mut recorder, &mut messages, &mut input, &controls)? {
                 ControlOutcome::Stop(reason) => break reason,
                 // A rotated session is only durable once the transcript lands
                 // under its new identifier, so it checkpoints before the next
@@ -682,12 +708,11 @@ where
                         None => break TurnStopReason::Cancelled,
                     }
                 }
+                // Reference `_handle_middleware_result` appends the message
+                // and publishes nothing: the history a client reads leaves a
+                // harness reminder out.
                 MiddlewareAction::InjectMessage => {
                     if let Some(content) = policy.message {
-                        recorder.emit(EngineEvent::ContextInjected {
-                            content: content.clone(),
-                            as_message: false,
-                        })?;
                         messages.push(ModelMessage::injected_user(content));
                     }
                 }
@@ -1014,6 +1039,7 @@ where
         &self,
         recorder: &mut TurnRecorder<'_>,
         messages: &mut Vec<ModelMessage>,
+        input: &mut ProviderInput,
         controls: &TurnControlHandle,
     ) -> Result<ControlOutcome, EngineError> {
         let mut cleared = false;
@@ -1080,13 +1106,24 @@ where
                     // clearing drops what was said, and the continuation is the
                     // only instruction the next request carries.
                     messages.retain(|message| matches!(message, ModelMessage::System { .. }));
-                    messages.push(ModelMessage::user(continuation));
+                    if !continuation.is_empty() {
+                        messages.push(ModelMessage::injected_user(continuation));
+                    }
                     recorder.emit(EngineEvent::SessionHandoff {
                         from_session_id,
                         to_session_id,
                         cause: SessionHandoffCause::ContextCleared { plan_file_path },
                     })?;
                     cleared = true;
+                }
+                TurnControl::SwitchAgent {
+                    agent_name,
+                    tools,
+                    profile,
+                } => {
+                    input.tools = tools;
+                    self.sink.record_agent(&profile);
+                    recorder.emit(EngineEvent::AgentChanged { agent_name })?;
                 }
             }
         }
@@ -1481,11 +1518,8 @@ where
         while !pending.is_empty() {
             tokio::select! {
                 streamed = stream_rx.recv() => {
-                    if let Some((index, chunk)) = streamed {
-                        recorder.emit(EngineEvent::ToolStream {
-                            call_id: tool_calls[index].id.clone(),
-                            chunk,
-                        })?;
+                    if let Some((index, item)) = streamed {
+                        recorder.emit(stream_event(&tool_calls[index].id, item))?;
                     }
                 }
                 signal = signal_rx.recv() => {
@@ -2019,15 +2053,26 @@ fn patch_tool_call_arguments(
 fn drain_tool_stream(
     recorder: &mut TurnRecorder<'_>,
     tool_calls: &[ModelToolCall],
-    stream_rx: &mut tokio::sync::mpsc::Receiver<(usize, String)>,
+    stream_rx: &mut tokio::sync::mpsc::Receiver<(usize, ToolStreamItem)>,
 ) -> Result<(), EngineError> {
-    while let Ok((index, chunk)) = stream_rx.try_recv() {
-        recorder.emit(EngineEvent::ToolStream {
-            call_id: tool_calls[index].id.clone(),
-            chunk,
-        })?;
+    while let Ok((index, item)) = stream_rx.try_recv() {
+        recorder.emit(stream_event(&tool_calls[index].id, item))?;
     }
     Ok(())
+}
+
+/// The event one streamed item of the call `call_id` publishes.
+fn stream_event(call_id: &str, item: ToolStreamItem) -> EngineEvent {
+    match item {
+        ToolStreamItem::Output(chunk) => EngineEvent::ToolStream {
+            call_id: call_id.to_owned(),
+            chunk,
+        },
+        ToolStreamItem::ChildSession(child_session_id) => EngineEvent::ToolChildSession {
+            call_id: call_id.to_owned(),
+            child_session_id,
+        },
+    }
 }
 
 /// One provider exchange: either it produced a response, or the turn was cancelled.
@@ -2203,7 +2248,7 @@ mod tests {
             output: ToolStreamSink,
         ) -> ToolFuture<'a> {
             Box::pin(async move {
-                output(format!("{name}-chunk"))?;
+                output(format!("{name}-chunk").into())?;
                 self.execute(name, arguments).await
             })
         }
@@ -2538,6 +2583,7 @@ mod tests {
             turn_id: None,
             session_id: None,
             model_override: None,
+            model: None,
             messages: vec![ModelMessage::System {
                 content: "system".to_owned(),
             }],
@@ -2922,7 +2968,7 @@ mod tests {
                 ModelMessage::System {
                     content: "system".to_owned(),
                 },
-                ModelMessage::user("Plan approved. Switch to code mode.".to_owned()),
+                ModelMessage::injected_user("Plan approved. Switch to code mode.".to_owned()),
                 ModelMessage::Assistant {
                     message_id: None,
                     reasoning_message_id: None,
@@ -3585,12 +3631,11 @@ mod tests {
 
         assert_eq!(outcome.stop_reason, TurnStopReason::Complete);
         assert!(
-            outcome.events.iter().any(|envelope| matches!(
-                &envelope.event,
-                EngineEvent::ContextInjected { content, as_message }
-                    if content == "half the window" && !*as_message
-            )),
-            "the injection is marked on the wire rather than told as a user turn"
+            !outcome
+                .events
+                .iter()
+                .any(|envelope| matches!(&envelope.event, EngineEvent::ContextInjected { .. })),
+            "a policy's reminder publishes no history entry"
         );
         let requested = engine
             .provider

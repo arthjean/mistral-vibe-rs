@@ -228,18 +228,9 @@ pub(super) fn respond_to_pending_callback(
             return;
         }
     };
-    let previous_settings = if let Some(auto_approve) = plan_transition {
-        let previous = (runtime.mode.clone(), runtime.auto_approve);
-        if let Err(error) = update_session_settings(runtime, "code", auto_approve) {
-            state.push_diagnostic(format!(
-                "Cannot approve the plan until the session can enter code mode: {error}"
-            ));
-            return;
-        }
-        Some(previous)
-    } else {
-        None
-    };
+    // The plan review tool moves the session to the profile the answer names
+    // inside the running turn (reference `ExitPlanMode.run`), so the client
+    // only records that it left plan mode.
     match runtime.service.respond_callback(dispatch.params.clone()) {
         Ok(_) => {
             if let Err(error) =
@@ -251,9 +242,8 @@ pub(super) fn respond_to_pending_callback(
                 resync_current_projection(runtime, state);
                 sync_active_callbacks(runtime, state, controls);
             }
-            if let Some(auto_approve) = plan_transition {
-                runtime.mode = "code".to_owned();
-                runtime.auto_approve = auto_approve;
+            if plan_transition.is_some() {
+                "code".clone_into(&mut runtime.mode);
             }
             settle_callback_notice(
                 state,
@@ -282,18 +272,8 @@ pub(super) fn respond_to_pending_callback(
                 &pending.callback_id,
                 error,
             );
-            if still_pending && let Some((mode, auto_approve)) = previous_settings {
-                if let Err(error) = update_session_settings(runtime, &mode, auto_approve) {
-                    state.push_diagnostic(format!(
-                        "Callback retry remains open, but restoring plan mode failed: {error}"
-                    ));
-                } else {
-                    runtime.mode = mode;
-                    runtime.auto_approve = auto_approve;
-                }
-            } else if let Some(auto_approve) = plan_transition {
-                runtime.mode = "code".to_owned();
-                runtime.auto_approve = auto_approve;
+            if !still_pending && plan_transition.is_some() {
+                "code".clone_into(&mut runtime.mode);
                 settle_callback_notice(
                     state,
                     &pending.callback_id,
@@ -306,22 +286,6 @@ pub(super) fn respond_to_pending_callback(
             }
         }
     }
-}
-
-fn update_session_settings(
-    runtime: &mut InteractiveRuntime,
-    mode: &str,
-    auto_approve: bool,
-) -> Result<(), vibe_app_server::client::ClientError> {
-    runtime.service.public_call(
-        "session/overrides/write",
-        json!({
-            "sessionId": runtime.session_id,
-            "mode": mode,
-            "autoApprove": auto_approve,
-        }),
-    )?;
-    Ok(())
 }
 
 pub(super) fn recover_from_callback_response_error(
@@ -345,8 +309,8 @@ pub(super) fn recover_from_callback_response_error(
     still_pending
 }
 
-/// The auto-approval an accepted plan switches the session to, if the choice
-/// accepts it.
+/// Whether the choice accepts the plan, and with edits approved on their own
+/// (`true`) or asked for (`false`).
 ///
 /// Clearing the planning context is not read here: the plan review tool raises
 /// it on the running turn, so the transcript rotates inside the turn rather
@@ -1148,7 +1112,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn plan_callback_stays_open_when_code_mode_cannot_be_committed() {
+    async fn plan_callback_stays_open_when_its_answer_cannot_be_delivered() {
         let mut runtime = interactive_test_runtime("plan-settings-failure");
         runtime.mode = "plan".to_owned();
         let session_id = runtime.session_id.clone();
@@ -1200,13 +1164,10 @@ mod tests {
             &mut state,
         );
 
+        // The review tool switches the profile inside the turn, so an answer
+        // that never reached it leaves the session in plan mode.
         assert_eq!(runtime.mode, "plan");
         assert!(controls.contains_callback("plan-callback"));
-        assert!(
-            state
-                .diagnostics()
-                .any(|message| message.contains("Cannot approve the plan"))
-        );
     }
 
     #[test]

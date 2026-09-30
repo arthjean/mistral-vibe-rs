@@ -98,7 +98,6 @@ impl AppServer {
         let callback_sequence = self.next_callback.fetch_add(1, Ordering::Relaxed);
         let callback_id = vibe_core::session_id::uuid_v4();
         let timestamp = now_millis();
-        let title_for_notice = title.clone();
         let callback = PublicHistoryEntry::Callback {
             metadata: PublicEntryMetadata {
                 id: format!("callback:{callback_id}"),
@@ -133,8 +132,9 @@ impl AppServer {
         // The reference publishes a plan review as its own notice rather than as
         // a field on the callback, so the entry that names the plan lands ahead
         // of the question a client is about to be asked.
+        let mut notice = None;
         if let Some(file_path) = plan_review_path {
-            snapshot.history.push(PublicHistoryEntry::Notice {
+            let entry = PublicHistoryEntry::Notice {
                 metadata: PublicEntryMetadata {
                     id: format!("notice:{callback_id}:plan-review"),
                     session_id: snapshot.session_id.clone(),
@@ -145,9 +145,11 @@ impl AppServer {
                     related_entry_id: Some(format!("callback:{callback_id}")),
                 },
                 level: vibe_core::events::PublicNoticeLevel::Info,
-                message: title_for_notice.clone(),
+                message: "The plan awaits review".to_owned(),
                 detail: NoticeDetail::PlanReviewStarted { file_path },
-            });
+            };
+            snapshot.history.push(entry.clone());
+            notice = Some(entry);
         }
         if !snapshot.history.iter().any(|entry| {
             matches!(
@@ -163,7 +165,11 @@ impl AppServer {
         // Reference `_request_approval`: the callback is published, the
         // effect it gates shows as blocked on it, and the session as blocked,
         // before the question is delivered.
-        let mut frames = vec![entry_added_frame(session, turn_id, &callback)];
+        let mut frames = notice
+            .iter()
+            .map(|notice| entry_added_frame(session, turn_id, notice))
+            .collect::<Vec<_>>();
+        frames.push(entry_added_frame(session, turn_id, &callback));
         frames.extend(set_effect_state(
             session,
             turn_id,

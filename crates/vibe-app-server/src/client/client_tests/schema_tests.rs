@@ -208,7 +208,7 @@ async fn a_question_with_a_single_option_fails_naming_its_index() {
     let (sender, _receiver) = tokio::sync::mpsc::channel::<InteractiveCallbackRequest>(1);
     let tools = ToolRegistry::default();
     InteractiveSessionToolFactory {
-        sender,
+        sender: crate::client::interactive::CallbackChannel::Shared(sender),
         plan_directory: None,
     }
     .register("session", &tools)

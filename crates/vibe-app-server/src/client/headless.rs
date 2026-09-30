@@ -115,7 +115,7 @@ where
                 sender: sender.clone(),
             }),
             Arc::new(InteractiveSessionToolFactory {
-                sender,
+                sender: CallbackChannel::Shared(sender),
                 plan_directory,
             }),
         );
@@ -339,41 +339,6 @@ where
         Ok((callback_id, callback))
     }
 
-    /// Hands a tool's clearing request to the turn it names, and answers the
-    /// tool with what the driver said.
-    fn dispatch_context_clearing(&self, request: InteractiveCallbackRequest) {
-        let InteractiveCallbackRequest::ClearContext {
-            session_id,
-            continuation,
-            plan_file_path,
-            response,
-        } = request
-        else {
-            return;
-        };
-        let outcome = self
-            .client
-            .server
-            .session(&session_id)
-            .map_err(|error| error.to_string())
-            .and_then(|session| {
-                session
-                    .active_turn
-                    .ok_or_else(|| "turn is no longer active".to_owned())
-            })
-            .and_then(|turn_id| {
-                self.driver
-                    .clear_context(
-                        &session_id,
-                        &turn_id,
-                        &continuation,
-                        plan_file_path.as_deref(),
-                    )
-                    .map_err(|error| error.to_string())
-            });
-        let _ = response.send(outcome);
-    }
-
     pub fn drain_callbacks(&mut self) -> Result<Vec<PublicHistoryEntry>, ClientError> {
         let mut requests = std::mem::take(&mut self.interactive_backlog);
         if let Some(receiver) = self.interactive_callbacks.as_mut() {
@@ -390,8 +355,8 @@ where
             // A clearing occupies no callback slot: it names the running turn
             // and hands it a control, which is why it settles here rather than
             // queueing behind whatever callback is open.
-            if matches!(request, InteractiveCallbackRequest::ClearContext { .. }) {
-                self.dispatch_context_clearing(request);
+            if request.is_turn_control() {
+                settle_turn_control(&self.client.server, &*self.driver, request);
                 continue;
             }
             let (session_id, title, detail, kind) = match &request {
@@ -424,7 +389,7 @@ where
                     detail.clone(),
                     EngineCallbackKind::UserInput,
                 ),
-                InteractiveCallbackRequest::ClearContext { .. } => continue,
+                _ => continue,
             };
             if self
                 .pending_interactive_callbacks
@@ -461,7 +426,7 @@ where
                         InteractiveCallbackRequest::Tool { response, .. } => {
                             InteractiveCallbackResponse::Tool(response)
                         }
-                        InteractiveCallbackRequest::ClearContext { .. } => continue,
+                        _ => continue,
                     };
                     if self
                         .pending_interactive_callbacks

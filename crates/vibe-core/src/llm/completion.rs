@@ -70,13 +70,14 @@ impl LlmCompletion {
             .as_deref()
             .filter(|name| !name.is_empty())
             .unwrap_or(&self.default_model);
-        let mut model = self
-            .models
-            .iter()
-            .find(|model| model.alias == name)
-            .or_else(|| self.models.iter().find(|model| model.name == name))
-            .cloned()
-            .unwrap_or_else(|| ModelConfig::new(name, self.provider.name.clone()));
+        let mut model = input.model.clone().unwrap_or_else(|| {
+            self.models
+                .iter()
+                .find(|model| model.alias == name)
+                .or_else(|| self.models.iter().find(|model| model.name == name))
+                .cloned()
+                .unwrap_or_else(|| ModelConfig::new(name, self.provider.name.clone()))
+        });
         if let Some(temperature) = input.limits.temperature_millis {
             model.temperature = f64::from(temperature) / 1000.0;
         }

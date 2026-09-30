@@ -125,6 +125,10 @@ pub struct SessionIntent {
     pub resume: Option<String>,
     #[serde(rename = "continue")]
     pub continue_session: bool,
+    /// The profiles the start selected past the rollout gate, which stay
+    /// offered to the session (reference `AgentManager._forced_agents`).
+    #[serde(skip)]
+    pub forced_agents: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]

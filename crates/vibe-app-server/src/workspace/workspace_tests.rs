@@ -798,11 +798,19 @@ fn smart_approve_is_selectable_but_offered_only_to_the_session_running_it() {
             .as_array()
             .is_some_and(|agents| agents.iter().all(|agent| agent["name"] != "smart-approve"))
     );
-    let profile = service
-        .agent_profile("smart-approve")
+    let (profile, forced) = service
+        .initial_agent("smart-approve")
         .expect("an explicit selection resolves");
     assert_eq!(profile.safety, "smart");
-    let running = service.runtime_projection(Some("smart-approve"));
+    assert!(forced, "the selection opts past the rollout gate");
+    assert!(
+        service.agent_profile("smart-approve").is_err(),
+        "a switch is not an explicit start and stays behind the gate"
+    );
+    // The start that forced it keeps it offered to that session alone.
+    let mut forced = service.clone();
+    forced.forced_agents.insert("smart-approve".to_owned());
+    let running = forced.runtime_projection(Some("smart-approve"));
     assert_eq!(running.active_agent["name"], json!("smart-approve"));
     assert_eq!(running.active_agent["safety"], json!("smart"));
     assert!(

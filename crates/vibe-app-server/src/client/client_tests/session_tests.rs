@@ -8,7 +8,7 @@ fn plan_review_tool_is_absent_without_a_canonical_plan_directory() {
     let (sender, _receiver) = tokio::sync::mpsc::channel::<InteractiveCallbackRequest>(1);
     let tools = ToolRegistry::default();
     InteractiveSessionToolFactory {
-        sender,
+        sender: crate::client::interactive::CallbackChannel::Shared(sender),
         plan_directory: None,
     }
     .register("session", &tools)

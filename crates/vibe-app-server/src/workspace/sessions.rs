@@ -213,13 +213,12 @@ impl WorkspaceService {
     pub fn update_runtime_agent(
         &self,
         session_id: &str,
-        name: &str,
+        profile: &AgentProfile,
     ) -> Result<Option<HydratedSession>, WorkspaceServiceError> {
         if !self.persists_runtime_sessions() {
             return Ok(None);
         }
-        self.set_session_agent(session_id, name)
-            .map(|(_, hydrated)| Some(hydrated))
+        self.write_session_agent(session_id, profile).map(Some)
     }
 
     pub fn close_saved_session(
@@ -433,8 +432,18 @@ impl WorkspaceService {
         name: &str,
     ) -> Result<(AgentProfile, HydratedSession), WorkspaceServiceError> {
         let profile = self.agent_profile(name)?;
+        let hydrated = self.write_session_agent(session_id, &profile)?;
+        Ok((profile, hydrated))
+    }
+
+    /// Records `profile` as the one the saved session runs.
+    fn write_session_agent(
+        &self,
+        session_id: &str,
+        profile: &AgentProfile,
+    ) -> Result<HydratedSession, WorkspaceServiceError> {
         let mut metadata = self.store.open(session_id).map_err(storage_error)?.metadata;
-        metadata.agent_profile = Some(serde_json::to_value(&profile)?);
+        metadata.agent_profile = Some(serde_json::to_value(profile)?);
         self.store
             .update_metadata(&metadata)
             .map_err(storage_error)?;
@@ -442,7 +451,7 @@ impl WorkspaceService {
         self.continuity
             .refresh(hydrated.clone())
             .map_err(|error| WorkspaceServiceError::Storage(error.to_string()))?;
-        Ok((profile, hydrated))
+        Ok(hydrated)
     }
 }
 

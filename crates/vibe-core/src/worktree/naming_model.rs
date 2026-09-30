@@ -105,6 +105,7 @@ async fn complete(prompt: &str, provider: &dyn CompletionProvider) -> Option<Str
         turn_id: None,
         session_id: None,
         model_override: None,
+        model: None,
         messages: vec![
             ModelMessage::System {
                 content: UtilityPrompt::WorktreeName.text().to_owned(),

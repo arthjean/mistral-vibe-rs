@@ -40,6 +40,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // driver writes turns where the workspace lists and resumes them.
     let workspace =
         WorkspaceService::for_runtime_session_root(vibe_home.join("sessions"), &working_directory);
+    // Reference `vibe-app-server` brings the configuration forward before it
+    // composes anything, as the interactive start does.
+    workspace.migrate_configuration()?;
     let session_root = workspace
         .persists_runtime_sessions()
         .then(|| workspace.session_root().to_path_buf());

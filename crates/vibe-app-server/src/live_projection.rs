@@ -184,6 +184,14 @@ impl EventObserver for AppServerEventObserver {
                 .turn_id
                 .clone()
                 .ok_or_else(|| "session handoff has no active turn".to_owned())?;
+            // What the rotation itself wrote, the notice a clearing leaves, is
+            // published under the new identifier once the handoff is out.
+            let written = snapshot
+                .history
+                .iter()
+                .filter(|entry| !projection.entries.contains_key(&entry.metadata().id))
+                .cloned()
+                .collect::<Vec<_>>();
             projection.entries = snapshot
                 .history
                 .iter()
@@ -203,12 +211,23 @@ impl EventObserver for AppServerEventObserver {
                 .send(AppServerUpdate::SessionHandoff {
                     old_session_id: from_session_id.clone(),
                     new_session_id: to_session_id.clone(),
-                    turn_id,
+                    turn_id: turn_id.clone(),
                     emitted_at: event.emitted_at,
-                    snapshot,
+                    snapshot: snapshot.clone(),
                     notice,
                 })
                 .map_err(|_| "app-server update receiver is closed".to_owned())?;
+            for entry in written {
+                self.sender
+                    .send(AppServerUpdate::HistoryAdded {
+                        session_id: snapshot.session_id.clone(),
+                        turn_id: turn_id.clone(),
+                        emitted_at: event.emitted_at,
+                        entry: Box::new(entry),
+                        snapshot: snapshot.clone(),
+                    })
+                    .map_err(|_| "app-server update receiver is closed".to_owned())?;
+            }
             return Ok(());
         }
 
@@ -336,6 +355,32 @@ fn history_entry_patch(
             "state" => appended_at(before, after, &["outputText"]),
             _ => None,
         });
+        // Reference `link_subagent` names the child a delegation opened by
+        // replacing that one field of the effect's detail.
+        let linked = before.filter(|_| key == "detail").and_then(|before| {
+            let mut before = before.clone();
+            let mut after = after.clone();
+            let field = "childSessionId";
+            let (Some(old), Some(new)) = (
+                before
+                    .as_object_mut()
+                    .and_then(|fields| fields.remove(field)),
+                after
+                    .as_object_mut()
+                    .and_then(|fields| fields.remove(field)),
+            ) else {
+                return None;
+            };
+            (old != new && before == after).then_some(new)
+        });
+        if let Some(child_session_id) = linked {
+            patch.push(JsonPatchOperation {
+                op: "replace",
+                path: format!("{path}/childSessionId"),
+                value: child_session_id,
+            });
+            continue;
+        }
         patch.push(match appended {
             Some((suffix, text)) => JsonPatchOperation {
                 op: "append",

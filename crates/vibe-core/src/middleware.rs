@@ -410,6 +410,115 @@ impl ConversationMiddleware for ContextWarningMiddleware {
     }
 }
 
+/// Tells the model once when the plan agent takes over a session and once
+/// when it hands the session back. Reference `ReadOnlyAgentMiddleware` over
+/// `make_plan_agent_reminder` and `PLAN_AGENT_EXIT`.
+///
+/// A session keeps one for its lifetime, since what it latches is whether the
+/// previous cycle already ran under the plan agent. The driver states the
+/// agent and the reminder before each turn, and a switch made during a turn
+/// states the agent again, so the next cycle reads the change.
+#[derive(Debug, Default)]
+pub struct PlanAgentMiddleware {
+    active: AtomicBool,
+    was_active: AtomicBool,
+    reminder: std::sync::Mutex<String>,
+}
+
+impl PlanAgentMiddleware {
+    /// Records whether the plan agent runs the session from now on.
+    pub fn set_active(&self, active: bool) {
+        self.active.store(active, Ordering::SeqCst);
+    }
+
+    /// Records the reminder the next activation injects.
+    pub fn set_reminder(&self, reminder: String) {
+        if let Ok(mut current) = self.reminder.lock() {
+            *current = reminder;
+        }
+    }
+}
+
+/// The reminder the plan agent runs under, naming the one file it may write.
+///
+/// The directives are the reference's (`make_plan_agent_reminder`); the
+/// wording is this port's own (`NOTICE`). The last step depends on whether
+/// the session can ask its client to approve the plan, and the second on
+/// whether it can ask questions at all.
+#[must_use]
+pub fn plan_agent_reminder(
+    plan_file: &str,
+    has_ask_user_question: bool,
+    has_exit_plan_mode: bool,
+) -> String {
+    let mut steps =
+        vec!["Investigate the request with read-only tools only (grep, read_file and the like)."];
+    if has_ask_user_question {
+        steps.push(
+            "Where a requirement or the approach is unclear, settle it with ask_user_question \
+             before the plan is final.",
+        );
+    }
+    steps.push("Record the plan in the plan file named above.");
+    steps.push(if has_exit_plan_mode {
+        "Once the plan is final, call exit_plan_mode so the user can approve it and implementation \
+         can begin."
+    } else {
+        "Once the plan is final, show it to the user and ask them to change modes if they approve \
+         it."
+    });
+    let numbered = steps
+        .iter()
+        .enumerate()
+        .map(|(index, step)| format!("{}. {step}", index + 1))
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "<{WARNING_TAG}>You are in plan mode. Change nothing: no edits other than to the plan \
+         file below or inside your scratchpad, no tool that is not read-only, no configuration \
+         change and no commit. This overrides every other instruction.\n\n## The plan file\n\
+         Write the plan to {plan_file} with write_file and edit, growing it step by step as your \
+         thinking moves. No other file may be edited, so create it early and keep it current.\n\n\
+         ## Steps\n{numbered}</{WARNING_TAG}>"
+    )
+}
+
+/// What the model reads once the plan agent hands the session back.
+#[must_use]
+pub fn plan_agent_exit() -> String {
+    format!(
+        "<{WARNING_TAG}>Plan mode is over. Carry out the plan if one is ready; either way, the \
+         editing tools are available again.</{WARNING_TAG}>"
+    )
+}
+
+impl ConversationMiddleware for PlanAgentMiddleware {
+    fn before_turn(&self, _context: &ConversationContext<'_>) -> MiddlewareResult {
+        let active = self.active.load(Ordering::SeqCst);
+        let was_active = self.was_active.swap(active, Ordering::SeqCst);
+        match (was_active, active) {
+            (true, false) => MiddlewareResult::inject(plan_agent_exit()),
+            (false, true) => MiddlewareResult::inject(
+                self.reminder
+                    .lock()
+                    .map(|reminder| reminder.clone())
+                    .unwrap_or_default(),
+            ),
+            _ => MiddlewareResult::proceed(),
+        }
+    }
+
+    /// A compaction replaces the reminder the model read, so the next cycle
+    /// under the plan agent tells it again. The stop reset the engine makes at
+    /// the top of every turn is not the session reset the reference means by
+    /// it, and leaves the latch alone.
+    fn reset(&self, reset_reason: ResetReason) {
+        if matches!(reset_reason, ResetReason::Compact) {
+            self.was_active.store(false, Ordering::SeqCst);
+        }
+    }
+}
+
 /// The registered policies, in the order the engine polls them.
 #[derive(Clone, Default)]
 pub struct MiddlewarePipeline {

@@ -490,6 +490,18 @@ impl AppServer {
     /// catalogs, and the session itself holds its accounting. Composing here is
     /// what makes the answer live rather than a fixed payload, and it is the
     /// same composition the notification publishes.
+    /// The workspace as `session` sees its agents: its directory, trust and
+    /// roots, and the profiles its start forced.
+    pub(crate) fn agent_workspace(&self, session: &SessionRuntime) -> WorkspaceService {
+        self.workspace.scoped_to_agents(
+            PathBuf::from(&session.working_directory),
+            session.intent.trusted,
+            &session.intent.add_directories,
+            session.intent.project_file_trust,
+            &session.intent.forced_agents,
+        )
+    }
+
     pub(crate) fn runtime_snapshot(&self, session_id: &str) -> Option<Value> {
         let mut snapshot = self.resources.lock().ok()?.runtime(session_id).ok()?;
         let settings = self
@@ -497,11 +509,12 @@ impl AppServer {
             .config_snapshot()
             .map(|snapshot| crate::connector_catalog::connector_settings(&snapshot))
             .unwrap_or_default();
-        let (active_agent, stats, context_window, pinned, connector_sources, hooks) =
+        let (agents, active_agent, stats, context_window, pinned, connector_sources, hooks) =
             match self.lock_sessions() {
                 Ok(sessions) => {
                     let session = sessions.get(session_id);
                     (
+                        session.map(|session| self.agent_workspace(session)),
                         session.and_then(|session| session.intent.agent.clone()),
                         public_stats(session),
                         session.map_or(0, |session| session.context_window),
@@ -512,7 +525,15 @@ impl AppServer {
                             .unwrap_or_default(),
                     )
                 }
-                Err(_) => (None, public_stats(None), 0, false, None, Default::default()),
+                Err(_) => (
+                    None,
+                    None,
+                    public_stats(None),
+                    0,
+                    false,
+                    None,
+                    Default::default(),
+                ),
             };
         // Once the session accepted a connector catalog, its connector rows are
         // the ones the accepted catalog publishes.
@@ -535,7 +556,10 @@ impl AppServer {
             }
         }
         let stats = priced(stats, self.workspace.active_model_pricing());
-        let projection = self.workspace.runtime_projection(active_agent.as_deref());
+        let projection = agents
+            .as_ref()
+            .unwrap_or(&self.workspace)
+            .runtime_projection(active_agent.as_deref());
         // Discovery issues and configuration diagnostics are the same fact to a
         // client: a file the session could not read cleanly.
         // Reference `project_diagnostics` lists the hook issues first.
@@ -935,6 +959,44 @@ impl AppServer {
             return Err(error);
         }
         Ok(())
+    }
+
+    /// Moves a session to `agent_name` while its turn runs, the way
+    /// `session/agent/update` does between turns: the profile is saved with the
+    /// session and the runtime rebuilt around it. Answers the profile, the intent and the
+    /// tools the turn's next request is to run with. Reference
+    /// `AgentLoop.switch_agent`, which `exit_plan_mode` calls mid-turn.
+    pub(crate) fn switch_agent_in_turn(
+        &self,
+        session_id: &str,
+        agent_name: &str,
+    ) -> Result<(AgentProfile, SessionIntent, ToolRegistry), ServerError> {
+        let scoped = {
+            let sessions = self.lock_sessions()?;
+            let session = sessions
+                .get(session_id)
+                .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
+            self.agent_workspace(session)
+        };
+        let params = BTreeMap::from([
+            ("sessionId".to_owned(), json!(session_id)),
+            ("agentName".to_owned(), json!(agent_name)),
+        ]);
+        let attachment = scoped
+            .dispatch("session/agent/update", &params)
+            .map_err(|error| ServerError::Resource(error.to_string()))?
+            .attachment
+            .ok_or_else(|| ServerError::Resource("the agent switch named no session".to_owned()))?;
+        let profile = attachment
+            .agent_profile
+            .clone()
+            .ok_or_else(|| ServerError::Resource("the agent switch named no profile".to_owned()))?;
+        self.refresh_workspace_runtime(&attachment, None)?;
+        let sessions = self.lock_sessions()?;
+        let session = sessions
+            .get(session_id)
+            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
+        Ok((profile, session.intent.clone(), session.tools.clone()))
     }
 
     /// Reads the session's hook files again. Reference
