@@ -721,69 +721,6 @@ impl super::LayeredConfig {
         self.replace_array_cas(target, expected_fingerprint, collection.key(), entries)
     }
 
-    pub fn connector_preferences(
-        &self,
-    ) -> Result<BTreeMap<String, IntegrationPreference>, ConfigError> {
-        let snapshot = self.load()?;
-        let entries = config_array(&snapshot.effective, IntegrationCollection::Connectors)?;
-        let collection = IntegrationCollection::Connectors;
-        let mut preferences = BTreeMap::new();
-        for entry in entries {
-            let entry = entry.as_table().ok_or_else(|| {
-                ConfigError::InvalidIntegration("each connectors entry must be a table".to_owned())
-            })?;
-            let name = collection
-                .identity(entry)
-                .filter(|name| !name.is_empty())
-                .ok_or_else(|| {
-                    ConfigError::InvalidIntegration(
-                        "connector field `name` must be a non-empty string".to_owned(),
-                    )
-                })?;
-            if preferences
-                .insert(name.to_owned(), collection.preference(entry)?)
-                .is_some()
-            {
-                return Err(ConfigError::InvalidIntegration(format!(
-                    "connector `{name}` appears more than once"
-                )));
-            }
-        }
-        Ok(preferences)
-    }
-
-    pub fn persist_connector_state(
-        &self,
-        name: &str,
-        enabled: bool,
-        disabled_tools: &BTreeSet<String>,
-    ) -> Result<ConfigSnapshot, ConfigError> {
-        self.persist_integration_state(
-            IntegrationCollection::Connectors,
-            name,
-            enabled,
-            disabled_tools,
-        )
-    }
-
-    pub fn persist_connector_state_cas(
-        &self,
-        name: &str,
-        enabled: bool,
-        disabled_tools: &BTreeSet<String>,
-        target: ConfigTarget,
-        expected_fingerprint: Option<String>,
-    ) -> Result<ConfigSnapshot, ConfigError> {
-        self.persist_integration_state_cas(
-            IntegrationCollection::Connectors,
-            name,
-            enabled,
-            disabled_tools,
-            target,
-            expected_fingerprint,
-        )
-    }
-
     fn replace_array_cas(
         &self,
         target: ConfigTarget,

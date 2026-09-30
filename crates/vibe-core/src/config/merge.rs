@@ -271,7 +271,7 @@ fn union_identity(field: &str, entry: &Value) -> Result<String, ConfigError> {
             table
                 .get(merge_key)
                 // A connector written by another client may carry `id` instead,
-                // which `connector_preferences` already reads.
+                // which `IntegrationCollection::identity` already reads.
                 .or_else(|| (field == "connectors").then(|| table.get("id")).flatten())
         })
         .and_then(Value::as_str)

@@ -1580,9 +1580,6 @@ winner = "defaults"
 [[mcp_servers]]
 name = "docs"
 url = "https://mcp.example.test/rpc"
-
-[[connectors]]
-name = "drive"
 "#,
         )
         .expect("integration fixture");
@@ -1591,7 +1588,7 @@ name = "drive"
             .persist_mcp_state("docs", false, &BTreeSet::from(["search".to_owned()]))
             .expect("MCP preference commit");
         let mcp_target = mcp_commit.selected_target;
-        let after_mcp_writer = store
+        store
             .batch_write(&[ConfigWrite {
                 target: mcp_target,
                 expected_fingerprint: mcp_commit.fingerprints[&mcp_target].clone(),
@@ -1614,40 +1611,6 @@ name = "drive"
         assert_eq!(
             store.load().expect("MCP conflict reloads").effective["writer"].as_str(),
             Some("after-mcp")
-        );
-
-        let connector_commit = store
-            .persist_connector_state("drive", false, &BTreeSet::from(["search".to_owned()]))
-            .expect("connector preference commit");
-        let connector_target = connector_commit.selected_target;
-        store
-            .batch_write(&[ConfigWrite {
-                target: connector_target,
-                expected_fingerprint: connector_commit.fingerprints[&connector_target].clone(),
-                mutations: vec![ConfigMutation::set(
-                    ["writer"],
-                    Value::String("after-connector".to_owned()),
-                )],
-            }])
-            .expect("interleaved connector writer");
-        assert!(matches!(
-            store.persist_connector_state_cas(
-                "drive",
-                true,
-                &BTreeSet::new(),
-                connector_target,
-                connector_commit.fingerprints[&connector_target].clone(),
-            ),
-            Err(ConfigError::ConcurrentEdit { target }) if target == connector_target
-        ));
-        let final_snapshot = store.load().expect("connector conflict reloads");
-        assert_eq!(
-            final_snapshot.effective["writer"].as_str(),
-            Some("after-connector")
-        );
-        assert_ne!(
-            final_snapshot.fingerprints[&connector_target],
-            after_mcp_writer.fingerprints[&connector_target]
         );
     }
 
@@ -1896,24 +1859,6 @@ disabled_tools = ["admin"]
             ..server.clone()
         };
         assert!(store.preflight_mcp_add(&same_url).is_err());
-
-        store
-            .persist_connector_state(
-                "github",
-                false,
-                &BTreeSet::from(["create_issue".to_owned()]),
-            )
-            .expect("connector state persists");
-        let preferences = store
-            .connector_preferences()
-            .expect("connector preferences reload");
-        assert_eq!(
-            preferences.get("github"),
-            Some(&IntegrationPreference {
-                enabled: false,
-                disabled_tools: BTreeSet::from(["create_issue".to_owned()]),
-            })
-        );
     }
 
     #[test]

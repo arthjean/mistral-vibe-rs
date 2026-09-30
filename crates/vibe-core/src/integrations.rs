@@ -1,9 +1,9 @@
-//! What every integration shares: the error it reports and the redaction its
-//! free-form text passes through before it is published.
+//! The redaction an integration's free-form text passes through before it is
+//! published.
 
 mod shared;
 
-pub use shared::{IntegrationError, redact};
+pub use shared::redact;
 
 #[cfg(test)]
 mod tests {

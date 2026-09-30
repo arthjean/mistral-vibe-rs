@@ -1,20 +1,6 @@
-use thiserror::Error;
-
 use crate::text::truncate_utf8;
 
 const MAX_PUBLIC_LOG_MESSAGE: usize = 2_048;
-
-#[derive(Debug, Error)]
-pub enum IntegrationError {
-    #[error("{0} lock is poisoned")]
-    LockPoisoned(&'static str),
-    #[error("connector `{0}` was not found")]
-    ConnectorNotFound(String),
-    #[error("invalid connector: {0}")]
-    InvalidConnector(String),
-    #[error("connector tool failed: {0}")]
-    Tool(String),
-}
 
 pub fn redact(message: &str) -> String {
     let bounded = truncate_utf8(message, MAX_PUBLIC_LOG_MESSAGE);
