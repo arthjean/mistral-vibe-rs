@@ -30,7 +30,10 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "scripts" / "parity"))
 
-from pin import EXPECTED_COMMIT  # noqa: E402  the path insert above enables it
+from pin import (  # noqa: E402  the path insert above enables it
+    DEFAULT_REFERENCE,
+    EXPECTED_COMMIT,
+)
 
 # The argument shapes the corpus replays, keyed by trace id.
 CASES: dict[str, dict[str, Any]] = {
@@ -193,7 +196,7 @@ def capture_post_mount_action(startup: Any) -> dict[str, Any] | None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--reference", type=Path, default=Path("/home/arthur/dev/mistral-vibe"))
+    parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
     parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
     parser.add_argument("--output", type=Path, default=None)
     arguments = parser.parse_args()
