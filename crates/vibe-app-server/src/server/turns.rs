@@ -334,6 +334,8 @@ impl AppServer {
                 ("emittedAt", json!(now_millis())),
             ]),
         ));
+        drop(sessions);
+        frames.extend(self.converge_connectors(&target_session_id));
         Ok(frames)
     }
 
@@ -418,6 +420,8 @@ impl AppServer {
                 ("emittedAt", json!(now_millis())),
             ]),
         ));
+        drop(sessions);
+        frames.extend(self.converge_connectors(session_id));
         Ok(frames)
     }
 

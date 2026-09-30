@@ -41,6 +41,7 @@ bench = false
 [dependencies]
 base64.workspace = true
 command-group.workspace = true
+fs2.workspace = true
 futures-util.workspace = true
 getrandom.workspace = true
 keyring.workspace = true

@@ -12,8 +12,7 @@ use vibe_app_server::client::{LiveDriverConfig, SessionOptions};
 use vibe_app_server::harness::HarnessSelection;
 use vibe_app_server::projects::{ProjectsService, VibeCodeCloudConfig};
 use vibe_app_server::resources::{
-    CoreResourceBackend, MistralConnectorClient, production_mcp_authentication,
-    production_mcp_factory,
+    CoreResourceBackend, production_mcp_authentication, production_mcp_factory,
 };
 use vibe_app_server::server::{AppServer, WebSearchAccess};
 use vibe_app_server::workspace::WorkspaceService;
@@ -303,24 +302,13 @@ pub(crate) fn resource_server(
     credential: String,
     sampling: Option<Arc<dyn SamplingHandler>>,
 ) -> Result<AppServer, CliError> {
-    let connector = Arc::new(
-        MistralConnectorClient::new(&arguments.api_base, credential.clone())
-            .map_err(|error| CliError::Terminal(error.to_string()))?,
-    );
     // The sampling handler is what turns an entry's `sampling_enabled` into a
     // capability: it carries the provider the driver already runs turns on, so
     // a server that asks for a completion is answered by the active model.
     let resource_backend = CoreResourceBackend::default()
         .with_config(workspace.layered_config())
         .with_mcp_factory(production_mcp_factory(sampling))
-        .with_mcp_authentication(production_mcp_authentication())
-        .with_connector_catalog(
-            connector.clone(),
-            connector.clone(),
-            arguments.credential_environment.clone(),
-            connector.base_url(),
-        )
-        .with_connector_auth(connector);
+        .with_mcp_authentication(production_mcp_authentication());
     Ok(AppServer::with_resource_backend(Arc::new(resource_backend))
         .using_workspace_service(workspace)
         .using_web_search_access(Some(web_search_access(arguments, credential)))

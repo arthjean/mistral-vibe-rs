@@ -393,19 +393,10 @@ pub(super) fn reduce_event(
                         output: Value::Null,
                         output_text: streamed,
                         duration_ms: *duration_ms,
-                        display: match &detail.remote {
-                            // The reference settles an errored call ahead of
-                            // the tool's own branch, so a remote failure names
-                            // what the server reported.
-                            Some(remote) => EffectResultDisplay::for_remote(
-                                remote,
-                                &detail.display,
-                                &RemoteSettlement::failed(content, &answered),
-                            ),
-                            // Reference `_result_display`: an error is shown
-                            // as its own message.
-                            None => failure_display(content),
-                        },
+                        // Reference `_result_display` settles an errored
+                        // call ahead of any tool's own branch, a proxied one
+                        // included: the error alone, with no verb.
+                        display: failure_display(content),
                         approval,
                     }
                 } else {

@@ -83,10 +83,21 @@ impl AppServer {
         Ok(resolved)
     }
 
-    /// Resolves the catalog `session_id` opens with, once: a catalog that
-    /// cannot be had leaves the session with none, as the reference logs it
-    /// and starts anyway.
-    async fn open_session_connectors(&self, session_id: &str) -> Result<(), ProtocolFault> {
+    /// Resolves the catalog `session_id` opens with, once, and publishes its
+    /// tools. A catalog that cannot be had leaves the session with none, as
+    /// the reference logs it and starts anyway.
+    ///
+    /// The reference resolves the catalog twice while it opens a session,
+    /// once to build the registry and once to bind it, so a bootstrap that
+    /// fails is fetched a second time.
+    pub(crate) async fn open_session_connectors(
+        &self,
+        session_id: &str,
+    ) -> Result<(), ProtocolFault> {
+        let (snapshot, provider) = self.connector_provider()?;
+        let account = catalog::mistral_account(&snapshot, |variable| {
+            self.workspace.resolve_credential(variable)
+        });
         {
             let mut sessions = self.lock_sessions()?;
             let session = sessions
@@ -96,23 +107,32 @@ impl AppServer {
                 return Ok(());
             }
             session.connectors.opened = true;
+            session.connectors.registry = account.is_some();
+            session.connectors.account = account;
         }
-        let (snapshot, provider) = self.connector_provider()?;
         let Some(provider) = provider else {
             return Ok(());
         };
-        let Ok(resolved) = self.resolve_connector_catalog(&provider, false).await else {
-            return Ok(());
+        let resolved = match self.resolve_connector_catalog(&provider, false).await {
+            Ok(resolved) => resolved,
+            Err(_) => match self.resolve_connector_catalog(&provider, false).await {
+                Ok(resolved) => resolved,
+                Err(_) => return Ok(()),
+            },
         };
         let selection = catalog::resolve_selection(&snapshot, Some(&resolved));
         if let Some(session) = self.lock_sessions()?.get_mut(session_id) {
             session.connectors.accept(resolved, selection);
+            // A registry the session cannot publish into is a session whose
+            // tool surface is gone, which nothing here can repair.
+            let _ = session.connectors.publish_tools(&session.tools);
         }
         Ok(())
     }
 
     /// Reference `reconfigure_connectors` on the legacy backend, which
-    /// refuses while the session runs a turn. Answers the accepted state.
+    /// refuses while the session runs a turn and keeps the candidate for the
+    /// turn's end. Answers the accepted state.
     fn accept_connector_catalog(
         &self,
         session_id: &str,
@@ -124,12 +144,32 @@ impl AppServer {
             .get_mut(session_id)
             .ok_or_else(|| session_missing("Session not found"))?;
         if let Some(turn_id) = &session.active_turn {
-            return Err(ProtocolFault::plain(
-                ProtocolErrorCode::Conflict,
-                format!("Session is busy running turn {turn_id}"),
-            ));
+            let message = format!("Session is busy running turn {turn_id}");
+            session.connectors.pending = Some((resolved, selection));
+            return Err(ProtocolFault::plain(ProtocolErrorCode::Conflict, message));
         }
-        Ok(session.connectors.accept(resolved, selection))
+        session.connectors.pending = None;
+        let state = session.connectors.accept(resolved, selection);
+        let _ = session.connectors.publish_tools(&session.tools);
+        Ok(state)
+    }
+
+    /// The catalog a session accepted while its turn ran, applied now that
+    /// the turn ended, with the runtime it makes: reference `server.py`
+    /// converges the pending connector selection on `turn/completed`.
+    pub(crate) fn converge_connectors(&self, session_id: &str) -> Option<Vec<u8>> {
+        {
+            let mut sessions = self.lock_sessions().ok()?;
+            let session = sessions.get_mut(session_id)?;
+            let (resolved, selection) = session.connectors.pending.take()?;
+            session.connectors.accept(resolved, selection);
+            let _ = session.connectors.publish_tools(&session.tools);
+        }
+        let runtime = self.runtime_snapshot(session_id)?;
+        Some(encode_notification(
+            "runtime/updated",
+            result_map([("sessionId", json!(session_id)), ("runtime", runtime)]),
+        ))
     }
 
     fn session_connector_view(&self, session_id: &str) -> Result<Value, ProtocolFault> {
@@ -507,16 +547,20 @@ impl AppServer {
                 provider.base_url
             ))
             .bearer_auth(&provider.api_key)
+            .query(&[("github_installation_link", "false")])
             .send()
             .await
             .ok()?;
         if !response.status().is_success() {
             return None;
         }
+        // The SDK's `AuthURLResponse` requires the page and its lifetime.
         let payload = response.json::<Value>().await.ok()?;
         payload
+            .get("ttl")
+            .filter(|ttl| ttl.is_i64() || ttl.is_u64())?;
+        payload
             .get("auth_url")
-            .or_else(|| payload.get("authUrl"))
             .and_then(Value::as_str)
             .map(str::to_owned)
     }

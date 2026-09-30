@@ -245,7 +245,6 @@ const IMPLEMENTED_METHODS: &[&str] = &[
     "connectors/auth/read",
     "connectors/read",
     "connectors/refresh",
-    "connectors/toggle",
     "diagnostics/list",
     "diagnostics/logs/read",
     "feedback/record",

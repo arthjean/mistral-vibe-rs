@@ -93,8 +93,19 @@ pub(crate) struct SessionConnectors {
     pub(crate) route_revision: u64,
     /// Whether the catalog the session opens with was resolved yet. The
     /// reference resolves it while it builds the session; this port does it
-    /// before the first connector operation reads the session.
+    /// once the session is attached, before its opening is answered.
     pub(crate) opened: bool,
+    /// Whether the session holds a connector registry, which reference
+    /// `_build_connector_registry` builds for a Mistral provider with a
+    /// credential whatever `enable_connectors` says. Without one the runtime
+    /// publishes no connector total.
+    pub(crate) registry: bool,
+    /// The account the session's connector tools call the gateway with.
+    pub(crate) account: Option<CatalogProvider>,
+    /// A catalog accepted while a turn ran, which the session converges on
+    /// once the turn ends (reference `_accept_candidate` and the
+    /// `turn/completed` convergence in `vibe/app_server/server.py`).
+    pub(crate) pending: Option<(ResolvedCatalog, ConnectorSelection)>,
 }
 
 /// Where a read found the catalog.
@@ -210,9 +221,17 @@ pub(crate) fn resolve_provider(
     snapshot: &ConfigSnapshot,
     resolve_key: impl Fn(&str) -> Option<String>,
 ) -> Option<CatalogProvider> {
-    if !connectors_enabled(snapshot) {
-        return None;
-    }
+    connectors_enabled(snapshot)
+        .then(|| mistral_account(snapshot, resolve_key))
+        .flatten()
+}
+
+/// The Mistral provider with its credential, whether or not connectors are
+/// enabled: what a session's connector registry is built for.
+pub(crate) fn mistral_account(
+    snapshot: &ConfigSnapshot,
+    resolve_key: impl Fn(&str) -> Option<String>,
+) -> Option<CatalogProvider> {
     let provider = mistral_provider(snapshot)?;
     let variable = provider
         .get("api_key_env_var")
@@ -666,26 +685,41 @@ pub(crate) fn read_cache(
 }
 
 /// Writes `catalog` into the cache, dropping the stale entries of other
-/// providers, through a temporary file renamed over the cache.
+/// providers, under the cache's lock and through a temporary file flushed and
+/// renamed over it (reference `ConnectorCatalogCache.write`).
 pub(crate) fn write_cache(
     path: &Path,
     catalog: &ResolvedCatalog,
     stored_at: i64,
 ) -> std::io::Result<()> {
+    use std::io::Write as _;
+
     let entry = cache_entry(catalog, stored_at);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let lock = std::fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(path.with_file_name(format!(".{CACHE_FILE}.lock")))?;
+    fs2::FileExt::lock_exclusive(&lock)?;
     let mut entries = read_cache_entries(path)
         .into_iter()
         .filter(|(fingerprint, entry)| parse_cache_entry(fingerprint, entry, stored_at).is_some())
         .collect::<Map<_, _>>();
     entries.insert(catalog.fingerprint.clone(), entry);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
     let temporary = path.with_file_name(format!(".{CACHE_FILE}.{}.tmp", std::process::id()));
-    std::fs::write(&temporary, python_json_unicode(&Value::Object(entries)))?;
-    std::fs::rename(&temporary, path).inspect_err(|_| {
+    let written = std::fs::File::create(&temporary)
+        .and_then(|mut file| {
+            file.write_all(python_json_unicode(&Value::Object(entries)).as_bytes())?;
+            file.sync_all()
+        })
+        .and_then(|()| std::fs::rename(&temporary, path));
+    if written.is_err() {
         let _ = std::fs::remove_file(&temporary);
-    })
+    }
+    let _ = fs2::FileExt::unlock(&lock);
+    written
 }
 
 /// The configuration's `connectors` entries.
@@ -814,23 +848,38 @@ pub(crate) fn selections_view(
                 .collect::<BTreeSet<_>>()
         })
         .unwrap_or_default();
+    // The entries are listed as written: the disabled tools keep their order
+    // and repetitions, which the selection itself reads as a set.
     Value::Array(
-        connector_settings(snapshot)
+        snapshot
+            .entries("connectors")
             .into_iter()
-            .map(|setting| {
-                json!({
-                    "alias": setting.alias,
-                    "disabled": setting.disabled,
-                    "disabledTools": setting.disabled_tools.iter().collect::<Vec<_>>(),
-                    "state": if resolved.contains(&setting.alias) { "resolved" } else { "pending" },
-                })
+            .filter_map(|entry| {
+                let alias = entry.get("name")?.as_str()?.to_owned();
+                let disabled_tools = entry
+                    .get("disabled_tools")
+                    .and_then(TomlValue::as_array)
+                    .map(|tools| {
+                        tools
+                            .iter()
+                            .filter_map(TomlValue::as_str)
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                Some(json!({
+                    "alias": alias,
+                    "disabled": entry.get("disabled").and_then(TomlValue::as_bool).unwrap_or(false),
+                    "disabledTools": disabled_tools,
+                    "state": if resolved.contains(&alias) { "resolved" } else { "pending" },
+                }))
             })
             .collect(),
     )
 }
 
 /// Reference `_legacy_connector_source`: how a session publishes one
-/// accepted connector. A ready connector is one the session connected.
+/// accepted connector. A ready connector publishing a tool is one the
+/// session's registry connected (reference `ConnectorRegistry.is_connected`).
 fn source_status(connector: &ResolvedConnector, selection: &ConnectorSelection) -> &'static str {
     if !selection.source_enabled(&connector.alias) {
         "disabled"
@@ -838,7 +887,7 @@ fn source_status(connector: &ResolvedConnector, selection: &ConnectorSelection) 
         "needs_auth"
     } else if !connector.ready && connector.auth_action == "credentials_setup" {
         "needs_setup"
-    } else if !connector.ready || connector.auth_action == "unknown" {
+    } else if !connector.ready || connector.auth_action == "unknown" || connector.tools.is_empty() {
         "unavailable"
     } else {
         "connected"
@@ -988,6 +1037,16 @@ impl SessionConnectors {
         Some((connector, source_status(connector, selection)))
     }
 
+    /// Reference `project_connector_counts` for the runtime: the counts over
+    /// the accepted sources, with no total for a session without a registry.
+    pub(crate) fn runtime_counts(&self) -> Value {
+        let mut counts = self.counts();
+        if !self.registry {
+            counts["total"] = Value::Null;
+        }
+        counts
+    }
+
     /// Reference `ConnectorCounts` over the accepted sources.
     pub(crate) fn counts(&self) -> Value {
         let (connected, total) = self
@@ -1008,32 +1067,33 @@ impl SessionConnectors {
 
     /// Reference `_project_mcp_connectors` once the legacy backend handed the
     /// accepted catalog to the session's registry: one row per connector the
-    /// configuration names or the catalog publishes, sorted by name. `None`
-    /// until a catalog is accepted.
+    /// configuration names or the catalog publishes, sorted by name. A
+    /// session that accepted no catalog lists the configured names alone.
     ///
     /// A connector no entry names, or one its entry disables, is disabled; a
     /// ready one publishing at least one tool is connected. Its published
     /// tools are listed with the selection deciding which are enabled, and a
     /// connector that is not ready lists its catalog tools, all disabled.
-    pub(crate) fn mcp_sources(&self, settings: &[ConnectorSetting]) -> Option<Vec<Value>> {
-        let (catalog, selection) = self.accepted.as_ref()?;
+    pub(crate) fn mcp_sources(&self, settings: &[ConnectorSetting]) -> Vec<Value> {
+        let empty = Vec::new();
+        let (connectors, selection) = self
+            .accepted
+            .as_ref()
+            .map_or((&empty, None), |(catalog, selection)| {
+                (&catalog.connectors, Some(selection))
+            });
         let mut names = settings
             .iter()
             .map(|setting| setting.alias.as_str())
-            .chain(
-                catalog
-                    .connectors
-                    .iter()
-                    .map(|connector| connector.alias.as_str()),
-            )
+            .chain(connectors.iter().map(|connector| connector.alias.as_str()))
             .collect::<Vec<_>>();
         names.sort_unstable();
         names.dedup();
-        let sources = names
+        names
             .into_iter()
             .map(|name| {
                 let setting = settings.iter().find(|setting| setting.alias == name);
-                let connector = catalog.connectors.iter().find(|connector| connector.alias == name);
+                let connector = connectors.iter().find(|connector| connector.alias == name);
                 let connected = connector.is_some_and(|connector| connector.ready && !connector.tools.is_empty());
                 let status = if setting.is_none_or(|setting| setting.disabled) {
                     "disabled"
@@ -1058,7 +1118,9 @@ impl SessionConnectors {
                                         .clone()
                                         .unwrap_or_else(|| format!("Connector tool '{}'", tool.raw_name));
                                     let first = description.split('\n').next().unwrap_or_default().trim().to_owned();
-                                    (first, selection.tool_enabled(name, &tool.raw_name))
+                                    let enabled = selection
+                                        .is_some_and(|selection| selection.tool_enabled(name, &tool.raw_name));
+                                    (first, enabled)
                                 } else {
                                     (tool.description.clone().unwrap_or_default(), false)
                                 };
@@ -1086,8 +1148,7 @@ impl SessionConnectors {
                     "pluginName": null,
                 })
             })
-            .collect();
-        Some(sources)
+            .collect()
     }
 
     /// Accepts a catalog and the selection over it, which reroutes the
@@ -1102,6 +1163,8 @@ impl SessionConnectors {
         self.view()
     }
 }
+
+mod tools;
 
 #[cfg(test)]
 #[path = "connector_catalog_tests.rs"]

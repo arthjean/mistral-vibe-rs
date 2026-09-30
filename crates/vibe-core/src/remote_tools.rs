@@ -81,32 +81,18 @@ pub(crate) fn public_tool_name(source: ToolSource, alias: &str, tool: &str) -> S
     }
 }
 
-/// Why a provider's tools are not currently callable.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ProviderReach {
-    /// The provider answers calls right now.
-    Ready,
-    /// The provider exists but cannot be reached, so its tools stay listed.
-    Unreachable,
-}
-
-/// The availability one tool of a provider should carry.
-///
-/// Disabling is a user decision and outranks reachability: a disabled tool is
-/// reported as disabled even when its provider is down.
+/// The availability one tool of a reachable provider should carry: disabled
+/// when the provider or the tool is, available otherwise.
 #[must_use]
 pub(crate) fn tool_availability(
     provider_enabled: bool,
     disabled_tools: &BTreeSet<String>,
-    reach: ProviderReach,
     tool: &str,
 ) -> ToolAvailability {
     if !provider_enabled || disabled_tools.contains(tool) {
         ToolAvailability::Disabled
-    } else if reach == ProviderReach::Ready {
-        ToolAvailability::Available
     } else {
-        ToolAvailability::Unavailable
+        ToolAvailability::Available
     }
 }
 
@@ -158,32 +144,18 @@ mod tests {
     }
 
     #[test]
-    fn disabling_outranks_unreachability() {
+    fn a_disabled_provider_or_tool_is_disabled() {
         let disabled = BTreeSet::from(["mcp_docs_read".to_owned()]);
         assert_eq!(
-            tool_availability(true, &disabled, ProviderReach::Ready, "mcp_docs_read"),
+            tool_availability(true, &disabled, "mcp_docs_read"),
             ToolAvailability::Disabled
         );
         assert_eq!(
-            tool_availability(true, &disabled, ProviderReach::Unreachable, "mcp_docs_list"),
-            ToolAvailability::Unavailable
-        );
-        assert_eq!(
-            tool_availability(
-                false,
-                &BTreeSet::new(),
-                ProviderReach::Ready,
-                "mcp_docs_list"
-            ),
+            tool_availability(false, &BTreeSet::new(), "mcp_docs_list"),
             ToolAvailability::Disabled
         );
         assert_eq!(
-            tool_availability(
-                true,
-                &BTreeSet::new(),
-                ProviderReach::Ready,
-                "mcp_docs_list"
-            ),
+            tool_availability(true, &BTreeSet::new(), "mcp_docs_list"),
             ToolAvailability::Available
         );
     }

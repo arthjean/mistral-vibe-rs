@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Run account connectors the way the reference does. A session resolves the
+  connector catalog as it opens and offers the tools of every ready connector
+  the configuration opts in (`[[connectors]]` entries, their `disabled_tools`
+  and the global `enabled_tools` and `disabled_tools`) as
+  `connector_{alias}_{tool}`, after every other tool. Calling one goes through
+  the Mistral connector gateway with the account key, asks for approval like an
+  MCP tool and shows its result as one; a failing gateway tells the model which
+  connector failed and why. Refreshing, toggling or authorizing a connector
+  updates the running session, a change made while a turn runs applies when it
+  ends, and the runtime reports no connector total without a Mistral key. The
+  terminal and the editor adapter toggle connectors through
+  `connector_catalog/toggle`, which replaces the port-only `connectors/toggle`,
+  and a call to a tool the session does not offer now reads
+  `Unknown tool '<name>'`.
+
 - Run agents, subagents and delegation the way the reference does. Profiles
   are read from `agent_paths`, the project's `.vibe/agents` and
   `~/.vibe/agents` with the reference's precedence; an invalid file is

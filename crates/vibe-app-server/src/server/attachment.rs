@@ -211,12 +211,10 @@ impl AppServer {
             command,
         };
         let session_id = request.session_id.clone();
-        let method = request.command.method();
         resource_result_batch(
             request_id,
             self,
             &session_id,
-            method,
             backend.dispatch(request).await,
         )
     }
@@ -273,6 +271,9 @@ impl AppServer {
             && let Ok(mut resources) = self.resources.lock()
         {
             resources.record_integrations(session_id, state);
+        }
+        if let Some(session_id) = &session_id {
+            self.overlay_session_connectors(session_id, outcome.result.get_mut("mcp"));
         }
         let mut outbound = session_id
             .as_deref()
@@ -502,44 +503,28 @@ impl AppServer {
         )
     }
 
-    pub(crate) fn runtime_snapshot(&self, session_id: &str) -> Option<Value> {
-        let mut snapshot = self.resources.lock().ok()?.runtime(session_id).ok()?;
+    /// Replaces the connector rows of `mcp` with the ones the session's
+    /// accepted catalog, or the configuration alone, publishes (reference
+    /// `_project_mcp_connectors`), answering the session's connector counts.
+    pub(crate) fn overlay_session_connectors(
+        &self,
+        session_id: &str,
+        mcp: Option<&mut Value>,
+    ) -> Option<Value> {
         let settings = self
             .workspace
             .config_snapshot()
             .map(|snapshot| crate::connector_catalog::connector_settings(&snapshot))
             .unwrap_or_default();
-        let (agents, active_agent, stats, context_window, pinned, connector_sources, hooks) =
-            match self.lock_sessions() {
-                Ok(sessions) => {
-                    let session = sessions.get(session_id);
-                    (
-                        session.map(|session| self.agent_workspace(session)),
-                        session.and_then(|session| session.intent.agent.clone()),
-                        public_stats(session),
-                        session.map_or(0, |session| session.context_window),
-                        session.is_some_and(|session| session.pinned_model.is_some()),
-                        session.and_then(|session| session.connectors.mcp_sources(&settings)),
-                        session
-                            .map(|session| session.hooks.clone())
-                            .unwrap_or_default(),
-                    )
-                }
-                Err(_) => (
-                    None,
-                    None,
-                    public_stats(None),
-                    0,
-                    false,
-                    None,
-                    Default::default(),
-                ),
-            };
-        // Once the session accepted a connector catalog, its connector rows are
-        // the ones the accepted catalog publishes.
-        if let Some(connector_sources) = connector_sources
-            && let Some(Value::Object(mcp)) = snapshot.get_mut("mcp")
-        {
+        let (connector_sources, counts) = {
+            let sessions = self.lock_sessions().ok()?;
+            let session = sessions.get(session_id)?;
+            (
+                session.connectors.mcp_sources(&settings),
+                session.connectors.runtime_counts(),
+            )
+        };
+        if let Some(Value::Object(mcp)) = mcp {
             let mut replaced = Vec::new();
             if let Some(Value::Array(sources)) = mcp.get_mut("sources") {
                 sources.retain(|source| {
@@ -554,6 +539,31 @@ impl AppServer {
             if let Some(Value::Object(errors)) = mcp.get_mut("discoveryErrors") {
                 errors.retain(|name, _| !replaced.contains(name));
             }
+        }
+        Some(counts)
+    }
+
+    pub(crate) fn runtime_snapshot(&self, session_id: &str) -> Option<Value> {
+        let mut snapshot = self.resources.lock().ok()?.runtime(session_id).ok()?;
+        let (agents, active_agent, stats, context_window, pinned, hooks) =
+            match self.lock_sessions() {
+                Ok(sessions) => {
+                    let session = sessions.get(session_id);
+                    (
+                        session.map(|session| self.agent_workspace(session)),
+                        session.and_then(|session| session.intent.agent.clone()),
+                        public_stats(session),
+                        session.map_or(0, |session| session.context_window),
+                        session.is_some_and(|session| session.pinned_model.is_some()),
+                        session
+                            .map(|session| session.hooks.clone())
+                            .unwrap_or_default(),
+                    )
+                }
+                Err(_) => (None, None, public_stats(None), 0, false, Default::default()),
+            };
+        if let Some(counts) = self.overlay_session_connectors(session_id, snapshot.get_mut("mcp")) {
+            snapshot.insert("connectors".to_owned(), counts);
         }
         let stats = priced(stats, self.workspace.active_model_pricing());
         let projection = agents

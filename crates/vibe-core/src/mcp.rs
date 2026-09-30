@@ -12,9 +12,7 @@ use tokio::sync::{Mutex, watch};
 use url::Url;
 
 use crate::policy::{ApprovalAgent, PermissionContext, PermissionStore, PolicyGuardedTool};
-use crate::remote_tools::{
-    ProviderReach, public_tool_name, sanitize_mcp_name, set_all, tool_availability,
-};
+use crate::remote_tools::{public_tool_name, sanitize_mcp_name, set_all, tool_availability};
 use crate::text::canonical_url;
 
 use crate::tools::{
@@ -264,24 +262,6 @@ impl McpPeerFactory for DefaultMcpPeerFactory {
     }
 }
 
-/// The HTTP-only factory the connector gateway uses.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct HttpMcpPeerFactory;
-
-impl McpPeerFactory for HttpMcpPeerFactory {
-    fn connect<'a>(&'a self, config: &'a McpServerConfig) -> McpFuture<'a, Arc<dyn McpPeer>> {
-        Box::pin(async move {
-            validate_config(config)?;
-            if matches!(config.transport, McpTransportConfig::Stdio { .. }) {
-                return Err(McpError::Transport(
-                    "the HTTP MCP factory requires an HTTP transport".to_owned(),
-                ));
-            }
-            Ok(Arc::new(ServerPeer::new(config, None)) as Arc<dyn McpPeer>)
-        })
-    }
-}
-
 /// One configured server.
 struct ServerPeer {
     config: McpServerConfig,
@@ -458,82 +438,62 @@ fn session_error(error: SessionError) -> McpError {
     }
 }
 
-/// Decodes a `tools/call` result the way the connector gateway renders it.
-///
-/// Connectors publish their own result shape, so this stays beside the MCP
-/// rendering rather than inside it.
-pub fn decode_tool_result(result: Value) -> Result<ToolExecutionOutput, McpError> {
-    let content = result
-        .get("content")
-        .and_then(Value::as_array)
-        .ok_or_else(|| McpError::Tool("tools/call omitted content".to_owned()))?;
-    let mut model_text = content
-        .iter()
-        .filter(|block| block.get("type").and_then(Value::as_str) == Some("text"))
-        .filter_map(|block| block.get("text").and_then(Value::as_str))
-        .collect::<Vec<_>>()
-        .join("\n");
-    if model_text.is_empty() {
-        model_text = match result.get("structuredContent") {
-            Some(structured) => serde_json::to_string(structured),
-            None => serde_json::to_string(content),
-        }
-        .map_err(|error| McpError::Tool(error.to_string()))?;
-    }
-    if result
-        .get("isError")
-        .and_then(Value::as_bool)
-        .unwrap_or(false)
-    {
-        return Err(McpError::Tool(if model_text.is_empty() {
-            "remote MCP tool reported an error".to_owned()
-        } else {
-            crate::integrations::redact(&model_text)
-        }));
-    }
-    Ok(ToolExecutionOutput::new(model_text)
-        .displayed_as(json!({"kind": "mcp", "isError": false}))
-        .typed(
-            result
-                .get("structuredContent")
-                .cloned()
-                .unwrap_or_else(|| json!({"content": content})),
-        ))
+/// Why a call through the connector gateway failed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GatewayFailure {
+    /// The gateway answered with a failing HTTP status.
+    Status(u16),
+    /// No answer arrived in time.
+    Timeout,
+    /// The gateway could not be reached.
+    Unreachable(String),
+    /// The exchange failed after the gateway answered.
+    Failed(String),
 }
 
-/// One `tools/call` over its own HTTP session, answered with the raw result:
-/// the connector gateway's exchange.
-pub async fn call_http_tool(
-    config: &McpServerConfig,
+/// One `tools/call` through the connector gateway at `url`, rendered as an
+/// MCP tool result naming `url` as its server.
+///
+/// Reference `ConnectorProxyTool.run` calls `call_tool_http` with a bearer
+/// header and neither timeout, so neither the session nor the call is bounded
+/// here.
+pub async fn call_connector_gateway(
+    url: &Url,
+    api_key: &str,
     name: &str,
     arguments: Value,
-) -> Result<Value, McpError> {
-    validate_config(config)?;
-    let peer = ServerPeer::new(config, None);
-    let headers = authorization::http_headers(config);
-    let (McpTransportConfig::Http { url, .. } | McpTransportConfig::StreamableHttp { url, .. }) =
-        &config.transport
-    else {
-        return Err(McpError::Transport(
-            "a connector call requires an HTTP transport".to_owned(),
-        ));
+) -> Result<ToolExecutionOutput, GatewayFailure> {
+    let headers = BTreeMap::from([("Authorization".to_owned(), format!("Bearer {api_key}"))]);
+    let failure = |error: SessionError| match error {
+        SessionError::Unauthorized => GatewayFailure::Status(401),
+        SessionError::Status(status) => GatewayFailure::Status(status),
+        SessionError::Timeout(_) => GatewayFailure::Timeout,
+        SessionError::Transport(message) => GatewayFailure::Unreachable(message),
+        other => GatewayFailure::Failed(other.to_string()),
     };
     let mut session = Session::open(
         Endpoint::Http {
             url,
             headers: &headers,
         },
-        Some(peer.startup_timeout),
+        None,
         None,
     )
     .await
-    .map_err(session_error)?;
-    let answer = session
-        .call_tool(name, arguments, Some(peer.tool_timeout))
-        .await;
+    .map_err(failure)?;
+    let answer = session.call_tool(name, arguments, None).await;
     let terminate = answer.as_ref().err().is_none_or(Session::terminates);
     session.close(terminate).await;
-    answer.map(|answer| answer.result).map_err(session_error)
+    let answer = answer.map_err(failure)?;
+    let result = McpToolResult::parse(
+        url.to_string(),
+        name.to_owned(),
+        &answer.result,
+        &answer.raw,
+    );
+    Ok(ToolExecutionOutput::new(result.model_text())
+        .displayed_as(json!({"kind": "mcp", "isError": false}))
+        .typed(result.typed()))
 }
 
 /// The JSON-RPC answer to one `sampling/createMessage` request.

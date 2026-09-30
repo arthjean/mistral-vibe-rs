@@ -2,21 +2,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 
-use crate::host::now_millis;
 use crate::params::{self, required_string, usize_param};
 use crate::vocabulary::{McpSourceKind, McpSourceStatus};
 use serde_json::{Map, Value, json};
 use thiserror::Error;
 use tokio::sync::Mutex;
-use url::Url;
-use vibe_core::config::{ConfigSnapshot, LayeredConfig};
-use vibe_core::integrations::{
-    ConnectorAuthKind, ConnectorAuthState, ConnectorBackend, ConnectorDefinition,
-    ConnectorRegistry, ConnectorView, redact,
-};
+use vibe_core::config::LayeredConfig;
+use vibe_core::integrations::redact;
 use vibe_core::mcp::{
     DefaultMcpPeerFactory, McpAuthenticationService, McpPeerFactory, McpRegistry, McpServerConfig,
     McpServerStatus, McpServerView, SamplingHandler,
@@ -35,16 +29,14 @@ use vibe_core::tools::config::ShellCommandConfig;
 mod backend_command;
 mod core_backend;
 pub mod mcp_catalog;
-mod mistral_connector;
 mod views;
 
 use views::*;
 
-pub use backend_command::{ConnectorCommand, ResourceBackendCommand, ShellCommand};
+pub use backend_command::{ResourceBackendCommand, ShellCommand};
 pub use mcp_catalog::{
     McpCatalogCall, McpCatalogError, McpCatalogNotify, McpCatalogOutcome, McpCatalogTarget,
 };
-pub use mistral_connector::MistralConnectorClient;
 
 /// The peer factory the installed binaries connect MCP servers through.
 ///
@@ -72,10 +64,6 @@ pub fn production_mcp_authentication() -> Arc<McpAuthenticationService> {
 
 pub const RESOURCE_METHODS: &[&str] = &[
     "account/read",
-    "connectors/auth/read",
-    "connectors/read",
-    "connectors/refresh",
-    "connectors/toggle",
     "diagnostics/list",
     "diagnostics/logs/read",
     "feedback/record",
@@ -98,19 +86,7 @@ pub const RESOURCE_METHODS: &[&str] = &[
     "tools/list",
 ];
 
-pub const BACKEND_RESOURCE_METHODS: &[&str] = &[
-    "connectors/auth/read",
-    "connectors/read",
-    "connectors/refresh",
-    "connectors/toggle",
-    "shell/interrupt",
-    "shell/run",
-];
-
-/// The transport a connector is published under. Reference `project_mcp`
-/// spells it the same way, because a connector reaches its tools through the
-/// gateway rather than through a transport an operator configured.
-const CONNECTOR_TRANSPORT: &str = "connector";
+pub const BACKEND_RESOURCE_METHODS: &[&str] = &["shell/interrupt", "shell/run"];
 
 const MAX_RESOURCE_RECORDS: usize = 1_024;
 const MAX_RESOURCE_SESSIONS: usize = 256;
@@ -146,14 +122,13 @@ pub struct ResourceSignals {
     pub integrations: Option<IntegrationState>,
 }
 
-/// The integration surface a session publishes: every MCP source it can reach
-/// and how many connectors are behind them.
+/// The integration surface a session's resource backend publishes: every MCP
+/// server it can reach. The connector rows and counts are the app server's
+/// (`AppServer::overlay_session_connectors`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct IntegrationState {
     /// An `MCPState`.
     pub mcp: Value,
-    /// A `ConnectorCounts`.
-    pub counts: Value,
 }
 
 #[derive(Clone)]
@@ -192,29 +167,6 @@ pub type ResourceFuture<'a, T> =
 /// What a catalog call resolves to.
 pub type McpCatalogFuture<'a> =
     Pin<Box<dyn Future<Output = Result<McpCatalogOutcome, McpCatalogError>> + Send + 'a>>;
-
-pub trait ConnectorAuthBackend: Send + Sync {
-    fn auth_url<'a>(
-        &'a self,
-        session_id: &'a str,
-        connector_id: &'a str,
-    ) -> ResourceFuture<'a, Option<String>>;
-
-    fn refresh<'a>(
-        &'a self,
-        session_id: &'a str,
-        connector_id: &'a str,
-    ) -> ResourceFuture<'a, bool>;
-}
-
-pub trait ConnectorCatalogBackend: Send + Sync {
-    fn catalog<'a>(&'a self) -> ResourceFuture<'a, ConnectorCatalog>;
-}
-
-pub struct ConnectorCatalog {
-    pub definitions: Vec<ConnectorDefinition>,
-    pub connected: BTreeSet<String>,
-}
 
 pub trait ResourceBackend: Send + Sync {
     fn open_session(&self, session: ResourceSession) -> Result<(), ResourceError>;
@@ -262,7 +214,6 @@ pub trait ResourceBackend: Send + Sync {
 }
 
 pub use core_backend::CoreResourceBackend;
-use core_backend::CoreResourceSession;
 
 #[derive(Debug, Clone)]
 struct McpSource {
@@ -289,7 +240,6 @@ pub struct ResourceService {
     /// an empty page rather than an error.
     log: Option<FileLog>,
     feedback_actions: Vec<String>,
-    connectors: BTreeMap<String, bool>,
     mcp: BTreeMap<String, McpSource>,
     policy_stores: BTreeMap<String, PermissionStore>,
     tool_registries: BTreeMap<String, ToolRegistry>,
@@ -367,34 +317,6 @@ impl ResourceService {
         command: ResourceBackendCommand,
     ) -> Result<ResourceDispatch, ResourceError> {
         match command {
-            // The counts are the whole answer here too: a fallback that
-            // published the sources would answer in a shape
-            // `ConnectorsReadResponse` refuses, and the attached backend does
-            // not.
-            ResourceBackendCommand::Connector(ConnectorCommand::Read) => {
-                Ok(read_only([("counts", self.connector_counts())]))
-            }
-            ResourceBackendCommand::Connector(ConnectorCommand::AuthRead { name }) => {
-                let connected = self.connectors.get(&name).ok_or_else(|| {
-                    ResourceError::NotFound(format!("connector `{name}` was not found"))
-                })?;
-                Ok(read_only([(
-                    "url",
-                    if *connected {
-                        Value::Null
-                    } else {
-                        json!(format!("https://connectors.mistral.ai/auth/{name}"))
-                    },
-                )]))
-            }
-            ResourceBackendCommand::Connector(ConnectorCommand::Refresh { name }) => {
-                Err(ResourceError::Unavailable(format!(
-                    "connector `{name}` refresh backend is not attached"
-                )))
-            }
-            ResourceBackendCommand::Connector(ConnectorCommand::Toggle { .. }) => Err(
-                ResourceError::Unavailable("connector toggle backend is not attached".to_owned()),
-            ),
             ResourceBackendCommand::Shell(ShellCommand::Run { operation_id, .. }) => {
                 Err(ResourceError::Unavailable(format!(
                     "shell operation `{operation_id}` cannot run because no shell backend is attached"
@@ -512,13 +434,6 @@ impl ResourceService {
             )
             .take(MAX_RESOURCE_RECORDS)
             .collect()
-    }
-
-    fn connector_counts(&self) -> Value {
-        json!({
-            "connected": self.connectors.values().filter(|connected| **connected).count(),
-            "total": self.connectors.len()
-        })
     }
 
     /// Reference `_diagnostics_logs_read`: one page of the log file, newest
@@ -675,10 +590,9 @@ impl ResourceService {
                 "issues".to_owned(),
                 Value::Array(self.reported_issues(Some(session_id))),
             ),
-            (
-                "connectors".to_owned(),
-                recorded.map_or_else(|| self.connector_counts(), |state| state.counts.clone()),
-            ),
+            // A neutral placeholder: `AppServer::runtime_snapshot` replaces it
+            // with the counts over the session's accepted connector catalog.
+            ("connectors".to_owned(), json!({"connected": 0, "total": 0})),
             (
                 "mcp".to_owned(),
                 recorded.map_or_else(|| self.mcp_state(), |state| state.mcp.clone()),
@@ -686,47 +600,6 @@ impl ResourceService {
         ]
         .into_iter()
         .collect())
-    }
-}
-
-/// Reads a JSON response body under a byte budget.
-///
-/// The budget is enforced while streaming rather than trusting
-/// `Content-Length`, so a lying header cannot make the client allocate without
-/// bound.
-async fn bounded_json<T: serde::de::DeserializeOwned>(
-    mut response: reqwest::Response,
-    label: &str,
-    limit: usize,
-) -> Result<T, ResourceError> {
-    let exceeded = || ResourceError::Unavailable(format!("{label} exceeded its byte budget"));
-    if response
-        .content_length()
-        .is_some_and(|length| length > limit as u64)
-    {
-        return Err(exceeded());
-    }
-    let mut bytes = Vec::new();
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|error| ResourceError::Unavailable(redact(&error.to_string())))?
-    {
-        if bytes.len().saturating_add(chunk.len()) > limit {
-            return Err(exceeded());
-        }
-        bytes.extend_from_slice(&chunk);
-    }
-    serde_json::from_slice(&bytes)
-        .map_err(|error| ResourceError::Unavailable(format!("{label} was invalid: {error}")))
-}
-
-fn integration_error(error: vibe_core::integrations::IntegrationError) -> ResourceError {
-    match error {
-        vibe_core::integrations::IntegrationError::ConnectorNotFound(name) => {
-            ResourceError::NotFound(format!("connector `{name}` was not found"))
-        }
-        error => ResourceError::Unavailable(redact(&error.to_string())),
     }
 }
 

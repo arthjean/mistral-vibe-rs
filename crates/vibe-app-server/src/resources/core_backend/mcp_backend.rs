@@ -40,22 +40,15 @@ type AuthRequiredKey = (String, String, String, Option<String>);
 const INACTIVE_SOURCE: &str = "This MCP server is configured but not active in this session";
 
 impl CoreResourceBackend {
-    /// Every source a session can call a tool through: its configured MCP
-    /// servers and its connectors, in the one list `MCPState` declares.
-    ///
-    /// The connectors are enumerated best-effort. A catalog this session cannot
-    /// reach leaves them out of the list rather than failing the read: the MCP
-    /// servers are still there to publish, and a client that cannot read them
-    /// loses more than one that sees no connector.
+    /// Every configured MCP server a session can call a tool through, in the
+    /// list `MCPState` declares. The session's connector rows are the app
+    /// server's to publish: `AppServer::overlay_session_connectors` adds them.
     pub(super) async fn mcp_state(&self, session: &CoreResourceSession) -> Value {
-        let _ = self.ensure_connectors(session).await;
-        let connectors = session.connectors.views().unwrap_or_default();
         let configured = self.session_mcp_configs(session).unwrap_or_default();
         project_mcp(
             &configured,
             session.mcp.read().await,
             session.mcp.auth_status().await,
-            connectors,
             &session.tools,
         )
     }
@@ -65,10 +58,8 @@ impl CoreResourceBackend {
         &self,
         session: &CoreResourceSession,
     ) -> crate::resources::IntegrationState {
-        let counts = connector_counts_value(&session.connectors.views().unwrap_or_default());
         crate::resources::IntegrationState {
             mcp: self.mcp_state(session).await,
-            counts,
         }
     }
 
@@ -534,12 +525,11 @@ fn session_log_dir(effective: &toml::Table) -> Option<PathBuf> {
 }
 
 /// Reference `project_mcp_sources` over the legacy runtime's `project_mcp`:
-/// every configured server in configuration order, then the connectors.
+/// every configured server in configuration order.
 fn project_mcp(
     configured: &[McpServerConfig],
     views: Vec<McpServerView>,
     auth_status: BTreeMap<String, McpAuthStatus>,
-    connectors: Vec<ConnectorView>,
     tools: &ToolRegistry,
 ) -> Value {
     let specs = tools
@@ -553,7 +543,7 @@ fn project_mcp(
         .map(|view| (view.alias.clone(), view))
         .collect::<BTreeMap<_, _>>();
     let mut discovery_errors = Map::new();
-    let mut sources = Vec::with_capacity(configured.len().saturating_add(connectors.len()));
+    let mut sources = Vec::with_capacity(configured.len());
     for server in configured {
         let name = server.alias.as_str();
         let view = views.get(name);
@@ -617,42 +607,6 @@ fn project_mcp(
             "pluginName": null,
         }));
     }
-    for view in connectors {
-        if let Some(diagnostic) = &view.diagnostic {
-            discovery_errors.insert(view.name.clone(), json!(redact(diagnostic)));
-        }
-        let disabled_tools = view.disabled_tools;
-        let status = connector_status(view.enabled, view.auth_state);
-        let available = status == McpSourceStatus::Connected;
-        let mut tools = view
-            .tool_names
-            .into_iter()
-            .map(|name| {
-                let enabled = available && !disabled_tools.contains(&name);
-                let description = specs
-                    .get(&name)
-                    .map(|spec| display_description(&spec.description, ""))
-                    .unwrap_or_default();
-                json!({"name": name, "description": description, "enabled": enabled})
-            })
-            .collect::<Vec<_>>();
-        tools.sort_by(|left, right| {
-            left["name"]
-                .as_str()
-                .unwrap_or_default()
-                .cmp(right["name"].as_str().unwrap_or_default())
-        });
-        sources.push(json!({
-            "name": view.name,
-            "displayName": view.name,
-            "kind": McpSourceKind::Connector,
-            "transport": CONNECTOR_TRANSPORT,
-            "status": status,
-            "tools": tools,
-            "error": null,
-            "pluginName": null,
-        }));
-    }
     json!({
         "sources": sources,
         "discoveryErrors": Value::Object(discovery_errors),
@@ -665,12 +619,10 @@ fn project_mcp(
 /// without the `[alias] ` prefix a published MCP description carries.
 fn display_description(description: &str, source: &str) -> String {
     let prefix = format!("[{source}] ");
-    let head = if source.is_empty() {
-        description
-    } else {
-        description.strip_prefix(&prefix).unwrap_or(description)
-    };
-    head.split('\n')
+    description
+        .strip_prefix(&prefix)
+        .unwrap_or(description)
+        .split('\n')
         .next()
         .unwrap_or_default()
         .trim()

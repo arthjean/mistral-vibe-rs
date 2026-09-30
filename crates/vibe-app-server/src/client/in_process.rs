@@ -423,6 +423,10 @@ impl InProcessClient {
         &mut self,
         session_id: &str,
     ) -> Result<Vec<String>, ClientError> {
+        // The session's connector catalog is resolved with its integrations,
+        // as the reference resolves it while it builds the session. A catalog
+        // that cannot be had leaves the session without one.
+        let _ = self.server.open_session_connectors(session_id).await;
         let Some(configs) = self.pending_mcp.get(session_id).cloned() else {
             return Ok(Vec::new());
         };

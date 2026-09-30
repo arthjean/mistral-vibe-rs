@@ -19,6 +19,7 @@ use crate::params::object_of;
 use crate::wire_validation;
 
 pub(crate) use route::SKILLS_MUTATIONS;
+use route::is_connector_method;
 #[cfg(test)]
 pub(crate) use route::{Route, route};
 
@@ -466,6 +467,7 @@ impl ServerConnection {
                 self.mcp_catalog_request(request)
             }
             method if review::is_review_method(method) => self.review_request(request),
+            method if is_connector_method(method) => self.connector_request(request),
             method if RESOURCE_METHODS.contains(&method) => self.resource_request(request),
             method if WORKSPACE_METHODS.contains(&method) => self.workspace_request(request),
             method if PROJECTS_METHODS.contains(&method) => self.projects_request(request),
@@ -473,6 +475,26 @@ impl ServerConnection {
                 let id = request.id.clone();
                 route::method_not_found(method).into_batch(id)
             }
+        }
+    }
+
+    /// One `connector_catalog/*` or `connectors/*` call, answered off the
+    /// request loop because the catalog and the authorization pages are
+    /// fetched. The attached session rides along, as over stdio, since a call
+    /// naming none may still act on it.
+    fn connector_request(&self, request: ServerRequest) -> DispatchBatch {
+        let mut params = request.params;
+        if let Some(root) = self.root_id() {
+            params.insert(CONNECTION_ROOT_PARAM.to_owned(), json!(root));
+        }
+        DispatchBatch {
+            outbound: Vec::new(),
+            deferred: vec![DeferredWork::CloudRequest {
+                request_id: request.id,
+                method: request.method,
+                params,
+            }],
+            close_after_flush: false,
         }
     }
 
@@ -763,7 +785,6 @@ impl ServerConnection {
             request.id,
             &self.server,
             &session_id,
-            &request.method,
             result,
         ))
     }

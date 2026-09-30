@@ -57,6 +57,15 @@ pub(crate) const SKILLS_MUTATIONS: &[&str] = &[
 ];
 
 /// The route the reference gives `method`, a name it declares.
+/// The methods reference `ConnectorCatalogService` answers.
+pub(crate) fn is_connector_method(method: &str) -> bool {
+    method.starts_with("connector_catalog/")
+        || matches!(
+            method,
+            "connectors/read" | "connectors/refresh" | "connectors/auth/read"
+        )
+}
+
 pub(crate) fn route(method: &str) -> Route {
     match method {
         "events/read" => Route::Events,
@@ -231,11 +240,7 @@ impl ServerConnection {
             method,
             "skills/catalog" | "skills/updates" | "skills/versions" | "skills/detail"
         ) || SKILLS_MUTATIONS.contains(&method)
-            || method.starts_with("connector_catalog/")
-            || matches!(
-                method,
-                "connectors/read" | "connectors/refresh" | "connectors/auth/read"
-            )
+            || is_connector_method(method)
         {
             let mut params = request.params;
             if let Some(root) = self.root_id() {

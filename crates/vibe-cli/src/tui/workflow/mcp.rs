@@ -243,11 +243,13 @@ pub(in crate::tui) fn execute_mcp_effect(
             detail,
             enabled,
         } => {
+            // Reference `MCPResource.toggle`: a connector is toggled through
+            // its catalog, a server through the MCP catalog.
             let (method, params) = match target.kind {
                 IntegrationKind::Connector => (
-                    "connectors/toggle",
+                    "connector_catalog/toggle",
                     json!({
-                        "name": target.source,
+                        "alias": target.source,
                         "toolName": target.tool,
                         "disabled": !enabled,
                     }),

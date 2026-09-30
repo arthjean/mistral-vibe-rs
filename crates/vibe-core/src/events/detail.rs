@@ -517,8 +517,10 @@ pub struct EffectDetail {
     /// The remote this call is proxied to, absent for a tool the session
     /// implements itself. It routes the call header, the status text and the
     /// settled header, which is why it travels with the detail instead of being
-    /// re-derived from the published name.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// re-derived from the published name. It never reaches the wire: the
+    /// reference's effect detail declares no such field, and the display it
+    /// routes is published in full.
+    #[serde(skip)]
     pub remote: Option<RemoteToolOrigin>,
 }
 
@@ -532,9 +534,6 @@ impl Serialize for EffectDetail {
         map.serialize_entry("input", &self.input)?;
         if self.kind == ToolEffectKind::Subagent || self.child_session_id.is_some() {
             map.serialize_entry("childSessionId", &self.child_session_id)?;
-        }
-        if let Some(remote) = &self.remote {
-            map.serialize_entry("remote", remote)?;
         }
         map.end()
     }
@@ -583,6 +582,23 @@ impl EffectDetail {
         // read them from iterates lexicographically already.
         Self::for_decoded_call(tool_name, arguments, &[], None, working_directory)
             .reviewing_plan(arguments.is_object())
+    }
+
+    /// The detail an approval presents for a call, which a session proxying
+    /// the tool to `remote` presents as the proxied call its effect will be.
+    #[must_use]
+    pub fn for_gated_call(
+        tool_name: &str,
+        arguments: &Value,
+        remote: Option<&RemoteToolOrigin>,
+        working_directory: Option<&Path>,
+    ) -> Self {
+        match remote {
+            Some(remote) => {
+                Self::for_decoded_call(tool_name, arguments, &[], Some(remote), working_directory)
+            }
+            None => Self::for_call_at(tool_name, arguments, working_directory),
+        }
     }
 
     /// The shared constructor, told which order the arguments arrived in,

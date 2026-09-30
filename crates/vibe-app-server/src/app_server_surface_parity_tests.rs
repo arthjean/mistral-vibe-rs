@@ -2193,7 +2193,7 @@ fn probe(
 /// one.
 ///
 /// `mcp/read` is served by the catalog and `connectors/read` by the
-/// asynchronous resource backend, and the session-less project surface resolves a repository root off
+/// session's connector catalog off the loop, and the session-less project surface resolves a repository root off
 /// the loop, so in both cases the frame exists only after the deferred work
 /// runs. Without this those methods would leave the probe silently.
 fn run_deferred(server: &AppServer, batch: DispatchBatch) -> Option<DispatchBatch> {

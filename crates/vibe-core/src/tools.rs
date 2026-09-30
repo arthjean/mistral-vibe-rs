@@ -725,6 +725,28 @@ impl ToolRegistry {
             .collect())
     }
 
+    /// Removes every tool `source` published, answering their names.
+    ///
+    /// A source that republishes its whole surface retracts it first, so the
+    /// tools it registers again take the end of the discovery order: reference
+    /// `integrate_connectors_async` drops the connector tools from the manager
+    /// and appends the new ones.
+    pub fn retract_source(&self, source: ToolSource) -> Result<Vec<String>, ToolError> {
+        let mut tools = self
+            .tools
+            .write()
+            .map_err(|_| ToolError::RegistryPoisoned)?;
+        let retracted = tools
+            .values()
+            .filter(|tool| tool.spec.source == source)
+            .map(|tool| tool.spec.name.clone())
+            .collect::<Vec<_>>();
+        for name in &retracted {
+            tools.remove(name);
+        }
+        Ok(retracted)
+    }
+
     pub fn set_availability(
         &self,
         name: &str,

@@ -572,25 +572,6 @@ fn terminal_client() -> ClientToolIo {
     ClientToolIo::new("session-1", Arc::new(TerminalHostingClient))
 }
 
-/// Answers connector calls for the ordering case, which never places one.
-struct UnreachableConnector;
-
-impl vibe_core::integrations::ConnectorBackend for UnreachableConnector {
-    fn call<'a>(
-        &'a self,
-        _connector_id: &'a str,
-        _tool: &'a str,
-        _arguments: Value,
-        _max_response_bytes: usize,
-    ) -> vibe_core::integrations::ConnectorFuture<'a> {
-        Box::pin(async {
-            Err(vibe_core::integrations::IntegrationError::Tool(
-                "the ordering case never calls a connector".to_owned(),
-            ))
-        })
-    }
-}
-
 /// The surface a session publishes carries the order its families registered
 /// in, and a connector integrated afterwards lands behind all of them.
 ///
@@ -632,36 +613,48 @@ async fn the_published_surface_carries_the_registration_order_not_the_name_order
     );
     assert_eq!(builtins.last().map(String::as_str), Some("task"));
 
-    let connectors = vibe_core::integrations::ConnectorRegistry::default();
-    connectors
-        .discover(
-            vec![vibe_core::integrations::ConnectorDefinition {
-                id: "drive-id".to_owned(),
-                name: "Drive".to_owned(),
-                base_url: url::Url::parse("https://connectors.example/drive")
-                    .expect("connector URL"),
-                auth_kind: vibe_core::integrations::ConnectorAuthKind::None,
-                tools: vec![vibe_core::integrations::ConnectorTool {
-                    name: "search".to_owned(),
-                    description: "Search files".to_owned(),
-                    input_schema: serde_json::json!({"type": "object"}),
-                    output_schema: None,
-                }],
+    // The connector is published the way a session publishes its accepted
+    // catalog, which needs the guard every published tool is wrapped in.
+    registry.set_guard(ToolGuard::new(
+        PermissionStore::default(),
+        Arc::new(RejectApproval),
+    ));
+    let catalog = crate::connector_catalog::resolve_catalog(
+        &serde_json::json!({"connectors": [{
+            "id": "drive-id",
+            "name": "Drive",
+            "status": {"is_ready": true},
+            "tools": [{
+                "name": "search",
+                "description": "Search files",
+                "inputSchema": {"type": "object"},
             }],
-            "credential",
-            &url::Url::parse("https://connectors.example").expect("catalog URL"),
-            0,
-        )
-        .await
-        .expect("the connector is discovered");
-    connectors
-        .register_tools(
-            &registry,
-            Arc::new(UnreachableConnector),
-            PermissionStore::default(),
-            Arc::new(RejectApproval),
-        )
-        .expect("the connector tool registers");
+        }]}),
+        "fingerprint",
+    )
+    .expect("the catalog resolves");
+    let selection = crate::connector_catalog::ConnectorSelection {
+        revision: catalog.revision.clone(),
+        enable_connectors: true,
+        settings: vec![crate::connector_catalog::ConnectorSetting {
+            alias: "Drive".to_owned(),
+            disabled: false,
+            disabled_tools: BTreeSet::new(),
+        }],
+        enabled_tools: Vec::new(),
+        disabled_tools: Vec::new(),
+    };
+    crate::connector_catalog::SessionConnectors {
+        accepted: Some((catalog, selection)),
+        account: Some(crate::connector_catalog::CatalogProvider {
+            fingerprint: "fingerprint".to_owned(),
+            base_url: "https://connectors.example".into(),
+            api_key: "credential".into(),
+        }),
+        ..Default::default()
+    }
+    .publish_tools(&registry)
+    .expect("the connector tool registers");
     let published = registry
         .list()
         .expect("the registered surface")

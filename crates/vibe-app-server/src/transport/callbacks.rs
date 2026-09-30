@@ -122,7 +122,12 @@ impl StdioCallbacks {
                     ..
                 } => {
                     let directory = std::path::PathBuf::from(&session.working_directory);
-                    let detail = approval_callback_detail(&approval, Some(&directory));
+                    let remote = server
+                        .tool_registry(&session_id)
+                        .ok()
+                        .and_then(|tools| tools.remote_origin(&approval.tool));
+                    let detail =
+                        approval_callback_detail(&approval, Some(&directory), remote.as_ref());
                     (
                         format!("Approve {}?", approval.tool),
                         detail,

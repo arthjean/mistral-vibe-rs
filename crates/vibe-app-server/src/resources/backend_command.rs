@@ -6,45 +6,16 @@ use super::ResourceError;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ResourceBackendCommand {
-    Connector(ConnectorCommand),
     Shell(ShellCommand),
 }
 
 impl ResourceBackendCommand {
-    /// The method this command was parsed from.
-    ///
-    /// The deferred path carries the command rather than the request, and the
-    /// answer's shape is decided by the method, so the name travels with it.
-    #[must_use]
-    pub const fn method(&self) -> &'static str {
-        match self {
-            Self::Connector(ConnectorCommand::Read) => "connectors/read",
-            Self::Connector(ConnectorCommand::AuthRead { .. }) => "connectors/auth/read",
-            Self::Connector(ConnectorCommand::Refresh { .. }) => "connectors/refresh",
-            Self::Connector(ConnectorCommand::Toggle { .. }) => "connectors/toggle",
-            Self::Shell(ShellCommand::Run { .. }) => "shell/run",
-            Self::Shell(ShellCommand::Interrupt { .. }) => "shell/interrupt",
-        }
-    }
-
     pub fn parse(
         method: &str,
         params: &BTreeMap<String, Value>,
         session_active: bool,
     ) -> Result<Self, ResourceError> {
         let command = match method {
-            "connectors/read" => Self::Connector(ConnectorCommand::Read),
-            "connectors/auth/read" => Self::Connector(ConnectorCommand::AuthRead {
-                name: required_string(params, "name")?.to_owned(),
-            }),
-            "connectors/refresh" => Self::Connector(ConnectorCommand::Refresh {
-                name: required_string(params, "name")?.to_owned(),
-            }),
-            "connectors/toggle" => Self::Connector(ConnectorCommand::Toggle {
-                name: required_string(params, "name")?.to_owned(),
-                disabled: required_bool(params, "disabled")?,
-                tool_name: optional_string(params, "toolName")?.map(str::to_owned),
-            }),
             "shell/run" => {
                 if session_active {
                     return Err(ResourceError::Conflict(
@@ -72,22 +43,6 @@ impl ResourceBackendCommand {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ConnectorCommand {
-    Read,
-    AuthRead {
-        name: String,
-    },
-    Refresh {
-        name: String,
-    },
-    Toggle {
-        name: String,
-        disabled: bool,
-        tool_name: Option<String>,
-    },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ShellCommand {
     Run {
         operation_id: String,
@@ -109,17 +64,6 @@ fn required_string<'a>(
     crate::params::required_string(values, key).map_err(invalid_params)
 }
 
-fn optional_string<'a>(
-    values: &'a BTreeMap<String, Value>,
-    key: &str,
-) -> Result<Option<&'a str>, ResourceError> {
-    crate::params::optional_string(values, key).map_err(invalid_params)
-}
-
-fn required_bool(values: &BTreeMap<String, Value>, key: &str) -> Result<bool, ResourceError> {
-    crate::params::required_bool(values, key).map_err(invalid_params)
-}
-
 #[cfg(test)]
 mod tests {
     use serde_json::json;
@@ -128,20 +72,10 @@ mod tests {
 
     #[test]
     fn rejects_empty_domain_identifiers() {
-        for (method, params) in [
-            (
-                "connectors/refresh",
-                BTreeMap::from([("name".to_owned(), json!("  "))]),
-            ),
-            (
-                "shell/interrupt",
-                BTreeMap::from([("operationId".to_owned(), json!(""))]),
-            ),
-        ] {
-            assert!(matches!(
-                ResourceBackendCommand::parse(method, &params, false),
-                Err(ResourceError::InvalidParams(_))
-            ));
-        }
+        let params = BTreeMap::from([("operationId".to_owned(), json!(""))]);
+        assert!(matches!(
+            ResourceBackendCommand::parse("shell/interrupt", &params, false),
+            Err(ResourceError::InvalidParams(_))
+        ));
     }
 }

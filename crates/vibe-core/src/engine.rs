@@ -1437,8 +1437,10 @@ where
             if resolved[index] {
                 continue;
             }
+            // Reference `APIToolFormatHandler.resolve_tool_calls` fails the call
+            // as `Unknown tool '<name>'`.
             let error = format!(
-                "<tool_error>{}: no tool named '{}' is available</tool_error>",
+                "<tool_error>{}: Unknown tool '{}'</tool_error>",
                 call.name, call.name
             );
             recorder.emit(EngineEvent::ToolCallUnresolved {

@@ -371,10 +371,20 @@ where
                         .session(session_id)
                         .ok()
                         .map(|session| std::path::PathBuf::from(session.working_directory));
+                    let remote = self
+                        .client
+                        .server
+                        .tool_registry(session_id)
+                        .ok()
+                        .and_then(|tools| tools.remote_origin(&request.tool));
                     (
                         session_id.clone(),
                         format!("Approve {}?", request.tool),
-                        approval_callback_detail(request, working_directory.as_deref()),
+                        approval_callback_detail(
+                            request,
+                            working_directory.as_deref(),
+                            remote.as_ref(),
+                        ),
                         EngineCallbackKind::Approval,
                     )
                 }

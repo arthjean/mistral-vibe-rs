@@ -822,8 +822,7 @@ impl McpRegistry {
                 "MCP server `{alias}` has no tool `{tool_name}`"
             )));
         }
-        let availability =
-            tool_availability(enabled, &BTreeSet::new(), ProviderReach::Ready, tool_name);
+        let availability = tool_availability(enabled, &BTreeSet::new(), tool_name);
         if !tools
             .set_availability(tool_name, ToolSource::Mcp, availability)
             .map_err(|error| McpError::Tool(error.to_string()))?

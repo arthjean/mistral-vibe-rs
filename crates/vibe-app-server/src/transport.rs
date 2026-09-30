@@ -235,7 +235,16 @@ where
                         break 'serve;
                     }
                 };
+                let attached = connection.attached_session_ids();
                 let batch = connection.dispatch(&bytes);
+                // A session this request attached opens with its connector
+                // catalog resolved, as the reference resolves it while it
+                // builds the session, before the opening is answered.
+                for session_id in connection.attached_session_ids() {
+                    if !attached.contains(&session_id) {
+                        let _ = server.open_session_connectors(&session_id).await;
+                    }
+                }
                 for outbound in batch.outbound {
                     if let Err(error) = transport.send(&outbound).await {
                         fail_deferred(&server, &batch.deferred, "transport response write failed")

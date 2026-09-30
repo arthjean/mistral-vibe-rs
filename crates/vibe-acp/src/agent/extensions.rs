@@ -407,10 +407,12 @@ where
                     Some(_) => json!(text(params, "toolName")?),
                 };
                 let harness = self.session_harness(&session_id)?;
+                // Reference `MCPResource.toggle` toggles a connector through
+                // its catalog.
                 self.call_async(
                     &harness,
-                    "connectors/toggle",
-                    json!({"name": name, "disabled": disabled, "toolName": tool_name}),
+                    "connector_catalog/toggle",
+                    json!({"alias": name, "disabled": disabled, "toolName": tool_name}),
                 )
                 .await
                 .map_err(|error| AcpError::InvalidParams(error_message(&error)))?;

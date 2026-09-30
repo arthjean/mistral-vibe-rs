@@ -5,7 +5,8 @@
 //! This is a test fixture, not a shipped binary: the distribution keeps
 //! `vibe-app-server` unpublished (row 1 of `docs/parity.md`). It reads what the
 //! `vibe-acp` binary reads from its environment: the vibe home, the provider
-//! endpoint and the credential variable.
+//! endpoint and the credential variable, which `VIBE_ORACLE_CREDENTIAL`
+//! renames from `MISTRAL_API_KEY`.
 //!
 //! With `VIBE_ORACLE_KEYRING` set, it also serves the MCP catalog, over a
 //! credential store kept in that JSON file (`{service: {account: secret}}`),
@@ -53,9 +54,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let api_base = dotenv
         .variable("VIBE_API_BASE")
         .ok_or("VIBE_API_BASE must name the scripted completions endpoint")?;
+    // A scenario whose active provider is not Mistral names the variable its
+    // turns authenticate with, so the fixture starts without a Mistral key as
+    // the reference does.
+    let credential = dotenv
+        .variable("VIBE_ORACLE_CREDENTIAL")
+        .unwrap_or_else(|| "MISTRAL_API_KEY".to_owned());
     let config = LiveDriverConfig {
         compaction_prompts: CompactionPromptResolution::default(),
-        provider: ProviderConfig::for_style(&style, &api_base, "MISTRAL_API_KEY")
+        provider: ProviderConfig::for_style(&style, &api_base, &credential)
             .ok_or("VIBE_PROVIDER_STYLE names no provider style")?,
         models: Vec::new(),
         model: dotenv

@@ -52,7 +52,6 @@ pub(super) fn resource_result_batch(
     id: RequestId,
     server: &AppServer,
     session_id: &str,
-    method: &str,
     result: Result<ResourceDispatch, ResourceError>,
 ) -> DispatchBatch {
     match result {
@@ -65,15 +64,6 @@ pub(super) fn resource_result_batch(
             {
                 resources.record_integrations(session_id, state);
             }
-            // Every mutation answer that declares a runtime carries the one the
-            // mutation produced, composed here for the same reason the
-            // notification is: the backend knows something moved, the server
-            // knows what the runtime looks like afterward.
-            if RUNTIME_ANSWERS.contains(&method)
-                && let Some(runtime) = server.runtime_snapshot(session_id)
-            {
-                dispatch.result.insert("runtime".to_owned(), runtime);
-            }
             let mut outbound = vec![success_bytes(id, dispatch.result)];
             outbound.extend(signal_frames(server, session_id, &dispatch.signals));
             DispatchBatch {
@@ -85,9 +75,6 @@ pub(super) fn resource_result_batch(
         Err(error) => resource_error_batch(id, error),
     }
 }
-
-/// The resource methods whose response declares a `RuntimeSnapshot`.
-const RUNTIME_ANSWERS: &[&str] = &["connectors/refresh"];
 
 /// Reference `_forward_mcp_authorization`: each accepted requirement is
 /// published, then the runtime it left.

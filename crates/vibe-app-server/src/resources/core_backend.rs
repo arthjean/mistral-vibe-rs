@@ -1,6 +1,5 @@
 use super::*;
 
-mod connector_backend;
 mod mcp_backend;
 mod shell_backend;
 
@@ -20,11 +19,8 @@ pub(super) struct CoreResourceSession {
     /// The servers the session was started with, which are all it knows
     /// when it has no configuration store to read them from.
     started_mcp: StdMutex<Vec<McpServerConfig>>,
-    pub(super) connectors: ConnectorRegistry,
-    connectors_initialized: AtomicBool,
     config: Option<LayeredConfig>,
     mcp_mutation: Mutex<()>,
-    connector_mutation: Mutex<()>,
     terminals: TerminalManager,
     shell_operations: Mutex<BTreeMap<String, String>>,
 }
@@ -60,12 +56,6 @@ pub struct CoreResourceBackend {
     mcp_authentication: Arc<McpAuthenticationService>,
     mcp_auth_required: Arc<StdMutex<Vec<mcp_backend::PendingAuthRequired>>>,
     mcp_auth_required_seen: Arc<StdMutex<BTreeSet<AuthRequiredKey>>>,
-    connector_definitions: Arc<Vec<ConnectorDefinition>>,
-    connector_catalog: Option<Arc<dyn ConnectorCatalogBackend>>,
-    connector_backend: Option<Arc<dyn ConnectorBackend>>,
-    connector_auth: Option<Arc<dyn ConnectorAuthBackend>>,
-    connector_base_url: Option<Url>,
-    connector_credential_reference: Arc<str>,
     config: Option<LayeredConfig>,
 }
 
@@ -79,12 +69,6 @@ impl Default for CoreResourceBackend {
             mcp_authentication: Arc::new(McpAuthenticationService::new(None)),
             mcp_auth_required: Arc::new(StdMutex::new(Vec::new())),
             mcp_auth_required_seen: Arc::new(StdMutex::new(BTreeSet::new())),
-            connector_definitions: Arc::new(Vec::new()),
-            connector_catalog: None,
-            connector_backend: None,
-            connector_auth: None,
-            connector_base_url: None,
-            connector_credential_reference: Arc::from("unconfigured"),
             config: None,
         }
     }
@@ -111,42 +95,6 @@ impl CoreResourceBackend {
         self
     }
 
-    #[must_use]
-    pub fn with_connectors(
-        mut self,
-        definitions: Vec<ConnectorDefinition>,
-        backend: Arc<dyn ConnectorBackend>,
-        credential_reference: impl Into<Arc<str>>,
-        base_url: Url,
-    ) -> Self {
-        self.connector_definitions = Arc::new(definitions);
-        self.connector_backend = Some(backend);
-        self.connector_credential_reference = credential_reference.into();
-        self.connector_base_url = Some(base_url);
-        self
-    }
-
-    #[must_use]
-    pub fn with_connector_catalog(
-        mut self,
-        catalog: Arc<dyn ConnectorCatalogBackend>,
-        backend: Arc<dyn ConnectorBackend>,
-        credential_reference: impl Into<Arc<str>>,
-        base_url: Url,
-    ) -> Self {
-        self.connector_catalog = Some(catalog);
-        self.connector_backend = Some(backend);
-        self.connector_credential_reference = credential_reference.into();
-        self.connector_base_url = Some(base_url);
-        self
-    }
-
-    #[must_use]
-    pub fn with_connector_auth(mut self, backend: Arc<dyn ConnectorAuthBackend>) -> Self {
-        self.connector_auth = Some(backend);
-        self
-    }
-
     pub(super) fn session(
         &self,
         session_id: &str,
@@ -160,67 +108,6 @@ impl CoreResourceBackend {
             .map(|entry| Arc::clone(&entry.session))
             .ok_or_else(|| ResourceError::NotFound(format!("session `{session_id}` was not found")))
     }
-}
-
-fn config_error(error: vibe_core::config::ConfigError) -> ResourceError {
-    match error {
-        vibe_core::config::ConfigError::ConcurrentEdit { .. } => {
-            ResourceError::Conflict(error.to_string())
-        }
-        _ => ResourceError::Unavailable(redact(&error.to_string())),
-    }
-}
-
-fn persist_connector_view(
-    store: &LayeredConfig,
-    view: &ConnectorView,
-) -> Result<ConfigSnapshot, vibe_core::config::ConfigError> {
-    let disabled_tools = persisted_tool_names("connector", &view.alias, &view.disabled_tools);
-    store.persist_connector_state(&view.alias, view.enabled, &disabled_tools)
-}
-
-fn rollback_connector_view(
-    store: &LayeredConfig,
-    view: &ConnectorView,
-    committed: &ConfigSnapshot,
-) -> Result<ConfigSnapshot, vibe_core::config::ConfigError> {
-    let target = committed.selected_target;
-    let disabled_tools = persisted_tool_names("connector", &view.alias, &view.disabled_tools);
-    store.persist_connector_state_cas(
-        &view.alias,
-        view.enabled,
-        &disabled_tools,
-        target,
-        committed.fingerprints[&target].clone(),
-    )
-}
-
-fn config_rollback_error(
-    operation: &str,
-    error: ResourceError,
-    rollback: vibe_core::config::ConfigError,
-) -> ResourceError {
-    let message = format!(
-        "{operation} failed ({}) and configuration rollback failed ({})",
-        redact(&error.to_string()),
-        redact(&rollback.to_string())
-    );
-    match rollback {
-        vibe_core::config::ConfigError::ConcurrentEdit { .. } => ResourceError::Conflict(message),
-        _ => ResourceError::Unavailable(message),
-    }
-}
-
-fn persisted_tool_names(
-    kind: &str,
-    alias: &str,
-    public_names: &BTreeSet<String>,
-) -> BTreeSet<String> {
-    let prefix = format!("{kind}_{alias}_");
-    public_names
-        .iter()
-        .map(|name| name.strip_prefix(&prefix).unwrap_or(name).to_owned())
-        .collect()
 }
 
 impl ResourceBackend for CoreResourceBackend {
@@ -255,11 +142,8 @@ impl ResourceBackend for CoreResourceBackend {
                     tools: session.tools,
                     mcp: McpRegistry::default(),
                     started_mcp: StdMutex::new(Vec::new()),
-                    connectors: ConnectorRegistry::default(),
-                    connectors_initialized: AtomicBool::new(false),
                     config: scoped_config,
                     mcp_mutation: Mutex::new(()),
-                    connector_mutation: Mutex::new(()),
                     terminals: TerminalManager::default(),
                     shell_operations: Mutex::new(BTreeMap::new()),
                 }),
@@ -315,22 +199,11 @@ impl ResourceBackend for CoreResourceBackend {
     ) -> ResourceFuture<'a, ResourceDispatch> {
         Box::pin(async move {
             let session = self.session(&request.session_id)?;
-            let mut dispatch = match &request.command {
-                ResourceBackendCommand::Connector(command) => {
-                    self.dispatch_connectors(&session, &request.session_id, command)
-                        .await
-                }
+            match &request.command {
                 ResourceBackendCommand::Shell(command) => {
                     self.dispatch_shell(&session, command).await
                 }
-            }?;
-            // Every integration call learns the current state on its way
-            // through, so it carries it back: the runtime snapshot is composed
-            // synchronously and cannot ask an async backend for it.
-            if matches!(request.command, ResourceBackendCommand::Connector(_)) {
-                dispatch.signals.integrations = Some(self.integration_state(&session).await);
             }
-            Ok(dispatch)
         })
     }
 
@@ -364,9 +237,6 @@ impl ResourceBackend for CoreResourceBackend {
                 pending.retain(|event| event.session_id() != session_id);
             }
             failures.extend(session.mcp.close().await);
-            if let Err(error) = session.connectors.close().await {
-                failures.push(redact(&error.to_string()));
-            }
             if let Err(error) = session.terminals.cleanup_all().await {
                 failures.push(redact(&error.to_string()));
             }

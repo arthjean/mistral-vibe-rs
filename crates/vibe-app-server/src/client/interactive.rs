@@ -270,11 +270,14 @@ pub(super) struct InteractiveQuestionOption {
 pub(crate) fn approval_callback_detail(
     request: &ApprovalRequest,
     working_directory: Option<&std::path::Path>,
+    remote: Option<&vibe_core::events::RemoteToolOrigin>,
 ) -> Value {
     // The approval presents the effect it is gating, so the detail carries the
     // same typed shape the effect entry will publish once the call is allowed,
-    // its paths shown against the same session directory.
-    let effect = EffectDetail::for_call_at(&request.tool, &request.input, working_directory);
+    // its paths shown against the same session directory and a proxied call
+    // presented as proxied.
+    let effect =
+        EffectDetail::for_gated_call(&request.tool, &request.input, remote, working_directory);
     json!({
         "kind": "approval",
         "effect": effect,
