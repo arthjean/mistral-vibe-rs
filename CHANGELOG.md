@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Compose the system prompt the way the reference does. Every session and
+  subagent now opens on one system message built from the configured
+  `system_prompt_id` (project and user `.vibe/prompts` files, the builtins
+  and the bundled variants, with the date filled in), then the headless
+  directive, the commit trailer, the model, the operating system and shell,
+  the skills, the subagents, the scratchpad, the repository's branch and
+  recent commits (or a notice when the directory is the home directory or a
+  system folder), the other open directories and the `AGENTS.md` documents of
+  the user and the project. `include_commit_signature`, `include_model_info`,
+  `include_prompt_detail`, `include_project_context` and `project_context`
+  are read, an unknown `system_prompt_id` refuses the configuration, agents
+  in `~/.vibe/agents` are found, and `enabled_agents` and `disabled_agents`
+  narrow the agents offered.
+
 - Run hooks. The `[[hooks]]` of the trusted project's `.vibe/hooks.toml`, of
   every added directory and of `~/.vibe/hooks.toml` now run around tool calls
   and turns with the reference's schema and semantics: a `pre_tool` hook can

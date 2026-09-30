@@ -26,6 +26,8 @@ use url::Url;
 
 use crate::{Arguments, CliError, price_per_million_micros};
 
+/// What the driver sends when a reservation carries no composed prompt. Every
+/// session turn the server reserves carries one (`vibe/core/system_prompt.py`).
 const SYSTEM_PROMPT: &str = "You are Mistral Vibe.";
 
 /// The variables `{vibe_home}/.env` declares for this invocation.

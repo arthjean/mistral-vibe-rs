@@ -19,6 +19,7 @@ grep-regex.workspace = true
 grep-searcher.workspace = true
 hex.workspace = true
 ignore.workspace = true
+jiff.workspace = true
 keyring.workspace = true
 opentelemetry.workspace = true
 opentelemetry-otlp.workspace = true

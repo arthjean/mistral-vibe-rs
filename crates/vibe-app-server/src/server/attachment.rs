@@ -956,6 +956,8 @@ impl AppServer {
                 .session_hooks(Path::new(&working_directory), trusted, &add_directories);
         if let Some(session) = self.lock_sessions()?.get_mut(session_id) {
             session.hooks = hooks;
+            // The same reload reads the prompt's files again.
+            session.system_prompt = None;
         }
         Ok(())
     }

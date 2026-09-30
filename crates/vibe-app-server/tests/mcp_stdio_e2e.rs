@@ -236,6 +236,7 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
     let outcome = driver
         .run(&TurnReservation {
             hooks: Default::default(),
+            system_prompt: None,
             session_id: "session-1".to_owned(),
             turn_id: "turn-1".to_owned(),
             prompt: "use the fixture".to_owned(),

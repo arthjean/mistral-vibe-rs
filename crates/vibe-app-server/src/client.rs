@@ -233,7 +233,39 @@ pub struct TurnReservation {
     pub tools: ToolRegistry,
     /// The hooks the session loaded, which the turn runs.
     pub hooks: crate::session_hooks::SessionHooks,
+    /// The system message the server composed for the session, which the
+    /// driver's configured prompt stands in for when absent.
+    pub system_prompt: Option<SessionSystemPrompt>,
 }
+
+/// Composes the system message of a subagent a session starts, for the agent
+/// profile the child runs.
+pub type SubagentPromptComposer =
+    Arc<dyn Fn(&vibe_core::extensions::AgentProfile) -> Result<String, String> + Send + Sync>;
+
+/// A session's composed system message, with what composes its children's.
+#[derive(Clone)]
+pub struct SessionSystemPrompt {
+    pub text: String,
+    pub subagent: SubagentPromptComposer,
+}
+
+impl std::fmt::Debug for SessionSystemPrompt {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("SessionSystemPrompt")
+            .field("text", &self.text)
+            .finish_non_exhaustive()
+    }
+}
+
+impl PartialEq for SessionSystemPrompt {
+    fn eq(&self, other: &Self) -> bool {
+        self.text == other.text
+    }
+}
+
+impl Eq for SessionSystemPrompt {}
 
 #[derive(Debug, Clone)]
 pub struct ScheduledTurn {

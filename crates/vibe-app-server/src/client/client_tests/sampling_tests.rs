@@ -159,6 +159,7 @@ async fn plan_mode_states_its_directive_on_every_cycle_of_a_persisted_session() 
     .with_session_root_for_tests(Some(session_root));
     let reservation = |turn_id: &str| TurnReservation {
         hooks: Default::default(),
+        system_prompt: None,
         session_id: "planning".to_owned(),
         turn_id: turn_id.to_owned(),
         prompt: "keep planning".to_owned(),

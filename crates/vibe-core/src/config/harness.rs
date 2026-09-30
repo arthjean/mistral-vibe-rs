@@ -24,6 +24,9 @@ const PROMPTS_DIRECTORY: &str = "prompts";
 /// tool directories: `{root}/.vibe/tools` and `{vibe_home}/tools`.
 const TOOLS_DIRECTORY: &str = "tools";
 
+/// The instruction file a directory carries. Reference `AGENTS_MD_FILENAME`.
+pub const AGENTS_FILE: &str = "AGENTS.md";
+
 /// A configuration file family the process is allowed to read and write.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ConfigSource {
@@ -252,8 +255,87 @@ impl HarnessFiles {
         roots
     }
 
+    /// Whether the working directory's `.vibe` is the vibe home itself, which
+    /// is where a session opened in the operator's home directory sits.
+    /// Reference `cwd_is_user_config_home`.
+    #[must_use]
+    pub fn cwd_is_user_config_home(&self) -> bool {
+        resolve_lenient(
+            &self
+                .absolutize(&self.paths.working_directory)
+                .join(PROJECT_DIRECTORY),
+        ) == resolve_lenient(&self.paths.vibe_home)
+    }
+
+    /// Whether the project layer may be read for this working directory at
+    /// all: the source is enabled and the directory's `.vibe` is not the user
+    /// configuration read under another name. Reference
+    /// `project_source_enabled`.
+    #[must_use]
+    pub fn project_source_enabled(&self) -> bool {
+        self.sources.contains(&ConfigSource::Project) && !self.cwd_is_user_config_home()
+    }
+
+    /// [`Self::project_roots`] resolved through the filesystem and
+    /// deduplicated again, which is the spelling reference `project_roots`
+    /// publishes: its `dedup_paths` resolves every root before comparing.
+    #[must_use]
+    pub fn resolved_project_roots(&self) -> Vec<PathBuf> {
+        let mut roots: Vec<PathBuf> = Vec::new();
+        for root in self.project_roots() {
+            let resolved = resolve_lenient(&root);
+            if !roots.contains(&resolved) {
+                roots.push(resolved);
+            }
+        }
+        roots
+    }
+
+    /// The user-level `AGENTS.md`, stripped, or empty when the user source is
+    /// off or the file is missing, unreadable or blank. Reference
+    /// `load_user_doc`.
+    #[must_use]
+    pub fn load_user_doc(&self) -> String {
+        if !self.sources.contains(&ConfigSource::User) {
+            return String::new();
+        }
+        read_stripped(&self.paths.vibe_home.join(AGENTS_FILE)).unwrap_or_default()
+    }
+
+    /// Where the user-level `AGENTS.md` is read from, as the system prompt
+    /// names it: under the vibe home as the reference resolves it.
+    #[must_use]
+    pub fn user_doc_path(&self) -> PathBuf {
+        resolve_lenient(&self.paths.vibe_home).join(AGENTS_FILE)
+    }
+
+    /// Every non-empty `AGENTS.md` from each open project root up to its trust
+    /// root, outermost first within a root, each directory once across roots.
+    ///
+    /// Reference `load_project_docs`: the working directory's walk stops at the
+    /// closest trusted ancestor the trust store records, which may sit above
+    /// it, and a root the store does not cover (an `--add-dir` entry) stops at
+    /// itself. A directory reached from two roots keeps the first reading.
+    #[must_use]
+    pub fn load_project_docs(&self, trust: &crate::trust::TrustStore) -> Vec<(PathBuf, String)> {
+        let mut documents: Vec<(PathBuf, (PathBuf, String))> = Vec::new();
+        for root in self.resolved_project_roots() {
+            let stop = trust.find_trust_root(&root).unwrap_or_else(|| root.clone());
+            for (directory, content) in collect_agents_docs(&root, &stop) {
+                let key = resolve_lenient(&directory);
+                if !documents.iter().any(|(known, _)| *known == key) {
+                    documents.push((key, (directory, content)));
+                }
+            }
+        }
+        documents
+            .into_iter()
+            .map(|(_, document)| document)
+            .collect()
+    }
+
     fn open_working_directory(&self) -> Option<PathBuf> {
-        if !self.sources.contains(&ConfigSource::Project) || !self.project_trusted {
+        if !self.project_source_enabled() || !self.project_trusted {
             return None;
         }
         Some(self.absolutize(&self.paths.working_directory))
@@ -292,5 +374,64 @@ impl HarnessFiles {
             }
         }
         folded
+    }
+}
+
+/// Reference `_collect_agents_md` with `stop_inclusive=True`: the non-empty
+/// instruction files from `start` up to and including `stop`, outermost first,
+/// or nothing when `start` is not below `stop`.
+fn collect_agents_docs(start: &Path, stop: &Path) -> Vec<(PathBuf, String)> {
+    if !start.starts_with(stop) {
+        return Vec::new();
+    }
+    let mut documents = Vec::new();
+    let mut current = start.to_path_buf();
+    loop {
+        if let Some(content) = read_stripped(&current.join(AGENTS_FILE)) {
+            documents.push((current.clone(), content));
+        }
+        if current == stop {
+            break;
+        }
+        match current.parent() {
+            Some(parent) if parent != current => current = parent.to_path_buf(),
+            _ => break,
+        }
+    }
+    documents.reverse();
+    documents
+}
+
+/// A file decoded the way the reference's `read_safe` decodes it and stripped,
+/// or `None` when it is missing, unreadable or blank.
+pub(crate) fn read_stripped(path: &Path) -> Option<String> {
+    let bytes = std::fs::read(path).ok()?;
+    let decoded = crate::workspace::text_file::decode(&bytes);
+    let stripped = crate::text::python_strip(&decoded.text);
+    (!stripped.is_empty()).then(|| stripped.to_owned())
+}
+
+/// Python's non-strict `Path.resolve()`: symlinks resolved as far as the path
+/// exists, and the part that does not exist appended as written.
+pub(crate) fn resolve_lenient(path: &Path) -> PathBuf {
+    if let Ok(resolved) = std::fs::canonicalize(path) {
+        return resolved;
+    }
+    let mut missing = Vec::new();
+    let mut current = path.to_path_buf();
+    loop {
+        let Some(name) = current.file_name().map(ToOwned::to_owned) else {
+            return path.to_path_buf();
+        };
+        missing.push(name);
+        if !current.pop() {
+            return path.to_path_buf();
+        }
+        if let Ok(mut resolved) = std::fs::canonicalize(&current) {
+            for name in missing.iter().rev() {
+                resolved.push(name);
+            }
+            return resolved;
+        }
     }
 }

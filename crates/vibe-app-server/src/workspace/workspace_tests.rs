@@ -1065,17 +1065,6 @@ fn caller_paths_cannot_expand_server_authorized_roots() {
         install,
         Err(WorkspaceServiceError::InvalidParams(_))
     ));
-    let prompt = service.dispatch(
-        "workspace/prompt/prepare",
-        &BTreeMap::from([
-            ("base".to_owned(), json!("base")),
-            ("addDirectories".to_owned(), json!([outside])),
-        ]),
-    );
-    assert!(matches!(
-        prompt,
-        Err(WorkspaceServiceError::InvalidParams(_))
-    ));
 }
 
 #[test]

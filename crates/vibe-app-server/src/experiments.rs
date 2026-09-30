@@ -24,7 +24,6 @@
 //! pair and its close order, and `vibe/app_server/_runtime.py`'s resume and
 //! fork.
 
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use vibe_core::config::LayeredConfig;
@@ -35,7 +34,6 @@ use vibe_core::experiments::{
 use vibe_core::identity::{
     CachedIdentity, IdentityCache, IdentityFuture, IdentityResolver, IdentityResult,
 };
-use vibe_core::prompt::PromptResolver;
 use vibe_core::storage::SessionStore;
 use vibe_core::telemetry::{ExperimentExposures, LaunchContext};
 
@@ -57,18 +55,8 @@ pub struct SessionExperiments {
     manager: tokio::sync::Mutex<ExperimentManager>,
     exposures: ExperimentExposures,
     launch: Option<LaunchContext>,
-    /// Where a prompt variant is validated against, kept as roots because a
-    /// resolver is cheap to build and a session's prompt directories can be
-    /// written to between two loads.
-    prompt_roots: PromptRoots,
     /// The lookup in flight, held so a closing session can cancel it.
     task: Mutex<Option<tokio::task::JoinHandle<()>>>,
-}
-
-struct PromptRoots {
-    project: Vec<PathBuf>,
-    user: Vec<PathBuf>,
-    project_trusted: bool,
 }
 
 impl SessionExperiments {
@@ -113,11 +101,6 @@ impl SessionExperiments {
             };
         Self {
             store: service.session_store(),
-            prompt_roots: PromptRoots {
-                project: service.project_prompt_roots(),
-                user: vec![service.vibe_home().join("extensions/prompts")],
-                project_trusted: service.project_trusted(),
-            },
             config,
             credentials,
             identity,
@@ -236,22 +219,14 @@ impl SessionExperiments {
     /// `refresh_config`: the variants go into the layer, and the load is what
     /// republishes the merged document to the caches that follow one, which is
     /// how the managed shell family reaches the next registration. Reference
-    /// also refreshes the system prompt here; this port has nothing to refresh,
-    /// because the merged `system_prompt_id` has no consumer composing a
-    /// session's prompt yet, which is the gap the "System prompt and project
-    /// context" row of `docs/parity.md` records. The assignment still lands in
-    /// the layer, so it takes effect with that consumer rather than needing a
-    /// second write here.
+    /// also refreshes the system prompt here; a session here recomposes its
+    /// prompt on its next turn, because the merged settings it was composed
+    /// under no longer match.
     fn publish(&self, manager: &ExperimentManager) {
-        let resolver = PromptResolver::new(
-            self.prompt_roots.project.clone(),
-            self.prompt_roots.user.clone(),
-            std::collections::BTreeMap::new(),
-            self.prompt_roots.project_trusted,
-        );
+        let directories = self.config.harness_files().prompts_dirs();
         self.config
             .set_experiment_variants(&manager.config_variants(), &|prompt_id| {
-                resolver.resolve(prompt_id).is_ok()
+                vibe_core::system_prompt::load_system_prompt(prompt_id, &directories).is_ok()
             });
         drop(self.config.load());
         self.exposures.publish(manager.assignments());

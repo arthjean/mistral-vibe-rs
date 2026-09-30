@@ -75,6 +75,7 @@ impl vibe_core::skills::InvokedSkillResolver for ProbeSkillResolver {
 fn probe_reservation(prompt: &str, tools: ToolRegistry) -> TurnReservation {
     TurnReservation {
         hooks: Default::default(),
+        system_prompt: None,
         session_id: "session-1".to_owned(),
         turn_id: "turn-1".to_owned(),
         prompt: prompt.to_owned(),
@@ -357,6 +358,7 @@ async fn run_task_probe(
     driver
         .run(&TurnReservation {
             hooks: Default::default(),
+            system_prompt: None,
             session_id: "probe".to_owned(),
             turn_id: "probe-turn".to_owned(),
             prompt: "delegate".to_owned(),
@@ -670,6 +672,7 @@ async fn live_task_tool_runs_a_durable_child_session_through_the_provider() {
     let outcome = driver
         .run(&TurnReservation {
             hooks: Default::default(),
+            system_prompt: None,
             session_id: "runtime-alias".to_owned(),
             turn_id: "root-turn".to_owned(),
             prompt: "delegate".to_owned(),

@@ -185,18 +185,6 @@ pub(crate) fn profiles(vibe_home: &Path) -> Vec<AgentProfile> {
     ]
 }
 
-pub(crate) fn system_prompt(id: &str) -> Option<&'static str> {
-    match id {
-        "explore" => Some(
-            "You are a senior engineer analyzing codebases. Use only read-only tools. Start with code, a diagram, or structured output, then give at most two concise context sentences.",
-        ),
-        "lean" => Some(
-            "You are Leanstral, a Lean 4 coding agent. Inspect the project and its Lean toolchain before changing code. Prefer focused edits, verify them with the narrowest relevant lake build or test, use grind when the project Lean version supports it, and never use native_decide.",
-        ),
-        _ => None,
-    }
-}
-
 fn builtin_agent(
     name: &str,
     display_name: &str,

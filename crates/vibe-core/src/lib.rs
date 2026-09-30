@@ -54,6 +54,7 @@ mod setup_auth_parity_tests;
 pub mod shell;
 pub mod skills;
 pub mod storage;
+pub mod system_prompt;
 pub mod telemetry;
 pub mod text;
 pub mod tools;

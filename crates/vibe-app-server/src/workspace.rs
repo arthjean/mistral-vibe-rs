@@ -21,9 +21,11 @@ mod config;
 mod internal;
 mod sessions;
 mod skills;
+mod system_prompt;
 pub(crate) use sessions::{
     history_entry_id, reference_message_index, rewind_entry_index, runtime_attachment,
 };
+pub use system_prompt::{PromptHost, SessionPromptScope, SystemPromptError};
 mod worktrees;
 
 use crate::builtin_agents;
@@ -49,10 +51,6 @@ use vibe_core::extensions::{
 use vibe_core::mcp::McpServerConfig;
 use vibe_core::middleware::CompactionSettings;
 use vibe_core::policy::AllowlistPersistence;
-use vibe_core::prompt::{
-    InstructionLoader, PromptComposition, PromptResolver, SkillSummary, SubagentSummary,
-    UserResource, prepare_user_resources,
-};
 use vibe_core::skills::{SearchInputs, SkillDiscovery, search_paths, skill_summary};
 use vibe_core::storage::{HydratedSession, SessionLogging, SessionStore, StorageError};
 use vibe_core::tools::config::ToolConfigResolver;
@@ -327,7 +325,9 @@ impl WorkspaceService {
         let discovery_roots = DiscoveryRoots {
             configured: Vec::new(),
             project: project_discovery_roots(&config, project_trusted),
-            user: vec![user_extensions.clone()],
+            // Reference `user_agents_dirs` is `~/.vibe/agents`; the extensions
+            // root keeps what this port installs there.
+            user: vec![paths.vibe_home.clone(), user_extensions.clone()],
             project_trusted,
             // The skill roots are resolved per catalog build rather than
             // stored, so a `skill_paths` written between two builds changes
@@ -407,17 +407,6 @@ impl WorkspaceService {
     #[must_use]
     pub const fn project_trusted(&self) -> bool {
         self.project_trusted
-    }
-
-    /// The project directories a prompt is resolved from, which are none in an
-    /// untrusted workspace.
-    #[must_use]
-    pub fn project_prompt_roots(&self) -> Vec<PathBuf> {
-        if self.project_trusted {
-            vec![self.paths.working_directory.join(".vibe/prompts")]
-        } else {
-            Vec::new()
-        }
     }
 
     /// The per-tool configuration a session's tools resolve through.
@@ -756,7 +745,6 @@ impl WorkspaceService {
             "agents/uninstall" => self.agent_uninstall(params),
             "session/agent/update" => self.agent_update(params),
             "skills/list" => self.skills_list(),
-            "workspace/prompt/prepare" => self.prompt_prepare(params),
             "workspace/git/checkouts" => self.git_checkouts(params),
             "workspace/git/worktrees/list" => self.worktrees_list(params),
             "workspace/git/worktrees/limit/update" => self.worktrees_limit_update(params),

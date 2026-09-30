@@ -55,6 +55,29 @@ mod specs;
 use decode::{render_stream_bytes, render_stream_chars};
 use document::Document;
 pub use host::{HostShells, ShellRollout};
+
+/// The shell reference `resolve_windows_shell` settles on for the legacy
+/// command tool on Windows, which is also the one its system prompt names.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WindowsShell {
+    /// A Git Bash found on `PATH`, beside `git.exe`, or at an install root.
+    Bash(std::path::PathBuf),
+    /// `cmd.exe`, from `COMSPEC`, `%SystemRoot%` or its bare name.
+    Cmd(std::path::PathBuf),
+}
+
+/// Reference `resolve_windows_shell`: a detected Git Bash first, `cmd.exe`
+/// otherwise. Meaningful on a Windows host only.
+#[must_use]
+pub fn resolve_windows_shell() -> WindowsShell {
+    let directories = std::env::var_os("PATH")
+        .map(|value| std::env::split_paths(&value).collect::<Vec<_>>())
+        .unwrap_or_default();
+    host::find_git_bash(&directories).map_or_else(
+        || WindowsShell::Cmd(host::windows_cmd_path()),
+        WindowsShell::Bash,
+    )
+}
 use host::{ShellFamily, family_config, published_family};
 use policy::{
     CommandWiring, command_argument, guarded_command, log_file_requirements, render_seconds,

@@ -50,9 +50,9 @@ pub const fn configured_fields(name: ExperimentName) -> &'static [&'static str] 
 /// can load.
 ///
 /// The mapper validates before it writes, and what "resolvable" means belongs
-/// to the caller rather than to the mapping: a session hands its own
-/// [`crate::prompt::PromptResolver`], which covers the project and user prompt
-/// directories as well as the builtins. Reference `load_system_prompt`, whose
+/// to the caller rather than to the mapping: a session hands
+/// [`crate::system_prompt::load_system_prompt`] over its prompt directories,
+/// which covers them as well as the builtins. Reference `load_system_prompt`, whose
 /// failure is what makes the reference mapper answer `None`.
 pub type PromptResolves<'a> = &'a dyn Fn(&str) -> bool;
 

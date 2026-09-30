@@ -795,6 +795,16 @@ impl LayeredConfig {
             &self.paths.vibe_home,
             &model_order(&layers),
         )?);
+        if let Some(prompt_id) = effective
+            .get(crate::system_prompt::SYSTEM_PROMPT_SETTING)
+            .and_then(toml::Value::as_str)
+        {
+            crate::system_prompt::load_system_prompt(
+                prompt_id,
+                &self.harness_files().prompts_dirs(),
+            )
+            .map_err(ConfigError::SystemPrompt)?;
+        }
 
         let mut fingerprints = BTreeMap::from([
             (
@@ -1329,6 +1339,10 @@ pub enum ConfigError {
     UntrustedProject,
     #[error("invalid provider entry: {0}")]
     InvalidProvider(String),
+    /// `system_prompt_id` names no prompt. Reference `_check_system_prompt`
+    /// refuses the configuration rather than the first session using it.
+    #[error(transparent)]
+    SystemPrompt(crate::prompt::library::PromptFileError),
     /// The session did not enable the source backing this target, so writing to
     /// it would persist to a file the caller opted out of. Reference
     /// `persist_allowed`.

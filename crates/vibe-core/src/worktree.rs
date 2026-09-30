@@ -37,7 +37,7 @@ use regex::Regex;
 use thiserror::Error;
 
 pub mod fetch;
-mod git;
+pub(crate) mod git;
 pub mod lifecycle;
 mod managed;
 mod naming;

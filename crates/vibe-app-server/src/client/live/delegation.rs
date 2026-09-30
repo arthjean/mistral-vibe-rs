@@ -57,6 +57,9 @@ pub(crate) fn task_spec() -> ToolSpec {
 pub(super) struct ProviderSubagentRunner {
     provider: Arc<dyn CompletionProvider>,
     system_prompt: String,
+    /// Composes the child's own system message, when the server composed the
+    /// parent's; `system_prompt` stands in for it otherwise.
+    subagent_prompt: Option<crate::client::SubagentPromptComposer>,
     store: SessionStore,
     tools: ToolRegistry,
     input_price_per_million_micros: u64,
@@ -91,7 +94,7 @@ impl LiveTurnDriver {
             &DiscoveryRoots {
                 configured: Vec::new(),
                 project: vec![PathBuf::from(&reservation.working_directory).join(".vibe")],
-                user: vec![vibe_home.join("extensions")],
+                user: vec![vibe_home.clone(), vibe_home.join("extensions")],
                 project_trusted: reservation.intent.trusted,
                 // Only the agent profiles are read here, so no skill root is
                 // resolved and no skill is walked.
@@ -109,6 +112,10 @@ impl LiveTurnDriver {
         let runner = Arc::new(ProviderSubagentRunner {
             provider: self.provider.clone(),
             system_prompt: self.system_prompt.clone(),
+            subagent_prompt: reservation
+                .system_prompt
+                .as_ref()
+                .map(|prompt| Arc::clone(&prompt.subagent)),
             store: store.clone(),
             tools: reservation.tools.clone(),
             input_price_per_million_micros: self.input_price_per_million_micros,
@@ -330,20 +337,14 @@ impl SubagentRunner for ProviderSubagentRunner {
                 executor = executor.refusing("task", refusal);
             }
             let definitions = executor.definitions().map_err(|error| error.to_string())?;
-            let mut messages = vec![ModelMessage::System {
-                content: self.system_prompt.clone(),
-            }];
-            if let Some(prompt_id) = settings.system_prompt_id.as_deref() {
-                let prompt = crate::builtin_agents::system_prompt(prompt_id).ok_or_else(|| {
-                    format!(
-                        "agent `{}` references unsupported system prompt `{prompt_id}`",
-                        context.agent.name
-                    )
-                })?;
-                messages.push(ModelMessage::System {
-                    content: prompt.to_owned(),
-                });
-            }
+            // Reference `_create_subagent_loop` renders the child's prompt from
+            // its own profile: its `system_prompt_id`, its skills and subagents,
+            // and no scratchpad.
+            let content = match &self.subagent_prompt {
+                Some(compose) => compose(&context.agent)?,
+                None => self.system_prompt.clone(),
+            };
+            let messages = vec![ModelMessage::System { content }];
             let input = ProviderInput {
                 turn_id: Some(format!("{}-turn", context.child_session_id)),
                 session_id: None,

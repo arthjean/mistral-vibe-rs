@@ -52,7 +52,6 @@ use crate::experiments::{
 use crate::identity::IDENTITY_PATH;
 use crate::identity::recorder::RecordingResolver;
 use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
-use crate::prompt::PromptResolver;
 use crate::telemetry::{LaunchContext, platform_id, version};
 
 const CORPUS_RELATIVE: &str = "crates/vibe-core/tests/experiments/corpus.json";
@@ -1356,40 +1355,11 @@ fn variant_labels_answer(case: &Case<'_>) -> Map<String, Value> {
 
 // -- configMapping and layerPrecedence ------------------------------------
 
-/// The prompt resolution the mapping is measured over.
-///
-/// The reference mapper calls `load_system_prompt`, which answers from a
-/// bundled prompt file or from one of the custom prompt directories, and drops
-/// the field when it raises. What the *mapping* does with that answer is what
-/// this family measures, so the replay hands this port's own
-/// [`PromptResolver`] over a directory seeded with the reference's five bundled
-/// identifiers. Which identifiers a shipped installation carries is a separate
-/// question this family does not decide: US-012 hands the session's own
-/// resolver to the same parameter.
-struct OraclePrompts {
-    root: tempfile::TempDir,
-    resolver: PromptResolver,
-}
-
-impl OraclePrompts {
-    fn seeded() -> Self {
-        let root = tempfile::tempdir().expect("a prompt directory");
-        let mut builtins = BTreeMap::new();
-        for identifier in ["cli", "explore", "tests", "lean", "minimal"] {
-            let path = root.path().join(format!("{identifier}.md"));
-            fs::write(&path, "seeded system prompt").expect("a seeded prompt file");
-            builtins.insert(identifier.to_owned(), path);
-        }
-        let resolver = PromptResolver::new(Vec::new(), Vec::new(), builtins, false);
-        Self { root, resolver }
-    }
-
-    fn resolves(&self) -> impl Fn(&str) -> bool + '_ {
-        // The directory has to outlive the predicate, which is what borrowing
-        // it here spells out.
-        let _ = &self.root;
-        |prompt_id: &str| self.resolver.resolve(prompt_id).is_ok()
-    }
+/// Reference `load_system_prompt`, which the variant mapper calls and whose
+/// failure drops the field. No custom prompt directory exists in these cases,
+/// so the builtins and the bundled files answer alone.
+fn prompt_resolves(prompt_id: &str) -> bool {
+    crate::system_prompt::load_system_prompt(prompt_id, &[]).is_ok()
 }
 
 /// The configuration variants one case is driven over.
@@ -1441,8 +1411,7 @@ fn config_mapping_answer(case: &Case<'_>) -> Map<String, Value> {
         answers.insert("hasFingerprint".to_owned(), Value::Null);
         return answers;
     }
-    let prompts = OraclePrompts::seeded();
-    let layer = ExperimentsLayer::from_variants(&case_variants(case), &prompts.resolves());
+    let layer = ExperimentsLayer::from_variants(&case_variants(case), &prompt_resolves);
     answers.insert(
         "data".to_owned(),
         serde_json::to_value(layer.values()).unwrap_or(Value::Null),
@@ -1523,7 +1492,6 @@ fn layer_precedence_answer(case: &Case<'_>) -> Map<String, Value> {
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
-    let prompts = OraclePrompts::seeded();
     let snapshot = LayeredConfig::new(
         ConfigPaths {
             vibe_home: home,
@@ -1534,7 +1502,7 @@ fn layer_precedence_answer(case: &Case<'_>) -> Map<String, Value> {
     .with_project_trusted(true)
     .with_environment(environment)
     .with_runtime_overrides(case_table(case, "overrides"))
-    .with_experiment_variants(&case_variants(case), &prompts.resolves())
+    .with_experiment_variants(&case_variants(case), &prompt_resolves)
     .load()
     .unwrap_or_else(|error| panic!("the {} case composes: {error}", case.id));
 

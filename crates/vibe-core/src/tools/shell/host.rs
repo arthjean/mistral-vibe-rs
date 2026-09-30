@@ -572,7 +572,7 @@ pub(super) fn legacy_posix_shell() -> PathBuf {
 
 /// Reference `_get_windows_cmd_path`: `COMSPEC` when it names `cmd`, then
 /// `%SystemRoot%\System32\cmd.exe`, then the bare name.
-fn windows_cmd_path() -> PathBuf {
+pub(super) fn windows_cmd_path() -> PathBuf {
     if let Some(comspec) = std::env::var("COMSPEC").ok().filter(|comspec| {
         let name = comspec
             .trim_matches('"')

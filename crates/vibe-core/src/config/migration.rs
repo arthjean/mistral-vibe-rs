@@ -411,8 +411,10 @@ fn migrate_renamed_agents(document: &mut Table) -> bool {
 }
 
 /// Whether the agent filters leave `agent` out: a non-empty enable list that
-/// does not match it, or else a disable list that does.
-fn agent_filters_exclude(document: &Table, agent: &str) -> bool {
+/// does not match it, or else a disable list that does. Reference
+/// `AgentManager._is_agent_available` reads the two lists the same way.
+#[must_use]
+pub fn agent_filters_exclude(document: &Table, agent: &str) -> bool {
     let patterns = |field: &str| -> Option<Vec<String>> {
         match document.get(field) {
             Some(Value::Array(values)) => Some(

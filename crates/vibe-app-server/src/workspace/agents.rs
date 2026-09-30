@@ -3,39 +3,10 @@
 //! An agent profile decides what a session may run and under which prompt, and
 //! a skill is what a prompt can invoke. Discovery is `vibe_core::extensions` and
 //! `vibe_core::skills`; what is here is the catalog the boundary publishes, the
-//! installation state it writes, and the prompt it composes for a workspace.
+//! installation state it writes.
 
 use super::sessions::runtime_attachment;
 use super::*;
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(super) struct PromptParams {
-    #[serde(default)]
-    base: String,
-    #[serde(default)]
-    prompt_id: Option<String>,
-    #[serde(default)]
-    headless: bool,
-    #[serde(default)]
-    commit_policy: Option<String>,
-    #[serde(default)]
-    model: Option<String>,
-    #[serde(default)]
-    os_tool_guidance: Option<String>,
-    #[serde(default)]
-    scratchpad: Option<PathBuf>,
-    #[serde(default)]
-    project_context: Option<String>,
-    #[serde(default)]
-    project_context_stale: bool,
-    #[serde(default)]
-    add_directories: Vec<PathBuf>,
-    #[serde(default)]
-    resources: Vec<UserResource>,
-    #[serde(default)]
-    supports_images: bool,
-}
 
 impl WorkspaceService {
     pub(crate) fn agent_profile(&self, name: &str) -> Result<AgentProfile, WorkspaceServiceError> {
@@ -73,7 +44,11 @@ impl WorkspaceService {
             )));
         }
         if let Some(prompt_id) = profile.runtime_settings().system_prompt_id
-            && builtin_agents::system_prompt(&prompt_id).is_none()
+            && vibe_core::system_prompt::load_system_prompt(
+                &prompt_id,
+                &self.config.harness_files().prompts_dirs(),
+            )
+            .is_err()
         {
             return Err(WorkspaceServiceError::InvalidParams(format!(
                 "agent `{name}` references unsupported system prompt `{prompt_id}`"
@@ -122,15 +97,22 @@ impl WorkspaceService {
         ]))
     }
 
-    /// Every agent profile a session may run, with the uninstalled builtins
-    /// filtered out.
+    /// Every agent profile a session may run, without the uninstalled builtins
+    /// and the agents `enabled_agents` and `disabled_agents` withhold.
     pub(super) fn available_agents(&self) -> Result<Vec<AgentProfile>, WorkspaceServiceError> {
         let installed = self.installed_agent_names()?;
+        let document = self.config.load().map_err(config_error)?.effective;
         let mut profiles = self
             .catalog()
             .agents
             .into_values()
-            .filter(|profile| builtin_agents::offered(&profile.name, &installed, None))
+            .filter(|profile| {
+                builtin_agents::offered(&profile.name, &installed, None)
+                    && !vibe_core::config::migration::agent_filters_exclude(
+                        &document,
+                        &profile.name,
+                    )
+            })
             .collect::<Vec<_>>();
         // Reference `AgentRegistry._discover` seeds its dictionary with the
         // builtins in declaration order, so they lead and keep that order even
@@ -347,99 +329,6 @@ impl WorkspaceService {
         )]))
     }
 
-    pub(super) fn prompt_prepare(
-        &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
-        let prompt: PromptParams = serde_json::from_value(Value::Object(
-            params.clone().into_iter().collect::<Map<_, _>>(),
-        ))
-        .map_err(|error| WorkspaceServiceError::InvalidParams(error.to_string()))?;
-        let additional_directories = prompt
-            .add_directories
-            .iter()
-            .map(|path| self.authorized_existing_path(path))
-            .collect::<Result<Vec<_>, _>>()?;
-        let catalog = self.catalog();
-        let user_home = self
-            .paths
-            .vibe_home
-            .parent()
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| self.paths.vibe_home.clone());
-        let project_roots = if self.project_trusted {
-            vec![(
-                self.paths.working_directory.clone(),
-                self.paths.working_directory.clone(),
-            )]
-        } else {
-            Vec::new()
-        };
-        let loader = InstructionLoader::new(user_home, project_roots);
-        let base = match prompt.prompt_id.as_deref() {
-            Some(prompt_id) => {
-                PromptResolver::new(
-                    vec![self.paths.working_directory.join(".vibe/prompts")],
-                    vec![self.paths.vibe_home.join("extensions/prompts")],
-                    BTreeMap::new(),
-                    self.project_trusted,
-                )
-                .resolve(prompt_id)
-                .map_err(|error| WorkspaceServiceError::Prompt(error.to_string()))?
-                .content
-            }
-            None => prompt.base,
-        };
-        let composition = PromptComposition {
-            base,
-            headless: prompt.headless,
-            commit_policy: prompt.commit_policy,
-            model_info: prompt.model,
-            os_tool_guidance: prompt.os_tool_guidance,
-            // Reference `system_prompt.py`: the model is shown only the skills
-            // it may load.
-            skills: catalog
-                .skills
-                .values()
-                .filter(|skill| skill.model_invocable)
-                .map(|skill| SkillSummary {
-                    name: skill.name.clone(),
-                    description: skill.description.clone(),
-                    path: skill.path.clone(),
-                })
-                .collect(),
-            subagents: catalog
-                .agents
-                .values()
-                .filter(|agent| agent.kind == AgentKind::Subagent)
-                .map(|agent| SubagentSummary {
-                    name: agent.name.clone(),
-                    description: agent.description.clone(),
-                })
-                .collect(),
-            scratchpad: prompt.scratchpad,
-            project_context: prompt.project_context,
-            project_context_stale: prompt.project_context_stale,
-            additional_directories: additional_directories.clone(),
-            user_instructions: loader
-                .user_document()
-                .map_err(|error| WorkspaceServiceError::Prompt(error.to_string()))?,
-            project_instructions: loader
-                .project_documents()
-                .map_err(|error| WorkspaceServiceError::Prompt(error.to_string()))?,
-        }
-        .compose();
-        let mut roots = vec![self.paths.working_directory.clone()];
-        roots.extend(additional_directories);
-        let prepared = prepare_user_resources(&prompt.resources, &roots, prompt.supports_images)
-            .map_err(|error| WorkspaceServiceError::Prompt(error.to_string()))?;
-        Ok(WorkspaceDispatch::result([
-            ("prompt", serde_json::to_value(composition)?),
-            ("user", serde_json::to_value(prepared)?),
-            ("issues", serde_json::to_value(catalog.issues)?),
-        ]))
-    }
-
     pub(super) fn authorized_existing_path(
         &self,
         path: &Path,
@@ -528,8 +417,7 @@ impl WorkspaceService {
                 configured: &configured,
                 projects: &projects,
                 vibe_home: &self.paths.vibe_home,
-                // The operator's home is the Vibe home's parent, which is what
-                // `prompt_prepare` already reads it as. Reference `AGENTS_HOME`
+                // The operator's home is the Vibe home's parent. Reference `AGENTS_HOME`
                 // hangs off `Path.home()` and ignores `VIBE_HOME`; the two
                 // agree on every default installation, where the Vibe home is
                 // `~/.vibe`, and this spelling keeps a relocated home from

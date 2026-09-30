@@ -89,6 +89,12 @@ pub(crate) struct SessionRuntime {
     /// The hooks the session loaded when it opened or last reloaded its
     /// runtime.
     pub(crate) hooks: crate::session_hooks::SessionHooks,
+    /// The system message composed for the session's turns, with the scope
+    /// and the merged settings it was composed under. It is kept while both
+    /// hold and until the files it was read from reload: reference
+    /// `refresh_system_prompt` recomposes on those events rather than on every
+    /// turn, so a file edited mid-session waits for one of them.
+    pub(crate) system_prompt: Option<ComposedPrompt>,
     pub(crate) persisted: Option<HydratedSession>,
     pub(crate) review: Option<Arc<ReviewManager>>,
     /// The worktree this session's start created, which closing the session
@@ -156,6 +162,7 @@ impl SessionRuntime {
             policy,
             tools,
             hooks: crate::session_hooks::SessionHooks::default(),
+            system_prompt: None,
             persisted: None,
             review,
             created_worktree: None,
@@ -487,4 +494,12 @@ impl From<&SessionRuntime> for SessionView {
             attachments: session.attachments,
         }
     }
+}
+
+/// A session's composed system message and what it was composed under.
+#[derive(Debug, Clone)]
+pub(crate) struct ComposedPrompt {
+    pub(crate) scope: crate::workspace::SessionPromptScope,
+    pub(crate) settings: toml::Table,
+    pub(crate) text: String,
 }

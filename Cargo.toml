@@ -31,6 +31,7 @@ grep-regex = "0.1.14"
 grep-searcher = "0.1.15"
 hex = "0.4.3"
 ignore = "0.4.24"
+jiff = "0.2.37"
 keyring = "4.1.5"
 nix = { version = "0.31.3", features = ["process", "signal"] }
 notify = "8.2.0"

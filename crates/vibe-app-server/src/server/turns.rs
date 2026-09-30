@@ -7,6 +7,8 @@
 
 use super::session_callbacks::finalize_turn_entries;
 use super::*;
+use crate::client::SessionSystemPrompt;
+use crate::workspace::SessionPromptScope;
 
 impl AppServer {
     pub fn complete_turn(
@@ -589,27 +591,100 @@ impl AppServer {
         else {
             return Err(ServerError::MissingTurnReservation);
         };
-        let sessions = self.lock_sessions()?;
-        let session = sessions
-            .get(&session_id)
-            .ok_or_else(|| ServerError::SessionNotFound(session_id.clone()))?;
-        Ok(TurnReservation {
-            working_directory: session.working_directory.clone(),
-            intent: session.intent.clone(),
-            compaction: session.compaction.clone(),
-            tools: session.tools.clone(),
-            hooks: session.hooks.clone(),
-            session_id,
-            turn_id,
-            prompt,
-            input,
-            prepared_images: None,
-            injected,
-            client_user_message_id,
-            auto_title,
-            user_display_content,
-            mention_stats,
-        })
+        let (mut reservation, scope, cached) = {
+            let sessions = self.lock_sessions()?;
+            let session = sessions
+                .get(&session_id)
+                .ok_or_else(|| ServerError::SessionNotFound(session_id.clone()))?;
+            let reservation = TurnReservation {
+                working_directory: session.working_directory.clone(),
+                intent: session.intent.clone(),
+                compaction: session.compaction.clone(),
+                tools: session.tools.clone(),
+                hooks: session.hooks.clone(),
+                system_prompt: None,
+                session_id,
+                turn_id,
+                prompt,
+                input,
+                prepared_images: None,
+                injected,
+                client_user_message_id,
+                auto_title,
+                user_display_content,
+                mention_stats,
+            };
+            (
+                reservation,
+                prompt_scope(session),
+                session.system_prompt.clone(),
+            )
+        };
+        // Composing reads files and asks git, so it runs outside the session
+        // lock; the text is kept for the next turn.
+        let settings = self
+            .workspace
+            .system_prompt_settings(&scope)
+            .map_err(|error| ServerError::Resource(error.to_string()))?;
+        let text = match cached {
+            Some(cached) if cached.scope == scope && cached.settings == settings => cached.text,
+            _ => {
+                let text = self
+                    .workspace
+                    .session_system_prompt(&scope)
+                    .map_err(|error| ServerError::Resource(error.to_string()))?;
+                if let Some(session) = self.lock_sessions()?.get_mut(&reservation.session_id) {
+                    session.system_prompt = Some(super::runtime::ComposedPrompt {
+                        scope: scope.clone(),
+                        settings,
+                        text: text.clone(),
+                    });
+                }
+                text
+            }
+        };
+        let workspace = Arc::clone(&self.workspace);
+        // Reference `_create_subagent_loop`: the child keeps the parent's
+        // directory, roots and headless flag, runs its own profile, and has no
+        // scratchpad of its own.
+        let child = SessionPromptScope {
+            agent: None,
+            model: None,
+            scratchpad: None,
+            ..scope
+        };
+        reservation.system_prompt = Some(SessionSystemPrompt {
+            text,
+            subagent: Arc::new(move |profile| {
+                let scope = SessionPromptScope {
+                    agent: Some(profile.name.clone()),
+                    ..child.clone()
+                };
+                workspace
+                    .session_system_prompt(&scope)
+                    .map_err(|error| error.to_string())
+            }),
+        });
+        Ok(reservation)
+    }
+}
+
+/// What the session's system message is composed for.
+fn prompt_scope(session: &SessionRuntime) -> SessionPromptScope {
+    SessionPromptScope {
+        working_directory: PathBuf::from(&session.working_directory),
+        trusted: session.intent.trusted,
+        add_directories: session.intent.add_directories.clone(),
+        project_file_trust: session.intent.project_file_trust,
+        agent: session.intent.agent.clone(),
+        model: session.intent.model.clone(),
+        headless: session.intent.headless,
+        scratchpad: vibe_core::scratchpad::init_scratchpad(&session.id),
+        tool_names: session
+            .tools
+            .list()
+            .map(|specs| specs.into_iter().map(|spec| spec.name).collect())
+            .unwrap_or_default(),
     }
 }
 

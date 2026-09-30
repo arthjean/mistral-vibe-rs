@@ -15,11 +15,14 @@
 //! Reference: `vibe/core/prompts/__init__.py` at the pinned commit.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// A prompt this crate ships, addressable by the identifier a setting carries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UtilityPrompt {
+    /// The wrapper the system prompt puts around the `AGENTS.md` documents,
+    /// with a `$sections` placeholder for them.
+    AgentsDoc,
     /// The compaction request, sent as a user message on the live transcript.
     Compact,
     /// The system message the dedicated fallback summarizer runs under.
@@ -27,6 +30,12 @@ pub enum UtilityPrompt {
     /// The marker an older build wrote in front of an injected summary. It is
     /// read as a filter and never sent to a model.
     CompactSummaryPrefix,
+    /// The project context a session opened in a dangerous directory gets
+    /// instead of a Git scan, with `$reason` and `$abs_path` placeholders.
+    DangerousDirectory,
+    /// The project context block, with `$abs_path` and `$git_status`
+    /// placeholders.
+    ProjectContext,
     /// The system message the worktree naming model runs under
     /// (`vibe/core/prompts/worktree_name.md` upstream; this text is this
     /// repository's own).
@@ -35,18 +44,43 @@ pub enum UtilityPrompt {
     /// (`vibe/core/prompts/session_title.md` upstream; this text is this
     /// repository's own).
     SessionTitle,
+    /// The system message a turn summary runs under. Only reachable here as a
+    /// bundled file a `system_prompt_id` can name.
+    TurnSummary,
+    /// The system message an image description runs under. Only reachable here
+    /// as a bundled file a `system_prompt_id` can name.
+    VisionDescribe,
 }
 
 impl UtilityPrompt {
+    /// Every prompt this crate ships, in the reference's declaration order.
+    pub const ALL: [Self; 10] = [
+        Self::AgentsDoc,
+        Self::Compact,
+        Self::CompactSummaryPrefix,
+        Self::CompactSystem,
+        Self::DangerousDirectory,
+        Self::ProjectContext,
+        Self::SessionTitle,
+        Self::TurnSummary,
+        Self::VisionDescribe,
+        Self::WorktreeName,
+    ];
+
     /// The identifier this prompt answers to, which is what a setting names.
     #[must_use]
     pub const fn id(self) -> &'static str {
         match self {
+            Self::AgentsDoc => "agents_doc",
             Self::Compact => "compact",
             Self::CompactSystem => "compact_system",
             Self::CompactSummaryPrefix => "compact_summary_prefix",
+            Self::DangerousDirectory => "dangerous_directory",
+            Self::ProjectContext => "project_context",
             Self::WorktreeName => "worktree_name",
             Self::SessionTitle => "session_title",
+            Self::TurnSummary => "turn_summary",
+            Self::VisionDescribe => "vision_describe",
         }
     }
 
@@ -55,6 +89,7 @@ impl UtilityPrompt {
     #[must_use]
     pub fn text(self) -> &'static str {
         match self {
+            Self::AgentsDoc => include_str!("assets/agents_doc.md").trim_ascii(),
             Self::Compact => include_str!("assets/compact.md").trim_ascii(),
             Self::CompactSystem => include_str!("assets/compact_system.md").trim_ascii(),
             Self::CompactSummaryPrefix => {
@@ -62,6 +97,10 @@ impl UtilityPrompt {
             }
             Self::WorktreeName => include_str!("assets/worktree_name.md").trim_ascii(),
             Self::SessionTitle => include_str!("assets/session_title.md").trim_ascii(),
+            Self::DangerousDirectory => include_str!("assets/dangerous_directory.md").trim_ascii(),
+            Self::ProjectContext => include_str!("assets/project_context.md").trim_ascii(),
+            Self::TurnSummary => include_str!("assets/turn_summary.md").trim_ascii(),
+            Self::VisionDescribe => include_str!("assets/vision_describe.md").trim_ascii(),
         }
     }
 }
@@ -157,19 +196,10 @@ pub fn load_prompt(
     directories: &[PathBuf],
     builtins: &[UtilityPrompt],
 ) -> Result<String, PromptFileError> {
-    if prompt_id.is_empty()
-        || prompt_id == "."
-        || prompt_id == ".."
-        || prompt_id.contains('/')
-        || prompt_id.contains('\\')
-    {
-        return Err(PromptFileError::InvalidId {
-            setting_name: setting_name.to_owned(),
-            prompt_id: prompt_id.to_owned(),
-        });
-    }
+    validate_prompt_id(prompt_id, setting_name)?;
+    let file_name = with_md_suffix(prompt_id);
     for directory in directories {
-        let candidate = directory.join(format!("{prompt_id}.md"));
+        let candidate = directory.join(&file_name);
         if candidate.is_file()
             && let Ok(text) = fs::read_to_string(&candidate)
         {
@@ -192,24 +222,64 @@ pub fn load_prompt(
     })
 }
 
+/// Reference `_validate_prompt_id`: a prompt identifier is a bare file name.
+///
+/// # Errors
+///
+/// [`PromptFileError::InvalidId`] for an empty value, `.`, `..`, or a value
+/// holding a path separator.
+pub(crate) fn validate_prompt_id(
+    prompt_id: &str,
+    setting_name: &str,
+) -> Result<(), PromptFileError> {
+    if prompt_id.is_empty()
+        || prompt_id == "."
+        || prompt_id == ".."
+        || prompt_id.contains('/')
+        || prompt_id.contains('\\')
+    {
+        return Err(PromptFileError::InvalidId {
+            setting_name: setting_name.to_owned(),
+            prompt_id: prompt_id.to_owned(),
+        });
+    }
+    Ok(())
+}
+
+/// The file name `Path(prompt_id).with_suffix(".md")` names: the identifier's
+/// own suffix, if it has one, is replaced rather than extended, so `cli.v2`
+/// looks for `cli.md`.
+pub(crate) fn with_md_suffix(prompt_id: &str) -> String {
+    let suffix = python_suffix(prompt_id);
+    format!("{}.md", &prompt_id[..prompt_id.len() - suffix.len()])
+}
+
+/// `PurePath.suffix` of a single name: from its last dot, when that dot is
+/// neither the first nor the last character.
+fn python_suffix(name: &str) -> &str {
+    match name.rfind('.') {
+        Some(index) if index > 0 && index + 1 < name.len() => &name[index..],
+        _ => "",
+    }
+}
+
+/// `PurePath.stem` of a single name.
+fn python_stem(name: &str) -> &str {
+    &name[..name.len() - python_suffix(name).len()]
+}
+
 /// Every identifier the searched directories do carry, sorted and deduplicated,
 /// so the error can list what the operator could have typed instead.
-fn available_ids(directories: &[PathBuf]) -> Vec<String> {
+pub(crate) fn available_ids(directories: &[PathBuf]) -> Vec<String> {
     let mut found: Vec<String> = directories
         .iter()
         .filter_map(|directory| fs::read_dir(directory).ok())
         .flat_map(|entries| entries.flatten().collect::<Vec<_>>())
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().is_some_and(|extension| extension == "md"))
-        .filter_map(|path| stem_of(&path))
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .filter(|name| name.ends_with(".md"))
+        .map(|name| python_stem(&name).to_owned())
         .collect();
     found.sort_unstable();
     found.dedup();
     found
-}
-
-fn stem_of(path: &Path) -> Option<String> {
-    path.file_stem()
-        .and_then(|stem| stem.to_str())
-        .map(ToOwned::to_owned)
 }

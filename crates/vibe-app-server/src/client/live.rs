@@ -74,6 +74,8 @@ pub struct LiveDriverConfig {
     /// The request timeout and the retry budget, with the three transport
     /// timeouts. Reference `api_timeout` and its four siblings.
     pub api: ApiSettings,
+    /// What a turn opens with when its reservation carries no prompt the
+    /// server composed for the session.
     pub system_prompt: String,
     pub session_root: Option<PathBuf>,
     pub input_price_per_million_micros: u64,
@@ -684,18 +686,18 @@ impl LiveTurnDriver {
         &self,
         reservation: &TurnReservation,
     ) -> Result<Vec<ModelMessage>, DriverError> {
-        // A launch that told the session nobody is behind it carries the
-        // directive the composed prompt carries for the same flag, as a section
-        // of the one system message the reference sends
-        // (`vibe/core/system_prompt.py:386-396`).
-        let content = if reservation.intent.headless {
-            format!(
+        // The server composes the session's prompt, headless section included
+        // (`vibe/core/system_prompt.py:380-425`). A reservation built without
+        // it runs on this driver's configured prompt, which carries the
+        // headless directive the same way.
+        let content = match &reservation.system_prompt {
+            Some(prompt) => prompt.text.clone(),
+            None if reservation.intent.headless => format!(
                 "{}\n\n{}",
                 self.system_prompt.trim_end(),
-                vibe_core::prompt::HEADLESS_SECTION
-            )
-        } else {
-            self.system_prompt.clone()
+                vibe_core::system_prompt::HEADLESS_SECTION
+            ),
+            None => self.system_prompt.clone(),
         };
         let mut messages = vec![ModelMessage::System { content }];
         if reservation.intent.mode.as_deref() == Some("plan") {
@@ -722,16 +724,6 @@ impl LiveTurnDriver {
                      file you may write while plan mode is active.",
                     plan_path.display()
                 ),
-            });
-        }
-        if let Some(profile_prompt) = reservation
-            .intent
-            .system_prompt_id
-            .as_deref()
-            .and_then(crate::builtin_agents::system_prompt)
-        {
-            messages.push(ModelMessage::System {
-                content: profile_prompt.to_owned(),
             });
         }
         Ok(messages)
