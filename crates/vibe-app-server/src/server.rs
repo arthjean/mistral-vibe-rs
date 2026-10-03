@@ -21,6 +21,7 @@ mod session_management;
 mod titles;
 mod turn_queue;
 mod turns;
+mod vibe_code_host;
 mod wire;
 
 pub(crate) use manual_shell::ShellOperation;
@@ -36,6 +37,7 @@ use callbacks::*;
 pub use connection::ServerConnection;
 use projection::*;
 use registry::SessionRegistry;
+pub use vibe_code_host::{ClientLaunch, FrameSink};
 
 use crate::client::{TurnReservation, public_turn_failure};
 use crate::client_tools::ClientToolBridge;
@@ -499,6 +501,15 @@ pub enum DeferredWork {
         target: McpCatalogTarget,
         publish: bool,
     },
+    /// One `vibeCode/*` call, run against the session's controller. Frames it
+    /// publishes after answering go out as they happen.
+    VibeCode {
+        request_id: RequestId,
+        session_id: String,
+        method: String,
+        params: BTreeMap<String, Value>,
+        launch: vibe_code_host::ClientLaunch,
+    },
     CompactSession {
         request_id: RequestId,
         session_id: String,
@@ -592,6 +603,10 @@ pub struct AppServer {
     /// name comes from the prompt alone, as it does upstream when no key
     /// resolves (`vibe/core/llm/utility_completion.py:22-76`).
     utility_provider: Option<Arc<dyn CompletionProvider>>,
+    /// The model a Teleport run summarizes the session with, on the session's
+    /// compaction model. Without one, a run with history to summarize fails
+    /// the way a failed summarization does.
+    secondary_provider: Option<Arc<dyn CompletionProvider>>,
     /// The harness this process resolved, which `config/read` reports.
     harness: Arc<HarnessSelection>,
     next_session: Arc<AtomicU64>,
@@ -645,6 +660,7 @@ impl Default for AppServer {
             client_tools: Arc::new(ClientToolBridge::default()),
             client_telemetry: Arc::new(NoClientTelemetry),
             utility_provider: None,
+            secondary_provider: None,
             harness: Arc::new(HarnessSelection::default()),
             next_session: Arc::new(AtomicU64::new(1)),
             next_turn: Arc::new(AtomicU64::new(1)),
@@ -749,6 +765,28 @@ impl AppServer {
         self
     }
 
+    /// The provider a Teleport run's summarization calls.
+    #[must_use]
+    pub fn using_secondary_provider(
+        mut self,
+        provider: Option<Arc<dyn CompletionProvider>>,
+    ) -> Self {
+        self.secondary_provider = provider;
+        self
+    }
+
+    /// [`Self::using_secondary_provider`], unless one is installed already.
+    #[must_use]
+    pub(crate) fn defaulting_secondary_provider(
+        self,
+        provider: Option<Arc<dyn CompletionProvider>>,
+    ) -> Self {
+        if self.secondary_provider.is_some() {
+            return self;
+        }
+        self.using_secondary_provider(provider)
+    }
+
     /// Installs what answers the approvals a session's tools ask for.
     #[must_use]
     pub(crate) fn using_approval_factory(
@@ -817,6 +855,7 @@ impl AppServer {
             attached_sessions: BTreeSet::new(),
             root: None,
             entrypoint: ClientEntrypoint::Unknown,
+            client_name: None,
             pending_server_requests: HashMap::new(),
         }
     }

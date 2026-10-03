@@ -1,4 +1,4 @@
-//! The git working tree a project link and a teleport are decided from.
+//! The git working tree a project link is decided from.
 //!
 //! [`GitProbe`] is the whole contract: what a directory's repository looks like,
 //! and what pushing it accomplishes. [`CommandGitProbe`] satisfies it by running
@@ -11,34 +11,23 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use base64::Engine as _;
-use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use command_group::CommandGroup;
 use serde::Serialize;
 use url::Url;
 
-use super::cloud::{CloudError, Project, TeleportRepository, TeleportRepositoryDiff};
+use super::cloud::{CloudError, Project};
 
 pub(super) const MAX_GIT_OUTPUT_BYTES: usize = 1024 * 1024;
-pub(super) const MAX_TELEPORT_DIFF_ENCODED_BYTES: usize = 1_000_000;
 pub(super) const DEFAULT_GIT_COMMAND_TIMEOUT: Duration = Duration::from_secs(15);
 pub(super) const DEFAULT_GIT_NETWORK_TIMEOUT: Duration = Duration::from_secs(60);
-pub(super) static NEXT_GIT_INDEX_FILE: AtomicU64 = AtomicU64::new(1);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GitSnapshot {
     pub repository: String,
     pub dirty: bool,
     pub unpushed: bool,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GitPushStatus {
-    pub unpushed_count: u64,
-    pub branch_not_pushed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,26 +102,6 @@ pub trait GitProbe: Send + Sync {
             branch: None,
         })
     }
-
-    fn inspect_for_teleport(
-        &self,
-        working_directory: &Path,
-    ) -> Result<(GitSnapshot, TeleportRepository, GitPushStatus), CloudError> {
-        let snapshot = self.inspect(working_directory)?;
-        let repository = TeleportRepository {
-            repo_url: snapshot.repository.clone(),
-            branch: None,
-            commit_sha: None,
-            diff: None,
-        };
-        let push_status = GitPushStatus {
-            unpushed_count: u64::from(snapshot.unpushed),
-            branch_not_pushed: snapshot.unpushed,
-        };
-        Ok((snapshot, repository, push_status))
-    }
-
-    fn push(&self, working_directory: &Path) -> Result<(), CloudError>;
 }
 
 pub(super) struct UnavailableGitProbe;
@@ -141,12 +110,6 @@ impl GitProbe for UnavailableGitProbe {
     fn inspect(&self, _working_directory: &Path) -> Result<GitSnapshot, CloudError> {
         Err(CloudError::Git(
             "the working directory is not an inspectable Git repository".to_owned(),
-        ))
-    }
-
-    fn push(&self, _working_directory: &Path) -> Result<(), CloudError> {
-        Err(CloudError::Git(
-            "no Git push implementation is configured".to_owned(),
         ))
     }
 }
@@ -254,7 +217,7 @@ impl CommandGitProbe {
             self.command_timeout,
             "read the current commit",
         )?;
-        let commit_sha = commit_sha.trim().to_owned();
+        let commit_sha = commit_sha.trim();
         if !(7..=64).contains(&commit_sha.len())
             || !commit_sha.bytes().all(|byte| byte.is_ascii_hexdigit())
         {
@@ -267,14 +230,10 @@ impl CommandGitProbe {
             remote,
             repo_url,
             branch,
-            commit_sha,
         })
     }
 
-    fn inspection(
-        &self,
-        working_directory: &Path,
-    ) -> Result<(GitSnapshot, TeleportRepository, GitPushStatus), CloudError> {
+    fn inspection(&self, working_directory: &Path) -> Result<GitSnapshot, CloudError> {
         let metadata = self.metadata(working_directory)?;
         let status = self.git_text(
             working_directory,
@@ -332,119 +291,11 @@ impl CommandGitProbe {
             .map_err(|_| {
                 CloudError::Git("Git returned an invalid unpushed commit count".to_owned())
             })?;
-        let diff = self.working_tree_diff(&metadata.repo_root, dirty)?;
-        let branch_not_pushed = !branch_pushed;
-        let unpushed = branch_not_pushed || unpushed_count > 0;
-        Ok((
-            GitSnapshot {
-                repository: metadata.repo_url.clone(),
-                dirty,
-                unpushed,
-            },
-            TeleportRepository {
-                repo_url: metadata.repo_url,
-                branch: Some(metadata.branch),
-                commit_sha: Some(metadata.commit_sha),
-                diff,
-            },
-            GitPushStatus {
-                unpushed_count,
-                branch_not_pushed,
-            },
-        ))
-    }
-
-    fn working_tree_diff(
-        &self,
-        working_directory: &Path,
-        dirty: bool,
-    ) -> Result<Option<TeleportRepositoryDiff>, CloudError> {
-        if !dirty {
-            return Ok(None);
-        }
-        let git_directory = self.git_text(
-            working_directory,
-            &["rev-parse", "--absolute-git-dir"],
-            self.command_timeout,
-            "locate Git metadata",
-        )?;
-        let git_directory = PathBuf::from(git_directory.trim());
-        if !git_directory.is_absolute() || !git_directory.is_dir() {
-            return Err(CloudError::Git(
-                "Git returned an invalid metadata directory".to_owned(),
-            ));
-        }
-        let sequence = NEXT_GIT_INDEX_FILE.fetch_add(1, Ordering::Relaxed);
-        let temporary_index = git_directory.join(format!(
-            ".vibe-teleport-index-{}-{sequence}",
-            std::process::id()
-        ));
-        let environment = [(
-            OsString::from("GIT_INDEX_FILE"),
-            temporary_index.as_os_str().to_owned(),
-        )];
-        let result = (|| {
-            for (args, action) in [
-                (
-                    vec![OsString::from("read-tree"), OsString::from("HEAD")],
-                    "initialize the Teleport diff index",
-                ),
-                (
-                    vec![
-                        OsString::from("add"),
-                        OsString::from("-A"),
-                        OsString::from("--"),
-                        OsString::from("."),
-                    ],
-                    "stage working-tree changes for Teleport",
-                ),
-            ] {
-                let result = self.run_git_with_environment(
-                    working_directory,
-                    &args,
-                    &environment,
-                    self.command_timeout,
-                    action,
-                )?;
-                if !result.status.success() {
-                    return Err(CloudError::Git(format!(
-                        "failed to {action}; the real Git index was not changed"
-                    )));
-                }
-            }
-            let diff = self.run_git_with_environment(
-                working_directory,
-                &[
-                    OsString::from("diff"),
-                    OsString::from("--cached"),
-                    OsString::from("--binary"),
-                    OsString::from("--no-ext-diff"),
-                    OsString::from("HEAD"),
-                    OsString::from("--"),
-                ],
-                &environment,
-                self.command_timeout,
-                "capture the working-tree diff",
-            )?;
-            if !diff.status.success() {
-                return Err(CloudError::Git(
-                    "failed to capture the working-tree diff; local state is unchanged".to_owned(),
-                ));
-            }
-            if diff.stdout_truncated {
-                return Err(CloudError::Git(
-                    "working-tree diff exceeded the local Git output safety limit".to_owned(),
-                ));
-            }
-            if diff.stdout.is_empty() {
-                return Err(CloudError::Git(
-                    "Git reported dirty files but produced no transferable diff".to_owned(),
-                ));
-            }
-            encode_working_tree_diff(&diff.stdout)
-        })();
-        let _ = fs::remove_file(&temporary_index);
-        result.map(Some)
+        Ok(GitSnapshot {
+            repository: metadata.repo_url,
+            dirty,
+            unpushed: !branch_pushed || unpushed_count > 0,
+        })
     }
 
     fn git_text(
@@ -518,27 +369,9 @@ impl CommandGitProbe {
     }
 }
 
-pub(super) fn encode_working_tree_diff(diff: &[u8]) -> Result<TeleportRepositoryDiff, CloudError> {
-    let compressed = zstd::stream::encode_all(diff, 3)
-        .map_err(|_| CloudError::Git("working-tree diff compression failed".to_owned()))?;
-    let content = BASE64_STANDARD.encode(compressed);
-    if content.len() > MAX_TELEPORT_DIFF_ENCODED_BYTES {
-        return Err(CloudError::Git(format!(
-            "working-tree diff exceeded the {MAX_TELEPORT_DIFF_ENCODED_BYTES} byte Teleport limit"
-        )));
-    }
-    Ok(TeleportRepositoryDiff {
-        format: "git-diff",
-        encoding: "base64",
-        compression: "zstd",
-        content,
-    })
-}
-
 impl GitProbe for CommandGitProbe {
     fn inspect(&self, working_directory: &Path) -> Result<GitSnapshot, CloudError> {
         self.inspection(working_directory)
-            .map(|(snapshot, _, _)| snapshot)
     }
 
     fn inspect_project(&self, working_directory: &Path) -> Result<ProjectGitSnapshot, CloudError> {
@@ -633,35 +466,6 @@ impl GitProbe for CommandGitProbe {
             default_branch,
         })
     }
-
-    fn inspect_for_teleport(
-        &self,
-        working_directory: &Path,
-    ) -> Result<(GitSnapshot, TeleportRepository, GitPushStatus), CloudError> {
-        self.inspection(working_directory)
-    }
-
-    fn push(&self, working_directory: &Path) -> Result<(), CloudError> {
-        let metadata = self.metadata(working_directory)?;
-        let result = self.run_git(
-            working_directory,
-            &[
-                OsString::from("push"),
-                OsString::from("--set-upstream"),
-                OsString::from("--"),
-                OsString::from(metadata.remote),
-                OsString::from(metadata.branch),
-            ],
-            self.network_timeout,
-            "push the current branch",
-        )?;
-        if !result.status.success() {
-            return Err(CloudError::Git(
-                "Git push failed; verify remote access and push the branch manually".to_owned(),
-            ));
-        }
-        Ok(())
-    }
 }
 
 #[derive(Debug)]
@@ -670,7 +474,6 @@ pub(super) struct GitMetadata {
     remote: String,
     repo_url: String,
     branch: String,
-    commit_sha: String,
 }
 
 #[derive(Debug)]
@@ -828,28 +631,6 @@ pub(super) fn is_project_linked_to_repo(project: &Project, repo_url: &str) -> bo
         .repositories
         .iter()
         .any(|repository| normalize_repo_url(&repository.repo_url) == normalized_repo_url)
-}
-
-pub(super) fn project_is_selectable(project: &Project, repo_url: &str) -> bool {
-    !project.is_read_only && is_project_linked_to_repo(project, repo_url)
-}
-
-pub(super) fn suggested_project_name(git: &ProjectGitSnapshot) -> String {
-    let root_name = Path::new(&git.repo_root)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .map(str::trim)
-        .filter(|name| !name.is_empty());
-    if let Some(root_name) = root_name {
-        return root_name.to_owned();
-    }
-    normalize_repo_url(&git.snapshot.repository)
-        .rsplit('/')
-        .next()
-        .map(str::trim)
-        .filter(|name| !name.is_empty())
-        .unwrap_or("vibe-project")
-        .to_owned()
 }
 
 pub(super) fn sanitize_git_remote(raw: &str) -> Result<String, CloudError> {

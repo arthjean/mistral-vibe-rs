@@ -293,6 +293,9 @@ impl ServerConnection {
         if let Some(shell) = &session.shell_operation {
             return Err(busy(format!("shell {}", shell.id)));
         }
+        if let Some(operation_id) = &session.teleport_operation {
+            return Err(busy(format!("teleport {operation_id}")));
+        }
         if session.compaction_pending {
             return Err(busy("lifecycle compact".to_owned()));
         }
@@ -437,6 +440,12 @@ impl ServerConnection {
             return Err(ProtocolFault::plain(
                 ProtocolErrorCode::Conflict,
                 format!("Session is already running turn {turn_id}"),
+            ));
+        }
+        if let Some(operation_id) = &session.teleport_operation {
+            return Err(ProtocolFault::plain(
+                ProtocolErrorCode::Conflict,
+                format!("Session is already running teleport {operation_id}"),
             ));
         }
         session.shell_operation = Some(ShellOperation {

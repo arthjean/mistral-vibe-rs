@@ -60,6 +60,12 @@ impl ServerConnection {
                 format!("Session is already running shell {}", operation.id),
             ));
         }
+        if let Some(operation_id) = &session.teleport_operation {
+            return Err(ProtocolFault::plain(
+                ProtocolErrorCode::Conflict,
+                format!("Session is already running teleport {operation_id}"),
+            ));
+        }
         let mut loop_notice = None;
         if let Some((loop_id, fired_at)) = scheduled {
             let fire = self.server.projects.fire_loop_for_session(

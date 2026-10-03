@@ -46,6 +46,14 @@ mod record;
 mod slug_table;
 
 pub use git::BranchChanges;
+
+/// The git this process may run in `cwd`: an absolute
+/// `GIT_PYTHON_GIT_EXECUTABLE`, or the first one on an absolute `PATH` entry
+/// outside the project (`vibe/utils/platform.py:89-167`).
+#[must_use]
+pub fn trusted_git_executable(cwd: &Path) -> Option<PathBuf> {
+    git::git_executable(cwd).ok()
+}
 pub use managed::{
     ManagedWorktree, RetainedRepositoryMapping, SNAPSHOT_REF_PREFIX, WorktreeRelease,
     WorktreeReleaseOutcome,

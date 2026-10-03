@@ -4,10 +4,7 @@ pub use super::*;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Duration;
 
-use crate::projects::{
-    CloudError, GitProbe, GitSnapshot, Project, ProjectCloud, ProjectPage, ProjectRepository,
-    ProjectsService, TeleportCloud, TeleportStartFailure, TeleportStartRequest,
-};
+use crate::projects::ProjectsService;
 use crate::server::SessionStatus;
 use crate::workspace::{WorkspacePaths, WorkspaceService};
 use vibe_core::compaction::CompactionFailureReason;
@@ -134,60 +131,6 @@ fn guarded_registry(
         approval.clone(),
     ));
     (tools, approval)
-}
-
-struct ProgrammaticProjects;
-
-impl ProjectCloud for ProgrammaticProjects {
-    fn create(
-        &self,
-        _name: &str,
-        _repo_url: &str,
-        _default_branch: &str,
-    ) -> Result<Project, CloudError> {
-        Err(CloudError::Unavailable(
-            "project creation is not used by this fixture".to_owned(),
-        ))
-    }
-
-    fn list(&self, _cursor: Option<&str>) -> Result<ProjectPage, CloudError> {
-        Ok(ProjectPage {
-            projects: vec![Project {
-                project_id: "project-public-dispatch".to_owned(),
-                name: "Public dispatch".to_owned(),
-                repositories: vec![ProjectRepository {
-                    repo_url: "https://git.example/public-dispatch".to_owned(),
-                    default_branch: Some("main".to_owned()),
-                }],
-                is_read_only: false,
-            }],
-            next_cursor: None,
-        })
-    }
-}
-
-struct ProgrammaticTeleport;
-
-impl TeleportCloud for ProgrammaticTeleport {
-    fn start(&self, request: &TeleportStartRequest) -> Result<String, TeleportStartFailure> {
-        Ok(format!("https://cloud.example/{}", request.idempotency_key))
-    }
-}
-
-struct ProgrammaticGit;
-
-impl GitProbe for ProgrammaticGit {
-    fn inspect(&self, _working_directory: &std::path::Path) -> Result<GitSnapshot, CloudError> {
-        Ok(GitSnapshot {
-            repository: "https://git.example/public-dispatch".to_owned(),
-            dirty: false,
-            unpushed: false,
-        })
-    }
-
-    fn push(&self, _working_directory: &std::path::Path) -> Result<(), CloudError> {
-        Ok(())
-    }
 }
 
 struct RecordingProvider {

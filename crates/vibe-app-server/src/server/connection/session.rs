@@ -617,10 +617,13 @@ impl ServerConnection {
         self.server
             .workspace
             .close_saved_session(&canonical_session_id, now_millis())?;
-        self.server
-            .projects
-            .close_transient_session(&canonical_session_id)
-            .map_err(|error| ProtocolFault::from(ServerError::Projects(error.to_string())))?;
+        // Reference `SessionHandler.close`: the session's Teleport runs stop
+        // and its project picker is dropped.
+        if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+            let server = self.server.clone();
+            let session = canonical_session_id.clone();
+            runtime.spawn(async move { server.reset_vibe_code(&session).await });
+        }
         let active_turn = session.active_turn.clone();
         session.status = SessionStatus::Closed;
         session.updated_at = now_millis();
@@ -769,7 +772,10 @@ impl ServerConnection {
             let session = sessions
                 .get_mut(&params.session_id)
                 .ok_or_else(|| session_missing("Session was not found"))?;
-            if session.active_turn.is_some() || session.compaction_pending {
+            if session.active_turn.is_some()
+                || session.compaction_pending
+                || session.teleport_operation.is_some()
+            {
                 return Err(ProtocolFault::new(
                     ProtocolErrorCode::Conflict,
                     "Cannot compact while the session has active work",

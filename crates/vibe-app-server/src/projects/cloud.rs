@@ -1,4 +1,4 @@
-//! The Vibe Code cloud the project and teleport workflows run against.
+//! The Vibe Code cloud the project-link workflows run against.
 //!
 //! The service above states what a workflow does; this states how it reaches the
 //! backend. Both halves of the contract live here, the traits a caller programs
@@ -17,7 +17,6 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use super::git::MAX_TELEPORT_DIFF_ENCODED_BYTES;
 use thiserror::Error;
 use url::Url;
 
@@ -70,82 +69,6 @@ pub trait AsyncProjectCloud: Send + Sync {
     ) -> CloudFuture<'a, Project>;
 
     fn list<'a>(&'a self, cursor: Option<&'a str>) -> CloudFuture<'a, ProjectPage>;
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TeleportRepository {
-    pub repo_url: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub branch: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub commit_sha: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub diff: Option<TeleportRepositoryDiff>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TeleportRepositoryDiff {
-    pub format: &'static str,
-    pub encoding: &'static str,
-    pub compression: &'static str,
-    pub content: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TeleportStartRequest {
-    pub project_id: String,
-    pub idempotency_key: String,
-    pub summary: String,
-    pub repository: TeleportRepository,
-}
-
-/// Why a Teleport start failed: the error as the service rendered it, and the
-/// HTTP status that produced it when a status is what produced it.
-///
-/// The status travels beside the error rather than inside it. [`CloudError`]
-/// classifies a failure as unavailable, unauthorized or git, and that
-/// classification decides remappings elsewhere that a numeric code must not
-/// move; a consumer that needs the number reads it here. Reference
-/// `TeleportFailureDetails.http_status_code`, which is what tells a saved
-/// project link the service refused from one that merely failed.
-#[derive(Debug)]
-pub struct TeleportStartFailure {
-    pub error: CloudError,
-    pub http_status_code: Option<u16>,
-}
-
-impl From<CloudError> for TeleportStartFailure {
-    fn from(error: CloudError) -> Self {
-        Self {
-            error,
-            http_status_code: None,
-        }
-    }
-}
-
-impl std::fmt::Display for TeleportStartFailure {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.error.fmt(formatter)
-    }
-}
-
-impl std::error::Error for TeleportStartFailure {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(&self.error)
-    }
-}
-
-pub type TeleportFuture<'a> =
-    Pin<Box<dyn Future<Output = Result<String, TeleportStartFailure>> + Send + 'a>>;
-
-pub trait TeleportCloud: Send + Sync {
-    fn start(&self, request: &TeleportStartRequest) -> Result<String, TeleportStartFailure>;
-}
-
-pub trait AsyncTeleportCloud: Send + Sync {
-    fn start<'a>(&'a self, request: &'a TeleportStartRequest) -> TeleportFuture<'a>;
 }
 
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
@@ -225,12 +148,6 @@ pub(super) enum ProjectCloudBackend {
     Async(Arc<dyn AsyncProjectCloud>),
 }
 
-#[derive(Clone)]
-pub(super) enum TeleportCloudBackend {
-    Sync(Arc<dyn TeleportCloud>),
-    Async(Arc<dyn AsyncTeleportCloud>),
-}
-
 pub(super) struct UnavailableProjectCloud;
 
 impl ProjectCloud for UnavailableProjectCloud {
@@ -249,17 +166,6 @@ impl ProjectCloud for UnavailableProjectCloud {
         Err(CloudError::Unavailable(
             "Vibe Code is not configured; provide MISTRAL_API_KEY and retry".to_owned(),
         ))
-    }
-}
-
-pub(super) struct UnavailableTeleportCloud;
-
-impl TeleportCloud for UnavailableTeleportCloud {
-    fn start(&self, _request: &TeleportStartRequest) -> Result<String, TeleportStartFailure> {
-        Err(CloudError::Unavailable(
-            "Teleport is not configured; provide MISTRAL_API_KEY and retry".to_owned(),
-        )
-        .into())
     }
 }
 
@@ -369,127 +275,6 @@ impl VibeCodeHttpCloud {
             .await?
             .into_project()
     }
-
-    /// The Teleport start, with the HTTP status kept beside a failure the
-    /// service answered with one: a saved project link the service refused
-    /// with a 403 or a 404 is reported as cleared, and only the number tells
-    /// that refusal from an ordinary outage.
-    async fn start_teleport(
-        &self,
-        request: &TeleportStartRequest,
-    ) -> Result<String, TeleportStartFailure> {
-        validate_cloud_text(&request.project_id, "project ID")?;
-        validate_cloud_text(&request.idempotency_key, "Teleport idempotency key")?;
-        validate_cloud_text(&request.summary, "Teleport message")?;
-        validate_cloud_text(&request.repository.repo_url, "repository URL")?;
-        if let Some(branch) = &request.repository.branch {
-            validate_cloud_text(branch, "repository branch")?;
-        }
-        if let Some(commit_sha) = &request.repository.commit_sha {
-            validate_cloud_text(commit_sha, "repository commit")?;
-        }
-        if let Some(diff) = &request.repository.diff {
-            if diff.content.len() > MAX_TELEPORT_DIFF_ENCODED_BYTES {
-                return Err(CloudError::Git(format!(
-                    "working-tree diff exceeded the {MAX_TELEPORT_DIFF_ENCODED_BYTES} byte safety limit"
-                ))
-                .into());
-            }
-            validate_cloud_text(diff.format, "repository diff format")?;
-            validate_cloud_text(diff.encoding, "repository diff encoding")?;
-            validate_cloud_text(diff.compression, "repository diff compression")?;
-        }
-        let repository = serde_json::to_value(&request.repository).map_err(|_| {
-            CloudError::Unavailable("Teleport repository context could not be encoded".to_owned())
-        })?;
-        let body = json!({
-            "projectId": request.project_id,
-            "source": "vibe_code_cli",
-            "idempotencyKey": request.idempotency_key,
-            "message": {
-                "role": "user",
-                "parts": [{"type": "text", "text": request.summary}],
-            },
-            "context": {
-                "repositories": [repository],
-            },
-        });
-        for attempt in 0..self.config.max_start_attempts {
-            let response = self
-                .client
-                .post(self.config.endpoint("/api/v1/code/sessions"))
-                .bearer_auth(self.config.api_key.expose_secret())
-                .json(&body)
-                .send()
-                .await;
-            match response {
-                Ok(response)
-                    if response.status() == StatusCode::GATEWAY_TIMEOUT
-                        && attempt + 1 < self.config.max_start_attempts =>
-                {
-                    tokio::time::sleep(Duration::from_millis(100)).await;
-                }
-                Ok(response) if response.status() == StatusCode::GATEWAY_TIMEOUT => {
-                    return Err(ambiguous_teleport_error().into());
-                }
-                Ok(response) => {
-                    let status = response.status();
-                    let decoded = self
-                        .decode::<TeleportResponse>(response, "Vibe Code Teleport start")
-                        .await;
-                    let response = match decoded {
-                        Ok(response) => response,
-                        Err(error) => {
-                            return Err(TeleportStartFailure {
-                                error,
-                                http_status_code: (!status.is_success()).then(|| status.as_u16()),
-                            });
-                        }
-                    };
-                    for (value, label) in [
-                        (&response.session_id, "Teleport session ID"),
-                        (&response.web_session_id, "Teleport web session ID"),
-                        (&response.status, "Teleport status"),
-                    ] {
-                        validate_cloud_text(value, label)?;
-                    }
-                    if response.project_id != request.project_id {
-                        return Err(CloudError::Unavailable(
-                            "Vibe Code Teleport returned a different project; local state is unchanged"
-                                .to_owned(),
-                        )
-                        .into());
-                    }
-                    let url = Url::parse(&response.url).map_err(|_| {
-                        CloudError::Unavailable(
-                            "Vibe Code Teleport returned an invalid URL".to_owned(),
-                        )
-                    })?;
-                    if !matches!(url.scheme(), "http" | "https")
-                        || !url.username().is_empty()
-                        || url.password().is_some()
-                    {
-                        return Err(CloudError::Unavailable(
-                            "Vibe Code Teleport returned an unsafe URL".to_owned(),
-                        )
-                        .into());
-                    }
-                    return Ok(response.url);
-                }
-                Err(error)
-                    if is_ambiguous_request_error(&error)
-                        && attempt + 1 < self.config.max_start_attempts =>
-                {
-                    tokio::time::sleep(Duration::from_millis(100)).await;
-                }
-                Err(error) if is_ambiguous_request_error(&error) => {
-                    return Err(ambiguous_teleport_error().into());
-                }
-                Err(_) => return Err(cloud_request_error("Vibe Code Teleport start").into()),
-            }
-        }
-        Err(ambiguous_teleport_error().into())
-    }
 }
 
 impl AsyncProjectCloud for VibeCodeHttpCloud {
@@ -504,12 +289,6 @@ impl AsyncProjectCloud for VibeCodeHttpCloud {
 
     fn list<'a>(&'a self, cursor: Option<&'a str>) -> CloudFuture<'a, ProjectPage> {
         Box::pin(async move { self.list_projects(cursor).await })
-    }
-}
-
-impl AsyncTeleportCloud for VibeCodeHttpCloud {
-    fn start<'a>(&'a self, request: &'a TeleportStartRequest) -> TeleportFuture<'a> {
-        Box::pin(async move { self.start_teleport(request).await })
     }
 }
 
@@ -568,16 +347,6 @@ pub(super) struct ProjectListResponse {
     next_cursor: Option<String>,
 }
 
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub(super) struct TeleportResponse {
-    session_id: String,
-    web_session_id: String,
-    project_id: String,
-    status: String,
-    url: String,
-}
-
 pub(super) fn validate_cloud_base_url(value: &str) -> Result<Url, CloudConfigError> {
     let url = Url::parse(value).map_err(|_| {
         CloudConfigError::InvalidBaseUrl("expected an absolute HTTPS URL".to_owned())
@@ -623,17 +392,6 @@ pub(super) fn cloud_request_error(operation: &str) -> CloudError {
     CloudError::Unavailable(format!(
         "{operation} could not reach Vibe Code within the configured timeout; check the base URL and network"
     ))
-}
-
-pub(super) fn ambiguous_teleport_error() -> CloudError {
-    CloudError::Unavailable(
-        "Vibe Code did not confirm Teleport session creation after bounded retries; check Vibe Code Web before retrying"
-            .to_owned(),
-    )
-}
-
-pub(super) fn is_ambiguous_request_error(error: &reqwest::Error) -> bool {
-    error.is_timeout() || error.is_connect() || error.is_request() || error.is_body()
 }
 
 pub(super) fn validate_cloud_text(value: &str, label: &str) -> Result<(), CloudError> {

@@ -456,6 +456,28 @@ where
             });
             Ok(Vec::new())
         }
+        DeferredWork::VibeCode {
+            request_id,
+            session_id,
+            method,
+            params,
+            launch,
+        } => {
+            let server = server.clone();
+            let live = events.clone();
+            // A Teleport start answers, then its run publishes events long
+            // after this call returned, so both go out through the loop.
+            let deliver: crate::server::FrameSink = Arc::new(move |frame| {
+                let _ = live.send(ServeEvent::Frame(frame));
+            });
+            spawn_frames(tasks, events.clone(), async move {
+                Ok(server
+                    .execute_vibe_code(request_id, session_id, method, params, launch, deliver)
+                    .await
+                    .outbound)
+            });
+            Ok(Vec::new())
+        }
         DeferredWork::ShellCommand {
             request_id,
             session_id,
@@ -773,6 +795,7 @@ async fn fail_deferred(server: &AppServer, deferred: &[DeferredWork], message: &
             | DeferredWork::ResolveCallback { .. }
             | DeferredWork::ResourceRequest { .. }
             | DeferredWork::McpCatalog { .. }
+            | DeferredWork::VibeCode { .. }
             | DeferredWork::CloudRequest { .. }
             | DeferredWork::ConfigureMcp { .. }
             | DeferredWork::ShellInterrupt { .. } => {}

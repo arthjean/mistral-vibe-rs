@@ -137,6 +137,48 @@ pub(crate) fn fetch_branch(
     }
 }
 
+/// How long a refresh of a whole remote may take, which the reference bounds
+/// with the executor every teleport git call runs on
+/// (`vibe/core/teleport/git.py:67`).
+const REMOTE_FETCH_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Refreshes every branch of `remote` into its remote-tracking refs under the
+/// policy, with local paths refused.
+///
+/// Reference `GitRepository._fetch` (`vibe/core/teleport/git.py:204-212`),
+/// which a teleport run calls before deciding what has to be pushed. The
+/// caller decides what a failure means: the reference swallows every one.
+///
+/// # Errors
+///
+/// The directory holding no checkout, the policy refusing the remote, git
+/// failing or the refresh outliving its bound, as one sentence.
+pub fn fetch_remote_heads(working_dir: &Path, remote: &str) -> Result<(), String> {
+    let repo = GitRepo::open(working_dir).map_err(|error| error.to_string())?;
+    let secure = prepare_secure_fetch(&repo, remote, false).map_err(|error| error.0)?;
+    let refspec = format!("+refs/heads/*:refs/remotes/{remote}/*");
+    let mut command = Command::new(repo.executable());
+    command
+        .arg("-C")
+        .arg(repo.working_dir())
+        .args(["fetch", "--no-recurse-submodules", "--no-auto-maintenance"])
+        .arg(&secure.url)
+        .arg(&refspec)
+        .envs(secure.env.iter().map(|(key, value)| (key, value)))
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped());
+    match run_bounded(command, REMOTE_FETCH_TIMEOUT) {
+        Ok((true, _)) => Ok(()),
+        Ok((false, stderr)) => Err(stderr.trim().to_owned()),
+        Err(Bounded::TimedOut) => Err(format!(
+            "fetching {remote} took longer than {}s",
+            REMOTE_FETCH_TIMEOUT.as_secs()
+        )),
+        Err(Bounded::Spawn(error)) => Err(error.to_string()),
+    }
+}
+
 enum Bounded {
     TimedOut,
     Spawn(std::io::Error),

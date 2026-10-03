@@ -23,6 +23,7 @@ mod tool_execution_parity_tests;
 #[cfg(test)]
 mod tool_surface_parity_tests;
 pub mod transport;
+mod vibe_code;
 pub mod vocabulary;
 mod wire_validation;
 pub mod workspace;

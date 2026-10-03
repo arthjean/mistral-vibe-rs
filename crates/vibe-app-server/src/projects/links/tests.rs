@@ -19,7 +19,7 @@ use vibe_protocol::{Envelope, TransportKind, decode_frame};
 use crate::app_server_surface_parity_tests::census_issues;
 use crate::projects::{
     CloudError, CommandGitProbe, Project, ProjectCloud, ProjectPage, ProjectRepository,
-    ProjectsService, SavedProjectLink, TeleportCloud, TeleportStartFailure, TeleportStartRequest,
+    ProjectsService, SavedProjectLink,
 };
 use crate::server::{AppServer, DeferredWork, ServerConnection};
 
@@ -100,14 +100,6 @@ impl ProjectCloud for FixtureProjects {
     }
 }
 
-struct UnusedTeleport;
-
-impl TeleportCloud for UnusedTeleport {
-    fn start(&self, _request: &TeleportStartRequest) -> Result<String, TeleportStartFailure> {
-        Err(CloudError::Unavailable("Teleport is not exercised here".to_owned()).into())
-    }
-}
-
 fn project(project_id: &str, name: &str, repo_urls: &[&str], is_read_only: bool) -> Project {
     Project {
         project_id: project_id.to_owned(),
@@ -172,13 +164,9 @@ fn github_repository() -> TempDir {
 const REPO_URL: &str = "https://github.com/owner/Repo.git";
 
 fn service(cloud: Arc<dyn ProjectCloud>, store: &Path) -> ProjectsService {
-    ProjectsService::with_backends(
-        cloud,
-        Arc::new(UnusedTeleport),
-        Arc::new(CommandGitProbe::default()),
-    )
-    .with_project_link_store(store.to_path_buf())
-    .expect("the project-link store loads")
+    ProjectsService::with_backends(cloud, Arc::new(CommandGitProbe::default()))
+        .with_project_link_store(store.to_path_buf())
+        .expect("the project-link store loads")
 }
 
 fn connected(service: ProjectsService) -> (AppServer, ServerConnection) {

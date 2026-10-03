@@ -35,6 +35,9 @@ pub struct ServerConnection {
     /// How the client said it was launched, which decides whether its
     /// sessions name themselves in the background.
     pub(super) entrypoint: ClientEntrypoint,
+    /// The name the client gave itself, which a Teleport summary reports as
+    /// its source.
+    pub(super) client_name: Option<String>,
     pub(super) pending_server_requests: HashMap<RequestId, CallbackRoute>,
 }
 
@@ -360,6 +363,14 @@ impl ServerConnection {
         // reference's backend shutdown does: the lease, and the terminal's
         // pointer to the session it leaves.
         for session_id in released {
+            // Reference `VibeCodeController.close`: a push still waiting is
+            // answered no and every run stops, so nothing ships after the
+            // session is gone.
+            if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+                let server = self.server.clone();
+                let session = session_id.clone();
+                runtime.spawn(async move { server.reset_vibe_code(&session).await });
+            }
             self.server.release_lease(&session_id);
             let _ = self
                 .server
@@ -560,6 +571,7 @@ impl ServerConnection {
         };
         self.capabilities = params.capabilities;
         self.entrypoint = params.client_info.entrypoint.clone();
+        self.client_name = Some(params.client_info.name.clone());
         // Sessions started on this connection publish their tools against what
         // the handshake just declared, so the delegation is recorded before the
         // first `session/start` can read it.
@@ -602,13 +614,17 @@ impl ServerConnection {
 
     fn dispatch_projects(
         &mut self,
-        mut request: ServerRequest,
+        request: ServerRequest,
     ) -> Result<DispatchBatch, ProtocolFault> {
         let session_id = request
             .params
             .get("sessionId")
             .and_then(Value::as_str)
             .map(ToOwned::to_owned);
+        if session_id.is_none() && request.method.starts_with("vibeCode/") {
+            crate::params::required_string(&request.params, "sessionId")
+                .map_err(ProjectsServiceError::from)?;
+        }
         if let Some(session_id) = &session_id {
             if let Some(batch) = self.attachment_error(request.id.clone(), session_id) {
                 return Ok(batch);
@@ -627,14 +643,25 @@ impl ServerConnection {
                     "Scheduled loops can only change while the session is idle",
                 ));
             }
-            if matches!(
-                request.method.as_str(),
-                "vibeCode/projects/open" | "vibeCode/teleport/start"
-            ) {
-                request.params.insert(
-                    "workingDirectory".to_owned(),
-                    json!(session.working_directory),
-                );
+            if request.method.starts_with("vibeCode/") {
+                let launch = ClientLaunch {
+                    entrypoint: serde_json::to_value(&self.entrypoint)
+                        .ok()
+                        .and_then(|value| value.as_str().map(ToOwned::to_owned))
+                        .unwrap_or_else(|| "unknown".to_owned()),
+                    client_name: self.client_name.clone(),
+                };
+                return Ok(DispatchBatch {
+                    outbound: Vec::new(),
+                    deferred: vec![DeferredWork::VibeCode {
+                        request_id: request.id,
+                        session_id: session.id.clone(),
+                        method: request.method,
+                        params: request.params,
+                        launch,
+                    }],
+                    close_after_flush: false,
+                });
             }
         }
         if self

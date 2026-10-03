@@ -25,7 +25,11 @@ pub(super) fn error_batch(id: RequestId, code: ProtocolErrorCode, message: &str)
 }
 
 /// Frames a refusal under a code that carries no structured detail.
-fn plain_error_batch(id: RequestId, code: ProtocolErrorCode, message: &str) -> DispatchBatch {
+pub(super) fn plain_error_batch(
+    id: RequestId,
+    code: ProtocolErrorCode,
+    message: &str,
+) -> DispatchBatch {
     let frame = Envelope::Error(ErrorResponse {
         jsonrpc: JsonRpcVersion::V2,
         id,

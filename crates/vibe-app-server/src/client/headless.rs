@@ -7,7 +7,6 @@
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 
 use serde_json::{Value, json};
 
@@ -59,6 +58,7 @@ where
         client_info: ClientInfo,
         capabilities: ClientCapabilities,
     ) -> Result<Self, ClientError> {
+        let server = server.defaulting_secondary_provider(driver.summary_provider());
         Ok(Self {
             client: InProcessClient::connect_with_server_and_client(
                 server,
@@ -110,15 +110,17 @@ where
         let (sender, receiver) =
             tokio::sync::mpsc::channel::<InteractiveCallbackRequest>(MAX_INTERACTIVE_CALLBACKS);
         let plan_directory = driver.plan_directory();
-        let server = server.using_surface_extension(
-            Arc::new(InteractiveApprovalFactory {
-                sender: sender.clone(),
-            }),
-            Arc::new(InteractiveSessionToolFactory {
-                sender: CallbackChannel::Shared(sender),
-                plan_directory,
-            }),
-        );
+        let server = server
+            .defaulting_secondary_provider(driver.summary_provider())
+            .using_surface_extension(
+                Arc::new(InteractiveApprovalFactory {
+                    sender: sender.clone(),
+                }),
+                Arc::new(InteractiveSessionToolFactory {
+                    sender: CallbackChannel::Shared(sender),
+                    plan_directory,
+                }),
+            );
         Ok(Self {
             client: InProcessClient::connect_with_server_and_client(
                 server,
@@ -584,11 +586,15 @@ where
             .finish_compaction(request_id, &canonical_session_id, result)
     }
 
+    /// Reference `_teleport` (`vibe/cli/programmatic.py`): the picker opens
+    /// for Teleport, which the server gates, a repository with no linked
+    /// project is refused, and the run's events are read as they arrive, every
+    /// push question answered with `approve_push`, until the run completes or
+    /// fails.
     pub async fn teleport(
         &mut self,
         session_id: &str,
-        working_directory: &str,
-        summary: &str,
+        prompt: &str,
         approve_push: bool,
     ) -> Result<Vec<ProgrammaticTeleportEvent>, ClientError> {
         let opened = self
@@ -596,8 +602,8 @@ where
                 "vibeCode/projects/open",
                 json!({
                     "sessionId": session_id,
-                    "workingDirectory": working_directory,
                     "purpose": "teleport",
+                    "prompt": (!prompt.is_empty()).then_some(prompt),
                 }),
             )
             .await?;
@@ -617,27 +623,44 @@ where
                     "no Vibe Code project is linked to this working directory".to_owned(),
                 )
             })?;
-        let operation_id = unique_cloud_operation_id();
-        let started = self
-            .public_call_async(
-                "vibeCode/teleport/start",
-                json!({
-                    "sessionId": session_id,
-                    "pickerId": picker_id,
-                    "projectId": project_id,
-                    "operationId": operation_id,
-                    "workingDirectory": working_directory,
-                    "prompt": summary,
-                }),
-            )
-            .await?;
-        let mut events = teleport_events(&started.notifications)?;
-        if events
-            .iter()
-            .any(|event| matches!(event, ProgrammaticTeleportEvent::PushRequired { .. }))
-        {
-            let responded = self
-                .public_call_async(
+        let operation_id = vibe_core::session_id::uuid_v4();
+        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let wanted = operation_id.clone();
+        let listener: LiveNotificationListener =
+            Arc::new(move |notification: PublicNotification| {
+                let Ok(events) = teleport_events(std::slice::from_ref(&notification)) else {
+                    return;
+                };
+                for event in events {
+                    if event.operation_id() == wanted {
+                        let _ = sender.send(event);
+                    }
+                }
+            });
+        self.begin_public_call(
+            "vibeCode/teleport/start",
+            json!({
+                "sessionId": session_id,
+                "pickerId": picker_id,
+                "projectId": project_id,
+                "operationId": operation_id,
+                "prompt": (!prompt.is_empty()).then_some(prompt),
+            }),
+        )?
+        .with_listener(listener)
+        .complete()
+        .await?;
+        let mut events = Vec::new();
+        while let Some(event) = receiver.recv().await {
+            let terminal = matches!(
+                event,
+                ProgrammaticTeleportEvent::Complete { .. }
+                    | ProgrammaticTeleportEvent::Failed { .. }
+            );
+            let push = matches!(event, ProgrammaticTeleportEvent::PushRequired { .. });
+            events.push(event);
+            if push {
+                self.public_call_async(
                     "vibeCode/teleport/push/respond",
                     json!({
                         "sessionId": session_id,
@@ -646,7 +669,10 @@ where
                     }),
                 )
                 .await?;
-            events.extend(teleport_events(&responded.notifications)?);
+            }
+            if terminal {
+                break;
+            }
         }
         Ok(events)
     }
@@ -875,13 +901,4 @@ where
             server.land_title(job, title);
         });
     }
-}
-
-fn unique_cloud_operation_id() -> String {
-    let timestamp = crate::host::now_millis();
-    let sequence = NEXT_CLOUD_OPERATION.fetch_add(1, Ordering::Relaxed);
-    format!(
-        "teleport-programmatic-{}-{timestamp}-{sequence}",
-        std::process::id()
-    )
 }

@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Run Teleport and the Vibe Code project picker the way the reference does.
+  Every `vibeCode/*` call is served by the session that owns it: the session
+  checks the model is on Mistral and the account key is eligible, reads the
+  checkout from the session's own directory, keeps the saved project link per
+  repository root, and refuses a run while a turn, a shell command or a
+  compaction holds the session (and those while a run holds it).
+  `vibeCode/teleport/start` answers first, then publishes each step as it
+  happens; the session summary is written on the compaction model, the
+  hardened fetch refreshes the remote before deciding whether a push is
+  needed, uncommitted changes travel as a compressed diff, and a start the
+  service refuses is retried like the reference's. A run that finds its saved
+  project gone clears the link and reopens the picker. Teleport telemetry is
+  now sent by the server alone. The `vibe_code_enabled` and
+  `vibe_code_api_key_env_var` settings, which the reference removed, are no
+  longer read: the key comes from the Mistral provider.
+
 - Run account connectors the way the reference does. A session resolves the
   connector catalog as it opens and offers the tools of every ready connector
   the configuration opts in (`[[connectors]]` entries, their `disabled_tools`

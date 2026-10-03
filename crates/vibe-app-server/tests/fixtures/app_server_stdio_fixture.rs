@@ -12,6 +12,12 @@
 //! credential store kept in that JSON file (`{service: {account: secret}}`),
 //! the same file the reference reads through its oracle keyring backend in
 //! `scripts/parity/mcp_catalog.py`.
+//!
+//! A Teleport run summarizes with the driver's own provider, and the Vibe Code
+//! links persist under the vibe home. With `VIBE_ORACLE_TELEMETRY` set, the
+//! events the server raises itself are delivered the way the reference
+//! delivers them, which `scripts/parity/teleport.py` captures; it stays off
+//! otherwise, so no other oracle sees a datalake request it never scripted.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -21,6 +27,7 @@ use std::sync::Arc;
 
 use tokio::io::BufReader;
 use vibe_app_server::client::{LiveDriverConfig, LiveTurnDriver};
+use vibe_app_server::projects::ProjectsService;
 use vibe_app_server::resources::{CoreResourceBackend, production_mcp_factory};
 use vibe_app_server::server::AppServer;
 use vibe_app_server::transport::{StdioTransport, serve_stdio};
@@ -28,8 +35,13 @@ use vibe_app_server::workspace::WorkspaceService;
 use vibe_core::auth::{KeyringBackend, KeyringFailure, McpOAuthStore};
 use vibe_core::compaction::manager::CompactionPromptResolution;
 use vibe_core::config::DotenvValues;
+use vibe_core::config::LayeredConfig;
 use vibe_core::mcp::McpAuthenticationService;
 use vibe_core::provider::config::{ApiSettings, ProviderConfig};
+use vibe_core::telemetry::{
+    ClientTelemetry, NoClientTelemetry, TelemetryContext, TelemetryEnvelope, TelemetryRecord,
+    merge_properties,
+};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -75,6 +87,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         output_price_per_million_micros: 7_500_000,
     };
     let driver = LiveTurnDriver::from_environment(config, &dotenv)?;
+    let projects = ProjectsService::default()
+        .with_project_link_store(vibe_home.join("vibe-code-project-links.json"))?;
+    let telemetry: Arc<dyn ClientTelemetry> = if std::env::var_os("VIBE_ORACLE_TELEMETRY").is_some()
+    {
+        Arc::new(LoopbackTelemetry {
+            config: workspace.layered_config(),
+            dotenv: dotenv.clone(),
+            client: reqwest::Client::new(),
+        })
+    } else {
+        Arc::new(NoClientTelemetry)
+    };
+    let provider = driver.completion_provider();
     let server = match std::env::var_os("VIBE_ORACLE_KEYRING") {
         Some(path) => {
             let store = McpOAuthStore::new(Arc::new(FileKeyring(PathBuf::from(path))), false);
@@ -88,7 +113,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         None => AppServer::default(),
     }
-    .using_workspace_service(workspace);
+    .using_workspace_service(workspace)
+    .using_projects_service(projects)
+    .using_client_telemetry(telemetry)
+    .using_secondary_provider(Some(provider));
     serve_stdio(
         server,
         StdioTransport::new(BufReader::new(tokio::io::stdin()), tokio::io::stdout()),
@@ -96,6 +124,75 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .await?;
     Ok(())
+}
+
+/// Delivers the events the server raises itself to the datalake path on the
+/// Mistral provider's own server, gated as the reference gates them: telemetry
+/// on, and a Mistral provider whose key resolves. Plain HTTP is accepted here
+/// because the oracle's backend is a loopback listener, which the shipped
+/// client refuses as a target.
+struct LoopbackTelemetry {
+    config: LayeredConfig,
+    dotenv: DotenvValues,
+    client: reqwest::Client,
+}
+
+impl ClientTelemetry for LoopbackTelemetry {
+    fn record_client_event(
+        &self,
+        _name: &str,
+        _properties: serde_json::Map<String, serde_json::Value>,
+        _session_id: Option<&str>,
+        _correlate_last_request: bool,
+    ) {
+    }
+
+    fn record(&self, record: &TelemetryRecord, session_id: Option<&str>) {
+        let Ok(snapshot) = self.config.load() else {
+            return;
+        };
+        let effective = &snapshot.effective;
+        let enabled = effective
+            .get("enable_telemetry")
+            .and_then(toml::Value::as_bool)
+            .unwrap_or(true);
+        let Some(provider) = vibe_core::telemetry::mistral_provider(effective) else {
+            return;
+        };
+        let key = provider
+            .get("api_key_env_var")
+            .and_then(toml::Value::as_str)
+            .and_then(|variable| self.dotenv.variable(variable))
+            .filter(|key| !key.is_empty());
+        let Some(base) = provider
+            .get("api_base")
+            .and_then(toml::Value::as_str)
+            .and_then(|base| url::Url::parse(base).ok())
+        else {
+            return;
+        };
+        let (true, Some(key)) = (enabled, key) else {
+            return;
+        };
+        let Ok(attributes) = record.attributes(None) else {
+            return;
+        };
+        let envelope = TelemetryEnvelope::new(
+            record.event().event_name(),
+            merge_properties(
+                TelemetryContext::default()
+                    .base_metadata(session_id)
+                    .properties(),
+                attributes.into_properties(),
+            ),
+            None,
+        );
+        let endpoint = format!("{}/v1/datalake/events", base.origin().ascii_serialization());
+        let request = self.client.post(endpoint).bearer_auth(key).json(&envelope);
+        tokio::spawn(async move {
+            let _ = request.send().await;
+        });
+    }
 }
 
 type Entries = BTreeMap<String, BTreeMap<String, String>>;

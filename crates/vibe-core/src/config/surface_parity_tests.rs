@@ -103,18 +103,7 @@ const PINNED_ACTIVE_MODEL: &str = "mistral-medium-3.5";
 /// The census fails on a registry field with no corpus entry; an entry here
 /// names one the reference withdrew and this port still declares. It fails as
 /// stale when the registry drops the field or the reference declares it again.
-const WITHDRAWN_FIELDS: &[(&str, &str)] = &[
-    (
-        "vibe_code_enabled",
-        "v2.25.7 removed the field (declared at vibe_schema.py:410 in v2.24.0, absent at \
-         4a96003); registry.rs still declares and ships it with default true",
-    ),
-    (
-        "vibe_code_api_key_env_var",
-        "v2.25.7 removed the field (declared at vibe_schema.py:411 in v2.24.0, absent at \
-         4a96003); registry.rs still declares and ships it with default MISTRAL_API_KEY",
-    ),
-];
+const WITHDRAWN_FIELDS: &[(&str, &str)] = &[];
 
 /// Fields both sides declare with different merge strategies, as
 /// `(field, reference strategy, port strategy, reason)`.

@@ -96,7 +96,7 @@ use self::telemetry::{
     CancelledAction, report_cancelled_action, report_copied_text, report_slash_command,
     report_voice_mode_toggled,
 };
-use self::teleport::{record_teleport_progress, teleport_event_message};
+use self::teleport::teleport_event_message;
 use self::terminal::{CrosstermOps, TerminalGuard};
 use self::turn::{
     ActiveTurn, request_active_turn_interrupt, settle_unstarted_reservation, start_active_turn,
@@ -257,14 +257,9 @@ pub(in crate::tui) fn persist_setting(
     .is_some()
 }
 
-fn apply_public_notifications(
-    dispatch: &PublicDispatch,
-    runtime: &mut InteractiveRuntime,
-    state: &mut TuiState,
-) {
+pub(super) fn apply_public_notifications(dispatch: &PublicDispatch, state: &mut TuiState) {
     for notification in &dispatch.notifications {
         if notification.method == "vibeCode/teleport/event" {
-            record_teleport_progress(notification.params.get("event"), runtime);
             if let Some(event) = notification.params.get("event")
                 && event.get("kind").and_then(Value::as_str) == Some("push_required")
             {
@@ -293,9 +288,6 @@ fn apply_public_notifications(
     }
 }
 
-/// Reference `TeleportTelemetryTracker.record_event` and the two senders that
-/// close a run: the tracker walks the stages the run reports and answers a
-/// completed or a failed event where it ends.
 fn sync_runtime_intent(runtime: &mut InteractiveRuntime, agent_name: Option<&str>) {
     if let Some(agent_name) = agent_name {
         runtime.agent_name = agent_name.to_owned();

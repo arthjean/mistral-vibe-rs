@@ -36,6 +36,10 @@ pub(crate) struct SessionRuntime {
     /// The manual command running in this session, which nothing else may
     /// run beside.
     pub(crate) shell_operation: Option<ShellOperation>,
+    /// The Teleport run holding this session's execution slot.
+    pub(crate) teleport_operation: Option<String>,
+    /// The session's Vibe Code picker and Teleport runs.
+    pub(crate) vibe_code: Arc<crate::vibe_code::VibeCodeController>,
     /// The connector catalog this session accepted and its route revision.
     pub(crate) connectors: crate::connector_catalog::SessionConnectors,
     pub(crate) context: Vec<String>,
@@ -137,6 +141,8 @@ impl SessionRuntime {
             resolved_callbacks: BTreeMap::new(),
             callback_rejection: None,
             shell_operation: None,
+            teleport_operation: None,
+            vibe_code: super::vibe_code_host::new_controller(),
             connectors: Default::default(),
             context: Vec::new(),
             steering: Vec::new(),

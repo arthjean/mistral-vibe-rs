@@ -124,7 +124,6 @@ pub(super) fn start_runtime(
         // does not size the meter either.
         context_window: DEFAULT_CONTEXT_WINDOW,
         auto_approve: session.intent.auto_approve,
-        vibe_code_enabled: preferences.vibe_code_enabled,
         registry_skills_enabled: preferences.registry_skills_enabled,
         config_target: None,
         remote_project_overlay: None,
@@ -137,8 +136,6 @@ pub(super) fn start_runtime(
         cloud: CloudWorkflowState::default(),
         pending_switch: None,
         telemetry: Some(telemetry),
-        project_picker: None,
-        teleport_telemetry: None,
         session_init_duration_ms: Some(session_init_duration_ms),
         voice,
         speech,
@@ -155,7 +152,6 @@ struct StartupPreferences {
     image_models: ImageModels,
     mode: String,
     reasoning_effort: Option<String>,
-    vibe_code_enabled: bool,
     registry_skills_enabled: bool,
 }
 
@@ -217,14 +213,6 @@ fn startup_preferences(
         image_models,
         mode,
         reasoning_effort,
-        vibe_code_enabled: config
-            .and_then(|config| {
-                config
-                    .get("vibe_code_enabled")
-                    .or_else(|| config.get("vibeCodeEnabled"))
-            })
-            .and_then(Value::as_bool)
-            .unwrap_or(true),
         registry_skills_enabled: config.is_some_and(super::runtime::registry_skills_enabled),
     })
 }
@@ -392,7 +380,6 @@ mod tests {
             !preferences.image_models.get("local").supports_images,
             "a model that takes no image is published as such"
         );
-        assert!(preferences.vibe_code_enabled);
         assert_eq!(preferences.reasoning_effort, None);
     }
 

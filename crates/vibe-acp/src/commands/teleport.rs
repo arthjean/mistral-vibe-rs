@@ -5,8 +5,13 @@
 //! the workflow needs is put to the client as a permission request, and the
 //! prompt response carries the outcome under `_meta.teleport`.
 
+use std::sync::Arc;
+
 use serde_json::{Value, json};
-use vibe_app_server::client::{ProgrammaticTeleportEvent, PublicNotification, TurnDriver};
+use tokio::sync::mpsc::UnboundedReceiver;
+use vibe_app_server::client::{
+    LiveNotificationListener, ProgrammaticTeleportEvent, PublicNotification, TurnDriver,
+};
 
 use super::{app_server_message, end_turn, text_content};
 use crate::agent::AcpAgent;
@@ -143,15 +148,6 @@ fn event_update(call_id: &str, event: &ProgrammaticTeleportEvent) -> Value {
     }
 }
 
-fn events(notifications: &[PublicNotification]) -> Vec<ProgrammaticTeleportEvent> {
-    notifications
-        .iter()
-        .filter(|notification| notification.method == "vibeCode/teleport/event")
-        .filter_map(|notification| notification.params.get("event").cloned())
-        .filter_map(|event| serde_json::from_value(event).ok())
-        .collect()
-}
-
 impl<D> AcpAgent<D>
 where
     D: TurnDriver + 'static,
@@ -161,7 +157,7 @@ where
             .call_async(
                 harness,
                 "vibeCode/projects/open",
-                json!({"purpose": "teleport", "workingDirectory": harness.cwd}),
+                json!({"purpose": "teleport"}),
             )
             .await;
         let opened = match opened {
@@ -203,27 +199,14 @@ where
             }),
         );
         let operation_id = uuid();
-        let started = self
-            .call_async(
-                harness,
-                "vibeCode/teleport/start",
-                json!({
-                    "pickerId": picker_id,
-                    "operationId": operation_id,
-                    "prompt": null,
-                    "projectId": project_id,
-                    "workingDirectory": harness.cwd,
-                }),
-            )
-            .await;
-        let mut pending = match started {
-            Ok(started) => events(&started.notifications),
+        let mut events = match self
+            .start_teleport(harness, &picker_id, &project_id, &operation_id)
+            .await
+        {
+            Ok(events) => events,
             Err(error) => return Ok(self.teleport_failed(harness, &call_id, &error)),
         };
-        let mut index = 0;
-        while index < pending.len() {
-            let event = pending[index].clone();
-            index += 1;
+        while let Some(event) = events.recv().await {
             self.session_update(&harness.session_id, event_update(&call_id, &event));
             match event {
                 ProgrammaticTeleportEvent::PushRequired {
@@ -263,16 +246,15 @@ where
                             .pointer("/outcome/optionId")
                             .and_then(Value::as_str)
                             == Some(PUSH_OPTION_ID);
-                    let responded = self
+                    if let Err(error) = self
                         .call_async(
                             harness,
                             "vibeCode/teleport/push/respond",
                             json!({"operationId": operation_id, "approved": approved}),
                         )
-                        .await;
-                    match responded {
-                        Ok(responded) => pending.extend(events(&responded.notifications)),
-                        Err(error) => return Ok(self.teleport_failed(harness, &call_id, &error)),
+                        .await
+                    {
+                        return Ok(self.teleport_failed(harness, &call_id, &error));
                     }
                 }
                 ProgrammaticTeleportEvent::Failed { .. } => {
@@ -292,6 +274,46 @@ where
         Err(AcpError::Internal(
             "the teleport ended without reporting an outcome".to_owned(),
         ))
+    }
+
+    /// Starts the run and answers the channel its events arrive on: the
+    /// server answers the start first, then publishes each event of the run as
+    /// it happens.
+    async fn start_teleport(
+        &self,
+        harness: &AcpHarness<D>,
+        picker_id: &str,
+        project_id: &str,
+        operation_id: &str,
+    ) -> Result<UnboundedReceiver<ProgrammaticTeleportEvent>, AcpError> {
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let wanted = operation_id.to_owned();
+        let listener: LiveNotificationListener =
+            Arc::new(move |notification: PublicNotification| {
+                if notification.method != "vibeCode/teleport/event" {
+                    return;
+                }
+                let Some(event) = notification.params.get("event").cloned().and_then(|event| {
+                    serde_json::from_value::<ProgrammaticTeleportEvent>(event).ok()
+                }) else {
+                    return;
+                };
+                if event.operation_id() == wanted {
+                    let _ = sender.send(event);
+                }
+            });
+        let pending = harness.service.lock().await.begin_public_call(
+            "vibeCode/teleport/start",
+            json!({
+                "sessionId": harness.canonical_id(),
+                "pickerId": picker_id,
+                "operationId": operation_id,
+                "prompt": null,
+                "projectId": project_id,
+            }),
+        )?;
+        pending.with_listener(listener).complete().await?;
+        Ok(receiver)
     }
 
     fn teleport_failed(&self, harness: &AcpHarness<D>, call_id: &str, error: &AcpError) -> Value {

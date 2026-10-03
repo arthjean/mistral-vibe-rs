@@ -404,6 +404,49 @@ impl ProjectsService {
         })
     }
 
+    /// The saved link a `vibeCode/*` picker reads for a checkout root.
+    pub(crate) fn vibe_code_link(&self, repo_root: &str) -> Option<crate::vibe_code::SavedLink> {
+        let state = self.lock_projects().ok()?;
+        state
+            .linked_projects
+            .get(repo_root)
+            .map(|link| crate::vibe_code::SavedLink {
+                repo_root: repo_root.to_owned(),
+                repo_url: link.repo_url.clone(),
+                project_id: link.project_id.clone(),
+                project_name: link.project_name.clone(),
+            })
+    }
+
+    /// Saves the link a `vibeCode/projects/select` made, over any other one
+    /// for the same root.
+    pub(crate) fn save_vibe_code_link(
+        &self,
+        link: &crate::vibe_code::SavedLink,
+    ) -> Result<(), ProjectsServiceError> {
+        let saved = SavedProjectLink {
+            repo_url: link.repo_url.clone(),
+            project_id: link.project_id.clone(),
+            project_name: link.project_name.clone(),
+        };
+        let mut state = self.lock_projects()?;
+        let before = state.clone();
+        state.linked_projects.insert(link.repo_root.clone(), saved);
+        if let Err(error) = self.persist_project_links(&state.linked_projects) {
+            *state = before;
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    /// Drops the link saved for a checkout root, if any.
+    pub(crate) fn delete_vibe_code_link(
+        &self,
+        repo_root: &str,
+    ) -> Result<(), ProjectsServiceError> {
+        self.remove_link(repo_root)
+    }
+
     fn upsert_link(
         &self,
         root: &ProjectLinkRoot,

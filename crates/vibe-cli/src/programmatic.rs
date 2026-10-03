@@ -218,9 +218,7 @@ where
         session_id: session_id.clone(),
         interrupt,
     };
-    let execution = run
-        .execute(&arguments, &prompt, &working_directory, &mut output, stdout)
-        .await;
+    let execution = run.execute(&arguments, &prompt, &mut output, stdout).await;
     let close_session_id = run.session_id.clone();
     // Reference `aclose` cancels the experiments task before it closes
     // anything else, so a shutdown never waits on a lookup that is still going.
@@ -400,7 +398,6 @@ impl<D: TurnDriver> Run<'_, D> {
         &mut self,
         arguments: &Arguments,
         prompt: &str,
-        working_directory: &Path,
         output: &mut Output,
         stdout: &mut impl Write,
     ) -> Result<End, CliError> {
@@ -409,15 +406,9 @@ impl<D: TurnDriver> Run<'_, D> {
             return Ok(End::Interrupted);
         }
         if arguments.teleport {
-            require_teleport_available(&self.service.workspace_service()).await?;
             let events = self
                 .service
-                .teleport(
-                    &self.session_id,
-                    &working_directory.to_string_lossy(),
-                    prompt,
-                    true,
-                )
+                .teleport(&self.session_id, prompt, true)
                 .await
                 .map_err(|error| teleport_refusal(&error))?;
             for event in &events {
@@ -583,53 +574,6 @@ fn teleport_refusal(error: &ClientError) -> CliError {
         }
         other => CliError::Session(client_error_message(other)),
     }
-}
-
-/// Reference `_require_teleport_available` (`vibe/app_server/_vibe_code.py`),
-/// which `open_projects` runs before it reads the repository: Teleport needs
-/// the active model on a Mistral provider and a key the console recognizes as
-/// one Teleport accepts. The sentences are this port's own.
-async fn require_teleport_available(workspace: &WorkspaceService) -> Result<(), CliError> {
-    let on_mistral = workspace
-        .layered_config()
-        .load()
-        .ok()
-        .and_then(|snapshot| snapshot.active_provider())
-        .is_some_and(|provider| {
-            provider
-                .get("backend")
-                .and_then(toml::Value::as_str)
-                .unwrap_or("mistral")
-                == "mistral"
-        });
-    if !on_mistral {
-        return Err(CliError::Session(
-            "Teleport runs only on a Mistral model; switch to one with /model, then retry."
-                .to_owned(),
-        ));
-    }
-    let account = workspace.read_account().await;
-    if account
-        .get("teleportEligible")
-        .and_then(serde_json::Value::as_bool)
-        == Some(true)
-    {
-        return Ok(());
-    }
-    let action = account.get("teleportAction");
-    let url = action
-        .and_then(|action| action.get("url"))
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or_default();
-    let switch_key = action
-        .and_then(|action| action.get("kind"))
-        .and_then(serde_json::Value::as_str)
-        == Some("switch_api_key");
-    Err(CliError::Session(if switch_key {
-        format!("Teleport does not accept a Codestral key; use a Vibe or workspace key from {url}")
-    } else {
-        format!("Teleport could not verify your Mistral API key; check your sign-in at {url}")
-    }))
 }
 
 /// Reference `_last_assistant_text`: the text of the last assistant message

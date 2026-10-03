@@ -132,6 +132,12 @@ pub trait ClientTelemetry: Send + Sync {
     fn is_active(&self) -> bool {
         false
     }
+
+    /// Queues one event the server raised itself, which is how the reference's
+    /// Vibe Code controller reports through the agent loop's own client
+    /// (`vibe/app_server/_vibe_code.py:264-321`). A sink with no client drops
+    /// it, as it drops a client-authored one.
+    fn record(&self, _record: &TelemetryRecord, _session_id: Option<&str>) {}
 }
 
 /// The sink a server with no telemetry client installed answers with, which
@@ -392,6 +398,10 @@ where
 {
     fn is_active(&self) -> bool {
         self.client.is_active()
+    }
+
+    fn record(&self, record: &TelemetryRecord, session_id: Option<&str>) {
+        let _ = Self::record(self, record, session_id);
     }
 
     /// Reference `TelemetryClient.send_telemetry_event`: the census first, the

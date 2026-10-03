@@ -572,6 +572,10 @@ impl ClientTelemetry for CliTelemetryObserver {
         self.events
             .record_client_event(name, properties, session_id, correlate_last_request);
     }
+
+    fn record(&self, record: &TelemetryRecord, session_id: Option<&str>) {
+        let _ = self.enqueue(record, session_id);
+    }
 }
 
 /// What this binary reports about itself on every event. Reference

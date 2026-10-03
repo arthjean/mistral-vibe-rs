@@ -54,16 +54,6 @@ pub(crate) fn optional_string<'a>(
     }
 }
 
-pub(crate) fn required_bool(
-    params: &BTreeMap<String, Value>,
-    key: &str,
-) -> Result<bool, ParamError> {
-    params
-        .get(key)
-        .and_then(Value::as_bool)
-        .ok_or_else(|| ParamError(format!("{key} must be a boolean")))
-}
-
 pub(crate) fn optional_u64(
     params: &BTreeMap<String, Value>,
     key: &str,

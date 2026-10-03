@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 use toml::Value as TomlValue;
 use vibe_core::config::DotenvValues;
 
-use super::{MISTRAL_KEY, WorkspaceService};
+use super::WorkspaceService;
 use crate::vocabulary::{AccountActionKind, AccountPlanKind, AccountStatus};
 
 const WHOAMI_PATH: &str = "/api/vibe/whoami";
@@ -44,30 +44,28 @@ impl WorkspaceService {
         let Ok(snapshot) = self.config.load() else {
             return unavailable;
         };
-        let Some(provider) = snapshot.active_provider() else {
+        // Reference `get_mistral_provider_and_api_key`: the active provider
+        // when it is Mistral, else the first Mistral provider configured. A
+        // provider that declares no backend is a generic one.
+        let Some(provider) = vibe_core::telemetry::mistral_provider(&snapshot.effective) else {
             return unavailable;
         };
-        let mistral = provider
-            .get("backend")
-            .and_then(TomlValue::as_str)
-            .unwrap_or("mistral")
-            == "mistral";
-        if !mistral {
-            return unavailable;
-        }
         let variable = provider
             .get("api_key_env_var")
             .and_then(TomlValue::as_str)
-            .unwrap_or(MISTRAL_KEY);
-        // The credential resolves as every other reader resolves one: the
-        // process environment with the vibe home's dotenv filling in what it
-        // does not set, then the OS keyring.
-        let environ = DotenvValues::global(&self.paths.vibe_home).environment();
-        let store = vibe_core::auth::KeyringStore::native();
-        let Some(key) = vibe_core::auth::resolve_api_key(variable, &environ, &store)
-            .filter(|key| !key.is_empty())
+            .unwrap_or_default();
+        let Some(key) = (!variable.is_empty())
+            .then(|| self.resolve_credential(variable))
+            .flatten()
         else {
-            return view(AccountStatus::MissingKey, &upgrade);
+            // A missing key is the account's state only while the session
+            // runs on Mistral; otherwise there is no account to show.
+            let status = if vibe_core::telemetry::is_active_model_mistral(&snapshot.effective) {
+                AccountStatus::MissingKey
+            } else {
+                AccountStatus::Unavailable
+            };
+            return view(status, &upgrade);
         };
         let console = snapshot
             .effective

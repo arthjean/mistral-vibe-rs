@@ -45,6 +45,7 @@ fs2.workspace = true
 futures-util.workspace = true
 getrandom.workspace = true
 keyring.workspace = true
+regex.workspace = true
 reqwest.workspace = true
 secrecy.workspace = true
 serde.workspace = true

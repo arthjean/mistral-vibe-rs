@@ -298,6 +298,19 @@ impl PendingPublicCall {
                         .execute_cloud_request(request_id, method, params)
                         .await
                 }
+                DeferredWork::VibeCode {
+                    request_id,
+                    session_id,
+                    method,
+                    params,
+                    launch,
+                } => {
+                    let live = live.clone();
+                    let deliver: crate::server::FrameSink = Arc::new(move |frame| live(frame));
+                    self.server
+                        .execute_vibe_code(request_id, session_id, method, params, launch, deliver)
+                        .await
+                }
                 DeferredWork::McpCatalog {
                     request_id,
                     call,

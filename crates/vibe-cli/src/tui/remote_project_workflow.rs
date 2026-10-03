@@ -1,64 +1,73 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use serde_json::{Value, json};
-use vibe_app_server::client::PublicDispatch;
-use vibe_core::telemetry::TelemetryRecord;
-use vibe_core::telemetry::records::{
-    ProjectPicker, ProjectSelectionSource, RemoteProjectOutcome, TeleportFailureStage,
-    TeleportTracker, multi_repo_match_count, teleport_early_failure,
-};
+use vibe_app_server::client::{PublicDispatch, PublicNotification};
 
 use super::cloud_workflow::ProjectSelection;
 use super::interaction::RemoteProjectAction;
 use super::pickers::remote_projects_overlay;
-use super::runtime::schedule_ui_call;
-use super::{EntryStatus, InteractiveRuntime, TuiState, UiOperation, push_local_notice};
+use super::runtime::{UiOperation, schedule_ui_background, schedule_ui_call};
+use super::{
+    EntryStatus, InteractiveRuntime, TuiState, apply_public_notifications, push_local_notice,
+};
+
+/// The failure code a Teleport run reports when the project its saved link
+/// named is gone; reference `_handle_teleport_failure` reopens the picker on it.
+const SAVED_PROJECT_STALE: &str = "saved_project_stale";
 
 #[derive(Debug, Clone)]
 pub(in crate::tui) enum ProjectPendingOperation {
     Open {
-        working_directory: PathBuf,
         teleport: bool,
         prompt: Option<String>,
     },
     Select {
-        working_directory: PathBuf,
         project_id: String,
     },
     More {
         query: String,
     },
     Create {
-        working_directory: PathBuf,
         requested_name: String,
     },
     ClosePicker {
         unlink: bool,
     },
     TeleportResponse,
-    TeleportStart {
-        operation_id: String,
+    /// The answer to `vibeCode/teleport/start`; the run reports through
+    /// [`Self::TeleportEvent`] after it.
+    TeleportStart,
+    TeleportEvent {
+        picker_id: String,
+        prompt: Option<String>,
+    },
+    /// Reference `recover_stale_link`, asked after a run failed because the
+    /// saved project is gone; `failure` is shown when nothing is recovered.
+    Recover {
+        picker_id: String,
+        prompt: Option<String>,
+        failure: String,
     },
 }
 
 pub(super) fn handle_project_action(
     action: RemoteProjectAction,
-    working_directory: &Path,
+    _working_directory: &Path,
     runtime: &mut InteractiveRuntime,
     state: &mut TuiState,
 ) {
-    execute_project_command(action.into(), working_directory, runtime, state);
+    execute_project_command(action.into(), runtime, state);
 }
 
 /// Reference `_vibe_code_project_command`: `/remote-project` opens the
 /// project picker and reads no arguments; what the picker offers is chosen in
 /// the picker.
 pub(super) fn open_project_picker(
-    working_directory: &Path,
+    _working_directory: &Path,
     runtime: &mut InteractiveRuntime,
     state: &mut TuiState,
 ) {
-    execute_project_command(ProjectCommand::Open, working_directory, runtime, state);
+    execute_project_command(ProjectCommand::Open, runtime, state);
 }
 
 #[derive(PartialEq, Eq)]
@@ -94,108 +103,75 @@ impl From<RemoteProjectAction> for ProjectCommand {
 
 fn execute_project_command(
     command: ProjectCommand,
-    working_directory: &Path,
     runtime: &mut InteractiveRuntime,
     state: &mut TuiState,
 ) {
-    match command {
-        ProjectCommand::Open => {
-            if let Err(message) = runtime.cloud.ensure_idle() {
-                state.push_diagnostic(message);
-                return;
-            }
-            schedule_project_call(
-                runtime,
-                "vibeCode/projects/open",
-                json!({
-                    "workingDirectory": working_directory,
-                    "purpose": "configure",
-                }),
-                ProjectPendingOperation::Open {
-                    working_directory: working_directory.to_owned(),
-                    teleport: false,
-                    prompt: None,
-                },
-                state,
-            );
+    if command == ProjectCommand::Open {
+        if let Err(message) = runtime.cloud.ensure_idle() {
+            state.push_diagnostic(message);
+            return;
         }
-        ProjectCommand::Select(project_id) => {
-            let Some(picker_id) = runtime.cloud.picker_id().map(ToOwned::to_owned) else {
-                state.push_diagnostic("Open the remote project picker first");
-                return;
-            };
-            schedule_project_call(
-                runtime,
-                "vibeCode/projects/select",
-                json!({"pickerId": picker_id, "projectId": project_id}),
-                ProjectPendingOperation::Select {
-                    working_directory: working_directory.to_owned(),
-                    project_id,
-                },
-                state,
-            );
-        }
+        schedule_project_call(
+            runtime,
+            "vibeCode/projects/open",
+            json!({"purpose": "configure"}),
+            ProjectPendingOperation::Open {
+                teleport: false,
+                prompt: None,
+            },
+            state,
+        );
+        return;
+    }
+    let Some(picker_id) = runtime.cloud.picker_id().map(ToOwned::to_owned) else {
+        state.push_diagnostic("Open the remote project picker first");
+        return;
+    };
+    let (method, params, operation) = match command {
+        ProjectCommand::Open => return,
+        ProjectCommand::Select(project_id) => (
+            "vibeCode/projects/select",
+            json!({"pickerId": picker_id, "projectId": project_id}),
+            ProjectPendingOperation::Select { project_id },
+        ),
         ProjectCommand::More => {
-            let Some(picker_id) = runtime.cloud.picker_id().map(ToOwned::to_owned) else {
-                state.push_diagnostic("Open the remote project picker first");
-                return;
-            };
             let query = state
                 .overlay
                 .as_ref()
                 .map(|overlay| overlay.query.clone())
                 .unwrap_or_default();
-            schedule_project_call(
-                runtime,
+            (
                 "vibeCode/projects/loadMore",
                 json!({"pickerId": picker_id}),
                 ProjectPendingOperation::More { query },
-                state,
-            );
+            )
         }
         ProjectCommand::Create {
             name,
             default_branch,
-        } => {
-            let Some(picker_id) = runtime.cloud.picker_id().map(ToOwned::to_owned) else {
-                state.push_diagnostic("Open the remote project picker first");
-                return;
-            };
-            schedule_project_call(
-                runtime,
-                "vibeCode/projects/create",
-                json!({
-                    "pickerId": picker_id,
-                    "name": name,
-                    "defaultBranch": default_branch,
-                }),
-                ProjectPendingOperation::Create {
-                    working_directory: working_directory.to_owned(),
-                    requested_name: name,
-                },
-                state,
-            );
-        }
-        action @ (ProjectCommand::Unlink | ProjectCommand::Cancel) => {
-            let Some(picker_id) = runtime.cloud.picker_id().map(ToOwned::to_owned) else {
-                state.push_diagnostic("No remote project picker is active");
-                return;
-            };
-            let unlink = action == ProjectCommand::Unlink;
-            let method = if unlink {
-                "vibeCode/projects/unlink"
-            } else {
-                "vibeCode/projects/cancel"
-            };
-            schedule_project_call(
-                runtime,
-                method,
-                json!({"pickerId": picker_id}),
-                ProjectPendingOperation::ClosePicker { unlink },
-                state,
-            );
-        }
-    }
+        } => (
+            "vibeCode/projects/create",
+            json!({
+                "pickerId": picker_id,
+                "name": name,
+                "defaultBranch": default_branch,
+            }),
+            ProjectPendingOperation::Create {
+                requested_name: name,
+            },
+        ),
+        ProjectCommand::Unlink => (
+            "vibeCode/projects/unlink",
+            json!({"pickerId": picker_id}),
+            ProjectPendingOperation::ClosePicker { unlink: true },
+        ),
+        ProjectCommand::Cancel => (
+            "vibeCode/projects/cancel",
+            json!({"pickerId": picker_id}),
+            ProjectPendingOperation::ClosePicker { unlink: false },
+        ),
+    };
+    schedule_project_call(runtime, method, params, operation, state);
 }
 
 /// Reference `_handle_teleport_command`: `/teleport` teleports the session
@@ -229,9 +205,12 @@ pub(super) fn handle_teleport_push_response(
     );
 }
 
+/// Reference `_resolve_vibe_code_project_for_teleport`: the server gates the
+/// run and answers the project a saved link resolves, or a picker to choose
+/// one from.
 pub(super) fn start_teleport(
     prompt: Option<&str>,
-    working_directory: &Path,
+    _working_directory: &Path,
     runtime: &mut InteractiveRuntime,
     state: &mut TuiState,
 ) {
@@ -242,15 +221,8 @@ pub(super) fn start_teleport(
     schedule_project_call(
         runtime,
         "vibeCode/projects/open",
-        with_optional_prompt(
-            json!({
-                "workingDirectory": working_directory,
-                "purpose": "teleport",
-            }),
-            prompt,
-        ),
+        with_optional_prompt(json!({"purpose": "teleport"}), prompt),
         ProjectPendingOperation::Open {
-            working_directory: working_directory.to_owned(),
             teleport: true,
             prompt: prompt.map(ToOwned::to_owned),
         },
@@ -283,7 +255,15 @@ pub(in crate::tui) fn apply_pending_operation(
     let dispatch = match result {
         Ok(dispatch) => dispatch,
         Err(error) => {
-            report_teleport_start_failure(&operation, runtime, state);
+            if matches!(
+                operation,
+                ProjectPendingOperation::TeleportStart | ProjectPendingOperation::TeleportResponse
+            ) {
+                runtime.cloud.complete_teleport();
+            }
+            if let ProjectPendingOperation::Recover { failure, .. } = operation {
+                state.push_diagnostic(failure);
+            }
             state.push_diagnostic(error);
             restore_remote_project_overlay(runtime, state);
             return;
@@ -291,16 +271,10 @@ pub(in crate::tui) fn apply_pending_operation(
     };
     let value = Value::Object(dispatch.result.clone().into_iter().collect());
     match operation {
-        ProjectPendingOperation::Open {
-            working_directory,
-            teleport,
-            prompt,
-        } => apply_open_result(&value, working_directory, teleport, prompt, runtime, state),
-        ProjectPendingOperation::Select {
-            working_directory,
-            project_id,
-        } => {
-            resolve_selection(runtime, ProjectSelectionSource::SelectedExisting);
+        ProjectPendingOperation::Open { teleport, prompt } => {
+            apply_open_result(&value, teleport, prompt, runtime, state);
+        }
+        ProjectPendingOperation::Select { project_id } => {
             let project_name = value
                 .pointer("/project/name")
                 .and_then(Value::as_str)
@@ -309,13 +283,7 @@ pub(in crate::tui) fn apply_pending_operation(
             state.overlay = None;
             runtime.remote_project_overlay = None;
             runtime.remote_project_draft = None;
-            complete_project_selection(
-                project_id,
-                project_name,
-                &working_directory,
-                runtime,
-                state,
-            );
+            complete_project_selection(project_id, project_name, runtime, state);
         }
         ProjectPendingOperation::More { query } => {
             let Some(view) = value.get("view") else {
@@ -334,53 +302,30 @@ pub(in crate::tui) fn apply_pending_operation(
             runtime.remote_project_overlay = Some(overlay.clone());
             state.overlay = Some(overlay);
         }
-        ProjectPendingOperation::Create {
-            working_directory,
-            requested_name,
-        } => {
-            resolve_selection(runtime, ProjectSelectionSource::CreatedProject);
+        // Reference `on_vibe_code_project_create_app_submitted`: a created
+        // project is then selected, which is what saves the link.
+        ProjectPendingOperation::Create { requested_name } => {
             let Some(project_id) = value
                 .pointer("/project/projectId")
                 .and_then(Value::as_str)
                 .map(ToOwned::to_owned)
             else {
-                state.push_diagnostic("Created remote project omitted its identity");
+                state.push_diagnostic(format!(
+                    "Created remote project {requested_name} omitted its identity"
+                ));
                 restore_remote_project_overlay(runtime, state);
                 return;
             };
-            let project_name = value
-                .pointer("/project/name")
-                .and_then(Value::as_str)
-                .unwrap_or(&requested_name)
-                .to_owned();
             state.overlay = None;
             runtime.remote_project_overlay = None;
             runtime.remote_project_draft = None;
-            complete_project_selection(
-                project_id,
-                project_name,
-                &working_directory,
-                runtime,
-                state,
-            );
+            execute_project_command(ProjectCommand::Select(project_id), runtime, state);
         }
         ProjectPendingOperation::ClosePicker { unlink } => {
             runtime.cloud.cancel_project_selection();
             state.overlay = None;
             runtime.remote_project_overlay = None;
             runtime.remote_project_draft = None;
-            // Reference `RemoteProjectOutcome`: closing the picker is an
-            // outcome of its own, and unlinking is a different one from
-            // walking away.
-            if let Some(picker) = resolve_selection(runtime, ProjectSelectionSource::Cancelled) {
-                let outcome = if unlink {
-                    RemoteProjectOutcome::Unlinked
-                } else {
-                    RemoteProjectOutcome::Cancelled
-                };
-                report_remote_project(runtime, outcome, picker);
-            }
-            runtime.project_picker = None;
             if unlink {
                 push_local_notice(
                     state,
@@ -389,147 +334,87 @@ pub(in crate::tui) fn apply_pending_operation(
                 );
             }
         }
-        ProjectPendingOperation::TeleportResponse => runtime.cloud.complete_teleport(),
-        ProjectPendingOperation::TeleportStart { operation_id } => {
-            if !teleport_dispatch_is_terminal(&dispatch)
-                && let Err(message) = runtime.cloud.start_teleport(operation_id)
-            {
-                state.push_diagnostic(message);
+        ProjectPendingOperation::TeleportResponse | ProjectPendingOperation::TeleportStart => {}
+        ProjectPendingOperation::TeleportEvent { picker_id, prompt } => {
+            apply_teleport_event(&dispatch, picker_id, prompt, runtime, state);
+        }
+        ProjectPendingOperation::Recover {
+            picker_id,
+            prompt,
+            failure,
+        } => {
+            let recovered = value
+                .get("recovered")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            match value.get("view") {
+                Some(view) if recovered => {
+                    if let Err(message) = runtime.cloud.select_teleport_project(picker_id, prompt) {
+                        state.push_diagnostic(message);
+                        return;
+                    }
+                    push_local_notice(
+                        state,
+                        "The saved Vibe Code project is gone; pick the project this repository should use.",
+                        EntryStatus::Completed,
+                    );
+                    show_remote_project_overlay(runtime, state, view);
+                }
+                _ => state.push_diagnostic(failure),
             }
         }
     }
 }
 
-/// Reference `build_project_picker_telemetry`: what the picker reports about
-/// itself before the operator answers it.
-///
-/// `shown` is decided by the caller, because a teleport whose project resolved
-/// from the saved link never opens one.
-fn picker_payload(view: Option<&Value>, shown: bool) -> ProjectPicker {
-    let Some(view) = view else {
-        return ProjectPicker {
-            shown,
-            ..ProjectPicker::hidden()
-        };
-    };
-    let projects = view
-        .pointer("/state/projects")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    let remote = view
-        .pointer("/state/repoUrl")
-        .and_then(Value::as_str)
-        .unwrap_or_default();
-    let repositories = projects
-        .iter()
-        .map(|project| {
-            project
-                .get("repositories")
-                .and_then(Value::as_array)
-                .map(|repositories| {
-                    repositories
-                        .iter()
-                        .filter_map(|repository| {
-                            repository
-                                .get("repoUrl")
-                                .and_then(Value::as_str)
-                                .map(ToOwned::to_owned)
-                        })
-                        .collect::<Vec<_>>()
-                })
-                .unwrap_or_default()
-        })
-        .collect::<Vec<_>>();
-    ProjectPicker {
-        shown,
-        selection_source: None,
-        candidate_count_loaded: Some(projects.len() as u64),
-        multi_repo_match_count: Some(multi_repo_match_count(
-            repositories.iter().map(Vec::as_slice),
-            remote,
-        )),
-        saved_project_link_cleared: Some(
-            view.get("savedProjectLinkCleared")
-                .and_then(Value::as_bool)
-                .unwrap_or(false),
-        ),
-        repo_remote_changed: Some(
-            view.get("projectRepoRemoteChanged")
-                .and_then(Value::as_bool)
-                .unwrap_or(false),
-        ),
-    }
-}
-
-/// Names how the project this run uses was chosen, and answers the payload the
-/// events carry.
-fn resolve_selection(
+/// One event of a running Teleport, delivered as it is published. A failure
+/// that names a stale saved project asks the picker to recover before it is
+/// shown, as reference `_handle_teleport_failure` does.
+fn apply_teleport_event(
+    dispatch: &PublicDispatch,
+    picker_id: String,
+    prompt: Option<String>,
     runtime: &mut InteractiveRuntime,
-    source: ProjectSelectionSource,
-) -> Option<ProjectPicker> {
-    let picker = runtime.project_picker.as_mut()?;
-    picker.selection_source = Some(source);
-    Some(*picker)
-}
-
-/// What a teleport reports as its error class when the refusal reached the
-/// client as prose rather than as a classified service error.
-const TELEPORT_START_ERROR_CLASS: &str = "TeleportStartError";
-
-/// Reference `_fail_early` and `send_failure_if_needed`: a teleport the service
-/// refused still reports a failure, even when the refusal answered the request
-/// itself and no progress event ever arrived.
-///
-/// A run already under way is attributed to the stage its tracker had reached;
-/// one refused before it started has no tracker, which is the early-failure
-/// payload the reference sends from the same place.
-fn report_teleport_start_failure(
-    operation: &ProjectPendingOperation,
-    runtime: &mut InteractiveRuntime,
-    state: &TuiState,
+    state: &mut TuiState,
 ) {
-    if !matches!(
-        operation,
-        ProjectPendingOperation::Open { teleport: true, .. }
-            | ProjectPendingOperation::TeleportStart { .. }
-            | ProjectPendingOperation::TeleportResponse
-    ) {
+    let event = dispatch
+        .notifications
+        .first()
+        .and_then(|notification| notification.params.get("event"));
+    let kind = event
+        .and_then(|event| event.get("kind"))
+        .and_then(Value::as_str);
+    if matches!(kind, Some("complete" | "failed" | "cancelled")) {
+        runtime.cloud.complete_teleport();
+    }
+    if kind == Some("failed")
+        && event
+            .and_then(|event| event.pointer("/error/code"))
+            .and_then(Value::as_str)
+            == Some(SAVED_PROJECT_STALE)
+    {
+        let failure = event
+            .and_then(|event| event.pointer("/error/message"))
+            .and_then(Value::as_str)
+            .unwrap_or("Teleport failed")
+            .to_owned();
+        schedule_project_call(
+            runtime,
+            "vibeCode/projects/recover",
+            json!({"pickerId": picker_id}),
+            ProjectPendingOperation::Recover {
+                picker_id,
+                prompt,
+                failure,
+            },
+            state,
+        );
         return;
     }
-    let record = match runtime.teleport_telemetry.as_mut() {
-        Some(tracker) => {
-            tracker.record_unexpected_error(TELEPORT_START_ERROR_CLASS);
-            tracker.failed()
-        }
-        // Reference `_require_teleport_available`: the refusal that never
-        // starts a run is attributed to the eligibility stage.
-        None => Some(teleport_early_failure(
-            TeleportFailureStage::Ineligible,
-            TELEPORT_START_ERROR_CLASS,
-            state.entries.len() as u64,
-        )),
-    };
-    runtime.teleport_telemetry = None;
-    runtime.project_picker = None;
-    if let Some(record) = record {
-        runtime.report(&record);
-    }
-}
-
-/// Reference `send_remote_project_configured`, raised where the operator's
-/// answer settles the link.
-fn report_remote_project(
-    runtime: &InteractiveRuntime,
-    outcome: RemoteProjectOutcome,
-    picker: ProjectPicker,
-) {
-    runtime.report(&TelemetryRecord::RemoteProjectConfigured { outcome, picker });
+    apply_public_notifications(dispatch, state);
 }
 
 fn apply_open_result(
     value: &Value,
-    working_directory: PathBuf,
     teleport: bool,
     prompt: Option<String>,
     runtime: &mut InteractiveRuntime,
@@ -543,7 +428,6 @@ fn apply_open_result(
         state.push_diagnostic("Remote project picker omitted its identity");
         return;
     };
-    runtime.project_picker = Some(picker_payload(value.get("view"), true));
     if !teleport {
         let Some(view) = value.get("view") else {
             state.push_diagnostic("Remote project picker omitted its view");
@@ -561,34 +445,28 @@ fn apply_open_result(
         .and_then(Value::as_str)
         .map(ToOwned::to_owned)
     {
-        // A project the saved link resolved is never picked, so the payload
-        // reports a picker that was not shown. `resolvedProjectId` is answered
-        // for a saved link alone, which is the selection source it names, and
-        // the source is what decides whether a refused link is reported as
-        // cleared.
-        runtime.project_picker = Some(ProjectPicker {
-            selection_source: Some(ProjectSelectionSource::SavedLink),
-            ..picker_payload(value.get("view"), false)
-        });
-        begin_teleport(
-            picker_id,
-            project_id,
-            prompt.as_deref(),
-            &working_directory,
-            runtime,
-            state,
-        );
+        begin_teleport(picker_id, project_id, prompt, runtime, state);
         return;
+    }
+    let Some(view) = value.get("view") else {
+        state.push_diagnostic("Teleport project picker omitted its view");
+        return;
+    };
+    if view
+        .get("savedProjectLinkCleared")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        push_local_notice(
+            state,
+            "The saved Vibe Code project link names another repository remote; pick the project this repository should use.",
+            EntryStatus::Completed,
+        );
     }
     if let Err(message) = runtime.cloud.select_teleport_project(picker_id, prompt) {
         state.push_diagnostic(message);
         return;
     }
-    let Some(view) = value.get("view") else {
-        state.push_diagnostic("Teleport project picker omitted its view");
-        runtime.cloud.cancel_project_selection();
-        return;
-    };
     show_remote_project_overlay(runtime, state, view);
 }
 
@@ -611,28 +489,14 @@ fn restore_remote_project_overlay(runtime: &InteractiveRuntime, state: &mut TuiS
 fn complete_project_selection(
     project_id: String,
     project_name: String,
-    working_directory: &Path,
     runtime: &mut InteractiveRuntime,
     state: &mut TuiState,
 ) {
     match runtime.cloud.complete_project_selection() {
-        Some(ProjectSelection::StartTeleport { picker_id, prompt }) => begin_teleport(
-            picker_id,
-            project_id,
-            prompt.as_deref(),
-            working_directory,
-            runtime,
-            state,
-        ),
+        Some(ProjectSelection::StartTeleport { picker_id, prompt }) => {
+            begin_teleport(picker_id, project_id, prompt, runtime, state);
+        }
         Some(ProjectSelection::Configured) => {
-            if let Some(picker) = runtime.project_picker {
-                let outcome = match picker.selection_source {
-                    Some(ProjectSelectionSource::CreatedProject) => RemoteProjectOutcome::Created,
-                    _ => RemoteProjectOutcome::Configured,
-                };
-                report_remote_project(runtime, outcome, picker);
-            }
-            runtime.project_picker = None;
             push_local_notice(
                 state,
                 &format!("Linked this repository to Vibe Code project **{project_name}**."),
@@ -645,50 +509,50 @@ fn complete_project_selection(
     }
 }
 
+/// Reference `_teleport`: the start is answered first, then every event of
+/// the run arrives on its own as the server publishes it.
 fn begin_teleport(
     picker_id: String,
     project_id: String,
-    prompt: Option<&str>,
-    working_directory: &Path,
+    prompt: Option<String>,
     runtime: &mut InteractiveRuntime,
     state: &mut TuiState,
 ) {
-    // Reference `TeleportTelemetryTracker`, built where the run starts: a
-    // failure before any progress is attributed to the eligibility stage, which
-    // is the last thing checked before the first yield.
-    runtime.teleport_telemetry = Some(TeleportTracker::new(
-        state.entries.len() as u64,
-        TeleportFailureStage::Ineligible,
-        runtime.project_picker,
-    ));
-    let operation_id = format!("teleport-{}", vibe_core::clock::now_millis());
-    schedule_project_call(
+    let operation_id = vibe_core::session_id::uuid_v4();
+    if let Err(message) = runtime.cloud.start_teleport(operation_id.clone()) {
+        state.push_diagnostic(message);
+        return;
+    }
+    let params = with_optional_prompt(
+        json!({
+            "operationId": operation_id,
+            "pickerId": picker_id,
+            "projectId": project_id,
+        }),
+        prompt.as_deref(),
+    );
+    let wanted = operation_id;
+    let progress = move |notification: &PublicNotification| {
+        let event = notification.params.get("event")?;
+        (notification.method == "vibeCode/teleport/event"
+            && event.get("operationId").and_then(Value::as_str) == Some(wanted.as_str()))
+        .then(|| {
+            UiOperation::RemoteProject(ProjectPendingOperation::TeleportEvent {
+                picker_id: picker_id.clone(),
+                prompt: prompt.clone(),
+            })
+        })
+    };
+    if !schedule_ui_background(
         runtime,
         "vibeCode/teleport/start",
-        with_optional_prompt(
-            json!({
-                "operationId": operation_id,
-                "pickerId": picker_id,
-                "projectId": project_id,
-                "workingDirectory": working_directory,
-            }),
-            prompt,
-        ),
-        ProjectPendingOperation::TeleportStart { operation_id },
+        params,
+        progress,
+        UiOperation::RemoteProject(ProjectPendingOperation::TeleportStart),
         state,
-    );
-}
-
-fn teleport_dispatch_is_terminal(dispatch: &PublicDispatch) -> bool {
-    dispatch.notifications.iter().rev().any(|notification| {
-        notification.method == "vibeCode/teleport/event"
-            && notification
-                .params
-                .get("event")
-                .and_then(|event| event.get("kind"))
-                .and_then(Value::as_str)
-                .is_some_and(|kind| matches!(kind, "complete" | "failed" | "cancelled"))
-    })
+    ) {
+        runtime.cloud.complete_teleport();
+    }
 }
 
 fn with_optional_prompt(mut params: Value, prompt: Option<&str>) -> Value {
@@ -706,8 +570,8 @@ mod tests {
 
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use serde_json::json;
-    use vibe_app_server::client::PublicNotification;
 
+    use super::super::cloud_workflow::CloudWorkflowState;
     use super::super::interaction::Overlay;
     use super::super::runtime::interactive_test_runtime;
     use super::super::state::TuiState;
@@ -715,128 +579,104 @@ mod tests {
     use super::*;
     use crate::tui::interaction::RemoteProjectField;
 
-    #[test]
-    fn teleport_terminal_detection_is_notification_driven() {
-        let dispatch = PublicDispatch {
+    fn event(event: Value) -> PublicDispatch {
+        PublicDispatch {
             result: BTreeMap::new(),
             notifications: vec![PublicNotification {
                 method: "vibeCode/teleport/event".to_owned(),
-                params: BTreeMap::from([(
-                    "event".to_owned(),
-                    json!({"kind": "complete", "url": "https://example.test/project"}),
-                )]),
+                params: BTreeMap::from([("event".to_owned(), event)]),
             }],
-        };
-        assert!(teleport_dispatch_is_terminal(&dispatch));
+        }
     }
 
-    /// The picker view a saved link resolves a project from.
-    fn saved_link_open_result() -> Value {
-        json!({
-            "pickerId": "picker-1",
-            "resolvedProjectId": "project-1",
-            "view": {
-                "state": {
-                    "repoUrl": "git@example.test:vibe.git",
-                    "projects": [
-                        {
-                            "projectId": "project-1",
-                            "name": "vibe",
-                            "isReadOnly": false,
-                            "repositories": [
-                                {"repoUrl": "git@example.test:vibe.git", "defaultBranch": "main"},
-                                {"repoUrl": "git@example.test:other.git", "defaultBranch": null},
-                            ],
-                        },
-                    ],
-                },
-                "savedProjectLinkCleared": false,
-                "projectRepoRemoteChanged": false,
-            },
-        })
-    }
-
-    /// US-011: `resolvedProjectId` is answered for a saved link alone, so the
-    /// run it starts reports that source, and a service that refuses the link
-    /// with a 403 is what reports it as cleared.
+    /// A project the saved link resolved starts the run without a picker, and
+    /// the run holds the workflow until an event ends it.
     #[tokio::test]
-    async fn a_saved_link_teleport_reports_its_source_and_clears_a_refused_link() {
-        let mut runtime = interactive_test_runtime("teleport-saved-link");
-        let mut state = TuiState::new("teleport-saved-link");
-
+    async fn a_resolved_project_starts_the_run_and_a_terminal_event_ends_it() {
+        let mut runtime = interactive_test_runtime("teleport-resolved");
+        let mut state = TuiState::new("teleport-resolved");
         apply_open_result(
-            &saved_link_open_result(),
-            PathBuf::from("/workspace"),
+            &json!({"pickerId": "picker-1", "resolvedProjectId": "project-1", "view": {}}),
             true,
             None,
             &mut runtime,
             &mut state,
         );
-
-        let picker = runtime.project_picker.expect("the run carries a payload");
-        assert_eq!(
-            picker.selection_source,
-            Some(ProjectSelectionSource::SavedLink)
-        );
-        assert!(!picker.shown, "a link that resolved opens no picker");
-        assert_eq!(
-            picker.multi_repo_match_count,
-            Some(1),
-            "the linked project carries a second repository"
-        );
-
-        let mut tracker = runtime
-            .teleport_telemetry
-            .clone()
-            .expect("the run opened a tracker");
-        tracker.record_service_error("ServiceTeleportError", Some("http".to_owned()), Some(403));
-        let record = tracker.failed().expect("a classified error is a failure");
-        let properties = record
-            .attributes(None)
-            .expect("the payload carries no unsafe label")
-            .into_properties();
-        assert_eq!(properties["saved_project_link_cleared"], json!(true));
-    }
-
-    /// US-011: a teleport the service refused answers the request rather than
-    /// reporting progress, and the refusal still closes the run.
-    #[tokio::test]
-    async fn a_refused_teleport_request_closes_the_run() {
-        let mut runtime = interactive_test_runtime("teleport-refused");
-        let mut state = TuiState::new("teleport-refused");
-        apply_open_result(
-            &saved_link_open_result(),
-            PathBuf::from("/workspace"),
-            true,
-            None,
-            &mut runtime,
-            &mut state,
-        );
-        assert!(runtime.teleport_telemetry.is_some());
+        assert!(matches!(
+            runtime.cloud,
+            CloudWorkflowState::Teleporting { .. }
+        ));
+        assert!(state.overlay.is_none());
 
         apply_pending_operation(
-            ProjectPendingOperation::TeleportStart {
-                operation_id: "teleport-1".to_owned(),
+            ProjectPendingOperation::TeleportEvent {
+                picker_id: "picker-1".to_owned(),
+                prompt: None,
             },
-            Err("Teleport requires an active Mistral model".to_owned()),
+            Ok(event(
+                json!({"kind": "complete", "url": "https://example.test/s"}),
+            )),
             &mut runtime,
             &mut state,
         );
+        assert_eq!(runtime.cloud, CloudWorkflowState::Idle);
+    }
 
-        assert!(
-            runtime.teleport_telemetry.is_none() && runtime.project_picker.is_none(),
-            "a refused request is terminal for the run"
+    /// Reference `_handle_teleport_failure`: a run that failed because the
+    /// saved project is gone asks the picker to recover before the failure is
+    /// shown, and a recovered picker reopens for the same prompt.
+    #[tokio::test]
+    async fn a_stale_saved_project_reopens_the_picker() {
+        let mut runtime = interactive_test_runtime("teleport-stale");
+        let mut state = TuiState::new("teleport-stale");
+        runtime
+            .cloud
+            .start_teleport("operation-1".to_owned())
+            .expect("idle workflow starts");
+        let entries = state.entries.len();
+        apply_pending_operation(
+            ProjectPendingOperation::TeleportEvent {
+                picker_id: "picker-1".to_owned(),
+                prompt: Some("ship it".to_owned()),
+            },
+            Ok(event(json!({
+                "kind": "failed",
+                "error": {"code": SAVED_PROJECT_STALE, "message": "gone"},
+            }))),
+            &mut runtime,
+            &mut state,
+        );
+        assert_eq!(runtime.cloud, CloudWorkflowState::Idle);
+        assert_eq!(
+            state.entries.len(),
+            entries,
+            "the failure waits on recovery"
         );
 
-        // A refusal that never opened a run reports the stage it never left.
-        let record = teleport_early_failure(TeleportFailureStage::Ineligible, "OracleError", 7);
-        let properties = record
-            .attributes(None)
-            .expect("the payload carries no unsafe label")
-            .into_properties();
-        assert_eq!(properties["stage"], json!("ineligible"));
-        assert_eq!(properties["push_required"], json!(false));
-        assert_eq!(properties["nb_session_messages"], json!(7));
+        apply_pending_operation(
+            ProjectPendingOperation::Recover {
+                picker_id: "picker-1".to_owned(),
+                prompt: Some("ship it".to_owned()),
+                failure: "gone".to_owned(),
+            },
+            Ok(PublicDispatch {
+                result: BTreeMap::from([
+                    ("recovered".to_owned(), json!(true)),
+                    ("view".to_owned(), json!({"state": {"projects": []}})),
+                ]),
+                notifications: Vec::new(),
+            }),
+            &mut runtime,
+            &mut state,
+        );
+        assert_eq!(
+            runtime.cloud,
+            CloudWorkflowState::SelectingTeleportProject {
+                picker_id: "picker-1".to_owned(),
+                prompt: Some("ship it".to_owned()),
+            }
+        );
+        assert!(state.overlay.is_some());
     }
 
     #[test]
@@ -851,8 +691,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn remote_project_create_draft_survives_failure_and_clears_on_success_or_cancel() {
+    #[tokio::test]
+    async fn remote_project_create_draft_survives_failure_and_clears_on_success_or_cancel() {
         let draft = interaction::RemoteProjectDraft {
             name: "vibe-rs".to_owned(),
             default_branch: "main".to_owned(),
@@ -899,7 +739,6 @@ mod tests {
         state.overlay = Some(pickers::remote_project_create_overlay(&draft));
         apply_pending_operation(
             ProjectPendingOperation::Create {
-                working_directory: PathBuf::from("/workspace"),
                 requested_name: draft.name.clone(),
             },
             Err("creation failed".to_owned()),
@@ -918,7 +757,6 @@ mod tests {
             .expect("picker restarts");
         apply_pending_operation(
             ProjectPendingOperation::Create {
-                working_directory: PathBuf::from("/workspace"),
                 requested_name: draft.name.clone(),
             },
             Ok(PublicDispatch {

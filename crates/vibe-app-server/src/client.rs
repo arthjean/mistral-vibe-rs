@@ -67,6 +67,12 @@ pub trait TurnDriver: Send + Sync {
         None
     }
 
+    /// The model a Teleport run summarizes the session with, when the server
+    /// was given none of its own.
+    fn summary_provider(&self) -> Option<Arc<dyn vibe_core::engine::CompletionProvider>> {
+        None
+    }
+
     fn run_observed<'a>(
         &'a self,
         reservation: &'a TurnReservation,
@@ -427,6 +433,22 @@ pub enum ProgrammaticTeleportEvent {
     },
 }
 
+impl ProgrammaticTeleportEvent {
+    /// The run this event belongs to.
+    #[must_use]
+    pub fn operation_id(&self) -> &str {
+        match self {
+            Self::SummarizingContext { operation_id }
+            | Self::CheckingGit { operation_id }
+            | Self::PushRequired { operation_id, .. }
+            | Self::Pushing { operation_id }
+            | Self::StartingWorkflow { operation_id }
+            | Self::Complete { operation_id, .. }
+            | Self::Failed { operation_id, .. } => operation_id,
+        }
+    }
+}
+
 fn teleport_events(
     notifications: &[PublicNotification],
 ) -> Result<Vec<ProgrammaticTeleportEvent>, ClientError> {
@@ -528,8 +550,6 @@ pub(crate) const MAX_INTERACTIVE_CALLBACKS: usize = 8;
 const MAX_INTERACTIVE_QUESTIONS: usize = 16;
 const MAX_INTERACTIVE_OPTIONS_PER_QUESTION: usize = 32;
 const MAX_INTERACTIVE_REQUEST_BYTES: usize = 64 * 1_024;
-
-static NEXT_CLOUD_OPERATION: AtomicU64 = AtomicU64::new(1);
 
 pub fn programmatic_update_channel(
     session_id: impl Into<String>,
@@ -960,7 +980,7 @@ pub(crate) mod interactive;
 pub(crate) mod live;
 
 pub use headless::HeadlessService;
-pub use in_process::{InProcessClient, PendingPublicCall};
+pub use in_process::{InProcessClient, LiveNotificationListener, PendingPublicCall};
 
 use in_process::ProgrammaticEventObserver;
 

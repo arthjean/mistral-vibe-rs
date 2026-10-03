@@ -815,16 +815,6 @@ pub static FIELDS: &[FieldSpec] = &[
         "",
     ),
     // Internal
-    FieldSpec::declared("vibe_code_enabled", FieldKind::Bool, REPLACE).published(
-        FieldDefault::Bool(true),
-        "Allow the hosted Vibe Code surface.",
-        "",
-    ),
-    FieldSpec::declared("vibe_code_api_key_env_var", FieldKind::Str, REPLACE).published(
-        FieldDefault::Str("MISTRAL_API_KEY"),
-        "Environment variable holding the key the hosted surface authenticates with.",
-        "",
-    ),
     FieldSpec::declared("enable_otel", FieldKind::Bool, REPLACE).published(
         FieldDefault::Bool(false),
         "Export OpenTelemetry spans.",

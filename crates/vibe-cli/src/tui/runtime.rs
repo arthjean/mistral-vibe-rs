@@ -15,7 +15,6 @@ use vibe_app_server::client::{
 };
 use vibe_app_server::workspace::WorkspaceService;
 use vibe_core::telemetry::TelemetryRecord;
-use vibe_core::telemetry::records::{ProjectPicker, TeleportTracker};
 
 use super::chat_input::Safety;
 use super::clipboard_images::{ImageModel, ImageModels};
@@ -59,7 +58,6 @@ pub(super) struct InteractiveRuntime {
     pub(super) context_tokens: u64,
     pub(super) context_window: u64,
     pub(super) auto_approve: bool,
-    pub(super) vibe_code_enabled: bool,
     /// Reference `experimental_enable_registry_skills`, which gates `/skills`.
     /// Read at startup and after every configuration change, the moments the
     /// reference calls `_refresh_command_registry`.
@@ -77,14 +75,6 @@ pub(super) struct InteractiveRuntime {
     pub(super) cloud: CloudWorkflowState,
     pub(super) pending_switch: Option<switching::SwitchRequest>,
     pub(super) telemetry: Option<Arc<CliTelemetryObserver>>,
-    /// What the project picker reported about itself, carried into the
-    /// teleport and remote-project events. Reference
-    /// `build_project_picker_telemetry`, whose payload is built where the
-    /// picker opens and completed where the operator answers it.
-    pub(super) project_picker: Option<ProjectPicker>,
-    /// The teleport run in flight, and the stage machine it walks. Reference
-    /// `TeleportTelemetryTracker`.
-    pub(super) teleport_telemetry: Option<TeleportTracker>,
     /// How long `session/new` took, which is one of the three durations
     /// `vibe.startup` reports. Reference
     /// `resources.runtime.session_init_duration_ms`.
@@ -283,7 +273,7 @@ pub(super) fn apply_ui_operation_completion(
         }
         runtime.active_ui_operation = None;
         if let Ok(dispatch) = &completion.result {
-            apply_public_notifications(dispatch, runtime, state);
+            apply_public_notifications(dispatch, state);
         }
     }
     match completion.operation {
@@ -490,7 +480,6 @@ pub(in crate::tui) fn interactive_test_runtime_with_trust(
         context_tokens: 0,
         context_window: super::DEFAULT_CONTEXT_WINDOW,
         auto_approve: true,
-        vibe_code_enabled: true,
         registry_skills_enabled: false,
         config_target: None,
         remote_project_overlay: None,
@@ -505,8 +494,6 @@ pub(in crate::tui) fn interactive_test_runtime_with_trust(
         cloud: CloudWorkflowState::default(),
         pending_switch: None,
         telemetry: None,
-        project_picker: None,
-        teleport_telemetry: None,
         session_init_duration_ms: None,
         voice: VoiceManager::production(
             &json!({
@@ -604,7 +591,6 @@ mod tests {
     #[test]
     fn the_command_context_follows_the_registry_gate_and_keeps_teleport_open() {
         let mut runtime = interactive_test_runtime("command-context-session");
-        runtime.vibe_code_enabled = false;
         let context = command_context(Some(&runtime));
         assert!(!context.registry_skills_enabled);
         assert!(!context.experimental_harness);

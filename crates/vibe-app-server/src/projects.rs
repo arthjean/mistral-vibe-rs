@@ -2,11 +2,11 @@
 //! to a local repository.
 //!
 //! [`cloud`] is the backend contract and the HTTP client that satisfies it,
-//! [`git`] the working tree a link and a teleport are decided from,
-//! [`selection`] the project a session runs against, [`teleport`] handing a
-//! session to the cloud, and [`links`] the saved association between a
-//! repository root and a project. [`ProjectsService`] holds the state they
-//! share and routes to them.
+//! [`git`] the working tree a link is decided from, and [`links`] the saved
+//! association between a repository root and a project. [`ProjectsService`]
+//! holds the state they share and routes to them. The `vibeCode/*` methods are
+//! listed here because the wire routes them to this family, and are served by
+//! the session's own controller (`crate::vibe_code`).
 //!
 //! [`loops`] is the exception, and stays here for one reason: the wire routes
 //! `loops/*` to this same service, which owns their store and their schedule.
@@ -20,44 +20,35 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::host;
-use crate::params::{self, optional_string, optional_u64, required_bool, required_string};
+use crate::params::{self, optional_u64, required_string};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::Value;
 use thiserror::Error;
 
 mod cloud;
 mod git;
+mod links;
 mod loops;
 mod selection;
-mod teleport;
 
-use selection::{MAX_HEADLESS_PROJECT_PAGES, ProjectPicker, ProjectState};
-use teleport::TeleportOperation;
-mod links;
+use selection::{MAX_HEADLESS_PROJECT_PAGES, ProjectState};
 
 pub use cloud::{
     CloudConfigError, CloudError, Project, ProjectCloud, ProjectPage, ProjectRepository,
-    TeleportCloud, TeleportRepository, TeleportStartFailure, TeleportStartRequest,
     VibeCodeCloudConfig,
 };
 pub use git::{
-    CommandGitProbe, GitProbe, GitPushStatus, GitSnapshot, ProjectGitSnapshot, ProjectLinkRoot,
+    CommandGitProbe, GitProbe, GitSnapshot, ProjectGitSnapshot, ProjectLinkRoot,
     ProjectRootRejection,
 };
 pub use loops::{LoopFire, LoopState, ScheduledLoop};
 use loops::{default_loop_store, load_loops, next_loop_sequence};
 
-use cloud::{
-    PROJECT_PAGE_LIMIT, ProjectCloudBackend, TeleportCloudBackend, UnavailableProjectCloud,
-    UnavailableTeleportCloud, VibeCodeHttpCloud, validate_cloud_text,
-};
-use git::{
-    UnavailableGitProbe, is_project_linked_to_repo, normalize_repo_url, project_is_selectable,
-    suggested_project_name,
-};
+use cloud::{PROJECT_PAGE_LIMIT, ProjectCloudBackend, UnavailableProjectCloud, VibeCodeHttpCloud};
+use git::{UnavailableGitProbe, is_project_linked_to_repo, normalize_repo_url};
 
 pub const PROJECTS_METHODS: &[&str] = &[
     "loops/clear",
@@ -96,11 +87,6 @@ const DEFERRED_PROJECTS_METHODS: &[&str] = &[
     "projectLinks/resolveRoot",
     "projectLinks/save",
     "projectLinks/unlink",
-    "vibeCode/projects/create",
-    "vibeCode/projects/loadMore",
-    "vibeCode/projects/open",
-    "vibeCode/teleport/push/respond",
-    "vibeCode/teleport/start",
 ];
 static NEXT_LINK_TEMP_FILE: AtomicU64 = AtomicU64::new(1);
 
@@ -126,19 +112,6 @@ impl ProjectsDispatch {
             notifications: Vec::new(),
         }
     }
-
-    fn with_notifications(
-        entries: impl IntoIterator<Item = (impl Into<String>, Value)>,
-        notifications: Vec<ProjectsNotification>,
-    ) -> Self {
-        Self {
-            result: entries
-                .into_iter()
-                .map(|(key, value)| (key.into(), value))
-                .collect(),
-            notifications,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -151,8 +124,6 @@ struct SavedProjectLink {
 
 pub struct ProjectsSessionRemoval {
     session_id: String,
-    pickers: BTreeMap<String, ProjectPicker>,
-    teleports: BTreeMap<String, TeleportOperation>,
     loops: BTreeMap<String, ScheduledLoop>,
 }
 
@@ -171,14 +142,12 @@ impl ProjectsSessionRemoval {
 #[derive(Clone)]
 pub struct ProjectsService {
     projects: Arc<Mutex<ProjectState>>,
-    teleports: Arc<Mutex<BTreeMap<String, TeleportOperation>>>,
     loops: Arc<Mutex<BTreeMap<String, ScheduledLoop>>>,
     project_link_store: Option<PathBuf>,
     project_link_store_error: Option<String>,
     loop_store: PathBuf,
     loop_store_error: Option<String>,
     project_cloud: ProjectCloudBackend,
-    teleport_cloud: TeleportCloudBackend,
     git: Arc<dyn GitProbe>,
     /// Whether a Vibe Code backend is attached at all.
     ///
@@ -186,7 +155,6 @@ pub struct ProjectsService {
     /// authorization failure, which is how the reference classifies a missing
     /// API key; a backend that is attached but failing is an internal error.
     cloud_configured: bool,
-    next_operation: Arc<AtomicU64>,
     next_loop: Arc<AtomicU64>,
 }
 
@@ -207,17 +175,14 @@ impl Default for ProjectsService {
         let next_loop = next_loop_sequence(&loops);
         Self {
             projects: Arc::new(Mutex::new(ProjectState::default())),
-            teleports: Arc::new(Mutex::new(BTreeMap::new())),
             loops: Arc::new(Mutex::new(loops)),
             project_link_store: None,
             project_link_store_error: None,
             loop_store,
             loop_store_error,
             project_cloud: ProjectCloudBackend::Sync(Arc::new(UnavailableProjectCloud)),
-            teleport_cloud: TeleportCloudBackend::Sync(Arc::new(UnavailableTeleportCloud)),
             git: Arc::new(UnavailableGitProbe),
             cloud_configured: false,
-            next_operation: Arc::new(AtomicU64::new(1)),
             next_loop: Arc::new(AtomicU64::new(next_loop)),
         }
     }
@@ -227,8 +192,7 @@ impl ProjectsService {
     pub fn production(config: VibeCodeCloudConfig) -> Result<Self, ProjectsBuildError> {
         let cloud = Arc::new(VibeCodeHttpCloud::new(config)?);
         let service = Self {
-            project_cloud: ProjectCloudBackend::Async(cloud.clone()),
-            teleport_cloud: TeleportCloudBackend::Async(cloud),
+            project_cloud: ProjectCloudBackend::Async(cloud),
             git: Arc::new(CommandGitProbe::default()),
             cloud_configured: true,
             ..Self::default()
@@ -236,15 +200,6 @@ impl ProjectsService {
         service
             .with_project_link_store(default_project_link_store())
             .map_err(ProjectsBuildError::Service)
-    }
-
-    pub fn close_transient_session(&self, session_id: &str) -> Result<(), ProjectsServiceError> {
-        self.lock_projects()?
-            .pickers
-            .retain(|_, picker| picker.session_id != session_id);
-        self.lock_teleports()?
-            .retain(|_, operation| operation.session_id != session_id);
-        Ok(())
     }
 
     pub fn remove_session(&self, session_id: &str) -> Result<usize, ProjectsServiceError> {
@@ -257,32 +212,9 @@ impl ProjectsService {
         session_id: &str,
     ) -> Result<ProjectsSessionRemoval, ProjectsServiceError> {
         self.ensure_loop_store_ready()?;
-        let mut projects = self.lock_projects()?;
-        let mut teleports = self.lock_teleports()?;
         let mut loops = self.lock_loops()?;
-        let projects_before = projects.clone();
-        let teleports_before = teleports.clone();
         let loops_before = loops.clone();
 
-        let picker_ids = projects
-            .pickers
-            .iter()
-            .filter(|(_, picker)| picker.session_id == session_id)
-            .map(|(picker_id, _)| picker_id.clone())
-            .collect::<Vec<_>>();
-        let removed_pickers = picker_ids
-            .into_iter()
-            .filter_map(|picker_id| projects.pickers.remove_entry(&picker_id))
-            .collect();
-        let teleport_ids = teleports
-            .iter()
-            .filter(|(_, operation)| operation.session_id == session_id)
-            .map(|(operation_id, _)| operation_id.clone())
-            .collect::<Vec<_>>();
-        let removed_teleports = teleport_ids
-            .into_iter()
-            .filter_map(|operation_id| teleports.remove_entry(&operation_id))
-            .collect();
         let loop_ids = loops
             .iter()
             .filter(|(_, scheduled)| scheduled.session_id == session_id)
@@ -293,15 +225,11 @@ impl ProjectsService {
             .filter_map(|loop_id| loops.remove_entry(&loop_id))
             .collect();
         if let Err(error) = self.persist_loops(&loops) {
-            *projects = projects_before;
-            *teleports = teleports_before;
             *loops = loops_before;
             return Err(error);
         }
         Ok(ProjectsSessionRemoval {
             session_id: session_id.to_owned(),
-            pickers: removed_pickers,
-            teleports: removed_teleports,
             loops: removed_loops,
         })
     }
@@ -311,36 +239,20 @@ impl ProjectsService {
         removal: &ProjectsSessionRemoval,
     ) -> Result<(), ProjectsServiceError> {
         self.ensure_loop_store_ready()?;
-        let mut projects = self.lock_projects()?;
-        let mut teleports = self.lock_teleports()?;
         let mut loops = self.lock_loops()?;
         if removal
-            .pickers
+            .loops
             .keys()
-            .any(|picker_id| projects.pickers.contains_key(picker_id))
-            || removal
-                .teleports
-                .keys()
-                .any(|operation_id| teleports.contains_key(operation_id))
-            || removal
-                .loops
-                .keys()
-                .any(|loop_id| loops.contains_key(loop_id))
+            .any(|loop_id| loops.contains_key(loop_id))
         {
             return Err(ProjectsServiceError::Conflict(
                 "projects session rollback collides with newer session state".to_owned(),
             ));
         }
-        let projects_before = projects.clone();
-        let teleports_before = teleports.clone();
         let loops_before = loops.clone();
 
-        projects.pickers.extend(removal.pickers.clone());
-        teleports.extend(removal.teleports.clone());
         loops.extend(removal.loops.clone());
         if let Err(error) = self.persist_loops(&loops) {
-            *projects = projects_before;
-            *teleports = teleports_before;
             *loops = loops_before;
             return Err(error);
         }
@@ -356,31 +268,15 @@ impl ProjectsService {
         if old_session_id == new_session_id {
             return Ok(());
         }
-        let mut projects = self.lock_projects()?;
-        let mut teleports = self.lock_teleports()?;
         let mut loops = self.lock_loops()?;
-        let projects_before = projects.clone();
-        let teleports_before = teleports.clone();
         let loops_before = loops.clone();
 
-        for picker in projects.pickers.values_mut() {
-            if picker.session_id == old_session_id {
-                picker.session_id = new_session_id.to_owned();
-            }
-        }
-        for operation in teleports.values_mut() {
-            if operation.session_id == old_session_id {
-                operation.session_id = new_session_id.to_owned();
-            }
-        }
         for scheduled in loops.values_mut() {
             if scheduled.session_id == old_session_id {
                 scheduled.session_id = new_session_id.to_owned();
             }
         }
         if let Err(error) = self.persist_loops(&loops) {
-            *projects = projects_before;
-            *teleports = teleports_before;
             *loops = loops_before;
             return Err(error);
         }
@@ -388,14 +284,9 @@ impl ProjectsService {
     }
 
     #[must_use]
-    pub fn with_backends(
-        project_cloud: Arc<dyn ProjectCloud>,
-        teleport_cloud: Arc<dyn TeleportCloud>,
-        git: Arc<dyn GitProbe>,
-    ) -> Self {
+    pub fn with_backends(project_cloud: Arc<dyn ProjectCloud>, git: Arc<dyn GitProbe>) -> Self {
         Self {
             project_cloud: ProjectCloudBackend::Sync(project_cloud),
-            teleport_cloud: TeleportCloudBackend::Sync(teleport_cloud),
             git,
             cloud_configured: true,
             ..Self::default()
@@ -404,10 +295,7 @@ impl ProjectsService {
 
     pub fn with_project_link_store(mut self, path: PathBuf) -> Result<Self, ProjectsServiceError> {
         let linked_projects = load_project_links(&path)?;
-        self.projects = Arc::new(Mutex::new(ProjectState {
-            pickers: BTreeMap::new(),
-            linked_projects,
-        }));
+        self.projects = Arc::new(Mutex::new(ProjectState { linked_projects }));
         self.project_link_store = Some(path);
         self.project_link_store_error = None;
         Ok(self)
@@ -429,11 +317,6 @@ impl ProjectsService {
         }
         match method {
             "projectLinks/list" => self.project_links_list(),
-            "vibeCode/projects/recover" => self.project_recover(params),
-            "vibeCode/projects/select" => self.project_select(params),
-            "vibeCode/projects/unlink" => self.project_unlink(params),
-            "vibeCode/projects/cancel" => self.project_cancel(params),
-            "vibeCode/teleport/cancel" => self.teleport_cancel(params),
             "loops/create" => self.loop_create(params),
             "loops/list" => self.loop_list(params),
             "loops/clear" => self.loop_clear(params),
@@ -456,20 +339,8 @@ impl ProjectsService {
             method if method.starts_with("projectLinks/") => {
                 self.project_links_deferred(method, params).await
             }
-            "vibeCode/projects/create" => self.project_create(params).await,
-            "vibeCode/projects/loadMore" => self.project_load_more(params).await,
-            "vibeCode/projects/open" => self.project_open(params).await,
-            "vibeCode/teleport/start" => self.teleport_start(params).await,
-            "vibeCode/teleport/push/respond" => self.teleport_push_respond(params).await,
             _ => self.dispatch(method, params),
         }
-    }
-
-    fn next_operation_id(&self, prefix: &str) -> String {
-        format!(
-            "{prefix}-operation-{}",
-            self.next_operation.fetch_add(1, Ordering::Relaxed)
-        )
     }
 
     fn persist_project_links(

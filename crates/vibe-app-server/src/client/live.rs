@@ -409,6 +409,13 @@ struct LiveTurnControl {
 }
 
 impl LiveTurnDriver {
+    /// The provider this driver's turns are sent to, which a Teleport run's
+    /// summarization also calls.
+    #[must_use]
+    pub fn completion_provider(&self) -> Arc<dyn CompletionProvider> {
+        Arc::clone(&self.provider)
+    }
+
     #[cfg(any(test, feature = "test-fixtures"))]
     #[must_use]
     pub fn from_provider_for_tests(
@@ -922,6 +929,10 @@ impl TurnDriver for LiveTurnDriver {
 
     /// Reference `PLANS_DIR`: `plans` under the vibe home, which is also
     /// where the plan profile's allowlist lets it write.
+    fn summary_provider(&self) -> Option<Arc<dyn CompletionProvider>> {
+        Some(self.completion_provider())
+    }
+
     fn plan_directory(&self) -> Option<PathBuf> {
         self.session_root
             .as_ref()

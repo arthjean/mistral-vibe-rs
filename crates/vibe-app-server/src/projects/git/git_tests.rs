@@ -39,7 +39,7 @@ pub(in crate::projects) fn committed_github_repository() -> tempfile::TempDir {
 }
 
 #[test]
-fn command_git_probe_tolerates_fetch_failure_and_transfers_dirty_only_changes() {
+fn command_git_probe_tolerates_fetch_failure_and_reports_dirty_changes() {
     let repository = committed_github_repository();
     let nested = repository.path().join("nested/deeper");
     fs::create_dir_all(&nested).expect("nested working directory");
@@ -52,26 +52,16 @@ fn command_git_probe_tolerates_fetch_failure_and_transfers_dirty_only_changes() 
     let probe =
         CommandGitProbe::default().with_timeouts(Duration::from_secs(2), Duration::from_millis(1));
 
-    let (snapshot, context, push) = probe.inspection(&nested).expect("Git inspection succeeds");
+    let snapshot = probe.inspection(&nested).expect("Git inspection succeeds");
 
     assert!(snapshot.dirty);
     assert!(!snapshot.unpushed);
-    assert_eq!(push.unpushed_count, 0);
-    assert!(!push.branch_not_pushed);
-    let encoded = context.diff.expect("dirty diff");
-    let compressed = BASE64_STANDARD
-        .decode(encoded.content)
-        .expect("base64 diff");
-    let decoded = zstd::stream::decode_all(compressed.as_slice()).expect("zstd diff");
-    let decoded = String::from_utf8(decoded).expect("UTF-8 Git patch");
-    assert!(decoded.contains("changed"));
-    assert!(decoded.contains("untracked.bin"));
-    assert!(decoded.contains("GIT binary patch"));
+    assert_eq!(snapshot.repository, "https://github.com/owner/repo.git");
     assert!(!repository.path().join(".git/index.lock").exists());
 }
 
 #[test]
-fn command_git_probe_reports_true_unpushed_commit_count() {
+fn command_git_probe_reports_unpushed_commits() {
     let repository = committed_github_repository();
     for (name, contents) in [("one.txt", "one\n"), ("two.txt", "two\n")] {
         fs::write(repository.path().join(name), contents).expect("commit fixture");
@@ -81,15 +71,12 @@ fn command_git_probe_reports_true_unpushed_commit_count() {
     let probe =
         CommandGitProbe::default().with_timeouts(Duration::from_secs(2), Duration::from_millis(1));
 
-    let (snapshot, context, push) = probe
+    let snapshot = probe
         .inspection(repository.path())
         .expect("Git inspection succeeds");
 
     assert!(snapshot.unpushed);
     assert!(!snapshot.dirty);
-    assert_eq!(push.unpushed_count, 2);
-    assert!(!push.branch_not_pushed);
-    assert!(context.diff.is_none());
 }
 
 #[test]
@@ -132,20 +119,4 @@ fn git_remote_selection_prefers_an_eligible_github_remote_and_rejects_paths() {
             Err(CloudError::Git(_))
         ));
     }
-}
-
-#[test]
-fn oversized_encoded_diff_fails_instead_of_truncating() {
-    let mut state = 0x1234_5678_u32;
-    let mut diff = vec![0_u8; 800_000];
-    for byte in &mut diff {
-        state ^= state << 13;
-        state ^= state >> 17;
-        state ^= state << 5;
-        *byte = state as u8;
-    }
-    assert!(matches!(
-        encode_working_tree_diff(&diff),
-        Err(CloudError::Git(message)) if message.contains("Teleport limit")
-    ));
 }
