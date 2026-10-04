@@ -522,8 +522,8 @@ fn tool_events(content: &str, is_error: bool) -> [EventEnvelope; 2] {
     ]
 }
 
-/// The base census carries the twelve reference fields, and a field with no
-/// value is dropped rather than sent as null.
+/// The base census carries the reference fields it has values for, and a
+/// field with no value is dropped rather than sent as null.
 #[test]
 fn the_base_census_carries_the_reference_fields() {
     let properties = context().base_metadata(Some("oracle-session")).properties();
@@ -534,6 +534,7 @@ fn the_base_census_carries_the_reference_fields() {
         [
             "agent_entrypoint",
             "agent_version",
+            "arch",
             "client_name",
             "client_version",
             "os",
@@ -554,17 +555,17 @@ fn the_base_census_carries_the_reference_fields() {
     let mut keys = bare.keys().cloned().collect::<Vec<_>>();
     keys.sort_unstable();
     let expected: Vec<&str> = if platform_version().is_some() {
-        vec!["os", "os_version", "version"]
+        vec!["arch", "os", "os_version", "version"]
     } else {
-        vec!["os", "version"]
+        vec!["arch", "os", "version"]
     };
     assert_eq!(keys, expected);
 }
 
-/// The request census adds the three reference fields, and `call_source`
-/// defaults to `vibe_code`.
+/// The request census adds the reference's request fields: `call_source`
+/// defaults to `vibe_code` and `host_kind` is `local`.
 #[test]
-fn the_request_census_adds_the_three_request_fields() {
+fn the_request_census_adds_the_request_fields() {
     let properties = context()
         .request_metadata(
             Some("oracle-session"),
@@ -574,6 +575,8 @@ fn the_request_census_adds_the_three_request_fields() {
         .properties();
     assert_eq!(properties["call_type"], json!("main_call"));
     assert_eq!(properties["call_source"], json!(TELEMETRY_CALL_SOURCE));
+    assert_eq!(properties["host_kind"], json!("local"));
+    assert_eq!(properties["arch"], json!(platform_arch()));
     assert_eq!(properties["message_id"], json!("oracle-message"));
     assert_eq!(properties["session_id"], json!("oracle-session"));
 

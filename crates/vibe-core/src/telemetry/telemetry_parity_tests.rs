@@ -126,28 +126,12 @@ const FAMILIES: [&str; 15] = [
 /// over.
 const METADATA: [&str; 4] = ["schemaVersion", "reference", "note", "documents"];
 
-/// Why every sent envelope diverges at 4a960031: the base metadata an event
-/// merges gained the machine architecture.
-const REPIN_ENVELOPE_ARCH: &str = "OPEN: v2.25.0 stamps `arch`, `platform.machine().lower()`, \
-     into the base metadata every datalake event merges (vibe/core/telemetry/build_metadata.py:41 \
-     at 4a960031); this port's `TelemetryBaseMetadata` has no architecture field \
-     (crates/vibe-core/src/telemetry.rs:332-359), so the sent properties lack the key";
-/// Why a base census without experiments diverges at 4a960031.
-const REPIN_BASE_ARCH: &str = "OPEN: v2.25.0 adds `arch`, `platform.machine().lower()`, to \
-     `build_base_metadata` (vibe/core/telemetry/build_metadata.py:41 at 4a960031); this port's \
-     `TelemetryBaseMetadata` has no architecture field (crates/vibe-core/src/telemetry.rs:332-359)";
 /// Why a base census with experiments diverges at 4a960031.
-const REPIN_BASE_ARCH_ASSIGNMENTS: &str = "OPEN: v2.25.0 adds `arch` \
-     (vibe/core/telemetry/build_metadata.py:41 at 4a960031), and v2.24.3 made the builder take \
+const REPIN_BASE_ARCH_ASSIGNMENTS: &str = "OPEN: v2.24.3 made the builder take \
      `experiment_assignments` and echo them beside the `experiments` map it now derives from them \
-     (build_metadata.py:22-53, vibe/core/telemetry/types.py:49-60,78 at 4a960031); this port's \
-     `TelemetryBaseMetadata` carries the map only and no architecture \
-     (crates/vibe-core/src/telemetry.rs:332-359)";
-/// Why every request census diverges at 4a960031.
-const REPIN_REQUEST_ARCH_HOST_KIND: &str = "OPEN: v2.25.0 adds `arch` \
-     (vibe/core/telemetry/build_metadata.py:70 at 4a960031) and `host_kind`, always `local` \
-     (vibe/core/telemetry/types.py:100 at 4a960031), to the request metadata; this port's \
-     `TelemetryRequestMetadata` carries neither (crates/vibe-core/src/telemetry.rs:332-359,391-397)";
+     (vibe/core/telemetry/build_metadata.py:22-53, vibe/core/telemetry/types.py:49-60,78 at \
+     4a960031); this port's `TelemetryBaseMetadata` carries the map only \
+     (crates/vibe-core/src/telemetry.rs:332-361)";
 /// Why `vibe.new_session` diverges at 4a960031.
 const REPIN_NEW_SESSION_HOST_KIND: &str = "OPEN: v2.25.0 adds `host_kind`, always `local`, to \
      `send_new_session` (vibe/core/telemetry/send.py:447 at 4a960031); this port's `NewSession` \
@@ -231,134 +215,8 @@ const DIVERGENCES: &[(&str, &str)] = &[
         "constants/baseMetadataFields/declared",
         "OPEN: `TelemetryBaseMetadata` grew from 12 to 16 fields: `experiment_assignments` \
          (v2.24.3), `experiment_attributes` (v2.24.4), `arch` and `harness_backend` (v2.25.0) \
-         (vibe/core/telemetry/types.py:63-94 at 4a960031); this port's base metadata still \
-         publishes the 12 fields of v2.24.0",
-    ),
-    (
-        "constants/requestMetadataFields/declared",
-        "OPEN: v2.25.0 added `host_kind`, always `local`, to `TelemetryRequestMetadata` \
-         (vibe/core/telemetry/types.py:97-101 at 4a960031); this port's request metadata still \
-         publishes call_type, call_source and message_id only",
-    ),
-    (
-        "envelope/propertyKeys/mistral-active-correlation-no",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/propertyTypes/mistral-active-correlation-no",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/properties/mistral-active-correlation-no",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/propertyKeys/mistral-active-correlation-yes",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/propertyTypes/mistral-active-correlation-yes",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/properties/mistral-active-correlation-yes",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/propertyKeys/third-party-active-mistral-configured-correlation-no",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/propertyTypes/third-party-active-mistral-configured-correlation-no",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/properties/third-party-active-mistral-configured-correlation-no",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/propertyKeys/third-party-active-mistral-configured-correlation-yes",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/propertyTypes/third-party-active-mistral-configured-correlation-yes",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/properties/third-party-active-mistral-configured-correlation-yes",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/propertyKeys/mistral-behind-a-proxy-correlation-no",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/propertyTypes/mistral-behind-a-proxy-correlation-no",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/properties/mistral-behind-a-proxy-correlation-no",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/propertyKeys/mistral-behind-a-proxy-correlation-yes",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/propertyTypes/mistral-behind-a-proxy-correlation-yes",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/properties/mistral-behind-a-proxy-correlation-yes",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/propertyKeys/mistral-base-without-a-version-segment-correlation-no",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/propertyTypes/mistral-base-without-a-version-segment-correlation-no",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/properties/mistral-base-without-a-version-segment-correlation-no",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/propertyKeys/mistral-base-without-a-version-segment-correlation-yes",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/propertyTypes/mistral-base-without-a-version-segment-correlation-yes",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/properties/mistral-base-without-a-version-segment-correlation-yes",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/propertyKeys/caller-properties-win-over-metadata",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/propertyTypes/caller-properties-win-over-metadata",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/properties/caller-properties-win-over-metadata",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/propertyKeys/empty-correlation-id",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/propertyTypes/empty-correlation-id",
-        REPIN_ENVELOPE_ARCH,
-    ),
-    (
-        "envelope/properties/empty-correlation-id",
-        REPIN_ENVELOPE_ARCH,
+         (vibe/core/telemetry/types.py:63-94 at 4a960031); this port's base metadata publishes \
+         the 12 fields of v2.24.0 and `arch`",
     ),
     (
         "baseMetadata/baseKeys/full-launch-context-main_call",
@@ -369,153 +227,12 @@ const DIVERGENCES: &[(&str, &str)] = &[
         REPIN_BASE_ARCH_ASSIGNMENTS,
     ),
     (
-        "baseMetadata/requestKeys/full-launch-context-main_call",
-        REPIN_REQUEST_ARCH_HOST_KIND,
-    ),
-    (
-        "baseMetadata/request/full-launch-context-main_call",
-        REPIN_REQUEST_ARCH_HOST_KIND,
-    ),
-    (
         "baseMetadata/baseKeys/full-launch-context-secondary_call",
         REPIN_BASE_ARCH_ASSIGNMENTS,
     ),
     (
         "baseMetadata/base/full-launch-context-secondary_call",
         REPIN_BASE_ARCH_ASSIGNMENTS,
-    ),
-    (
-        "baseMetadata/requestKeys/full-launch-context-secondary_call",
-        REPIN_REQUEST_ARCH_HOST_KIND,
-    ),
-    (
-        "baseMetadata/request/full-launch-context-secondary_call",
-        REPIN_REQUEST_ARCH_HOST_KIND,
-    ),
-    (
-        "baseMetadata/baseKeys/no-launch-context-main_call",
-        REPIN_BASE_ARCH,
-    ),
-    (
-        "baseMetadata/base/no-launch-context-main_call",
-        REPIN_BASE_ARCH,
-    ),
-    (
-        "baseMetadata/requestKeys/no-launch-context-main_call",
-        REPIN_REQUEST_ARCH_HOST_KIND,
-    ),
-    (
-        "baseMetadata/request/no-launch-context-main_call",
-        REPIN_REQUEST_ARCH_HOST_KIND,
-    ),
-    (
-        "baseMetadata/baseKeys/no-launch-context-secondary_call",
-        REPIN_BASE_ARCH,
-    ),
-    (
-        "baseMetadata/base/no-launch-context-secondary_call",
-        REPIN_BASE_ARCH,
-    ),
-    (
-        "baseMetadata/requestKeys/no-launch-context-secondary_call",
-        REPIN_REQUEST_ARCH_HOST_KIND,
-    ),
-    (
-        "baseMetadata/request/no-launch-context-secondary_call",
-        REPIN_REQUEST_ARCH_HOST_KIND,
-    ),
-    (
-        "baseMetadata/baseKeys/no-session-main_call",
-        REPIN_BASE_ARCH,
-    ),
-    ("baseMetadata/base/no-session-main_call", REPIN_BASE_ARCH),
-    (
-        "baseMetadata/requestKeys/no-session-main_call",
-        REPIN_REQUEST_ARCH_HOST_KIND,
-    ),
-    (
-        "baseMetadata/request/no-session-main_call",
-        REPIN_REQUEST_ARCH_HOST_KIND,
-    ),
-    (
-        "baseMetadata/baseKeys/no-session-secondary_call",
-        REPIN_BASE_ARCH,
-    ),
-    (
-        "baseMetadata/base/no-session-secondary_call",
-        REPIN_BASE_ARCH,
-    ),
-    (
-        "baseMetadata/requestKeys/no-session-secondary_call",
-        REPIN_REQUEST_ARCH_HOST_KIND,
-    ),
-    (
-        "baseMetadata/request/no-session-secondary_call",
-        REPIN_REQUEST_ARCH_HOST_KIND,
-    ),
-    (
-        "baseMetadata/baseKeys/empty-experiments-main_call",
-        REPIN_BASE_ARCH,
-    ),
-    (
-        "baseMetadata/base/empty-experiments-main_call",
-        REPIN_BASE_ARCH,
-    ),
-    (
-        "baseMetadata/requestKeys/empty-experiments-main_call",
-        REPIN_REQUEST_ARCH_HOST_KIND,
-    ),
-    (
-        "baseMetadata/request/empty-experiments-main_call",
-        REPIN_REQUEST_ARCH_HOST_KIND,
-    ),
-    (
-        "baseMetadata/baseKeys/empty-experiments-secondary_call",
-        REPIN_BASE_ARCH,
-    ),
-    (
-        "baseMetadata/base/empty-experiments-secondary_call",
-        REPIN_BASE_ARCH,
-    ),
-    (
-        "baseMetadata/requestKeys/empty-experiments-secondary_call",
-        REPIN_REQUEST_ARCH_HOST_KIND,
-    ),
-    (
-        "baseMetadata/request/empty-experiments-secondary_call",
-        REPIN_REQUEST_ARCH_HOST_KIND,
-    ),
-    (
-        "baseMetadata/baseKeys/no-terminal-emulator-main_call",
-        REPIN_BASE_ARCH,
-    ),
-    (
-        "baseMetadata/base/no-terminal-emulator-main_call",
-        REPIN_BASE_ARCH,
-    ),
-    (
-        "baseMetadata/requestKeys/no-terminal-emulator-main_call",
-        REPIN_REQUEST_ARCH_HOST_KIND,
-    ),
-    (
-        "baseMetadata/request/no-terminal-emulator-main_call",
-        REPIN_REQUEST_ARCH_HOST_KIND,
-    ),
-    (
-        "baseMetadata/baseKeys/no-terminal-emulator-secondary_call",
-        REPIN_BASE_ARCH,
-    ),
-    (
-        "baseMetadata/base/no-terminal-emulator-secondary_call",
-        REPIN_BASE_ARCH,
-    ),
-    (
-        "baseMetadata/requestKeys/no-terminal-emulator-secondary_call",
-        REPIN_REQUEST_ARCH_HOST_KIND,
-    ),
-    (
-        "baseMetadata/request/no-terminal-emulator-secondary_call",
-        REPIN_REQUEST_ARCH_HOST_KIND,
     ),
     (
         "baseMetadata/baseKeys/no-user-plan-main_call",
@@ -526,28 +243,12 @@ const DIVERGENCES: &[(&str, &str)] = &[
         REPIN_BASE_ARCH_ASSIGNMENTS,
     ),
     (
-        "baseMetadata/requestKeys/no-user-plan-main_call",
-        REPIN_REQUEST_ARCH_HOST_KIND,
-    ),
-    (
-        "baseMetadata/request/no-user-plan-main_call",
-        REPIN_REQUEST_ARCH_HOST_KIND,
-    ),
-    (
         "baseMetadata/baseKeys/no-user-plan-secondary_call",
         REPIN_BASE_ARCH_ASSIGNMENTS,
     ),
     (
         "baseMetadata/base/no-user-plan-secondary_call",
         REPIN_BASE_ARCH_ASSIGNMENTS,
-    ),
-    (
-        "baseMetadata/requestKeys/no-user-plan-secondary_call",
-        REPIN_REQUEST_ARCH_HOST_KIND,
-    ),
-    (
-        "baseMetadata/request/no-user-plan-secondary_call",
-        REPIN_REQUEST_ARCH_HOST_KIND,
     ),
     (
         "eventPayloads/propertyKeys/vibe.new_session",

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Send the machine architecture and `host_kind` with model request metadata,
+  as the reference does since v2.25.0.
+
 - Complete `@` paths the way the reference does. Inside a git repository the
   index is what `git ls-files` lists, tracked and untracked files alike, so
   nested `.gitignore` files, `.git/info/exclude` and `core.excludesFile` apply

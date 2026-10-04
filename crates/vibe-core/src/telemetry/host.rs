@@ -20,6 +20,18 @@ pub fn platform_id() -> String {
     }
 }
 
+/// Reference `platform.machine().lower()`, which `build_base_metadata` stamps
+/// as `arch`: the kernel's machine name, which Rust's target architecture
+/// matches except where the operating system names it otherwise.
+#[must_use]
+pub fn platform_arch() -> String {
+    match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("macos" | "windows", "aarch64") => "arm64".to_owned(),
+        ("windows", "x86_64") => "amd64".to_owned(),
+        (_, arch) => arch.to_owned(),
+    }
+}
+
 /// Reference `get_platform_version`: the distribution version on Linux, the
 /// product version on macOS and the system version on Windows.
 ///

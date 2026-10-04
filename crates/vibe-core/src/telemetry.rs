@@ -61,6 +61,8 @@ pub const TELEMETRY_AUTHORIZATION_SCHEME: &str = "Bearer";
 /// The source every request-scoped census reports. Reference
 /// `TelemetryRequestMetadata.call_source`.
 pub const TELEMETRY_CALL_SOURCE: &str = "vibe_code";
+/// Reference `TelemetryRequestMetadata.host_kind`.
+pub const TELEMETRY_HOST_KIND: &str = "local";
 /// The only attachment kind the reference counts. Reference `AttachmentKind`.
 pub const TELEMETRY_ATTACHMENT_IMAGE: &str = "image";
 /// The backend value that makes a provider Mistral's. A provider entry that
@@ -90,7 +92,7 @@ mod vocabulary;
 
 #[cfg(test)]
 pub(crate) use host::terminal_emulator_from;
-pub use host::{detect_terminal_emulator, platform_id, platform_version};
+pub use host::{detect_terminal_emulator, platform_arch, platform_id, platform_version};
 pub use observer::{
     ClientTelemetry, NoClientTelemetry, TelemetryClient, TelemetryConfigGetter,
     TelemetryEventObserver, TelemetryOutcome,
@@ -349,6 +351,8 @@ pub struct TelemetryBaseMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub os: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arch: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub os_version: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
@@ -393,7 +397,7 @@ impl TelemetryCallType {
     }
 }
 
-/// Reference `TelemetryRequestMetadata`: the base census plus the three fields
+/// Reference `TelemetryRequestMetadata`: the base census plus the four fields
 /// a request-scoped event adds.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TelemetryRequestMetadata {
@@ -401,6 +405,8 @@ pub struct TelemetryRequestMetadata {
     pub base: TelemetryBaseMetadata,
     pub call_type: TelemetryCallType,
     pub call_source: String,
+    /// Reference `host_kind`, which declares the one value `local`.
+    pub host_kind: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub message_id: Option<String>,
 }
@@ -496,6 +502,7 @@ impl TelemetryContext {
             client_name: launch.map(|launch| launch.client_name.clone()),
             client_version: launch.map(|launch| launch.client_version.clone()),
             os: Some(platform_id()),
+            arch: Some(platform_arch()),
             os_version: platform_version(),
             version: Some(VERSION.to_owned()),
             terminal_emulator: launch.and_then(|launch| launch.terminal_emulator.clone()),
@@ -525,6 +532,7 @@ impl TelemetryContext {
             },
             call_type,
             call_source: TELEMETRY_CALL_SOURCE.to_owned(),
+            host_kind: TELEMETRY_HOST_KIND.to_owned(),
             message_id,
         }
     }
