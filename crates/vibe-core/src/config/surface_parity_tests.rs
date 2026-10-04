@@ -168,11 +168,6 @@ const ORIGIN_REWRITE: &str = "v2.25.0 adds `browser_auth_allow_origin_rewrite` t
 /// default document, as `(pointer, reason)`.
 const DEFAULT_DIVERGENCES: &[(&str, &str)] = &[
     (
-        "/file_watcher_for_autocomplete",
-        "v2.25.3 turns the autocomplete file watcher on by default (vibe_schema.py:561); \
-         registry.rs ships false",
-    ),
-    (
         "/providers/0/browser_auth_allow_origin_rewrite",
         ORIGIN_REWRITE,
     ),

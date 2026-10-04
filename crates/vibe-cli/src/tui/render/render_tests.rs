@@ -1351,3 +1351,44 @@ fn a_failed_manual_command_folds_its_error_and_reasoning_unfolds_on_click() {
     assert!(frame.contains("⏷ Thought"), "{frame}");
     assert!(frame.contains("the makefile is missing"), "{frame}");
 }
+
+/// The mid-prompt skill ghost is drawn dim after the caret, as Textual draws
+/// the `text-area--suggestion` component in an ANSI theme.
+#[test]
+fn a_mid_prompt_skill_ghost_is_drawn_dim_after_the_caret() {
+    let backend = TestBackend::new(80, 24);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut state = TuiState::new("session");
+    let mut editor = PromptEditor::default();
+    editor.set_text("fix /rev");
+    let mut completion = CompletionEngine::default();
+    completion.set_user_skills([("review", "Review the working tree")]);
+    completion.update_inline_skill(&editor, true);
+    terminal
+        .draw(|frame| {
+            draw(
+                frame,
+                &mut state,
+                &editor,
+                &completion,
+                InputMode::Prompt,
+                theme(false),
+                test_context(false),
+            );
+        })
+        .expect("ghost renders");
+    let buffer = terminal.backend().buffer();
+    let row = (0..buffer.area.height)
+        .find(|y| {
+            (0..buffer.area.width)
+                .map(|x| buffer[(x, *y)].symbol())
+                .collect::<String>()
+                .contains("fix /review")
+        })
+        .expect("the prompt row shows the ghost after the token");
+    let ghost_cells = (0..buffer.area.width)
+        .filter(|x| buffer[(*x, row)].modifier.contains(Modifier::DIM))
+        .map(|x| buffer[(x, row)].symbol().to_owned())
+        .collect::<String>();
+    assert_eq!(ghost_cells, "iew");
+}

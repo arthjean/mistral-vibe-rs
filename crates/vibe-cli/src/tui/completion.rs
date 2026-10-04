@@ -12,12 +12,12 @@ use super::commands::{CommandContext, command_aliases_in, command_description};
 use super::input::{InputError, PromptEditor, grapheme_byte, grapheme_count};
 
 mod fuzzy;
+mod inline_skill;
 mod path;
 
 use fuzzy::fuzzy_match_score;
+use inline_skill::InlineSkillGhost;
 pub(crate) use path::PathIndex;
-
-pub const MAX_VISIBLE_COMPLETIONS: usize = 10;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -59,6 +59,12 @@ pub struct CompletionEngine {
     /// The list and highlight a re-query replaced, so an answer with the same
     /// list keeps the highlight.
     carried: Option<(Vec<CompletionCandidate>, usize)>,
+    /// The generation of a mention query handed to the worker and not yet
+    /// answered: reference `PathCompletionController._pending_future`.
+    pending: Option<u64>,
+    /// The mid-prompt skill ghost on display, reference
+    /// `InlineSkillCompletionController`.
+    inline: Option<InlineSkillGhost>,
 }
 
 #[derive(Debug, Clone)]
@@ -279,6 +285,55 @@ impl CompletionEngine {
         }
     }
 
+    /// Recomputes the mid-prompt skill ghost for the prompt as it now stands.
+    /// Only reached when neither the slash popup nor a mention owns the
+    /// caret, which is the reference manager's controller order.
+    pub(crate) fn update_inline_skill(&mut self, editor: &PromptEditor, default_mode: bool) {
+        // A skill token carries a slash, which the editor already counts.
+        self.inline = if editor.has_path_syntax() && !self.user_skills.is_empty() {
+            inline_skill::ghost_for(
+                editor.text(),
+                editor.cursor_byte(),
+                default_mode,
+                self.user_skills.iter().map(|skill| skill.label.as_str()),
+            )
+        } else {
+            None
+        };
+    }
+
+    /// The text drawn after the caret, when a skill ghost is on display.
+    #[must_use]
+    pub fn inline_skill_suffix(&self) -> Option<String> {
+        self.inline.as_ref().map(InlineSkillGhost::suffix)
+    }
+
+    /// Reference `_accept`, reached by Tab and by the right arrow: writes the
+    /// alias over its token when the ghost still applies, reporting whether it
+    /// did. A ghost that no longer applies is dropped either way.
+    pub(crate) fn accept_inline_skill(
+        &mut self,
+        editor: &mut PromptEditor,
+        default_mode: bool,
+    ) -> bool {
+        let Some(ghost) = self.inline.take() else {
+            return false;
+        };
+        let text = editor.text();
+        if !inline_skill::still_applies(&ghost, text, editor.cursor_byte(), default_mode) {
+            return false;
+        }
+        let start = grapheme_count(&text[..ghost.start]);
+        let end = grapheme_count(&text[..ghost.end]);
+        let separator = insertion_separator(&ghost.alias, &text[ghost.end..]);
+        editor.select(start..end);
+        editor.insert(&ghost.alias);
+        if !separator.is_empty() {
+            editor.insert(separator);
+        }
+        true
+    }
+
     pub fn set_user_skills<'a>(&mut self, skills: impl IntoIterator<Item = (&'a str, &'a str)>) {
         self.user_skills = skills
             .into_iter()
@@ -363,10 +418,12 @@ impl CompletionEngine {
                 })?
             }
         };
+        let generation = request.generation;
         worker.submit(CompletionJob {
             request,
             workspace: workspace.to_path_buf(),
         })?;
+        self.pending = Some(generation);
         Ok(None)
     }
 
@@ -425,6 +482,9 @@ impl CompletionEngine {
         resolution: CompletionResolution,
     ) -> CompletionApplyOutcome {
         let request = resolution.request();
+        if self.pending == Some(request.generation) {
+            self.pending = None;
+        }
         if request.generation != self.generation
             || !active_token(editor).is_some_and(|(range, query)| {
                 range == request.token_range() && query == request.query
@@ -463,9 +523,11 @@ impl CompletionEngine {
 
     /// Ranks candidates and presents them without touching the filesystem.
     ///
-    /// Slash candidates arrive raw. Slash ranking, the mention cap and the
-    /// empty-result rule are part of the observable contract and stay in this
-    /// layer whether lookup ran on the worker thread or in a replay adapter.
+    /// Slash candidates arrive raw. Slash ranking and the empty-result rule are
+    /// part of the observable contract and stay in this layer whether lookup
+    /// ran on the worker thread or in a replay adapter. A mention answer keeps
+    /// every candidate the completer returned, as the reference has since it
+    /// dropped `MAX_SUGGESTIONS_COUNT` at v2.25.3; the popup scrolls.
     pub fn install(
         &mut self,
         generation: u64,
@@ -475,14 +537,7 @@ impl CompletionEngine {
     ) {
         self.active = None;
         let carried = self.carried.take();
-        let mut result = ranked_completion(generation, query, candidates);
-        if result
-            .candidates
-            .first()
-            .is_some_and(|candidate| candidate.kind == CompletionKind::Mention)
-        {
-            result.candidates.truncate(MAX_VISIBLE_COMPLETIONS);
-        }
+        let result = ranked_completion(generation, query, candidates);
         if !result.candidates.is_empty() {
             let selected = carried
                 .filter(|(previous, _)| *previous == result.candidates)
@@ -533,6 +588,12 @@ impl CompletionEngine {
         key: CompletionKey,
         editor: &mut PromptEditor,
     ) -> Result<CompletionKeyOutcome, InputError> {
+        // Reference `PathCompletionController.on_key`: while a mention query is
+        // in flight, Tab and Enter belong to it, so neither accepts a stale row
+        // nor submits a prompt whose completion is still being computed.
+        if self.pending.is_some() && matches!(key, CompletionKey::Tab | CompletionKey::Enter) {
+            return Ok(CompletionKeyOutcome::Consumed);
+        }
         if self.active.is_none() {
             return Ok(CompletionKeyOutcome::Ignored);
         }
@@ -612,6 +673,7 @@ impl CompletionEngine {
 
     pub fn cancel(&mut self) {
         self.carried = None;
+        self.inline = None;
         self.retire();
     }
 
@@ -620,6 +682,7 @@ impl CompletionEngine {
     /// the highlighted row when the new answer is the same list, which a caret
     /// move usually produces.
     pub fn requery(&mut self) {
+        self.inline = None;
         self.carried = self
             .active
             .take()
@@ -630,6 +693,7 @@ impl CompletionEngine {
     fn retire(&mut self) {
         self.generation = self.generation.saturating_add(1);
         self.active = None;
+        self.pending = None;
         if let Some(worker) = &self.worker {
             worker.cancel_pending();
         }
@@ -1031,7 +1095,7 @@ mod tests {
     }
 
     #[test]
-    fn path_popup_keeps_at_most_ten_ranked_candidates() {
+    fn a_path_popup_keeps_every_ranked_candidate() {
         let temporary = tempfile::tempdir().expect("temporary workspace");
         for index in 0..15 {
             fs::write(
@@ -1046,9 +1110,49 @@ mod tests {
             .expect("path candidates");
         assert_eq!(candidates.len(), 15);
         engine.install(0, 0..1, "@", candidates);
+        assert_eq!(engine.view().expect("path popup").candidates.len(), 15);
+    }
+
+    /// Reference `PathCompletionController.on_key` since v2.25.7: a mention
+    /// query in flight owns Tab and Enter, so neither submits the prompt.
+    #[test]
+    fn tab_and_enter_wait_for_a_mention_query_in_flight() {
+        let temporary = tempfile::tempdir().expect("temporary workspace");
+        fs::write(temporary.path().join("notes.md"), "fixture").expect("fixture");
+        let mut engine = CompletionEngine::default();
+        let mut editor = PromptEditor::default();
+        editor.insert("@no");
+        let (range, query) = active_token(&editor).expect("a mention token");
+        engine.requery();
+        let request = CompletionRequest::new(engine.generation(), range, query);
+        assert!(
+            engine
+                .dispatch_request(request, temporary.path())
+                .expect("dispatched")
+                .is_none(),
+            "a mention query runs on the worker"
+        );
+        for key in [CompletionKey::Tab, CompletionKey::Enter] {
+            assert_eq!(
+                engine.handle_key(key, &mut editor).expect("handled"),
+                CompletionKeyOutcome::Consumed
+            );
+        }
         assert_eq!(
-            engine.view().expect("path popup").candidates.len(),
-            MAX_VISIBLE_COMPLETIONS
+            engine
+                .handle_key(CompletionKey::Down, &mut editor)
+                .expect("handled"),
+            CompletionKeyOutcome::Ignored
+        );
+        engine
+            .wait_for_pending(&editor)
+            .expect("the answer arrives");
+        assert_eq!(
+            engine
+                .handle_key(CompletionKey::Enter, &mut editor)
+                .expect("handled"),
+            CompletionKeyOutcome::Refresh,
+            "once answered, Enter accepts the highlighted row"
         );
     }
 

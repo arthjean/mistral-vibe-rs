@@ -49,28 +49,82 @@ fn pasted_path_mention(line: &str) -> Option<String> {
     (path.is_absolute() && path.exists()).then(|| format!("@{}", quote_path_if_needed(&candidate)))
 }
 
-pub fn mention_values(text: &str) -> Vec<String> {
-    let mut values = Vec::new();
-    let mut cursor = 0usize;
-    while cursor < text.len() {
-        let Some(relative_start) = text[cursor..].find('@') else {
-            break;
-        };
-        let start = cursor.saturating_add(relative_start);
-        let boundary = text[..start].chars().next_back();
-        if boundary.is_some_and(|character| character.is_alphanumeric() || character == '_') {
-            cursor = start.saturating_add(1);
+/// Reference `build_path_prompt_payload`'s scan
+/// (`vibe/core/autocompletion/path_prompt.py`): every `@` that does not follow
+/// a letter, a digit or `_` opens a candidate, quoted or bare, and a candidate
+/// that `resolve` accepts is kept and skipped over. One it refuses, an empty
+/// one included, moves the scan a single character on, so an anchor inside a
+/// refused quoted candidate is still read.
+pub fn resolved_mentions<T>(
+    text: &str,
+    mut resolve: impl FnMut(&str) -> Option<T>,
+) -> Vec<(String, T)> {
+    let characters = text.chars().collect::<Vec<_>>();
+    let mut mentions = Vec::new();
+    let mut position = 0usize;
+    while position < characters.len() {
+        if is_path_anchor(&characters, position)
+            && let Some((candidate, next)) = extract_candidate(&characters, position + 1)
+            && !candidate.is_empty()
+            && let Some(value) = resolve(&candidate)
+        {
+            mentions.push((candidate, value));
+            position = next;
             continue;
         }
-        let value_start = start.saturating_add(1);
-        let Some((value, end)) = scan_path_value(text, value_start, PathSyntax::Mention) else {
-            cursor = start.saturating_add(1);
-            continue;
-        };
-        values.push(value);
-        cursor = end;
+        position += 1;
     }
-    values
+    mentions
+}
+
+/// Reference `_is_path_anchor`.
+fn is_path_anchor(characters: &[char], position: usize) -> bool {
+    if characters.get(position) != Some(&'@') {
+        return false;
+    }
+    position == 0
+        || !characters
+            .get(position - 1)
+            .is_some_and(|previous| previous.is_alphanumeric() || *previous == '_')
+}
+
+/// Reference `_extract_candidate`: a quoted candidate, or the run of path
+/// characters, and the position after it.
+fn extract_candidate(characters: &[char], start: usize) -> Option<(String, usize)> {
+    let head = *characters.get(start)?;
+    if matches!(head, '\'' | '"') {
+        return extract_quoted_candidate(characters, start + 1, head);
+    }
+    let end = characters[start..]
+        .iter()
+        .position(|character| !is_mention_path_character(*character))
+        .map_or(characters.len(), |offset| start + offset);
+    (end > start).then(|| (characters[start..end].iter().collect(), end))
+}
+
+/// Reference `_extract_quoted_candidate`: everything up to the closing quote,
+/// with a backslash before the quote character standing for the quote itself.
+/// An unterminated quote is no candidate.
+fn extract_quoted_candidate(
+    characters: &[char],
+    start: usize,
+    quote: char,
+) -> Option<(String, usize)> {
+    let mut candidate = String::new();
+    let mut position = start;
+    while let Some(&character) = characters.get(position) {
+        if character == '\\' && characters.get(position + 1) == Some(&quote) {
+            candidate.push(quote);
+            position += 2;
+            continue;
+        }
+        if character == quote {
+            return Some((candidate, position + 1));
+        }
+        candidate.push(character);
+        position += 1;
+    }
+    None
 }
 
 pub fn resolve_candidate(workspace: &Path, candidate: &str) -> Option<PathBuf> {
@@ -98,13 +152,9 @@ fn candidate_path(workspace: &Path, candidate: &str) -> PathBuf {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-enum PathSyntax {
-    Mention,
-    Pasted,
-}
-
-fn scan_path_value(text: &str, start: usize, syntax: PathSyntax) -> Option<(String, usize)> {
+/// A path token in pasted or typed text: a quoted run, or an absolute or
+/// home-relative path whose escaped spaces are kept.
+fn scan_pasted_path(text: &str, start: usize) -> Option<(String, usize)> {
     let head = text.get(start..)?.chars().next()?;
     if matches!(head, '\'' | '"') {
         let content_start = start.saturating_add(head.len_utf8());
@@ -115,7 +165,7 @@ fn scan_path_value(text: &str, start: usize, syntax: PathSyntax) -> Option<(Stri
             content_end.saturating_add(head.len_utf8()),
         ));
     }
-    if matches!(syntax, PathSyntax::Pasted) && !matches!(head, '/' | '~') {
+    if !matches!(head, '/' | '~') {
         return None;
     }
 
@@ -123,19 +173,12 @@ fn scan_path_value(text: &str, start: usize, syntax: PathSyntax) -> Option<(Stri
     let mut end = start;
     while end < text.len() {
         let character = text.get(end..)?.chars().next()?;
-        if matches!(syntax, PathSyntax::Pasted)
-            && character == '\\'
-            && text[end + character.len_utf8()..].starts_with(' ')
-        {
+        if character == '\\' && text[end + character.len_utf8()..].starts_with(' ') {
             value.push(' ');
             end = end.saturating_add(character.len_utf8() + 1);
             continue;
         }
-        let accepted = match syntax {
-            PathSyntax::Mention => is_mention_path_character(character),
-            PathSyntax::Pasted => !character.is_whitespace(),
-        };
-        if !accepted {
+        if character.is_whitespace() {
             break;
         }
         value.push(character);
@@ -190,7 +233,7 @@ fn rewrite_bare_image_paths(text: &str) -> String {
     let mut cursor = 0usize;
     while cursor < text.len() {
         if is_path_token_boundary(text, cursor)
-            && let Some((candidate, end)) = scan_path_value(text, cursor, PathSyntax::Pasted)
+            && let Some((candidate, end)) = scan_pasted_path(text, cursor)
             && is_image_file(&candidate)
         {
             output.push('@');

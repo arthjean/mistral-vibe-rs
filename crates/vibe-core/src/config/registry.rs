@@ -864,7 +864,7 @@ pub static FIELDS: &[FieldSpec] = &[
             "",
         ),
     FieldSpec::declared("file_watcher_for_autocomplete", FieldKind::Bool, REPLACE).published(
-        FieldDefault::Bool(false),
+        FieldDefault::Bool(true),
         "Watch the workspace so path completion stays current.",
         "",
     ),

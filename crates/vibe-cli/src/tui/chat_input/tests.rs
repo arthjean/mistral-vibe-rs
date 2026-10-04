@@ -911,3 +911,40 @@ fn the_published_file_watcher_preference_reaches_the_completion_index() {
         "a watched workspace reports no diagnostic"
     );
 }
+
+/// Reference `InlineSkillCompletionController`: a skill typed mid-prompt is
+/// previewed after the caret, Tab writes it, and the next deeper skill is
+/// previewed in turn.
+#[test]
+fn a_mid_prompt_skill_ghost_is_accepted_with_tab() {
+    let mut state = ChatInputState::default();
+    state.set_user_skills([("implement", ""), ("implement-plan", "")]);
+    type_text(&mut state, "fix /imp");
+    assert_eq!(
+        state.completion().inline_skill_suffix().as_deref(),
+        Some("lement")
+    );
+    state.apply(key(KeyName::Tab));
+    assert_eq!(state.editor().text(), "fix /implement");
+    assert_eq!(
+        state.completion().inline_skill_suffix().as_deref(),
+        Some("-plan")
+    );
+}
+
+/// Textual's `TextArea.suggestion` takes the right arrow as well, and the
+/// first word belongs to the slash popup rather than to the ghost.
+#[test]
+fn the_right_arrow_accepts_the_ghost_and_the_first_word_has_none() {
+    let mut state = ChatInputState::default();
+    state.set_user_skills([("deploy", "")]);
+    type_text(&mut state, "ship /de");
+    state.apply(key(KeyName::Right));
+    assert_eq!(state.editor().text(), "ship /deploy");
+    assert_eq!(state.completion().inline_skill_suffix(), None);
+
+    let mut first = ChatInputState::default();
+    first.set_user_skills([("deploy", "")]);
+    type_text(&mut first, "/de");
+    assert_eq!(first.completion().inline_skill_suffix(), None);
+}

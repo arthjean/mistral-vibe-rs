@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- Complete `@` paths the way the reference does. Inside a git repository the
+  index is what `git ls-files` lists, tracked and untracked files alike, so
+  nested `.gitignore` files, `.git/info/exclude` and `core.excludesFile` apply
+  and tracked files under `vendor/`, `logs/` or `build/` are offered; a change
+  on disk refreshes the list on the next keystroke. Every indexed file is
+  ranked, however large the tree. `@../` lists the directories around the
+  workspace, `@name/` falls back to a fuzzy match when no indexed directory has
+  that name, a backslash reads as a slash, and a path answer keeps all of its
+  matches in a scrolling popup instead of ten. Tab and Enter now wait for a
+  path query still being answered rather than submitting the prompt.
+
+- Preview a skill typed in the middle of a prompt: after `fix /rev` the rest of
+  the skill's name appears dimmed after the caret, and Tab or the right arrow
+  completes it.
+
+- Watch the workspace for path completion by default, as the reference does
+  since v2.25.3 (`file_watcher_for_autocomplete`), ignoring the same editor,
+  cache and version-control files and gathering bursts of changes the same way.
+
+- Read file mentions as the reference does: `@'it\'s.txt'` names `it's.txt`, an
+  empty `@""` names nothing, and a quoted mention that names no file no longer
+  hides a mention written inside it. A `.gitignore` saved with a byte-order
+  mark or unusual line breaks is read in full.
+
 - Run Teleport and the Vibe Code project picker the way the reference does.
   Every `vibeCode/*` call is served by the session that owns it: the session
   checks the model is on Mistral and the account key is eligible, reads the

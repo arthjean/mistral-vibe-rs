@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use crate::images::ImageFormat;
 use serde::{Deserialize, Serialize};
 
-use crate::path_mentions::{mention_values, resolve_candidate};
+use crate::path_mentions::{resolve_candidate, resolved_mentions};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,6 +45,12 @@ pub struct PathPromptPayload {
 }
 
 impl PathPromptPayload {
+    /// Every resolved mention in message order, repeats included.
+    #[must_use]
+    pub fn all_resources(&self) -> &[PathResource] {
+        &self.all_resources
+    }
+
     pub fn mention_stats(&self) -> MentionStats {
         let mut stats = MentionStats {
             count: self.all_resources.len(),
@@ -70,9 +76,9 @@ impl PathPromptPayload {
 }
 
 pub fn build_path_prompt_payload(workspace: &Path, message: &str) -> PathPromptPayload {
-    let all_resources = mention_values(message)
+    let all_resources = resolved_mentions(message, |alias| path_resource(workspace, alias))
         .into_iter()
-        .filter_map(|alias| path_resource(workspace, &alias))
+        .map(|(_, resource)| resource)
         .collect::<Vec<_>>();
     let mut seen = HashSet::new();
     let resources = all_resources

@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
+use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -8,12 +9,16 @@ use super::fuzzy::fuzzy_match_score;
 use super::{CompletionCandidate, CompletionKind};
 use crate::tui::input::InputError;
 use vibe_core::matching::pattern_matches;
+use vibe_core::workspace::text_file;
+use vibe_core::worktree::trusted_git_executable;
 
 mod watch;
 
 use watch::{ChangeKind, WatchController};
 
-const MAX_INDEXED_ENTRIES: usize = 32_000;
+/// Reference `DEFAULT_TARGET_MATCHES`: how many candidates one answer keeps.
+/// Every indexed entry is ranked, as the reference's uncapped
+/// `max_entries_to_process` does since v2.25.3.
 const MAX_PATH_MATCHES: usize = 100;
 /// Past this many changes in one delivered batch, the reference replaces the
 /// incremental path with one full rebuild.
@@ -93,6 +98,11 @@ struct PathSearchContext<'a> {
 /// and their shared ignore rules, held together because nothing here needs the
 /// upstream split across three objects.
 ///
+/// Inside a git work tree the index is what `git ls-files` lists, as reference
+/// `FileIndexStore._list_git_entries` does since v2.25.3; elsewhere it is the
+/// ignore-rule walk. A watched change only marks a git-backed index dirty, and
+/// the next query lists the tree again.
+///
 /// The reference's background rebuild executor, its per-root cancellation tasks
 /// and its `_target_root` bookkeeping are not reproduced: this port already
 /// rebuilds off the terminal event path, on the completion worker, so the
@@ -104,6 +114,10 @@ pub(super) struct WorkspaceIndex {
     rules: IgnoreRules,
     entries: BTreeMap<String, IndexedPath>,
     stats: IndexStats,
+    /// Whether the entries came from `git ls-files` rather than the walk.
+    git_backed: bool,
+    /// Set by a watched change to a git-backed index: the next query rebuilds.
+    dirty: bool,
     watcher: WatchController,
     /// Read on every query, the way the reference reads its
     /// `should_enable_watcher` getter inside `get_index`.
@@ -114,31 +128,80 @@ pub(super) struct WorkspaceIndex {
 }
 
 impl WorkspaceIndex {
-    pub(super) fn candidates(
+    /// Reference `PathCompleter._collect_matches` for the text after `@`: a
+    /// bare `@` lists the working directory, a `..` path lists the directory
+    /// it names outside the root, and anything else is ranked against the
+    /// index, with a trailing slash that names no indexed directory retried
+    /// as a fuzzy pattern.
+    pub(super) fn collect(
         &mut self,
         workspace: &Path,
         raw_query: &str,
     ) -> Result<Vec<CompletionCandidate>, InputError> {
+        let partial = raw_query.replace('\\', "/");
+        if partial.is_empty() {
+            return Ok(list_current_directory(workspace));
+        }
         let root = fs::canonicalize(workspace)
             .map_err(|error| InputError::Workspace(error.to_string()))?;
-        if self.root.as_deref() != Some(root.as_path()) {
+        if let Some(matches) = collect_filesystem_matches(&root, &partial) {
+            return Ok(matches);
+        }
+        self.ensure(&root);
+        let context = path_search_context(&partial);
+        let mut matches = rank_with_context(self.entries.values(), &context, true);
+        if matches.is_empty() && partial.ends_with('/') {
+            let prefix = partial.trim_end_matches('/');
+            let prefix_is_real_directory = self
+                .entries
+                .values()
+                .any(|entry| entry.is_directory && entry.rel == prefix);
+            if !prefix.is_empty() && !prefix_is_real_directory {
+                let fallback = PathSearchContext {
+                    suffix: "",
+                    search_pattern: &partial,
+                    path_prefix: "",
+                    immediate_only: false,
+                    search_pattern_ascii_mask: query_ascii_mask(&partial),
+                };
+                matches = rank_with_context(self.entries.values(), &fallback, true);
+            }
+        }
+        Ok(matches)
+    }
+
+    /// Reference `FileIndexer.get_index`: a new root or a dirty index is built
+    /// again, and the watcher follows the configured key. Delivered batches are
+    /// applied first, which is when the reference's watch thread would already
+    /// have applied them.
+    fn ensure(&mut self, root: &Path) {
+        if self.root.as_deref() != Some(root) {
             // The previous root's watcher stops before the new root is built,
             // so no batch can arrive against an index it does not describe.
             self.watcher.stop();
-            self.rebuild(&root);
         }
-        self.sync_watcher(&root);
         self.drain_changes();
-        Ok(rank_indexed_paths(self.entries.values(), raw_query, true))
+        if self.root.as_deref() != Some(root) || self.dirty {
+            self.rebuild(root);
+        }
+        self.sync_watcher(root);
     }
 
-    /// Walks `root` from scratch, recompiling the ignore rules for it first.
+    /// Lists `root` from scratch: through `git ls-files` inside a work tree,
+    /// through the ignore-rule walk everywhere else.
     fn rebuild(&mut self, root: &Path) {
-        self.rules.ensure_for_root(root);
-        let mut entries = BTreeMap::new();
-        walk_workspace(root, "", &self.rules, &mut entries);
-        self.entries = entries;
+        if let Some(entries) = list_git_entries(root) {
+            self.entries = entries;
+            self.git_backed = true;
+        } else {
+            self.rules.ensure_for_root(root);
+            let mut entries = BTreeMap::new();
+            walk_workspace(root, "", &self.rules, &mut entries);
+            self.entries = entries;
+            self.git_backed = false;
+        }
         self.root = Some(root.to_path_buf());
+        self.dirty = false;
         self.stats.rebuilds = self.stats.rebuilds.saturating_add(1);
     }
 
@@ -152,6 +215,8 @@ impl WorkspaceIndex {
         self.watcher.stop();
         self.entries.clear();
         self.root = None;
+        self.git_backed = false;
+        self.dirty = false;
         self.rules.reset();
     }
 
@@ -172,21 +237,31 @@ impl WorkspaceIndex {
     /// Applies every batch the watcher has delivered since the last query.
     fn drain_changes(&mut self) {
         while let Some((root, changes)) = self.watcher.next_batch() {
-            // A batch left over from a watcher this index has replaced names a
-            // root the store no longer holds, which is the stale-root guard.
-            if self.root.as_deref() != Some(root.as_path()) {
-                continue;
-            }
-            self.apply_changes(&changes);
+            self.handle_batch(&root, &changes);
         }
     }
 
-    /// Applies one delivered batch in place, or rebuilds when the batch is
-    /// larger than the reference's threshold.
+    /// Reference `FileIndexer._handle_watch_changes`: an empty batch is
+    /// dropped, and a batch left over from a watcher this index has replaced
+    /// names a root the store no longer holds, which is the stale-root guard.
+    fn handle_batch(&mut self, root: &Path, changes: &[(ChangeKind, PathBuf)]) {
+        if changes.is_empty() || self.root.as_deref() != Some(root) {
+            return;
+        }
+        self.apply_changes(changes);
+    }
+
+    /// Applies one delivered batch: a git-backed index is only marked dirty,
+    /// a walked one is updated in place, or rebuilt when the batch is larger
+    /// than the reference's threshold.
     fn apply_changes(&mut self, changes: &[(ChangeKind, PathBuf)]) {
         let Some(root) = self.root.clone() else {
             return;
         };
+        if self.git_backed {
+            self.dirty = true;
+            return;
+        }
         if changes.len() > MASS_CHANGE_THRESHOLD {
             self.rebuild(&root);
             return;
@@ -251,6 +326,21 @@ impl WorkspaceIndex {
         Some(indexed_path(rel, name, is_directory))
     }
 
+    /// Builds or refreshes the index for `workspace` and ranks `raw_query`
+    /// against it without the `_collect_matches` routing, which is what the
+    /// index tests below exercise.
+    #[cfg(test)]
+    fn candidates(
+        &mut self,
+        workspace: &Path,
+        raw_query: &str,
+    ) -> Result<Vec<CompletionCandidate>, InputError> {
+        let root = fs::canonicalize(workspace)
+            .map_err(|error| InputError::Workspace(error.to_string()))?;
+        self.ensure(&root);
+        Ok(rank_indexed_paths(self.entries.values(), raw_query, true))
+    }
+
     /// The two counters the corpus compares. Nothing in the running client
     /// reads them; they exist so rebuild behavior is measurable.
     #[cfg(test)]
@@ -300,26 +390,14 @@ impl PathIndex {
         })
     }
 
-    pub(crate) fn candidates(
-        &self,
-        workspace: &Path,
-        raw_query: &str,
-    ) -> Result<Vec<CompletionCandidate>, InputError> {
-        self.locked()?.candidates(workspace, raw_query)
-    }
-
-    /// What the composer's path completer answers for the text after `@`:
-    /// reference `PathCompleter._collect_matches` lists the working directory
-    /// for a bare `@` and ranks the index for anything else.
+    /// What the composer's path completer answers for the text after `@`,
+    /// reference `PathCompleter._collect_matches`.
     pub(crate) fn completer_candidates(
         &self,
         workspace: &Path,
         raw_query: &str,
     ) -> Result<Vec<CompletionCandidate>, InputError> {
-        if raw_query.is_empty() {
-            return Ok(list_current_directory(workspace));
-        }
-        self.candidates(workspace, raw_query)
+        self.locked()?.collect(workspace, raw_query)
     }
 
     /// Publishes `file_watcher_for_autocomplete`. The index reads it on every
@@ -327,6 +405,15 @@ impl PathIndex {
     /// rebuilding anything.
     pub(crate) fn set_watch_enabled(&self, enabled: bool) {
         self.watch_enabled.store(enabled, Ordering::Relaxed);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn candidates(
+        &self,
+        workspace: &Path,
+        raw_query: &str,
+    ) -> Result<Vec<CompletionCandidate>, InputError> {
+        self.locked()?.candidates(workspace, raw_query)
     }
 
     /// How many times this index has walked a tree, which is what proves the
@@ -350,15 +437,26 @@ impl PathIndex {
     }
 }
 
+#[cfg(test)]
 fn rank_indexed_paths<'a>(
     entries: impl IntoIterator<Item = &'a IndexedPath>,
     raw_query: &str,
     mask_filter: bool,
 ) -> Vec<CompletionCandidate> {
-    let context = path_search_context(raw_query);
+    rank_with_context(entries, &path_search_context(raw_query), mask_filter)
+}
+
+/// Reference `PathCompleter._score_matches`: every entry is ranked, an empty
+/// pattern stops at the target count, and the answer is sorted by label and
+/// then by descending rank, so equal ranks keep the label order.
+fn rank_with_context<'a>(
+    entries: impl IntoIterator<Item = &'a IndexedPath>,
+    context: &PathSearchContext<'_>,
+    mask_filter: bool,
+) -> Vec<CompletionCandidate> {
     let mut matches = Vec::<(CompletionCandidate, PathMatchRank)>::new();
-    for entry in entries.into_iter().take(MAX_INDEXED_ENTRIES) {
-        if !path_matches_prefix(entry, &context)
+    for entry in entries {
+        if !path_matches_prefix(entry, context)
             || entry.name.starts_with('.') && !context.suffix.starts_with('.')
         {
             continue;
@@ -366,14 +464,14 @@ fn rank_indexed_paths<'a>(
         if context.search_pattern.is_empty() {
             matches.push((
                 mention_candidate(entry.rel.clone(), entry.is_directory),
-                path_match_rank(entry, &context, 0),
+                path_match_rank(entry, context, 0),
             ));
             if matches.len() >= MAX_PATH_MATCHES {
                 break;
             }
             continue;
         }
-        if mask_filter && !can_possibly_fuzzy_match(entry, &context) {
+        if mask_filter && !can_possibly_fuzzy_match(entry, context) {
             continue;
         }
         let Some(score) = fuzzy_match_score(context.search_pattern, &entry.rel) else {
@@ -381,7 +479,7 @@ fn rank_indexed_paths<'a>(
         };
         matches.push((
             mention_candidate(entry.rel.clone(), entry.is_directory),
-            path_match_rank(entry, &context, score),
+            path_match_rank(entry, context, score),
         ));
     }
     matches.sort_by(|left, right| left.0.label.cmp(&right.0.label));
@@ -417,6 +515,189 @@ fn list_current_directory(workspace: &Path) -> Vec<CompletionCandidate> {
             mention_candidate(name, is_directory)
         })
         .collect()
+}
+
+/// Reference `PathCompleter._collect_filesystem_matches`: a partial whose first
+/// segment is `..` and whose directory resolves outside `root` lists that
+/// directory's children, or [`None`] when the query belongs to the index.
+fn collect_filesystem_matches(root: &Path, partial: &str) -> Option<Vec<CompletionCandidate>> {
+    let (dir_portion, suffix) = split_outside_root_dir(partial)?;
+    if dir_portion.is_empty() {
+        return None;
+    }
+    let target = lenient_resolve(root, &dir_portion);
+    if target.starts_with(root) {
+        return None;
+    }
+    if target.is_dir() {
+        return Some(list_outside_root_children(&target, &dir_portion, &suffix));
+    }
+    let parent = target.parent()?;
+    if parent == root || !parent.is_dir() {
+        return Some(Vec::new());
+    }
+    let name = target
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    Some(list_outside_root_children(
+        parent,
+        &posix_parent(&dir_portion),
+        &name,
+    ))
+}
+
+/// Reference `PathCompleter._split_outside_root_dir`: the directory part and the
+/// name prefix of a partial that starts with `..`.
+fn split_outside_root_dir(partial: &str) -> Option<(String, String)> {
+    if partial.is_empty() || partial.split('/').next() != Some("..") {
+        return None;
+    }
+    if partial.ends_with('/') {
+        return Some((partial.trim_end_matches('/').to_owned(), String::new()));
+    }
+    let Some(slash) = partial.rfind('/') else {
+        return Some((partial.to_owned(), String::new()));
+    };
+    let (directory, suffix) = (&partial[..slash], &partial[slash + 1..]);
+    if suffix == ".." {
+        return Some((format!("{directory}/{suffix}"), String::new()));
+    }
+    Some((directory.to_owned(), suffix.to_owned()))
+}
+
+/// Reference `PathCompleter._list_outside_root_children`: the visible children
+/// of `directory` whose name starts with `suffix` regardless of case, sorted
+/// case-insensitively, labeled under the directory part as typed.
+fn list_outside_root_children(
+    directory: &Path,
+    dir_portion: &str,
+    suffix: &str,
+) -> Vec<CompletionCandidate> {
+    let Ok(entries) = fs::read_dir(directory) else {
+        return Vec::new();
+    };
+    let suffix_lower = suffix.to_lowercase();
+    let mut matched = entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| entry.file_name().into_string().ok())
+        .filter(|name| !name.starts_with('.') || suffix.starts_with('.'))
+        .filter(|name| suffix_lower.is_empty() || name.to_lowercase().starts_with(&suffix_lower))
+        .collect::<Vec<_>>();
+    matched.sort_by_cached_key(|name| name.to_lowercase());
+    matched
+        .into_iter()
+        .take(MAX_PATH_MATCHES)
+        .map(|name| {
+            let is_directory = directory.join(&name).is_dir();
+            mention_candidate(format!("{dir_portion}/{name}"), is_directory)
+        })
+        .collect()
+}
+
+/// `Path(base / relative).resolve()` without `strict`: every component that
+/// exists is resolved through its links, a missing one is kept as written,
+/// and `..` steps back from whatever has been resolved so far.
+fn lenient_resolve(base: &Path, relative: &str) -> PathBuf {
+    let mut resolved = base.to_path_buf();
+    for component in Path::new(relative).components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                resolved.pop();
+            }
+            Component::Normal(name) => {
+                resolved.push(name);
+                if let Ok(canonical) = fs::canonicalize(&resolved) {
+                    resolved = canonical;
+                }
+            }
+            Component::RootDir | Component::Prefix(_) => {
+                resolved = PathBuf::from(component.as_os_str());
+            }
+        }
+    }
+    resolved
+}
+
+/// `Path(value).parent.as_posix()` for a relative POSIX path: empty and `.`
+/// segments are dropped, and a single segment's parent is `.`.
+fn posix_parent(value: &str) -> String {
+    let segments = value
+        .split('/')
+        .filter(|segment| !segment.is_empty() && *segment != ".")
+        .collect::<Vec<_>>();
+    match segments.split_last() {
+        Some((_, parents)) if !parents.is_empty() => parents.join("/"),
+        _ => ".".to_owned(),
+    }
+}
+
+/// Reference `FileIndexStore._list_git_entries`: what `git ls-files` lists
+/// under `root`, tracked and untracked but not ignored, with every parent
+/// directory added, or [`None`] when `root` is in no work tree or git cannot
+/// run. A listed path that no longer exists is skipped. The repository's
+/// `core.fsmonitor` is cleared for the call, which changes no answer and keeps
+/// a checkout from running a command of its choosing.
+fn list_git_entries(root: &Path) -> Option<BTreeMap<String, IndexedPath>> {
+    let git = trusted_git_executable(root)?;
+    let output = Command::new(git)
+        .arg("-C")
+        .arg(root)
+        .args([
+            "-c",
+            "core.fsmonitor=",
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "-z",
+        ])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let mut entries = BTreeMap::new();
+    for raw in output.stdout.split(|byte| *byte == 0) {
+        let Ok(rel) = std::str::from_utf8(raw) else {
+            continue;
+        };
+        if rel.is_empty() {
+            continue;
+        }
+        let path = root.join(rel);
+        if !path.exists() {
+            continue;
+        }
+        add_git_entry(&mut entries, rel, &path);
+    }
+    Some(entries)
+}
+
+/// Adds one listed path and every directory above it, as reference
+/// `_add_git_entry` does: a parent already present keeps its entry.
+fn add_git_entry(entries: &mut BTreeMap<String, IndexedPath>, rel: &str, path: &Path) {
+    let segments = rel
+        .split('/')
+        .filter(|segment| !segment.is_empty() && *segment != ".")
+        .collect::<Vec<_>>();
+    let Some((name, parents)) = segments.split_last() else {
+        return;
+    };
+    for depth in 1..=parents.len() {
+        let parent = segments[..depth].join("/");
+        entries
+            .entry(parent.clone())
+            .or_insert_with(|| indexed_path(parent, segments[depth - 1].to_owned(), true));
+    }
+    let normalized = segments.join("/");
+    entries.insert(
+        normalized.clone(),
+        indexed_path(normalized, (*name).to_owned(), path.is_dir()),
+    );
 }
 
 fn path_search_context(raw_query: &str) -> PathSearchContext<'_> {
@@ -689,26 +970,30 @@ impl IgnoreRules {
         self.root = None;
     }
 
+    /// Reference `IgnoreRules._build_patterns`: the defaults, then the root's
+    /// `.gitignore` decoded as `read_safe` decodes it and split where
+    /// `str.splitlines` splits, each line stripped of what `str.strip` strips.
     fn load(root: &Path) -> Self {
         let mut rules = DEFAULT_IGNORE_PATTERNS
             .iter()
             .filter_map(|pattern| IgnoreRule::parse(pattern, true))
             .collect::<Vec<_>>();
-        if let Ok(contents) = fs::read_to_string(root.join(".gitignore")) {
-            for line in contents.lines() {
-                let mut raw = line.trim();
+        if let Ok(bytes) = fs::read(root.join(".gitignore")) {
+            let contents = text_file::decode(&bytes).text;
+            for line in contents.split(is_line_boundary) {
+                let mut raw = line.trim_matches(is_python_space);
                 if raw.is_empty() || raw.starts_with('#') {
                     continue;
                 }
                 if let Some((before, _)) = raw.split_once('#') {
-                    raw = before.trim_end();
+                    raw = before.trim_end_matches(is_python_space);
                 }
                 if raw.is_empty() {
                     continue;
                 }
                 let excludes = !raw.starts_with('!');
-                if !excludes {
-                    raw = raw.trim_start_matches('!').trim_start();
+                if let Some(negated) = raw.strip_prefix('!') {
+                    raw = negated.trim_start_matches(is_python_space);
                 }
                 if let Some(rule) = IgnoreRule::parse(raw, excludes) {
                     rules.push(rule);
@@ -735,7 +1020,7 @@ impl IgnoreRules {
 impl IgnoreRule {
     fn parse(raw: &str, excludes: bool) -> Option<Self> {
         let anchored_at_root = raw.starts_with('/');
-        let raw = raw.trim_start_matches('/');
+        let raw = raw.strip_prefix('/').unwrap_or(raw);
         let directory_only = raw.ends_with('/');
         let pattern = raw.trim_end_matches('/');
         if pattern.is_empty() {
@@ -762,8 +1047,39 @@ impl IgnoreRule {
         } else {
             rel
         };
+        if cfg!(windows) {
+            // `fnmatch.fnmatch` applies `os.path.normcase` to both sides, which
+            // on Windows folds case and turns `/` into `\`.
+            return pattern_matches(&normcase(&self.pattern), &normcase(target));
+        }
         pattern_matches(&self.pattern, target)
     }
+}
+
+fn normcase(value: &str) -> String {
+    value.replace('/', "\\").to_lowercase()
+}
+
+/// The boundaries `str.splitlines` splits on once newlines are normalized.
+fn is_line_boundary(character: char) -> bool {
+    matches!(
+        character,
+        '\n' | '\r'
+            | '\u{0b}'
+            | '\u{0c}'
+            | '\u{1c}'
+            | '\u{1d}'
+            | '\u{1e}'
+            | '\u{85}'
+            | '\u{2028}'
+            | '\u{2029}'
+    )
+}
+
+/// `str.isspace` for one character: Unicode whitespace plus the four
+/// information separators Python also counts.
+fn is_python_space(character: char) -> bool {
+    character.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&character)
 }
 
 fn mention_candidate(path: String, is_directory: bool) -> CompletionCandidate {
@@ -806,9 +1122,11 @@ mod tests {
         index
     }
 
+    /// Reference `max_entries_to_process` defaults to `None` since v2.25.3, so
+    /// an entry past the old 32 000-entry window is still ranked.
     #[test]
-    fn results_are_bounded_after_the_reference_index_window() {
-        let mut entries = (0..MAX_INDEXED_ENTRIES)
+    fn every_indexed_entry_is_ranked() {
+        let mut entries = (0..32_000)
             .map(|index| {
                 let rel = format!("a{index:05}.txt");
                 indexed_path(rel.clone(), rel, false)
@@ -819,7 +1137,11 @@ mod tests {
             "zzzz-needle.txt".to_owned(),
             false,
         ));
-        assert!(rank_indexed_paths(entries.iter(), "needle", true).is_empty());
+        let ranked = rank_indexed_paths(entries.iter(), "needle", true);
+        assert_eq!(
+            ranked.first().map(|candidate| candidate.label.as_str()),
+            Some("@zzzz-needle.txt")
+        );
     }
 
     #[test]

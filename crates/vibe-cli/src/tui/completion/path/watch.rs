@@ -7,13 +7,20 @@
 //! built on the `notify` crate, so the platform backends and their event
 //! categories are the same ones this controller reads.
 //!
+//! Batches are delivered the way `watchfiles.watch` yields them: the changes
+//! seen are kept as a set, polled every step, and handed over once a step adds
+//! nothing new or the 1 600 ms debounce has passed since the first one; the
+//! set then goes through `watchfiles.DefaultFilter`, and an empty result is not
+//! delivered at all.
+//!
 //! One difference is deliberate and invisible to the index: upstream the watch
 //! thread calls back into the store under a lock, while here it hands each
 //! batch to a channel the index drains before it answers a query. A batch
 //! therefore reaches the store at the same point in the query sequence either
 //! way, and the boundary stays single-threaded.
 
-use std::path::{Path, PathBuf};
+use std::collections::HashSet;
+use std::path::{Component, Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::JoinHandle;
@@ -22,9 +29,26 @@ use std::time::{Duration, Instant};
 use notify::event::{EventKind, ModifyKind, RenameMode};
 use notify::{RecursiveMode, Watcher};
 
-/// The reference's `step=200`: changes are accumulated for this long after the
-/// first one before the batch is delivered.
+/// The reference's `step=200`: how often the change set is polled.
 const WATCH_STEP: Duration = Duration::from_millis(200);
+/// `watchfiles.watch`'s default `debounce=1600`: the longest a growing change
+/// set is held after it was first seen.
+const WATCH_DEBOUNCE: Duration = Duration::from_millis(1_600);
+/// `watchfiles.DefaultFilter.ignore_dirs`: a change under any of these is
+/// dropped.
+const IGNORED_DIRECTORIES: [&str; 11] = [
+    "__pycache__",
+    ".git",
+    ".hg",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".idea",
+    "node_modules",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".hypothesis",
+];
 /// How long `start` waits for the backend to report that it is watching,
 /// matching the reference's readiness wait.
 const READY_TIMEOUT: Duration = Duration::from_millis(500);
@@ -36,7 +60,7 @@ const JOIN_TIMEOUT: Duration = Duration::from_secs(1);
 /// The three change categories the index applies. Every other event the
 /// platform reports is dropped before it reaches a batch, which is what the
 /// reference's membership test does with the categories `watchfiles` names.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) enum ChangeKind {
     Added,
     Modified,
@@ -211,44 +235,114 @@ fn watch_loop(
     }
     ready.set();
 
-    let mut batch = Vec::new();
+    let mut pending = Vec::new();
+    let mut seen = HashSet::new();
+    let mut last_size = 0usize;
+    let mut deadline: Option<Instant> = None;
     loop {
-        if stop.is_set() {
-            break;
-        }
-        match incoming.recv_timeout(WATCH_STEP) {
-            Ok(Ok(event)) => collect(&event, &mut batch),
-            // A backend error after the watch started is not fatal upstream
-            // either: the loop keeps reporting whatever still arrives.
-            Ok(Err(_)) | Err(RecvTimeoutError::Timeout) => {}
-            Err(RecvTimeoutError::Disconnected) => break,
-        }
-        if batch.is_empty() {
-            continue;
-        }
-        // The first change opens a step-long window, so a burst reaches the
-        // store as one batch and the mass-change threshold sees the burst.
-        let deadline = Instant::now().checked_add(WATCH_STEP);
-        while let Some(remaining) = deadline
-            .and_then(|deadline| deadline.checked_duration_since(Instant::now()))
+        // One step of `RustNotify.watch`: sleep, collecting what arrives.
+        let step_end = Instant::now().checked_add(WATCH_STEP);
+        while let Some(remaining) = step_end
+            .and_then(|end| end.checked_duration_since(Instant::now()))
             .filter(|remaining| !remaining.is_zero())
         {
             match incoming.recv_timeout(remaining) {
-                Ok(Ok(event)) => collect(&event, &mut batch),
+                Ok(Ok(event)) => {
+                    let mut changes = Vec::new();
+                    collect(&event, &mut changes);
+                    for change in changes {
+                        if seen.insert(change.clone()) {
+                            pending.push(change);
+                        }
+                    }
+                }
+                // A backend error after the watch started is not fatal
+                // upstream either: the loop keeps reporting what still arrives.
                 Ok(Err(_)) => {}
-                Err(_) => break,
+                Err(RecvTimeoutError::Timeout) => break,
+                Err(RecvTimeoutError::Disconnected) => return,
             }
         }
         if stop.is_set() {
             break;
         }
-        if batches
-            .send((root.to_path_buf(), std::mem::take(&mut batch)))
-            .is_err()
-        {
+        let size = pending.len();
+        if size == 0 {
+            continue;
+        }
+        if size != last_size {
+            last_size = size;
+            let now = Instant::now();
+            match deadline {
+                Some(limit) if now > limit => {}
+                Some(_) => continue,
+                None => {
+                    deadline = now.checked_add(WATCH_DEBOUNCE);
+                    continue;
+                }
+            }
+        }
+        let batch = std::mem::take(&mut pending)
+            .into_iter()
+            .filter(|(_, path)| default_filter_allows(path))
+            .collect::<Vec<_>>();
+        seen.clear();
+        last_size = 0;
+        deadline = None;
+        if batch.is_empty() {
+            continue;
+        }
+        if batches.send((root.to_path_buf(), batch)).is_err() {
             break;
         }
     }
+}
+
+/// `watchfiles.DefaultFilter.__call__`: a change is dropped when any segment
+/// of its path is an ignored directory or its last segment is an editor,
+/// bytecode or system file.
+pub(super) fn default_filter_allows(path: &Path) -> bool {
+    let segments = path
+        .components()
+        .filter_map(|component| match component {
+            Component::Normal(segment) => Some(segment.to_string_lossy()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    if segments
+        .iter()
+        .any(|segment| IGNORED_DIRECTORIES.contains(&segment.as_ref()))
+    {
+        return false;
+    }
+    let name = segments.last().map_or("", |segment| segment.as_ref());
+    !is_ignored_entity(name)
+}
+
+/// `DefaultFilter.ignore_entity_patterns`, searched in the entity's name:
+/// `\.py[cod]$`, `\.___jb_...___$`, `\.sw.$`, `~$`, `^\.\#`,
+/// `^\.DS_Store$` and `^flycheck_`. A `$` also matches before a final newline.
+fn is_ignored_entity(name: &str) -> bool {
+    let at_end = |test: fn(&[char]) -> bool| {
+        let characters = name.chars().collect::<Vec<_>>();
+        test(&characters)
+            || characters
+                .split_last()
+                .is_some_and(|(last, rest)| *last == '\n' && test(rest))
+    };
+    at_end(|name| matches!(name, [.., '.', 'p', 'y', 'c' | 'o' | 'd']))
+        || at_end(|name| {
+            matches!(
+                name,
+                [.., '.', '_', '_', '_', 'j', 'b', '_', a, b, c, '_', '_', '_']
+                    if ![a, b, c].contains(&&'\n')
+            )
+        })
+        || at_end(|name| matches!(name, [.., '.', 's', 'w', last] if *last != '\n'))
+        || at_end(|name| matches!(name, [.., '~']))
+        || at_end(|name| name == ['.', 'D', 'S', '_', 'S', 't', 'o', 'r', 'e'])
+        || name.starts_with(".#")
+        || name.starts_with("flycheck_")
 }
 
 fn report(failure: &Arc<Mutex<Option<String>>>, ready: &Arc<Flag>, reason: &str) {

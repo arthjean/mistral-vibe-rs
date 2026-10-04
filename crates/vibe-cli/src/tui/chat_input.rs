@@ -485,6 +485,27 @@ impl ChatInputState {
             }
         }
 
+        // Reference `InlineSkillCompletionController.on_key` takes Tab, and the
+        // text area's own suggestion takes the right arrow, with or without
+        // Shift: either writes the previewed skill over its token.
+        if !self.secret_input
+            && self.completion.inline_skill_suffix().is_some()
+            && !ctrl
+            && !alt
+            && !meta
+            && ((key == KeyName::Tab && !shift) || key == KeyName::Right)
+        {
+            let before = self.editor.revision();
+            if self
+                .completion
+                .accept_inline_skill(&mut self.editor, self.mode == InputMode::Prompt)
+            {
+                self.finish_user_edit(before, effects);
+                self.refresh_completion(effects);
+                return;
+            }
+        }
+
         if key == KeyName::Backtab || (key == KeyName::Tab && shift) {
             self.reset_completion(effects);
             return;
@@ -716,6 +737,8 @@ impl ChatInputState {
         }
         let Some((range, query)) = active_token(&self.editor) else {
             self.completion.cancel();
+            self.completion
+                .update_inline_skill(&self.editor, self.mode == InputMode::Prompt);
             return;
         };
         self.completion.requery();

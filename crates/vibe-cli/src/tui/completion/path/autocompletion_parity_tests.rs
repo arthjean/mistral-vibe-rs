@@ -18,6 +18,14 @@
 //! capture drives the reference's: the index is built over the fixture tree,
 //! each step mutates the tree and hands the store the change list the capture
 //! recorded, and the resulting entry set and counters are compared.
+//!
+//! The git families initialize the same repository the capture did, with the
+//! system and global git configuration disabled for the setup commands and the
+//! repository's own `core.excludesFile` outranking any global one for the
+//! listing. The `collect` and `controller` families rebuild the enclosure the
+//! capture completed in, so a `..` query lists the same directories. The
+//! `fuzzy` family draws the capture's pairs again from the same SplitMix64
+//! stream and compares every score.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -29,12 +37,19 @@ use serde_json::Value;
 
 use vibe_core::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 
-use super::super::{CompletionEngine, CompletionRequest, CompletionResolution};
+use vibe_core::path_resources::{PathResourceKind, build_path_prompt_payload};
+
+use super::super::{
+    CompletionEngine, CompletionKey, CompletionKeyOutcome, CompletionRequest, CompletionResolution,
+    PathIndex, active_token,
+};
+use super::watch::default_filter_allows;
 use super::{
     ASCII_CODEPOINT_LIMIT, ChangeKind, DEFAULT_IGNORE_PATTERNS, IgnoreRule, IgnoreRules,
-    IndexedPath, MASS_CHANGE_THRESHOLD, MAX_INDEXED_ENTRIES, MAX_PATH_MATCHES, WorkspaceIndex,
-    build_ascii_mask, fuzzy_match_score, path_match_rank, path_search_context, rank_indexed_paths,
+    IndexedPath, MASS_CHANGE_THRESHOLD, MAX_PATH_MATCHES, WorkspaceIndex, build_ascii_mask,
+    fuzzy_match_score, path_match_rank, path_search_context, rank_indexed_paths,
 };
+use crate::tui::input::PromptEditor;
 
 const CORPUS_RELATIVE: &str = "crates/vibe-cli/tests/autocompletion/corpus.json";
 const CAPTURE_SCRIPT: &str = "scripts/parity/autocompletion.py";
@@ -43,7 +58,7 @@ const CAPTURE_SCRIPT: &str = "scripts/parity/autocompletion.py";
 const CORPUS_SCHEMA_VERSION: u32 = 1;
 /// The comparison floor this replay commits to, so a regeneration that
 /// captured almost nothing fails instead of reporting a clean but empty run.
-const MINIMUM_SCENARIOS: usize = 150;
+const MINIMUM_SCENARIOS: usize = 4_000;
 /// The scale the corpus records a fuzzy score in, which is the one this port's
 /// matcher already computes in. A capture that rescaled would silently move
 /// every score, so the constant is compared rather than assumed.
@@ -53,7 +68,21 @@ const SCORE_SCALE: i64 = 100;
 /// capture adds without a reader here fails the replay by name rather than
 /// passing unread, and so does a family this replay expects and the corpus
 /// dropped.
-const FAMILIES: [&str; 5] = ["constants", "ignoreRules", "walk", "changes", "ranking"];
+const FAMILIES: [&str; 13] = [
+    "constants",
+    "ignoreRules",
+    "walk",
+    "changes",
+    "ranking",
+    "gitWalk",
+    "gitChanges",
+    "collect",
+    "controller",
+    "inlineSkill",
+    "pathPrompt",
+    "watchFilter",
+    "fuzzy",
+];
 
 /// Keys the corpus carries that are not families: the pin, the layout, the
 /// prose-free note and the fixture declarations every family is measured over.
@@ -64,9 +93,10 @@ const METADATA: [&str; 4] = ["schemaVersion", "reference", "note", "fixtures"];
 /// a stale entry, and a case that diverges without an entry fails naming the
 /// family, the case and the observed and expected values.
 ///
-/// The non-goal `WALK_SKIP_DIR_NAMES`, exported by the reference and imported
-/// by nothing at the pinned commit, and the drift the v2.25.3 cap removal
-/// opened.
+/// Both are accepted divergences `docs/parity.md` records: the non-goal
+/// `WALK_SKIP_DIR_NAMES`, exported by the reference and imported by nothing at
+/// the pinned commit, and the reference matcher's `IndexError` on a text whose
+/// lowercase form is longer than the text.
 const DIVERGENCES: &[(&str, &str)] = &[
     (
         "constants/walkSkipDirNames",
@@ -75,14 +105,12 @@ const DIVERGENCES: &[(&str, &str)] = &[
          docs/parity.md records it as a non-goal",
     ),
     (
-        "constants/maxEntriesToProcess",
-        "DRIFT (v2.25.3, b166c3a3): the reference deleted DEFAULT_MAX_ENTRIES_TO_PROCESS and \
-         defaults PathCompleter's max_entries_to_process to None, applying a cap only when one \
-         is passed (vibe/cli/autocompletion/completers.py:119, :320-324 at 4a960031), and the \
-         chat input constructs it without one (vibe/cli/textual_ui/widgets/chat_input/\
-         container.py:97-101), so every indexed entry is ranked; this port still stops ranking \
-         after MAX_INDEXED_ENTRIES = 32000 entries (crates/vibe-cli/src/tui/completion/path.rs:16, \
-         :346), which differs only on trees past 32000 entries",
+        "fuzzy/raises-*",
+        "ACCEPTED: reference `fuzzy_match` indexes the original text with offsets into its \
+         lowercase form (vibe/cli/autocompletion/fuzzy.py:72, :196), so a text holding a \
+         character whose lowercase is longer, such as `İ`, raises `IndexError` and the \
+         reference's completion answers nothing; this port reads the original with a bounds \
+         check and scores the pair; docs/parity.md records it",
     ),
 ];
 
@@ -103,6 +131,175 @@ struct Corpus {
     walk: Vec<WalkCase>,
     changes: Vec<ChangeCase>,
     ranking: Vec<RankingCase>,
+    git_walk: GitWalk,
+    git_changes: GitChanges,
+    collect: Collect,
+    controller: Vec<ControllerCase>,
+    inline_skill: InlineSkill,
+    path_prompt: PathPrompt,
+    watch_filter: Vec<WatchProbe>,
+    fuzzy: Fuzzy,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct GitWalk {
+    fixture: GitFixture,
+    cases: Vec<GitWalkCase>,
+}
+
+/// The repository both sides initialize: `tracked` is staged with `git add -f`,
+/// `deleted` removed after staging, `excludesFile` wired as the repository's
+/// own `core.excludesFile`.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct GitFixture {
+    tracked: Vec<String>,
+    untracked: Vec<String>,
+    deleted: Vec<String>,
+    empty_dirs: Vec<String>,
+    gitignores: BTreeMap<String, String>,
+    info_exclude: String,
+    excludes_file: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct GitWalkCase {
+    case: String,
+    root: String,
+    git_backed: bool,
+    entries: Vec<Entry>,
+    stats: Stats,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct GitChanges {
+    cases: Vec<GitChangeCase>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct GitChangeCase {
+    case: String,
+    mutations: Vec<Mutation>,
+    changes: Vec<Vec<String>>,
+    applied: GitObservation,
+    queried: GitObservation,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct GitObservation {
+    dirty: bool,
+    entries: Vec<Entry>,
+    stats: Stats,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Collect {
+    root: String,
+    outside: Vec<String>,
+    cases: Vec<CollectCase>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CollectCase {
+    case: String,
+    fixture: String,
+    text: String,
+    cursor: usize,
+    labels: Vec<String>,
+    replacement_range: Option<[usize; 2]>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ControllerCase {
+    case: String,
+    observed: Value,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct InlineSkill {
+    skills: Vec<(String, String)>,
+    cases: Vec<InlineCase>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct InlineCase {
+    case: String,
+    text: String,
+    cursor: usize,
+    default_mode: bool,
+    ghost: Option<String>,
+    accept: InlineAccept,
+    /// The prompt the ghost was computed for, when it differs from `text`.
+    #[serde(default)]
+    shown_for: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct InlineAccept {
+    result: String,
+    replaced: Option<(usize, usize, String)>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PathPrompt {
+    tree: Vec<String>,
+    cases: Vec<PromptCase>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PromptCase {
+    case: String,
+    message: String,
+    resources: Vec<PromptResource>,
+    all_aliases: Vec<String>,
+    mentions: Mentions,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PromptResource {
+    alias: String,
+    kind: String,
+    path: String,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Mentions {
+    count: usize,
+    context_types: BTreeMap<String, usize>,
+    file_extensions: BTreeMap<String, usize>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct WatchProbe {
+    case: String,
+    segments: Vec<String>,
+    allowed: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Fuzzy {
+    seed: u64,
+    count: usize,
+    alphabet: String,
+    canary: Vec<(String, String)>,
+    scores: Vec<Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -401,39 +598,44 @@ impl Scratch {
 
     /// Applies one scripted mutation, in the same vocabulary the capture uses.
     fn mutate(&self, mutation: &Mutation, body: &str) {
-        let target = self.root.join(&mutation.path);
-        match mutation.op.as_str() {
-            "createFile" => {
-                if let Some(parent) = target.parent() {
-                    fs::create_dir_all(parent).expect("mutation parent");
-                }
-                fs::write(&target, body).expect("mutation file");
+        mutate_at(&self.root, mutation, body);
+    }
+}
+
+/// Applies one scripted mutation under `root`.
+fn mutate_at(root: &Path, mutation: &Mutation, body: &str) {
+    let target = root.join(&mutation.path);
+    match mutation.op.as_str() {
+        "createFile" => {
+            if let Some(parent) = target.parent() {
+                fs::create_dir_all(parent).expect("mutation parent");
             }
-            "createDir" => fs::create_dir_all(&target).expect("mutation directory"),
-            "modifyFile" => {
-                fs::write(&target, format!("{body}modified\n")).expect("mutation rewrite");
-            }
-            "delete" => {
-                if target.is_dir() {
-                    fs::remove_dir_all(&target).expect("mutation directory removal");
-                } else if target.exists() {
-                    fs::remove_file(&target).expect("mutation file removal");
-                }
-            }
-            "rename" => {
-                let destination = self.root.join(
-                    mutation
-                        .to
-                        .as_deref()
-                        .expect("a rename mutation names its destination"),
-                );
-                if let Some(parent) = destination.parent() {
-                    fs::create_dir_all(parent).expect("mutation destination parent");
-                }
-                fs::rename(&target, &destination).expect("mutation rename");
-            }
-            other => panic!("unknown fixture mutation `{other}`"),
+            fs::write(&target, body).expect("mutation file");
         }
+        "createDir" => fs::create_dir_all(&target).expect("mutation directory"),
+        "modifyFile" => {
+            fs::write(&target, format!("{body}modified\n")).expect("mutation rewrite");
+        }
+        "delete" => {
+            if target.is_dir() {
+                fs::remove_dir_all(&target).expect("mutation directory removal");
+            } else if target.exists() {
+                fs::remove_file(&target).expect("mutation file removal");
+            }
+        }
+        "rename" => {
+            let destination = root.join(
+                mutation
+                    .to
+                    .as_deref()
+                    .expect("a rename mutation names its destination"),
+            );
+            if let Some(parent) = destination.parent() {
+                fs::create_dir_all(parent).expect("mutation destination parent");
+            }
+            fs::rename(&target, &destination).expect("mutation rename");
+        }
+        other => panic!("unknown fixture mutation `{other}`"),
     }
 }
 
@@ -506,12 +708,13 @@ fn change_list(root: &Path, step: &ChangeStep) -> Vec<(ChangeKind, PathBuf)> {
 // --------------------------------------------------------------------------
 
 fn run_constants(constants: &Constants, report: &mut Report) {
+    // Every indexed entry is ranked, as the reference's uncapped default does.
     report.check(
         "constants",
         "maxEntriesToProcess",
         "cap",
         &constants.max_entries_to_process,
-        &Some(MAX_INDEXED_ENTRIES),
+        &None,
     );
     report.check(
         "constants",
@@ -734,6 +937,555 @@ fn run_ranking(corpus: &Corpus, report: &mut Report) {
     }
 }
 
+/// Runs one git setup command with the system and global configuration off,
+/// as the capture does.
+fn git(repository: &Path, arguments: &[&str]) {
+    let null_device = if cfg!(windows) { "NUL" } else { "/dev/null" };
+    let output = Command::new("git")
+        .args(arguments)
+        .current_dir(repository)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", null_device)
+        .output()
+        .expect("git runs");
+    assert!(
+        output.status.success(),
+        "git {arguments:?} failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// Initializes the git fixture under `enclosure` and returns the repository.
+fn materialize_git(enclosure: &Path, fixture: &GitFixture, body: &str) -> PathBuf {
+    let repository = enclosure.join("repo");
+    fs::create_dir(&repository).expect("repository root");
+    for relative in fixture.tracked.iter().chain(&fixture.untracked) {
+        let target = repository.join(relative);
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent).expect("fixture parent");
+        }
+        fs::write(&target, body).expect("fixture file");
+    }
+    for relative in &fixture.empty_dirs {
+        fs::create_dir_all(repository.join(relative)).expect("empty fixture directory");
+    }
+    for (relative, text) in &fixture.gitignores {
+        fs::write(repository.join(relative), text).expect("fixture ignore file");
+    }
+    git(&repository, &["init", "-q"]);
+    let mut add = vec!["add", "-f", "--"];
+    add.extend(fixture.tracked.iter().map(String::as_str));
+    git(&repository, &add);
+    for relative in &fixture.deleted {
+        fs::remove_file(repository.join(relative)).expect("deleted fixture file");
+    }
+    let info = repository.join(".git").join("info");
+    fs::create_dir_all(&info).expect("git info directory");
+    fs::write(info.join("exclude"), &fixture.info_exclude).expect("info exclude");
+    let excludes = enclosure.join("excludes");
+    fs::write(&excludes, &fixture.excludes_file).expect("excludes file");
+    let excludes = excludes.to_string_lossy().replace('\\', "/");
+    git(&repository, &["config", "core.excludesFile", &excludes]);
+    repository
+}
+
+fn file_body(corpus: &Corpus) -> &str {
+    corpus
+        .fixtures
+        .first()
+        .map_or("fixture\n", |fixture| fixture.file_body.as_str())
+}
+
+fn run_git_walk(corpus: &Corpus, report: &mut Report) {
+    let enclosure = tempfile::tempdir().expect("git enclosure");
+    let repository = materialize_git(
+        enclosure.path(),
+        &corpus.git_walk.fixture,
+        file_body(corpus),
+    );
+    for case in &corpus.git_walk.cases {
+        let root = if case.root.is_empty() {
+            repository.clone()
+        } else {
+            repository.join(&case.root)
+        };
+        let root = fs::canonicalize(&root).expect("git root resolves");
+        let mut index = WorkspaceIndex::default();
+        index.rebuild(&root);
+        report.check(
+            "gitWalk",
+            &case.case,
+            "gitBacked",
+            &case.git_backed,
+            &index.git_backed,
+        );
+        report.check(
+            "gitWalk",
+            &case.case,
+            "entries",
+            &case.entries,
+            &held(&index),
+        );
+        report.check(
+            "gitWalk",
+            &case.case,
+            "stats",
+            &case.stats,
+            &stats_of(&index),
+        );
+    }
+}
+
+fn git_observation(index: &WorkspaceIndex) -> GitObservation {
+    GitObservation {
+        dirty: index.dirty,
+        entries: held(index),
+        stats: stats_of(index),
+    }
+}
+
+fn run_git_changes(corpus: &Corpus, report: &mut Report) {
+    for case in &corpus.git_changes.cases {
+        let enclosure = tempfile::tempdir().expect("git enclosure");
+        let repository = materialize_git(
+            enclosure.path(),
+            &corpus.git_walk.fixture,
+            file_body(corpus),
+        );
+        let root = fs::canonicalize(&repository).expect("git root resolves");
+        let mut index = WorkspaceIndex::default();
+        index.ensure(&root);
+        for mutation in &case.mutations {
+            mutate_at(&root, mutation, file_body(corpus));
+        }
+        let changes = case
+            .changes
+            .iter()
+            .map(|pair| {
+                let [kind, relative] = pair.as_slice() else {
+                    panic!("a corpus change is a `(kind, path)` pair: {pair:?}");
+                };
+                let kind = match kind.as_str() {
+                    "added" => ChangeKind::Added,
+                    "modified" => ChangeKind::Modified,
+                    "deleted" => ChangeKind::Deleted,
+                    other => panic!("unknown corpus change kind `{other}`"),
+                };
+                (kind, root.join(relative))
+            })
+            .collect::<Vec<_>>();
+        index.handle_batch(&root, &changes);
+        report.check(
+            "gitChanges",
+            &case.case,
+            "applied",
+            &case.applied,
+            &git_observation(&index),
+        );
+        index.ensure(&root);
+        report.check(
+            "gitChanges",
+            &case.case,
+            "queried",
+            &case.queried,
+            &git_observation(&index),
+        );
+    }
+}
+
+/// Writes a fixture at the collect root under `enclosure`, with the files the
+/// capture placed around it.
+fn materialize_collect(enclosure: &Path, collect: &Collect, fixture: &Fixture) -> PathBuf {
+    let root = enclosure.join(&collect.root);
+    fs::create_dir_all(&root).expect("collect root");
+    for entry in &fixture.tree {
+        if let Some(directory) = entry.strip_suffix('/') {
+            fs::create_dir_all(root.join(directory)).expect("fixture directory");
+            continue;
+        }
+        let target = root.join(entry);
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent).expect("fixture parent");
+        }
+        fs::write(&target, &fixture.file_body).expect("fixture file");
+    }
+    for relative in &collect.outside {
+        let target = enclosure.join(relative);
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent).expect("outside parent");
+        }
+        fs::write(&target, &fixture.file_body).expect("outside file");
+    }
+    fs::canonicalize(&root).expect("collect root resolves")
+}
+
+/// A prompt editor holding `text` with the caret at character `cursor`.
+fn editor_at(text: &str, cursor: usize) -> PromptEditor {
+    let mut editor = PromptEditor::default();
+    editor.set_text(text);
+    let byte = text
+        .char_indices()
+        .nth(cursor)
+        .map_or(text.len(), |(byte, _)| byte);
+    let grapheme = crate::tui::input::grapheme_count(&text[..byte]);
+    editor.select(grapheme..grapheme);
+    editor
+}
+
+fn run_collect(corpus: &Corpus, report: &mut Report) {
+    let index = fixtures(corpus);
+    let mut current: Option<(String, tempfile::TempDir, PathBuf, PathIndex)> = None;
+    for case in &corpus.collect.cases {
+        let reuse = current
+            .as_ref()
+            .is_some_and(|(id, _, _, _)| id == &case.fixture);
+        if !reuse {
+            let enclosure = tempfile::tempdir().expect("collect enclosure");
+            let root = materialize_collect(
+                enclosure.path(),
+                &corpus.collect,
+                fixture(&index, &case.fixture),
+            );
+            current = Some((case.fixture.clone(), enclosure, root, PathIndex::default()));
+        }
+        let Some((_, _, root, paths)) = current.as_ref() else {
+            continue;
+        };
+        let editor = editor_at(&case.text, case.cursor);
+        let (labels, range) = match active_token(&editor) {
+            Some((range, query)) => {
+                let raw = query.strip_prefix('@').unwrap_or(&query);
+                let labels = paths
+                    .completer_candidates(root, raw)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|candidate| candidate.label)
+                    .collect::<Vec<_>>();
+                (labels, Some([range.start, range.end]))
+            }
+            None => (Vec::new(), None),
+        };
+        report.check("collect", &case.case, "labels", &case.labels, &labels);
+        // The range only matters for a list someone can accept from; with no
+        // candidates the reference's controller does not handle the prompt.
+        if !case.labels.is_empty() {
+            report.check(
+                "collect",
+                &case.case,
+                "replacementRange",
+                &case.replacement_range,
+                &range,
+            );
+        }
+    }
+}
+
+fn key_result(outcome: CompletionKeyOutcome) -> &'static str {
+    match outcome {
+        CompletionKeyOutcome::Ignored => "ignored",
+        CompletionKeyOutcome::Submit => "submit",
+        CompletionKeyOutcome::Consumed | CompletionKeyOutcome::Refresh => "handled",
+    }
+}
+
+/// Answers `text` synchronously and installs the answer, as a resolved worker
+/// request would be.
+fn answer(engine: &mut CompletionEngine, root: &Path, text: &str) {
+    let editor = editor_at(text, text.chars().count());
+    let (range, query) = active_token(&editor).expect("a mention token");
+    engine.requery();
+    let request = CompletionRequest::new(engine.generation(), range, query);
+    let resolution = engine.resolve_request(request, root);
+    engine.apply_resolution(&editor, resolution);
+}
+
+/// Hands `text` to the worker and leaves it unanswered.
+fn dispatch(engine: &mut CompletionEngine, root: &Path, text: &str) -> PromptEditor {
+    let editor = editor_at(text, text.chars().count());
+    let (range, query) = active_token(&editor).expect("a mention token");
+    engine.requery();
+    let request = CompletionRequest::new(engine.generation(), range, query);
+    let answered = engine.dispatch_request(request, root).expect("dispatched");
+    assert!(answered.is_none(), "a mention query runs on the worker");
+    editor
+}
+
+fn shown(engine: &CompletionEngine) -> Value {
+    let view = engine.view();
+    serde_json::json!({
+        "count": view.as_ref().map_or(0, |view| view.candidates.len()),
+        "selected": view.as_ref().map(|view| view.selected),
+    })
+}
+
+fn run_controller(corpus: &Corpus, report: &mut Report) {
+    let index = fixtures(corpus);
+    let enclosure = tempfile::tempdir().expect("controller enclosure");
+    let root = materialize_collect(enclosure.path(), &corpus.collect, fixture(&index, "wide"));
+    let mut engine = CompletionEngine::default();
+    let mut observed = BTreeMap::<String, Value>::new();
+    answer(&mut engine, &root, "@entry");
+    observed.insert("a-wide-answer-keeps-every-match".to_owned(), shown(&engine));
+    engine.move_selection(1);
+    answer(&mut engine, &root, "@entr");
+    observed.insert(
+        "the-same-list-keeps-the-highlight".to_owned(),
+        shown(&engine),
+    );
+    answer(&mut engine, &root, "@entry-12");
+    observed.insert(
+        "a-different-list-resets-the-highlight".to_owned(),
+        shown(&engine),
+    );
+    for (name, key) in [
+        ("tab", CompletionKey::Tab),
+        ("enter", CompletionKey::Enter),
+        ("down", CompletionKey::Down),
+        ("escape", CompletionKey::Escape),
+    ] {
+        let mut pending = CompletionEngine::default();
+        let mut editor = dispatch(&mut pending, &root, "@entry");
+        let outcome = pending.handle_key(key, &mut editor).expect("a routed key");
+        observed.insert(
+            format!("pending-{name}"),
+            serde_json::json!({"result": key_result(outcome)}),
+        );
+    }
+    for (name, key) in [("tab", CompletionKey::Tab), ("enter", CompletionKey::Enter)] {
+        let mut over = CompletionEngine::default();
+        answer(&mut over, &root, "@entry-00");
+        let mut editor = dispatch(&mut over, &root, "@entry-00");
+        let outcome = over.handle_key(key, &mut editor).expect("a routed key");
+        observed.insert(
+            format!("pending-{name}-over-shown-suggestions"),
+            serde_json::json!({"result": key_result(outcome)}),
+        );
+    }
+    for case in &corpus.controller {
+        let actual = observed
+            .get(&case.case)
+            .unwrap_or_else(|| panic!("the controller replay drives `{}`", case.case));
+        report.check("controller", &case.case, "observed", &case.observed, actual);
+    }
+}
+
+/// The text the reference's view holds after a replace, through the chat
+/// input's `_format_insertion`.
+fn replaced_text(text: &str, replaced: &(usize, usize, String)) -> String {
+    let characters = text.chars().collect::<Vec<_>>();
+    let (start, end, replacement) = replaced;
+    let prefix = characters[..*start].iter().collect::<String>();
+    let suffix = characters[*end..].iter().collect::<String>();
+    let separator = if suffix
+        .chars()
+        .next()
+        .is_some_and(|first| !first.is_whitespace())
+    {
+        " "
+    } else {
+        ""
+    };
+    format!("{prefix}{replacement}{separator}{suffix}")
+}
+
+fn run_inline_skill(corpus: &Corpus, report: &mut Report) {
+    let skills = &corpus.inline_skill.skills;
+    for case in &corpus.inline_skill.cases {
+        let mut engine = CompletionEngine::default();
+        engine.set_user_skills(
+            skills
+                .iter()
+                .map(|(alias, description)| (alias.as_str(), description.as_str())),
+        );
+        let shown_for = case.shown_for.as_deref().unwrap_or(&case.text);
+        let editor = editor_at(shown_for, case.cursor);
+        engine.update_inline_skill(&editor, case.default_mode);
+        if case.shown_for.is_none() {
+            report.check(
+                "inlineSkill",
+                &case.case,
+                "ghost",
+                &case.ghost,
+                &engine.inline_skill_suffix(),
+            );
+        }
+        let mut editor = editor_at(&case.text, case.cursor);
+        let accepted = engine.accept_inline_skill(&mut editor, case.default_mode);
+        let result = if accepted { "handled" } else { "ignored" };
+        report.check(
+            "inlineSkill",
+            &case.case,
+            "result",
+            &case.accept.result,
+            &result.to_owned(),
+        );
+        let expected = case.accept.replaced.as_ref().map_or_else(
+            || case.text.clone(),
+            |replaced| replaced_text(&case.text, replaced),
+        );
+        report.check(
+            "inlineSkill",
+            &case.case,
+            "text",
+            &expected,
+            &editor.text().to_owned(),
+        );
+    }
+}
+
+fn run_path_prompt(corpus: &Corpus, report: &mut Report) {
+    let enclosure = tempfile::tempdir().expect("prompt enclosure");
+    let root = enclosure.path().join("root");
+    for entry in &corpus.path_prompt.tree {
+        let target = root.join(entry);
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent).expect("prompt fixture parent");
+        }
+        fs::write(&target, file_body(corpus)).expect("prompt fixture file");
+    }
+    let root = fs::canonicalize(&root).expect("prompt root resolves");
+    let spelled = root.to_string_lossy().replace('\\', "/");
+    let placed = |path: &Path| {
+        path.strip_prefix(&root).map_or_else(
+            |_| path.to_string_lossy().into_owned(),
+            |relative| relative.to_string_lossy().replace('\\', "/"),
+        )
+    };
+    for case in &corpus.path_prompt.cases {
+        let message = case.message.replace("{root}", &spelled);
+        let payload = build_path_prompt_payload(&root, &message);
+        let resources = payload
+            .resources
+            .iter()
+            .map(|resource| PromptResource {
+                alias: resource.alias.replace(&spelled, "{root}"),
+                kind: match resource.kind {
+                    PathResourceKind::File => "file",
+                    PathResourceKind::Folder => "folder",
+                    PathResourceKind::Image => "image",
+                }
+                .to_owned(),
+                path: placed(&resource.path),
+            })
+            .collect::<Vec<_>>();
+        let aliases = payload
+            .all_resources()
+            .iter()
+            .map(|resource| resource.alias.replace(&spelled, "{root}"))
+            .collect::<Vec<_>>();
+        let stats = payload.mention_stats();
+        let mentions = Mentions {
+            count: stats.count,
+            context_types: stats.context_types,
+            file_extensions: stats.file_extensions,
+        };
+        report.check(
+            "pathPrompt",
+            &case.case,
+            "resources",
+            &case.resources,
+            &resources,
+        );
+        report.check(
+            "pathPrompt",
+            &case.case,
+            "allAliases",
+            &case.all_aliases,
+            &aliases,
+        );
+        report.check(
+            "pathPrompt",
+            &case.case,
+            "mentions",
+            &case.mentions,
+            &mentions,
+        );
+    }
+}
+
+fn run_watch_filter(corpus: &Corpus, report: &mut Report) {
+    for probe in &corpus.watch_filter {
+        let path = probe
+            .segments
+            .iter()
+            .fold(PathBuf::from("/watched"), |path, segment| {
+                path.join(segment)
+            });
+        report.check(
+            "watchFilter",
+            &probe.case,
+            "allowed",
+            &probe.allowed,
+            &default_filter_allows(&path),
+        );
+    }
+}
+
+/// The generator the capture draws its fuzzy pairs from.
+struct SplitMix64(u64);
+
+impl SplitMix64 {
+    fn next(&mut self) -> u64 {
+        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = self.0;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    }
+
+    fn below(&mut self, bound: usize) -> usize {
+        usize::try_from(self.next() % u64::try_from(bound).expect("a small bound"))
+            .expect("a bounded draw")
+    }
+}
+
+/// The capture's `fuzzy_pairs`, drawn again.
+fn fuzzy_pairs(sweep: &Fuzzy) -> Vec<(String, String)> {
+    let mut stream = SplitMix64(sweep.seed);
+    let alphabet = sweep.alphabet.chars().collect::<Vec<_>>();
+    (0..sweep.count)
+        .map(|_| {
+            let length = stream.below(17);
+            let text = (0..length)
+                .map(|_| alphabet[stream.below(alphabet.len())])
+                .collect::<Vec<_>>();
+            let pattern_length = 1 + stream.below(4);
+            let pattern = if !text.is_empty() && stream.below(2) == 0 {
+                let mut indices = (0..pattern_length)
+                    .map(|_| stream.below(text.len()))
+                    .collect::<Vec<_>>();
+                indices.sort_unstable();
+                indices.into_iter().map(|index| text[index]).collect()
+            } else {
+                (0..pattern_length)
+                    .map(|_| alphabet[stream.below(alphabet.len())])
+                    .collect::<String>()
+            };
+            (pattern, text.into_iter().collect())
+        })
+        .collect()
+}
+
+fn run_fuzzy(corpus: &Corpus, report: &mut Report) {
+    let sweep = &corpus.fuzzy;
+    let pairs = fuzzy_pairs(sweep);
+    assert_eq!(
+        pairs.get(..sweep.canary.len()),
+        Some(sweep.canary.as_slice()),
+        "the replay draws different pairs than the capture"
+    );
+    assert_eq!(pairs.len(), sweep.scores.len(), "one score per drawn pair");
+    for (index, ((pattern, text), expected)) in pairs.iter().zip(&sweep.scores).enumerate() {
+        let case = if expected.as_str() == Some("raises") {
+            format!("raises-{index}")
+        } else {
+            index.to_string()
+        };
+        let actual = fuzzy_match_score(pattern, text).map_or(Value::Null, Value::from);
+        report.check("fuzzy", &case, "score", expected, &actual);
+    }
+}
+
 // --------------------------------------------------------------------------
 // The replay
 // --------------------------------------------------------------------------
@@ -832,6 +1584,30 @@ fn the_committed_corpus_replays_against_this_port() {
     let mut report = Report::default();
     run_ranking(&corpus, &mut report);
     scenarios += settle(&report, "ranking");
+    let mut report = Report::default();
+    run_git_walk(&corpus, &mut report);
+    scenarios += settle(&report, "gitWalk");
+    let mut report = Report::default();
+    run_git_changes(&corpus, &mut report);
+    scenarios += settle(&report, "gitChanges");
+    let mut report = Report::default();
+    run_collect(&corpus, &mut report);
+    scenarios += settle(&report, "collect");
+    let mut report = Report::default();
+    run_controller(&corpus, &mut report);
+    scenarios += settle(&report, "controller");
+    let mut report = Report::default();
+    run_inline_skill(&corpus, &mut report);
+    scenarios += settle(&report, "inlineSkill");
+    let mut report = Report::default();
+    run_path_prompt(&corpus, &mut report);
+    scenarios += settle(&report, "pathPrompt");
+    let mut report = Report::default();
+    run_watch_filter(&corpus, &mut report);
+    scenarios += settle(&report, "watchFilter");
+    let mut report = Report::default();
+    run_fuzzy(&corpus, &mut report);
+    scenarios += settle(&report, "fuzzy");
     println!(
         "autocompletion: {scenarios} comparisons across {} families replayed at {}",
         FAMILIES.len(),

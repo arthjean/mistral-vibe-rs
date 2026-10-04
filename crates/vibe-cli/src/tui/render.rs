@@ -135,6 +135,7 @@ pub fn draw(
         .queue_selection
         .as_ref()
         .is_some_and(|selection| !selection.editing);
+    let ghost = completion.inline_skill_suffix();
     draw_input(
         frame,
         input_area,
@@ -142,7 +143,7 @@ pub fn draw(
         input_mode,
         theme,
         context,
-        (&composer, caret),
+        (&composer, caret, ghost.as_deref()),
     );
     // Reference `QuitManager.request_confirmation` writes into the path display.
     let quit_prompt = state
@@ -672,7 +673,7 @@ fn draw_input(
     input_mode: InputMode,
     theme: ResolvedTheme,
     context: UiContext<'_>,
-    (composer, caret): (&ComposerLayout, bool),
+    (composer, caret, ghost): (&ComposerLayout, bool, Option<&str>),
 ) {
     let input_width = composer.width();
     let title = if context.secret_input {
@@ -738,6 +739,9 @@ fn draw_input(
         theme.base()
     };
     frame.render_widget(Paragraph::new(text).style(input_style), input_area);
+    if caret && let Some(ghost) = ghost {
+        draw_inline_ghost(frame, input_area, composer, ghost, theme);
+    }
     if caret && input_area.width > 0 && input_area.height > 0 {
         frame.set_cursor_position((
             input_area.x.saturating_add(
@@ -751,6 +755,48 @@ fn draw_input(
                     .min(input_area.height.saturating_sub(1)),
             ),
         ));
+    }
+}
+
+/// Textual's `TextArea.suggestion`, which the reference's mid-prompt skill
+/// ghost sets: drawn dim at the caret, with the rest of the caret's row pushed
+/// right and cropped at the composer's edge.
+fn draw_inline_ghost(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    composer: &ComposerLayout,
+    ghost: &str,
+    theme: ResolvedTheme,
+) {
+    let Some(row) = composer.cursor_row().checked_sub(composer.scroll()) else {
+        return;
+    };
+    let (Ok(row), Ok(column)) = (u16::try_from(row), u16::try_from(composer.cursor_column()))
+    else {
+        return;
+    };
+    if row >= area.height || column >= area.width {
+        return;
+    }
+    let y = area.y.saturating_add(row);
+    let start = area.x.saturating_add(column);
+    let right = area.right();
+    let buffer = frame.buffer_mut();
+    let tail = (start..right)
+        .map(|x| buffer[(x, y)].clone())
+        .collect::<Vec<_>>();
+    let width = usize::from(right.saturating_sub(start));
+    let style = theme.base().add_modifier(Modifier::DIM);
+    let (end, _) = buffer.set_stringn(start, y, ghost, width, style);
+    for (offset, cell) in tail.into_iter().enumerate() {
+        let Some(x) = u16::try_from(offset)
+            .ok()
+            .and_then(|offset| end.checked_add(offset))
+            .filter(|x| *x < right)
+        else {
+            break;
+        };
+        buffer[(x, y)] = cell;
     }
 }
 

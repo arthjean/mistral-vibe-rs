@@ -390,7 +390,7 @@ pub(in crate::tui) fn apply_render_preferences(
     state.file_watcher_for_autocomplete =
         configured_value(runtime, "file_watcher_for_autocomplete")
             .and_then(|value| value.as_bool())
-            .unwrap_or(false);
+            .unwrap_or(true);
     // Reference `get_enabled` and `get_title_enabled`, both on by default.
     state.notifier.set_enabled(
         configured_value(runtime, "enable_notifications")
@@ -561,16 +561,16 @@ mod tests {
         let mut runtime = interactive_test_runtime("file-watcher-preference");
         assert_eq!(
             configured_value(&mut runtime, "file_watcher_for_autocomplete"),
-            Some(Value::Bool(false)),
-            "the key resolves to its declared default"
+            Some(Value::Bool(true)),
+            "the key resolves to its declared default, on since v2.25.3"
         );
 
         let mut state = TuiState::new("file-watcher-preference");
-        state.file_watcher_for_autocomplete = true;
+        state.file_watcher_for_autocomplete = false;
         apply_render_preferences(&mut runtime, &mut state);
 
         assert!(
-            !state.file_watcher_for_autocomplete,
+            state.file_watcher_for_autocomplete,
             "the gate follows the configuration rather than whatever the state held"
         );
     }

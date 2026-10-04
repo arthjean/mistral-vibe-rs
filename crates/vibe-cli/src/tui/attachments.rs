@@ -10,8 +10,8 @@ use vibe_app_server::client::{PreparedImages, PublicContentBlock, TurnRequest};
 use vibe_core::images::{ImageDigest, ImageReadError, MAX_IMAGES_PER_MESSAGE, read_image};
 use vibe_core::provider::ImageInput;
 
-use vibe_core::path_mentions::{mention_values, resolve_owned_candidate};
 pub use vibe_core::path_mentions::{normalize_pasted_text, normalize_typed_text};
+use vibe_core::path_mentions::{resolve_owned_candidate, resolved_mentions};
 pub use vibe_core::path_resources::MentionStats;
 use vibe_core::path_resources::{PathResourceKind, build_path_prompt_payload};
 
@@ -44,27 +44,27 @@ impl PromptDraft {
         tracked_images: &BTreeMap<PathBuf, ImageDigest>,
     ) -> Self {
         let text = text.into();
-        let transient_images = mention_values(&text)
-            .into_iter()
-            .filter_map(|alias| {
-                let path = resolve_owned_candidate(workspace, &alias, |path| {
-                    tracked_images.contains_key(path)
-                })?;
-                Some(TransientImage {
-                    digest: *tracked_images.get(&path)?,
-                    alias,
-                    path,
-                })
-            })
-            .fold(Vec::new(), |mut images, image| {
-                if !images
-                    .iter()
-                    .any(|existing: &TransientImage| existing.path == image.path)
-                {
-                    images.push(image);
-                }
-                images
-            });
+        let transient_images = resolved_mentions(&text, |alias| {
+            let path = resolve_owned_candidate(workspace, alias, |path| {
+                tracked_images.contains_key(path)
+            })?;
+            Some((*tracked_images.get(&path)?, path))
+        })
+        .into_iter()
+        .map(|(alias, (digest, path))| TransientImage {
+            digest,
+            alias,
+            path,
+        })
+        .fold(Vec::new(), |mut images, image| {
+            if !images
+                .iter()
+                .any(|existing: &TransientImage| existing.path == image.path)
+            {
+                images.push(image);
+            }
+            images
+        });
         Self {
             text,
             transient_images,

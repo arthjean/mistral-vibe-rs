@@ -6707,6 +6707,695 @@
       ]
     }
   ],
+  "collect": {
+    "cases": [
+      {
+        "case": "collect/@@1",
+        "cursor": 1,
+        "fixture": "collect",
+        "labels": [
+          "@docs/",
+          "@empty-dir/",
+          "@Makefile",
+          "@README.md",
+          "@src/"
+        ],
+        "replacementRange": [
+          0,
+          1
+        ],
+        "text": "@"
+      },
+      {
+        "case": "collect/@..@3",
+        "cursor": 3,
+        "fixture": "collect",
+        "labels": [
+          "@../peer.txt",
+          "@../root/",
+          "@../sibling/"
+        ],
+        "replacementRange": [
+          0,
+          3
+        ],
+        "text": "@.."
+      },
+      {
+        "case": "collect/@../@4",
+        "cursor": 4,
+        "fixture": "collect",
+        "labels": [
+          "@../peer.txt",
+          "@../root/",
+          "@../sibling/"
+        ],
+        "replacementRange": [
+          0,
+          4
+        ],
+        "text": "@../"
+      },
+      {
+        "case": "collect/@../s@5",
+        "cursor": 5,
+        "fixture": "collect",
+        "labels": [
+          "@../sibling/"
+        ],
+        "replacementRange": [
+          0,
+          5
+        ],
+        "text": "@../s"
+      },
+      {
+        "case": "collect/@../SIB@7",
+        "cursor": 7,
+        "fixture": "collect",
+        "labels": [
+          "@../sibling/"
+        ],
+        "replacementRange": [
+          0,
+          7
+        ],
+        "text": "@../SIB"
+      },
+      {
+        "case": "collect/@../sibling/@12",
+        "cursor": 12,
+        "fixture": "collect",
+        "labels": [
+          "@../sibling/a.txt",
+          "@../sibling/alpha.md",
+          "@../sibling/Beta/"
+        ],
+        "replacementRange": [
+          0,
+          12
+        ],
+        "text": "@../sibling/"
+      },
+      {
+        "case": "collect/@../sibling/a@13",
+        "cursor": 13,
+        "fixture": "collect",
+        "labels": [
+          "@../sibling/a.txt",
+          "@../sibling/alpha.md"
+        ],
+        "replacementRange": [
+          0,
+          13
+        ],
+        "text": "@../sibling/a"
+      },
+      {
+        "case": "collect/@../sibling/.@13",
+        "cursor": 13,
+        "fixture": "collect",
+        "labels": [
+          "@../sibling/.hidden"
+        ],
+        "replacementRange": [
+          0,
+          13
+        ],
+        "text": "@../sibling/."
+      },
+      {
+        "case": "collect/@../sibling/b@13",
+        "cursor": 13,
+        "fixture": "collect",
+        "labels": [
+          "@../sibling/Beta/"
+        ],
+        "replacementRange": [
+          0,
+          13
+        ],
+        "text": "@../sibling/b"
+      },
+      {
+        "case": "collect/@../sibling/Beta@16",
+        "cursor": 16,
+        "fixture": "collect",
+        "labels": [
+          "@../sibling/Beta/"
+        ],
+        "replacementRange": [
+          0,
+          16
+        ],
+        "text": "@../sibling/Beta"
+      },
+      {
+        "case": "collect/@../sibling/Beta/@17",
+        "cursor": 17,
+        "fixture": "collect",
+        "labels": [
+          "@../sibling/Beta/inner.txt"
+        ],
+        "replacementRange": [
+          0,
+          17
+        ],
+        "text": "@../sibling/Beta/"
+      },
+      {
+        "case": "collect/@../missing@11",
+        "cursor": 11,
+        "fixture": "collect",
+        "labels": [],
+        "replacementRange": [
+          0,
+          11
+        ],
+        "text": "@../missing"
+      },
+      {
+        "case": "collect/@../missing/x@13",
+        "cursor": 13,
+        "fixture": "collect",
+        "labels": [],
+        "replacementRange": [
+          0,
+          13
+        ],
+        "text": "@../missing/x"
+      },
+      {
+        "case": "collect/@../..@6",
+        "cursor": 6,
+        "fixture": "collect",
+        "labels": [
+          "@../../other/",
+          "@../../top/"
+        ],
+        "replacementRange": [
+          0,
+          6
+        ],
+        "text": "@../.."
+      },
+      {
+        "case": "collect/@../../@7",
+        "cursor": 7,
+        "fixture": "collect",
+        "labels": [
+          "@../../other/",
+          "@../../top/"
+        ],
+        "replacementRange": [
+          0,
+          7
+        ],
+        "text": "@../../"
+      },
+      {
+        "case": "collect/@../../o@8",
+        "cursor": 8,
+        "fixture": "collect",
+        "labels": [
+          "@../../other/"
+        ],
+        "replacementRange": [
+          0,
+          8
+        ],
+        "text": "@../../o"
+      },
+      {
+        "case": "collect/@..x@4",
+        "cursor": 4,
+        "fixture": "collect",
+        "labels": [],
+        "replacementRange": [
+          0,
+          4
+        ],
+        "text": "@..x"
+      },
+      {
+        "case": "collect/@../root/@9",
+        "cursor": 9,
+        "fixture": "collect",
+        "labels": [],
+        "replacementRange": [
+          0,
+          9
+        ],
+        "text": "@../root/"
+      },
+      {
+        "case": "collect/@../root/src@12",
+        "cursor": 12,
+        "fixture": "collect",
+        "labels": [],
+        "replacementRange": [
+          0,
+          12
+        ],
+        "text": "@../root/src"
+      },
+      {
+        "case": "collect/@./src/@7",
+        "cursor": 7,
+        "fixture": "collect",
+        "labels": [],
+        "replacementRange": [
+          0,
+          7
+        ],
+        "text": "@./src/"
+      },
+      {
+        "case": "collect/@src\\par@8",
+        "cursor": 8,
+        "fixture": "collect",
+        "labels": [
+          "@src/parser/",
+          "@src/parser/lexer.rs",
+          "@src/parser/mod.rs"
+        ],
+        "replacementRange": [
+          0,
+          8
+        ],
+        "text": "@src\\par"
+      },
+      {
+        "case": "collect/@src\\parser\\@12",
+        "cursor": 12,
+        "fixture": "collect",
+        "labels": [
+          "@src/parser/lexer.rs",
+          "@src/parser/mod.rs"
+        ],
+        "replacementRange": [
+          0,
+          12
+        ],
+        "text": "@src\\parser\\"
+      },
+      {
+        "case": "collect/@srx/@5",
+        "cursor": 5,
+        "fixture": "collect",
+        "labels": [],
+        "replacementRange": [
+          0,
+          5
+        ],
+        "text": "@srx/"
+      },
+      {
+        "case": "collect/@/@2",
+        "cursor": 2,
+        "fixture": "collect",
+        "labels": [],
+        "replacementRange": [
+          0,
+          2
+        ],
+        "text": "@/"
+      },
+      {
+        "case": "collect/@empty-dir/@11",
+        "cursor": 11,
+        "fixture": "collect",
+        "labels": [],
+        "replacementRange": [
+          0,
+          11
+        ],
+        "text": "@empty-dir/"
+      },
+      {
+        "case": "collect/@parser/@8",
+        "cursor": 8,
+        "fixture": "collect",
+        "labels": [
+          "@src/parser/lexer.rs",
+          "@src/parser/mod.rs"
+        ],
+        "replacementRange": [
+          0,
+          8
+        ],
+        "text": "@parser/"
+      },
+      {
+        "case": "collect/@Src/@5",
+        "cursor": 5,
+        "fixture": "collect",
+        "labels": [
+          "@src/main.rs",
+          "@src/parser/",
+          "@src/parser/lexer.rs",
+          "@src/parser/mod.rs"
+        ],
+        "replacementRange": [
+          0,
+          5
+        ],
+        "text": "@Src/"
+      },
+      {
+        "case": "collect/@src/@5",
+        "cursor": 5,
+        "fixture": "collect",
+        "labels": [
+          "@src/main.rs",
+          "@src/parser/"
+        ],
+        "replacementRange": [
+          0,
+          5
+        ],
+        "text": "@src/"
+      },
+      {
+        "case": "collect/@main@5",
+        "cursor": 5,
+        "fixture": "collect",
+        "labels": [
+          "@src/main.rs"
+        ],
+        "replacementRange": [
+          0,
+          5
+        ],
+        "text": "@main"
+      },
+      {
+        "case": "collect/look at @src/ma@15",
+        "cursor": 15,
+        "fixture": "collect",
+        "labels": [
+          "@src/main.rs"
+        ],
+        "replacementRange": [
+          8,
+          15
+        ],
+        "text": "look at @src/ma"
+      },
+      {
+        "case": "collect/@src/main.rs tail@6",
+        "cursor": 6,
+        "fixture": "collect",
+        "labels": [
+          "@src/main.rs",
+          "@src/parser/mod.rs"
+        ],
+        "replacementRange": [
+          0,
+          6
+        ],
+        "text": "@src/main.rs tail"
+      },
+      {
+        "case": "collect/@foo bar@8",
+        "cursor": 8,
+        "fixture": "collect",
+        "labels": [],
+        "replacementRange": [
+          0,
+          8
+        ],
+        "text": "@foo bar"
+      },
+      {
+        "case": "collect/no mention here@15",
+        "cursor": 15,
+        "fixture": "collect",
+        "labels": [],
+        "replacementRange": null,
+        "text": "no mention here"
+      },
+      {
+        "case": "collect/a@src/ma@8",
+        "cursor": 8,
+        "fixture": "collect",
+        "labels": [
+          "@src/main.rs"
+        ],
+        "replacementRange": [
+          1,
+          8
+        ],
+        "text": "a@src/ma"
+      },
+      {
+        "case": "collect/@.e@3",
+        "cursor": 3,
+        "fixture": "collect",
+        "labels": [
+          "@.env"
+        ],
+        "replacementRange": [
+          0,
+          3
+        ],
+        "text": "@.e"
+      },
+      {
+        "case": "wide/@@1",
+        "cursor": 1,
+        "fixture": "wide",
+        "labels": [
+          "@entry-000.txt",
+          "@entry-001.txt",
+          "@entry-002.txt",
+          "@entry-003.txt",
+          "@entry-004.txt",
+          "@entry-005.txt",
+          "@entry-006.txt",
+          "@entry-007.txt",
+          "@entry-008.txt",
+          "@entry-009.txt",
+          "@entry-010.txt",
+          "@entry-011.txt",
+          "@entry-012.txt",
+          "@entry-013.txt",
+          "@entry-014.txt",
+          "@entry-015.txt",
+          "@entry-016.txt",
+          "@entry-017.txt",
+          "@entry-018.txt",
+          "@entry-019.txt",
+          "@entry-020.txt",
+          "@entry-021.txt",
+          "@entry-022.txt",
+          "@entry-023.txt",
+          "@entry-024.txt",
+          "@entry-025.txt",
+          "@entry-026.txt",
+          "@entry-027.txt",
+          "@entry-028.txt",
+          "@entry-029.txt",
+          "@entry-030.txt",
+          "@entry-031.txt",
+          "@entry-032.txt",
+          "@entry-033.txt",
+          "@entry-034.txt",
+          "@entry-035.txt",
+          "@entry-036.txt",
+          "@entry-037.txt",
+          "@entry-038.txt",
+          "@entry-039.txt",
+          "@entry-040.txt",
+          "@entry-041.txt",
+          "@entry-042.txt",
+          "@entry-043.txt",
+          "@entry-044.txt",
+          "@entry-045.txt",
+          "@entry-046.txt",
+          "@entry-047.txt",
+          "@entry-048.txt",
+          "@entry-049.txt",
+          "@entry-050.txt",
+          "@entry-051.txt",
+          "@entry-052.txt",
+          "@entry-053.txt",
+          "@entry-054.txt",
+          "@entry-055.txt",
+          "@entry-056.txt",
+          "@entry-057.txt",
+          "@entry-058.txt",
+          "@entry-059.txt",
+          "@entry-060.txt",
+          "@entry-061.txt",
+          "@entry-062.txt",
+          "@entry-063.txt",
+          "@entry-064.txt",
+          "@entry-065.txt",
+          "@entry-066.txt",
+          "@entry-067.txt",
+          "@entry-068.txt",
+          "@entry-069.txt",
+          "@entry-070.txt",
+          "@entry-071.txt",
+          "@entry-072.txt",
+          "@entry-073.txt",
+          "@entry-074.txt",
+          "@entry-075.txt",
+          "@entry-076.txt",
+          "@entry-077.txt",
+          "@entry-078.txt",
+          "@entry-079.txt",
+          "@entry-080.txt",
+          "@entry-081.txt",
+          "@entry-082.txt",
+          "@entry-083.txt",
+          "@entry-084.txt",
+          "@entry-085.txt",
+          "@entry-086.txt",
+          "@entry-087.txt",
+          "@entry-088.txt",
+          "@entry-089.txt",
+          "@entry-090.txt",
+          "@entry-091.txt",
+          "@entry-092.txt",
+          "@entry-093.txt",
+          "@entry-094.txt",
+          "@entry-095.txt",
+          "@entry-096.txt",
+          "@entry-097.txt",
+          "@entry-098.txt",
+          "@entry-099.txt"
+        ],
+        "replacementRange": [
+          0,
+          1
+        ],
+        "text": "@"
+      },
+      {
+        "case": "wide/@entry@6",
+        "cursor": 6,
+        "fixture": "wide",
+        "labels": [
+          "@entry-000.txt",
+          "@entry-001.txt",
+          "@entry-002.txt",
+          "@entry-003.txt",
+          "@entry-004.txt",
+          "@entry-005.txt",
+          "@entry-006.txt",
+          "@entry-007.txt",
+          "@entry-008.txt",
+          "@entry-009.txt",
+          "@entry-010.txt",
+          "@entry-011.txt",
+          "@entry-012.txt",
+          "@entry-013.txt",
+          "@entry-014.txt",
+          "@entry-015.txt",
+          "@entry-016.txt",
+          "@entry-017.txt",
+          "@entry-018.txt",
+          "@entry-019.txt",
+          "@entry-020.txt",
+          "@entry-021.txt",
+          "@entry-022.txt",
+          "@entry-023.txt",
+          "@entry-024.txt",
+          "@entry-025.txt",
+          "@entry-026.txt",
+          "@entry-027.txt",
+          "@entry-028.txt",
+          "@entry-029.txt",
+          "@entry-030.txt",
+          "@entry-031.txt",
+          "@entry-032.txt",
+          "@entry-033.txt",
+          "@entry-034.txt",
+          "@entry-035.txt",
+          "@entry-036.txt",
+          "@entry-037.txt",
+          "@entry-038.txt",
+          "@entry-039.txt",
+          "@entry-040.txt",
+          "@entry-041.txt",
+          "@entry-042.txt",
+          "@entry-043.txt",
+          "@entry-044.txt",
+          "@entry-045.txt",
+          "@entry-046.txt",
+          "@entry-047.txt",
+          "@entry-048.txt",
+          "@entry-049.txt",
+          "@entry-050.txt",
+          "@entry-051.txt",
+          "@entry-052.txt",
+          "@entry-053.txt",
+          "@entry-054.txt",
+          "@entry-055.txt",
+          "@entry-056.txt",
+          "@entry-057.txt",
+          "@entry-058.txt",
+          "@entry-059.txt",
+          "@entry-060.txt",
+          "@entry-061.txt",
+          "@entry-062.txt",
+          "@entry-063.txt",
+          "@entry-064.txt",
+          "@entry-065.txt",
+          "@entry-066.txt",
+          "@entry-067.txt",
+          "@entry-068.txt",
+          "@entry-069.txt",
+          "@entry-070.txt",
+          "@entry-071.txt",
+          "@entry-072.txt",
+          "@entry-073.txt",
+          "@entry-074.txt",
+          "@entry-075.txt",
+          "@entry-076.txt",
+          "@entry-077.txt",
+          "@entry-078.txt",
+          "@entry-079.txt",
+          "@entry-080.txt",
+          "@entry-081.txt",
+          "@entry-082.txt",
+          "@entry-083.txt",
+          "@entry-084.txt",
+          "@entry-085.txt",
+          "@entry-086.txt",
+          "@entry-087.txt",
+          "@entry-088.txt",
+          "@entry-089.txt",
+          "@entry-090.txt",
+          "@entry-091.txt",
+          "@entry-092.txt",
+          "@entry-093.txt",
+          "@entry-094.txt",
+          "@entry-095.txt",
+          "@entry-096.txt",
+          "@entry-097.txt",
+          "@entry-098.txt",
+          "@entry-099.txt"
+        ],
+        "replacementRange": [
+          0,
+          6
+        ],
+        "text": "@entry"
+      }
+    ],
+    "outside": [
+      "top/sibling/alpha.md",
+      "top/sibling/a.txt",
+      "top/sibling/Beta/inner.txt",
+      "top/sibling/.hidden",
+      "top/peer.txt",
+      "other/x.txt"
+    ],
+    "root": "top/root"
+  },
   "constants": {
     "asciiCodepointLimit": 128,
     "compiledDefaultPatterns": [
@@ -7142,6 +7831,65 @@
       "venv"
     ]
   },
+  "controller": [
+    {
+      "case": "a-wide-answer-keeps-every-match",
+      "observed": {
+        "count": 100,
+        "selected": 0
+      }
+    },
+    {
+      "case": "the-same-list-keeps-the-highlight",
+      "observed": {
+        "count": 100,
+        "selected": 1
+      }
+    },
+    {
+      "case": "a-different-list-resets-the-highlight",
+      "observed": {
+        "count": 13,
+        "selected": 0
+      }
+    },
+    {
+      "case": "pending-tab",
+      "observed": {
+        "result": "handled"
+      }
+    },
+    {
+      "case": "pending-enter",
+      "observed": {
+        "result": "handled"
+      }
+    },
+    {
+      "case": "pending-down",
+      "observed": {
+        "result": "ignored"
+      }
+    },
+    {
+      "case": "pending-escape",
+      "observed": {
+        "result": "ignored"
+      }
+    },
+    {
+      "case": "pending-tab-over-shown-suggestions",
+      "observed": {
+        "result": "handled"
+      }
+    },
+    {
+      "case": "pending-enter-over-shown-suggestions",
+      "observed": {
+        "result": "handled"
+      }
+    }
+  ],
   "fixtures": [
     {
       "fileBody": "fixture\n",
@@ -7371,8 +8119,6435 @@
         "entry-128.txt",
         "entry-129.txt"
       ]
+    },
+    {
+      "fileBody": "fixture\n",
+      "gitignore": "﻿*.bom\n*.txt\n!!double.txt\n//slashed\n*.ff\f*.vt\n*.ps *.ls\n\u001f*.us\n*.cr\r*.cr2\n",
+      "id": "edgeignore",
+      "tree": [
+        "double.txt",
+        "!double.txt",
+        "slashed",
+        "x.bom",
+        "a.vt",
+        "a.ls",
+        "a.us",
+        "a.cr2",
+        "keep.md"
+      ]
+    },
+    {
+      "fileBody": "fixture\n",
+      "gitignore": null,
+      "id": "collect",
+      "tree": [
+        "README.md",
+        "Makefile",
+        ".env",
+        "src/main.rs",
+        "src/parser/mod.rs",
+        "src/parser/lexer.rs",
+        "docs/guide.md",
+        "empty-dir/"
+      ]
     }
   ],
+  "fuzzy": {
+    "alphabet": "abcdeABCDE/-_.012éÉßİΣσǅⒶ",
+    "canary": [
+      [
+        "ǅ_",
+        "ǅd_1_éσEİİ"
+      ],
+      [
+        "C",
+        "d.ⒶD1eddde"
+      ],
+      [
+        "BÉé",
+        "İ_é0ßEⒶBσ"
+      ],
+      [
+        "AAee",
+        "Ae"
+      ],
+      [
+        "/CÉc",
+        "ǅ-0.İAⒶσİÉbc"
+      ],
+      [
+        "A",
+        "bedADⒶaaC"
+      ],
+      [
+        "EA",
+        "DÉcßé0d"
+      ],
+      [
+        "σ",
+        "C_-0_2e.eσΣ"
+      ]
+    ],
+    "count": 4096,
+    "scores": [
+      15750,
+      null,
+      null,
+      null,
+      "raises",
+      9900,
+      null,
+      8400,
+      9200,
+      12100,
+      null,
+      null,
+      16800,
+      10400,
+      9100,
+      "raises",
+      null,
+      null,
+      null,
+      10000,
+      9900,
+      null,
+      null,
+      null,
+      9000,
+      null,
+      16000,
+      "raises",
+      null,
+      8150,
+      8650,
+      17200,
+      15700,
+      null,
+      null,
+      9800,
+      null,
+      null,
+      null,
+      9850,
+      15500,
+      null,
+      10500,
+      9000,
+      null,
+      null,
+      10700,
+      null,
+      null,
+      null,
+      13700,
+      null,
+      null,
+      15500,
+      null,
+      null,
+      null,
+      15700,
+      null,
+      null,
+      null,
+      17850,
+      null,
+      null,
+      9400,
+      null,
+      10700,
+      null,
+      null,
+      "raises",
+      18100,
+      null,
+      null,
+      null,
+      10300,
+      16100,
+      10900,
+      null,
+      18400,
+      null,
+      null,
+      8850,
+      9250,
+      null,
+      null,
+      null,
+      9550,
+      null,
+      null,
+      null,
+      15700,
+      9000,
+      null,
+      null,
+      8800,
+      null,
+      null,
+      9400,
+      11700,
+      10100,
+      null,
+      null,
+      10550,
+      null,
+      12300,
+      null,
+      9150,
+      11500,
+      8900,
+      null,
+      20600,
+      null,
+      9700,
+      10900,
+      8800,
+      10900,
+      null,
+      18300,
+      11500,
+      10600,
+      null,
+      null,
+      "raises",
+      null,
+      null,
+      9500,
+      null,
+      10400,
+      15750,
+      10300,
+      15700,
+      null,
+      null,
+      null,
+      null,
+      10000,
+      null,
+      null,
+      null,
+      null,
+      null,
+      11500,
+      null,
+      null,
+      11150,
+      8800,
+      9700,
+      null,
+      null,
+      13350,
+      8600,
+      null,
+      null,
+      null,
+      null,
+      11050,
+      null,
+      null,
+      null,
+      10300,
+      null,
+      null,
+      null,
+      9050,
+      null,
+      null,
+      null,
+      null,
+      9750,
+      null,
+      null,
+      null,
+      9500,
+      null,
+      10650,
+      10150,
+      null,
+      10600,
+      null,
+      null,
+      10050,
+      8900,
+      null,
+      10100,
+      null,
+      null,
+      null,
+      null,
+      12950,
+      null,
+      null,
+      null,
+      null,
+      17200,
+      null,
+      13400,
+      null,
+      null,
+      null,
+      "raises",
+      10000,
+      null,
+      11550,
+      8600,
+      null,
+      10500,
+      null,
+      15750,
+      9050,
+      null,
+      11150,
+      9700,
+      "raises",
+      10850,
+      8500,
+      null,
+      "raises",
+      15700,
+      9800,
+      9250,
+      null,
+      16500,
+      null,
+      null,
+      17100,
+      8100,
+      17200,
+      10450,
+      null,
+      null,
+      7900,
+      null,
+      null,
+      null,
+      10750,
+      15700,
+      16800,
+      null,
+      null,
+      7900,
+      15700,
+      null,
+      9700,
+      null,
+      null,
+      null,
+      10750,
+      null,
+      null,
+      10300,
+      "raises",
+      null,
+      null,
+      null,
+      9200,
+      10500,
+      9900,
+      null,
+      null,
+      17400,
+      15700,
+      null,
+      null,
+      9400,
+      15700,
+      10050,
+      null,
+      9500,
+      null,
+      null,
+      15700,
+      10100,
+      15600,
+      "raises",
+      9100,
+      9150,
+      null,
+      8450,
+      null,
+      null,
+      11200,
+      9500,
+      null,
+      9600,
+      10200,
+      10700,
+      null,
+      null,
+      12700,
+      null,
+      null,
+      10100,
+      8950,
+      null,
+      null,
+      null,
+      14800,
+      15100,
+      null,
+      null,
+      9450,
+      null,
+      null,
+      null,
+      9600,
+      8050,
+      null,
+      null,
+      null,
+      10000,
+      null,
+      null,
+      null,
+      null,
+      15700,
+      null,
+      null,
+      13700,
+      null,
+      12700,
+      null,
+      8600,
+      7200,
+      null,
+      "raises",
+      11100,
+      null,
+      10950,
+      null,
+      10000,
+      11200,
+      10950,
+      null,
+      null,
+      null,
+      null,
+      17000,
+      null,
+      null,
+      15700,
+      10000,
+      null,
+      9200,
+      null,
+      10100,
+      null,
+      16900,
+      null,
+      null,
+      9150,
+      null,
+      15700,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      10000,
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      null,
+      15050,
+      9800,
+      null,
+      9000,
+      null,
+      null,
+      10900,
+      null,
+      10500,
+      10000,
+      null,
+      15150,
+      15700,
+      17200,
+      9900,
+      "raises",
+      null,
+      null,
+      null,
+      15700,
+      9800,
+      11550,
+      null,
+      10000,
+      10200,
+      null,
+      null,
+      null,
+      null,
+      null,
+      "raises",
+      10400,
+      null,
+      null,
+      9700,
+      10200,
+      null,
+      null,
+      null,
+      10000,
+      9900,
+      null,
+      null,
+      "raises",
+      8900,
+      8900,
+      null,
+      9150,
+      null,
+      null,
+      9900,
+      8500,
+      12500,
+      null,
+      9150,
+      null,
+      null,
+      9650,
+      null,
+      7800,
+      null,
+      10500,
+      null,
+      15700,
+      null,
+      "raises",
+      9200,
+      null,
+      null,
+      null,
+      null,
+      null,
+      11900,
+      null,
+      8650,
+      9200,
+      null,
+      null,
+      null,
+      null,
+      9200,
+      null,
+      null,
+      null,
+      null,
+      null,
+      10000,
+      null,
+      null,
+      7800,
+      11400,
+      null,
+      null,
+      null,
+      15700,
+      null,
+      12400,
+      "raises",
+      10700,
+      10150,
+      15750,
+      null,
+      12200,
+      null,
+      10000,
+      null,
+      9300,
+      8900,
+      9000,
+      "raises",
+      null,
+      null,
+      null,
+      null,
+      null,
+      11700,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      9850,
+      "raises",
+      null,
+      null,
+      null,
+      null,
+      "raises",
+      "raises",
+      9100,
+      null,
+      null,
+      null,
+      null,
+      9200,
+      10550,
+      "raises",
+      null,
+      16450,
+      null,
+      null,
+      9800,
+      null,
+      11600,
+      null,
+      null,
+      10000,
+      null,
+      null,
+      null,
+      null,
+      "raises",
+      8800,
+      null,
+      12300,
+      null,
+      null,
+      7850,
+      null,
+      18300,
+      15500,
+      null,
+      11300,
+      8000,
+      null,
+      null,
+      null,
+      10000,
+      null,
+      9750,
+      null,
+      null,
+      9200,
+      "raises",
+      null,
+      null,
+      9700,
+      "raises",
+      "raises",
+      null,
+      null,
+      18300,
+      null,
+      null,
+      null,
+      15450,
+      null,
+      9150,
+      null,
+      null,
+      null,
+      null,
+      null,
+      15700,
+      null,
+      10300,
+      null,
+      18400,
+      null,
+      null,
+      9800,
+      10800,
+      null,
+      8900,
+      12400,
+      12550,
+      null,
+      null,
+      null,
+      null,
+      10500,
+      null,
+      "raises",
+      16550,
+      8050,
+      15700,
+      9500,
+      null,
+      9000,
+      9200,
+      9550,
+      "raises",
+      11800,
+      null,
+      11600,
+      null,
+      8450,
+      "raises",
+      null,
+      null,
+      10500,
+      null,
+      11100,
+      null,
+      15500,
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      8800,
+      null,
+      null,
+      15700,
+      10100,
+      null,
+      null,
+      null,
+      null,
+      null,
+      9700,
+      null,
+      null,
+      17200,
+      null,
+      null,
+      null,
+      null,
+      9000,
+      null,
+      null,
+      null,
+      8400,
+      null,
+      "raises",
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      null,
+      9300,
+      null,
+      null,
+      null,
+      8700,
+      15700,
+      null,
+      12650,
+      10000,
+      null,
+      null,
+      null,
+      null,
+      9900,
+      9000,
+      17400,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      9000,
+      9800,
+      null,
+      8700,
+      7800,
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      null,
+      10500,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      8800,
+      16900,
+      10800,
+      null,
+      null,
+      null,
+      null,
+      11300,
+      null,
+      15700,
+      null,
+      null,
+      null,
+      null,
+      null,
+      12100,
+      null,
+      null,
+      14250,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      15700,
+      9700,
+      null,
+      null,
+      null,
+      null,
+      10100,
+      null,
+      17400,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      15700,
+      null,
+      8800,
+      15700,
+      10000,
+      null,
+      null,
+      15700,
+      15700,
+      null,
+      9500,
+      15700,
+      null,
+      null,
+      null,
+      null,
+      null,
+      16900,
+      null,
+      9600,
+      null,
+      null,
+      10100,
+      9500,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      15700,
+      null,
+      null,
+      null,
+      null,
+      null,
+      10000,
+      null,
+      null,
+      8500,
+      null,
+      null,
+      null,
+      null,
+      9700,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      null,
+      9900,
+      null,
+      9300,
+      null,
+      15950,
+      15700,
+      null,
+      null,
+      null,
+      null,
+      8700,
+      null,
+      null,
+      11000,
+      9000,
+      null,
+      null,
+      null,
+      9850,
+      "raises",
+      null,
+      null,
+      18450,
+      null,
+      null,
+      null,
+      17200,
+      16900,
+      11100,
+      null,
+      null,
+      null,
+      null,
+      null,
+      15700,
+      null,
+      18200,
+      10200,
+      8700,
+      9400,
+      15700,
+      null,
+      9550,
+      10000,
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      null,
+      12400,
+      null,
+      15600,
+      null,
+      null,
+      null,
+      15700,
+      null,
+      null,
+      12950,
+      9600,
+      "raises",
+      null,
+      10100,
+      null,
+      null,
+      null,
+      null,
+      10500,
+      "raises",
+      null,
+      10250,
+      11450,
+      null,
+      null,
+      null,
+      18400,
+      null,
+      9100,
+      "raises",
+      null,
+      10650,
+      12000,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      10200,
+      null,
+      10500,
+      null,
+      9950,
+      9800,
+      9700,
+      null,
+      null,
+      10000,
+      null,
+      null,
+      null,
+      15700,
+      null,
+      9100,
+      "raises",
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      9700,
+      null,
+      null,
+      null,
+      15750,
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      null,
+      17100,
+      12750,
+      null,
+      12500,
+      null,
+      15100,
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      11500,
+      null,
+      null,
+      null,
+      null,
+      9950,
+      7900,
+      10850,
+      null,
+      null,
+      null,
+      null,
+      9750,
+      null,
+      8350,
+      null,
+      15700,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      9850,
+      8400,
+      "raises",
+      "raises",
+      null,
+      null,
+      null,
+      9800,
+      null,
+      null,
+      10300,
+      null,
+      11450,
+      8300,
+      8800,
+      null,
+      8700,
+      9200,
+      "raises",
+      null,
+      10300,
+      null,
+      null,
+      null,
+      null,
+      11100,
+      null,
+      null,
+      null,
+      null,
+      9000,
+      null,
+      16300,
+      null,
+      null,
+      null,
+      null,
+      null,
+      8600,
+      9700,
+      null,
+      null,
+      11500,
+      9600,
+      null,
+      13150,
+      9100,
+      null,
+      null,
+      10950,
+      16700,
+      null,
+      "raises",
+      null,
+      16250,
+      "raises",
+      15700,
+      null,
+      "raises",
+      11700,
+      11200,
+      null,
+      null,
+      null,
+      8100,
+      null,
+      9400,
+      null,
+      9350,
+      10300,
+      null,
+      null,
+      null,
+      null,
+      9950,
+      null,
+      null,
+      null,
+      null,
+      null,
+      "raises",
+      9800,
+      11500,
+      null,
+      null,
+      null,
+      null,
+      15550,
+      9600,
+      "raises",
+      null,
+      9000,
+      9100,
+      null,
+      9800,
+      8700,
+      16050,
+      9150,
+      9800,
+      null,
+      8400,
+      null,
+      null,
+      10300,
+      15700,
+      null,
+      9950,
+      null,
+      11700,
+      null,
+      null,
+      null,
+      11400,
+      9350,
+      null,
+      null,
+      null,
+      12100,
+      null,
+      null,
+      10000,
+      null,
+      null,
+      null,
+      10700,
+      null,
+      null,
+      null,
+      null,
+      8300,
+      "raises",
+      null,
+      12350,
+      null,
+      "raises",
+      null,
+      9900,
+      15600,
+      10650,
+      null,
+      18850,
+      12950,
+      9800,
+      null,
+      10150,
+      16250,
+      7700,
+      null,
+      null,
+      "raises",
+      16900,
+      17250,
+      null,
+      9100,
+      15650,
+      10950,
+      null,
+      9450,
+      null,
+      null,
+      null,
+      14850,
+      null,
+      null,
+      "raises",
+      9000,
+      10700,
+      null,
+      null,
+      null,
+      null,
+      null,
+      10350,
+      null,
+      null,
+      null,
+      null,
+      null,
+      15700,
+      null,
+      8900,
+      null,
+      null,
+      null,
+      16250,
+      16150,
+      null,
+      "raises",
+      null,
+      null,
+      10150,
+      null,
+      null,
+      null,
+      null,
+      null,
+      9200,
+      15700,
+      "raises",
+      10400,
+      null,
+      15700,
+      9800,
+      null,
+      null,
+      null,
+      null,
+      9250,
+      null,
+      12400,
+      11300,
+      10000,
+      10600,
+      9650,
+      8600,
+      null,
+      10500,
+      null,
+      null,
+      9450,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      9300,
+      11200,
+      null,
+      null,
+      null,
+      7800,
+      null,
+      9200,
+      null,
+      null,
+      9500,
+      10400,
+      "raises",
+      null,
+      15500,
+      null,
+      null,
+      null,
+      16700,
+      15700,
+      null,
+      null,
+      null,
+      null,
+      16700,
+      null,
+      null,
+      null,
+      10750,
+      11350,
+      null,
+      15700,
+      null,
+      null,
+      null,
+      9200,
+      10500,
+      null,
+      15700,
+      8000,
+      null,
+      null,
+      "raises",
+      10050,
+      null,
+      null,
+      8500,
+      null,
+      null,
+      15700,
+      null,
+      11200,
+      "raises",
+      null,
+      null,
+      11300,
+      8800,
+      9050,
+      11250,
+      null,
+      null,
+      null,
+      null,
+      null,
+      9650,
+      15700,
+      null,
+      8800,
+      "raises",
+      10100,
+      8100,
+      null,
+      7800,
+      null,
+      null,
+      null,
+      11500,
+      8900,
+      null,
+      9950,
+      18100,
+      null,
+      15700,
+      null,
+      17200,
+      8100,
+      null,
+      null,
+      null,
+      null,
+      null,
+      18350,
+      8300,
+      null,
+      null,
+      12800,
+      11300,
+      null,
+      "raises",
+      9000,
+      "raises",
+      9250,
+      null,
+      11700,
+      8700,
+      12000,
+      11500,
+      null,
+      10300,
+      null,
+      null,
+      10050,
+      13050,
+      null,
+      null,
+      null,
+      8900,
+      10400,
+      10500,
+      null,
+      null,
+      11650,
+      null,
+      8800,
+      null,
+      null,
+      null,
+      null,
+      9700,
+      9850,
+      null,
+      null,
+      null,
+      11400,
+      null,
+      null,
+      "raises",
+      15600,
+      null,
+      10000,
+      null,
+      null,
+      null,
+      "raises",
+      "raises",
+      15700,
+      null,
+      null,
+      8700,
+      null,
+      null,
+      null,
+      null,
+      9500,
+      15500,
+      15700,
+      null,
+      16900,
+      null,
+      8800,
+      7900,
+      null,
+      null,
+      15700,
+      "raises",
+      9450,
+      12700,
+      null,
+      null,
+      null,
+      null,
+      null,
+      17150,
+      10000,
+      null,
+      null,
+      11300,
+      9600,
+      null,
+      9750,
+      null,
+      null,
+      null,
+      null,
+      9900,
+      13050,
+      null,
+      null,
+      "raises",
+      10650,
+      "raises",
+      11500,
+      null,
+      "raises",
+      15700,
+      9400,
+      null,
+      15700,
+      9300,
+      null,
+      null,
+      null,
+      null,
+      null,
+      8900,
+      15500,
+      null,
+      null,
+      null,
+      10950,
+      null,
+      null,
+      "raises",
+      "raises",
+      10800,
+      null,
+      null,
+      8300,
+      null,
+      "raises",
+      null,
+      16500,
+      null,
+      8150,
+      10300,
+      null,
+      null,
+      9100,
+      null,
+      null,
+      null,
+      15550,
+      10100,
+      8900,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      10300,
+      9200,
+      null,
+      9700,
+      11700,
+      null,
+      null,
+      null,
+      9400,
+      18400,
+      null,
+      null,
+      15700,
+      9900,
+      9150,
+      null,
+      null,
+      null,
+      "raises",
+      7400,
+      "raises",
+      null,
+      null,
+      8900,
+      null,
+      12850,
+      null,
+      null,
+      null,
+      10550,
+      15100,
+      11100,
+      null,
+      16350,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      11300,
+      null,
+      null,
+      null,
+      9100,
+      null,
+      null,
+      null,
+      null,
+      9250,
+      null,
+      null,
+      null,
+      9400,
+      null,
+      null,
+      null,
+      10950,
+      null,
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      8450,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      8850,
+      null,
+      null,
+      10000,
+      9600,
+      null,
+      9500,
+      null,
+      null,
+      10650,
+      null,
+      null,
+      10250,
+      null,
+      null,
+      null,
+      10000,
+      null,
+      null,
+      null,
+      9600,
+      null,
+      null,
+      15400,
+      null,
+      null,
+      9800,
+      null,
+      9800,
+      null,
+      null,
+      null,
+      15700,
+      9800,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      10350,
+      null,
+      null,
+      null,
+      9600,
+      null,
+      null,
+      null,
+      15450,
+      null,
+      null,
+      null,
+      null,
+      null,
+      10300,
+      null,
+      11200,
+      null,
+      null,
+      8600,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      11200,
+      12000,
+      10000,
+      null,
+      null,
+      9900,
+      9800,
+      10100,
+      null,
+      17000,
+      null,
+      16900,
+      null,
+      null,
+      12550,
+      null,
+      null,
+      null,
+      10900,
+      null,
+      null,
+      9300,
+      null,
+      9700,
+      8200,
+      null,
+      null,
+      "raises",
+      9500,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      10500,
+      17150,
+      null,
+      9900,
+      null,
+      null,
+      null,
+      null,
+      14300,
+      8900,
+      10000,
+      18150,
+      null,
+      10100,
+      11050,
+      7200,
+      null,
+      11100,
+      null,
+      null,
+      12650,
+      null,
+      10300,
+      9800,
+      9800,
+      null,
+      null,
+      null,
+      16900,
+      9900,
+      9500,
+      null,
+      16950,
+      9400,
+      null,
+      null,
+      11050,
+      null,
+      9500,
+      18250,
+      10650,
+      16950,
+      null,
+      null,
+      null,
+      "raises",
+      "raises",
+      11400,
+      null,
+      null,
+      null,
+      9600,
+      9300,
+      "raises",
+      null,
+      15700,
+      null,
+      null,
+      15700,
+      10300,
+      null,
+      null,
+      null,
+      null,
+      11000,
+      null,
+      null,
+      9800,
+      10000,
+      null,
+      null,
+      null,
+      10000,
+      null,
+      null,
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      null,
+      9350,
+      10300,
+      11200,
+      8200,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      15700,
+      null,
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      8200,
+      null,
+      null,
+      10950,
+      11200,
+      9900,
+      null,
+      11700,
+      null,
+      null,
+      null,
+      null,
+      "raises",
+      15300,
+      null,
+      null,
+      null,
+      null,
+      null,
+      9200,
+      null,
+      null,
+      null,
+      null,
+      15500,
+      null,
+      null,
+      9200,
+      null,
+      10700,
+      15300,
+      null,
+      null,
+      null,
+      null,
+      9250,
+      10300,
+      null,
+      null,
+      10000,
+      10500,
+      null,
+      null,
+      null,
+      null,
+      null,
+      9600,
+      null,
+      null,
+      9600,
+      "raises",
+      null,
+      null,
+      null,
+      10000,
+      12250,
+      10600,
+      null,
+      null,
+      16900,
+      9900,
+      9600,
+      null,
+      null,
+      9200,
+      15700,
+      null,
+      17400,
+      null,
+      17900,
+      null,
+      null,
+      null,
+      12350,
+      null,
+      null,
+      8400,
+      8800,
+      null,
+      null,
+      null,
+      15700,
+      15700,
+      10050,
+      "raises",
+      null,
+      null,
+      "raises",
+      null,
+      8800,
+      11150,
+      "raises",
+      "raises",
+      null,
+      null,
+      null,
+      15500,
+      null,
+      16700,
+      9900,
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      null,
+      10500,
+      9600,
+      9350,
+      "raises",
+      null,
+      null,
+      null,
+      14850,
+      null,
+      null,
+      null,
+      12450,
+      10000,
+      null,
+      null,
+      null,
+      9850,
+      null,
+      11150,
+      15700,
+      11000,
+      9800,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      11150,
+      null,
+      null,
+      9900,
+      null,
+      9900,
+      10500,
+      9300,
+      null,
+      8800,
+      10700,
+      10600,
+      8500,
+      11300,
+      8450,
+      8800,
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      9900,
+      null,
+      15700,
+      10300,
+      17400,
+      9900,
+      9600,
+      null,
+      15700,
+      null,
+      9100,
+      null,
+      "raises",
+      null,
+      null,
+      10000,
+      null,
+      null,
+      9600,
+      11600,
+      null,
+      null,
+      null,
+      9750,
+      11650,
+      null,
+      10300,
+      16050,
+      16300,
+      null,
+      null,
+      null,
+      15750,
+      null,
+      11300,
+      8200,
+      11600,
+      20300,
+      9700,
+      null,
+      8500,
+      12050,
+      null,
+      null,
+      null,
+      10400,
+      9000,
+      null,
+      "raises",
+      15700,
+      9850,
+      null,
+      null,
+      null,
+      null,
+      9500,
+      9400,
+      16900,
+      7650,
+      null,
+      null,
+      null,
+      10200,
+      8700,
+      null,
+      null,
+      null,
+      null,
+      8500,
+      10300,
+      7850,
+      10750,
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      null,
+      14500,
+      null,
+      null,
+      null,
+      null,
+      17400,
+      18000,
+      null,
+      null,
+      9850,
+      null,
+      17200,
+      null,
+      null,
+      null,
+      null,
+      null,
+      15450,
+      "raises",
+      null,
+      null,
+      12100,
+      null,
+      9800,
+      null,
+      10100,
+      9700,
+      null,
+      15700,
+      null,
+      8700,
+      null,
+      7800,
+      null,
+      9800,
+      null,
+      null,
+      9900,
+      null,
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      9600,
+      9900,
+      15700,
+      null,
+      null,
+      null,
+      null,
+      9700,
+      null,
+      9200,
+      10900,
+      null,
+      null,
+      null,
+      9400,
+      null,
+      15450,
+      null,
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      null,
+      10500,
+      null,
+      null,
+      11850,
+      10000,
+      null,
+      null,
+      null,
+      9250,
+      null,
+      9000,
+      10600,
+      null,
+      9800,
+      null,
+      null,
+      null,
+      8900,
+      null,
+      null,
+      11300,
+      9850,
+      null,
+      10450,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      10000,
+      10000,
+      null,
+      10600,
+      "raises",
+      9200,
+      10100,
+      null,
+      null,
+      17500,
+      15700,
+      null,
+      null,
+      16600,
+      null,
+      10300,
+      null,
+      null,
+      null,
+      10600,
+      null,
+      null,
+      10300,
+      null,
+      null,
+      16100,
+      10000,
+      null,
+      null,
+      null,
+      10900,
+      10100,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      11600,
+      null,
+      null,
+      null,
+      18100,
+      null,
+      null,
+      null,
+      10300,
+      null,
+      10350,
+      null,
+      null,
+      null,
+      9100,
+      null,
+      null,
+      12550,
+      10100,
+      15300,
+      null,
+      null,
+      "raises",
+      null,
+      null,
+      10450,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      9000,
+      17450,
+      null,
+      null,
+      null,
+      null,
+      null,
+      14150,
+      null,
+      10500,
+      null,
+      null,
+      15700,
+      null,
+      null,
+      "raises",
+      null,
+      "raises",
+      null,
+      10750,
+      9550,
+      null,
+      9200,
+      null,
+      null,
+      9600,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      12400,
+      8400,
+      null,
+      null,
+      15700,
+      12400,
+      9300,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      15300,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      12700,
+      8600,
+      null,
+      9350,
+      14150,
+      16900,
+      9700,
+      null,
+      11100,
+      null,
+      18100,
+      10300,
+      null,
+      null,
+      9700,
+      null,
+      13700,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      10550,
+      null,
+      9350,
+      null,
+      8400,
+      9500,
+      null,
+      null,
+      10400,
+      15750,
+      9400,
+      null,
+      17100,
+      10900,
+      null,
+      null,
+      null,
+      null,
+      9600,
+      8900,
+      9450,
+      null,
+      9850,
+      null,
+      10100,
+      9400,
+      null,
+      null,
+      null,
+      9800,
+      null,
+      10900,
+      null,
+      null,
+      15850,
+      null,
+      10500,
+      null,
+      null,
+      null,
+      null,
+      11200,
+      "raises",
+      9600,
+      null,
+      null,
+      null,
+      15700,
+      8700,
+      null,
+      null,
+      9600,
+      9700,
+      9250,
+      null,
+      15700,
+      null,
+      9600,
+      9700,
+      null,
+      15700,
+      null,
+      null,
+      null,
+      12300,
+      15200,
+      null,
+      null,
+      9750,
+      null,
+      16000,
+      null,
+      null,
+      16700,
+      10300,
+      null,
+      15700,
+      16400,
+      8400,
+      10550,
+      17150,
+      null,
+      null,
+      9500,
+      9150,
+      11100,
+      15700,
+      16300,
+      null,
+      17200,
+      17500,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      11200,
+      null,
+      null,
+      null,
+      9000,
+      null,
+      8200,
+      null,
+      9150,
+      null,
+      null,
+      null,
+      10550,
+      null,
+      null,
+      null,
+      null,
+      null,
+      16450,
+      null,
+      15700,
+      null,
+      null,
+      12300,
+      null,
+      7200,
+      null,
+      null,
+      "raises",
+      7900,
+      "raises",
+      15700,
+      null,
+      8950,
+      null,
+      null,
+      null,
+      null,
+      null,
+      9600,
+      null,
+      null,
+      15700,
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      7700,
+      9100,
+      null,
+      10000,
+      null,
+      15800,
+      null,
+      10200,
+      8600,
+      null,
+      17150,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      8500,
+      null,
+      15700,
+      null,
+      12350,
+      null,
+      null,
+      16900,
+      "raises",
+      10000,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      11250,
+      null,
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      null,
+      8950,
+      "raises",
+      9000,
+      null,
+      10500,
+      12500,
+      null,
+      10650,
+      null,
+      null,
+      null,
+      10350,
+      "raises",
+      null,
+      9200,
+      null,
+      10100,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      9250,
+      null,
+      15450,
+      9000,
+      15700,
+      null,
+      9400,
+      10800,
+      16100,
+      15700,
+      8450,
+      10000,
+      null,
+      null,
+      null,
+      10100,
+      null,
+      null,
+      null,
+      null,
+      8850,
+      null,
+      null,
+      15700,
+      9100,
+      null,
+      null,
+      null,
+      null,
+      null,
+      9800,
+      null,
+      null,
+      15700,
+      "raises",
+      null,
+      null,
+      16900,
+      "raises",
+      null,
+      10650,
+      null,
+      null,
+      16900,
+      null,
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      null,
+      9300,
+      null,
+      null,
+      10300,
+      15700,
+      null,
+      null,
+      9700,
+      10500,
+      null,
+      15700,
+      null,
+      null,
+      null,
+      null,
+      null,
+      "raises",
+      10500,
+      null,
+      null,
+      15650,
+      null,
+      10250,
+      null,
+      null,
+      17750,
+      null,
+      9500,
+      10100,
+      null,
+      null,
+      null,
+      null,
+      null,
+      9500,
+      null,
+      null,
+      9200,
+      8900,
+      null,
+      null,
+      9600,
+      null,
+      19800,
+      null,
+      null,
+      10500,
+      10850,
+      "raises",
+      null,
+      null,
+      null,
+      9700,
+      null,
+      null,
+      null,
+      null,
+      null,
+      7000,
+      null,
+      null,
+      null,
+      10200,
+      null,
+      9400,
+      null,
+      8600,
+      9800,
+      11150,
+      null,
+      9400,
+      16950,
+      null,
+      9400,
+      null,
+      null,
+      10000,
+      null,
+      15700,
+      null,
+      null,
+      9700,
+      null,
+      null,
+      9550,
+      9100,
+      null,
+      null,
+      10150,
+      9600,
+      "raises",
+      null,
+      9000,
+      null,
+      18600,
+      null,
+      null,
+      null,
+      null,
+      null,
+      11300,
+      null,
+      9900,
+      10750,
+      null,
+      null,
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      null,
+      10300,
+      null,
+      10400,
+      null,
+      null,
+      15750,
+      null,
+      9400,
+      null,
+      null,
+      null,
+      null,
+      9250,
+      10750,
+      null,
+      null,
+      11900,
+      9550,
+      null,
+      null,
+      "raises",
+      16950,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      15450,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      11100,
+      null,
+      15850,
+      null,
+      9800,
+      "raises",
+      null,
+      null,
+      9600,
+      11200,
+      7400,
+      9400,
+      null,
+      15700,
+      10100,
+      null,
+      null,
+      null,
+      null,
+      null,
+      16700,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      15700,
+      null,
+      15700,
+      9600,
+      "raises",
+      null,
+      null,
+      null,
+      20600,
+      null,
+      "raises",
+      10850,
+      9100,
+      9400,
+      null,
+      null,
+      12350,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      15700,
+      null,
+      "raises",
+      null,
+      null,
+      13300,
+      null,
+      null,
+      null,
+      12000,
+      10000,
+      null,
+      null,
+      null,
+      null,
+      8000,
+      11500,
+      null,
+      null,
+      null,
+      null,
+      14300,
+      7400,
+      null,
+      null,
+      null,
+      null,
+      15500,
+      null,
+      12850,
+      10800,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      8700,
+      12700,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      8200,
+      11000,
+      10600,
+      9850,
+      null,
+      null,
+      null,
+      null,
+      10550,
+      null,
+      null,
+      17400,
+      15700,
+      null,
+      17400,
+      15700,
+      null,
+      null,
+      null,
+      9700,
+      null,
+      null,
+      null,
+      15600,
+      13550,
+      10300,
+      9600,
+      9700,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      11050,
+      null,
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      null,
+      16250,
+      null,
+      null,
+      null,
+      null,
+      16700,
+      12900,
+      10800,
+      null,
+      15700,
+      "raises",
+      8600,
+      null,
+      11000,
+      10050,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      9200,
+      14650,
+      null,
+      null,
+      10550,
+      null,
+      10100,
+      null,
+      null,
+      null,
+      null,
+      9600,
+      null,
+      15450,
+      15750,
+      16000,
+      null,
+      9800,
+      8950,
+      15700,
+      null,
+      null,
+      null,
+      11250,
+      null,
+      null,
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      null,
+      13400,
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      15700,
+      8600,
+      null,
+      9600,
+      null,
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      10300,
+      9200,
+      null,
+      11500,
+      null,
+      null,
+      null,
+      null,
+      8200,
+      17200,
+      "raises",
+      15750,
+      null,
+      15700,
+      15700,
+      17300,
+      null,
+      null,
+      null,
+      null,
+      11450,
+      null,
+      null,
+      10300,
+      null,
+      null,
+      null,
+      10000,
+      8700,
+      null,
+      null,
+      "raises",
+      null,
+      11500,
+      null,
+      16700,
+      null,
+      9550,
+      15500,
+      8300,
+      15700,
+      null,
+      15700,
+      null,
+      null,
+      null,
+      16900,
+      null,
+      7500,
+      15450,
+      null,
+      null,
+      9400,
+      9050,
+      15700,
+      null,
+      null,
+      null,
+      10100,
+      null,
+      null,
+      null,
+      null,
+      10100,
+      9900,
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      9450,
+      9400,
+      9100,
+      "raises",
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      8000,
+      9050,
+      null,
+      null,
+      null,
+      null,
+      16900,
+      "raises",
+      15500,
+      9000,
+      9100,
+      null,
+      16700,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      9600,
+      null,
+      9200,
+      9200,
+      null,
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      9700,
+      null,
+      null,
+      8500,
+      null,
+      10800,
+      null,
+      11500,
+      8800,
+      null,
+      16100,
+      "raises",
+      null,
+      null,
+      16900,
+      null,
+      null,
+      null,
+      15600,
+      null,
+      11200,
+      null,
+      null,
+      null,
+      9500,
+      null,
+      8900,
+      null,
+      10000,
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      null,
+      15700,
+      null,
+      null,
+      null,
+      null,
+      "raises",
+      15700,
+      9500,
+      9800,
+      null,
+      null,
+      null,
+      null,
+      8000,
+      17350,
+      null,
+      null,
+      null,
+      15500,
+      9250,
+      null,
+      null,
+      null,
+      null,
+      null,
+      15500,
+      "raises",
+      null,
+      null,
+      15650,
+      null,
+      null,
+      null,
+      10300,
+      "raises",
+      16800,
+      null,
+      null,
+      null,
+      null,
+      11200,
+      9700,
+      null,
+      8300,
+      9800,
+      null,
+      null,
+      9650,
+      null,
+      null,
+      "raises",
+      9000,
+      18100,
+      10000,
+      null,
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      null,
+      7600,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      8600,
+      null,
+      18200,
+      null,
+      10000,
+      null,
+      null,
+      null,
+      12350,
+      null,
+      "raises",
+      null,
+      8200,
+      8800,
+      null,
+      9800,
+      null,
+      9800,
+      null,
+      9100,
+      15700,
+      12700,
+      null,
+      10100,
+      null,
+      8600,
+      10100,
+      null,
+      null,
+      null,
+      8600,
+      null,
+      null,
+      9400,
+      null,
+      null,
+      null,
+      null,
+      null,
+      10500,
+      null,
+      null,
+      10300,
+      15750,
+      11200,
+      9800,
+      null,
+      15700,
+      null,
+      9350,
+      null,
+      null,
+      11700,
+      null,
+      null,
+      null,
+      null,
+      11200,
+      null,
+      10000,
+      8650,
+      null,
+      null,
+      7600,
+      null,
+      null,
+      null,
+      15700,
+      9600,
+      9200,
+      null,
+      15700,
+      9550,
+      15700,
+      8750,
+      null,
+      null,
+      10500,
+      null,
+      null,
+      null,
+      9500,
+      9800,
+      15700,
+      null,
+      null,
+      9600,
+      null,
+      10750,
+      null,
+      null,
+      null,
+      "raises",
+      11150,
+      9500,
+      null,
+      null,
+      null,
+      12200,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      11500,
+      null,
+      "raises",
+      8800,
+      null,
+      9400,
+      "raises",
+      null,
+      9500,
+      11000,
+      15700,
+      10200,
+      16300,
+      9850,
+      null,
+      16400,
+      null,
+      15700,
+      null,
+      null,
+      10750,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      11200,
+      null,
+      13500,
+      null,
+      null,
+      null,
+      13250,
+      null,
+      null,
+      null,
+      null,
+      null,
+      12400,
+      null,
+      10000,
+      null,
+      null,
+      10700,
+      9900,
+      8600,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      8400,
+      null,
+      null,
+      8150,
+      null,
+      null,
+      10650,
+      null,
+      15750,
+      9400,
+      10900,
+      17500,
+      null,
+      null,
+      11550,
+      null,
+      null,
+      10000,
+      null,
+      null,
+      null,
+      8100,
+      12300,
+      null,
+      11750,
+      null,
+      "raises",
+      null,
+      null,
+      15700,
+      null,
+      null,
+      null,
+      15700,
+      17050,
+      9550,
+      null,
+      null,
+      null,
+      null,
+      9400,
+      null,
+      9850,
+      9800,
+      null,
+      11450,
+      null,
+      null,
+      null,
+      null,
+      null,
+      9850,
+      null,
+      null,
+      15700,
+      "raises",
+      9100,
+      null,
+      10100,
+      9300,
+      10700,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      17000,
+      null,
+      null,
+      null,
+      null,
+      10700,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      9900,
+      null,
+      null,
+      null,
+      9300,
+      null,
+      10150,
+      15750,
+      null,
+      null,
+      null,
+      9900,
+      null,
+      null,
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      null,
+      9800,
+      10300,
+      7850,
+      null,
+      null,
+      null,
+      null,
+      10300,
+      15700,
+      null,
+      null,
+      null,
+      11100,
+      10200,
+      null,
+      null,
+      null,
+      9650,
+      9200,
+      null,
+      null,
+      null,
+      null,
+      10150,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      9400,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      "raises",
+      8800,
+      null,
+      null,
+      null,
+      10450,
+      "raises",
+      null,
+      null,
+      null,
+      12800,
+      12550,
+      8550,
+      null,
+      16800,
+      null,
+      null,
+      null,
+      null,
+      15750,
+      null,
+      15700,
+      null,
+      null,
+      16900,
+      11500,
+      9800,
+      null,
+      10400,
+      null,
+      15150,
+      null,
+      10000,
+      null,
+      14400,
+      10400,
+      10400,
+      10000,
+      10050,
+      null,
+      null,
+      9950,
+      11600,
+      9950,
+      15700,
+      null,
+      9550,
+      null,
+      8800,
+      9900,
+      null,
+      10050,
+      null,
+      15350,
+      null,
+      9550,
+      null,
+      9500,
+      null,
+      13950,
+      null,
+      null,
+      9800,
+      null,
+      null,
+      null,
+      null,
+      9000,
+      15700,
+      null,
+      null,
+      null,
+      8900,
+      null,
+      null,
+      11000,
+      null,
+      null,
+      10000,
+      12900,
+      null,
+      15950,
+      null,
+      8500,
+      11600,
+      16400,
+      null,
+      null,
+      null,
+      9400,
+      "raises",
+      10000,
+      null,
+      10400,
+      9300,
+      12400,
+      null,
+      10000,
+      "raises",
+      "raises",
+      null,
+      null,
+      15900,
+      null,
+      null,
+      null,
+      9800,
+      null,
+      11500,
+      null,
+      null,
+      null,
+      null,
+      null,
+      8200,
+      null,
+      null,
+      10000,
+      null,
+      null,
+      null,
+      null,
+      8700,
+      17400,
+      11400,
+      null,
+      15700,
+      null,
+      null,
+      10900,
+      null,
+      null,
+      11250,
+      null,
+      10900,
+      10050,
+      null,
+      null,
+      9800,
+      11400,
+      null,
+      null,
+      null,
+      15700,
+      null,
+      null,
+      "raises",
+      null,
+      "raises",
+      9550,
+      null,
+      null,
+      11000,
+      9600,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      16700,
+      null,
+      9800,
+      null,
+      18200,
+      null,
+      11300,
+      null,
+      null,
+      9900,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      10000,
+      null,
+      null,
+      null,
+      null,
+      9000,
+      9350,
+      null,
+      null,
+      16150,
+      "raises",
+      null,
+      null,
+      null,
+      11500,
+      16550,
+      "raises",
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      10100,
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      9900,
+      null,
+      null,
+      "raises",
+      null,
+      "raises",
+      null,
+      11100,
+      8800,
+      null,
+      null,
+      null,
+      null,
+      17800,
+      null,
+      9000,
+      null,
+      null,
+      null,
+      null,
+      null,
+      10700,
+      null,
+      null,
+      null,
+      null,
+      9100,
+      null,
+      null,
+      null,
+      null,
+      9800,
+      null,
+      null,
+      null,
+      18200,
+      null,
+      10300,
+      null,
+      null,
+      null,
+      null,
+      null,
+      9700,
+      null,
+      null,
+      11600,
+      10000,
+      16850,
+      15500,
+      null,
+      null,
+      null,
+      null,
+      10600,
+      16900,
+      null,
+      null,
+      9900,
+      null,
+      null,
+      null,
+      10600,
+      8900,
+      null,
+      null,
+      null,
+      9300,
+      null,
+      null,
+      null,
+      12600,
+      null,
+      null,
+      15500,
+      null,
+      9750,
+      11850,
+      null,
+      15700,
+      null,
+      null,
+      8900,
+      15150,
+      null,
+      null,
+      null,
+      null,
+      9700,
+      null,
+      null,
+      null,
+      9600,
+      null,
+      null,
+      8500,
+      null,
+      11400,
+      10300,
+      16900,
+      15000,
+      null,
+      null,
+      null,
+      9900,
+      null,
+      9300,
+      "raises",
+      null,
+      null,
+      11950,
+      null,
+      10350,
+      null,
+      9650,
+      "raises",
+      null,
+      null,
+      9000,
+      15700,
+      null,
+      17350,
+      null,
+      10550,
+      null,
+      null,
+      11100,
+      null,
+      null,
+      11500,
+      null,
+      null,
+      15700,
+      null,
+      null,
+      10200,
+      null,
+      16800,
+      8600,
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      null,
+      19600,
+      9750,
+      null,
+      null,
+      19300,
+      10200,
+      null,
+      10300,
+      null,
+      8350,
+      15700,
+      9200,
+      8350,
+      null,
+      9600,
+      null,
+      15750,
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      10100,
+      8800,
+      null,
+      11000,
+      null,
+      null,
+      16950,
+      15700,
+      null,
+      null,
+      null,
+      9750,
+      10400,
+      15700,
+      null,
+      null,
+      8500,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      11800,
+      null,
+      11300,
+      9600,
+      null,
+      null,
+      16750,
+      10900,
+      null,
+      8650,
+      null,
+      9900,
+      null,
+      15400,
+      10300,
+      null,
+      null,
+      11750,
+      null,
+      17750,
+      17400,
+      null,
+      9600,
+      "raises",
+      null,
+      12000,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      17700,
+      null,
+      "raises",
+      9150,
+      null,
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      9000,
+      17300,
+      15700,
+      11600,
+      null,
+      null,
+      15700,
+      10650,
+      null,
+      10750,
+      null,
+      null,
+      null,
+      12350,
+      null,
+      null,
+      10000,
+      null,
+      15250,
+      12900,
+      null,
+      8000,
+      null,
+      9100,
+      null,
+      11600,
+      11450,
+      14900,
+      9900,
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      null,
+      15700,
+      null,
+      null,
+      10650,
+      null,
+      9900,
+      null,
+      null,
+      9400,
+      null,
+      null,
+      null,
+      15500,
+      10500,
+      null,
+      null,
+      8800,
+      9100,
+      null,
+      11000,
+      null,
+      null,
+      null,
+      14700,
+      null,
+      7200,
+      15750,
+      null,
+      9200,
+      null,
+      null,
+      null,
+      null,
+      null,
+      18650,
+      null,
+      null,
+      null,
+      null,
+      "raises",
+      null,
+      10500,
+      8800,
+      null,
+      null,
+      null,
+      null,
+      13100,
+      8600,
+      null,
+      null,
+      11100,
+      15700,
+      9800,
+      null,
+      null,
+      11050,
+      null,
+      null,
+      null,
+      15700,
+      9600,
+      null,
+      null,
+      null,
+      null,
+      9800,
+      null,
+      null,
+      9700,
+      null,
+      null,
+      null,
+      null,
+      null,
+      10800,
+      null,
+      "raises",
+      null,
+      10500,
+      null,
+      null,
+      "raises",
+      null,
+      8700,
+      null,
+      null,
+      11650,
+      9800,
+      null,
+      null,
+      null,
+      9800,
+      null,
+      null,
+      10000,
+      null,
+      15600,
+      null,
+      9050,
+      "raises",
+      null,
+      16800,
+      15700,
+      null,
+      null,
+      null,
+      null,
+      null,
+      8050,
+      null,
+      16900,
+      null,
+      9500,
+      null,
+      null,
+      null,
+      7200,
+      null,
+      9650,
+      19000,
+      15700,
+      8800,
+      9700,
+      16600,
+      null,
+      null,
+      null,
+      null,
+      null,
+      17650,
+      null,
+      null,
+      10200,
+      null,
+      null,
+      null,
+      null,
+      10000,
+      16100,
+      9800,
+      null,
+      null,
+      null,
+      null,
+      null,
+      20300,
+      10950,
+      9400,
+      9800,
+      10000,
+      null,
+      9400,
+      "raises",
+      null,
+      null,
+      9800,
+      null,
+      null,
+      null,
+      null,
+      7950,
+      8500,
+      10150,
+      18400,
+      null,
+      "raises",
+      9750,
+      null,
+      9800,
+      null,
+      "raises",
+      null,
+      null,
+      9800,
+      9700,
+      9700,
+      null,
+      9200,
+      null,
+      "raises",
+      null,
+      null,
+      null,
+      9200,
+      10400,
+      "raises",
+      "raises",
+      null,
+      null,
+      null,
+      null,
+      8400,
+      12300,
+      null,
+      9900,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      9400,
+      15750,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      8300
+    ],
+    "seed": 1592631580
+  },
+  "gitChanges": {
+    "cases": [
+      {
+        "applied": {
+          "dirty": true,
+          "entries": [
+            {
+              "isDir": false,
+              "name": ".gitignore",
+              "rel": ".gitignore"
+            },
+            {
+              "isDir": true,
+              "name": ".vscode",
+              "rel": ".vscode"
+            },
+            {
+              "isDir": false,
+              "name": "settings.json",
+              "rel": ".vscode/settings.json"
+            },
+            {
+              "isDir": true,
+              "name": "build",
+              "rel": "build"
+            },
+            {
+              "isDir": false,
+              "name": "out.txt",
+              "rel": "build/out.txt"
+            },
+            {
+              "isDir": true,
+              "name": "café",
+              "rel": "café"
+            },
+            {
+              "isDir": false,
+              "name": "menu.txt",
+              "rel": "café/menu.txt"
+            },
+            {
+              "isDir": true,
+              "name": "docs",
+              "rel": "docs"
+            },
+            {
+              "isDir": false,
+              "name": "guide.md",
+              "rel": "docs/guide.md"
+            },
+            {
+              "isDir": true,
+              "name": "ignored-dir",
+              "rel": "ignored-dir"
+            },
+            {
+              "isDir": false,
+              "name": "forced.txt",
+              "rel": "ignored-dir/forced.txt"
+            },
+            {
+              "isDir": true,
+              "name": "logs",
+              "rel": "logs"
+            },
+            {
+              "isDir": false,
+              "name": "app.log",
+              "rel": "logs/app.log"
+            },
+            {
+              "isDir": true,
+              "name": "nested",
+              "rel": "nested"
+            },
+            {
+              "isDir": false,
+              "name": ".gitignore",
+              "rel": "nested/.gitignore"
+            },
+            {
+              "isDir": true,
+              "name": "inner",
+              "rel": "nested/inner"
+            },
+            {
+              "isDir": true,
+              "name": "deep",
+              "rel": "nested/inner/deep"
+            },
+            {
+              "isDir": false,
+              "name": "new.txt",
+              "rel": "nested/inner/deep/new.txt"
+            },
+            {
+              "isDir": false,
+              "name": "extra.txt",
+              "rel": "nested/inner/extra.txt"
+            },
+            {
+              "isDir": false,
+              "name": "keep.txt",
+              "rel": "nested/inner/keep.txt"
+            },
+            {
+              "isDir": true,
+              "name": "node_modules",
+              "rel": "node_modules"
+            },
+            {
+              "isDir": true,
+              "name": "x",
+              "rel": "node_modules/x"
+            },
+            {
+              "isDir": false,
+              "name": "index.js",
+              "rel": "node_modules/x/index.js"
+            },
+            {
+              "isDir": false,
+              "name": "notes.txt",
+              "rel": "notes.txt"
+            },
+            {
+              "isDir": false,
+              "name": "spaced name.txt",
+              "rel": "spaced name.txt"
+            },
+            {
+              "isDir": true,
+              "name": "src",
+              "rel": "src"
+            },
+            {
+              "isDir": false,
+              "name": "main.rs",
+              "rel": "src/main.rs"
+            },
+            {
+              "isDir": true,
+              "name": "vendor",
+              "rel": "vendor"
+            },
+            {
+              "isDir": true,
+              "name": "pkg",
+              "rel": "vendor/pkg"
+            },
+            {
+              "isDir": false,
+              "name": "lib.go",
+              "rel": "vendor/pkg/lib.go"
+            }
+          ],
+          "stats": {
+            "incrementalUpdates": 0,
+            "rebuilds": 1
+          }
+        },
+        "case": "untracked-file-appears-after-the-next-query",
+        "changes": [
+          [
+            "added",
+            "added.txt"
+          ]
+        ],
+        "mutations": [
+          {
+            "op": "createFile",
+            "path": "added.txt"
+          }
+        ],
+        "queried": {
+          "dirty": false,
+          "entries": [
+            {
+              "isDir": false,
+              "name": ".gitignore",
+              "rel": ".gitignore"
+            },
+            {
+              "isDir": true,
+              "name": ".vscode",
+              "rel": ".vscode"
+            },
+            {
+              "isDir": false,
+              "name": "settings.json",
+              "rel": ".vscode/settings.json"
+            },
+            {
+              "isDir": false,
+              "name": "added.txt",
+              "rel": "added.txt"
+            },
+            {
+              "isDir": true,
+              "name": "build",
+              "rel": "build"
+            },
+            {
+              "isDir": false,
+              "name": "out.txt",
+              "rel": "build/out.txt"
+            },
+            {
+              "isDir": true,
+              "name": "café",
+              "rel": "café"
+            },
+            {
+              "isDir": false,
+              "name": "menu.txt",
+              "rel": "café/menu.txt"
+            },
+            {
+              "isDir": true,
+              "name": "docs",
+              "rel": "docs"
+            },
+            {
+              "isDir": false,
+              "name": "guide.md",
+              "rel": "docs/guide.md"
+            },
+            {
+              "isDir": true,
+              "name": "ignored-dir",
+              "rel": "ignored-dir"
+            },
+            {
+              "isDir": false,
+              "name": "forced.txt",
+              "rel": "ignored-dir/forced.txt"
+            },
+            {
+              "isDir": true,
+              "name": "logs",
+              "rel": "logs"
+            },
+            {
+              "isDir": false,
+              "name": "app.log",
+              "rel": "logs/app.log"
+            },
+            {
+              "isDir": true,
+              "name": "nested",
+              "rel": "nested"
+            },
+            {
+              "isDir": false,
+              "name": ".gitignore",
+              "rel": "nested/.gitignore"
+            },
+            {
+              "isDir": true,
+              "name": "inner",
+              "rel": "nested/inner"
+            },
+            {
+              "isDir": true,
+              "name": "deep",
+              "rel": "nested/inner/deep"
+            },
+            {
+              "isDir": false,
+              "name": "new.txt",
+              "rel": "nested/inner/deep/new.txt"
+            },
+            {
+              "isDir": false,
+              "name": "extra.txt",
+              "rel": "nested/inner/extra.txt"
+            },
+            {
+              "isDir": false,
+              "name": "keep.txt",
+              "rel": "nested/inner/keep.txt"
+            },
+            {
+              "isDir": true,
+              "name": "node_modules",
+              "rel": "node_modules"
+            },
+            {
+              "isDir": true,
+              "name": "x",
+              "rel": "node_modules/x"
+            },
+            {
+              "isDir": false,
+              "name": "index.js",
+              "rel": "node_modules/x/index.js"
+            },
+            {
+              "isDir": false,
+              "name": "notes.txt",
+              "rel": "notes.txt"
+            },
+            {
+              "isDir": false,
+              "name": "spaced name.txt",
+              "rel": "spaced name.txt"
+            },
+            {
+              "isDir": true,
+              "name": "src",
+              "rel": "src"
+            },
+            {
+              "isDir": false,
+              "name": "main.rs",
+              "rel": "src/main.rs"
+            },
+            {
+              "isDir": true,
+              "name": "vendor",
+              "rel": "vendor"
+            },
+            {
+              "isDir": true,
+              "name": "pkg",
+              "rel": "vendor/pkg"
+            },
+            {
+              "isDir": false,
+              "name": "lib.go",
+              "rel": "vendor/pkg/lib.go"
+            }
+          ],
+          "stats": {
+            "incrementalUpdates": 0,
+            "rebuilds": 2
+          }
+        }
+      },
+      {
+        "applied": {
+          "dirty": true,
+          "entries": [
+            {
+              "isDir": false,
+              "name": ".gitignore",
+              "rel": ".gitignore"
+            },
+            {
+              "isDir": true,
+              "name": ".vscode",
+              "rel": ".vscode"
+            },
+            {
+              "isDir": false,
+              "name": "settings.json",
+              "rel": ".vscode/settings.json"
+            },
+            {
+              "isDir": true,
+              "name": "build",
+              "rel": "build"
+            },
+            {
+              "isDir": false,
+              "name": "out.txt",
+              "rel": "build/out.txt"
+            },
+            {
+              "isDir": true,
+              "name": "café",
+              "rel": "café"
+            },
+            {
+              "isDir": false,
+              "name": "menu.txt",
+              "rel": "café/menu.txt"
+            },
+            {
+              "isDir": true,
+              "name": "docs",
+              "rel": "docs"
+            },
+            {
+              "isDir": false,
+              "name": "guide.md",
+              "rel": "docs/guide.md"
+            },
+            {
+              "isDir": true,
+              "name": "ignored-dir",
+              "rel": "ignored-dir"
+            },
+            {
+              "isDir": false,
+              "name": "forced.txt",
+              "rel": "ignored-dir/forced.txt"
+            },
+            {
+              "isDir": true,
+              "name": "logs",
+              "rel": "logs"
+            },
+            {
+              "isDir": false,
+              "name": "app.log",
+              "rel": "logs/app.log"
+            },
+            {
+              "isDir": true,
+              "name": "nested",
+              "rel": "nested"
+            },
+            {
+              "isDir": false,
+              "name": ".gitignore",
+              "rel": "nested/.gitignore"
+            },
+            {
+              "isDir": true,
+              "name": "inner",
+              "rel": "nested/inner"
+            },
+            {
+              "isDir": true,
+              "name": "deep",
+              "rel": "nested/inner/deep"
+            },
+            {
+              "isDir": false,
+              "name": "new.txt",
+              "rel": "nested/inner/deep/new.txt"
+            },
+            {
+              "isDir": false,
+              "name": "extra.txt",
+              "rel": "nested/inner/extra.txt"
+            },
+            {
+              "isDir": false,
+              "name": "keep.txt",
+              "rel": "nested/inner/keep.txt"
+            },
+            {
+              "isDir": true,
+              "name": "node_modules",
+              "rel": "node_modules"
+            },
+            {
+              "isDir": true,
+              "name": "x",
+              "rel": "node_modules/x"
+            },
+            {
+              "isDir": false,
+              "name": "index.js",
+              "rel": "node_modules/x/index.js"
+            },
+            {
+              "isDir": false,
+              "name": "notes.txt",
+              "rel": "notes.txt"
+            },
+            {
+              "isDir": false,
+              "name": "spaced name.txt",
+              "rel": "spaced name.txt"
+            },
+            {
+              "isDir": true,
+              "name": "src",
+              "rel": "src"
+            },
+            {
+              "isDir": false,
+              "name": "main.rs",
+              "rel": "src/main.rs"
+            },
+            {
+              "isDir": true,
+              "name": "vendor",
+              "rel": "vendor"
+            },
+            {
+              "isDir": true,
+              "name": "pkg",
+              "rel": "vendor/pkg"
+            },
+            {
+              "isDir": false,
+              "name": "lib.go",
+              "rel": "vendor/pkg/lib.go"
+            }
+          ],
+          "stats": {
+            "incrementalUpdates": 0,
+            "rebuilds": 1
+          }
+        },
+        "case": "ignored-file-stays-out",
+        "changes": [
+          [
+            "added",
+            "fresh.tmp"
+          ]
+        ],
+        "mutations": [
+          {
+            "op": "createFile",
+            "path": "fresh.tmp"
+          }
+        ],
+        "queried": {
+          "dirty": false,
+          "entries": [
+            {
+              "isDir": false,
+              "name": ".gitignore",
+              "rel": ".gitignore"
+            },
+            {
+              "isDir": true,
+              "name": ".vscode",
+              "rel": ".vscode"
+            },
+            {
+              "isDir": false,
+              "name": "settings.json",
+              "rel": ".vscode/settings.json"
+            },
+            {
+              "isDir": true,
+              "name": "build",
+              "rel": "build"
+            },
+            {
+              "isDir": false,
+              "name": "out.txt",
+              "rel": "build/out.txt"
+            },
+            {
+              "isDir": true,
+              "name": "café",
+              "rel": "café"
+            },
+            {
+              "isDir": false,
+              "name": "menu.txt",
+              "rel": "café/menu.txt"
+            },
+            {
+              "isDir": true,
+              "name": "docs",
+              "rel": "docs"
+            },
+            {
+              "isDir": false,
+              "name": "guide.md",
+              "rel": "docs/guide.md"
+            },
+            {
+              "isDir": true,
+              "name": "ignored-dir",
+              "rel": "ignored-dir"
+            },
+            {
+              "isDir": false,
+              "name": "forced.txt",
+              "rel": "ignored-dir/forced.txt"
+            },
+            {
+              "isDir": true,
+              "name": "logs",
+              "rel": "logs"
+            },
+            {
+              "isDir": false,
+              "name": "app.log",
+              "rel": "logs/app.log"
+            },
+            {
+              "isDir": true,
+              "name": "nested",
+              "rel": "nested"
+            },
+            {
+              "isDir": false,
+              "name": ".gitignore",
+              "rel": "nested/.gitignore"
+            },
+            {
+              "isDir": true,
+              "name": "inner",
+              "rel": "nested/inner"
+            },
+            {
+              "isDir": true,
+              "name": "deep",
+              "rel": "nested/inner/deep"
+            },
+            {
+              "isDir": false,
+              "name": "new.txt",
+              "rel": "nested/inner/deep/new.txt"
+            },
+            {
+              "isDir": false,
+              "name": "extra.txt",
+              "rel": "nested/inner/extra.txt"
+            },
+            {
+              "isDir": false,
+              "name": "keep.txt",
+              "rel": "nested/inner/keep.txt"
+            },
+            {
+              "isDir": true,
+              "name": "node_modules",
+              "rel": "node_modules"
+            },
+            {
+              "isDir": true,
+              "name": "x",
+              "rel": "node_modules/x"
+            },
+            {
+              "isDir": false,
+              "name": "index.js",
+              "rel": "node_modules/x/index.js"
+            },
+            {
+              "isDir": false,
+              "name": "notes.txt",
+              "rel": "notes.txt"
+            },
+            {
+              "isDir": false,
+              "name": "spaced name.txt",
+              "rel": "spaced name.txt"
+            },
+            {
+              "isDir": true,
+              "name": "src",
+              "rel": "src"
+            },
+            {
+              "isDir": false,
+              "name": "main.rs",
+              "rel": "src/main.rs"
+            },
+            {
+              "isDir": true,
+              "name": "vendor",
+              "rel": "vendor"
+            },
+            {
+              "isDir": true,
+              "name": "pkg",
+              "rel": "vendor/pkg"
+            },
+            {
+              "isDir": false,
+              "name": "lib.go",
+              "rel": "vendor/pkg/lib.go"
+            }
+          ],
+          "stats": {
+            "incrementalUpdates": 0,
+            "rebuilds": 2
+          }
+        }
+      },
+      {
+        "applied": {
+          "dirty": true,
+          "entries": [
+            {
+              "isDir": false,
+              "name": ".gitignore",
+              "rel": ".gitignore"
+            },
+            {
+              "isDir": true,
+              "name": ".vscode",
+              "rel": ".vscode"
+            },
+            {
+              "isDir": false,
+              "name": "settings.json",
+              "rel": ".vscode/settings.json"
+            },
+            {
+              "isDir": true,
+              "name": "build",
+              "rel": "build"
+            },
+            {
+              "isDir": false,
+              "name": "out.txt",
+              "rel": "build/out.txt"
+            },
+            {
+              "isDir": true,
+              "name": "café",
+              "rel": "café"
+            },
+            {
+              "isDir": false,
+              "name": "menu.txt",
+              "rel": "café/menu.txt"
+            },
+            {
+              "isDir": true,
+              "name": "docs",
+              "rel": "docs"
+            },
+            {
+              "isDir": false,
+              "name": "guide.md",
+              "rel": "docs/guide.md"
+            },
+            {
+              "isDir": true,
+              "name": "ignored-dir",
+              "rel": "ignored-dir"
+            },
+            {
+              "isDir": false,
+              "name": "forced.txt",
+              "rel": "ignored-dir/forced.txt"
+            },
+            {
+              "isDir": true,
+              "name": "logs",
+              "rel": "logs"
+            },
+            {
+              "isDir": false,
+              "name": "app.log",
+              "rel": "logs/app.log"
+            },
+            {
+              "isDir": true,
+              "name": "nested",
+              "rel": "nested"
+            },
+            {
+              "isDir": false,
+              "name": ".gitignore",
+              "rel": "nested/.gitignore"
+            },
+            {
+              "isDir": true,
+              "name": "inner",
+              "rel": "nested/inner"
+            },
+            {
+              "isDir": true,
+              "name": "deep",
+              "rel": "nested/inner/deep"
+            },
+            {
+              "isDir": false,
+              "name": "new.txt",
+              "rel": "nested/inner/deep/new.txt"
+            },
+            {
+              "isDir": false,
+              "name": "extra.txt",
+              "rel": "nested/inner/extra.txt"
+            },
+            {
+              "isDir": false,
+              "name": "keep.txt",
+              "rel": "nested/inner/keep.txt"
+            },
+            {
+              "isDir": true,
+              "name": "node_modules",
+              "rel": "node_modules"
+            },
+            {
+              "isDir": true,
+              "name": "x",
+              "rel": "node_modules/x"
+            },
+            {
+              "isDir": false,
+              "name": "index.js",
+              "rel": "node_modules/x/index.js"
+            },
+            {
+              "isDir": false,
+              "name": "notes.txt",
+              "rel": "notes.txt"
+            },
+            {
+              "isDir": false,
+              "name": "spaced name.txt",
+              "rel": "spaced name.txt"
+            },
+            {
+              "isDir": true,
+              "name": "src",
+              "rel": "src"
+            },
+            {
+              "isDir": false,
+              "name": "main.rs",
+              "rel": "src/main.rs"
+            },
+            {
+              "isDir": true,
+              "name": "vendor",
+              "rel": "vendor"
+            },
+            {
+              "isDir": true,
+              "name": "pkg",
+              "rel": "vendor/pkg"
+            },
+            {
+              "isDir": false,
+              "name": "lib.go",
+              "rel": "vendor/pkg/lib.go"
+            }
+          ],
+          "stats": {
+            "incrementalUpdates": 0,
+            "rebuilds": 1
+          }
+        },
+        "case": "deleted-tracked-file-leaves",
+        "changes": [
+          [
+            "deleted",
+            "src/main.rs"
+          ]
+        ],
+        "mutations": [
+          {
+            "op": "delete",
+            "path": "src/main.rs"
+          }
+        ],
+        "queried": {
+          "dirty": false,
+          "entries": [
+            {
+              "isDir": false,
+              "name": ".gitignore",
+              "rel": ".gitignore"
+            },
+            {
+              "isDir": true,
+              "name": ".vscode",
+              "rel": ".vscode"
+            },
+            {
+              "isDir": false,
+              "name": "settings.json",
+              "rel": ".vscode/settings.json"
+            },
+            {
+              "isDir": true,
+              "name": "build",
+              "rel": "build"
+            },
+            {
+              "isDir": false,
+              "name": "out.txt",
+              "rel": "build/out.txt"
+            },
+            {
+              "isDir": true,
+              "name": "café",
+              "rel": "café"
+            },
+            {
+              "isDir": false,
+              "name": "menu.txt",
+              "rel": "café/menu.txt"
+            },
+            {
+              "isDir": true,
+              "name": "docs",
+              "rel": "docs"
+            },
+            {
+              "isDir": false,
+              "name": "guide.md",
+              "rel": "docs/guide.md"
+            },
+            {
+              "isDir": true,
+              "name": "ignored-dir",
+              "rel": "ignored-dir"
+            },
+            {
+              "isDir": false,
+              "name": "forced.txt",
+              "rel": "ignored-dir/forced.txt"
+            },
+            {
+              "isDir": true,
+              "name": "logs",
+              "rel": "logs"
+            },
+            {
+              "isDir": false,
+              "name": "app.log",
+              "rel": "logs/app.log"
+            },
+            {
+              "isDir": true,
+              "name": "nested",
+              "rel": "nested"
+            },
+            {
+              "isDir": false,
+              "name": ".gitignore",
+              "rel": "nested/.gitignore"
+            },
+            {
+              "isDir": true,
+              "name": "inner",
+              "rel": "nested/inner"
+            },
+            {
+              "isDir": true,
+              "name": "deep",
+              "rel": "nested/inner/deep"
+            },
+            {
+              "isDir": false,
+              "name": "new.txt",
+              "rel": "nested/inner/deep/new.txt"
+            },
+            {
+              "isDir": false,
+              "name": "extra.txt",
+              "rel": "nested/inner/extra.txt"
+            },
+            {
+              "isDir": false,
+              "name": "keep.txt",
+              "rel": "nested/inner/keep.txt"
+            },
+            {
+              "isDir": true,
+              "name": "node_modules",
+              "rel": "node_modules"
+            },
+            {
+              "isDir": true,
+              "name": "x",
+              "rel": "node_modules/x"
+            },
+            {
+              "isDir": false,
+              "name": "index.js",
+              "rel": "node_modules/x/index.js"
+            },
+            {
+              "isDir": false,
+              "name": "notes.txt",
+              "rel": "notes.txt"
+            },
+            {
+              "isDir": false,
+              "name": "spaced name.txt",
+              "rel": "spaced name.txt"
+            },
+            {
+              "isDir": true,
+              "name": "vendor",
+              "rel": "vendor"
+            },
+            {
+              "isDir": true,
+              "name": "pkg",
+              "rel": "vendor/pkg"
+            },
+            {
+              "isDir": false,
+              "name": "lib.go",
+              "rel": "vendor/pkg/lib.go"
+            }
+          ],
+          "stats": {
+            "incrementalUpdates": 0,
+            "rebuilds": 2
+          }
+        }
+      },
+      {
+        "applied": {
+          "dirty": true,
+          "entries": [
+            {
+              "isDir": false,
+              "name": ".gitignore",
+              "rel": ".gitignore"
+            },
+            {
+              "isDir": true,
+              "name": ".vscode",
+              "rel": ".vscode"
+            },
+            {
+              "isDir": false,
+              "name": "settings.json",
+              "rel": ".vscode/settings.json"
+            },
+            {
+              "isDir": true,
+              "name": "build",
+              "rel": "build"
+            },
+            {
+              "isDir": false,
+              "name": "out.txt",
+              "rel": "build/out.txt"
+            },
+            {
+              "isDir": true,
+              "name": "café",
+              "rel": "café"
+            },
+            {
+              "isDir": false,
+              "name": "menu.txt",
+              "rel": "café/menu.txt"
+            },
+            {
+              "isDir": true,
+              "name": "docs",
+              "rel": "docs"
+            },
+            {
+              "isDir": false,
+              "name": "guide.md",
+              "rel": "docs/guide.md"
+            },
+            {
+              "isDir": true,
+              "name": "ignored-dir",
+              "rel": "ignored-dir"
+            },
+            {
+              "isDir": false,
+              "name": "forced.txt",
+              "rel": "ignored-dir/forced.txt"
+            },
+            {
+              "isDir": true,
+              "name": "logs",
+              "rel": "logs"
+            },
+            {
+              "isDir": false,
+              "name": "app.log",
+              "rel": "logs/app.log"
+            },
+            {
+              "isDir": true,
+              "name": "nested",
+              "rel": "nested"
+            },
+            {
+              "isDir": false,
+              "name": ".gitignore",
+              "rel": "nested/.gitignore"
+            },
+            {
+              "isDir": true,
+              "name": "inner",
+              "rel": "nested/inner"
+            },
+            {
+              "isDir": true,
+              "name": "deep",
+              "rel": "nested/inner/deep"
+            },
+            {
+              "isDir": false,
+              "name": "new.txt",
+              "rel": "nested/inner/deep/new.txt"
+            },
+            {
+              "isDir": false,
+              "name": "extra.txt",
+              "rel": "nested/inner/extra.txt"
+            },
+            {
+              "isDir": false,
+              "name": "keep.txt",
+              "rel": "nested/inner/keep.txt"
+            },
+            {
+              "isDir": true,
+              "name": "node_modules",
+              "rel": "node_modules"
+            },
+            {
+              "isDir": true,
+              "name": "x",
+              "rel": "node_modules/x"
+            },
+            {
+              "isDir": false,
+              "name": "index.js",
+              "rel": "node_modules/x/index.js"
+            },
+            {
+              "isDir": false,
+              "name": "notes.txt",
+              "rel": "notes.txt"
+            },
+            {
+              "isDir": false,
+              "name": "spaced name.txt",
+              "rel": "spaced name.txt"
+            },
+            {
+              "isDir": true,
+              "name": "src",
+              "rel": "src"
+            },
+            {
+              "isDir": false,
+              "name": "main.rs",
+              "rel": "src/main.rs"
+            },
+            {
+              "isDir": true,
+              "name": "vendor",
+              "rel": "vendor"
+            },
+            {
+              "isDir": true,
+              "name": "pkg",
+              "rel": "vendor/pkg"
+            },
+            {
+              "isDir": false,
+              "name": "lib.go",
+              "rel": "vendor/pkg/lib.go"
+            }
+          ],
+          "stats": {
+            "incrementalUpdates": 0,
+            "rebuilds": 1
+          }
+        },
+        "case": "modified-file-marks-dirty",
+        "changes": [
+          [
+            "modified",
+            "notes.txt"
+          ]
+        ],
+        "mutations": [
+          {
+            "op": "modifyFile",
+            "path": "notes.txt"
+          }
+        ],
+        "queried": {
+          "dirty": false,
+          "entries": [
+            {
+              "isDir": false,
+              "name": ".gitignore",
+              "rel": ".gitignore"
+            },
+            {
+              "isDir": true,
+              "name": ".vscode",
+              "rel": ".vscode"
+            },
+            {
+              "isDir": false,
+              "name": "settings.json",
+              "rel": ".vscode/settings.json"
+            },
+            {
+              "isDir": true,
+              "name": "build",
+              "rel": "build"
+            },
+            {
+              "isDir": false,
+              "name": "out.txt",
+              "rel": "build/out.txt"
+            },
+            {
+              "isDir": true,
+              "name": "café",
+              "rel": "café"
+            },
+            {
+              "isDir": false,
+              "name": "menu.txt",
+              "rel": "café/menu.txt"
+            },
+            {
+              "isDir": true,
+              "name": "docs",
+              "rel": "docs"
+            },
+            {
+              "isDir": false,
+              "name": "guide.md",
+              "rel": "docs/guide.md"
+            },
+            {
+              "isDir": true,
+              "name": "ignored-dir",
+              "rel": "ignored-dir"
+            },
+            {
+              "isDir": false,
+              "name": "forced.txt",
+              "rel": "ignored-dir/forced.txt"
+            },
+            {
+              "isDir": true,
+              "name": "logs",
+              "rel": "logs"
+            },
+            {
+              "isDir": false,
+              "name": "app.log",
+              "rel": "logs/app.log"
+            },
+            {
+              "isDir": true,
+              "name": "nested",
+              "rel": "nested"
+            },
+            {
+              "isDir": false,
+              "name": ".gitignore",
+              "rel": "nested/.gitignore"
+            },
+            {
+              "isDir": true,
+              "name": "inner",
+              "rel": "nested/inner"
+            },
+            {
+              "isDir": true,
+              "name": "deep",
+              "rel": "nested/inner/deep"
+            },
+            {
+              "isDir": false,
+              "name": "new.txt",
+              "rel": "nested/inner/deep/new.txt"
+            },
+            {
+              "isDir": false,
+              "name": "extra.txt",
+              "rel": "nested/inner/extra.txt"
+            },
+            {
+              "isDir": false,
+              "name": "keep.txt",
+              "rel": "nested/inner/keep.txt"
+            },
+            {
+              "isDir": true,
+              "name": "node_modules",
+              "rel": "node_modules"
+            },
+            {
+              "isDir": true,
+              "name": "x",
+              "rel": "node_modules/x"
+            },
+            {
+              "isDir": false,
+              "name": "index.js",
+              "rel": "node_modules/x/index.js"
+            },
+            {
+              "isDir": false,
+              "name": "notes.txt",
+              "rel": "notes.txt"
+            },
+            {
+              "isDir": false,
+              "name": "spaced name.txt",
+              "rel": "spaced name.txt"
+            },
+            {
+              "isDir": true,
+              "name": "src",
+              "rel": "src"
+            },
+            {
+              "isDir": false,
+              "name": "main.rs",
+              "rel": "src/main.rs"
+            },
+            {
+              "isDir": true,
+              "name": "vendor",
+              "rel": "vendor"
+            },
+            {
+              "isDir": true,
+              "name": "pkg",
+              "rel": "vendor/pkg"
+            },
+            {
+              "isDir": false,
+              "name": "lib.go",
+              "rel": "vendor/pkg/lib.go"
+            }
+          ],
+          "stats": {
+            "incrementalUpdates": 0,
+            "rebuilds": 2
+          }
+        }
+      },
+      {
+        "applied": {
+          "dirty": false,
+          "entries": [
+            {
+              "isDir": false,
+              "name": ".gitignore",
+              "rel": ".gitignore"
+            },
+            {
+              "isDir": true,
+              "name": ".vscode",
+              "rel": ".vscode"
+            },
+            {
+              "isDir": false,
+              "name": "settings.json",
+              "rel": ".vscode/settings.json"
+            },
+            {
+              "isDir": true,
+              "name": "build",
+              "rel": "build"
+            },
+            {
+              "isDir": false,
+              "name": "out.txt",
+              "rel": "build/out.txt"
+            },
+            {
+              "isDir": true,
+              "name": "café",
+              "rel": "café"
+            },
+            {
+              "isDir": false,
+              "name": "menu.txt",
+              "rel": "café/menu.txt"
+            },
+            {
+              "isDir": true,
+              "name": "docs",
+              "rel": "docs"
+            },
+            {
+              "isDir": false,
+              "name": "guide.md",
+              "rel": "docs/guide.md"
+            },
+            {
+              "isDir": true,
+              "name": "ignored-dir",
+              "rel": "ignored-dir"
+            },
+            {
+              "isDir": false,
+              "name": "forced.txt",
+              "rel": "ignored-dir/forced.txt"
+            },
+            {
+              "isDir": true,
+              "name": "logs",
+              "rel": "logs"
+            },
+            {
+              "isDir": false,
+              "name": "app.log",
+              "rel": "logs/app.log"
+            },
+            {
+              "isDir": true,
+              "name": "nested",
+              "rel": "nested"
+            },
+            {
+              "isDir": false,
+              "name": ".gitignore",
+              "rel": "nested/.gitignore"
+            },
+            {
+              "isDir": true,
+              "name": "inner",
+              "rel": "nested/inner"
+            },
+            {
+              "isDir": true,
+              "name": "deep",
+              "rel": "nested/inner/deep"
+            },
+            {
+              "isDir": false,
+              "name": "new.txt",
+              "rel": "nested/inner/deep/new.txt"
+            },
+            {
+              "isDir": false,
+              "name": "extra.txt",
+              "rel": "nested/inner/extra.txt"
+            },
+            {
+              "isDir": false,
+              "name": "keep.txt",
+              "rel": "nested/inner/keep.txt"
+            },
+            {
+              "isDir": true,
+              "name": "node_modules",
+              "rel": "node_modules"
+            },
+            {
+              "isDir": true,
+              "name": "x",
+              "rel": "node_modules/x"
+            },
+            {
+              "isDir": false,
+              "name": "index.js",
+              "rel": "node_modules/x/index.js"
+            },
+            {
+              "isDir": false,
+              "name": "notes.txt",
+              "rel": "notes.txt"
+            },
+            {
+              "isDir": false,
+              "name": "spaced name.txt",
+              "rel": "spaced name.txt"
+            },
+            {
+              "isDir": true,
+              "name": "src",
+              "rel": "src"
+            },
+            {
+              "isDir": false,
+              "name": "main.rs",
+              "rel": "src/main.rs"
+            },
+            {
+              "isDir": true,
+              "name": "vendor",
+              "rel": "vendor"
+            },
+            {
+              "isDir": true,
+              "name": "pkg",
+              "rel": "vendor/pkg"
+            },
+            {
+              "isDir": false,
+              "name": "lib.go",
+              "rel": "vendor/pkg/lib.go"
+            }
+          ],
+          "stats": {
+            "incrementalUpdates": 0,
+            "rebuilds": 1
+          }
+        },
+        "case": "no-change-no-rebuild",
+        "changes": [],
+        "mutations": [],
+        "queried": {
+          "dirty": false,
+          "entries": [
+            {
+              "isDir": false,
+              "name": ".gitignore",
+              "rel": ".gitignore"
+            },
+            {
+              "isDir": true,
+              "name": ".vscode",
+              "rel": ".vscode"
+            },
+            {
+              "isDir": false,
+              "name": "settings.json",
+              "rel": ".vscode/settings.json"
+            },
+            {
+              "isDir": true,
+              "name": "build",
+              "rel": "build"
+            },
+            {
+              "isDir": false,
+              "name": "out.txt",
+              "rel": "build/out.txt"
+            },
+            {
+              "isDir": true,
+              "name": "café",
+              "rel": "café"
+            },
+            {
+              "isDir": false,
+              "name": "menu.txt",
+              "rel": "café/menu.txt"
+            },
+            {
+              "isDir": true,
+              "name": "docs",
+              "rel": "docs"
+            },
+            {
+              "isDir": false,
+              "name": "guide.md",
+              "rel": "docs/guide.md"
+            },
+            {
+              "isDir": true,
+              "name": "ignored-dir",
+              "rel": "ignored-dir"
+            },
+            {
+              "isDir": false,
+              "name": "forced.txt",
+              "rel": "ignored-dir/forced.txt"
+            },
+            {
+              "isDir": true,
+              "name": "logs",
+              "rel": "logs"
+            },
+            {
+              "isDir": false,
+              "name": "app.log",
+              "rel": "logs/app.log"
+            },
+            {
+              "isDir": true,
+              "name": "nested",
+              "rel": "nested"
+            },
+            {
+              "isDir": false,
+              "name": ".gitignore",
+              "rel": "nested/.gitignore"
+            },
+            {
+              "isDir": true,
+              "name": "inner",
+              "rel": "nested/inner"
+            },
+            {
+              "isDir": true,
+              "name": "deep",
+              "rel": "nested/inner/deep"
+            },
+            {
+              "isDir": false,
+              "name": "new.txt",
+              "rel": "nested/inner/deep/new.txt"
+            },
+            {
+              "isDir": false,
+              "name": "extra.txt",
+              "rel": "nested/inner/extra.txt"
+            },
+            {
+              "isDir": false,
+              "name": "keep.txt",
+              "rel": "nested/inner/keep.txt"
+            },
+            {
+              "isDir": true,
+              "name": "node_modules",
+              "rel": "node_modules"
+            },
+            {
+              "isDir": true,
+              "name": "x",
+              "rel": "node_modules/x"
+            },
+            {
+              "isDir": false,
+              "name": "index.js",
+              "rel": "node_modules/x/index.js"
+            },
+            {
+              "isDir": false,
+              "name": "notes.txt",
+              "rel": "notes.txt"
+            },
+            {
+              "isDir": false,
+              "name": "spaced name.txt",
+              "rel": "spaced name.txt"
+            },
+            {
+              "isDir": true,
+              "name": "src",
+              "rel": "src"
+            },
+            {
+              "isDir": false,
+              "name": "main.rs",
+              "rel": "src/main.rs"
+            },
+            {
+              "isDir": true,
+              "name": "vendor",
+              "rel": "vendor"
+            },
+            {
+              "isDir": true,
+              "name": "pkg",
+              "rel": "vendor/pkg"
+            },
+            {
+              "isDir": false,
+              "name": "lib.go",
+              "rel": "vendor/pkg/lib.go"
+            }
+          ],
+          "stats": {
+            "incrementalUpdates": 0,
+            "rebuilds": 1
+          }
+        }
+      },
+      {
+        "applied": {
+          "dirty": true,
+          "entries": [
+            {
+              "isDir": false,
+              "name": ".gitignore",
+              "rel": ".gitignore"
+            },
+            {
+              "isDir": true,
+              "name": ".vscode",
+              "rel": ".vscode"
+            },
+            {
+              "isDir": false,
+              "name": "settings.json",
+              "rel": ".vscode/settings.json"
+            },
+            {
+              "isDir": true,
+              "name": "build",
+              "rel": "build"
+            },
+            {
+              "isDir": false,
+              "name": "out.txt",
+              "rel": "build/out.txt"
+            },
+            {
+              "isDir": true,
+              "name": "café",
+              "rel": "café"
+            },
+            {
+              "isDir": false,
+              "name": "menu.txt",
+              "rel": "café/menu.txt"
+            },
+            {
+              "isDir": true,
+              "name": "docs",
+              "rel": "docs"
+            },
+            {
+              "isDir": false,
+              "name": "guide.md",
+              "rel": "docs/guide.md"
+            },
+            {
+              "isDir": true,
+              "name": "ignored-dir",
+              "rel": "ignored-dir"
+            },
+            {
+              "isDir": false,
+              "name": "forced.txt",
+              "rel": "ignored-dir/forced.txt"
+            },
+            {
+              "isDir": true,
+              "name": "logs",
+              "rel": "logs"
+            },
+            {
+              "isDir": false,
+              "name": "app.log",
+              "rel": "logs/app.log"
+            },
+            {
+              "isDir": true,
+              "name": "nested",
+              "rel": "nested"
+            },
+            {
+              "isDir": false,
+              "name": ".gitignore",
+              "rel": "nested/.gitignore"
+            },
+            {
+              "isDir": true,
+              "name": "inner",
+              "rel": "nested/inner"
+            },
+            {
+              "isDir": true,
+              "name": "deep",
+              "rel": "nested/inner/deep"
+            },
+            {
+              "isDir": false,
+              "name": "new.txt",
+              "rel": "nested/inner/deep/new.txt"
+            },
+            {
+              "isDir": false,
+              "name": "extra.txt",
+              "rel": "nested/inner/extra.txt"
+            },
+            {
+              "isDir": false,
+              "name": "keep.txt",
+              "rel": "nested/inner/keep.txt"
+            },
+            {
+              "isDir": true,
+              "name": "node_modules",
+              "rel": "node_modules"
+            },
+            {
+              "isDir": true,
+              "name": "x",
+              "rel": "node_modules/x"
+            },
+            {
+              "isDir": false,
+              "name": "index.js",
+              "rel": "node_modules/x/index.js"
+            },
+            {
+              "isDir": false,
+              "name": "notes.txt",
+              "rel": "notes.txt"
+            },
+            {
+              "isDir": false,
+              "name": "spaced name.txt",
+              "rel": "spaced name.txt"
+            },
+            {
+              "isDir": true,
+              "name": "src",
+              "rel": "src"
+            },
+            {
+              "isDir": false,
+              "name": "main.rs",
+              "rel": "src/main.rs"
+            },
+            {
+              "isDir": true,
+              "name": "vendor",
+              "rel": "vendor"
+            },
+            {
+              "isDir": true,
+              "name": "pkg",
+              "rel": "vendor/pkg"
+            },
+            {
+              "isDir": false,
+              "name": "lib.go",
+              "rel": "vendor/pkg/lib.go"
+            }
+          ],
+          "stats": {
+            "incrementalUpdates": 0,
+            "rebuilds": 1
+          }
+        },
+        "case": "change-outside-the-root-still-marks-dirty",
+        "changes": [
+          [
+            "added",
+            "../outside.txt"
+          ]
+        ],
+        "mutations": [],
+        "queried": {
+          "dirty": false,
+          "entries": [
+            {
+              "isDir": false,
+              "name": ".gitignore",
+              "rel": ".gitignore"
+            },
+            {
+              "isDir": true,
+              "name": ".vscode",
+              "rel": ".vscode"
+            },
+            {
+              "isDir": false,
+              "name": "settings.json",
+              "rel": ".vscode/settings.json"
+            },
+            {
+              "isDir": true,
+              "name": "build",
+              "rel": "build"
+            },
+            {
+              "isDir": false,
+              "name": "out.txt",
+              "rel": "build/out.txt"
+            },
+            {
+              "isDir": true,
+              "name": "café",
+              "rel": "café"
+            },
+            {
+              "isDir": false,
+              "name": "menu.txt",
+              "rel": "café/menu.txt"
+            },
+            {
+              "isDir": true,
+              "name": "docs",
+              "rel": "docs"
+            },
+            {
+              "isDir": false,
+              "name": "guide.md",
+              "rel": "docs/guide.md"
+            },
+            {
+              "isDir": true,
+              "name": "ignored-dir",
+              "rel": "ignored-dir"
+            },
+            {
+              "isDir": false,
+              "name": "forced.txt",
+              "rel": "ignored-dir/forced.txt"
+            },
+            {
+              "isDir": true,
+              "name": "logs",
+              "rel": "logs"
+            },
+            {
+              "isDir": false,
+              "name": "app.log",
+              "rel": "logs/app.log"
+            },
+            {
+              "isDir": true,
+              "name": "nested",
+              "rel": "nested"
+            },
+            {
+              "isDir": false,
+              "name": ".gitignore",
+              "rel": "nested/.gitignore"
+            },
+            {
+              "isDir": true,
+              "name": "inner",
+              "rel": "nested/inner"
+            },
+            {
+              "isDir": true,
+              "name": "deep",
+              "rel": "nested/inner/deep"
+            },
+            {
+              "isDir": false,
+              "name": "new.txt",
+              "rel": "nested/inner/deep/new.txt"
+            },
+            {
+              "isDir": false,
+              "name": "extra.txt",
+              "rel": "nested/inner/extra.txt"
+            },
+            {
+              "isDir": false,
+              "name": "keep.txt",
+              "rel": "nested/inner/keep.txt"
+            },
+            {
+              "isDir": true,
+              "name": "node_modules",
+              "rel": "node_modules"
+            },
+            {
+              "isDir": true,
+              "name": "x",
+              "rel": "node_modules/x"
+            },
+            {
+              "isDir": false,
+              "name": "index.js",
+              "rel": "node_modules/x/index.js"
+            },
+            {
+              "isDir": false,
+              "name": "notes.txt",
+              "rel": "notes.txt"
+            },
+            {
+              "isDir": false,
+              "name": "spaced name.txt",
+              "rel": "spaced name.txt"
+            },
+            {
+              "isDir": true,
+              "name": "src",
+              "rel": "src"
+            },
+            {
+              "isDir": false,
+              "name": "main.rs",
+              "rel": "src/main.rs"
+            },
+            {
+              "isDir": true,
+              "name": "vendor",
+              "rel": "vendor"
+            },
+            {
+              "isDir": true,
+              "name": "pkg",
+              "rel": "vendor/pkg"
+            },
+            {
+              "isDir": false,
+              "name": "lib.go",
+              "rel": "vendor/pkg/lib.go"
+            }
+          ],
+          "stats": {
+            "incrementalUpdates": 0,
+            "rebuilds": 2
+          }
+        }
+      }
+    ]
+  },
+  "gitWalk": {
+    "cases": [
+      {
+        "case": "<root>",
+        "entries": [
+          {
+            "isDir": false,
+            "name": ".gitignore",
+            "rel": ".gitignore"
+          },
+          {
+            "isDir": true,
+            "name": ".vscode",
+            "rel": ".vscode"
+          },
+          {
+            "isDir": false,
+            "name": "settings.json",
+            "rel": ".vscode/settings.json"
+          },
+          {
+            "isDir": true,
+            "name": "build",
+            "rel": "build"
+          },
+          {
+            "isDir": false,
+            "name": "out.txt",
+            "rel": "build/out.txt"
+          },
+          {
+            "isDir": true,
+            "name": "café",
+            "rel": "café"
+          },
+          {
+            "isDir": false,
+            "name": "menu.txt",
+            "rel": "café/menu.txt"
+          },
+          {
+            "isDir": true,
+            "name": "docs",
+            "rel": "docs"
+          },
+          {
+            "isDir": false,
+            "name": "guide.md",
+            "rel": "docs/guide.md"
+          },
+          {
+            "isDir": true,
+            "name": "ignored-dir",
+            "rel": "ignored-dir"
+          },
+          {
+            "isDir": false,
+            "name": "forced.txt",
+            "rel": "ignored-dir/forced.txt"
+          },
+          {
+            "isDir": true,
+            "name": "logs",
+            "rel": "logs"
+          },
+          {
+            "isDir": false,
+            "name": "app.log",
+            "rel": "logs/app.log"
+          },
+          {
+            "isDir": true,
+            "name": "nested",
+            "rel": "nested"
+          },
+          {
+            "isDir": false,
+            "name": ".gitignore",
+            "rel": "nested/.gitignore"
+          },
+          {
+            "isDir": true,
+            "name": "inner",
+            "rel": "nested/inner"
+          },
+          {
+            "isDir": true,
+            "name": "deep",
+            "rel": "nested/inner/deep"
+          },
+          {
+            "isDir": false,
+            "name": "new.txt",
+            "rel": "nested/inner/deep/new.txt"
+          },
+          {
+            "isDir": false,
+            "name": "extra.txt",
+            "rel": "nested/inner/extra.txt"
+          },
+          {
+            "isDir": false,
+            "name": "keep.txt",
+            "rel": "nested/inner/keep.txt"
+          },
+          {
+            "isDir": true,
+            "name": "node_modules",
+            "rel": "node_modules"
+          },
+          {
+            "isDir": true,
+            "name": "x",
+            "rel": "node_modules/x"
+          },
+          {
+            "isDir": false,
+            "name": "index.js",
+            "rel": "node_modules/x/index.js"
+          },
+          {
+            "isDir": false,
+            "name": "notes.txt",
+            "rel": "notes.txt"
+          },
+          {
+            "isDir": false,
+            "name": "spaced name.txt",
+            "rel": "spaced name.txt"
+          },
+          {
+            "isDir": true,
+            "name": "src",
+            "rel": "src"
+          },
+          {
+            "isDir": false,
+            "name": "main.rs",
+            "rel": "src/main.rs"
+          },
+          {
+            "isDir": true,
+            "name": "vendor",
+            "rel": "vendor"
+          },
+          {
+            "isDir": true,
+            "name": "pkg",
+            "rel": "vendor/pkg"
+          },
+          {
+            "isDir": false,
+            "name": "lib.go",
+            "rel": "vendor/pkg/lib.go"
+          }
+        ],
+        "gitBacked": true,
+        "root": "",
+        "stats": {
+          "incrementalUpdates": 0,
+          "rebuilds": 1
+        }
+      },
+      {
+        "case": "nested",
+        "entries": [
+          {
+            "isDir": false,
+            "name": ".gitignore",
+            "rel": ".gitignore"
+          },
+          {
+            "isDir": true,
+            "name": "inner",
+            "rel": "inner"
+          },
+          {
+            "isDir": true,
+            "name": "deep",
+            "rel": "inner/deep"
+          },
+          {
+            "isDir": false,
+            "name": "new.txt",
+            "rel": "inner/deep/new.txt"
+          },
+          {
+            "isDir": false,
+            "name": "extra.txt",
+            "rel": "inner/extra.txt"
+          },
+          {
+            "isDir": false,
+            "name": "keep.txt",
+            "rel": "inner/keep.txt"
+          }
+        ],
+        "gitBacked": true,
+        "root": "nested",
+        "stats": {
+          "incrementalUpdates": 0,
+          "rebuilds": 1
+        }
+      },
+      {
+        "case": "ignored-dir",
+        "entries": [
+          {
+            "isDir": false,
+            "name": "forced.txt",
+            "rel": "forced.txt"
+          }
+        ],
+        "gitBacked": true,
+        "root": "ignored-dir",
+        "stats": {
+          "incrementalUpdates": 0,
+          "rebuilds": 1
+        }
+      },
+      {
+        "case": "docs",
+        "entries": [
+          {
+            "isDir": false,
+            "name": "guide.md",
+            "rel": "guide.md"
+          }
+        ],
+        "gitBacked": true,
+        "root": "docs",
+        "stats": {
+          "incrementalUpdates": 0,
+          "rebuilds": 1
+        }
+      }
+    ],
+    "fixture": {
+      "deleted": [
+        "docs/gone.md"
+      ],
+      "emptyDirs": [
+        "empty-dir",
+        "nested/empty"
+      ],
+      "excludesFile": "*.junk\n",
+      "gitignores": {
+        ".gitignore": "*.tmp\nignored-dir/\n",
+        "nested/.gitignore": "*.draft\n"
+      },
+      "infoExclude": "*.secret\n",
+      "tracked": [
+        "src/main.rs",
+        "vendor/pkg/lib.go",
+        "logs/app.log",
+        "build/out.txt",
+        ".vscode/settings.json",
+        "docs/guide.md",
+        "docs/gone.md",
+        "nested/inner/keep.txt",
+        "café/menu.txt",
+        "spaced name.txt",
+        "ignored-dir/forced.txt"
+      ],
+      "untracked": [
+        "notes.txt",
+        "nested/scratch.draft",
+        "nested/inner/extra.txt",
+        "nested/inner/deep/new.txt",
+        "local.secret",
+        "cache.junk",
+        "node_modules/x/index.js",
+        "a.tmp",
+        "ignored-dir/file.txt"
+      ]
+    }
+  },
   "ignoreRules": [
     {
       "case": "plain/src/",
@@ -7893,9 +15068,883 @@
       "isDir": false,
       "name": "spaced name.txt",
       "rel": "spaced name.txt"
+    },
+    {
+      "case": "edgeignore/x.bom",
+      "fixture": "edgeignore",
+      "ignored": true,
+      "isDir": false,
+      "name": "x.bom",
+      "rel": "x.bom"
+    },
+    {
+      "case": "edgeignore/double.txt",
+      "fixture": "edgeignore",
+      "ignored": true,
+      "isDir": false,
+      "name": "double.txt",
+      "rel": "double.txt"
+    },
+    {
+      "case": "edgeignore/!double.txt",
+      "fixture": "edgeignore",
+      "ignored": false,
+      "isDir": false,
+      "name": "!double.txt",
+      "rel": "!double.txt"
+    },
+    {
+      "case": "edgeignore/slashed",
+      "fixture": "edgeignore",
+      "ignored": false,
+      "isDir": false,
+      "name": "slashed",
+      "rel": "slashed"
+    },
+    {
+      "case": "edgeignore/a.ff",
+      "fixture": "edgeignore",
+      "ignored": true,
+      "isDir": false,
+      "name": "a.ff",
+      "rel": "a.ff"
+    },
+    {
+      "case": "edgeignore/a.vt",
+      "fixture": "edgeignore",
+      "ignored": true,
+      "isDir": false,
+      "name": "a.vt",
+      "rel": "a.vt"
+    },
+    {
+      "case": "edgeignore/a.ps",
+      "fixture": "edgeignore",
+      "ignored": true,
+      "isDir": false,
+      "name": "a.ps",
+      "rel": "a.ps"
+    },
+    {
+      "case": "edgeignore/a.ls",
+      "fixture": "edgeignore",
+      "ignored": true,
+      "isDir": false,
+      "name": "a.ls",
+      "rel": "a.ls"
+    },
+    {
+      "case": "edgeignore/a.us",
+      "fixture": "edgeignore",
+      "ignored": true,
+      "isDir": false,
+      "name": "a.us",
+      "rel": "a.us"
+    },
+    {
+      "case": "edgeignore/a.cr",
+      "fixture": "edgeignore",
+      "ignored": true,
+      "isDir": false,
+      "name": "a.cr",
+      "rel": "a.cr"
+    },
+    {
+      "case": "edgeignore/a.cr2",
+      "fixture": "edgeignore",
+      "ignored": true,
+      "isDir": false,
+      "name": "a.cr2",
+      "rel": "a.cr2"
+    },
+    {
+      "case": "edgeignore/keep.md",
+      "fixture": "edgeignore",
+      "ignored": false,
+      "isDir": false,
+      "name": "keep.md",
+      "rel": "keep.md"
     }
   ],
-  "note": "Autocompletion corpus: what the pinned reference's ignore rules, index store and path ranking answer for each scripted fixture tree, change sequence and query. Every name here is supplied by the fixtures scripts/parity/autocompletion.py authors; no reference-authored text, no reference source and no machine path is recorded. Two normalizations apply on both sides of the replay: entry lists are sorted by relative path, because the reference holds a rebuilt index in scandir order and a mutated one in relative-path order, so its order is not a contract; and fuzzy scores are recorded in hundredths, the integer scale this port's matcher computes in. Regenerate with scripts/parity/autocompletion.py --corpus when the pinned reference moves.",
+  "inlineSkill": {
+    "cases": [
+      {
+        "accept": {
+          "replaced": [
+            4,
+            8,
+            "/implement"
+          ],
+          "result": "handled"
+        },
+        "case": "fix /imp@8",
+        "cursor": 8,
+        "defaultMode": true,
+        "ghost": "lement",
+        "text": "fix /imp"
+      },
+      {
+        "accept": {
+          "replaced": [
+            4,
+            14,
+            "/implement-plan"
+          ],
+          "result": "handled"
+        },
+        "case": "fix /implement@14",
+        "cursor": 14,
+        "defaultMode": true,
+        "ghost": "-plan",
+        "text": "fix /implement"
+      },
+      {
+        "accept": {
+          "replaced": null,
+          "result": "ignored"
+        },
+        "case": "fix /implement-plan@19",
+        "cursor": 19,
+        "defaultMode": true,
+        "ghost": null,
+        "text": "fix /implement-plan"
+      },
+      {
+        "accept": {
+          "replaced": null,
+          "result": "ignored"
+        },
+        "case": "/imp@4",
+        "cursor": 4,
+        "defaultMode": true,
+        "ghost": null,
+        "text": "/imp"
+      },
+      {
+        "accept": {
+          "replaced": null,
+          "result": "ignored"
+        },
+        "case": "   /imp@7",
+        "cursor": 7,
+        "defaultMode": true,
+        "ghost": null,
+        "text": "   /imp"
+      },
+      {
+        "accept": {
+          "replaced": [
+            4,
+            8,
+            "/implement"
+          ],
+          "result": "handled"
+        },
+        "case": "fix /IMP@8",
+        "cursor": 8,
+        "defaultMode": true,
+        "ghost": "lement",
+        "text": "fix /IMP"
+      },
+      {
+        "accept": {
+          "replaced": [
+            4,
+            8,
+            "/Review"
+          ],
+          "result": "handled"
+        },
+        "case": "fix /rev@8",
+        "cursor": 8,
+        "defaultMode": true,
+        "ghost": "iew",
+        "text": "fix /rev"
+      },
+      {
+        "accept": {
+          "replaced": [
+            4,
+            8,
+            "/implement"
+          ],
+          "result": "handled"
+        },
+        "case": "fix /imp tail@8",
+        "cursor": 8,
+        "defaultMode": true,
+        "ghost": "lement",
+        "text": "fix /imp tail"
+      },
+      {
+        "accept": {
+          "replaced": null,
+          "result": "ignored"
+        },
+        "case": "fix /imptail@8",
+        "cursor": 8,
+        "defaultMode": true,
+        "ghost": null,
+        "text": "fix /imptail"
+      },
+      {
+        "accept": {
+          "replaced": null,
+          "result": "ignored"
+        },
+        "case": "fix /@5",
+        "cursor": 5,
+        "defaultMode": true,
+        "ghost": null,
+        "text": "fix /"
+      },
+      {
+        "accept": {
+          "replaced": null,
+          "result": "ignored"
+        },
+        "case": "fix /a/b@8",
+        "cursor": 8,
+        "defaultMode": true,
+        "ghost": null,
+        "text": "fix /a/b"
+      },
+      {
+        "accept": {
+          "replaced": null,
+          "result": "ignored"
+        },
+        "case": "fix /a@b@8",
+        "cursor": 8,
+        "defaultMode": true,
+        "ghost": null,
+        "text": "fix /a@b"
+      },
+      {
+        "accept": {
+          "replaced": [
+            7,
+            11,
+            "/deploy"
+          ],
+          "result": "handled"
+        },
+        "case": "mail@x /dep@11",
+        "cursor": 11,
+        "defaultMode": true,
+        "ghost": "loy",
+        "text": "mail@x /dep"
+      },
+      {
+        "accept": {
+          "replaced": [
+            4,
+            8,
+            "/implement"
+          ],
+          "result": "handled"
+        },
+        "case": "fix\n/imp@8",
+        "cursor": 8,
+        "defaultMode": true,
+        "ghost": "lement",
+        "text": "fix\n/imp"
+      },
+      {
+        "accept": {
+          "replaced": null,
+          "result": "ignored"
+        },
+        "case": "fix /imp@8#mode",
+        "cursor": 8,
+        "defaultMode": false,
+        "ghost": null,
+        "text": "fix /imp"
+      },
+      {
+        "accept": {
+          "replaced": null,
+          "result": "ignored"
+        },
+        "case": "fix /imp@0",
+        "cursor": 0,
+        "defaultMode": true,
+        "ghost": null,
+        "text": "fix /imp"
+      },
+      {
+        "accept": {
+          "replaced": null,
+          "result": "ignored"
+        },
+        "case": "fix /a@6",
+        "cursor": 6,
+        "defaultMode": true,
+        "ghost": null,
+        "text": "fix /a"
+      },
+      {
+        "accept": {
+          "replaced": null,
+          "result": "ignored"
+        },
+        "case": "fix /zzz@8",
+        "cursor": 8,
+        "defaultMode": true,
+        "ghost": null,
+        "text": "fix /zzz"
+      },
+      {
+        "accept": {
+          "replaced": [
+            4,
+            8,
+            "/deploy"
+          ],
+          "result": "handled"
+        },
+        "case": "fix\t/dep@8",
+        "cursor": 8,
+        "defaultMode": true,
+        "ghost": "loy",
+        "text": "fix\t/dep"
+      },
+      {
+        "accept": {
+          "replaced": null,
+          "result": "ignored"
+        },
+        "case": "stale-ghost",
+        "cursor": 8,
+        "defaultMode": true,
+        "ghost": null,
+        "shownFor": "fix /imp",
+        "text": "fix /imx"
+      }
+    ],
+    "skills": [
+      [
+        "/implement",
+        ""
+      ],
+      [
+        "/implement-plan",
+        ""
+      ],
+      [
+        "/Review",
+        ""
+      ],
+      [
+        "/review-pr",
+        ""
+      ],
+      [
+        "/deploy",
+        ""
+      ],
+      [
+        "/a",
+        ""
+      ]
+    ]
+  },
+  "note": "Autocompletion corpus: what the pinned reference's ignore rules, index store and path ranking answer for each scripted fixture tree, change sequence and query. Every name here is supplied by the fixtures scripts/parity/autocompletion.py authors; no reference-authored text, no reference source and no machine path is recorded. Two normalizations apply on both sides of the replay: entry lists are sorted by relative path, because the reference holds a rebuilt index in scandir order and a mutated one in relative-path order, so its order is not a contract; and fuzzy scores are recorded in hundredths, the integer scale this port's matcher computes in. The git families run in a repository the script initializes with the system and global git configuration disabled; the collect and controller families run with the working directory at a fixture root, because the reference completes against the process working directory; the fuzzy family records only the seed, the alphabet and the scores of a sweep both sides draw from the same SplitMix64 stream. Regenerate with scripts/parity/autocompletion.py --corpus when the pinned reference moves.",
+  "pathPrompt": {
+    "cases": [
+      {
+        "allAliases": [],
+        "case": "<empty>",
+        "mentions": {
+          "contextTypes": {},
+          "count": 0,
+          "fileExtensions": {}
+        },
+        "message": "",
+        "resources": []
+      },
+      {
+        "allAliases": [
+          "docs/guide.md"
+        ],
+        "case": "read @docs/guide.md please",
+        "mentions": {
+          "contextTypes": {
+            "file": 1
+          },
+          "count": 1,
+          "fileExtensions": {
+            ".md": 1
+          }
+        },
+        "message": "read @docs/guide.md please",
+        "resources": [
+          {
+            "alias": "docs/guide.md",
+            "kind": "file",
+            "path": "docs/guide.md"
+          }
+        ]
+      },
+      {
+        "allAliases": [
+          "docs/guide.md",
+          "docs/guide.md"
+        ],
+        "case": "@docs/guide.md and @docs/guide.md",
+        "mentions": {
+          "contextTypes": {
+            "file": 2
+          },
+          "count": 2,
+          "fileExtensions": {
+            ".md": 2
+          }
+        },
+        "message": "@docs/guide.md and @docs/guide.md",
+        "resources": [
+          {
+            "alias": "docs/guide.md",
+            "kind": "file",
+            "path": "docs/guide.md"
+          }
+        ]
+      },
+      {
+        "allAliases": [
+          "docs/guide.md",
+          "./docs/../docs/guide.md"
+        ],
+        "case": "@docs/guide.md then @./docs/../docs/guide.md",
+        "mentions": {
+          "contextTypes": {
+            "file": 2
+          },
+          "count": 2,
+          "fileExtensions": {
+            ".md": 2
+          }
+        },
+        "message": "@docs/guide.md then @./docs/../docs/guide.md",
+        "resources": [
+          {
+            "alias": "docs/guide.md",
+            "kind": "file",
+            "path": "docs/guide.md"
+          }
+        ]
+      },
+      {
+        "allAliases": [],
+        "case": "email a@docs/guide.md",
+        "mentions": {
+          "contextTypes": {},
+          "count": 0,
+          "fileExtensions": {}
+        },
+        "message": "email a@docs/guide.md",
+        "resources": []
+      },
+      {
+        "allAliases": [],
+        "case": "x_@docs/guide.md",
+        "mentions": {
+          "contextTypes": {},
+          "count": 0,
+          "fileExtensions": {}
+        },
+        "message": "x_@docs/guide.md",
+        "resources": []
+      },
+      {
+        "allAliases": [],
+        "case": "é@docs/guide.md",
+        "mentions": {
+          "contextTypes": {},
+          "count": 0,
+          "fileExtensions": {}
+        },
+        "message": "é@docs/guide.md",
+        "resources": []
+      },
+      {
+        "allAliases": [],
+        "case": "(@docs/guide.md)",
+        "mentions": {
+          "contextTypes": {},
+          "count": 0,
+          "fileExtensions": {}
+        },
+        "message": "(@docs/guide.md)",
+        "resources": []
+      },
+      {
+        "allAliases": [
+          "docs"
+        ],
+        "case": "see @docs",
+        "mentions": {
+          "contextTypes": {
+            "folder": 1
+          },
+          "count": 1,
+          "fileExtensions": {}
+        },
+        "message": "see @docs",
+        "resources": [
+          {
+            "alias": "docs",
+            "kind": "folder",
+            "path": "docs"
+          }
+        ]
+      },
+      {
+        "allAliases": [
+          "img/shot.PNG"
+        ],
+        "case": "see @img/shot.PNG",
+        "mentions": {
+          "contextTypes": {
+            "image": 1
+          },
+          "count": 1,
+          "fileExtensions": {}
+        },
+        "message": "see @img/shot.PNG",
+        "resources": [
+          {
+            "alias": "img/shot.PNG",
+            "kind": "image",
+            "path": "img/shot.PNG"
+          }
+        ]
+      },
+      {
+        "allAliases": [
+          "dir with space/file.txt"
+        ],
+        "case": "see @\"dir with space/file.txt\"",
+        "mentions": {
+          "contextTypes": {
+            "file": 1
+          },
+          "count": 1,
+          "fileExtensions": {
+            ".txt": 1
+          }
+        },
+        "message": "see @\"dir with space/file.txt\"",
+        "resources": [
+          {
+            "alias": "dir with space/file.txt",
+            "kind": "file",
+            "path": "dir with space/file.txt"
+          }
+        ]
+      },
+      {
+        "allAliases": [
+          "dir with space/file.txt"
+        ],
+        "case": "see @'dir with space/file.txt'",
+        "mentions": {
+          "contextTypes": {
+            "file": 1
+          },
+          "count": 1,
+          "fileExtensions": {
+            ".txt": 1
+          }
+        },
+        "message": "see @'dir with space/file.txt'",
+        "resources": [
+          {
+            "alias": "dir with space/file.txt",
+            "kind": "file",
+            "path": "dir with space/file.txt"
+          }
+        ]
+      },
+      {
+        "allAliases": [
+          "it's.txt"
+        ],
+        "case": "see @'it\\'s.txt'",
+        "mentions": {
+          "contextTypes": {
+            "file": 1
+          },
+          "count": 1,
+          "fileExtensions": {
+            ".txt": 1
+          }
+        },
+        "message": "see @'it\\'s.txt'",
+        "resources": [
+          {
+            "alias": "it's.txt",
+            "kind": "file",
+            "path": "it's.txt"
+          }
+        ]
+      },
+      {
+        "allAliases": [
+          "it's.txt"
+        ],
+        "case": "see @\"it's.txt\"",
+        "mentions": {
+          "contextTypes": {
+            "file": 1
+          },
+          "count": 1,
+          "fileExtensions": {
+            ".txt": 1
+          }
+        },
+        "message": "see @\"it's.txt\"",
+        "resources": [
+          {
+            "alias": "it's.txt",
+            "kind": "file",
+            "path": "it's.txt"
+          }
+        ]
+      },
+      {
+        "allAliases": [],
+        "case": "see @\"unterminated",
+        "mentions": {
+          "contextTypes": {},
+          "count": 0,
+          "fileExtensions": {}
+        },
+        "message": "see @\"unterminated",
+        "resources": []
+      },
+      {
+        "allAliases": [],
+        "case": "see @\"\" now",
+        "mentions": {
+          "contextTypes": {},
+          "count": 0,
+          "fileExtensions": {}
+        },
+        "message": "see @\"\" now",
+        "resources": []
+      },
+      {
+        "allAliases": [],
+        "case": "see @'' now",
+        "mentions": {
+          "contextTypes": {},
+          "count": 0,
+          "fileExtensions": {}
+        },
+        "message": "see @'' now",
+        "resources": []
+      },
+      {
+        "allAliases": [
+          "docs/guide.md"
+        ],
+        "case": "see @\"missing @docs/guide.md\"",
+        "mentions": {
+          "contextTypes": {
+            "file": 1
+          },
+          "count": 1,
+          "fileExtensions": {
+            ".md": 1
+          }
+        },
+        "message": "see @\"missing @docs/guide.md\"",
+        "resources": [
+          {
+            "alias": "docs/guide.md",
+            "kind": "file",
+            "path": "docs/guide.md"
+          }
+        ]
+      },
+      {
+        "allAliases": [],
+        "case": "see @missing.md",
+        "mentions": {
+          "contextTypes": {},
+          "count": 0,
+          "fileExtensions": {}
+        },
+        "message": "see @missing.md",
+        "resources": []
+      },
+      {
+        "allAliases": [],
+        "case": "see @ alone",
+        "mentions": {
+          "contextTypes": {},
+          "count": 0,
+          "fileExtensions": {}
+        },
+        "message": "see @ alone",
+        "resources": []
+      },
+      {
+        "allAliases": [
+          "docs/guide.md"
+        ],
+        "case": "see @@docs/guide.md",
+        "mentions": {
+          "contextTypes": {
+            "file": 1
+          },
+          "count": 1,
+          "fileExtensions": {
+            ".md": 1
+          }
+        },
+        "message": "see @@docs/guide.md",
+        "resources": [
+          {
+            "alias": "docs/guide.md",
+            "kind": "file",
+            "path": "docs/guide.md"
+          }
+        ]
+      },
+      {
+        "allAliases": [
+          "{root}/notes.md"
+        ],
+        "case": "see @\"{root}/notes.md\"",
+        "mentions": {
+          "contextTypes": {
+            "file": 1
+          },
+          "count": 1,
+          "fileExtensions": {
+            ".md": 1
+          }
+        },
+        "message": "see @\"{root}/notes.md\"",
+        "resources": [
+          {
+            "alias": "{root}/notes.md",
+            "kind": "file",
+            "path": "notes.md"
+          }
+        ]
+      },
+      {
+        "allAliases": [
+          "docs/guide.md",
+          "notes.md"
+        ],
+        "case": "see @docs/guide.md,@notes.md",
+        "mentions": {
+          "contextTypes": {
+            "file": 2
+          },
+          "count": 2,
+          "fileExtensions": {
+            ".md": 2
+          }
+        },
+        "message": "see @docs/guide.md,@notes.md",
+        "resources": [
+          {
+            "alias": "docs/guide.md",
+            "kind": "file",
+            "path": "docs/guide.md"
+          },
+          {
+            "alias": "notes.md",
+            "kind": "file",
+            "path": "notes.md"
+          }
+        ]
+      },
+      {
+        "allAliases": [
+          "docs/guide.md",
+          "notes.md"
+        ],
+        "case": "see @'docs/guide.md'@notes.md",
+        "mentions": {
+          "contextTypes": {
+            "file": 2
+          },
+          "count": 2,
+          "fileExtensions": {
+            ".md": 2
+          }
+        },
+        "message": "see @'docs/guide.md'@notes.md",
+        "resources": [
+          {
+            "alias": "docs/guide.md",
+            "kind": "file",
+            "path": "docs/guide.md"
+          },
+          {
+            "alias": "notes.md",
+            "kind": "file",
+            "path": "notes.md"
+          }
+        ]
+      },
+      {
+        "allAliases": [
+          "archive.tar.gz",
+          "img"
+        ],
+        "case": "see @archive.tar.gz and @img",
+        "mentions": {
+          "contextTypes": {
+            "file": 1,
+            "folder": 1
+          },
+          "count": 2,
+          "fileExtensions": {
+            ".gz": 1
+          }
+        },
+        "message": "see @archive.tar.gz and @img",
+        "resources": [
+          {
+            "alias": "archive.tar.gz",
+            "kind": "file",
+            "path": "archive.tar.gz"
+          },
+          {
+            "alias": "img",
+            "kind": "folder",
+            "path": "img"
+          }
+        ]
+      },
+      {
+        "allAliases": [],
+        "case": "trailing @",
+        "mentions": {
+          "contextTypes": {},
+          "count": 0,
+          "fileExtensions": {}
+        },
+        "message": "trailing @",
+        "resources": []
+      }
+    ],
+    "tree": [
+      "docs/guide.md",
+      "img/shot.PNG",
+      "dir with space/file.txt",
+      "it's.txt",
+      "notes.md",
+      "archive.tar.gz"
+    ]
+  },
   "ranking": [
     {
       "candidates": [
@@ -13595,6 +21644,378 @@
         "incrementalUpdates": 0,
         "rebuilds": 1
       }
+    },
+    {
+      "case": "edgeignore",
+      "entries": [
+        {
+          "isDir": false,
+          "name": "!double.txt",
+          "rel": "!double.txt"
+        },
+        {
+          "isDir": false,
+          "name": ".gitignore",
+          "rel": ".gitignore"
+        },
+        {
+          "isDir": false,
+          "name": "keep.md",
+          "rel": "keep.md"
+        },
+        {
+          "isDir": false,
+          "name": "slashed",
+          "rel": "slashed"
+        }
+      ],
+      "fixture": "edgeignore",
+      "stats": {
+        "incrementalUpdates": 0,
+        "rebuilds": 1
+      }
+    },
+    {
+      "case": "collect",
+      "entries": [
+        {
+          "isDir": false,
+          "name": ".env",
+          "rel": ".env"
+        },
+        {
+          "isDir": false,
+          "name": "Makefile",
+          "rel": "Makefile"
+        },
+        {
+          "isDir": false,
+          "name": "README.md",
+          "rel": "README.md"
+        },
+        {
+          "isDir": true,
+          "name": "docs",
+          "rel": "docs"
+        },
+        {
+          "isDir": false,
+          "name": "guide.md",
+          "rel": "docs/guide.md"
+        },
+        {
+          "isDir": true,
+          "name": "empty-dir",
+          "rel": "empty-dir"
+        },
+        {
+          "isDir": true,
+          "name": "src",
+          "rel": "src"
+        },
+        {
+          "isDir": false,
+          "name": "main.rs",
+          "rel": "src/main.rs"
+        },
+        {
+          "isDir": true,
+          "name": "parser",
+          "rel": "src/parser"
+        },
+        {
+          "isDir": false,
+          "name": "lexer.rs",
+          "rel": "src/parser/lexer.rs"
+        },
+        {
+          "isDir": false,
+          "name": "mod.rs",
+          "rel": "src/parser/mod.rs"
+        }
+      ],
+      "fixture": "collect",
+      "stats": {
+        "incrementalUpdates": 0,
+        "rebuilds": 1
+      }
+    }
+  ],
+  "watchFilter": [
+    {
+      "allowed": true,
+      "case": "src/main.rs",
+      "segments": [
+        "src",
+        "main.rs"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": ".git/index",
+      "segments": [
+        ".git",
+        "index"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": ".git",
+      "segments": [
+        ".git"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": "a/.git/HEAD",
+      "segments": [
+        "a",
+        ".git",
+        "HEAD"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": "node_modules/x/i.js",
+      "segments": [
+        "node_modules",
+        "x",
+        "i.js"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": "__pycache__/m.cpython-312.pyc",
+      "segments": [
+        "__pycache__",
+        "m.cpython-312.pyc"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": "m.pyc",
+      "segments": [
+        "m.pyc"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": "m.pyo",
+      "segments": [
+        "m.pyo"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": "m.pyd",
+      "segments": [
+        "m.pyd"
+      ]
+    },
+    {
+      "allowed": true,
+      "case": "m.py",
+      "segments": [
+        "m.py"
+      ]
+    },
+    {
+      "allowed": true,
+      "case": "x.pyc.txt",
+      "segments": [
+        "x.pyc.txt"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": ".venv/lib",
+      "segments": [
+        ".venv",
+        "lib"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": ".idea/ws.xml",
+      "segments": [
+        ".idea",
+        "ws.xml"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": ".hg",
+      "segments": [
+        ".hg"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": ".svn/x",
+      "segments": [
+        ".svn",
+        "x"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": ".tox",
+      "segments": [
+        ".tox"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": ".mypy_cache/x",
+      "segments": [
+        ".mypy_cache",
+        "x"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": ".pytest_cache",
+      "segments": [
+        ".pytest_cache"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": ".hypothesis/x",
+      "segments": [
+        ".hypothesis",
+        "x"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": "f.swp",
+      "segments": [
+        "f.swp"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": "f.swx",
+      "segments": [
+        "f.swx"
+      ]
+    },
+    {
+      "allowed": true,
+      "case": "f.sw",
+      "segments": [
+        "f.sw"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": "notes~",
+      "segments": [
+        "notes~"
+      ]
+    },
+    {
+      "allowed": true,
+      "case": "a~b",
+      "segments": [
+        "a~b"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": ".#lock",
+      "segments": [
+        ".#lock"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": ".DS_Store",
+      "segments": [
+        ".DS_Store"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": "a/.DS_Store",
+      "segments": [
+        "a",
+        ".DS_Store"
+      ]
+    },
+    {
+      "allowed": true,
+      "case": "DS_Store",
+      "segments": [
+        "DS_Store"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": "flycheck_main.rs",
+      "segments": [
+        "flycheck_main.rs"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": "src/flycheck_x",
+      "segments": [
+        "src",
+        "flycheck_x"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": "x.___jb_tmp___",
+      "segments": [
+        "x.___jb_tmp___"
+      ]
+    },
+    {
+      "allowed": false,
+      "case": "x.___jb_old___",
+      "segments": [
+        "x.___jb_old___"
+      ]
+    },
+    {
+      "allowed": true,
+      "case": "x.___jb_ld___",
+      "segments": [
+        "x.___jb_ld___"
+      ]
+    },
+    {
+      "allowed": true,
+      "case": "venv/x",
+      "segments": [
+        "venv",
+        "x"
+      ]
+    },
+    {
+      "allowed": true,
+      "case": "target/x",
+      "segments": [
+        "target",
+        "x"
+      ]
+    },
+    {
+      "allowed": true,
+      "case": "git",
+      "segments": [
+        "git"
+      ]
+    },
+    {
+      "allowed": true,
+      "case": "my.git",
+      "segments": [
+        "my.git"
+      ]
     }
   ]
 }
