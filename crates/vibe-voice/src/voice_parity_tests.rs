@@ -17,8 +17,9 @@
 //! The wire families are measured at the seam each side actually builds a
 //! request from: the corpus holds the URL the reference hands its websocket
 //! opener and the request it hands its HTTP sender, and this port answers with
-//! [`super::settings::TranscriptionSettings`], [`super::realtime::VoiceConfig`]
-//! and [`super::realtime::session_update`], resolved per document, which is what
+//! [`super::settings::TranscriptionSettings`],
+//! [`super::transcribe::RealtimeEndpoint`] and
+//! [`super::transcribe::session_update`], resolved per document, which is what
 //! a running session opens and sends. Where this build still answers something
 //! else, the ledger below names it rather than the replay passing quietly.
 
@@ -34,16 +35,19 @@ use vibe_core::config::registry::default_document;
 use vibe_core::config::{ConfigPaths, ConfigSnapshot, LayeredConfig};
 use vibe_core::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
 
-use super::player::PLAYBACK_SAMPLE_WIDTH;
-use super::realtime::{DRAIN_TIMEOUT, VoiceConfig, session_update};
+use super::manager::TRANSCRIPTION_DRAIN_TIMEOUT;
+use super::playback::{PLAYBACK_BUFFER_MS, PLAYBACK_SAMPLE_WIDTH};
 use super::settings::{SpeechSettings, TranscriptionSettings};
 use super::speech::SpeechRequest;
+use super::transcribe::{RealtimeEndpoint, session_update};
 
-const CORPUS_RELATIVE: &str = "crates/vibe-cli/tests/voice/corpus.json";
+mod behavior;
+
+const CORPUS_RELATIVE: &str = "crates/vibe-voice/tests/voice/corpus.json";
 const CAPTURE_SCRIPT: &str = "scripts/parity/voice.py";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 2;
+const CORPUS_SCHEMA_VERSION: u32 = 3;
 /// The comparison floor this replay commits to, so a regeneration that
 /// captured almost nothing fails instead of reporting a clean but empty run.
 const MINIMUM_SCENARIOS: usize = 200;
@@ -54,11 +58,20 @@ const CONFIG_FILE: &str = "config.toml";
 /// capture adds without a reader here fails the replay by name rather than
 /// passing unread, and so does a family this replay expects and the corpus
 /// dropped.
-const FAMILIES: [&str; 4] = [
+const FAMILIES: [&str; 13] = [
     "constants",
     "transcriptionResolution",
     "speechResolution",
     "wireFrames",
+    "captureSignal",
+    "audioDevices",
+    "decodeWav",
+    "audioMetadata",
+    "transcribeStream",
+    "voiceManager",
+    "narrator",
+    "narrationService",
+    "acpBridge",
 ];
 
 /// Keys the corpus carries that are not families: the pin, the layout, the
@@ -92,16 +105,6 @@ const DIVERGENCES: &[(&str, &str)] = &[
          docs/parity.md records the streaming-only surface",
     ),
     (
-        "constants/playback/bufferMs",
-        "ACCEPTED: since v2.25.5 the reference plays through miniaudio and opens the output device \
-         with a 200 ms buffer (`DEFAULT_BUFFER_MS`, `vibe/cli/audio_player/audio_player.py:27`, \
-         passed as `buffersize_msec` at :101-106 at 4a96003), \
-         replacing the 4096-frame `DEFAULT_BLOCKSIZE` it had at 2.24.0; this port still opens \
-         cpal with a fixed 4096-frame buffer (`PLAYBACK_BLOCK_SIZE`, \
-         `crates/vibe-cli/src/tui/voice/player.rs:237`) and declares no millisecond buffer, a \
-         device-latency difference with no user-visible output",
-    ),
-    (
         "transcriptionResolution/cause/*",
         "ACCEPTED: the reference raises on a document whose active alias or provider resolves to \
          nothing and loses its whole configuration with it, while this port's view falls back to \
@@ -124,15 +127,16 @@ const DIVERGENCES: &[(&str, &str)] = &[
         "ACCEPTED: as above, on the read-aloud surface",
     ),
     (
-        "wireFrames/speech.body.metadata/*",
-        "ACCEPTED: the reference's audio clients attach the request metadata their metadata \
-         getter returns, on both directions: an empty mapping when none is passed, which is what \
-         the corpus records, and since v2.24.4 the mapping \
-         `vibe/cli/audio_request_metadata.py:11-25` builds when the TUI supplies one \
-         (`vibe/cli/textual_ui/app.py:4995` at 4a96003), where \
-         2.24.0 took it from the telemetry client; this port attaches none, which is the same \
-         choice its realtime request already makes and which `docs/parity.md` records for the \
-         telemetry envelope as a whole",
+        "voiceManager/listener/no-audio",
+        "ACCEPTED: the reference's no-audio error joins its two clauses with an em dash \
+         (`_no_audio_detected_message`, `vibe/cli/voice_manager/voice_manager.py`); this \
+         repository's writing rules forbid that glyph in any output, so \
+         `crate::manager::no_audio_detected_message` joins them with a semicolon, one code \
+         point shorter, which the prose digest reports",
+    ),
+    (
+        "voiceManager/telemetry/no-audio",
+        "ACCEPTED: the same message, carried as the error event's `error_message`",
     ),
 ];
 
@@ -152,6 +156,20 @@ struct Corpus {
     transcription_resolution: Vec<TranscriptionCase>,
     speech_resolution: Vec<SpeechCase>,
     wire_frames: Vec<FrameCase>,
+    capture_signal: Vec<behavior::SignalCase>,
+    audio_devices: Vec<behavior::DeviceCase>,
+    decode_wav: Vec<behavior::WavCase>,
+    audio_metadata: Vec<behavior::MetadataCase>,
+    transcribe_stream: Vec<behavior::StreamCase>,
+    voice_manager: Vec<behavior::VoiceCase>,
+    narrator: Vec<behavior::NarratorCase>,
+    narration_service: Vec<behavior::NarrationCase>,
+    #[expect(
+        dead_code,
+        reason = "replayed by the editor adapter that owns the bridge, in \
+                  crates/vibe-acp/src/agent/voice/voice_parity_tests.rs"
+    )]
+    acp_bridge: Vec<Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -563,21 +581,21 @@ struct PortTranscriptionFrame {
 /// configuration resolves to no session at all.
 fn port_transcription_frame(view: &Value) -> Option<PortTranscriptionFrame> {
     let settings = TranscriptionSettings::from_config_view(view).ok()?;
-    let config = VoiceConfig::resolve(&settings).ok()?;
+    let config = RealtimeEndpoint::resolve(&settings).ok()?;
     let model = config
-        .endpoint
+        .url
         .query_pairs()
         .find(|(key, _)| key == "model")
         .map(|(_, value)| value.into_owned())
         .unwrap_or_default();
     let frame: Value = serde_json::from_str(&session_update(
         &config.encoding,
-        config.requested_sample_rate,
+        config.sample_rate,
         config.target_streaming_delay_ms,
     ))
     .expect("the session frame is JSON");
     Some(PortTranscriptionFrame {
-        endpoint: config.endpoint.to_string(),
+        endpoint: config.url.to_string(),
         server_url: settings.api_base.clone(),
         model,
         encoding: string_at(&frame, "/session/audio_format/encoding"),
@@ -602,7 +620,9 @@ struct PortSpeechFrame {
 
 fn port_speech_frame(view: &Value, input: &str) -> Option<PortSpeechFrame> {
     let settings = SpeechSettings::from_config_view(view).ok()?;
-    let request = SpeechRequest::resolve(&settings, input).ok()?;
+    // The reference captures the frame from a client built without a
+    // metadata getter, whose mapping is the empty one.
+    let request = SpeechRequest::resolve(&settings, input, &Vec::new()).ok()?;
     Some(PortSpeechFrame {
         method: "POST",
         endpoint: request.endpoint.to_string(),
@@ -844,7 +864,7 @@ fn run_constants(constants: &Constants, report: &mut Report) {
         "drainTimeoutSeconds",
         "voice",
         &constants.transcription_drain_timeout_seconds,
-        &DRAIN_TIMEOUT.as_secs_f64(),
+        &TRANSCRIPTION_DRAIN_TIMEOUT.as_secs_f64(),
     );
     report.check(
         "constants",
@@ -867,15 +887,12 @@ fn run_constants(constants: &Constants, report: &mut Report) {
         &integer_default("target_streaming_delay_ms"),
         &port_frame.target_streaming_delay_ms,
     );
-    // This port sizes its output buffer in frames rather than milliseconds, so
-    // it declares no millisecond buffer and answers nothing here; the ledger
-    // names the frame count it opens with instead.
     report.check(
         "constants",
         "playback",
         "bufferMs",
-        &Some(i64::from(constants.playback.buffer_ms)),
-        &None,
+        &i64::from(constants.playback.buffer_ms),
+        &i64::from(PLAYBACK_BUFFER_MS),
     );
     report.check(
         "constants",
@@ -1414,6 +1431,30 @@ fn the_committed_corpus_replays_against_this_port() {
     let mut report = Report::default();
     run_wire_frames(&corpus, &mut report);
     scenarios += settle(&report, "wireFrames");
+    let mut report = Report::default();
+    behavior::run_capture_signal(&corpus.capture_signal, &mut report);
+    scenarios += settle(&report, "captureSignal");
+    let mut report = Report::default();
+    behavior::run_audio_devices(&corpus.audio_devices, &mut report);
+    scenarios += settle(&report, "audioDevices");
+    let mut report = Report::default();
+    behavior::run_decode_wav(&corpus.decode_wav, &mut report);
+    scenarios += settle(&report, "decodeWav");
+    let mut report = Report::default();
+    behavior::run_audio_metadata(&corpus.audio_metadata, &mut report);
+    scenarios += settle(&report, "audioMetadata");
+    let mut report = Report::default();
+    behavior::run_transcribe_stream(&corpus.transcribe_stream, &mut report);
+    scenarios += settle(&report, "transcribeStream");
+    let mut report = Report::default();
+    behavior::run_voice_manager(&corpus.voice_manager, &mut report);
+    scenarios += settle(&report, "voiceManager");
+    let mut report = Report::default();
+    behavior::run_narrator(&corpus.narrator, &mut report);
+    scenarios += settle(&report, "narrator");
+    let mut report = Report::default();
+    behavior::run_narration_service(&corpus.narration_service, &mut report);
+    scenarios += settle(&report, "narrationService");
     println!(
         "voice: {scenarios} comparisons across {} families replayed at {}",
         FAMILIES.len(),

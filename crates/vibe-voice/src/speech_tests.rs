@@ -8,11 +8,9 @@ use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 use tokio::net::TcpListener;
 use tokio::sync::Notify;
 
-use crate::tui::narrator::{NarratorEffect, NarratorManager, NarratorState};
-use crate::tui::runtime::interactive_test_runtime;
-use crate::tui::state::TuiState;
+use crate::identity::no_metadata;
+use crate::playback::{DecodedAudio, Playback};
 
-use super::super::player::{DecodedAudio, Playback};
 use super::*;
 
 const FIXTURE_SUMMARY: &str = "wrote the parser";
@@ -184,7 +182,9 @@ impl SpeechClient for ScriptedClient {
             if let Some(gate) = self.gate.as_ref() {
                 gate.notified().await;
             }
-            self.payload.clone()
+            self.payload
+                .clone()
+                .map_err(|message| SpeechFailure::new("SDKError", message))
         })
     }
 }
@@ -220,7 +220,8 @@ fn the_request_is_built_from_the_configured_entry() {
     ))
     .expect("the configured surface resolves");
     assert_eq!(settings.api_key_env_var, "FIXTURE_TOKEN");
-    let request = SpeechRequest::resolve(&settings, FIXTURE_SUMMARY).expect("a request");
+    let request =
+        SpeechRequest::resolve(&settings, FIXTURE_SUMMARY, &Vec::new()).expect("a request");
     assert_eq!(
         request.endpoint.as_str(),
         "https://speech.fixture.invalid:9443/v1/audio/speech"
@@ -233,6 +234,7 @@ fn the_request_is_built_from_the_configured_entry() {
             "voice_id": "fixture-gateway-voice",
             "response_format": "mp3",
             "stream": false,
+            "metadata": {},
         })
     );
 }
@@ -243,6 +245,7 @@ fn a_provider_path_prefix_is_kept_under_the_speech_path() {
     let request = SpeechRequest::resolve(
         &speech_settings("https://gateway.fixture.invalid/audio/"),
         FIXTURE_SUMMARY,
+        &Vec::new(),
     )
     .expect("a request");
     assert_eq!(
@@ -253,11 +256,15 @@ fn a_provider_path_prefix_is_kept_under_the_speech_path() {
 
 #[test]
 fn an_endpoint_that_is_not_a_url_is_reported_rather_than_posted_to() {
-    let error = SpeechRequest::resolve(&speech_settings("not a url"), FIXTURE_SUMMARY)
+    let error = SpeechRequest::resolve(&speech_settings("not a url"), FIXTURE_SUMMARY, &Vec::new())
         .expect_err("an unusable endpoint is reported");
     assert!(error.contains("invalid"), "{error}");
-    let error = SpeechRequest::resolve(&speech_settings("wss://gateway.fixture.invalid"), "")
-        .expect_err("an unsupported scheme is reported");
+    let error = SpeechRequest::resolve(
+        &speech_settings("wss://gateway.fixture.invalid"),
+        "",
+        &Vec::new(),
+    )
+    .expect_err("an unsupported scheme is reported");
     assert!(error.contains("wss"), "{error}");
 }
 
@@ -350,7 +357,7 @@ async fn a_summary_is_posted_to_the_configured_endpoint_and_decoded() {
         one_shot_gateway("200 OK", json!({"audio_data": encoded}).to_string()).await;
     let mut settings = speech_settings(&base);
     settings.response_format = "wav".to_owned();
-    let client = HttpSpeechClient::new(settings, "fixture-credential".to_owned())
+    let client = HttpSpeechClient::new(settings, "fixture-credential".to_owned(), no_metadata())
         .expect("the transport starts");
 
     let spoken = client.speak(FIXTURE_SUMMARY).await.expect("audio bytes");
@@ -370,6 +377,7 @@ async fn a_summary_is_posted_to_the_configured_endpoint_and_decoded() {
             "voice_id": "fixture-voice",
             "response_format": "wav",
             "stream": false,
+            "metadata": {},
         })
     );
 }
@@ -378,26 +386,28 @@ async fn a_summary_is_posted_to_the_configured_endpoint_and_decoded() {
 #[tokio::test]
 async fn a_refused_request_is_reported_by_status() {
     let (base, server) = one_shot_gateway("503 Service Unavailable", "{}".to_owned()).await;
-    let client = HttpSpeechClient::new(speech_settings(&base), "fixture-credential".to_owned())
-        .expect("the transport starts");
+    let client = HttpSpeechClient::new(
+        speech_settings(&base),
+        "fixture-credential".to_owned(),
+        no_metadata(),
+    )
+    .expect("the transport starts");
     let error = client
         .speak(FIXTURE_SUMMARY)
         .await
         .expect_err("a refused request fails");
     let _ = server.await;
-    assert!(error.contains("503"), "{error}");
-    assert!(!error.contains("fixture-credential"), "{error}");
+    assert_eq!(error.class, "SDKError");
+    assert!(error.message.contains("503"), "{error:?}");
+    assert!(!error.message.contains("fixture-credential"), "{error:?}");
 }
 
 /// A configuration that resolves to no client answers where the summary was
 /// spoken, so the narrator settles instead of waiting, and nothing is posted.
 #[tokio::test]
 async fn an_unresolved_configuration_settles_the_generation_without_posting() {
-    let mut manager = SpeechManager::production(
-        &json!({}),
-        "",
-        std::path::Path::new("/nonexistent-vibe-home"),
-    );
+    let mut manager =
+        SpeechManager::production(&json!({}), Arc::new(|_: &str| None), no_metadata());
     assert!(!manager.available(), "no client is built");
     manager.speak(3, FIXTURE_SUMMARY.to_owned());
     let event = next_event(&mut manager).await;
@@ -408,7 +418,7 @@ async fn an_unresolved_configuration_settles_the_generation_without_posting() {
     else {
         panic!("the missing configuration is reported: {event:?}");
     };
-    assert!(error.contains("tts_models"), "{error}");
+    assert!(error.message.contains("tts_models"), "{error:?}");
 }
 
 // --------------------------------------------------------------------------
@@ -456,6 +466,12 @@ async fn an_undecodable_payload_is_reported_and_opens_no_device() {
         output.clone(),
     );
     manager.speak(2, FIXTURE_SUMMARY.to_owned());
+    // Reference `_speak_summary`: the endpoint answered, so the narration is
+    // speaking before the player refuses the payload.
+    assert_eq!(
+        next_event(&mut manager).await,
+        SpeechEvent::PlaybackStarted { generation: 2 }
+    );
     let event = next_event(&mut manager).await;
     let SpeechEvent::Finished {
         generation: 2,
@@ -464,19 +480,24 @@ async fn an_undecodable_payload_is_reported_and_opens_no_device() {
     else {
         panic!("the undecodable payload is reported: {event:?}");
     };
-    assert!(error.contains("decoded"), "{error}");
+    assert_eq!(error.class, "Error", "reference `wave.Error`");
+    assert!(error.message.contains("decoded"), "{error:?}");
     assert_eq!(output.starts(), 0, "no device was opened");
 }
 
-/// A host with no output device says so and the turn stays successful.
+/// A host with no output device says so, under the reference's class name.
 #[tokio::test]
-async fn an_absent_output_device_is_reported_once_and_settles_the_turn() {
+async fn an_absent_output_device_is_reported_by_cause() {
     let output = ScriptedOutput::failing(PlaybackError::NoOutputDevice(
         "the host names none".to_owned(),
     ));
     let mut manager =
         SpeechManager::scripted(ScriptedClient::answering(Ok(fixture_wav())), output.clone());
     manager.speak(1, FIXTURE_SUMMARY.to_owned());
+    assert_eq!(
+        next_event(&mut manager).await,
+        SpeechEvent::PlaybackStarted { generation: 1 }
+    );
     let event = next_event(&mut manager).await;
     let SpeechEvent::Finished {
         generation: 1,
@@ -485,43 +506,17 @@ async fn an_absent_output_device_is_reported_once_and_settles_the_turn() {
     else {
         panic!("the absent device is reported: {event:?}");
     };
-    assert!(error.contains("No audio output device"), "{error}");
-
-    // The same fact on the next turn reaches the operator only once, which is
-    // what the TUI's own notice gate answers with, and the turn that asked for
-    // the summary returns to idle rather than staying in the machine.
-    let mut state = TuiState::new("speech-notice");
-    state.narrator = NarratorManager::new(true, true);
-    state.narrator.on_turn_start("write the parser");
-    state.narrator.on_turn_end().expect("a summary");
-    crate::tui::narration::apply_speech_event(
-        SpeechEvent::Finished {
-            generation: 1,
-            error: Some(error.clone()),
-        },
-        &mut state,
+    assert_eq!(error.class, "NoAudioOutputDeviceError");
+    assert!(
+        error.message.contains("No audio output device"),
+        "{error:?}"
     );
-    crate::tui::narration::apply_speech_event(
-        SpeechEvent::Finished {
-            generation: 2,
-            error: Some(error),
-        },
-        &mut state,
-    );
-    assert_eq!(
-        state.diagnostics().count(),
-        1,
-        "the operator is told once per session, not once per turn"
-    );
-    assert_eq!(
-        state.narrator.state(),
-        NarratorState::Idle,
-        "a failure settles the generation that asked for the summary"
-    );
+    assert_eq!(output.starts(), 1);
 }
 
-/// Reference `AlreadyPlayingError`: a second playback is refused and the running
-/// one keeps its stream.
+/// Reference `AlreadyPlayingError`: the second summary is still spoken and
+/// enters the speaking state, then the player refuses it and the running
+/// playback keeps its stream.
 #[tokio::test]
 async fn a_second_playback_is_rejected_while_one_runs() {
     let output = ScriptedOutput::holding();
@@ -532,8 +527,19 @@ async fn a_second_playback_is_rejected_while_one_runs() {
         next_event(&mut manager).await,
         SpeechEvent::PlaybackStarted { generation: 1 }
     );
+    // The device opens right after the speaking state is entered.
+    for _ in 0..200 {
+        if output.starts() == 1 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
 
     manager.speak(2, "a second summary".to_owned());
+    assert_eq!(
+        next_event(&mut manager).await,
+        SpeechEvent::PlaybackStarted { generation: 2 }
+    );
     let event = next_event(&mut manager).await;
     let SpeechEvent::Finished {
         generation: 2,
@@ -542,7 +548,7 @@ async fn a_second_playback_is_rejected_while_one_runs() {
     else {
         panic!("the second request is refused: {event:?}");
     };
-    assert!(error.contains("already speaking"), "{error}");
+    assert_eq!(error.class, "AlreadyPlayingError", "{error:?}");
     assert_eq!(output.starts(), 1, "the running stream was left alone");
     assert!(!output.dropped.load(Ordering::Acquire));
 }
@@ -592,103 +598,16 @@ async fn a_superseded_request_never_reaches_the_device() {
 }
 
 // --------------------------------------------------------------------------
-// US-213: the narrator
+// US-213: the configuration
 // --------------------------------------------------------------------------
-
-/// The effect the state machine emits reaches the transport, and the answers the
-/// transport sends drive the same machine through speaking and back to idle.
-#[tokio::test]
-async fn the_speak_effect_reaches_the_transport_and_drives_the_state_machine() {
-    let mut runtime = interactive_test_runtime("speech-wiring");
-    let client = ScriptedClient::answering(Ok(fixture_wav()));
-    runtime.speech = SpeechManager::scripted(client.clone(), ScriptedOutput::playing());
-    let mut state = TuiState::new("speech-wiring");
-    state.narrator = NarratorManager::new(true, true);
-    state.narrator.on_turn_start("write the parser");
-    state.narrator.on_assistant_text("done");
-    let Some(NarratorEffect::Summarize { generation, .. }) = state.narrator.on_turn_end() else {
-        panic!("an enabled narrator summarizes");
-    };
-    let Some(effect) = state
-        .narrator
-        .apply_summary(generation, Some(FIXTURE_SUMMARY.to_owned()))
-    else {
-        panic!("a summary speaks");
-    };
-
-    crate::tui::apply_narrator_effect(effect, &mut runtime, &mut state);
-    assert_eq!(
-        next_event(&mut runtime.speech).await,
-        SpeechEvent::PlaybackStarted { generation }
-    );
-    crate::tui::narration::apply_speech_event(
-        SpeechEvent::PlaybackStarted { generation },
-        &mut state,
-    );
-    assert_eq!(state.narrator.state(), NarratorState::Speaking);
-    assert_eq!(client.spoken(), vec![FIXTURE_SUMMARY.to_owned()]);
-
-    let finished = next_event(&mut runtime.speech).await;
-    assert_eq!(
-        finished,
-        SpeechEvent::Finished {
-            generation,
-            error: None,
-        }
-    );
-    crate::tui::narration::apply_speech_event(finished, &mut state);
-    assert_eq!(state.narrator.state(), NarratorState::Idle);
-    assert_eq!(
-        state.diagnostics().count(),
-        0,
-        "a spoken summary reports nothing"
-    );
-}
-
-/// A late answer whose generation has been superseded settles nothing.
-#[test]
-fn a_late_answer_from_a_superseded_generation_is_discarded() {
-    let mut state = TuiState::new("speech-late");
-    state.narrator = NarratorManager::new(true, true);
-    state.narrator.on_turn_start("first");
-    state.narrator.on_turn_end().expect("a first summary");
-    state.narrator.cancel();
-    state.narrator.on_turn_start("second");
-    state.narrator.on_turn_end().expect("a second summary");
-
-    crate::tui::narration::apply_speech_event(
-        SpeechEvent::PlaybackStarted { generation: 1 },
-        &mut state,
-    );
-    assert_eq!(
-        state.narrator.state(),
-        NarratorState::Summarizing,
-        "a stale playback never enters the speaking state"
-    );
-    crate::tui::narration::apply_speech_event(
-        SpeechEvent::Finished {
-            generation: 1,
-            error: None,
-        },
-        &mut state,
-    );
-    assert_eq!(
-        state.narrator.state(),
-        NarratorState::Summarizing,
-        "a stale completion settles nothing"
-    );
-}
 
 /// Reference `NarratorManager.sync`: the client is rebuilt from the
 /// configuration as it stands, so an edit reaches the next turn and a
 /// configuration that stops resolving takes the speaking state with it.
 #[test]
 fn a_configuration_change_is_read_again_into_the_next_turn() {
-    let mut manager = SpeechManager::production(
-        &json!({}),
-        "",
-        std::path::Path::new("/nonexistent-vibe-home"),
-    );
+    let mut manager =
+        SpeechManager::production(&json!({}), Arc::new(|_: &str| None), no_metadata());
     assert!(!manager.available());
     manager.resync(&speech_view(
         json!({

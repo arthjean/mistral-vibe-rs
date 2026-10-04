@@ -20,6 +20,10 @@ where
     pub(crate) client_info: Option<AcpClientInfo>,
     /// Live sessions, keyed by the identity the client addresses them by.
     pub(crate) sessions: BTreeMap<String, Arc<AcpHarness<D>>>,
+    /// The identities sessions were opened under, oldest first, so the first
+    /// one still live is known (reference `next(iter(self.sessions.values()))`
+    /// over an insertion-ordered dict).
+    pub(crate) opened: Vec<String>,
 }
 
 impl<D> AgentState<D>
@@ -31,7 +35,27 @@ where
             client_capabilities: None,
             client_info: None,
             sessions: BTreeMap::new(),
+            opened: Vec::new(),
         }
+    }
+
+    /// The live session opened first.
+    pub(crate) fn first_session(&self) -> Option<Arc<AcpHarness<D>>> {
+        self.opened
+            .iter()
+            .find_map(|session_id| self.sessions.get(session_id).cloned())
+    }
+
+    /// Records a session going live: a new one goes last, one already live
+    /// keeps its place, and one closed meanwhile is forgotten.
+    pub(crate) fn open(&mut self, harness: Arc<AcpHarness<D>>) {
+        let session_id = harness.session_id.clone();
+        let live = &self.sessions;
+        self.opened.retain(|opened| live.contains_key(opened));
+        if !self.sessions.contains_key(&session_id) {
+            self.opened.push(session_id.clone());
+        }
+        self.sessions.insert(session_id, harness);
     }
 
     pub(crate) fn capabilities(&self) -> AcpClientCapabilities {

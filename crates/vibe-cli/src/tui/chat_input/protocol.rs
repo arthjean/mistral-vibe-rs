@@ -168,6 +168,17 @@ pub enum InputEvent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         error: Option<String>,
     },
+    /// Reference `on_transcribe_error`: a transcription that failed, reported
+    /// whatever phase the composer reached in the meantime.
+    VoiceError {
+        generation: u64,
+        message: String,
+    },
+    /// Reference `on_transcribe_notice`.
+    VoiceNotice {
+        generation: u64,
+        message: String,
+    },
     Switching {
         active: bool,
     },
@@ -233,6 +244,12 @@ pub enum InputEffect {
     Notify {
         message: String,
         severity: Severity,
+    },
+    /// Reference `InlineNoticeRequested`: a notice beside the loading line
+    /// that clears itself after `timeout_ms`.
+    InlineNotice {
+        message: String,
+        timeout_ms: u64,
     },
     /// An event the boundary refused; recorded instead of panicking.
     Rejected {

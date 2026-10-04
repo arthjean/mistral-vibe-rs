@@ -106,7 +106,7 @@ layering. No test enforces it, so check any new dependency edge by hand: a
 crate never depends on a crate in a later layer.
 
 1. `vibe-protocol`, `vibe-core`
-2. `vibe-app-server`
+2. `vibe-app-server`, `vibe-voice`
 3. `vibe-cli`, `vibe-acp`
 
 - `vibe-protocol` owns the JSON-RPC envelopes, the routed method inventory, and
@@ -116,6 +116,9 @@ crate never depends on a crate in a later layer.
 - `vibe-core` owns provider-neutral contracts: engine, tools, config, storage,
   policy, process, and platform.
 - `vibe-app-server` owns session lifecycle and method dispatch.
+- `vibe-voice` owns the audio stack both adapters drive: the recorder, the
+  player, the realtime transcription and speech clients, and the voice and
+  narrator managers.
 - `vibe-cli` builds the `vibe` binary and `vibe-acp` the `vibe-acp` binary. Both
   are adapters: shared logic belongs one layer down.
 

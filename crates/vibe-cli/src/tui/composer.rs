@@ -41,6 +41,12 @@ pub(super) fn apply_effects(
             InputEffect::Notify { message, .. } | InputEffect::Rejected { reason: message } => {
                 state.push_diagnostic(message);
             }
+            InputEffect::InlineNotice {
+                message,
+                timeout_ms,
+            } => {
+                state.show_inline_notice(message, Some(timeout_ms), vibe_core::clock::now_millis());
+            }
             effect => application_effects.push(effect),
         }
     }

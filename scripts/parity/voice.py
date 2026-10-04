@@ -9,7 +9,10 @@ the two views a client renders, and the per-direction client reads five values
 off those views before it ever connects. This script drives all three over
 documents it authors itself.
 
-Four families come out, and are what the Rust replay compares:
+Four resolution families come out of this script, and nine behavior families
+out of `voice_behavior.py`, which drives the same reference past resolution
+with every device, socket and endpoint scripted. All thirteen are what the
+Rust replays compare:
 
 ``constants``                the audio defaults, the per-entry field defaults
                              and the closed vocabularies
@@ -29,7 +32,7 @@ corpus an oracle for the endpoint this port builds itself.
 Two artifacts come out of a run::
 
     .parity/voice-corpus.json                the full capture, gitignored
-    crates/vibe-cli/tests/voice/corpus.json  the committed corpus
+    crates/vibe-voice/tests/voice/corpus.json  the committed corpus
 
 No credential is recorded. Every environment variable a document names is set
 to a sentinel before the capture, so a resolved credential is recorded as the
@@ -71,9 +74,9 @@ from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 #: without one reads first.
 REFERENCE_VARIABLE = "VIBE_REFERENCE"
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 DEFAULT_OUTPUT = Path(".parity/voice-corpus.json")
-DEFAULT_CORPUS = Path("crates/vibe-cli/tests/voice/corpus.json")
+DEFAULT_CORPUS = Path("crates/vibe-voice/tests/voice/corpus.json")
 DEFAULT_CACHE = Path(".parity")
 
 #: Set on the re-executed process so it does not extract and re-exec forever.
@@ -1122,7 +1125,11 @@ def build_corpus(reference: dict[str, str], families: dict[str, Any]) -> dict[st
             "causes. The two wire frames are intercepted at the last call before the network, "
             "the websocket opener and the HTTP sender, so nothing is ever sent. No credential "
             "is recorded: every variable a document names carries a sentinel during the "
-            "capture and is recorded as a variable name and an origin. Regenerate with "
+            "capture and is recorded as a variable name and an origin. The behavior families "
+            "drive the reference's recorder, player, realtime client, dictation and read-aloud "
+            "managers, turn summary service and editor bridge over stand-ins "
+            "scripts/parity/voice_behavior.py authors; a text the reference writes is recorded "
+            "as its length and SHA-256 only. Regenerate with "
             "scripts/parity/voice.py --corpus when the pinned reference moves."
         ),
         "documents": DOCUMENTS,
@@ -1147,6 +1154,11 @@ def main() -> int:
         GUARD.verify()
         constants = capture_constants()
         transcription, speech, frames = asyncio.run(capture_documents())
+        import voice_behavior
+
+        behavior = asyncio.run(
+            voice_behavior.capture_behavior(CREDENTIAL_SENTINEL, _build_config)
+        )
     except OracleError as error:
         print(f"voice capture failed: {error}", file=sys.stderr)
         return 1
@@ -1171,6 +1183,7 @@ def main() -> int:
         "transcriptionResolution": transcription,
         "speechResolution": speech,
         "wireFrames": frames,
+        **behavior,
     }
     corpus = build_corpus(reference, families)
 
@@ -1201,6 +1214,7 @@ def main() -> int:
         "wireFrames": sum(
             len([key for key in frame if key != "case"]) for frame in frames
         ),
+        **{family: len(records) for family, records in behavior.items()},
     }
     total = sum(counted.values())
     print(

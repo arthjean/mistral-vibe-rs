@@ -13,6 +13,7 @@ pub(crate) mod state;
 pub(crate) mod surface;
 pub(crate) mod telemetry;
 pub(crate) mod turn;
+pub mod voice;
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -63,6 +64,8 @@ where
     /// The harness the launch flags picked, which every session's app server
     /// reports.
     pub(in crate::agent) harness: HarnessSelection,
+    /// Reference `VibeAcpAgent._voice`.
+    pub(in crate::agent) voice: voice::VoiceController,
 }
 
 /// The three things a session's enrollment is built from, installed once for
@@ -94,7 +97,18 @@ where
             telemetry: Arc::new(NoClientTelemetry),
             experiments: None,
             harness: HarnessSelection::default(),
+            voice: voice::VoiceController::new(voice::VoiceBackends::production(
+                &default_vibe_home(),
+            )),
         })
+    }
+
+    /// Replaces the microphone, the output device and the audio endpoints the
+    /// voice extension runs on, which is how a test scripts them.
+    #[must_use]
+    pub fn with_voice_backends(mut self, backends: voice::VoiceBackends) -> Self {
+        self.voice = voice::VoiceController::new(backends);
+        self
     }
 
     /// Installs the telemetry client every session's app server ships a

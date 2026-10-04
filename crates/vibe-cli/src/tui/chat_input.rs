@@ -26,6 +26,9 @@ use super::composer_layout::ComposerLayout;
 use super::input::{InputError, PromptEditor, composer_content_width};
 use super::voice::{VoiceCommand, VoiceState, VoiceUpdate, VoiceUpdateOutcome};
 
+/// Reference `on_transcribe_notice`: the notice clears itself after two seconds.
+const VOICE_NOTICE_TIMEOUT_MS: u64 = 2_000;
+
 pub use super::voice::VoicePhase;
 
 #[path = "chat_input/observation.rs"]
@@ -378,6 +381,30 @@ impl ChatInputState {
                     &mut effects,
                 );
             }
+            InputEvent::VoiceError {
+                generation,
+                message,
+            } => {
+                self.apply_voice_update(
+                    VoiceUpdate::Error {
+                        generation,
+                        message,
+                    },
+                    &mut effects,
+                );
+            }
+            InputEvent::VoiceNotice {
+                generation,
+                message,
+            } => {
+                self.apply_voice_update(
+                    VoiceUpdate::Notice {
+                        generation,
+                        message,
+                    },
+                    &mut effects,
+                );
+            }
             InputEvent::VoiceStopResolved { generation, error } => {
                 self.apply_voice_update(
                     VoiceUpdate::StopResolved { generation, error },
@@ -657,6 +684,14 @@ impl ChatInputState {
             VoiceUpdateOutcome::Notify(message) => effects.push(InputEffect::Notify {
                 message,
                 severity: Severity::Warning,
+            }),
+            VoiceUpdateOutcome::NotifyError(message) => effects.push(InputEffect::Notify {
+                message,
+                severity: Severity::Error,
+            }),
+            VoiceUpdateOutcome::InlineNotice(message) => effects.push(InputEffect::InlineNotice {
+                message,
+                timeout_ms: VOICE_NOTICE_TIMEOUT_MS,
             }),
             VoiceUpdateOutcome::Rejected(reason) => effects.push(InputEffect::Rejected {
                 reason: reason.to_owned(),

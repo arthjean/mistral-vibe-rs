@@ -176,7 +176,7 @@ pub(super) async fn start_prompt_with_client_id(
     if let Some(effect) = state.narrator.cancel()
         && let Some(runtime) = runtime.as_mut()
     {
-        super::apply_narrator_effect(effect, runtime, state);
+        super::apply_narrator_effect(effect, runtime);
     }
     state.narrator.on_turn_start(&prepared.turn.prompt);
     let Some(runtime) = runtime.as_mut() else {

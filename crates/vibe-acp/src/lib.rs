@@ -1,6 +1,14 @@
 //! Agent Client Protocol adapter over the public app-server contracts.
 
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+#![cfg_attr(
+    test,
+    allow(
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unwrap_in_result,
+        clippy::unwrap_used
+    )
+)]
 
 mod agent;
 mod auth;

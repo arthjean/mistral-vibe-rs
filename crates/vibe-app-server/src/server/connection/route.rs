@@ -226,6 +226,9 @@ impl ServerConnection {
         if method == "session/shellCommand" {
             return self.reference_shell_command(request);
         }
+        if method == "narration/summarize" {
+            return Ok(self.narration_deferred(request));
+        }
         if method == "skills/installed" {
             let result = self.server.workspace.skills_installed();
             return Ok(success_batch(request.id, object_of_value(result)));
@@ -600,6 +603,39 @@ impl ServerConnection {
             ));
         }
         Ok(batch)
+    }
+
+    /// Reference `_dispatch_narration`: the summary is a model call, so it is
+    /// answered off the request loop, with the client's launch context.
+    pub(super) fn narration_deferred(&self, request: ServerRequest) -> DispatchBatch {
+        let mut params = request.params;
+        if let Some(launch) = &self.launch {
+            params.insert(
+                CONNECTION_LAUNCH_PARAM.to_owned(),
+                serde_json::to_value(launch).unwrap_or(Value::Null),
+            );
+        }
+        DispatchBatch {
+            outbound: Vec::new(),
+            deferred: vec![DeferredWork::CloudRequest {
+                request_id: request.id,
+                method: request.method,
+                params,
+            }],
+            close_after_flush: false,
+        }
+    }
+
+    /// The parameters an in-process narration call is held to, which the
+    /// reference routing applies over stdio.
+    pub(super) fn narration_request(&self, request: ServerRequest) -> DispatchBatch {
+        let params = Json::from_value(&Value::Object(object_of(&request.params)));
+        if let Err(issues) = wire_validation::validate_method(&request.method, &params) {
+            return self
+                .rejected(&request.method, &issues)
+                .into_batch(request.id);
+        }
+        self.narration_deferred(request)
     }
 
     /// The refusal of parameters that did not validate, which the reference

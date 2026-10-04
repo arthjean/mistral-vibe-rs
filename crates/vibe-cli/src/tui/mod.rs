@@ -29,7 +29,7 @@ pub mod interaction;
 mod interactive;
 pub mod loading;
 pub mod narration;
-pub mod narrator;
+pub use vibe_voice::narrator;
 pub mod onboarding;
 #[cfg(test)]
 mod onboarding_parity_tests;
@@ -495,7 +495,7 @@ fn stop_narration(runtime: &mut Option<InteractiveRuntime>, state: &mut TuiState
         return false;
     };
     if let Some(runtime) = runtime.as_mut() {
-        apply_narrator_effect(effect, runtime, state);
+        apply_narrator_effect(effect, runtime);
     }
     true
 }

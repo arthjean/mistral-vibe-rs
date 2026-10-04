@@ -1,580 +1,359 @@
+//! The terminal's side of voice input: the shared manager's callbacks reach
+//! the composer as its own events, tagged with the generation the recording
+//! was started under, and its telemetry reaches the session's client.
+//!
+//! The lifecycle itself, its refusals and its four audio events are the
+//! manager's, held by `vibe-voice`; these tests hold what this adapter adds.
+
+use std::fs;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
-use futures_util::{SinkExt, StreamExt};
-use secrecy::SecretString;
 use serde_json::{Value, json};
-use tokio::net::TcpListener;
-use tokio::sync::{Notify, oneshot};
-use tokio_tungstenite::accept_async;
-use tokio_tungstenite::tungstenite::Message;
+use tokio::sync::mpsc;
+use vibe_app_server::server::AppServer;
+use vibe_app_server::workspace::{WorkspacePaths, WorkspaceService};
+use vibe_voice::capture::{AudioRecorder, AudioStream, RecorderError};
+use vibe_voice::transcribe::{TranscribeClient, TranscribeEvent, TranscribeFuture};
 
-use super::realtime::{message_json, prepare_transcription, session_update};
-use super::recorder::{AudioFailureSignal, enqueue_audio};
-use super::session::send_transcription_result;
-use super::settings::resolve_credential;
-use super::*;
+use super::{ClientFactory, VoiceManager};
+use crate::tui::chat_input::{InputEffect, InputEvent};
+use crate::tui::runtime::{interactive_test_runtime_with_server, no_credentials};
 
-/// The transcription surface a test session resolves from, as the published
-/// view carries it.
-fn transcription_settings(api_base: &str) -> TranscriptionSettings {
-    TranscriptionSettings {
-        model: "fixture-transcribe-model".to_owned(),
-        sample_rate: 16_000,
-        encoding: "pcm_s16le".to_owned(),
-        target_streaming_delay_ms: 500,
-        api_base: api_base.to_owned(),
-        api_key_env_var: String::new(),
+/// A microphone that streams nothing and reports the level it was given.
+struct FakeRecorder {
+    level: f32,
+    stream: Mutex<Option<mpsc::UnboundedSender<Vec<u8>>>>,
+}
+
+impl FakeRecorder {
+    fn new(level: f32) -> Arc<Self> {
+        Arc::new(Self {
+            level,
+            stream: Mutex::new(None),
+        })
     }
 }
 
-fn test_voice_config(api_base: &str) -> VoiceConfig {
-    VoiceConfig::resolve(&transcription_settings(api_base)).expect("test voice config")
+impl AudioRecorder for FakeRecorder {
+    fn start(&self, _sample_rate: u32) -> Result<AudioStream, RecorderError> {
+        let (sender, receiver) = mpsc::unbounded_channel();
+        *self.stream.lock().expect("the stream lock") = Some(sender);
+        Ok(receiver)
+    }
+
+    fn stop(&self) -> Duration {
+        self.cancel();
+        Duration::from_secs(1)
+    }
+
+    fn cancel(&self) {
+        self.stream.lock().expect("the stream lock").take();
+    }
+
+    fn peak(&self) -> f32 {
+        self.level
+    }
+
+    fn has_signal(&self) -> bool {
+        true
+    }
 }
 
-struct ScriptedFactory {
-    launches: Arc<AtomicUsize>,
-    cancellations: Arc<AtomicUsize>,
-    active: Arc<AtomicUsize>,
-    maximum_active: Arc<AtomicUsize>,
-    cancel_gate: Option<Arc<Notify>>,
-}
+/// An endpoint that names the session, says one word, and finishes once the
+/// recording has.
+struct FakeClient;
 
-impl VoiceSessionFactory for ScriptedFactory {
-    fn spawn(
+impl TranscribeClient for FakeClient {
+    fn transcribe(
         &self,
-        generation: u64,
-        updates: mpsc::Sender<InputEvent>,
-        signals: mpsc::Sender<VoiceSignal>,
-        mut control: watch::Receiver<VoiceControl>,
-    ) -> JoinHandle<()> {
-        self.launches.fetch_add(1, Ordering::Relaxed);
-        let current = self.active.fetch_add(1, Ordering::Relaxed) + 1;
-        self.maximum_active.fetch_max(current, Ordering::Relaxed);
-        let cancellations = self.cancellations.clone();
-        let active = self.active.clone();
-        let cancel_gate = self.cancel_gate.clone();
-        tokio::spawn(async move {
-            // The endpoint names the session before the recording runs, which
-            // is what a production session reports here too.
-            let _ = signals
-                .send(VoiceSignal::SessionCreated {
-                    generation,
-                    recording_id: format!("recording-{generation}"),
-                })
-                .await;
-            let _ = updates
-                .send(InputEvent::VoiceStartResolved {
-                    generation,
-                    error: None,
-                })
-                .await;
-            while control.changed().await.is_ok() {
-                let command = *control.borrow();
-                match command {
-                    VoiceControl::Stop => {
-                        let _ = updates.send(InputEvent::VoiceDone { generation }).await;
-                        active.fetch_sub(1, Ordering::Relaxed);
-                        return;
-                    }
-                    VoiceControl::Cancel => {
-                        cancellations.fetch_add(1, Ordering::Relaxed);
-                        if let Some(gate) = cancel_gate {
-                            gate.notified().await;
-                        }
-                        active.fetch_sub(1, Ordering::Relaxed);
-                        return;
-                    }
-                    VoiceControl::Running => {}
-                }
-            }
-            active.fetch_sub(1, Ordering::Relaxed);
+        mut audio: AudioStream,
+        events: mpsc::UnboundedSender<TranscribeEvent>,
+    ) -> TranscribeFuture {
+        Box::pin(async move {
+            let _ = events.send(TranscribeEvent::SessionCreated {
+                request_id: "req-1".to_owned(),
+            });
+            let _ = events.send(TranscribeEvent::TextDelta("hello".to_owned()));
+            while audio.recv().await.is_some() {}
+            let _ = events.send(TranscribeEvent::Done);
         })
     }
 }
 
-async fn next_event(manager: &mut VoiceManager) -> InputEvent {
-    tokio::time::timeout(Duration::from_secs(1), async {
-        loop {
-            if let Some(event) = manager.try_next_event() {
-                return event;
+/// A factory that counts the clients it built.
+fn counting_factory() -> (ClientFactory, Arc<AtomicUsize>) {
+    let built = Arc::new(AtomicUsize::new(0));
+    let counter = Arc::clone(&built);
+    let factory: ClientFactory = Arc::new(move |_: &Value| {
+        counter.fetch_add(1, Ordering::SeqCst);
+        Some(Arc::new(FakeClient) as Arc<dyn TranscribeClient>)
+    });
+    (factory, built)
+}
+
+fn view(api_key_env_var: &str) -> Value {
+    json!({"transcription": {
+        "model": {"name": "fixture-model", "sampleRate": 16_000},
+        "provider": {"apiBase": "wss://gateway.fixture.invalid", "apiKeyEnvVar": api_key_env_var},
+    }})
+}
+
+fn manager(enabled: bool) -> (VoiceManager, Arc<AtomicUsize>) {
+    let (factory, built) = counting_factory();
+    let manager = VoiceManager::new(
+        &view(""),
+        FakeRecorder::new(0.5),
+        factory,
+        no_credentials(),
+        enabled,
+    );
+    (manager, built)
+}
+
+/// Collects composer events until `last` arrives.
+async fn events_until(
+    manager: &mut VoiceManager,
+    last: impl Fn(&InputEvent) -> bool,
+) -> Vec<InputEvent> {
+    let mut events = Vec::new();
+    for _ in 0..400 {
+        while let Some(event) = manager.try_next_event() {
+            let done = last(&event);
+            events.push(event);
+            if done {
+                return events;
             }
-            tokio::task::yield_now().await;
         }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    panic!("the expected event never arrived: {events:?}");
+}
+
+fn telemetry_names(manager: &mut VoiceManager) -> Vec<&'static str> {
+    manager
+        .take_telemetry()
+        .iter()
+        .map(|record| record.event().event_name())
+        .collect()
+}
+
+#[tokio::test]
+async fn a_recording_reaches_the_composer_under_its_generation() {
+    let (mut manager, _) = manager(true);
+    manager.apply_effects(&[InputEffect::RecordingStartRequested], 7);
+    let started = events_until(&mut manager, |event| {
+        matches!(event, InputEvent::VoiceTranscriptDelta { .. })
     })
-    .await
-    .expect("scripted voice event")
-}
-
-fn scripted_factory(cancel_gate: Option<Arc<Notify>>) -> (Arc<ScriptedFactory>, Arc<AtomicUsize>) {
-    let maximum_active = Arc::new(AtomicUsize::new(0));
-    (
-        Arc::new(ScriptedFactory {
-            launches: Arc::new(AtomicUsize::new(0)),
-            cancellations: Arc::new(AtomicUsize::new(0)),
-            active: Arc::new(AtomicUsize::new(0)),
-            maximum_active: maximum_active.clone(),
-            cancel_gate,
-        }),
-        maximum_active,
-    )
-}
-
-#[tokio::test]
-async fn manager_starts_stops_and_respects_disabled_state() {
-    let (factory, _) = scripted_factory(None);
-    let launches = factory.launches.clone();
-    let cancellations = factory.cancellations.clone();
-    let mut manager = VoiceManager::new(factory, false);
-    manager.apply_effects(&[InputEffect::RecordingStartRequested], 1);
-    tokio::task::yield_now().await;
-    assert_eq!(launches.load(Ordering::Relaxed), 0);
-    assert!(matches!(
-        manager.try_next_event(),
-        Some(InputEvent::VoiceStartResolved { error: Some(_), .. })
-    ));
-
-    manager.set_enabled(true);
-    manager.apply_effects(&[InputEffect::RecordingStartRequested], 2);
-    assert!(matches!(
-        next_event(&mut manager).await,
-        InputEvent::VoiceStartResolved {
-            generation: 2,
-            error: None
-        }
-    ));
-    manager.apply_effects(&[InputEffect::RecordingStopRequested], 2);
-    assert!(matches!(
-        next_event(&mut manager).await,
-        InputEvent::VoiceDone { generation: 2 }
-    ));
-
-    manager.apply_effects(&[InputEffect::RecordingStartRequested], 3);
-    assert!(matches!(
-        next_event(&mut manager).await,
-        InputEvent::VoiceStartResolved {
-            generation: 3,
-            error: None
-        }
-    ));
-    assert_eq!(launches.load(Ordering::Relaxed), 2);
-    manager.shutdown().await;
-    assert_eq!(cancellations.load(Ordering::Relaxed), 1);
-}
-
-#[tokio::test]
-async fn restart_waits_until_the_cancelled_session_has_fully_retired() {
-    let gate = Arc::new(Notify::new());
-    let (factory, maximum_active) = scripted_factory(Some(gate.clone()));
-    let launches = factory.launches.clone();
-    let mut manager = VoiceManager::new(factory, true);
-    manager.apply_effects(&[InputEffect::RecordingStartRequested], 1);
-    let _ = next_event(&mut manager).await;
-
-    manager.apply_effects(
-        &[
-            InputEffect::RecordingCancelRequested,
-            InputEffect::RecordingStartRequested,
-        ],
-        2,
+    .await;
+    assert_eq!(
+        started,
+        [
+            InputEvent::VoiceStartResolved {
+                generation: 7,
+                error: None
+            },
+            InputEvent::VoiceTranscriptDelta {
+                text: "hello".to_owned(),
+                generation: 7
+            },
+        ]
     );
-    for _ in 0..10 {
-        assert!(manager.try_next_event().is_none());
-        tokio::task::yield_now().await;
-    }
-    assert_eq!(launches.load(Ordering::Relaxed), 1);
-    assert_eq!(manager.pending_start, Some(2));
 
-    gate.notify_one();
-    assert!(matches!(
-        next_event(&mut manager).await,
-        InputEvent::VoiceStartResolved {
-            generation: 2,
-            error: None
-        }
-    ));
-    assert_eq!(launches.load(Ordering::Relaxed), 2);
-    assert_eq!(maximum_active.load(Ordering::Relaxed), 1);
-
-    gate.notify_one();
-    manager.shutdown().await;
+    manager.apply_effects(&[InputEffect::RecordingStopRequested], 7);
+    let stopped = events_until(&mut manager, |event| {
+        matches!(event, InputEvent::VoiceDone { .. })
+    })
+    .await;
+    assert_eq!(
+        stopped,
+        [
+            InputEvent::VoiceStopResolved {
+                generation: 7,
+                error: None
+            },
+            InputEvent::VoiceDone { generation: 7 },
+        ]
+    );
+    assert_eq!(
+        telemetry_names(&mut manager),
+        [
+            "vibe.audio.transcription.start",
+            "vibe.audio.transcription.done"
+        ]
+    );
 }
 
+/// Reference `cancel_recording`: the manager returns to idle at once, under
+/// the generation the composer already left.
 #[tokio::test]
-async fn cancelling_while_a_restart_is_queued_drops_the_pending_generation() {
-    let gate = Arc::new(Notify::new());
-    let (factory, _) = scripted_factory(Some(gate.clone()));
-    let launches = factory.launches.clone();
-    let mut manager = VoiceManager::new(factory, true);
+async fn a_cancelled_recording_settles_under_its_old_generation() {
+    let (mut manager, _) = manager(true);
     manager.apply_effects(&[InputEffect::RecordingStartRequested], 1);
-    let _ = next_event(&mut manager).await;
-
-    manager.apply_effects(
-        &[
-            InputEffect::RecordingCancelRequested,
-            InputEffect::RecordingStartRequested,
-        ],
-        2,
-    );
-    assert_eq!(manager.pending_start, Some(2));
+    events_until(&mut manager, |event| {
+        matches!(event, InputEvent::VoiceStartResolved { .. })
+    })
+    .await;
     manager.apply_effects(&[InputEffect::RecordingCancelRequested], 2);
-    assert!(manager.pending_start.is_none());
-
-    gate.notify_one();
-    for _ in 0..20 {
-        let _ = manager.try_next_event();
-        tokio::task::yield_now().await;
-    }
-    assert_eq!(launches.load(Ordering::Relaxed), 1);
-    manager.shutdown().await;
-}
-
-#[test]
-fn saturated_audio_queue_reports_a_recoverable_failure() {
-    let (audio_tx, _audio_rx) = mpsc::channel(1);
-    let (failures, failure_rx) = AudioFailureSignal::channel();
-    enqueue_audio(&audio_tx, &failures, vec![1, 2]);
-    enqueue_audio(&audio_tx, &failures, vec![3, 4]);
-
+    let events = events_until(&mut manager, |event| {
+        matches!(event, InputEvent::VoiceDone { .. })
+    })
+    .await;
     assert_eq!(
-        failure_rx.borrow().as_deref(),
-        Some("Audio input could not keep up; captured audio was lost")
+        events.last(),
+        Some(&InputEvent::VoiceDone { generation: 1 })
     );
+    assert!(telemetry_names(&mut manager).contains(&"vibe.audio.transcription.cancel_recording"));
 }
 
 #[tokio::test]
-async fn transcription_preparation_waits_for_the_remote_session() {
-    let listener = TcpListener::bind("127.0.0.1:0")
-        .await
-        .expect("test listener");
-    let address = listener.local_addr().expect("listener address");
-    let session_gate = Arc::new(Notify::new());
-    let server_gate = session_gate.clone();
-    let (accepted_tx, accepted_rx) = oneshot::channel();
-    let server = tokio::spawn(async move {
-        let (stream, _) = listener.accept().await.expect("client connection");
-        let mut socket = accept_async(stream).await.expect("websocket handshake");
-        let _ = accepted_tx.send(());
-        server_gate.notified().await;
-        socket
-            .send(Message::Text(
-                json!({"type": "session.created"}).to_string().into(),
-            ))
-            .await
-            .expect("session created");
-        let update = socket
-            .next()
-            .await
-            .expect("session update")
-            .expect("message");
-        assert_eq!(
-            message_json(&update).expect("update JSON")["type"],
-            "session.update"
-        );
-    });
-    let config = test_voice_config(&format!("http://{address}"));
-    let preparation = tokio::spawn(async move {
-        prepare_transcription(&SecretString::from("test-key".to_owned()), &config).await
-    });
-
-    accepted_rx.await.expect("accepted signal");
-    tokio::task::yield_now().await;
-    assert!(!preparation.is_finished());
-    session_gate.notify_one();
-    let transcription = preparation
-        .await
-        .expect("preparation task")
-        .expect("transcription preparation");
-    server.await.expect("test server");
-
-    let (audio_tx, audio_rx) = mpsc::channel(1);
-    let (_failures, failure_rx) = AudioFailureSignal::channel();
-    let (ready_tx, ready_rx) = oneshot::channel();
-    let (updates_tx, _updates_rx) = mpsc::channel(1);
-    let consumer = tokio::spawn(async move {
-        transcription
-            .run(audio_rx, failure_rx, ready_tx, 8, &updates_tx)
-            .await
-    });
-    ready_rx.await.expect("consumer ready");
-    drop(audio_tx);
-    consumer.abort();
-    let _ = consumer.await;
-}
-
-#[tokio::test]
-async fn saturated_audio_queue_ends_transcription_with_a_recoverable_error() {
-    let listener = TcpListener::bind("127.0.0.1:0")
-        .await
-        .expect("test listener");
-    let address = listener.local_addr().expect("listener address");
-    let server = tokio::spawn(async move {
-        let (stream, _) = listener.accept().await.expect("client connection");
-        let mut socket = accept_async(stream).await.expect("websocket handshake");
-        socket
-            .send(Message::Text(
-                json!({"type": "session.created"}).to_string().into(),
-            ))
-            .await
-            .expect("session created");
-        let _ = socket.next().await.expect("session update");
-    });
-    let config = test_voice_config(&format!("http://{address}"));
-    let transcription = prepare_transcription(&SecretString::from("test-key".to_owned()), &config)
-        .await
-        .expect("transcription preparation");
-    server.await.expect("test server");
-    let (audio_tx, audio_rx) = mpsc::channel(1);
-    let (failures, failure_rx) = AudioFailureSignal::channel();
-    enqueue_audio(&audio_tx, &failures, vec![1, 2]);
-    enqueue_audio(&audio_tx, &failures, vec![3, 4]);
-    let (ready_tx, _ready_rx) = oneshot::channel();
-    let (updates_tx, mut updates_rx) = mpsc::channel(1);
-
-    let error = transcription
-        .run(audio_rx, failure_rx, ready_tx, 9, &updates_tx)
-        .await
-        .expect_err("audio loss must fail transcription");
+async fn a_refused_start_is_answered_with_the_reason() {
+    let (mut disabled, _) = manager(false);
+    disabled.apply_effects(&[InputEffect::RecordingStartRequested], 1);
     assert_eq!(
-        error,
-        "Audio input could not keep up; captured audio was lost"
+        events_until(&mut disabled, |_| true).await,
+        [InputEvent::VoiceStartResolved {
+            generation: 1,
+            error: Some("Voice mode is disabled".to_owned())
+        }]
     );
-    send_transcription_result(&updates_tx, 9, Ok(Err(error))).await;
-    assert!(matches!(
-        updates_rx.recv().await,
-        Some(InputEvent::VoiceStopResolved {
-            generation: 9,
-            error: Some(_)
-        })
-    ));
-}
 
-#[tokio::test]
-async fn realtime_client_streams_pcm_and_maps_delta_and_done_events() {
-    let listener = TcpListener::bind("127.0.0.1:0")
-        .await
-        .expect("test listener");
-    let address = listener.local_addr().expect("listener address");
-    let server = tokio::spawn(async move {
-        let (stream, _) = listener.accept().await.expect("client connection");
-        let mut socket = accept_async(stream).await.expect("websocket handshake");
-        socket
-            .send(Message::Text(
-                json!({"type": "session.created"}).to_string().into(),
-            ))
-            .await
-            .expect("session created");
-        let update = message_json(
-            &socket
-                .next()
-                .await
-                .expect("session update")
-                .expect("message"),
-        )
-        .expect("update JSON");
-        assert_eq!(update["type"], "session.update");
-        assert_eq!(update["session"]["audio_format"]["sample_rate"], 48_000);
-        let append = message_json(&socket.next().await.expect("audio append").expect("message"))
-            .expect("append JSON");
-        assert_eq!(append["type"], "input_audio.append");
-        assert_eq!(append["audio"], "AQID");
-        assert_eq!(
-            message_json(&socket.next().await.expect("flush").expect("message"))
-                .expect("flush JSON")["type"],
-            "input_audio.flush"
-        );
-        assert_eq!(
-            message_json(&socket.next().await.expect("end").expect("message")).expect("end JSON")["type"],
-            "input_audio.end"
-        );
-        socket
-            .send(Message::Text(
-                json!({"type": "transcription.text.delta", "text": "hello"})
-                    .to_string()
-                    .into(),
-            ))
-            .await
-            .expect("delta");
-        socket
-            .send(Message::Text(
-                json!({"type": "transcription.done"}).to_string().into(),
-            ))
-            .await
-            .expect("done");
-    });
-    let config = test_voice_config(&format!("http://{address}"));
-    assert_eq!(config.requested_sample_rate, 16_000);
-    let config = config.with_sample_rate(48_000);
-    let (audio_tx, audio_rx) = mpsc::channel(2);
-    audio_tx.send(vec![1, 2, 3]).await.expect("audio chunk");
-    drop(audio_tx);
-    let (failures, failure_rx) = AudioFailureSignal::channel();
-    let (updates_tx, mut updates_rx) = mpsc::channel(4);
-    let (ready_tx, ready_rx) = oneshot::channel();
-    let transcription = prepare_transcription(&SecretString::from("test-key".to_owned()), &config)
-        .await
-        .expect("transcription preparation");
-    transcription
-        .run(audio_rx, failure_rx, ready_tx, 7, &updates_tx)
-        .await
-        .expect("transcription succeeds");
-    ready_rx.await.expect("consumer ready");
-    drop(failures);
-    assert!(matches!(
-        updates_rx.recv().await,
-        Some(InputEvent::VoiceTranscriptDelta {
-            generation: 7,
-            ref text
-        }) if text == "hello"
-    ));
-    send_transcription_result(&updates_tx, 7, Ok(Ok(()))).await;
-    assert!(matches!(
-        updates_rx.recv().await,
-        Some(InputEvent::VoiceDone { generation: 7 })
-    ));
-    server.await.expect("test server");
-}
-
-/// The published view a document declaring one transcription surface produces.
-fn transcription_view(model: Value, provider: Value) -> Value {
-    json!({"transcription": {"model": model, "provider": provider}})
-}
-
-#[test]
-fn the_endpoint_and_the_session_frame_come_from_the_configured_entry() {
-    let settings = TranscriptionSettings::from_config_view(&transcription_view(
-        json!({
-            "name": "fixture-gateway-model",
-            "sampleRate": 8_000,
-            "encoding": "pcm_s16le",
-            "language": "en",
-            "targetStreamingDelayMs": 750,
-        }),
-        json!({"apiBase": "wss://gateway.fixture.invalid:8443", "apiKeyEnvVar": ""}),
-    ))
-    .expect("the configured surface resolves");
-    let config = VoiceConfig::resolve(&settings).expect("voice configuration");
-    assert_eq!(
-        config.endpoint.as_str(),
-        "wss://gateway.fixture.invalid:8443/v1/audio/transcriptions/realtime\
-         ?model=fixture-gateway-model"
-    );
-    let update: Value = serde_json::from_str(&session_update(
-        &config.encoding,
-        config.requested_sample_rate,
-        config.target_streaming_delay_ms,
-    ))
-    .expect("session update JSON");
-    assert_eq!(update["type"], "session.update");
-    assert_eq!(update["session"]["audio_format"]["encoding"], "pcm_s16le");
-    assert_eq!(update["session"]["audio_format"]["sample_rate"], 8_000);
-    assert_eq!(update["session"]["target_streaming_delay_ms"], 750);
-}
-
-/// A gateway served below a path prefix keeps it: the realtime path is appended
-/// to the configured `api_base`, not substituted for it.
-#[test]
-fn a_provider_path_prefix_is_kept_under_the_realtime_path() {
-    let mut settings = transcription_settings("https://gateway.fixture.invalid/audio/");
-    settings.model = "fixture-suffixed-model".to_owned();
-    let config = VoiceConfig::resolve(&settings).expect("voice configuration");
-    assert_eq!(
-        config.endpoint.as_str(),
-        "wss://gateway.fixture.invalid/audio/v1/audio/transcriptions/realtime\
-         ?model=fixture-suffixed-model"
-    );
-}
-
-#[test]
-fn a_configuration_declaring_no_transcription_model_resolves_to_an_error() {
-    let error = TranscriptionSettings::from_config_view(&transcription_view(
-        json!({"name": "", "sampleRate": 16_000, "encoding": "pcm_s16le"}),
-        json!({"apiBase": "wss://api.mistral.ai", "apiKeyEnvVar": ""}),
-    ))
-    .expect_err("an empty model list resolves to nothing");
-    assert!(error.contains("transcribe_models"), "{error}");
-}
-
-#[test]
-fn an_endpoint_that_is_not_a_url_is_reported_rather_than_opened() {
-    let error = VoiceConfig::resolve(&transcription_settings("not a url"))
-        .expect_err("an unusable endpoint is reported");
-    assert!(error.contains("invalid"), "{error}");
-    let error = VoiceConfig::resolve(&transcription_settings("ftp://gateway.fixture.invalid"))
-        .expect_err("an unsupported scheme is reported");
-    assert!(error.contains("ftp"), "{error}");
-}
-
-/// Reference `resolve_api_key`: the variable the provider names is what a
-/// session presents, an unnamed one leaves the runtime credential in place, and
-/// a named one that resolves to nothing fails naming itself.
-#[test]
-fn the_credential_is_read_under_the_variable_the_provider_names() {
-    assert_eq!(
-        resolve_credential("", "runtime-credential", |_| panic!(
-            "an empty variable is never looked up"
-        )),
-        Ok("runtime-credential".to_owned())
-    );
-    assert_eq!(
-        resolve_credential("FIXTURE_GATEWAY_TOKEN", "runtime-credential", |name| {
-            assert_eq!(name, "FIXTURE_GATEWAY_TOKEN");
-            Some("provider-credential".to_owned())
-        }),
-        Ok("provider-credential".to_owned())
-    );
-    let error = resolve_credential("FIXTURE_GATEWAY_TOKEN", "runtime-credential", |_| None)
-        .expect_err("a named variable that resolves to nothing fails");
-    assert!(error.contains("FIXTURE_GATEWAY_TOKEN"), "{error}");
-    assert!(!error.contains("runtime-credential"), "{error}");
-}
-
-/// The unresolved configuration reaches the operator where they asked for a
-/// recording, and nothing is connected to in the meantime.
-#[tokio::test]
-async fn a_start_on_an_unresolvable_configuration_reports_it_instead_of_connecting() {
-    let mut manager = VoiceManager::production(
-        &json!({"transcription": {"model": {"name": ""}, "provider": {"apiBase": ""}}}),
-        "runtime-credential",
-        std::path::Path::new("/nonexistent-vibe-home"),
+    // Reference `RecordingStartError("Transcribe client is not available")`
+    // for a configuration that resolves no client.
+    let mut unconfigured = VoiceManager::new(
+        &json!({}),
+        FakeRecorder::new(0.0),
+        Arc::new(|_: &Value| None),
+        no_credentials(),
         true,
     );
-    manager.apply_effects(&[InputEffect::RecordingStartRequested], 1);
-    let event = next_event(&mut manager).await;
-    let InputEvent::VoiceStartResolved {
-        generation: 1,
-        error: Some(error),
-    } = event
-    else {
-        panic!("the start reports the configuration: {event:?}");
-    };
-    assert!(error.contains("transcribe_models"), "{error}");
-    assert!(manager.active.is_none());
-}
-
-/// Reference `LazyVoiceManager`: the configuration is read again rather than
-/// kept from process start, so an edit reaches the next recording.
-#[tokio::test]
-async fn a_configuration_change_is_read_again_into_the_next_session() {
-    let mut manager = VoiceManager::production(
-        &json!({"transcription": {"model": {"name": ""}, "provider": {"apiBase": ""}}}),
-        "runtime-credential",
-        std::path::Path::new("/nonexistent-vibe-home"),
-        true,
+    unconfigured.apply_effects(&[InputEffect::RecordingStartRequested], 2);
+    assert_eq!(
+        events_until(&mut unconfigured, |_| true).await,
+        [InputEvent::VoiceStartResolved {
+            generation: 2,
+            error: Some("Transcribe client is not available".to_owned())
+        }]
     );
-    assert!(manager.factory.is_err());
-    manager.resync(&transcription_view(
-        json!({
-            "name": "fixture-second-model",
-            "sampleRate": 24_000,
-            "encoding": "pcm_s16le",
-            "targetStreamingDelayMs": 250,
-        }),
-        json!({"apiBase": "wss://gateway.fixture.invalid", "apiKeyEnvVar": ""}),
-    ));
-    assert!(manager.factory.is_ok(), "the edited surface resolves");
-    manager.resync(&json!({}));
+
+    // The credential variable is read from the configuration as it stands at
+    // the start.
+    let (mut keyless, _) = manager(true);
+    keyless.resync(&view("FIXTURE_UNSET_KEY"));
+    keyless.apply_effects(&[InputEffect::RecordingStartRequested], 3);
+    assert_eq!(
+        events_until(&mut keyless, |_| true).await,
+        [InputEvent::VoiceStartResolved {
+            generation: 3,
+            error: Some("Voice transcription needs an API key: set FIXTURE_UNSET_KEY".to_owned())
+        }]
+    );
     assert!(
-        manager.factory.is_err(),
-        "a configuration that stops resolving is read again too"
+        keyless.take_telemetry().is_empty(),
+        "a refused start reports nothing"
+    );
+}
+
+/// Reference `LazyVoiceManager`: the client is built the first time voice
+/// mode is on and kept afterward, whatever the configuration becomes.
+#[tokio::test]
+async fn the_client_is_built_once_when_voice_mode_first_turns_on() {
+    let (mut manager, built) = manager(false);
+    assert_eq!(
+        built.load(Ordering::SeqCst),
+        0,
+        "nothing is built while off"
+    );
+    manager.set_enabled(false);
+    assert_eq!(built.load(Ordering::SeqCst), 0);
+    manager.set_enabled(true);
+    assert_eq!(built.load(Ordering::SeqCst), 1);
+    manager.resync(&view(""));
+    manager.set_enabled(true);
+    manager.apply_effects(&[InputEffect::RecordingStartRequested], 1);
+    events_until(&mut manager, |event| {
+        matches!(event, InputEvent::VoiceStartResolved { .. })
+    })
+    .await;
+    assert_eq!(built.load(Ordering::SeqCst), 1);
+
+    let (_, enabled_built) = self::manager(true);
+    assert_eq!(
+        enabled_built.load(Ordering::SeqCst),
+        1,
+        "built at once when on"
+    );
+}
+
+/// Reference `RecordingIndicator._poll_peak`:
+/// `min(int(peak * len(PEAK_BLOCKS)), len(PEAK_BLOCKS) - 1)`.
+#[tokio::test]
+async fn the_peak_is_drawn_on_eight_levels() {
+    for (level, expected) in [(0.0, 0), (0.5, 4), (0.99, 7), (1.0, 7)] {
+        let (factory, _) = counting_factory();
+        let manager = VoiceManager::new(
+            &view(""),
+            FakeRecorder::new(level),
+            factory,
+            no_credentials(),
+            true,
+        );
+        assert_eq!(manager.peak_level(), expected, "peak {level}");
+    }
+    let (manager, _) = manager(false);
+    assert_eq!(manager.peak_level(), 0, "no manager reads silence");
+}
+
+/// The loop's recorder drains every queued event and leaves nothing in the
+/// transcript, whatever the telemetry client does with it. Where the events
+/// go, and the `enable_telemetry` gate that decides whether they travel at
+/// all, are the client's own and are held by `telemetry_tests` one layer down.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_recorder_drains_every_event_without_touching_the_transcript() {
+    let temporary = tempfile::tempdir().expect("a temporary vibe home");
+    let vibe_home = temporary.path().join("vibe-home");
+    fs::create_dir_all(&vibe_home).expect("the vibe home is created");
+    let service = WorkspaceService::new(
+        WorkspacePaths {
+            session_root: vibe_home.join("sessions"),
+            working_directory: temporary.path().join("workspace"),
+            vibe_home,
+        },
+        true,
+    )
+    .expect("the configuration service builds");
+    let mut runtime = interactive_test_runtime_with_server(
+        "audio-telemetry",
+        AppServer::with_workspace_service(service),
+    );
+    runtime.voice = manager(true).0;
+
+    runtime
+        .voice
+        .apply_effects(&[InputEffect::RecordingStartRequested], 1);
+    events_until(&mut runtime.voice, |event| {
+        matches!(event, InputEvent::VoiceTranscriptDelta { .. })
+    })
+    .await;
+    crate::tui::narration::record_audio_telemetry(&mut runtime);
+
+    assert!(
+        runtime.voice.take_telemetry().is_empty(),
+        "the recorder takes every queued event"
+    );
+    let logs = runtime
+        .service
+        .public_call(
+            "diagnostics/logs/read",
+            json!({"sessionId": runtime.session_id}),
+        )
+        .expect("the log page reads");
+    let entries = logs["logs"]["entries"].as_array().expect("a log page");
+    assert!(
+        !entries.iter().any(|entry| entry["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("vibe.audio.transcription.start"))),
+        "an audio event is telemetry, not a diagnostic the operator reads"
     );
 }

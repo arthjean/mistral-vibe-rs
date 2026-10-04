@@ -216,7 +216,7 @@ fn a_mistyped_active_audio_alias_falls_back_to_the_first_declared_entry() {
 }
 
 /// The two verdicts the reference gives an audio list, measured through
-/// `crates/vibe-cli/tests/voice/corpus.json`: an entry that declares no alias
+/// `crates/vibe-voice/tests/voice/corpus.json`: an entry that declares no alias
 /// has no merge key and takes the document down with it, and two entries
 /// declaring the same alias are one entry, the later winning whole and no
 /// warning being recorded.

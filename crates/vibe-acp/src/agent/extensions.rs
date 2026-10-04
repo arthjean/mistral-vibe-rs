@@ -15,12 +15,9 @@ use vibe_core::observability::{
 };
 use vibe_protocol::ProtocolErrorCode;
 
-use crate::agent::AcpAgent;
+use crate::agent::{AcpAgent, voice};
 use crate::projection::iso_timestamp;
 use crate::protocol::AcpError;
-
-/// The notification that tells the client narration stopped.
-const NARRATION_DONE_METHOD: &str = "_voice/narrationDone";
 
 impl<D> AcpAgent<D>
 where
@@ -61,7 +58,7 @@ where
                 self.whoami_extension(method, &params).await
             }
             _ if method.starts_with("logLevel/") => self.log_level_extension(method, &params).await,
-            _ if method.starts_with("voice/") => self.voice_extension(method, &params),
+            _ if method.starts_with("voice/") => self.voice_extension(method, &params).await,
             _ => Err(AcpError::NotImplemented(method.to_owned())),
         }
     }
@@ -562,39 +559,108 @@ where
         }
     }
 
-    /// Reference `_voice_extension`. Dictation and narration run on the
-    /// terminal client's audio stack, which this adapter does not carry, so
-    /// starting either reports why it cannot, as the reference does when its
-    /// managers fail to start.
-    fn voice_extension(
+    /// Reference `_voice_extension`: dictation and narration run against the
+    /// session opened first, its configuration read with voice mode and
+    /// narration forced on, since the editor gates both on its own settings
+    /// before it calls.
+    async fn voice_extension(
         &self,
         method: &str,
-        _params: &Map<String, Value>,
+        params: &Map<String, Value>,
     ) -> Result<Value, AcpError> {
-        let has_session = self
-            .lock_state()
-            .map(|state| !state.sessions.is_empty())
-            .unwrap_or(false);
-        let unavailable = || {
-            json!({
-                "ok": false,
-                "error": if has_session {
-                    "Voice input and narration are not available in this build"
-                } else {
-                    "No session is open"
-                },
-            })
+        let text = |key: &str| {
+            params
+                .get(key)
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned()
         };
-        match method {
-            "voice/transcribeStart" | "voice/narrate" => Ok(unavailable()),
-            "voice/transcribeStop" => Ok(json!({"ok": true, "text": ""})),
-            "voice/transcribeCancel" => Ok(json!({"ok": true})),
-            "voice/narrateCancel" => {
-                self.notify_after_response(NARRATION_DONE_METHOD, json!({}));
-                Ok(json!({"ok": true}))
+        let client = self.client.clone();
+        let notify: voice::Notify = Arc::new(move |method: &str, params: Value| {
+            if let Some(client) = &client {
+                client.notify(method, params);
             }
-            _ => Err(AcpError::NotImplemented(method.to_owned())),
+        });
+        let (result, notices) = match method {
+            "voice/transcribeStart" => {
+                let session = self.voice_session().await?;
+                (
+                    self.voice.transcribe_start(session, &notify).await,
+                    Vec::new(),
+                )
+            }
+            "voice/transcribeStop" => (self.voice.transcribe_stop().await, Vec::new()),
+            "voice/transcribeCancel" => (self.voice.transcribe_cancel().await, Vec::new()),
+            "voice/narrate" => {
+                let session = self.voice_session().await?;
+                self.voice
+                    .narrate(session, &notify, text("userMessage"), text("assistantText"))
+                    .await
+            }
+            "voice/narrateCancel" => self.voice.narrate_cancel().await,
+            _ => return Err(AcpError::NotImplemented(method.to_owned())),
+        };
+        for (method, params) in notices {
+            self.notify_after_response(method, params);
         }
+        Ok(result)
+    }
+
+    /// What the voice managers are built against, from the session opened
+    /// first, or `None` when no session is open.
+    async fn voice_session(&self) -> Result<Option<voice::VoiceSession>, AcpError> {
+        let Some(harness) = self.lock_state()?.first_session() else {
+            return Ok(None);
+        };
+        let mut config = self
+            .call_async(&harness, "config/read", json!({}))
+            .await
+            .map_err(|error| AcpError::Unexpected(error_message(&error)))?
+            .result
+            .remove("config")
+            .unwrap_or(Value::Null);
+        if let Some(config) = config.as_object_mut() {
+            config.insert("narratorEnabled".to_owned(), json!(true));
+            config.insert("voiceModeEnabled".to_owned(), json!(true));
+        }
+        let session_id = harness.canonical_id();
+        let telemetry = Arc::clone(&self.telemetry);
+        let record: voice::Recorder = {
+            let session_id = session_id.clone();
+            Arc::new(move |event| telemetry.record(event, Some(&session_id)))
+        };
+        let summarizer: voice::Summarizer = Arc::new(move |user_message, assistant_text| {
+            let harness = Arc::clone(&harness);
+            let session_id = session_id.clone();
+            Box::pin(async move {
+                // The call is begun under the session's lock and awaited
+                // outside it, so a slow summary never holds a turn back.
+                let pending = harness
+                    .service
+                    .lock()
+                    .await
+                    .begin_public_call(
+                        "narration/summarize",
+                        json!({
+                            "sessionId": session_id,
+                            "userMessage": user_message,
+                            "assistantText": assistant_text,
+                        }),
+                    )
+                    .ok()?;
+                let dispatch = pending.complete().await.ok()?;
+                dispatch
+                    .result
+                    .get("summary")
+                    .and_then(Value::as_str)
+                    .map(ToOwned::to_owned)
+            })
+        });
+        Ok(Some(voice::VoiceSession {
+            config,
+            summarizer,
+            record,
+        }))
     }
 }
 

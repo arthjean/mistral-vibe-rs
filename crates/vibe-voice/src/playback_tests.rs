@@ -89,35 +89,33 @@ fn a_chunk_between_the_header_and_the_data_is_skipped() {
     assert_eq!(decoded.samples, [7_i16, 8]);
 }
 
-/// A payload that is not a container this port decodes is refused by cause, and
-/// the refusal happens before any device is addressed: `decode_wav` opens
-/// nothing at all.
+/// A payload Python's `wave` module refuses is refused by the class it raises,
+/// before any device is addressed: `decode_wav` opens nothing at all.
 #[test]
 fn an_unsupported_payload_is_refused_by_cause() {
     let mp3 = [
         0xFF_u8, 0xFB, 0x90, 0x44, 0x00, 0x00, 0x00, 0x00, 0, 0, 0, 0,
     ];
-    assert!(matches!(
-        decode_wav(&mp3),
-        Err(PlaybackError::UnsupportedFormat(_))
-    ));
-    assert!(matches!(
-        decode_wav(&[]),
-        Err(PlaybackError::UnsupportedFormat(_))
-    ));
-    // A WAVE the reference's own `wave` module refuses too: a compressed tag.
-    let compressed = wav_with(16_000, 1, 16, 0x0055, &[1_i16], &[]);
-    assert!(matches!(
-        decode_wav(&compressed),
-        Err(PlaybackError::UnsupportedFormat(_))
-    ));
-    // A depth this port's `int16` output cannot carry.
-    let deep = wav_with(16_000, 1, 24, 1, &[1_i16], &[]);
-    let error = decode_wav(&deep).expect_err("a 24-bit container is refused");
-    assert!(
-        error.to_string().contains(PLAYBACK_SAMPLE_FORMAT),
-        "{error}"
+    assert_eq!(decode_wav(&mp3).map_err(|error| error.class), Err("Error"));
+    assert_eq!(
+        decode_wav(&[]).map_err(|error| error.class),
+        Err("EOFError")
     );
+    // A compressed tag, which `wave` refuses too.
+    let compressed = wav_with(16_000, 1, 16, 0x0055, &[1_i16], &[]);
+    assert_eq!(
+        decode_wav(&compressed).map_err(|error| error.class),
+        Err("Error")
+    );
+}
+
+/// Reference `decode_wav` reads every width `wave` reads and hands the bytes
+/// on as they are, so a 24-bit container decodes to its raw frames.
+#[test]
+fn any_declared_width_is_read_as_raw_frames() {
+    let deep = wav_with(16_000, 1, 24, 1, &[1_i16, 2, 3], &[]);
+    let decoded = decode_wav(&deep).expect("a 24-bit container decodes");
+    assert_eq!(decoded.pcm, [1, 0, 2, 0, 3, 0]);
 }
 
 fn feed(
@@ -175,9 +173,40 @@ fn a_multi_channel_source_keeps_its_channels() {
 /// The three playback constants are the reference's own.
 #[test]
 fn the_playback_constants_match_the_reference() {
-    assert_eq!(PLAYBACK_BLOCK_SIZE, 4_096);
+    assert_eq!(PLAYBACK_BUFFER_MS, 200);
     assert_eq!(PLAYBACK_SAMPLE_FORMAT, "int16");
     assert_eq!(PLAYBACK_SAMPLE_WIDTH, 2);
+}
+
+/// A container at a rate and channel count the device does not run is
+/// converted rather than refused, as miniaudio converts it.
+#[test]
+fn a_container_is_converted_to_the_device_layout() {
+    let mono = DecodedAudio {
+        sample_rate: 24_000,
+        channels: 1,
+        pcm: Vec::new(),
+        samples: vec![0, 100, 200, 300],
+    };
+    // Twice the rate on two channels: every frame is interpolated, then
+    // heard on both channels.
+    assert_eq!(
+        convert_for_device(&mono, 48_000, 2),
+        [
+            0, 0, 50, 50, 100, 100, 150, 150, 200, 200, 250, 250, 300, 300
+        ]
+    );
+    let stereo = DecodedAudio {
+        sample_rate: 16_000,
+        channels: 2,
+        pcm: Vec::new(),
+        samples: vec![100, 300, -100, 100],
+    };
+    assert_eq!(convert_for_device(&stereo, 16_000, 1), [200, 0]);
+    assert_eq!(
+        convert_for_device(&stereo, 16_000, 2),
+        [100, 300, -100, 100]
+    );
 }
 
 /// A default output device commonly names configurations in formats the stream

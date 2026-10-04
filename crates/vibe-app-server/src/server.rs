@@ -158,6 +158,10 @@ type ConnectorAuthRequest = (String, String, String, String);
 /// which no client can send: the parameters were validated before it is added.
 pub(crate) const CONNECTION_ROOT_PARAM: &str = "\u{0}connectionRoot";
 
+/// The parameter a routed narration call carries the client's launch context
+/// in, on the same terms as [`CONNECTION_ROOT_PARAM`].
+pub(crate) const CONNECTION_LAUNCH_PARAM: &str = "\u{0}connectionLaunch";
+
 /// Every method this build routes, sorted and unique, whether or not the
 /// reference declares it.
 #[cfg(test)]
@@ -856,6 +860,7 @@ impl AppServer {
             root: None,
             entrypoint: ClientEntrypoint::Unknown,
             client_name: None,
+            launch: None,
             pending_server_requests: HashMap::new(),
         }
     }

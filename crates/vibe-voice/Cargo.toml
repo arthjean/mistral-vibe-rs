@@ -1,0 +1,30 @@
+[package]
+name = "vibe-voice"
+description = "Voice input, read-aloud and the narrator, shared by the terminal and editor adapters"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+base64.workspace = true
+cpal.workspace = true
+futures-util.workspace = true
+reqwest.workspace = true
+secrecy.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+url.workspace = true
+vibe-core = { path = "../vibe-core" }
+
+[dev-dependencies]
+hex.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+toml.workspace = true
+
+[lints]
+workspace = true

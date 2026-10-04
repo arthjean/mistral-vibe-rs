@@ -1064,15 +1064,18 @@ impl TelemetryRecord {
                 attributes.label(TelemetryField::Outcome, outcome.label())?;
                 picker.write(&mut attributes)?;
             }
+            // The recording identifier is the endpoint's request identifier,
+            // opaque and empty for a session that failed before it opened, and
+            // the reference sends it as it is.
             Self::TranscriptionStarted { recording_id } => {
-                attributes.label(TelemetryField::RecordingId, recording_id)?;
+                attributes.text(TelemetryField::RecordingId, recording_id);
             }
             Self::TranscriptionCancelled {
                 recording_id,
                 recording_duration,
             } => {
                 attributes
-                    .label(TelemetryField::RecordingId, recording_id)?
+                    .text(TelemetryField::RecordingId, recording_id)
                     .millis(TelemetryField::RecordingDurationMs, *recording_duration);
             }
             Self::TranscriptionDone {
@@ -1082,7 +1085,7 @@ impl TelemetryRecord {
                 recording_duration,
             } => {
                 attributes
-                    .label(TelemetryField::RecordingId, recording_id)?
+                    .text(TelemetryField::RecordingId, recording_id)
                     .count(TelemetryField::TranscriptLength, *transcript_length)
                     .millis(
                         TelemetryField::TranscriptionDurationMs,
@@ -1097,7 +1100,7 @@ impl TelemetryRecord {
                 recording_duration,
             } => {
                 attributes
-                    .label(TelemetryField::RecordingId, recording_id)?
+                    .text(TelemetryField::RecordingId, recording_id)
                     .text(TelemetryField::ErrorMessage, message)
                     .millis(
                         TelemetryField::TranscriptionDurationMs,

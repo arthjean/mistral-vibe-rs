@@ -83,6 +83,11 @@ pub(super) struct InteractiveRuntime {
     /// The read-aloud transport, resolved from the same published view the
     /// transcription session is.
     pub(super) speech: SpeechManager,
+    /// The session the audio requests report, shared with their metadata
+    /// getters so a resume is reported from its first request.
+    pub(super) audio_session_id: Arc<std::sync::Mutex<String>>,
+    /// The turn summary being generated, which a cancellation stops.
+    pub(super) narration_summary: Option<tokio::task::AbortHandle>,
     /// What [`InteractiveRuntime::report`] was handed, kept only under test.
     ///
     /// The production observer needs a transport and answers nothing, so a test
@@ -96,6 +101,8 @@ pub(super) struct InteractiveRuntime {
 pub(super) enum UiOperation {
     Mcp(workflow::McpPendingOperation),
     RemoteProject(remote_project_workflow::ProjectPendingOperation),
+    /// A turn summary the narrator asked for, under its generation.
+    NarrationSummary(u64),
 }
 
 pub(super) struct UiOperationCompletion {
@@ -288,6 +295,9 @@ pub(super) fn apply_ui_operation_completion(
                 state,
             );
         }
+        UiOperation::NarrationSummary(generation) => {
+            super::narration::apply_summary(generation, completion.result, runtime, state);
+        }
     }
 }
 
@@ -382,6 +392,13 @@ pub(super) fn registry_skills_enabled(config: &Value) -> bool {
         .or_else(|| config.get("experimentalEnableRegistrySkills"))
         .and_then(Value::as_bool)
         .unwrap_or(false)
+}
+
+/// A credential lookup that resolves nothing, so a test never reads the
+/// machine's environment or keyring.
+#[cfg(test)]
+pub(in crate::tui) fn no_credentials() -> vibe_voice::settings::CredentialLookup {
+    Arc::new(|_: &str| None)
 }
 
 #[cfg(test)]
@@ -507,8 +524,8 @@ pub(in crate::tui) fn interactive_test_runtime_with_trust(
                     "provider": {"apiBase": "https://provider.invalid", "apiKeyEnvVar": ""},
                 },
             }),
-            "test-credential",
-            std::path::Path::new("/nonexistent-vibe-home"),
+            no_credentials(),
+            vibe_voice::identity::no_metadata(),
             false,
         ),
         speech: SpeechManager::production(
@@ -522,9 +539,11 @@ pub(in crate::tui) fn interactive_test_runtime_with_trust(
                     "provider": {"apiBase": "https://provider.invalid", "apiKeyEnvVar": ""},
                 },
             }),
-            "test-credential",
-            std::path::Path::new("/nonexistent-vibe-home"),
+            no_credentials(),
+            vibe_voice::identity::no_metadata(),
         ),
+        narration_summary: None,
+        audio_session_id: Arc::default(),
         recorded: std::sync::Mutex::default(),
     }
 }

@@ -5,6 +5,7 @@ members = [
     "crates/vibe-cli",
     "crates/vibe-core",
     "crates/vibe-protocol",
+    "crates/vibe-voice",
 ]
 resolver = "3"
 
@@ -80,6 +81,6 @@ unwrap_in_result = "warn"
 [workspace.metadata.vibe]
 dependency-layers = [
     ["vibe-protocol", "vibe-core"],
-    ["vibe-app-server"],
+    ["vibe-app-server", "vibe-voice"],
     ["vibe-cli", "vibe-acp"],
 ]

@@ -371,6 +371,9 @@ impl AppServer {
                 .skills_mutation_batch(request_id, &method, params)
                 .await;
         }
+        if method == "narration/summarize" {
+            return self.narrate(request_id, params).await;
+        }
         if method == "identity/read" {
             let identity = self.workspace.read_identity().await;
             return success_batch(request_id, result_map([("identity", identity)]));
@@ -379,6 +382,50 @@ impl AppServer {
             Ok(dispatch) => projects_dispatch_batch(request_id, dispatch),
             Err(error) => projects_error_batch(request_id, error),
         }
+    }
+
+    /// Reference `NarrationService.summarize`, against the configuration as
+    /// it stands. A summary that cannot be made answers `null`.
+    async fn narrate(
+        &self,
+        request_id: RequestId,
+        mut params: BTreeMap<String, Value>,
+    ) -> DispatchBatch {
+        let launch = params
+            .remove(CONNECTION_LAUNCH_PARAM)
+            .and_then(|launch| serde_json::from_value(launch).ok());
+        let text = |key: &str| params.get(key).and_then(Value::as_str);
+        let session_id = text("sessionId").unwrap_or_default();
+        let metadata = vibe_core::telemetry::TelemetryContext {
+            launch,
+            ..Default::default()
+        }
+        .request_metadata(
+            Some(session_id),
+            vibe_core::telemetry::TelemetryCallType::SecondaryCall,
+            text("messageId").map(ToOwned::to_owned),
+        )
+        .properties();
+        let effective = self
+            .workspace
+            .layered_config()
+            .load()
+            .map(|snapshot| snapshot.effective.clone())
+            .unwrap_or_default();
+        let providers =
+            vibe_core::provider::config::ModelRouting::from_effective(&effective, None).providers;
+        let context = vibe_core::llm::BackendContext::ambient(
+            vibe_core::provider::config::ApiSettings::from_table(&effective),
+            self.workspace.credentials(),
+        );
+        let input = vibe_core::narration::TurnSummaryInput {
+            user_message: text("userMessage").unwrap_or_default(),
+            assistant_text: text("assistantText").unwrap_or_default(),
+            error: text("error"),
+        };
+        let summary =
+            vibe_core::narration::summarize(&providers, &context, &input, &metadata).await;
+        success_batch(request_id, result_map([("summary", json!(summary))]))
     }
 
     /// A skills mutation answered with the runtime it produced, then

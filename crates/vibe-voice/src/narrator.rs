@@ -206,11 +206,24 @@ impl NarratorManager {
         self.data = None;
     }
 
-    /// Reference `on_turn_end`.
+    /// Reference `on_turn_end`. The tracker asks for the summary of every turn
+    /// it saw end, so a narrator without a speech client still sends the
+    /// request; nothing waits on its answer, which the reference's
+    /// `_on_turn_summary` meets with a return to an idle it never left.
     pub fn on_turn_end(&mut self) -> Option<NarratorEffect> {
         let data = self.data.take()?;
-        if !self.enabled || !self.speech_available {
+        if !self.enabled {
             return None;
+        }
+        let summarize = NarratorEffect::Summarize {
+            generation: self.generation,
+            user_message: data.user_message,
+            assistant_text: data.assistant_fragments.concat(),
+            error: data.error,
+            message_id: data.message_id,
+        };
+        if !self.speech_available {
+            return Some(summarize);
         }
         self.state = NarratorState::Summarizing;
         self.outstanding = Some(self.generation);
@@ -221,16 +234,12 @@ impl NarratorManager {
             read_aloud_session_id: self.tracking.session_id.clone(),
             trigger: ReadAloudTrigger::AutoplayNextMessage,
         });
-        Some(NarratorEffect::Summarize {
-            generation: self.generation,
-            user_message: data.user_message,
-            assistant_text: data.assistant_fragments.concat(),
-            error: data.error,
-            message_id: data.message_id,
-        })
+        Some(summarize)
     }
 
-    /// Reference `_on_turn_summary`: a stale or empty summary returns to idle.
+    /// Reference `_on_turn_summary`: a stale summary, or no summary at all,
+    /// returns to idle. An empty one is still spoken, as the reference tests
+    /// only for `None`.
     pub fn apply_summary(
         &mut self,
         generation: u64,
@@ -239,8 +248,7 @@ impl NarratorManager {
         if self.outstanding != Some(generation) || generation != self.generation {
             return None;
         }
-        let text = summary.filter(|summary| !summary.trim().is_empty());
-        match text {
+        match summary {
             Some(text) if self.speech_available => Some(NarratorEffect::Speak { generation, text }),
             _ => {
                 self.settle(generation);
@@ -336,7 +344,7 @@ impl NarratorManager {
 }
 
 #[cfg(test)]
-mod tests {
+mod narrator_tests {
     use super::*;
 
     fn enabled_manager() -> NarratorManager {
@@ -353,13 +361,21 @@ mod tests {
         assert_eq!(narrator.status_line(0), None);
     }
 
+    /// Reference `TurnSummaryTracker.end_turn` still asks for the summary;
+    /// the narrator never leaves idle, and the answer settles nothing.
     #[test]
     fn missing_speech_keeps_the_turn_successful_and_silent() {
         let mut narrator = NarratorManager::new(true, false);
         narrator.on_turn_start("write the parser");
         narrator.on_assistant_text("done");
-        assert_eq!(narrator.on_turn_end(), None);
+        assert!(matches!(
+            narrator.on_turn_end(),
+            Some(NarratorEffect::Summarize { generation: 1, .. })
+        ));
         assert_eq!(narrator.state(), NarratorState::Idle);
+        assert_eq!(narrator.apply_summary(1, Some("Spoken.".to_owned())), None);
+        assert_eq!(narrator.state(), NarratorState::Idle);
+        assert!(narrator.take_telemetry().is_empty());
     }
 
     #[test]
@@ -461,11 +477,11 @@ mod tests {
         narrator.on_turn_start("write the parser");
         narrator.on_assistant_text("done");
         narrator.on_turn_end();
-        narrator.apply_summary(1, Some(String::new()));
+        narrator.apply_summary(1, None);
         assert_eq!(
             event_names(&mut narrator),
             ["vibe.read_aloud.requested"],
-            "an empty summary settles without ever speaking"
+            "no summary settles without ever speaking"
         );
 
         let mut narrator = enabled_manager();
@@ -555,11 +571,20 @@ mod tests {
     }
 
     #[test]
-    fn empty_summaries_and_repeated_cancellation_settle_once() {
+    fn empty_summaries_are_spoken_and_cancellation_settles_once() {
         let mut narrator = enabled_manager();
         narrator.on_turn_start("first");
         narrator.on_turn_end().expect("summary");
-        assert_eq!(narrator.apply_summary(1, Some("   ".to_owned())), None);
+        // Reference `_on_turn_summary` tests for `None` only, so an empty
+        // summary still reaches the speech client.
+        assert_eq!(
+            narrator.apply_summary(1, Some(String::new())),
+            Some(NarratorEffect::Speak {
+                generation: 1,
+                text: String::new(),
+            })
+        );
+        narrator.settle(1);
         assert_eq!(narrator.state(), NarratorState::Idle);
         assert_eq!(narrator.cancel(), None, "an idle narrator emits no stop");
 

@@ -1,56 +1,92 @@
 //! Executing the effects the narrator produces, and settling what the speech
 //! transport answers.
 //!
-//! [`super::narrator`] owns the state machine; this module is the only place
-//! that turns its effects into calls on the session and on the audio transport.
+//! [`narrator`] owns the state machine; this module is the only place that
+//! turns its effects into calls on the session and on the audio transport.
 
 use serde_json::{Value, json};
+use vibe_app_server::client::PublicDispatch;
+use vibe_voice::narrator;
 
-use super::narrator;
-use super::runtime::InteractiveRuntime;
+use super::runtime::{InteractiveRuntime, UiOperation, UiOperationCompletion};
 use super::state::TuiState;
 use super::voice::SpeechEvent;
 
 pub(super) fn apply_narrator_effect(
     effect: narrator::NarratorEffect,
     runtime: &mut InteractiveRuntime,
-    state: &mut TuiState,
 ) {
     match effect {
-        // Reference `cancel`: playback stops before the machine returns to idle.
-        narrator::NarratorEffect::Stop => runtime.speech.stop(),
+        // Reference `cancel`: the summary task is cancelled and playback
+        // stops before the machine returns to idle.
+        narrator::NarratorEffect::Stop => {
+            if let Some(summary) = runtime.narration_summary.take() {
+                summary.abort();
+            }
+            runtime.speech.stop();
+        }
+        // Reference `TurnSummaryTracker._generate_summary`: the summary is
+        // generated beside the event loop, and a failure is no summary.
         narrator::NarratorEffect::Summarize {
             generation,
             user_message,
             assistant_text,
-            ..
+            error,
+            message_id,
         } => {
-            let summary = runtime
-                .service
-                .public_call(
-                    "narration/summarize",
-                    json!({
-                        "sessionId": runtime.session_id,
-                        "userMessage": user_message,
-                        "assistantText": assistant_text,
-                    }),
-                )
-                .ok()
-                .and_then(|result| {
-                    result
-                        .get("summary")
-                        .and_then(Value::as_str)
-                        .map(ToOwned::to_owned)
-                });
-            if let Some(narrator::NarratorEffect::Speak { generation, text }) =
-                state.narrator.apply_summary(generation, summary)
-            {
-                runtime.speech.speak(generation, text);
+            if let Some(previous) = runtime.narration_summary.take() {
+                previous.abort();
             }
+            let pending = runtime.service.begin_public_call(
+                "narration/summarize",
+                json!({
+                    "sessionId": runtime.session_id,
+                    "userMessage": user_message,
+                    "assistantText": assistant_text,
+                    "error": error,
+                    "messageId": message_id,
+                }),
+            );
+            let sender = runtime.ui_operation_sender.clone();
+            let task = tokio::spawn(async move {
+                let result = match pending {
+                    Ok(pending) => pending.complete().await.map_err(|error| error.to_string()),
+                    Err(error) => Err(error.to_string()),
+                };
+                let _ = sender.send(UiOperationCompletion {
+                    generation: None,
+                    operation: UiOperation::NarrationSummary(generation),
+                    result,
+                });
+            });
+            runtime.narration_summary = Some(task.abort_handle());
         }
         narrator::NarratorEffect::Speak { generation, text } => {
             runtime.speech.speak(generation, text);
         }
+    }
+}
+
+/// Reference `_on_turn_summary`: the summary the server answered, or none when
+/// the call failed or the server could not make one.
+pub(super) fn apply_summary(
+    generation: u64,
+    result: Result<PublicDispatch, String>,
+    runtime: &mut InteractiveRuntime,
+    state: &mut TuiState,
+) {
+    runtime.narration_summary = None;
+    let summary = result.ok().and_then(|dispatch| {
+        dispatch
+            .result
+            .get("summary")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned)
+    });
+    if let Some(narrator::NarratorEffect::Speak { generation, text }) =
+        state.narrator.apply_summary(generation, summary)
+    {
+        runtime.speech.speak(generation, text);
     }
 }
 
@@ -62,21 +98,15 @@ pub(super) fn apply_speech_event(event: SpeechEvent, state: &mut TuiState) {
         SpeechEvent::PlaybackStarted { generation } => state.narrator.playback_started(generation),
         SpeechEvent::Finished { generation, error } => {
             match error {
-                // Reference `_speak_summary` reports the exception's class
-                // name; this port's transport answers a message rather than an
-                // exception, so the class it names is the failure itself.
-                Some(failure) => {
-                    state.narrator.fail(generation, SPEECH_ERROR_CLASS);
-                    report_speech_failure(state, failure);
-                }
+                // Reference `_speak_summary` logs the failure and reports the
+                // exception's class name in `vibe.read_aloud.ended`; the
+                // operator is told nothing.
+                Some(failure) => state.narrator.fail(generation, failure.class),
                 None => state.narrator.settle(generation),
             }
         }
     }
 }
-
-/// What a read-aloud failure reports as its error type.
-const SPEECH_ERROR_CLASS: &str = "SpeechError";
 
 /// Sends the read-aloud events the narrator produced, on the same terms as the
 /// transcription ones.
@@ -84,18 +114,6 @@ pub(super) fn record_narrator_telemetry(runtime: &InteractiveRuntime, state: &mu
     for record in &state.narrator.take_telemetry() {
         runtime.report(record);
     }
-}
-
-/// Reports a speech failure once per session. An unconfigured model, an absent
-/// output device and an endpoint that refuses the request are all the same fact
-/// on every following turn, so the operator is told once rather than once per
-/// turn, and the turn itself stays successful.
-pub(super) fn report_speech_failure(state: &mut TuiState, failure: String) {
-    if state.speech_notice_shown {
-        return;
-    }
-    state.speech_notice_shown = true;
-    state.push_diagnostic(failure);
 }
 
 /// Sends the audio lifecycle events the voice manager produced.
@@ -111,3 +129,6 @@ pub(super) fn record_audio_telemetry(runtime: &mut InteractiveRuntime) {
         runtime.report(record);
     }
 }
+
+#[cfg(test)]
+mod narration_tests;

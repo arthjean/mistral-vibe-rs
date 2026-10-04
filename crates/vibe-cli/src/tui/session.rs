@@ -16,7 +16,7 @@ use vibe_app_server::workspace::WorkspaceService;
 use super::clipboard_images::ImageModels;
 use super::cloud_workflow::CloudWorkflowState;
 use super::runtime::{BannerMetrics, InteractiveRuntime, RuntimeSkill, UiOperationCompletion};
-use super::voice::{SpeechManager, VoiceManager};
+use super::voice::{SpeechManager, VoiceManager, audio_credentials, audio_metadata};
 use super::{
     Arguments, CliError, DEFAULT_CONTEXT_WINDOW, DEFAULT_MODEL, active_agent_safety, bootstrap,
     startup, telemetry_observer,
@@ -29,7 +29,6 @@ pub(super) fn start_runtime(
     credential: String,
     ui_operation_sender: tokio::sync::mpsc::UnboundedSender<UiOperationCompletion>,
 ) -> Result<InteractiveRuntime, CliError> {
-    let voice_credential = credential.clone();
     let banner = banner_metrics_from_workspace(&workspace, arguments, working_directory);
     let skills = runtime_skills(&workspace);
     let preferences = startup_preferences(arguments, &workspace)?;
@@ -83,16 +82,21 @@ pub(super) fn start_runtime(
         .and_then(Value::as_bool)
         .unwrap_or(false);
     let vibe_home = startup::vibe_home_directory(arguments, working_directory);
+    // Reference `build_audio_request_metadata`: both audio directions report
+    // the session they serve, which a resume replaces.
+    let audio_session_id = Arc::new(std::sync::Mutex::new(session_id.clone()));
+    let audio_metadata = audio_metadata(&audio_session_id);
+    let credentials = audio_credentials(&vibe_home);
     let voice = VoiceManager::production(
         &published_config,
-        &voice_credential,
-        &vibe_home,
+        Arc::clone(&credentials),
+        Arc::clone(&audio_metadata),
         voice_enabled,
     );
     // Reference `_make_tts_client`: the read-aloud client comes from the same
     // view, and a configuration it cannot be built from leaves the narrator
     // silent rather than failing the session.
-    let speech = SpeechManager::production(&published_config, &voice_credential, &vibe_home);
+    let speech = SpeechManager::production(&published_config, credentials, audio_metadata);
     let session = service.session(&session_id)?;
     let agent_name = session
         .intent
@@ -139,6 +143,8 @@ pub(super) fn start_runtime(
         session_init_duration_ms: Some(session_init_duration_ms),
         voice,
         speech,
+        narration_summary: None,
+        audio_session_id,
         #[cfg(test)]
         recorded: std::sync::Mutex::default(),
     })

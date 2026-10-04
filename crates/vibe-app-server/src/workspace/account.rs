@@ -260,6 +260,15 @@ impl WorkspaceService {
 
     /// The credential `variable` resolves to: the process environment with
     /// the Vibe home's dotenv filling in, then the OS keyring.
+    /// What a model call made on the workspace's behalf reads its key from:
+    /// the environment, the global `.env` file, then the keyring.
+    pub(crate) fn credentials(&self) -> std::sync::Arc<dyn vibe_core::llm::Credentials> {
+        std::sync::Arc::new(vibe_core::llm::AmbientCredentials::new(
+            DotenvValues::global(&self.paths.vibe_home),
+            vibe_core::auth::KeyringStore::native(),
+        ))
+    }
+
     pub(crate) fn resolve_credential(&self, variable: &str) -> Option<String> {
         let environ = DotenvValues::global(&self.paths.vibe_home).environment();
         let store = vibe_core::auth::KeyringStore::native();

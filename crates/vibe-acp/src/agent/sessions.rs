@@ -181,6 +181,8 @@ where
         for harness in sessions.into_values() {
             stop_session(&harness).await;
         }
+        // Reference `VibeAcpAgent` closes its voice controller last.
+        self.voice.close().await;
         Ok(())
     }
 
@@ -425,9 +427,7 @@ where
             );
             harness.track(pump.abort_handle());
         }
-        self.lock_state()?
-            .sessions
-            .insert(harness.session_id.clone(), Arc::clone(&harness));
+        self.lock_state()?.open(Arc::clone(&harness));
         self.warm_up(&harness);
         self.send_initial_commands(&harness);
         Ok(harness)

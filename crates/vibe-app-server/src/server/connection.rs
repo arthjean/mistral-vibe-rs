@@ -38,6 +38,9 @@ pub struct ServerConnection {
     /// The name the client gave itself, which a Teleport summary reports as
     /// its source.
     pub(super) client_name: Option<String>,
+    /// What the handshake declared about the client, which request metadata
+    /// reports (reference `_build_launch_context_from_services`).
+    pub(super) launch: Option<vibe_core::telemetry::LaunchContext>,
     pub(super) pending_server_requests: HashMap<RequestId, CallbackRoute>,
 }
 
@@ -479,6 +482,7 @@ impl ServerConnection {
             }
             method if review::is_review_method(method) => self.review_request(request),
             method if is_connector_method(method) => self.connector_request(request),
+            "narration/summarize" => self.narration_request(request),
             method if RESOURCE_METHODS.contains(&method) => self.resource_request(request),
             method if WORKSPACE_METHODS.contains(&method) => self.workspace_request(request),
             method if PROJECTS_METHODS.contains(&method) => self.projects_request(request),
@@ -572,6 +576,13 @@ impl ServerConnection {
         self.capabilities = params.capabilities;
         self.entrypoint = params.client_info.entrypoint.clone();
         self.client_name = Some(params.client_info.name.clone());
+        self.launch = Some(vibe_core::telemetry::LaunchContext {
+            agent_entrypoint: wire_name(&params.client_info.entrypoint),
+            agent_version: env!("CARGO_PKG_VERSION").to_owned(),
+            client_name: params.client_info.name.clone(),
+            client_version: params.client_info.version.clone(),
+            terminal_emulator: Some(wire_name(&params.client_info.terminal_emulator)),
+        });
         // Sessions started on this connection publish their tools against what
         // the handshake just declared, so the delegation is recorded before the
         // first `session/start` can read it.
@@ -1046,4 +1057,12 @@ fn count_user_messages(session: &super::SessionRuntime) -> usize {
             })
             .count()
     })
+}
+
+/// The name a handshake enum travels under.
+fn wire_name<T: serde::Serialize>(value: &T) -> String {
+    serde_json::to_value(value)
+        .ok()
+        .and_then(|value| value.as_str().map(ToOwned::to_owned))
+        .unwrap_or_else(|| "unknown".to_owned())
 }

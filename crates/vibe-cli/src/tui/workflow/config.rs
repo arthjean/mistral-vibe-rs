@@ -417,7 +417,7 @@ pub(in crate::tui) fn apply_render_preferences(
     }
     let speech_available = narrator_enabled && runtime.speech.available();
     if let Some(effect) = state.narrator.sync(narrator_enabled, speech_available) {
-        crate::tui::apply_narrator_effect(effect, runtime, state);
+        crate::tui::apply_narrator_effect(effect, runtime);
     }
 }
 
@@ -596,7 +596,11 @@ mod tests {
             "MISTRAL_API_KEY=narrator-gate-credential\n",
         )
         .expect("the credential file is written");
-        runtime.speech = SpeechManager::production(&json!({}), "", vibe_home.path());
+        runtime.speech = SpeechManager::production(
+            &json!({}),
+            crate::tui::voice::audio_credentials(vibe_home.path()),
+            vibe_voice::identity::no_metadata(),
+        );
         assert!(
             !runtime.speech.available(),
             "no client is resolved before the preferences pass runs"

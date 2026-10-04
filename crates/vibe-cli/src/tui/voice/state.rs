@@ -51,6 +51,16 @@ pub(crate) enum VoiceUpdate {
         generation: u64,
         error: Option<String>,
     },
+    /// Reference `on_transcribe_error`.
+    Error {
+        generation: u64,
+        message: String,
+    },
+    /// Reference `on_transcribe_notice`.
+    Notice {
+        generation: u64,
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,6 +68,10 @@ pub(crate) enum VoiceUpdateOutcome {
     None,
     Insert(String),
     Notify(String),
+    /// Reference `notify(..., severity="error")`.
+    NotifyError(String),
+    /// Reference `InlineNoticeRequested(message, timeout=2.0)`.
+    InlineNotice(String),
     Rejected(&'static str),
 }
 
@@ -193,6 +207,31 @@ impl VoiceState {
                     VoiceUpdateOutcome::Notify(error)
                 } else {
                     self.phase = VoicePhase::Recording;
+                    VoiceUpdateOutcome::None
+                }
+            }
+            // Reference `on_transcribe_error` resets the recording UI and
+            // raises the failure whatever state the manager reached first,
+            // which is idle by the time a failed transcription reports.
+            VoiceUpdate::Error {
+                generation,
+                message,
+            } => {
+                if generation != self.generation {
+                    return VoiceUpdateOutcome::None;
+                }
+                if self.phase.is_active() {
+                    self.reset(VoicePhase::Idle);
+                }
+                VoiceUpdateOutcome::NotifyError(format!("Voice transcription failed: {message}"))
+            }
+            VoiceUpdate::Notice {
+                generation,
+                message,
+            } => {
+                if generation == self.generation {
+                    VoiceUpdateOutcome::InlineNotice(message)
+                } else {
                     VoiceUpdateOutcome::None
                 }
             }

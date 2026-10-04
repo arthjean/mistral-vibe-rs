@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Dictate and hear turns read aloud from an editor. The `_voice/*` methods of
+  `vibe-acp` now record, transcribe, summarize and speak through the same audio
+  stack as the terminal, against the session the editor opened first, and
+  send the transcription and narration notifications the reference sends.
+
+- Summarize a turn for read-aloud with the fast model on the `mistral`
+  provider, as the reference does, instead of truncating the assistant's
+  answer. A configuration with no such provider, or one whose key is not set,
+  leaves the turn silent.
+
+- Follow the reference's realtime transcription more closely: messages the
+  server sends before the session opens are no longer lost, malformed events
+  are skipped, a server that closes the connection ends the transcription
+  quietly, and a transcription that fails before its session opens is still
+  reported to telemetry. Spoken summaries play whatever sample width the
+  speech endpoint returns, and a summary that arrives while another is still
+  playing is reported the way the reference reports it.
+
 - Send the machine architecture and `host_kind` with model request metadata,
   as the reference does since v2.25.0.
 

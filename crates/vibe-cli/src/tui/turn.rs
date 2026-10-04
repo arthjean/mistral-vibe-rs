@@ -385,7 +385,7 @@ pub(super) async fn finish_active(
     // Reference `_finalize_turn_ui`: narration settles and attention is
     // requested for every turn outcome.
     if let Some(effect) = state.narrator.on_turn_end() {
-        apply_narrator_effect(effect, runtime, state);
+        apply_narrator_effect(effect, runtime);
     }
     let idle = state.notifier.set_running(false);
     state.attend(idle);

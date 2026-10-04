@@ -65,6 +65,9 @@ pub(super) fn adopt_hydrated_session(
     };
     replacement.resize(state.viewport.0, state.viewport.1);
     runtime.session_id.clone_from(&session_id);
+    if let Ok(mut audio_session_id) = runtime.audio_session_id.lock() {
+        audio_session_id.clone_from(&session_id);
+    }
     sync_runtime_intent(runtime, None);
     *state = replacement;
     *controls = ControlState::new(session_id);

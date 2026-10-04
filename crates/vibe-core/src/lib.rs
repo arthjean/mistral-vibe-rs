@@ -33,6 +33,7 @@ pub mod llm;
 pub mod matching;
 pub mod mcp;
 pub mod middleware;
+pub mod narration;
 pub mod observability;
 pub mod parity;
 pub mod path_mentions;

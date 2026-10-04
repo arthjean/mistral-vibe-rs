@@ -368,7 +368,7 @@ impl Session {
             .to_owned();
         push_local_notice(&mut self.state, &message, EntryStatus::Completed);
         if let Some(effect) = self.state.narrator.cancel() {
-            apply_narrator_effect(effect, runtime, &mut self.state);
+            apply_narrator_effect(effect, runtime);
         }
         self.state.narrator.on_turn_start("");
         match start_active_turn(
@@ -556,6 +556,10 @@ pub async fn run_interactive(
     ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut voice_ticker = tokio::time::interval(Duration::from_millis(100));
     voice_ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    // Reference `PEAK_POLL_INTERVAL`: the recording indicator reads the
+    // microphone's level every 50 ms while it records.
+    let mut peak_ticker = tokio::time::interval(Duration::from_millis(50));
+    peak_ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     let mut loop_ticker = tokio::time::interval(Duration::from_secs(1));
     loop_ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
@@ -670,6 +674,19 @@ pub async fn run_interactive(
                 _ = ticker.tick() => {
                     if let Some(runtime) = session.runtime.as_mut() {
                         switching::apply_pending(runtime, &mut session.input, &mut session.state);
+                    }
+                }
+                _ = peak_ticker.tick(),
+                    if session.input.voice_phase() == VoicePhase::Recording =>
+                {
+                    if let Some(level) = session.runtime.as_ref().map(|runtime| runtime.voice.peak_level()) {
+                        let generation = session.input.voice_generation();
+                        apply_composer_event(
+                            &mut session.input,
+                            InputEvent::VoicePeak { generation, level },
+                            &session.working_directory,
+                            &mut session.state,
+                        );
                     }
                 }
                 _ = voice_ticker.tick() => {

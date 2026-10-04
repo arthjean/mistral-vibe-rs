@@ -292,7 +292,6 @@ impl ResourceService {
                 "show",
                 json!(self.feedback_actions.is_empty()),
             )])),
-            "narration/summarize" => self.narration(params),
             "session/ready/read" => Ok(read_only([("ready", json!(self.ready))])),
             "session/ready/wait" => {
                 let duration = params
@@ -494,28 +493,6 @@ impl ResourceService {
             action.to_owned(),
         );
         Ok(read_only([]))
-    }
-
-    fn narration(
-        &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<ResourceDispatch, ResourceError> {
-        let user = required_string(params, "userMessage")?;
-        let assistant = required_string(params, "assistantText")?;
-        let source = if assistant.trim().is_empty() {
-            user
-        } else {
-            assistant
-        };
-        if source.trim().is_empty() {
-            return Err(ResourceError::InvalidParams(
-                "narration input cannot be empty".to_owned(),
-            ));
-        }
-        Ok(read_only([(
-            "summary",
-            json!(source.chars().take(280).collect::<String>()),
-        )]))
     }
 
     /// The session's tool surface as `ToolSummary` declares it: a name and

@@ -4345,6 +4345,7 @@ dependencies = [
  "vibe-app-server",
  "vibe-core",
  "vibe-protocol",
+ "vibe-voice",
 ]
 
 [[package]]
@@ -4381,7 +4382,6 @@ version = "2.24.0"
 dependencies = [
  "base64 0.23.0",
  "clap",
- "cpal",
  "crossterm",
  "futures-util",
  "hex",
@@ -4397,13 +4397,13 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "tokio",
- "tokio-tungstenite",
  "toml",
  "unicode-segmentation",
  "unicode-width",
  "url",
  "vibe-app-server",
  "vibe-core",
+ "vibe-voice",
 ]
 
 [[package]]
@@ -4458,6 +4458,27 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.19",
+]
+
+[[package]]
+name = "vibe-voice"
+version = "2.24.0"
+dependencies = [
+ "base64 0.23.0",
+ "cpal",
+ "futures-util",
+ "hex",
+ "reqwest",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "tempfile",
+ "tokio",
+ "tokio-tungstenite",
+ "toml",
+ "url",
+ "vibe-core",
 ]
 
 [[package]]

@@ -9,13 +9,13 @@ use super::controls::CallbackPresentation;
 use super::debug_console::DebugConsole;
 use super::diagnostics::{Activity, ErrorLog};
 use super::interaction::{Overlay, PromptQueue, QuitConfirmation};
-use super::narrator::NarratorManager;
 use super::rewind::RewindState;
 use super::session_picker::SessionDeleteState;
 use super::transcript_view::TranscriptView;
 use vibe_app_server::client::{
     NoticeDetail, PublicEffectState, PublicHistoryEntry, PublicNoticeLevel,
 };
+use vibe_voice::narrator::NarratorManager;
 
 const MAX_DIAGNOSTICS: usize = 100;
 
@@ -313,8 +313,6 @@ pub struct TuiState {
     pub pending_attention: Vec<AttentionEffect>,
     /// Narration lifecycle, owned locally so a resync cannot revive a summary.
     pub narrator: NarratorManager,
-    /// Whether this session already reported that narration cannot be spoken.
-    pub speech_notice_shown: bool,
     /// Reference `_is_file_watcher_enabled`: the gate the completion index
     /// reads on every query, refreshed with the rest of the preferences.
     pub file_watcher_for_autocomplete: bool,
@@ -381,7 +379,6 @@ impl TuiState {
             notifier: AttentionNotifier::default(),
             pending_attention: Vec::new(),
             narrator: NarratorManager::default(),
-            speech_notice_shown: false,
             file_watcher_for_autocomplete: false,
             retry_offered: false,
             value_edit: None,
@@ -693,7 +690,6 @@ impl TuiState {
         replacement.transcript_view = std::mem::take(&mut self.transcript_view);
         replacement.notifier = std::mem::take(&mut self.notifier);
         replacement.narrator = std::mem::take(&mut self.narrator);
-        replacement.speech_notice_shown = self.speech_notice_shown;
         replacement.file_watcher_for_autocomplete = self.file_watcher_for_autocomplete;
         replacement.diagnostics = self.diagnostics.clone();
         replacement.local_sequence = self.local_sequence;

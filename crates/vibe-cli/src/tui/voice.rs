@@ -1,418 +1,346 @@
-//! Voice input lifecycle and deterministic state boundary.
+//! Voice input between the composer and the shared voice manager.
+//!
+//! Reference `LazyVoiceManager` (`vibe/cli/lazy_audio_managers.py`): the
+//! manager, and with it its transcribe client, is built the first time voice
+//! mode is on, from the configuration as it stands then, and kept afterward.
+//! Every start reads the sample rate and the credential variable afresh. The
+//! manager's callbacks are translated into the composer's event protocol,
+//! tagged with the composer generation the recording was started under, so a
+//! late event from a cancelled recording is recognized as stale.
 
-use std::path::{Path, PathBuf};
+use std::collections::VecDeque;
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::Value;
-use tokio::sync::{mpsc, watch};
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
+use vibe_core::config::DotenvValues;
+use vibe_core::telemetry::TelemetryRecord;
+use vibe_voice::capture::{AudioRecorder, CpalRecorder};
+use vibe_voice::identity::{MetadataGetter, audio_request_metadata};
+use vibe_voice::settings::CredentialLookup;
+use vibe_voice::transcribe::{TranscribeClient, client_from_view};
+use vibe_voice::{StartRequest, TranscribeState, VoiceEvent};
 
 use super::chat_input::{InputEffect, InputEvent};
+use super::setup::PersistedCredentialStore;
 
-mod player;
-mod realtime;
-mod recorder;
-mod session;
-mod settings;
-mod speech;
 mod state;
-mod telemetry;
 
-pub(crate) use speech::{SpeechEvent, SpeechManager};
 pub use state::VoicePhase;
 pub(crate) use state::{VoiceCommand, VoiceState, VoiceUpdate, VoiceUpdateOutcome};
+pub(crate) use vibe_voice::{SpeechEvent, SpeechManager};
 
-use vibe_core::telemetry::TelemetryRecord;
-
-use realtime::VoiceConfig;
-use session::ProductionVoiceSessionFactory;
-use settings::TranscriptionSettings;
-use telemetry::TranscriptionTracking;
-
-const UPDATE_QUEUE_CAPACITY: usize = 128;
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(2);
 
-/// What a running session tells its manager that the event stream the composer
-/// reads does not carry.
-///
-/// The composer's `InputEvent` vocabulary is an observable protocol of its own,
-/// so the recording identity travels beside it rather than inside it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) enum VoiceSignal {
-    /// The endpoint accepted the session and named it, which is where the
-    /// reference sets the recording id and emits its start event.
-    SessionCreated {
-        generation: u64,
-        recording_id: String,
-    },
+/// Reference `PEAK_BLOCKS`: how many levels the recording indicator draws.
+const PEAK_LEVELS: f32 = 8.0;
+
+/// Builds the transcribe client from a configuration view, or answers `None`
+/// when the view resolves to none, which every start then reports.
+pub(super) type ClientFactory =
+    Arc<dyn Fn(&Value) -> Option<Arc<dyn TranscribeClient>> + Send + Sync>;
+
+/// Reference `resolve_api_key`: the environment first, then the stored
+/// credential. The vibe home's dotenv stands in for the environment the
+/// reference loads it into at startup.
+pub(super) fn audio_credentials(vibe_home: &Path) -> CredentialLookup {
+    let vibe_home = vibe_home.to_path_buf();
+    Arc::new(move |name: &str| {
+        DotenvValues::global(&vibe_home)
+            .variable(name)
+            .filter(|credential| !credential.is_empty())
+            .or_else(|| {
+                PersistedCredentialStore::new(vibe_core::config::global_env_file(&vibe_home))
+                    .resolve(name)
+            })
+    })
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum VoiceControl {
-    Running,
-    Stop,
-    Cancel,
+/// Reference `build_audio_request_metadata` for the session `session_id`
+/// holds when a request is made; the terminal runs no subagent session, so
+/// there is no parent to report.
+pub(super) fn audio_metadata(session_id: &Arc<std::sync::Mutex<String>>) -> MetadataGetter {
+    let session_id = Arc::clone(session_id);
+    Arc::new(move || {
+        let session_id = session_id
+            .lock()
+            .map(|session_id| session_id.clone())
+            .unwrap_or_default();
+        audio_request_metadata(&session_id, None)
+    })
 }
 
-struct ActiveVoice {
-    generation: u64,
-    control: watch::Sender<VoiceControl>,
-    task: JoinHandle<()>,
-}
-
-pub(super) trait VoiceSessionFactory: Send + Sync {
-    fn spawn(
-        &self,
-        generation: u64,
-        updates: mpsc::Sender<InputEvent>,
-        signals: mpsc::Sender<VoiceSignal>,
-        control: watch::Receiver<VoiceControl>,
-    ) -> JoinHandle<()>;
-}
-
-/// Owns generation-aware voice sessions without exposing device or network
-/// work to the deterministic composer reducer.
 pub(super) struct VoiceManager {
     enabled: bool,
-    /// The session factory the configuration resolved to, or why it resolved to
-    /// none. A configuration this build cannot address is answered when a
-    /// recording is asked for, the way the reference answers one with a null
-    /// transcribe client, rather than taken as a startup failure.
-    factory: Result<Arc<dyn VoiceSessionFactory>, String>,
-    /// What a resolution needs beyond the configuration itself, kept so the
-    /// surface can be resolved again when the configuration changes.
-    fallback_credential: String,
-    vibe_home: PathBuf,
-    updates_tx: mpsc::Sender<InputEvent>,
-    updates_rx: mpsc::Receiver<InputEvent>,
-    signals_tx: mpsc::Sender<VoiceSignal>,
-    signals_rx: mpsc::Receiver<VoiceSignal>,
-    active: Option<ActiveVoice>,
-    retiring: Vec<JoinHandle<()>>,
-    pending_start: Option<u64>,
-    /// Reference `VoiceManager._tracking`: what the four audio events are built
-    /// from, reset where a recording starts.
-    tracking: TranscriptionTracking,
-    /// When the microphone actually opened, which is what the reference reads
-    /// off `AudioRecording.duration` when the recorder stops. This port never
-    /// holds the captured buffer, so the recording is measured from the moment
-    /// the session reported it running to the moment it stopped.
-    recording_started: Option<std::time::Instant>,
-    /// The events produced but not yet handed to the telemetry client.
+    /// The configuration as last published, which a start reads from.
+    view: Value,
+    recorder: Arc<dyn AudioRecorder>,
+    client_factory: ClientFactory,
+    credentials: CredentialLookup,
+    manager: Option<vibe_voice::VoiceManager>,
+    events_tx: mpsc::UnboundedSender<VoiceEvent>,
+    events_rx: mpsc::UnboundedReceiver<VoiceEvent>,
+    replies_tx: mpsc::UnboundedSender<InputEvent>,
+    replies_rx: mpsc::UnboundedReceiver<InputEvent>,
+    /// Composer events read off the channel while telemetry was drained.
+    pending: VecDeque<InputEvent>,
+    /// The start that is opening the microphone; a start asked for meanwhile
+    /// waits for it, so a recording cancelled while it opened never swallows
+    /// the next one.
+    starting: Option<JoinHandle<()>>,
+    stopping: Vec<JoinHandle<()>>,
     telemetry: Vec<TelemetryRecord>,
 }
 
 impl VoiceManager {
-    /// Resolves the transcription session from the published configuration:
-    /// the endpoint, the model, the wire values and the credential the provider
-    /// entry names, with the session's own credential standing in only where the
-    /// provider names no variable.
     pub(super) fn production(
         config_view: &Value,
-        fallback_credential: &str,
-        vibe_home: &Path,
+        credentials: CredentialLookup,
+        metadata: MetadataGetter,
         enabled: bool,
     ) -> Self {
-        let mut manager = Self::with_factory(
-            Err("Voice mode is not configured".to_owned()),
+        Self::new(
+            config_view,
+            Arc::new(CpalRecorder::new()),
+            {
+                let credentials = Arc::clone(&credentials);
+                Arc::new(move |view: &Value| {
+                    client_from_view(view, &credentials, Arc::clone(&metadata))
+                })
+            },
+            credentials,
             enabled,
-            fallback_credential.to_owned(),
-            vibe_home.to_path_buf(),
-        );
-        manager.resync(config_view);
+        )
+    }
+
+    pub(super) fn new(
+        config_view: &Value,
+        recorder: Arc<dyn AudioRecorder>,
+        client_factory: ClientFactory,
+        credentials: CredentialLookup,
+        enabled: bool,
+    ) -> Self {
+        let (events_tx, events_rx) = mpsc::unbounded_channel();
+        let (replies_tx, replies_rx) = mpsc::unbounded_channel();
+        let mut manager = Self {
+            enabled,
+            view: config_view.clone(),
+            recorder,
+            client_factory,
+            credentials,
+            manager: None,
+            events_tx,
+            events_rx,
+            replies_tx,
+            replies_rx,
+            pending: VecDeque::new(),
+            starting: None,
+            stopping: Vec::new(),
+            telemetry: Vec::new(),
+        };
+        // Reference `LazyVoiceManager.__init__`.
+        if enabled {
+            manager.materialize();
+        }
         manager
     }
 
-    /// Resolves the transcription surface again from the configuration as it
-    /// stands now.
-    ///
-    /// Reference `LazyVoiceManager`, which materializes its manager, and with it
-    /// its transcribe client, from the current configuration rather than from
-    /// the one the process started on: an operator who changes the active model
-    /// or its provider is recording against the new one on the next start. A
-    /// session already running keeps the endpoint it opened.
-    pub(super) fn resync(&mut self, config_view: &Value) {
-        self.factory = TranscriptionSettings::from_config_view(config_view).and_then(|settings| {
-            let credential = settings.credential(&self.fallback_credential, &self.vibe_home)?;
-            let config = VoiceConfig::resolve(&settings)?;
-            let factory: Arc<dyn VoiceSessionFactory> =
-                Arc::new(ProductionVoiceSessionFactory::new(credential, config));
-            Ok(factory)
-        });
-    }
-
-    #[cfg(test)]
-    pub(in crate::tui) fn new(factory: Arc<dyn VoiceSessionFactory>, enabled: bool) -> Self {
-        Self::with_factory(Ok(factory), enabled, String::new(), PathBuf::new())
-    }
-
-    fn with_factory(
-        factory: Result<Arc<dyn VoiceSessionFactory>, String>,
-        enabled: bool,
-        fallback_credential: String,
-        vibe_home: PathBuf,
-    ) -> Self {
-        let (updates_tx, updates_rx) = mpsc::channel(UPDATE_QUEUE_CAPACITY);
-        let (signals_tx, signals_rx) = mpsc::channel(UPDATE_QUEUE_CAPACITY);
-        Self {
-            enabled,
-            factory,
-            fallback_credential,
-            vibe_home,
-            updates_tx,
-            updates_rx,
-            signals_tx,
-            signals_rx,
-            active: None,
-            retiring: Vec::new(),
-            pending_start: None,
-            tracking: TranscriptionTracking::default(),
-            recording_started: None,
-            telemetry: Vec::new(),
+    fn materialize(&mut self) -> vibe_voice::VoiceManager {
+        if let Some(manager) = &self.manager {
+            return manager.clone();
         }
+        let manager = vibe_voice::VoiceManager::new(
+            Arc::clone(&self.recorder),
+            (self.client_factory)(&self.view),
+            Arc::clone(&self.credentials),
+            self.events_tx.clone(),
+        );
+        self.manager = Some(manager.clone());
+        manager
+    }
+
+    /// Records the configuration as it stands now. A manager already built
+    /// keeps its client, as the reference's does; a start reads its sample
+    /// rate and credential variable from this view.
+    pub(super) fn resync(&mut self, config_view: &Value) {
+        self.view = config_view.clone();
     }
 
     pub(super) const fn enabled(&self) -> bool {
         self.enabled
     }
 
+    /// Reference `apply_enabled`.
     pub(super) fn set_enabled(&mut self, enabled: bool) {
         self.enabled = enabled;
+        if self.manager.is_none() && !enabled {
+            return;
+        }
+        let manager = self.materialize();
         if !enabled {
-            self.pending_start = None;
-            self.cancel_active();
+            manager.cancel_recording();
         }
     }
 
     pub(super) fn apply_effects(&mut self, effects: &[InputEffect], generation: u64) {
-        self.reap_finished();
         for effect in effects {
             match effect {
                 InputEffect::RecordingStartRequested => self.start(generation),
-                InputEffect::RecordingStopRequested => self.control(VoiceControl::Stop),
-                InputEffect::RecordingCancelRequested => self.cancel_active(),
-                _ => {}
-            }
-        }
-    }
-
-    pub(super) fn try_next_event(&mut self) -> Option<InputEvent> {
-        self.drain_signals();
-        let event = self.updates_rx.try_recv().ok();
-        if let Some(event) = event.as_ref() {
-            self.observe(event);
-        }
-        if event
-            .as_ref()
-            .and_then(terminal_generation)
-            .is_some_and(|generation| {
-                self.active
-                    .as_ref()
-                    .is_some_and(|active| active.generation == generation)
-            })
-        {
-            self.retire_active();
-        }
-        self.reap_finished();
-        event
-    }
-
-    /// Queues an event a session would have sent, so a test drives the same
-    /// reader the event loop drives rather than the observer behind it.
-    #[cfg(test)]
-    pub(in crate::tui) fn inject_for_test(&mut self, event: InputEvent) {
-        let _ = self.updates_tx.try_send(event);
-    }
-
-    /// The audio events produced since the last drain, in the order they fired.
-    ///
-    /// The caller hands them to the session's telemetry client, which is where
-    /// `enable_telemetry` decides whether anything is sent.
-    pub(crate) fn take_telemetry(&mut self) -> Vec<TelemetryRecord> {
-        self.drain_signals();
-        std::mem::take(&mut self.telemetry)
-    }
-
-    fn drain_signals(&mut self) {
-        while let Ok(signal) = self.signals_rx.try_recv() {
-            let VoiceSignal::SessionCreated {
-                generation,
-                recording_id,
-            } = signal;
-            // A signal from a session already retired belongs to a recording
-            // whose tracking has been reset, so it is dropped rather than
-            // renaming the running one.
-            if self
-                .active
-                .as_ref()
-                .is_some_and(|active| active.generation == generation)
-            {
-                self.tracking.set_recording_id(recording_id);
-                self.telemetry.push(self.tracking.start_event());
-            }
-        }
-    }
-
-    /// What the reference reads off its own transcribe stream: text lengths
-    /// accumulate, a clean stop takes the recording's duration, and the
-    /// terminal answer emits `done` or `error`.
-    ///
-    /// A start that failed emits nothing, matching the reference, whose
-    /// `RecordingStartError` is raised to the caller rather than reported: only
-    /// a transcription that ran and then failed reaches the error event.
-    fn observe(&mut self, event: &InputEvent) {
-        match event {
-            InputEvent::VoiceStartResolved { error: None, .. } => {
-                self.recording_started = Some(std::time::Instant::now());
-            }
-            InputEvent::VoiceTranscriptDelta { text, .. } => self.tracking.record_text(text),
-            // Reference `stop_recording`: the recorder's own duration is taken
-            // where it stops cleanly, and a transcription that fails while the
-            // microphone is still open reports no recording duration at all.
-            InputEvent::VoiceStopResolved { error: None, .. } => {
-                if let Some(started) = self.recording_started.take() {
-                    self.tracking.set_recording_duration(started.elapsed());
+                InputEffect::RecordingStopRequested => self.stop(),
+                InputEffect::RecordingCancelRequested => {
+                    if let Some(manager) = &self.manager {
+                        manager.cancel_recording();
+                    }
                 }
-            }
-            InputEvent::VoiceStopResolved {
-                error: Some(error), ..
-            } => self.telemetry.push(self.tracking.error_event(error)),
-            InputEvent::VoiceDone { .. } => self.telemetry.push(self.tracking.done_event()),
-            _ => {}
-        }
-    }
-
-    pub(super) async fn shutdown(&mut self) {
-        self.pending_start = None;
-        self.cancel_active();
-        for mut task in self.retiring.drain(..) {
-            if tokio::time::timeout(SHUTDOWN_TIMEOUT, &mut task)
-                .await
-                .is_err()
-            {
-                task.abort();
-                let _ = task.await;
+                _ => {}
             }
         }
     }
 
     fn start(&mut self, generation: u64) {
         if !self.enabled {
-            let _ = self.updates_tx.try_send(InputEvent::VoiceStartResolved {
+            let _ = self.replies_tx.send(InputEvent::VoiceStartResolved {
                 generation,
                 error: Some("Voice mode is disabled".to_owned()),
             });
             return;
         }
-        // A configuration that resolves to no session is reported here, where
-        // the operator asked for a recording, and nothing is connected to.
-        if let Err(error) = &self.factory {
-            let _ = self.updates_tx.try_send(InputEvent::VoiceStartResolved {
-                generation,
-                error: Some(error.clone()),
-            });
-            return;
-        }
-        if self.active.is_some() {
-            return;
-        }
-        if !self.retiring.is_empty() {
-            self.pending_start = Some(generation);
-            return;
-        }
-        self.start_now(generation);
+        let manager = self.materialize();
+        let request = StartRequest {
+            tag: generation,
+            sample_rate: self
+                .view
+                .pointer("/transcription/model/sampleRate")
+                .and_then(Value::as_u64)
+                .and_then(|rate| u32::try_from(rate).ok())
+                .unwrap_or(16_000),
+            api_key_env_var: self
+                .view
+                .pointer("/transcription/provider/apiKeyEnvVar")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned(),
+        };
+        let previous = self.starting.take();
+        let replies = self.replies_tx.clone();
+        self.starting = Some(tokio::spawn(async move {
+            if let Some(previous) = previous {
+                let _ = previous.await;
+            }
+            if let Err(error) = manager.start_recording(request).await {
+                let _ = replies.send(InputEvent::VoiceStartResolved {
+                    generation,
+                    error: Some(error.0),
+                });
+            }
+        }));
     }
 
-    fn start_now(&mut self, generation: u64) {
-        let Ok(factory) = self.factory.as_ref() else {
+    fn stop(&mut self) {
+        let Some(manager) = self.manager.clone() else {
             return;
         };
-        let (control, receiver) = watch::channel(VoiceControl::Running);
-        let task = factory.spawn(
-            generation,
-            self.updates_tx.clone(),
-            self.signals_tx.clone(),
-            receiver,
-        );
-        // Reference `start_recording`: the tracking record is reset where the
-        // recording begins, so every event a session emits belongs to it.
-        self.tracking.reset();
-        self.recording_started = None;
-        self.active = Some(ActiveVoice {
-            generation,
-            control,
-            task,
-        });
+        self.stopping.retain(|task| !task.is_finished());
+        self.stopping.push(tokio::spawn(async move {
+            manager.stop_recording().await;
+        }));
     }
 
-    fn control(&self, control: VoiceControl) {
-        if let Some(active) = self.active.as_ref() {
-            let _ = active.control.send(control);
-        }
-    }
-
-    fn cancel_active(&mut self) {
-        self.pending_start = None;
-        if let Some(active) = self.active.take() {
-            let _ = active.control.send(VoiceControl::Cancel);
-            self.retiring.push(active.task);
-            // Reference `cancel_recording`, which returns before its emitter
-            // when nothing is running: the event fires exactly where a session
-            // was cancelled.
-            self.recording_started = None;
-            self.telemetry.push(self.tracking.cancel_event());
-        }
-    }
-
-    fn retire_active(&mut self) {
-        if let Some(active) = self.active.take() {
-            self.retiring.push(active.task);
-        }
-    }
-
-    fn reap_finished(&mut self) {
-        if self
-            .active
+    /// Reference `peak`, as the recording indicator draws it.
+    pub(super) fn peak_level(&self) -> u8 {
+        let peak = self
+            .manager
             .as_ref()
-            .is_some_and(|active| active.task.is_finished())
-        {
-            self.retire_active();
-        }
-        self.retiring.retain(|task| !task.is_finished());
-        if self.active.is_none()
-            && self.retiring.is_empty()
-            && let Some(generation) = self.pending_start.take()
-        {
-            self.start_now(generation);
-        }
+            .map_or(0.0, vibe_voice::VoiceManager::peak);
+        // Reference `min(int(peak * len(PEAK_BLOCKS)), len(PEAK_BLOCKS) - 1)`.
+        (peak * PEAK_LEVELS).clamp(0.0, PEAK_LEVELS - 1.0) as u8
     }
-}
 
-fn terminal_generation(event: &InputEvent) -> Option<u64> {
-    match event {
-        InputEvent::VoiceDone { generation }
-        | InputEvent::VoiceStartResolved {
-            generation,
-            error: Some(_),
+    pub(super) fn try_next_event(&mut self) -> Option<InputEvent> {
+        if let Some(event) = self.pending.pop_front() {
+            return Some(event);
         }
-        | InputEvent::VoiceStopResolved {
-            generation,
-            error: Some(_),
-        } => Some(*generation),
-        _ => None,
+        while let Ok(event) = self.events_rx.try_recv() {
+            if let Some(event) = self.translate(event) {
+                return Some(event);
+            }
+        }
+        self.replies_rx.try_recv().ok()
+    }
+
+    /// The composer event a manager event stands for; telemetry is kept for
+    /// [`Self::take_telemetry`] instead.
+    fn translate(&mut self, event: VoiceEvent) -> Option<InputEvent> {
+        Some(match event {
+            VoiceEvent::Telemetry(record) => {
+                self.telemetry.push(record);
+                return None;
+            }
+            VoiceEvent::State { tag, state } => match state {
+                TranscribeState::Recording => InputEvent::VoiceStartResolved {
+                    generation: tag,
+                    error: None,
+                },
+                TranscribeState::Flushing => InputEvent::VoiceStopResolved {
+                    generation: tag,
+                    error: None,
+                },
+                TranscribeState::Idle => InputEvent::VoiceDone { generation: tag },
+            },
+            VoiceEvent::Text { tag, text } => InputEvent::VoiceTranscriptDelta {
+                text,
+                generation: tag,
+            },
+            VoiceEvent::Error { tag, message } => InputEvent::VoiceError {
+                generation: tag,
+                message,
+            },
+            VoiceEvent::Notice { tag, message } => InputEvent::VoiceNotice {
+                generation: tag,
+                message,
+            },
+        })
+    }
+
+    /// The audio events produced since the last drain, in the order they
+    /// fired. The caller hands them to the session's telemetry client, which
+    /// is where `enable_telemetry` decides whether anything is sent.
+    pub(crate) fn take_telemetry(&mut self) -> Vec<TelemetryRecord> {
+        while let Ok(event) = self.events_rx.try_recv() {
+            if let Some(event) = self.translate(event) {
+                self.pending.push_back(event);
+            }
+        }
+        std::mem::take(&mut self.telemetry)
+    }
+
+    /// Reference `close`.
+    pub(super) async fn shutdown(&mut self) {
+        if let Some(task) = self.starting.take() {
+            task.abort();
+        }
+        for task in self.stopping.drain(..) {
+            task.abort();
+        }
+        if let Some(manager) = &self.manager {
+            let _ = tokio::time::timeout(SHUTDOWN_TIMEOUT, manager.close()).await;
+        }
     }
 }
 
 impl Drop for VoiceManager {
     fn drop(&mut self) {
-        self.pending_start = None;
-        if let Some(active) = self.active.take() {
-            let _ = active.control.send(VoiceControl::Cancel);
-            active.task.abort();
-        }
-        for task in self.retiring.drain(..) {
+        if let Some(task) = self.starting.take() {
             task.abort();
+        }
+        for task in self.stopping.drain(..) {
+            task.abort();
+        }
+        if let Some(manager) = &self.manager {
+            manager.cancel_recording();
         }
     }
 }
@@ -420,11 +348,3 @@ impl Drop for VoiceManager {
 #[cfg(test)]
 #[path = "voice/tests.rs"]
 mod tests;
-
-#[cfg(test)]
-#[path = "voice/voice_parity_tests.rs"]
-mod voice_parity_tests;
-
-#[cfg(test)]
-#[path = "voice/audio_telemetry_tests.rs"]
-mod audio_telemetry_tests;
