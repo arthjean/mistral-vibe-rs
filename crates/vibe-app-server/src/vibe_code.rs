@@ -35,8 +35,8 @@ use vibe_core::telemetry::records::{
 };
 use vibe_protocol::ProtocolErrorCode;
 
-mod git;
-mod http;
+pub(crate) mod git;
+pub(crate) mod http;
 
 use git::{FailureClass, GitFailure, GitRepoInfo, GitRepository, normalize_repo_url};
 use http::{Project, ProjectClient};
@@ -152,18 +152,42 @@ impl Purpose {
 /// The project API a picker was opened against (reference
 /// `VibeCodeProjectPickerService`).
 #[derive(Debug, Clone)]
-struct Service {
+pub(crate) struct Service {
     base_url: String,
     api_key: String,
     timeout: Duration,
 }
 
 impl Service {
-    fn client(&self) -> Result<ProjectClient, String> {
+    /// Reference `_build_service`: the endpoint and timeout the configuration
+    /// names, under the Mistral provider's key, or `None` when no key
+    /// resolves.
+    pub(crate) fn from_config(
+        config: &toml::Table,
+        credential: impl Fn(&str) -> Option<String>,
+    ) -> Option<Self> {
+        let api_key = configured_api_key(config, credential)?;
+        let timeout = config
+            .get("api_timeout")
+            .and_then(|value| {
+                value
+                    .as_float()
+                    .or_else(|| value.as_integer().map(|value| value as f64))
+            })
+            .filter(|seconds| *seconds > 0.0)
+            .unwrap_or(DEFAULT_API_TIMEOUT_SECONDS);
+        Some(Self {
+            base_url: config_text(config, "vibe_code_sessions_base_url", DEFAULT_BASE_URL),
+            api_key,
+            timeout: Duration::from_secs_f64(timeout),
+        })
+    }
+
+    pub(crate) fn client(&self) -> Result<ProjectClient, String> {
         ProjectClient::new(&self.base_url, &self.api_key, self.timeout)
     }
 
-    async fn page(&self, cursor: Option<&str>) -> Result<http::Page, String> {
+    pub(crate) async fn page(&self, cursor: Option<&str>) -> Result<http::Page, String> {
         self.client()?.list(cursor).await
     }
 }
@@ -741,30 +765,21 @@ async fn require_teleport_available(host: &dyn Host, prompt: Option<&str>) -> Re
 
 /// Reference `_make_service`.
 fn make_service(host: &dyn Host) -> Result<Service, Refusal> {
-    let config = host.config();
-    let api_key = mistral_api_key(host, &config)
-        .ok_or_else(|| Refusal::invalid("No Mistral API key is set."))?;
-    let timeout = config
-        .get("api_timeout")
-        .and_then(|value| {
-            value
-                .as_float()
-                .or_else(|| value.as_integer().map(|value| value as f64))
-        })
-        .filter(|seconds| *seconds > 0.0)
-        .unwrap_or(DEFAULT_API_TIMEOUT_SECONDS);
-    Ok(Service {
-        base_url: config_text(&config, "vibe_code_sessions_base_url", DEFAULT_BASE_URL),
-        api_key,
-        timeout: Duration::from_secs_f64(timeout),
-    })
+    Service::from_config(&host.config(), |variable| host.credential(variable))
+        .ok_or_else(|| Refusal::invalid("No Mistral API key is set."))
 }
 
 /// Reference `resolve_mistral_api_key`.
 fn mistral_api_key(host: &dyn Host, config: &toml::Table) -> Option<String> {
+    configured_api_key(config, |variable| host.credential(variable))
+}
+
+fn configured_api_key(
+    config: &toml::Table,
+    credential: impl Fn(&str) -> Option<String>,
+) -> Option<String> {
     let provider = vibe_core::telemetry::mistral_provider(config)?;
-    let variable = provider.get("api_key_env_var")?.as_str()?;
-    host.credential(variable)
+    credential(provider.get("api_key_env_var")?.as_str()?)
 }
 
 fn config_text(config: &toml::Table, key: &str, default: &str) -> String {
@@ -811,7 +826,7 @@ fn picker_cancelled(host: &dyn Host, payload: ProjectPicker) {
 }
 
 /// Reference `is_project_linked_to_repo`.
-fn is_project_linked_to_repo(project: &Project, repo_url: &str) -> bool {
+pub(crate) fn is_project_linked_to_repo(project: &Project, repo_url: &str) -> bool {
     let current = normalize_repo_url(repo_url);
     project
         .repositories

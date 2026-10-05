@@ -27,7 +27,6 @@ use std::sync::Arc;
 
 use tokio::io::BufReader;
 use vibe_app_server::client::{LiveDriverConfig, LiveTurnDriver};
-use vibe_app_server::projects::ProjectsService;
 use vibe_app_server::resources::{CoreResourceBackend, production_mcp_factory};
 use vibe_app_server::server::AppServer;
 use vibe_app_server::transport::{StdioTransport, serve_stdio};
@@ -87,8 +86,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         output_price_per_million_micros: 7_500_000,
     };
     let driver = LiveTurnDriver::from_environment(config, &dotenv)?;
-    let projects = ProjectsService::default()
-        .with_project_link_store(vibe_home.join("vibe-code-project-links.json"))?;
     let telemetry: Arc<dyn ClientTelemetry> = if std::env::var_os("VIBE_ORACLE_TELEMETRY").is_some()
     {
         Arc::new(LoopbackTelemetry {
@@ -114,7 +111,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         None => AppServer::default(),
     }
     .using_workspace_service(workspace)
-    .using_projects_service(projects)
     .using_client_telemetry(telemetry)
     .using_secondary_provider(Some(provider));
     serve_stdio(

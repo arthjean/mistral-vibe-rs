@@ -54,6 +54,15 @@ pub use git::BranchChanges;
 pub fn trusted_git_executable(cwd: &Path) -> Option<PathBuf> {
     git::git_executable(cwd).ok()
 }
+
+/// The branch the checkout at `working_dir` most likely merges back into,
+/// guessed without the network: `origin/HEAD`, then a configured
+/// `init.defaultBranch` that exists, then the first conventional trunk that
+/// does (reference `GitRepo.base_branch`, `vibe/core/git/repo.py:292-327`).
+#[must_use]
+pub fn checkout_base_branch(working_dir: &Path) -> Option<String> {
+    git::GitRepo::at(working_dir).ok()?.base_branch()
+}
 pub use managed::{
     ManagedWorktree, RetainedRepositoryMapping, SNAPSHOT_REF_PREFIX, WorktreeRelease,
     WorktreeReleaseOutcome,

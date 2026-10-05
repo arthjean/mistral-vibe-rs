@@ -8,6 +8,7 @@
 //! `vibe/app_server/_execution.py`).
 
 use super::*;
+use crate::projects::store::{ProjectLink, ProjectsStore};
 use crate::vibe_code::{
     Host, HostFuture, Purpose, Refusal, SavedLink, StartParams, VibeCodeController,
 };
@@ -33,6 +34,12 @@ struct SessionHost {
 }
 
 impl SessionHost {
+    /// The link store of the vibe home this server reads, which the
+    /// session-less `projectLinks/*` surface shares.
+    fn link_store(&self) -> ProjectsStore {
+        ProjectsStore::in_home(self.server.workspace.vibe_home())
+    }
+
     fn with_session<T>(&self, read: impl FnOnce(&mut SessionRuntime) -> T) -> Option<T> {
         let mut sessions = self.server.lock_sessions().ok()?;
         sessions.get_mut(&self.session_id).map(read)
@@ -201,18 +208,37 @@ impl Host for SessionHost {
     }
 
     fn saved_link(&self, repo_root: &str) -> Option<SavedLink> {
-        self.server.projects.vibe_code_link(repo_root)
+        match self.link_store().get_remote_project(Path::new(repo_root))? {
+            ProjectLink::Remote {
+                repo_url,
+                project_id,
+                project_name,
+                ..
+            } => Some(SavedLink {
+                repo_root: repo_root.to_owned(),
+                repo_url,
+                project_id,
+                project_name,
+            }),
+            ProjectLink::Local { .. } => None,
+        }
     }
 
     fn save_link(&self, link: &SavedLink) -> Result<(), String> {
-        self.server
-            .projects
-            .save_vibe_code_link(link)
+        self.link_store()
+            .upsert_project_link(&ProjectLink::Remote {
+                repo_root: PathBuf::from(&link.repo_root),
+                repo_url: link.repo_url.clone(),
+                project_id: link.project_id.clone(),
+                project_name: link.project_name.clone(),
+            })
             .map_err(|error| error.to_string())
     }
 
     fn delete_link(&self, repo_root: &str) {
-        let _ = self.server.projects.delete_vibe_code_link(repo_root);
+        let _ = self
+            .link_store()
+            .delete_remote_project(Path::new(repo_root));
     }
 }
 

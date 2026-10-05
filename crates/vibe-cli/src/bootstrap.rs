@@ -10,7 +10,6 @@ use std::sync::Arc;
 
 use vibe_app_server::client::{LiveDriverConfig, SessionOptions};
 use vibe_app_server::harness::HarnessSelection;
-use vibe_app_server::projects::{ProjectsService, VibeCodeCloudConfig};
 use vibe_app_server::resources::{
     CoreResourceBackend, production_mcp_authentication, production_mcp_factory,
 };
@@ -335,12 +334,6 @@ fn web_search_access(arguments: &Arguments, credential: String) -> WebSearchAcce
         endpoint,
         api_key: SecretString::from(credential),
     }
-}
-
-pub(crate) fn cloud_service(credential: String) -> Result<ProjectsService, CliError> {
-    let config = VibeCodeCloudConfig::from_credential(credential)
-        .map_err(|error| CliError::Teleport(error.to_string()))?;
-    ProjectsService::production(config).map_err(|error| CliError::Teleport(error.to_string()))
 }
 
 /// Which of the two launches is building the options.

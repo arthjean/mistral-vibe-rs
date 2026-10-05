@@ -99,7 +99,7 @@ pub(crate) async fn run(
     let mut driver =
         vibe_app_server::client::LiveTurnDriver::from_credential(config, credential.clone())?;
     driver = driver.with_event_observer(telemetry.clone());
-    let mut server = bootstrap::route_resource_server(
+    let server = bootstrap::route_resource_server(
         &arguments,
         workspace,
         &route,
@@ -107,9 +107,6 @@ pub(crate) async fn run(
         Some(driver.sampling_handler(&route.model)),
     )?
     .using_client_telemetry(telemetry.clone());
-    if arguments.teleport {
-        server = server.using_projects_service(bootstrap::cloud_service(credential)?);
-    }
     let census = arguments
         .workdir
         .clone()

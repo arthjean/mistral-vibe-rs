@@ -141,7 +141,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             session_root: Some(session_root),
             credential_environment,
             auth_environment: Arc::new(ProductionAuthEnvironment::new(vibe_home)),
-            production_cloud: true,
+            shared_projects: true,
             telemetry,
             experiments,
             harness: HarnessSelection::resolve(

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Keep Vibe Code project links where the reference keeps them, in
+  `projects.toml` under the Vibe home, so the terminal, an editor and the
+  reference itself share them. A link now names either a Git checkout and its
+  GitHub remote or any directory; the file is read afresh on every call and
+  rewritten as the reference writes it, keeping entries this version cannot
+  read. Links saved earlier in `vibe-code-project-links.json` are moved into
+  it once. The `projectLinks/*` methods answer the reference's directory
+  shapes: any directory resolves, with its checkout when it has one,
+  `projectLinks/save` links a directory with no GitHub remote, the picker,
+  `create` and `link` refuse what Teleport would refuse, a rejected Mistral key
+  reads as `unauthorized`, and unlinking a checkout that moved still removes
+  its link.
+
 - Dictate and hear turns read aloud from an editor. The `_voice/*` methods of
   `vibe-acp` now record, transcribe, summarize and speak through the same audio
   stack as the terminal, against the session the editor opened first, and

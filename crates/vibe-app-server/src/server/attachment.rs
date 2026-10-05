@@ -378,7 +378,13 @@ impl AppServer {
             let identity = self.workspace.read_identity().await;
             return success_batch(request_id, result_map([("identity", identity)]));
         }
-        match self.projects.dispatch_deferred(&method, &params).await {
+        if method.starts_with("projectLinks/") {
+            return match crate::projects::links::dispatch(&self.workspace, &method, &params).await {
+                Ok(result) => success_batch(request_id, object(result)),
+                Err(failure) => plain_error_batch(request_id, failure.code(), failure.message()),
+            };
+        }
+        match self.projects.dispatch(&method, &params) {
             Ok(dispatch) => projects_dispatch_batch(request_id, dispatch),
             Err(error) => projects_error_batch(request_id, error),
         }

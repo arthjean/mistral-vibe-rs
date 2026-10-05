@@ -51,7 +51,7 @@ where
     pub(in crate::agent) session_root: Option<PathBuf>,
     pub(crate) auth: AuthController,
     pub(in crate::agent) credential_environment: String,
-    pub(in crate::agent) production_cloud: bool,
+    pub(in crate::agent) shared_projects: bool,
     pub(in crate::agent) projects: Mutex<Option<ProjectsService>>,
     /// Where an event the editor records reaches the datalake. Every session's
     /// app server is built over the same sink, so an editor-side event and a
@@ -92,7 +92,7 @@ where
                 ProductionAuthEnvironment::new(default_vibe_home()),
             )),
             credential_environment: "MISTRAL_API_KEY".to_owned(),
-            production_cloud: false,
+            shared_projects: false,
             projects: Mutex::new(None),
             telemetry: Arc::new(NoClientTelemetry),
             experiments: None,
@@ -167,14 +167,14 @@ where
     }
 
     #[must_use]
-    pub fn with_production_cloud(mut self) -> Self {
-        self.production_cloud = true;
+    pub fn with_shared_projects(mut self) -> Self {
+        self.shared_projects = true;
         self
     }
 
     #[must_use]
     pub fn with_projects_service(mut self, service: ProjectsService) -> Self {
-        self.production_cloud = true;
+        self.shared_projects = true;
         self.projects = Mutex::new(Some(service));
         self
     }

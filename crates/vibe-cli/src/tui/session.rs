@@ -45,7 +45,6 @@ pub(super) fn start_runtime(
         credential.clone(),
         Some(driver.sampling_handler(&preferences.model)),
     )?
-    .using_projects_service(bootstrap::cloud_service(credential)?)
     .using_client_telemetry(telemetry.clone());
     let mut service =
         HeadlessService::new_interactive_shared_with_server(Arc::new(driver), server)?;

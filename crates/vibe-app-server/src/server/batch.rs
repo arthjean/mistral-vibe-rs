@@ -308,23 +308,8 @@ impl From<ProjectsServiceError> for ProtocolFault {
             ProjectsServiceError::Loop(message) => {
                 Self::plain(ProtocolErrorCode::InvalidParams, message)
             }
-            ProjectsServiceError::Cloud(crate::projects::CloudError::Unauthorized(message)) => {
-                Self::new(ProtocolErrorCode::Unauthorized, message)
-            }
-            // A checkout the reference cannot read is a `VibeCodeError`, which
-            // its handler answers as `invalid_params` with no issue list
-            // (`vibe/app_server/_handler.py:284`).
-            ProjectsServiceError::Cloud(error @ crate::projects::CloudError::Git(_)) => {
-                Self::plain(ProtocolErrorCode::InvalidParams, error.to_string())
-            }
-            ProjectsServiceError::Cloud(error) => {
-                Self::new(ProtocolErrorCode::Conflict, error.to_string())
-            }
-            ProjectsServiceError::VibeCode(_)
-            | ProjectsServiceError::Persistence(_)
+            ProjectsServiceError::Persistence(_)
             | ProjectsServiceError::PersistenceState(_)
-            | ProjectsServiceError::ProjectLinkPersistence(_)
-            | ProjectsServiceError::ProjectLinkPersistenceState(_)
             | ProjectsServiceError::BackgroundTask
             | ProjectsServiceError::StatePoisoned
             | ProjectsServiceError::Json(_) => Self::internal(error.to_string()),

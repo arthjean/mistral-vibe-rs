@@ -144,6 +144,16 @@ impl GitRepository {
     /// remote's default branch and the working-tree diff, failing in that
     /// order.
     pub(crate) async fn info(&self) -> Result<GitRepoInfo, GitFailure> {
+        self.build_info(true).await
+    }
+
+    /// Reference `get_metadata`: what [`Self::info`] reads but the
+    /// working-tree diff, which a project link never needs.
+    pub(crate) async fn metadata(&self) -> Result<GitRepoInfo, GitFailure> {
+        self.build_info(false).await
+    }
+
+    async fn build_info(&self, include_diff: bool) -> Result<GitRepoInfo, GitFailure> {
         let remote = self.github_remote().await.ok_or_else(|| {
             GitFailure::not_supported(
                 "Teleport only works with GitHub repositories, and no remote here points at \
@@ -164,7 +174,11 @@ impl GitRepository {
                     .strip_prefix(&format!("{}/", remote.name))
                     .map_or_else(|| reference.clone(), ToOwned::to_owned)
             });
-        let diff = self.diff().await;
+        let diff = if include_diff {
+            self.diff().await
+        } else {
+            Vec::new()
+        };
         Ok(GitRepoInfo {
             remote_url: format!("https://github.com/{}/{}.git", remote.owner, remote.repo),
             remote_name: remote.name,
@@ -259,8 +273,28 @@ impl GitRepository {
                 .any(|line| line.starts_with('!'))
     }
 
+    /// The checkout's top-level directory, or `None` for a bare repository.
+    pub(crate) fn working_tree(&self) -> Option<&Path> {
+        self.working_tree.as_deref()
+    }
+
+    /// Whether HEAD resolves to a commit (reference `GitRepo.has_commits`).
+    pub(crate) async fn has_commits(&self) -> bool {
+        self.stdout(&["rev-parse", "--verify", "--quiet", "HEAD^{commit}"])
+            .await
+            .is_some_and(|commit| !commit.is_empty())
+    }
+
+    /// The first GitHub remote as an https clone URL (reference
+    /// `find_github_remote` and `to_https_url`).
+    pub(crate) async fn github_remote_url(&self) -> Option<String> {
+        self.github_remote()
+            .await
+            .map(|remote| format!("https://github.com/{}/{}.git", remote.owner, remote.repo))
+    }
+
     /// The branch HEAD is on, or `None` when it is detached.
-    async fn branch(&self) -> Option<String> {
+    pub(crate) async fn branch(&self) -> Option<String> {
         self.stdout(&["symbolic-ref", "--quiet", "--short", "HEAD"])
             .await
             .filter(|branch| !branch.is_empty())

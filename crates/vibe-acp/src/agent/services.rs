@@ -5,10 +5,9 @@ use std::sync::Arc;
 
 use vibe_app_server::client::{HeadlessService, TurnDriver};
 use vibe_app_server::experiments::SessionExperiments;
-use vibe_app_server::projects::{ProjectsService, VibeCodeCloudConfig};
+use vibe_app_server::projects::ProjectsService;
 use vibe_app_server::server::AppServer;
 use vibe_app_server::workspace::WorkspaceService;
-use vibe_core::config::DotenvValues;
 use vibe_protocol::{
     CallbackKind, ClientCapabilities, ClientEntrypoint, ClientInfo, TerminalEmulator,
 };
@@ -60,7 +59,7 @@ where
         let mut server = AppServer::default()
             .using_client_telemetry(Arc::clone(&self.telemetry))
             .using_harness_selection(self.harness.clone());
-        if let Some(projects) = self.production_projects()? {
+        if let Some(projects) = self.shared_projects_service()? {
             server = server.using_projects_service(projects);
         }
         if let Some(session_root) = &self.session_root {
@@ -130,35 +129,16 @@ where
         result.and_then(|value| stopped.map(|()| value).map_err(AcpError::from))
     }
 
-    /// Cloud services are resolved lazily so sessions start without a
-    /// provider credential.
-    fn production_projects(&self) -> Result<Option<ProjectsService>, AcpError> {
-        if !self.production_cloud {
+    /// The one project service every session's server shares, so the
+    /// scheduled loops of every session live in one store. The project links
+    /// need nothing from it: each server reads them from its vibe home.
+    fn shared_projects_service(&self) -> Result<Option<ProjectsService>, AcpError> {
+        if !self.shared_projects {
             return Ok(None);
         }
         let mut cached = self.projects.lock().map_err(|_| AcpError::StatePoisoned)?;
-        if let Some(service) = cached.as_ref() {
-            return Ok(Some(service.clone()));
-        }
-        // The session root sits inside the vibe home, so the global dotenv file
-        // is resolvable here and a key kept there starts the cloud services the
-        // same way an exported one does.
-        let dotenv = self
-            .session_root
-            .as_deref()
-            .and_then(Path::parent)
-            .map_or_else(DotenvValues::default, DotenvValues::global);
-        let Some(api_key) = dotenv
-            .variable(&self.credential_environment)
-            .filter(|value| !value.trim().is_empty())
-        else {
-            return Ok(None);
-        };
-        let config = VibeCodeCloudConfig::from_credential(api_key)
-            .map_err(|error| AcpError::Configuration(error.to_string()))?;
-        let service = ProjectsService::production(config)
-            .map_err(|error| AcpError::Configuration(error.to_string()))?;
-        *cached = Some(service.clone());
-        Ok(Some(service))
+        Ok(Some(
+            cached.get_or_insert_with(ProjectsService::default).clone(),
+        ))
     }
 }

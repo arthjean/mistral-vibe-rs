@@ -1,563 +1,669 @@
 //! The session-less `projectLinks/*` surface.
 //!
-//! Every method is keyed on an absolute `rootPath` the caller holds rather than
-//! on a session, which is what lets a picker run before a session exists. The
-//! state it reads and writes is the same saved-link store `vibeCode/projects/*`
-//! already owns, so a link saved through either surface is the one the other
-//! sees; the reference shares its store the same way.
+//! Reference `ProjectLinksController` (`vibe/app_server/_project_links.py`):
+//! every method is keyed on a `rootPath` the caller holds rather than on a
+//! session, which is what lets a picker run before a session exists. It reads
+//! and writes the store a session's Teleport picker shares
+//! ([`ProjectsStore`]), so a link saved on either side is the one the other
+//! sees.
 //!
-//! Responses carry `repoLocalPath` rather than a compact label because this is a
-//! local boundary: the renderer derives the label, and only the absolute path
-//! identifies the checkout.
+//! Two readings of a directory are in play, as in the reference. The
+//! inspection behind `resolveRoot`, `inspectRoot`, `save` and `unlink` accepts
+//! any directory and describes its Git checkout when it has one. The picker
+//! and the two mutations that reach Vibe Code (`picker/*`, `create`, `link`)
+//! need what a Teleport run needs, a checkout with a GitHub remote and a
+//! commit, and refuse anything else as an invalid request.
 //!
-//! Failures are classified the way the reference classifies them: a root Git
-//! cannot resolve is reported as an ineligible answer with a reason drawn from
-//! the four reject values, a rejected credential is `unauthorized`, and a Vibe
-//! Code call that fails for any other reason is `internal_error`.
+//! Failures are classified the way the reference classifies them: no Mistral
+//! key, or a Vibe Code answer naming the key or a 401 or 403, is
+//! `unauthorized`; any other Vibe Code failure is `internal_error` with a
+//! message that carries nothing the service answered; a root that cannot be
+//! linked is `invalid_params`; and a store write that fails where the
+//! reference does not catch it is `internal_error` with the operating
+//! system's own report. The sentences are this port's own.
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
-use std::path::Path;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
+use vibe_protocol::ProtocolErrorCode;
 
+use super::store::{ProjectLink, ProjectsStore, StoreError, resolve_path};
 use crate::host::expand_home;
+use crate::vibe_code::Service;
+use crate::vibe_code::git::{FailureClass, GitRepoInfo, GitRepository, normalize_repo_url};
+use crate::vibe_code::http::Project;
+use crate::vibe_code::is_project_linked_to_repo;
+use crate::workspace::WorkspaceService;
 
-use super::{
-    CloudError, MAX_HEADLESS_PROJECT_PAGES, Project, ProjectLinkRoot, ProjectPage,
-    ProjectRootRejection, ProjectsDispatch, ProjectsService, ProjectsServiceError,
-    SavedProjectLink, is_project_linked_to_repo, normalize_repo_url, required_string,
-};
-
-/// What a saved link looked like once the root it is keyed on was resolved.
-struct Reconciliation {
-    /// A `ProjectLinksSavedLink`, or null when none survived.
-    summary: Value,
-    /// A link naming another repository was dropped.
-    cleared: bool,
-    /// Dropping it did not land, which only a caller with a field for it sees.
-    clear_failed: bool,
+/// Why a `projectLinks/*` call was refused, under the code the reference
+/// answers it with.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Failure {
+    Unauthorized(String),
+    Invalid(String),
+    Internal(String),
 }
 
-impl ProjectsService {
-    /// The eight methods that resolve a repository root or reach Vibe Code, and
-    /// so run off the caller's loop. `projectLinks/list` is answered inline by
-    /// [`ProjectsService::project_links_list`].
-    pub(super) async fn project_links_deferred(
-        &self,
-        method: &str,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
-        match method {
-            "projectLinks/resolveRoot" => self.project_links_resolve_root(params).await,
-            "projectLinks/inspectRoot" => self.project_links_inspect_root(params).await,
-            "projectLinks/picker/load" => self.project_links_picker_load(params).await,
-            "projectLinks/picker/loadMore" => self.project_links_picker_load_more(params).await,
-            "projectLinks/create" => self.project_links_create(params).await,
-            "projectLinks/link" => self.project_links_link(params).await,
-            "projectLinks/save" => self.project_links_save(params).await,
-            "projectLinks/unlink" => self.project_links_unlink(params).await,
-            _ => Err(ProjectsServiceError::MethodNotFound(method.to_owned())),
+impl Failure {
+    pub(crate) const fn code(&self) -> ProtocolErrorCode {
+        match self {
+            Self::Unauthorized(_) => ProtocolErrorCode::Unauthorized,
+            Self::Invalid(_) => ProtocolErrorCode::InvalidParams,
+            Self::Internal(_) => ProtocolErrorCode::InternalError,
         }
     }
 
-    /// Every saved link, grouped by the project it points at.
-    ///
-    /// Listing is local state, so it does not need a configured credential.
-    pub(super) fn project_links_list(&self) -> Result<ProjectsDispatch, ProjectsServiceError> {
-        let state = self.lock_projects()?;
-        let mut grouped: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
-        for (repo_root, link) in &state.linked_projects {
-            grouped
-                .entry(link.project_id.as_str())
-                .or_default()
-                .push(repo_root.as_str());
+    pub(crate) fn message(&self) -> &str {
+        match self {
+            Self::Unauthorized(message) | Self::Invalid(message) | Self::Internal(message) => {
+                message
+            }
         }
-        let projects = grouped
-            .into_iter()
-            .map(|(project_id, repo_local_paths)| {
-                json!({"projectId": project_id, "repoLocalPaths": repo_local_paths})
-            })
-            .collect::<Vec<_>>();
-        Ok(ProjectsDispatch::result([("projects", json!(projects))]))
+    }
+}
+
+impl From<StoreError> for Failure {
+    fn from(error: StoreError) -> Self {
+        Self::Internal(error.to_string())
+    }
+}
+
+const NO_KEY: &str = "No Mistral API key is set.";
+const REMOTE_CHANGED: &str =
+    "The repository's GitHub remote is not the one the link was prepared for.";
+
+/// Serves one `projectLinks/*` call against the store and configuration of
+/// `workspace`'s vibe home.
+pub(crate) async fn dispatch(
+    workspace: &WorkspaceService,
+    method: &str,
+    params: &BTreeMap<String, Value>,
+) -> Result<Value, Failure> {
+    let links = ProjectLinks {
+        workspace,
+        store: ProjectsStore::in_home(workspace.vibe_home()),
+    };
+    match method {
+        "projectLinks/list" => Ok(links.list().await),
+        "projectLinks/resolveRoot" => Ok(links.resolve_root(text(params, "rootPath")?).await),
+        "projectLinks/inspectRoot" => Ok(links.inspect_root(text(params, "rootPath")?).await),
+        "projectLinks/picker/load" => links.picker_load(text(params, "rootPath")?).await,
+        "projectLinks/picker/loadMore" => {
+            links
+                .picker_load_more(text(params, "rootPath")?, text(params, "cursor")?)
+                .await
+        }
+        "projectLinks/create" => {
+            links
+                .create(
+                    text(params, "rootPath")?,
+                    text(params, "name")?,
+                    text(params, "defaultBranch")?,
+                )
+                .await
+        }
+        "projectLinks/link" => {
+            // The name a caller sends is required and never written: the link
+            // takes the validated project's own.
+            text(params, "projectName")?;
+            links
+                .link(text(params, "rootPath")?, text(params, "projectId")?)
+                .await
+        }
+        "projectLinks/save" => {
+            let expected = match params.get("expectedGithubRepoUrl") {
+                Some(Value::String(url)) => Some(url.as_str()),
+                Some(Value::Null) => None,
+                _ => {
+                    return Err(Failure::Invalid(
+                        "expectedGithubRepoUrl must be a string or null".to_owned(),
+                    ));
+                }
+            };
+            links
+                .save(
+                    text(params, "rootPath")?,
+                    text(params, "projectId")?,
+                    text(params, "projectName")?,
+                    expected,
+                )
+                .await
+        }
+        "projectLinks/unlink" => Ok(links.unlink(text(params, "rootPath")?).await),
+        _ => Err(Failure::Invalid(format!("Unknown method {method}"))),
+    }
+}
+
+/// A parameter the reference declares as a string of at least one character.
+/// Whitespace counts, as it does there: a blank name reaches the service.
+fn text<'a>(params: &'a BTreeMap<String, Value>, key: &str) -> Result<&'a str, Failure> {
+    params
+        .get(key)
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| Failure::Invalid(format!("{key} must be a non-empty string")))
+}
+
+struct ProjectLinks<'a> {
+    workspace: &'a WorkspaceService,
+    store: ProjectsStore,
+}
+
+impl ProjectLinks<'_> {
+    /// Every saved link, grouped by project in the order the store first
+    /// names each. Local state only, so no credential is needed.
+    async fn list(&self) -> Value {
+        let mut groups: Vec<(String, Vec<PathBuf>)> = Vec::new();
+        for link in self.store.list_project_links() {
+            let path = link.path().to_path_buf();
+            match groups
+                .iter_mut()
+                .find(|(project_id, _)| project_id == link.project_id())
+            {
+                Some((_, paths)) => paths.push(path),
+                None => groups.push((link.project_id().to_owned(), vec![path])),
+            }
+        }
+        let mut projects = Vec::with_capacity(groups.len());
+        for (project_id, paths) in groups {
+            let mut local_links = Vec::with_capacity(paths.len());
+            for path in paths {
+                local_links.push(json!({
+                    "directoryPath": path.to_string_lossy(),
+                    "hasCommits": has_commits(&path).await,
+                }));
+            }
+            projects.push(json!({"projectId": project_id, "localLinks": local_links}));
+        }
+        json!({"projects": projects})
     }
 
-    async fn project_links_resolve_root(
-        &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
-        let root_path = required_string(params, "rootPath")?.to_owned();
-        Ok(match self.resolve_link_root(&root_path).await? {
-            Ok(root) => ProjectsDispatch::result([
-                ("eligible", json!(true)),
-                ("rejectReason", Value::Null),
-                ("root", resolved_root(&root)),
-            ]),
-            Err(rejection) => ProjectsDispatch::result([
-                ("eligible", json!(false)),
-                ("rejectReason", reject_reason(rejection)),
-                ("root", Value::Null),
-            ]),
+    async fn resolve_root(&self, root_path: &str) -> Value {
+        match inspect_directory(&expand_home(Path::new(root_path))).await {
+            Ok(inspected) => json!({
+                "eligible": true,
+                "rejectReason": null,
+                "root": inspected.view(),
+            }),
+            Err(_) => json!({
+                "eligible": false,
+                "rejectReason": "nested_unresolvable",
+                "root": null,
+            }),
+        }
+    }
+
+    /// The root and its saved link. A checkout link whose remote no longer
+    /// matches is dropped; a failed drop is reported in its own field rather
+    /// than failing the call.
+    async fn inspect_root(&self, root_path: &str) -> Value {
+        let inspected = match inspect_directory(&expand_home(Path::new(root_path))).await {
+            Ok(inspected) => inspected,
+            Err(_) => {
+                return json!({
+                    "eligible": false,
+                    "rejectReason": "nested_unresolvable",
+                    "root": null,
+                    "savedLink": null,
+                    "staleLinkCleared": false,
+                    "staleLinkClearFailed": false,
+                });
+            }
+        };
+        let mut saved_link = Value::Null;
+        let mut cleared = false;
+        let mut clear_failed = false;
+        if let Some(link) = self.store.get_project_link(&inspected.path) {
+            let github = inspected
+                .git
+                .as_ref()
+                .and_then(|git| git.github_repo_url.as_deref());
+            let matches = match &link {
+                ProjectLink::Local { .. } => true,
+                ProjectLink::Remote { repo_url, .. } => github.is_some_and(|github| {
+                    normalize_repo_url(repo_url) == normalize_repo_url(github)
+                }),
+            };
+            if matches {
+                saved_link = saved_summary(&link);
+            } else if self.store.delete_project_link(&inspected.path).is_ok() {
+                cleared = true;
+            } else {
+                clear_failed = true;
+            }
+        }
+        json!({
+            "eligible": true,
+            "rejectReason": null,
+            "root": inspected.view(),
+            "savedLink": saved_link,
+            "staleLinkCleared": cleared,
+            "staleLinkClearFailed": clear_failed,
         })
     }
 
-    async fn project_links_inspect_root(
-        &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
-        let root_path = required_string(params, "rootPath")?.to_owned();
-        let root = match self.resolve_link_root(&root_path).await? {
-            Ok(root) => root,
-            Err(rejection) => {
-                return Ok(ProjectsDispatch::result([
-                    ("eligible", json!(false)),
-                    ("rejectReason", reject_reason(rejection)),
-                    ("root", Value::Null),
-                    ("savedLink", Value::Null),
-                    ("staleLinkCleared", json!(false)),
-                    ("staleLinkClearFailed", json!(false)),
-                ]));
+    /// The first candidate page, with the saved checkout link reconciled
+    /// against the current remote.
+    async fn picker_load(&self, root_path: &str) -> Result<Value, Failure> {
+        const METHOD: &str = "projectLinks/picker/load";
+        let (repo_root, git) = eligible_root(root_path).await?;
+        let service = self.service()?;
+        let (projects, next_cursor) = service
+            .page(None)
+            .await
+            .map_err(|message| api_failure(&message, METHOD))?;
+        let mut saved_link = Value::Null;
+        let mut saved_project_id = None;
+        let mut cleared = false;
+        if let Some(link) = self.store.get_remote_project(&repo_root)
+            && let ProjectLink::Remote { repo_url, .. } = &link
+        {
+            if normalize_repo_url(repo_url) == normalize_repo_url(&git.remote_url) {
+                saved_link = saved_summary(&link);
+                saved_project_id = Some(link.project_id().to_owned());
+            } else {
+                self.store.delete_remote_project(&repo_root)?;
+                cleared = true;
             }
-        };
-        // This is the one method with a field for a failed clear, so it reports
-        // the failure instead of failing the request, as the reference does.
-        let reconciled = self.reconcile_saved_link(&root, true)?;
-        Ok(ProjectsDispatch::result([
-            ("eligible", json!(true)),
-            ("rejectReason", Value::Null),
-            ("root", inspected_root(&root)),
-            ("savedLink", reconciled.summary),
-            ("staleLinkCleared", json!(reconciled.cleared)),
-            ("staleLinkClearFailed", json!(reconciled.clear_failed)),
-        ]))
+        }
+        Ok(json!({
+            "root": checkout_view(&repo_root, &git),
+            "savedLink": saved_link,
+            "staleLinkCleared": cleared,
+            "candidates": candidate_page(
+                &projects,
+                &git.remote_url,
+                saved_project_id.as_deref(),
+                next_cursor.as_deref(),
+                true,
+            ),
+        }))
     }
 
-    async fn project_links_picker_load(
-        &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
-        let root_path = required_string(params, "rootPath")?.to_owned();
-        let root = self.eligible_link_root(&root_path).await?;
-        let page = self.project_links_page(None).await?;
-        let reconciled = self.reconcile_saved_link(&root, false)?;
-        let saved_project_id = reconciled.summary["projectId"]
-            .as_str()
-            .map(ToOwned::to_owned);
-        let candidates = candidate_page(
-            &page.projects,
-            &root.repo_url,
-            saved_project_id.as_deref(),
-            page.next_cursor.as_deref(),
-            true,
-        );
-        Ok(ProjectsDispatch::result([
-            ("root", resolved_root(&root)),
-            ("savedLink", reconciled.summary),
-            ("staleLinkCleared", json!(reconciled.cleared)),
-            ("candidates", candidates),
-        ]))
-    }
-
-    async fn project_links_picker_load_more(
-        &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
-        let root_path = required_string(params, "rootPath")?.to_owned();
-        let requested_cursor = required_string(params, "cursor")?.to_owned();
-        let root = self.eligible_link_root(&root_path).await?;
-        // A page holding no selectable candidate would render as an empty list
-        // with more to load, so paging continues until one appears or the
-        // cursors run out, which is what the reference's picker does.
+    /// The pages after `cursor`, read until one shows a project this
+    /// repository can use, which is focused. A page past the first knows no
+    /// saved link, so nothing on it is recommended.
+    async fn picker_load_more(&self, root_path: &str, cursor: &str) -> Result<Value, Failure> {
+        const METHOD: &str = "projectLinks/picker/loadMore";
+        let (_, git) = eligible_root(root_path).await?;
+        let service = self.service()?;
         let mut projects = Vec::new();
-        let mut next_cursor = Some(requested_cursor.clone());
+        let mut next_cursor = Some(cursor.to_owned());
         let mut focus = None;
-        let mut seen = BTreeSet::new();
-        let mut cursor = Some(requested_cursor);
-        while let Some(page_cursor) = cursor.take() {
-            if seen.len() >= MAX_HEADLESS_PROJECT_PAGES || !seen.insert(page_cursor.clone()) {
-                return Err(ProjectsServiceError::Conflict(
-                    "Vibe Code project pagination did not terminate safely".to_owned(),
-                ));
-            }
-            let page = self.project_links_page(Some(page_cursor)).await?;
-            next_cursor.clone_from(&page.next_cursor);
+        let mut cursor = Some(cursor.to_owned());
+        while let Some(current) = cursor.take() {
+            let (page, page_cursor) = service
+                .page(Some(&current))
+                .await
+                .map_err(|message| api_failure(&message, METHOD))?;
+            next_cursor.clone_from(&page_cursor);
             focus = page
-                .projects
                 .iter()
-                .find(|project| {
-                    !project.is_read_only && is_project_linked_to_repo(project, &root.repo_url)
-                })
+                .find(|project| !project.is_read_only && visible(project, &git.remote_url))
                 .map(|project| project.project_id.clone());
-            projects.extend(page.projects);
+            projects.extend(page);
             if focus.is_some() {
                 break;
             }
-            cursor = page.next_cursor;
+            cursor = page_cursor;
         }
-        // A page past the first carries no saved-link context: the saved
-        // project, if any, ranked on the first page, so nothing here is
-        // recommended.
-        let candidates = candidate_page(
-            &projects,
-            &root.repo_url,
-            None,
-            next_cursor.as_deref(),
-            false,
-        );
-        Ok(ProjectsDispatch::result([
-            ("candidates", candidates),
-            (
-                "focusProjectId",
-                focus.map_or(Value::Null, |project_id| json!(project_id)),
+        Ok(json!({
+            "candidates": candidate_page(
+                &projects,
+                &git.remote_url,
+                None,
+                next_cursor.as_deref(),
+                false,
             ),
-        ]))
+            "focusProjectId": focus,
+        }))
     }
 
-    async fn project_links_create(
+    /// Creates a project for the checkout's GitHub remote and links the
+    /// checkout to it. The first page is read before anything is created, as
+    /// the picker the reference builds for it does.
+    async fn create(
         &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
-        let root_path = required_string(params, "rootPath")?.to_owned();
-        let name = required_string(params, "name")?.trim().to_owned();
-        let default_branch = required_string(params, "defaultBranch")?.trim().to_owned();
-        let root = self.eligible_link_root(&root_path).await?;
-        let project = self
-            .project_create_cloud(name, root.repo_url.clone(), default_branch)
+        root_path: &str,
+        name: &str,
+        default_branch: &str,
+    ) -> Result<Value, Failure> {
+        const METHOD: &str = "projectLinks/create";
+        let (repo_root, git) = eligible_root(root_path).await?;
+        let service = self.service()?;
+        service
+            .page(None)
             .await
-            .map_err(|error| self.classify_vibe_code(error))?;
-        let link = self.upsert_link(&root, &project.project_id, &project.name)?;
-        Ok(link_response(&root, &link))
+            .map_err(|message| api_failure(&message, METHOD))?;
+        let (name, default_branch) = (name.trim(), default_branch.trim());
+        if name.is_empty() || default_branch.is_empty() {
+            return Err(api_failure(
+                "a project needs a name and a default branch",
+                METHOD,
+            ));
+        }
+        let project = async {
+            service
+                .client()?
+                .create(name, &git.remote_url, default_branch)
+                .await
+        }
+        .await
+        .map_err(|message| api_failure(&message, METHOD))?;
+        self.save_checkout_link(&repo_root, &git, &project)
     }
 
-    async fn project_links_link(
-        &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
-        let root_path = required_string(params, "rootPath")?.to_owned();
-        let project_id = required_string(params, "projectId")?.to_owned();
-        // The reference validates the target and then persists the project's
-        // own name, so the name a stateless caller sends is required by the
-        // model and never written.
-        required_string(params, "projectName")?;
-        let root = self.eligible_link_root(&root_path).await?;
-        let page = self
-            .project_list_all()
-            .await
-            .map_err(|error| self.classify_vibe_code(error))?;
-        let project = page
-            .projects
+    /// Links the checkout to a project the caller names, once the project is
+    /// known to exist, to be writable and to list this repository.
+    async fn link(&self, root_path: &str, project_id: &str) -> Result<Value, Failure> {
+        const METHOD: &str = "projectLinks/link";
+        let (repo_root, git) = eligible_root(root_path).await?;
+        let service = self.service()?;
+        let mut projects = Vec::new();
+        let mut cursor = None;
+        loop {
+            let (page, next) = service
+                .page(cursor.as_deref())
+                .await
+                .map_err(|message| api_failure(&message, METHOD))?;
+            projects.extend(page);
+            match next {
+                Some(next) => cursor = Some(next),
+                None => break,
+            }
+        }
+        let project = projects
             .into_iter()
             .find(|project| project.project_id == project_id)
             .ok_or_else(|| {
-                ProjectsServiceError::InvalidParams(format!(
-                    "Unknown Vibe Code project: {project_id}"
+                Failure::Invalid(format!(
+                    "No Vibe Code project has the identifier {project_id}."
                 ))
             })?;
-        if project.is_read_only || !is_project_linked_to_repo(&project, &root.repo_url) {
-            return Err(ProjectsServiceError::InvalidParams(
-                "The selected Vibe Code project is not available for this repository".to_owned(),
+        if project.is_read_only || !is_project_linked_to_repo(&project, &git.remote_url) {
+            return Err(Failure::Invalid(
+                "That Vibe Code project cannot be linked to this repository.".to_owned(),
             ));
         }
-        let link = self.upsert_link(&root, &project.project_id, &project.name)?;
-        Ok(link_response(&root, &link))
+        self.save_checkout_link(&repo_root, &git, &project)
     }
 
-    async fn project_links_save(
-        &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
-        let root_path = required_string(params, "rootPath")?.to_owned();
-        let project_id = required_string(params, "projectId")?.to_owned();
-        let project_name = required_string(params, "projectName")?.to_owned();
-        let expected_repo_url = required_string(params, "expectedRepoUrl")?
-            .trim()
-            .to_owned();
-        let root = self.eligible_link_root(&root_path).await?;
-        if normalize_repo_url(&root.repo_url) != normalize_repo_url(&expected_repo_url) {
-            return Err(ProjectsServiceError::InvalidParams(
-                "The repository remote changed before the link could be saved.".to_owned(),
-            ));
-        }
-        let link = self.upsert_link(&root, &project_id, &project_name)?;
-        Ok(link_response(&root, &link))
-    }
-
-    async fn project_links_unlink(
-        &self,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
-        let root_path = required_string(params, "rootPath")?.to_owned();
-        match self.resolve_link_root(&root_path).await? {
-            Ok(root) => self.remove_link(&root.repo_local_path)?,
-            // The checkout moved or was deleted, so Git resolves nothing.
-            // Links are keyed on the resolved root, which may be an ancestor of
-            // the path the caller chose, so the stranded link is still removable.
-            Err(_) => self.remove_stale_link(&root_path)?,
-        }
-        Ok(ProjectsDispatch::result([("unlinked", json!(true))]))
-    }
-
-    /// Resolves `root_path` off the runtime thread, since the probe shells out
-    /// to Git. The inner result is the reference's eligible/ineligible answer.
-    async fn resolve_link_root(
+    /// Saves a link the caller already chose, without asking Vibe Code. A
+    /// directory with no GitHub remote gets a directory link; a checkout
+    /// with one gets a checkout link, provided its remote is still the one
+    /// the caller prepared the link for.
+    async fn save(
         &self,
         root_path: &str,
-    ) -> Result<Result<ProjectLinkRoot, ProjectRootRejection>, ProjectsServiceError> {
-        let git = self.git.clone();
-        let path = expand_home(Path::new(root_path));
-        tokio::task::spawn_blocking(move || git.resolve_project_root(&path))
-            .await
-            .map_err(|_| ProjectsServiceError::BackgroundTask)
-    }
-
-    /// The resolved root, or the rejection reported as an invalid request,
-    /// which is how the reference answers a mutation aimed at an unusable root.
-    async fn eligible_link_root(
-        &self,
-        root_path: &str,
-    ) -> Result<ProjectLinkRoot, ProjectsServiceError> {
-        self.resolve_link_root(root_path)
-            .await?
-            .map_err(|rejection| {
-                ProjectsServiceError::InvalidParams(format!(
-                    "`{root_path}` is not an eligible project root: {}",
-                    rejection_word(rejection)
-                ))
-            })
-    }
-
-    /// One page of Vibe Code projects, with the failure classified for this
-    /// surface.
-    async fn project_links_page(
-        &self,
-        cursor: Option<String>,
-    ) -> Result<ProjectPage, ProjectsServiceError> {
-        self.project_list_cloud(cursor)
-            .await
-            .map_err(|error| self.classify_vibe_code(error))
-    }
-
-    /// Reports a rejected or absent credential as an authorization failure and
-    /// every other Vibe Code failure as an internal one, which is the split the
-    /// reference makes and what tells a client to sign in rather than retry.
-    fn classify_vibe_code(&self, error: ProjectsServiceError) -> ProjectsServiceError {
-        match error {
-            ProjectsServiceError::Cloud(CloudError::Unauthorized(message)) => {
-                ProjectsServiceError::Cloud(CloudError::Unauthorized(message))
-            }
-            ProjectsServiceError::Cloud(CloudError::Unavailable(message))
-                if !self.cloud_configured =>
-            {
-                ProjectsServiceError::Cloud(CloudError::Unauthorized(message))
-            }
-            ProjectsServiceError::Cloud(error) => ProjectsServiceError::VibeCode(error.to_string()),
-            other => other,
-        }
-    }
-
-    /// Compares the saved link against the root's current remote, dropping one
-    /// that names another repository.
-    ///
-    /// `tolerate_clear_failure` is for the single method that publishes the
-    /// outcome; every other caller has no field for it and fails instead of
-    /// answering as though the stale link were gone.
-    fn reconcile_saved_link(
-        &self,
-        root: &ProjectLinkRoot,
-        tolerate_clear_failure: bool,
-    ) -> Result<Reconciliation, ProjectsServiceError> {
-        let mut state = self.lock_projects()?;
-        let Some(saved) = state.linked_projects.get(&root.repo_local_path).cloned() else {
-            return Ok(Reconciliation {
-                summary: Value::Null,
-                cleared: false,
-                clear_failed: false,
-            });
-        };
-        if normalize_repo_url(&saved.repo_url) == normalize_repo_url(&root.repo_url) {
-            return Ok(Reconciliation {
-                summary: json!({
-                    "projectId": saved.project_id,
-                    "projectName": saved.project_name,
-                }),
-                cleared: false,
-                clear_failed: false,
-            });
-        }
-        let before = state.clone();
-        state.linked_projects.remove(&root.repo_local_path);
-        if let Err(error) = self.persist_project_links(&state.linked_projects) {
-            *state = before;
-            if !tolerate_clear_failure {
-                return Err(error);
-            }
-            return Ok(Reconciliation {
-                summary: Value::Null,
-                cleared: false,
-                clear_failed: true,
-            });
-        }
-        Ok(Reconciliation {
-            summary: Value::Null,
-            cleared: true,
-            clear_failed: false,
-        })
-    }
-
-    /// The saved link a `vibeCode/*` picker reads for a checkout root.
-    pub(crate) fn vibe_code_link(&self, repo_root: &str) -> Option<crate::vibe_code::SavedLink> {
-        let state = self.lock_projects().ok()?;
-        state
-            .linked_projects
-            .get(repo_root)
-            .map(|link| crate::vibe_code::SavedLink {
-                repo_root: repo_root.to_owned(),
-                repo_url: link.repo_url.clone(),
-                project_id: link.project_id.clone(),
-                project_name: link.project_name.clone(),
-            })
-    }
-
-    /// Saves the link a `vibeCode/projects/select` made, over any other one
-    /// for the same root.
-    pub(crate) fn save_vibe_code_link(
-        &self,
-        link: &crate::vibe_code::SavedLink,
-    ) -> Result<(), ProjectsServiceError> {
-        let saved = SavedProjectLink {
-            repo_url: link.repo_url.clone(),
-            project_id: link.project_id.clone(),
-            project_name: link.project_name.clone(),
-        };
-        let mut state = self.lock_projects()?;
-        let before = state.clone();
-        state.linked_projects.insert(link.repo_root.clone(), saved);
-        if let Err(error) = self.persist_project_links(&state.linked_projects) {
-            *state = before;
-            return Err(error);
-        }
-        Ok(())
-    }
-
-    /// Drops the link saved for a checkout root, if any.
-    pub(crate) fn delete_vibe_code_link(
-        &self,
-        repo_root: &str,
-    ) -> Result<(), ProjectsServiceError> {
-        self.remove_link(repo_root)
-    }
-
-    fn upsert_link(
-        &self,
-        root: &ProjectLinkRoot,
         project_id: &str,
         project_name: &str,
-    ) -> Result<SavedProjectLink, ProjectsServiceError> {
-        let link = SavedProjectLink {
-            repo_url: root.repo_url.clone(),
-            project_id: project_id.to_owned(),
-            project_name: project_name.to_owned(),
+        expected: Option<&str>,
+    ) -> Result<Value, Failure> {
+        let inspected = inspect_directory(&expand_home(Path::new(root_path)))
+            .await
+            .map_err(|detail| Failure::Invalid(ineligible(&detail)))?;
+        let expected = expected.map(str::trim);
+        let github = inspected
+            .git
+            .as_ref()
+            .and_then(|git| git.github_repo_url.clone());
+        let link = match github {
+            None if expected.is_some() => {
+                return Err(Failure::Invalid(REMOTE_CHANGED.to_owned()));
+            }
+            None => ProjectLink::Local {
+                directory_path: inspected.path.clone(),
+                project_id: project_id.to_owned(),
+                project_name: project_name.to_owned(),
+            },
+            Some(github) => {
+                if expected.is_none_or(|expected| {
+                    normalize_repo_url(&github) != normalize_repo_url(expected)
+                }) {
+                    return Err(Failure::Invalid(REMOTE_CHANGED.to_owned()));
+                }
+                ProjectLink::Remote {
+                    repo_root: inspected.path.clone(),
+                    repo_url: github,
+                    project_id: project_id.to_owned(),
+                    project_name: project_name.to_owned(),
+                }
+            }
         };
-        let mut state = self.lock_projects()?;
-        let before = state.clone();
-        state
-            .linked_projects
-            .insert(root.repo_local_path.clone(), link.clone());
-        if let Err(error) = self.persist_project_links(&state.linked_projects) {
-            *state = before;
-            return Err(error);
-        }
-        Ok(link)
+        self.store.upsert_project_link(&link)?;
+        Ok(link_view(&link, &inspected.path))
     }
 
-    fn remove_link(&self, repo_root: &str) -> Result<(), ProjectsServiceError> {
-        let mut state = self.lock_projects()?;
-        let before = state.clone();
-        if state.linked_projects.remove(repo_root).is_none() {
-            return Ok(());
+    /// Drops the link saved for the root. A root that no longer resolves, a
+    /// checkout moved or deleted, drops the link saved for its closest
+    /// ancestor instead, so a stranded link stays removable. A drop that does
+    /// not land is not reported: the answer is always that it is unlinked.
+    async fn unlink(&self, root_path: &str) -> Value {
+        match inspect_directory(&expand_home(Path::new(root_path))).await {
+            Ok(inspected) => {
+                let _ = self.store.delete_project_link(&inspected.path);
+            }
+            Err(_) => {
+                let requested = resolve_path(&expand_home(Path::new(root_path)));
+                let target = self
+                    .store
+                    .list_project_links()
+                    .into_iter()
+                    .filter(|link| requested.starts_with(link.path()))
+                    .fold(None::<ProjectLink>, |closest, link| match closest {
+                        Some(closest)
+                            if closest.path().components().count()
+                                >= link.path().components().count() =>
+                        {
+                            Some(closest)
+                        }
+                        _ => Some(link),
+                    });
+                if let Some(target) = target {
+                    let _ = self.store.delete_project_link(target.path());
+                }
+            }
         }
-        if let Err(error) = self.persist_project_links(&state.linked_projects) {
-            *state = before;
-            return Err(error);
-        }
-        Ok(())
+        json!({"unlinked": true})
     }
 
-    /// Removes the link whose stored root contains the requested path, closest
-    /// first, so a link saved against an ancestor of a nested directory is
-    /// still removable once the checkout stops resolving.
-    fn remove_stale_link(&self, root_path: &str) -> Result<(), ProjectsServiceError> {
-        let requested = expand_home(Path::new(root_path));
-        let requested = fs::canonicalize(&requested).unwrap_or(requested);
-        let target = {
-            let state = self.lock_projects()?;
-            state
-                .linked_projects
-                .keys()
-                .filter(|stored| {
-                    let stored = Path::new(stored.as_str());
-                    requested == stored || requested.starts_with(stored)
-                })
-                .max_by_key(|stored| Path::new(stored.as_str()).components().count())
-                .cloned()
+    /// The Vibe Code endpoint, read from the configuration as it stands now.
+    fn service(&self) -> Result<Service, Failure> {
+        let config = self
+            .workspace
+            .layered_config()
+            .load()
+            .map(|snapshot| snapshot.effective.clone())
+            .unwrap_or_default();
+        Service::from_config(&config, |variable| {
+            self.workspace.resolve_credential(variable)
+        })
+        .ok_or_else(|| Failure::Unauthorized(NO_KEY.to_owned()))
+    }
+
+    fn save_checkout_link(
+        &self,
+        repo_root: &Path,
+        git: &GitRepoInfo,
+        project: &Project,
+    ) -> Result<Value, Failure> {
+        let link = ProjectLink::Remote {
+            repo_root: repo_root.to_path_buf(),
+            repo_url: git.remote_url.clone(),
+            project_id: project.project_id.clone(),
+            project_name: project.name.clone(),
         };
-        match target {
-            Some(target) => self.remove_link(&target),
-            None => Ok(()),
-        }
+        self.store.upsert_project_link(&link)?;
+        Ok(link_view(&link, repo_root))
     }
 }
 
-/// A `ProjectLinksResolvedRoot`: what a root looks like before a remote URL is
-/// needed to compare a saved link against it.
-fn resolved_root(root: &ProjectLinkRoot) -> Value {
-    json!({
-        "repoLocalPath": root.repo_local_path,
-        "repoName": root.repo_name,
-        "currentBranch": root.current_branch,
-        "defaultBranch": root.default_branch,
+/// Reference `_api_error`: a Vibe Code failure that names the key or a 401
+/// or 403 is the caller's to fix; any other is reported without repeating
+/// what the service answered.
+fn api_failure(message: &str, method: &str) -> Failure {
+    let lowered = message.to_lowercase();
+    if lowered.contains("api key")
+        || lowered.contains("status 401")
+        || lowered.contains("status 403")
+    {
+        Failure::Unauthorized(format!(
+            "Vibe Code did not accept the credential ({method})."
+        ))
+    } else {
+        Failure::Internal(format!("A request to Vibe Code failed ({method})."))
+    }
+}
+
+fn ineligible(detail: &str) -> String {
+    format!("This directory cannot be linked to a Vibe Code project: {detail}")
+}
+
+/// Reference `_resolve_root`: the checkout a Teleport run would read, and
+/// the root its link is keyed on.
+async fn eligible_root(root_path: &str) -> Result<(PathBuf, GitRepoInfo), Failure> {
+    let path = expand_home(Path::new(root_path));
+    let refuse = |message: String| Failure::Invalid(ineligible(&message));
+    let repository = GitRepository::open(&path)
+        .await
+        .map_err(|failure| refuse(failure.message))?;
+    let git = repository
+        .metadata()
+        .await
+        .map_err(|failure| refuse(failure.message))?;
+    let repo_root = git.repo_root.clone().unwrap_or_else(|| resolve_path(&path));
+    Ok((repo_root, git))
+}
+
+/// What `resolveRoot` reports of a directory.
+struct Inspected {
+    path: PathBuf,
+    git: Option<DirectoryGit>,
+}
+
+struct DirectoryGit {
+    github_repo_url: Option<String>,
+    current_branch: Option<String>,
+    default_branch: Option<String>,
+    has_commits: bool,
+}
+
+impl Inspected {
+    /// A `ProjectLinksInspectedDirectory`.
+    fn view(&self) -> Value {
+        json!({
+            "directoryPath": self.path.to_string_lossy(),
+            "directoryName": directory_name(&self.path),
+            "git": self.git.as_ref().map(|git| json!({
+                "currentBranch": git.current_branch,
+                "defaultBranch": git.default_branch,
+                "githubRepoUrl": git.github_repo_url,
+                "hasCommits": git.has_commits,
+            })),
+        })
+    }
+}
+
+/// Reference `_read_inspected_directory`: an existing directory, described
+/// by the checkout it sits in when it sits in one. A directory in no
+/// repository, or in a bare one, is a plain directory; one that does not
+/// exist, is not a directory or whose repository cannot be read is refused.
+async fn inspect_directory(path: &Path) -> Result<Inspected, String> {
+    let directory = std::fs::canonicalize(path)
+        .map_err(|error| format!("{} cannot be read: {error}", path.display()))?;
+    if !directory.is_dir() {
+        return Err(format!("{} is not a directory", directory.display()));
+    }
+    let repository = match GitRepository::open(&directory).await {
+        Ok(repository) => repository,
+        Err(failure) if failure.class == FailureClass::NotSupported => {
+            return Ok(Inspected {
+                path: directory,
+                git: None,
+            });
+        }
+        Err(failure) => return Err(failure.message),
+    };
+    let Some(root) = repository.working_tree().map(Path::to_path_buf) else {
+        return Ok(Inspected {
+            path: directory,
+            git: None,
+        });
+    };
+    let base_root = root.clone();
+    let default_branch =
+        tokio::task::spawn_blocking(move || vibe_core::worktree::checkout_base_branch(&base_root))
+            .await
+            .ok()
+            .flatten();
+    let git = DirectoryGit {
+        github_repo_url: repository.github_remote_url().await,
+        current_branch: repository.branch().await,
+        default_branch,
+        has_commits: repository.has_commits().await,
+    };
+    Ok(Inspected {
+        path: root,
+        git: Some(git),
     })
 }
 
-/// A `ProjectLinksInspectedRoot`, which adds the remote the saved link is
-/// compared against.
-fn inspected_root(root: &ProjectLinkRoot) -> Value {
-    let mut value = resolved_root(root);
-    if let Some(object) = value.as_object_mut() {
-        object.insert("repoUrl".to_owned(), json!(root.repo_url));
-    }
-    value
-}
-
-fn link_response(root: &ProjectLinkRoot, link: &SavedProjectLink) -> ProjectsDispatch {
-    ProjectsDispatch::result([(
-        "link",
-        json!({
-            "projectId": link.project_id,
-            "projectName": link.project_name,
-            "repoLocalPath": root.repo_local_path,
-        }),
-    )])
-}
-
-fn reject_reason(rejection: ProjectRootRejection) -> Value {
-    json!(rejection_word(rejection))
-}
-
-const fn rejection_word(rejection: ProjectRootRejection) -> &'static str {
-    match rejection {
-        ProjectRootRejection::NotGit => "not_git",
-        ProjectRootRejection::UnsupportedRemote => "unsupported_remote",
-        ProjectRootRejection::NestedUnresolvable => "nested_unresolvable",
-        ProjectRootRejection::NoCommits => "no_commits",
+/// Whether the checkout `path` sits in has a commit; `false` outside one.
+async fn has_commits(path: &Path) -> bool {
+    match GitRepository::open(path).await {
+        Ok(repository) => repository.has_commits().await,
+        Err(_) => false,
     }
 }
 
-/// A `ProjectLinksPickerCandidates` page.
-///
-/// The ranking is the one the terminal picker uses, so a client recommends the
-/// project the terminal would: the currently linked project first, then
-/// single-repository matches, then multi-repository ones, each by name.
+/// Python's `Path.name`: the last component, empty for the root.
+fn directory_name(path: &Path) -> String {
+    path.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+/// Reference `_inspection_from_git_info`: a checkout the picker resolved,
+/// described from what the Teleport reading saw.
+fn checkout_view(repo_root: &Path, git: &GitRepoInfo) -> Value {
+    json!({
+        "directoryPath": repo_root.to_string_lossy(),
+        "directoryName": directory_name(repo_root),
+        "git": {
+            "currentBranch": git.branch,
+            "defaultBranch": git.default_branch,
+            "githubRepoUrl": git.remote_url,
+            "hasCommits": true,
+        },
+    })
+}
+
+/// A `ProjectLinksSavedLink`.
+fn saved_summary(link: &ProjectLink) -> Value {
+    json!({"projectId": link.project_id(), "projectName": link.project_name()})
+}
+
+/// A `ProjectLinkMutationResponse`.
+fn link_view(link: &ProjectLink, directory: &Path) -> Value {
+    json!({
+        "link": {
+            "projectId": link.project_id(),
+            "projectName": link.project_name(),
+            "directoryPath": directory.to_string_lossy(),
+        }
+    })
+}
+
+/// Reference `_is_project_visible_in_picker`.
+fn visible(project: &Project, repo_url: &str) -> bool {
+    repo_url.is_empty() || is_project_linked_to_repo(project, repo_url)
+}
+
+/// A `ProjectLinksPickerCandidates` page (reference `_candidate_page` over
+/// `rank_project_items`): the writable projects that list this repository,
+/// the saved one first, then single-repository matches, then the rest, each
+/// by name. The first is recommended unless the saved project is elsewhere.
 fn candidate_page(
     projects: &[Project],
     repo_url: &str,
@@ -565,13 +671,22 @@ fn candidate_page(
     next_cursor: Option<&str>,
     recommend: bool,
 ) -> Value {
+    let rank = |project: &Project| -> u8 {
+        if saved_project_id == Some(project.project_id.as_str()) {
+            0
+        } else if project.repositories.len() == 1 {
+            1
+        } else {
+            2
+        }
+    };
     let mut ranked = projects
         .iter()
         .filter(|project| !project.is_read_only && is_project_linked_to_repo(project, repo_url))
         .collect::<Vec<_>>();
     ranked.sort_by(|left, right| {
-        match_rank(left, saved_project_id)
-            .cmp(&match_rank(right, saved_project_id))
+        rank(left)
+            .cmp(&rank(right))
             .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
     });
     let mut items = ranked
@@ -581,14 +696,10 @@ fn candidate_page(
             json!({
                 "projectId": project.project_id,
                 "name": project.name,
-                "matchKind": match_kind(project),
                 "recommended": recommend && index == 0,
             })
         })
         .collect::<Vec<_>>();
-    // Never recommend a candidate that contradicts the saved link: the saved
-    // project ranks first when it is on this page, so a different top candidate
-    // means the saved project is off-page or unselectable.
     if let (Some(saved), Some(first)) = (saved_project_id, items.first_mut())
         && first["projectId"].as_str() != Some(saved)
     {
@@ -597,20 +708,5 @@ fn candidate_page(
     json!({"items": items, "nextCursor": next_cursor})
 }
 
-fn match_rank(project: &Project, saved_project_id: Option<&str>) -> u8 {
-    if saved_project_id == Some(project.project_id.as_str()) {
-        return 0;
-    }
-    u8::from(project.repositories.len() != 1) + 1
-}
-
-const fn match_kind(project: &Project) -> &'static str {
-    if project.repositories.len() == 1 {
-        "exact_repo"
-    } else {
-        "multi_repo"
-    }
-}
-
 #[cfg(test)]
-mod tests;
+mod links_tests;

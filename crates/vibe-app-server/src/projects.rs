@@ -1,54 +1,39 @@
-//! The Vibe Code project a session runs against, and everything that binds one
-//! to a local repository.
+//! The Vibe Code project a session runs against, and the scheduled loops the
+//! wire routes to the same family.
 //!
-//! [`cloud`] is the backend contract and the HTTP client that satisfies it,
-//! [`git`] the working tree a link is decided from, and [`links`] the saved
-//! association between a repository root and a project. [`ProjectsService`]
-//! holds the state they share and routes to them. The `vibeCode/*` methods are
-//! listed here because the wire routes them to this family, and are served by
-//! the session's own controller (`crate::vibe_code`).
+//! [`store`] is the saved association between a directory and a project,
+//! `projects.toml` under the vibe home, and [`links`] the session-less
+//! `projectLinks/*` surface over it. Both read the vibe home of the workspace
+//! that serves the call, so the store holds no state of its own here. The
+//! `vibeCode/*` methods are listed here because the wire routes them to this
+//! family, and are served by the session's own controller
+//! (`crate::vibe_code`), which reads and writes the same store.
 //!
 //! [`loops`] is the exception, and stays here for one reason: the wire routes
 //! `loops/*` to this same service, which owns their store and their schedule.
 //! A scheduled loop touches a session only through the identifier a fire is
 //! attributed to, and knows nothing about a project.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use crate::host;
 use crate::params::{self, optional_u64, required_string};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::Value;
 use thiserror::Error;
 
-mod cloud;
-mod git;
-mod links;
+pub(crate) mod links;
 mod loops;
-mod selection;
+pub(crate) mod store;
 
-use selection::{MAX_HEADLESS_PROJECT_PAGES, ProjectState};
-
-pub use cloud::{
-    CloudConfigError, CloudError, Project, ProjectCloud, ProjectPage, ProjectRepository,
-    VibeCodeCloudConfig,
-};
-pub use git::{
-    CommandGitProbe, GitProbe, GitSnapshot, ProjectGitSnapshot, ProjectLinkRoot,
-    ProjectRootRejection,
-};
 pub use loops::{LoopFire, LoopState, ScheduledLoop};
 use loops::{default_loop_store, load_loops, next_loop_sequence};
-
-use cloud::{PROJECT_PAGE_LIMIT, ProjectCloudBackend, UnavailableProjectCloud, VibeCodeHttpCloud};
-use git::{UnavailableGitProbe, is_project_linked_to_repo, normalize_repo_url};
 
 pub const PROJECTS_METHODS: &[&str] = &[
     "loops/clear",
@@ -76,19 +61,21 @@ pub const PROJECTS_METHODS: &[&str] = &[
     "vibeCode/teleport/start",
 ];
 
-/// Methods that reach Vibe Code over the network. They are always dispatched on
-/// the asynchronous path so a slow cloud call never blocks the caller's loop.
+/// Methods that read a directory's checkout or reach Vibe Code. They are
+/// always dispatched on the asynchronous path, where the server answers them
+/// against its workspace ([`links::dispatch`]), so a slow Git or cloud call
+/// never blocks the caller's loop.
 const DEFERRED_PROJECTS_METHODS: &[&str] = &[
     "projectLinks/create",
     "projectLinks/inspectRoot",
     "projectLinks/link",
+    "projectLinks/list",
     "projectLinks/picker/load",
     "projectLinks/picker/loadMore",
     "projectLinks/resolveRoot",
     "projectLinks/save",
     "projectLinks/unlink",
 ];
-static NEXT_LINK_TEMP_FILE: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectsNotification {
@@ -114,14 +101,6 @@ impl ProjectsDispatch {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SavedProjectLink {
-    repo_url: String,
-    project_id: String,
-    project_name: String,
-}
-
 pub struct ProjectsSessionRemoval {
     session_id: String,
     loops: BTreeMap<String, ScheduledLoop>,
@@ -141,20 +120,9 @@ impl ProjectsSessionRemoval {
 
 #[derive(Clone)]
 pub struct ProjectsService {
-    projects: Arc<Mutex<ProjectState>>,
     loops: Arc<Mutex<BTreeMap<String, ScheduledLoop>>>,
-    project_link_store: Option<PathBuf>,
-    project_link_store_error: Option<String>,
     loop_store: PathBuf,
     loop_store_error: Option<String>,
-    project_cloud: ProjectCloudBackend,
-    git: Arc<dyn GitProbe>,
-    /// Whether a Vibe Code backend is attached at all.
-    ///
-    /// The session-less project surface reports an absent one as an
-    /// authorization failure, which is how the reference classifies a missing
-    /// API key; a backend that is attached but failing is an internal error.
-    cloud_configured: bool,
     next_loop: Arc<AtomicU64>,
 }
 
@@ -174,34 +142,15 @@ impl Default for ProjectsService {
         };
         let next_loop = next_loop_sequence(&loops);
         Self {
-            projects: Arc::new(Mutex::new(ProjectState::default())),
             loops: Arc::new(Mutex::new(loops)),
-            project_link_store: None,
-            project_link_store_error: None,
             loop_store,
             loop_store_error,
-            project_cloud: ProjectCloudBackend::Sync(Arc::new(UnavailableProjectCloud)),
-            git: Arc::new(UnavailableGitProbe),
-            cloud_configured: false,
             next_loop: Arc::new(AtomicU64::new(next_loop)),
         }
     }
 }
 
 impl ProjectsService {
-    pub fn production(config: VibeCodeCloudConfig) -> Result<Self, ProjectsBuildError> {
-        let cloud = Arc::new(VibeCodeHttpCloud::new(config)?);
-        let service = Self {
-            project_cloud: ProjectCloudBackend::Async(cloud),
-            git: Arc::new(CommandGitProbe::default()),
-            cloud_configured: true,
-            ..Self::default()
-        };
-        service
-            .with_project_link_store(default_project_link_store())
-            .map_err(ProjectsBuildError::Service)
-    }
-
     pub fn remove_session(&self, session_id: &str) -> Result<usize, ProjectsServiceError> {
         let removal = self.remove_session_transactional(session_id)?;
         Ok(removal.removed_loop_count())
@@ -283,28 +232,10 @@ impl ProjectsService {
         Ok(())
     }
 
-    #[must_use]
-    pub fn with_backends(project_cloud: Arc<dyn ProjectCloud>, git: Arc<dyn GitProbe>) -> Self {
-        Self {
-            project_cloud: ProjectCloudBackend::Sync(project_cloud),
-            git,
-            cloud_configured: true,
-            ..Self::default()
-        }
-    }
-
-    pub fn with_project_link_store(mut self, path: PathBuf) -> Result<Self, ProjectsServiceError> {
-        let linked_projects = load_project_links(&path)?;
-        self.projects = Arc::new(Mutex::new(ProjectState { linked_projects }));
-        self.project_link_store = Some(path);
-        self.project_link_store_error = None;
-        Ok(self)
-    }
-
-    /// Dispatches the methods that only touch local state.
+    /// Dispatches the methods that only touch the loop store.
     ///
-    /// Cloud-backed methods reach the network and are served by
-    /// [`Self::dispatch_deferred`]; calling them here is a routing mistake.
+    /// The `projectLinks/*` methods are answered by the server against its
+    /// workspace; calling them here is a routing mistake.
     pub fn dispatch(
         &self,
         method: &str,
@@ -312,11 +243,10 @@ impl ProjectsService {
     ) -> Result<ProjectsDispatch, ProjectsServiceError> {
         if DEFERRED_PROJECTS_METHODS.contains(&method) {
             return Err(ProjectsServiceError::Conflict(format!(
-                "`{method}` reaches Vibe Code and must be dispatched asynchronously"
+                "`{method}` reads a checkout and must be dispatched asynchronously"
             )));
         }
         match method {
-            "projectLinks/list" => self.project_links_list(),
             "loops/create" => self.loop_create(params),
             "loops/list" => self.loop_list(params),
             "loops/clear" => self.loop_clear(params),
@@ -329,35 +259,6 @@ impl ProjectsService {
     pub fn requires_deferred_dispatch(&self, method: &str) -> bool {
         DEFERRED_PROJECTS_METHODS.contains(&method)
     }
-
-    pub async fn dispatch_deferred(
-        &self,
-        method: &str,
-        params: &BTreeMap<String, Value>,
-    ) -> Result<ProjectsDispatch, ProjectsServiceError> {
-        match method {
-            method if method.starts_with("projectLinks/") => {
-                self.project_links_deferred(method, params).await
-            }
-            _ => self.dispatch(method, params),
-        }
-    }
-
-    fn persist_project_links(
-        &self,
-        links: &BTreeMap<String, SavedProjectLink>,
-    ) -> Result<(), ProjectsServiceError> {
-        let Some(path) = &self.project_link_store else {
-            return Ok(());
-        };
-        if let Some(error) = &self.project_link_store_error {
-            return Err(ProjectsServiceError::ProjectLinkPersistenceState(
-                error.clone(),
-            ));
-        }
-        persist_json_atomically(path, links, &NEXT_LINK_TEMP_FILE)
-            .map_err(ProjectsServiceError::ProjectLinkPersistence)
-    }
 }
 
 fn notification<const N: usize>(method: &str, entries: [(&str, Value); N]) -> ProjectsNotification {
@@ -368,40 +269,6 @@ fn notification<const N: usize>(method: &str, entries: [(&str, Value); N]) -> Pr
             .map(|(key, value)| (key.to_owned(), value))
             .collect(),
     }
-}
-
-fn load_project_links(
-    path: &Path,
-) -> Result<BTreeMap<String, SavedProjectLink>, ProjectsServiceError> {
-    match fs::read(path) {
-        Ok(contents) => {
-            let stored = serde_json::from_slice::<BTreeMap<String, StoredProjectLink>>(&contents)
-                .map_err(ProjectsServiceError::Json)?;
-            Ok(stored
-                .into_iter()
-                .map(|(root, link)| {
-                    let link = match link {
-                        StoredProjectLink::Detailed(link) => link,
-                        StoredProjectLink::Legacy(project_id) => SavedProjectLink {
-                            repo_url: String::new(),
-                            project_name: project_id.clone(),
-                            project_id,
-                        },
-                    };
-                    (root, link)
-                })
-                .collect())
-        }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(BTreeMap::new()),
-        Err(error) => Err(ProjectsServiceError::ProjectLinkPersistence(error)),
-    }
-}
-
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum StoredProjectLink {
-    Detailed(SavedProjectLink),
-    Legacy(String),
 }
 
 fn persist_json_atomically<T: Serialize>(
@@ -449,10 +316,6 @@ fn persist_json_atomically<T: Serialize>(
     Ok(())
 }
 
-fn default_project_link_store() -> PathBuf {
-    host::vibe_home().join("vibe-code-project-links.json")
-}
-
 fn replace_file(source: &Path, destination: &Path) -> std::io::Result<()> {
     #[cfg(target_os = "windows")]
     if destination.exists() {
@@ -482,37 +345,16 @@ pub enum ProjectsServiceError {
     /// issue list.
     #[error("{0}")]
     Loop(String),
-    #[error(transparent)]
-    Cloud(CloudError),
-    /// A Vibe Code call that failed for a reason the caller cannot act on.
-    ///
-    /// The session-less project surface separates this from an authorization
-    /// failure, because the reference answers the two with different codes and
-    /// a client shows a sign-in prompt for one and a retry for the other.
-    #[error("Vibe Code request failed: {0}")]
-    VibeCode(String),
     #[error("scheduled-loop persistence failed: {0}")]
     Persistence(std::io::Error),
     #[error("scheduled-loop persistence is unavailable: {0}")]
     PersistenceState(String),
-    #[error("Vibe Code project-link persistence failed: {0}")]
-    ProjectLinkPersistence(std::io::Error),
-    #[error("Vibe Code project-link persistence is unavailable: {0}")]
-    ProjectLinkPersistenceState(String),
     #[error("projects background task stopped unexpectedly")]
     BackgroundTask,
     #[error("projects state lock is poisoned")]
     StatePoisoned,
     #[error("JSON conversion failed: {0}")]
     Json(#[from] serde_json::Error),
-}
-
-#[derive(Debug, Error)]
-pub enum ProjectsBuildError {
-    #[error(transparent)]
-    Cloud(#[from] CloudConfigError),
-    #[error(transparent)]
-    Service(ProjectsServiceError),
 }
 
 #[cfg(test)]

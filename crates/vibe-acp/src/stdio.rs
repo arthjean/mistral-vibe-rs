@@ -24,7 +24,7 @@ pub(crate) struct StdioOptions {
     pub(crate) session_root: Option<PathBuf>,
     pub(crate) credential_environment: String,
     pub(crate) auth_environment: Arc<dyn AcpAuthEnvironment>,
-    pub(crate) production_cloud: bool,
+    pub(crate) shared_projects: bool,
     pub(crate) telemetry: Option<Arc<TelemetryEventObserver<ReqwestTelemetryTransport>>>,
     pub(crate) experiments: Option<AcpExperiments>,
     pub(crate) harness: HarnessSelection,
@@ -118,7 +118,7 @@ where
         session_root,
         credential_environment,
         auth_environment,
-        production_cloud,
+        shared_projects,
         telemetry,
         experiments,
         harness,
@@ -133,8 +133,8 @@ where
     if let Some(session_root) = session_root {
         agent = agent.with_session_root(session_root);
     }
-    if production_cloud {
-        agent = agent.with_production_cloud();
+    if shared_projects {
+        agent = agent.with_shared_projects();
     }
     Ok(agent
         .with_credential_environment(credential_environment)

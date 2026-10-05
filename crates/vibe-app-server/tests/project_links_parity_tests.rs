@@ -1,25 +1,27 @@
-//! Replays the committed ACP corpus against this port's `vibe-acp`.
+//! Replays the committed `projectLinks/*` corpus against this port's app server.
 //!
-//! `scripts/parity/acp.py` captured the corpus from the pinned reference's own
-//! `vibe-acp`: every scenario starts the agent over stdio in a fresh home,
-//! behind a scripted stand-in for the chat-completions API, and records what
-//! the agent writes. Driving this crate's binary through the same script with
-//! `--agent` yields observations normalized the same way, and the replay
+//! `scripts/parity/project_links.py` captured the corpus from the pinned
+//! reference's own `vibe-app-server`: every scenario serves it over stdio in a
+//! fresh home, beside plain directories, Git checkouts in several states, a
+//! bare repository and a file, behind a scripted stand-in for the Vibe Code
+//! projects endpoint, and drives the nine `projectLinks/*` methods row 25 of
+//! `docs/parity.md` is about. `store` records the link file byte for byte and
+//! its mode; `list`, `resolve` and `picker` what the reads answer; `create`,
+//! `link`, `save` and `unlink` what each mutation checks, sends and persists;
+//! `teleport` how a link reads to the session picker sharing the store.
+//! Driving the `vibe-app-server-stdio-fixture` binary through the same script
+//! with `--server` yields observations normalized the same way, and the replay
 //! compares the two scenario by scenario. It needs no reference checkout; only
 //! the live probe at the end, which recaptures the reference, does.
 //!
-//! Both sides reduce a string their agent authored to a length and a SHA-256.
-//! This port writes its own prose on purpose (`NOTICE`), so two digests count
-//! as equal wherever both sides hold one, and everything else is compared
-//! exactly.
-//!
-//! The corpus also records how the entry point answers argument vectors that
-//! exit before it serves anything, which is compared with no ledger at all.
-//!
-//! Every difference the replay finds has to fall under a `LEDGER` entry, and
-//! every entry has to still reproduce, so row 8 of `docs/parity.md` is a
-//! reading of the summary this file prints.
+//! Both sides reduce a string their server authored to a length and a
+//! SHA-256, and two digests are compared exactly. What differs is the prose
+//! `NOTICE` keeps this port from reproducing: the sentences a refusal or a
+//! failure carries. Every difference has to fall under a `LEDGER` entry, and
+//! every entry has to still reproduce, so row 25 is a reading of the summary
+//! this file prints.
 
+#![cfg(feature = "test-fixtures")]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -30,50 +32,81 @@ use serde_json::Value;
 use vibe_core::parity::{RESTORE_COMMAND, off_pin_reason, reference_root};
 
 /// The corpus, compiled in so a moved file fails the build rather than the run.
-const CORPUS: &str = include_str!("acp-parity/corpus.json");
+const CORPUS: &str = include_str!("project-links-parity/corpus.json");
 
 /// The scorecard the ledger's `row` values point into.
 const SCORECARD: &str = include_str!("../../../docs/parity.md");
 
-const CAPTURE_SCRIPT: &str = "scripts/parity/acp.py";
+const CAPTURE_SCRIPT: &str = "scripts/parity/project_links.py";
 
 /// The scenarios the corpus may not fall below, so a recapture that lost
 /// coverage fails here and not only on the machine that made it.
-const SCENARIO_FLOOR: usize = 79;
-const ARGV_FLOOR: usize = 23;
+const SCENARIO_FLOOR: usize = 120;
 
 /// How many scenarios the capture script runs side by side. Each owns its
-/// directories, backend and agent process.
-const JOBS: &str = "6";
+/// directories, backend and server process.
+const JOBS: &str = "4";
 
-/// A difference this port keeps, and the row of `docs/parity.md` that
-/// answers for it.
+/// The accepted divergence the entries below stand on: a difference the
+/// measured row keeps on purpose has to be decided in the scorecard.
+const OWN_PROSE: &str = "Teleport and Vibe Code refusals are this port's own prose";
+
+/// A difference this port keeps in the scenarios named, and the row of
+/// `docs/parity.md` that answers for it.
 struct Divergence {
-    scenario: &'static str,
-    /// Every difference under this JSON pointer, in that scenario, is covered.
-    pointer: &'static str,
+    scenarios: &'static [&'static str],
+    /// Every difference whose JSON pointer contains this fragment is covered.
+    fragment: &'static str,
     row: &'static str,
     reason: &'static str,
 }
 
-const LEDGER: &[Divergence] = &[
-    Divergence {
-        scenario: "initialize/terminal-auth",
-        pointer: "/0/response/result/authMethods/1",
-        row: "8",
-        reason: "the reference runs under a Python interpreter, so its terminal sign-in \
-                 relaunches `python3` with the script as the first argument; a native \
-                 executable announces itself with `--setup`, which is the reference's own \
-                 branch for one",
-    },
-    Divergence {
-        scenario: "ext/config-schema",
-        pointer: "/1/response/result",
-        row: "30",
-        reason: "`_config/schema` relays the app server's `config/schema`, whose content is \
-                 the configuration model",
-    },
+/// Every scenario answered with a refusal or a failure: a root the picker
+/// cannot use, no key, a Vibe Code answer that failed, a project the link
+/// cannot take, a remote that moved.
+const REFUSED: &[&str] = &[
+    "picker/plain-directory",
+    "picker/no-github-remote",
+    "picker/no-commits",
+    "picker/missing-root",
+    "picker/without-key",
+    "picker/without-key-plain",
+    "picker/list-401",
+    "picker/list-403",
+    "picker/list-404",
+    "picker/list-500",
+    "picker/list-body-names-key",
+    "picker/list-invalid-json",
+    "picker/list-invalid-schema",
+    "picker/list-dropped",
+    "picker/load-more-fails-late",
+    "create/blank-name",
+    "create/blank-branch",
+    "create/listing-fails-first",
+    "create/refused-401",
+    "create/refused-409",
+    "create/refused-500",
+    "create/invalid-answer",
+    "create/plain-directory",
+    "link/unknown",
+    "link/read-only",
+    "link/other-repository",
+    "link/listing-fails",
+    "link/plain-directory",
+    "save/plain-with-expected",
+    "save/repo-mismatch",
+    "save/repo-without-expected",
+    "save/missing-root",
+    "save/file-root",
 ];
+
+const LEDGER: &[Divergence] = &[Divergence {
+    scenarios: REFUSED,
+    fragment: "/response/error/message/",
+    row: "25",
+    reason: "the sentence a refusal or a failure carries; the code, and the absence of data, \
+             are the reference's",
+}];
 
 fn repository() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -99,17 +132,8 @@ fn scenarios(corpus: &Value) -> BTreeMap<String, &Value> {
         .collect()
 }
 
-fn is_prose(value: &Value) -> bool {
-    value.as_object().is_some_and(|object| {
-        object.len() == 2 && object.contains_key("prose") && object.contains_key("sha256")
-    })
-}
-
 /// Every JSON pointer at which `port` departs from `reference`.
 fn differences(reference: &Value, port: &Value, pointer: &str, found: &mut Vec<String>) {
-    if is_prose(reference) && is_prose(port) {
-        return;
-    }
     match (reference, port) {
         (Value::Object(left), Value::Object(right)) => {
             let keys: BTreeSet<&String> = left.keys().chain(right.keys()).collect();
@@ -135,14 +159,6 @@ fn differences(reference: &Value, port: &Value, pointer: &str, found: &mut Vec<S
     }
 }
 
-fn covers(entry: &Divergence, scenario: &str, pointer: &str) -> bool {
-    entry.scenario == scenario
-        && (pointer == entry.pointer
-            || pointer
-                .strip_prefix(entry.pointer)
-                .is_some_and(|rest| rest.starts_with('/')))
-}
-
 fn capture(arguments: &[&std::ffi::OsStr]) -> std::process::Output {
     Command::new("python3")
         .arg(repository().join(CAPTURE_SCRIPT))
@@ -151,11 +167,11 @@ fn capture(arguments: &[&std::ffi::OsStr]) -> std::process::Output {
         .current_dir(repository())
         .env_remove("FORCE_COLOR")
         .output()
-        .expect("python3 runs the ACP capture script")
+        .expect("python3 runs the project links capture script")
 }
 
 #[test]
-fn the_port_answers_every_scenario_as_the_corpus_records_or_as_the_ledger_names() {
+fn the_port_answers_every_project_links_scenario_as_the_corpus_records_or_as_the_ledger_names() {
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
     let recorded = scenarios(&corpus);
     assert!(
@@ -164,10 +180,10 @@ fn the_port_answers_every_scenario_as_the_corpus_records_or_as_the_ledger_names(
         recorded.len()
     );
 
-    let output_path = Path::new(env!("CARGO_TARGET_TMPDIR")).join("acp-parity-port.json");
+    let output_path = Path::new(env!("CARGO_TARGET_TMPDIR")).join("project-links-parity-port.json");
     let output = capture(&[
-        "--agent".as_ref(),
-        env!("CARGO_BIN_EXE_vibe-acp").as_ref(),
+        "--server".as_ref(),
+        env!("CARGO_BIN_EXE_vibe-app-server-stdio-fixture").as_ref(),
         "--output".as_ref(),
         output_path.as_os_str(),
     ]);
@@ -180,27 +196,6 @@ fn the_port_answers_every_scenario_as_the_corpus_records_or_as_the_ledger_names(
         &std::fs::read_to_string(&output_path).expect("the port capture is readable"),
     )
     .expect("the port capture parses");
-    // The command line answers before any scenario runs, and nothing about it
-    // is ledgered: every vector exits the way the reference's argparse does.
-    let argv = corpus["argv"]
-        .as_array()
-        .expect("the corpus records the command line");
-    assert!(
-        argv.len() >= ARGV_FLOOR,
-        "the corpus holds {} argument vectors, below the floor of {ARGV_FLOOR}",
-        argv.len()
-    );
-    let mut argv_differences = Vec::new();
-    differences(
-        &corpus["argv"],
-        &replayed["argv"],
-        "/argv",
-        &mut argv_differences,
-    );
-    assert!(
-        argv_differences.is_empty(),
-        "the command line departs from the corpus at {argv_differences:?}"
-    );
     let replayed = scenarios(&replayed);
     assert_eq!(
         recorded.keys().collect::<Vec<_>>(),
@@ -210,7 +205,9 @@ fn the_port_answers_every_scenario_as_the_corpus_records_or_as_the_ledger_names(
     );
 
     let mut unexplained = Vec::new();
-    let mut reproduced = vec![0_usize; LEDGER.len()];
+    // One count per entry and scenario it names, so an entry that stopped
+    // reproducing in one of its scenarios is reported for that one.
+    let mut reproduced = BTreeMap::<(usize, &str), usize>::new();
     let mut conformant = 0;
     for (name, reference) in &recorded {
         let port = replayed[name];
@@ -225,28 +222,34 @@ fn the_port_answers_every_scenario_as_the_corpus_records_or_as_the_ledger_names(
             conformant += 1;
         }
         for pointer in found {
-            match LEDGER
-                .iter()
-                .position(|entry| covers(entry, name, &pointer))
-            {
-                Some(index) => reproduced[index] += 1,
+            match LEDGER.iter().position(|entry| {
+                entry.scenarios.contains(&name.as_str()) && pointer.contains(entry.fragment)
+            }) {
+                Some(index) => {
+                    let scenario = LEDGER[index]
+                        .scenarios
+                        .iter()
+                        .find(|scenario| **scenario == name.as_str())
+                        .expect("the entry names the scenario it matched");
+                    *reproduced.entry((index, scenario)).or_default() += 1;
+                }
                 None => unexplained.push(format!("{name} {pointer}")),
             }
         }
     }
-    let stale: Vec<String> = LEDGER
-        .iter()
-        .zip(&reproduced)
-        .filter(|(_, count)| **count == 0)
-        .map(|(entry, _)| format!("{} {}", entry.scenario, entry.pointer))
-        .collect();
+    let mut stale = Vec::new();
+    for (index, entry) in LEDGER.iter().enumerate() {
+        for scenario in entry.scenarios {
+            if !reproduced.contains_key(&(index, *scenario)) {
+                stale.push(format!("{scenario} {}", entry.fragment));
+            }
+        }
+    }
     println!(
-        "acp parity: {}/{} argument vectors and {conformant}/{} scenarios conformant, {} \
-         ledgered differences across {} entries",
-        argv.len(),
-        argv.len(),
+        "project links parity: {conformant}/{} scenarios conformant, {} ledgered differences \
+         across {} entries",
         recorded.len(),
-        reproduced.iter().sum::<usize>(),
+        reproduced.values().sum::<usize>(),
         LEDGER.len()
     );
     assert!(
@@ -261,7 +264,7 @@ fn the_port_answers_every_scenario_as_the_corpus_records_or_as_the_ledger_names(
 }
 
 #[test]
-fn every_ledger_entry_names_a_scorecard_row_and_a_recorded_scenario() {
+fn every_ledger_entry_names_a_scorecard_row_that_answers_for_it() {
     let rows: BTreeSet<&str> = SCORECARD
         .lines()
         .filter_map(|line| line.strip_prefix("| "))
@@ -275,18 +278,27 @@ fn every_ledger_entry_names_a_scorecard_row_and_a_recorded_scenario() {
         assert!(
             rows.contains(entry.row),
             "the ledger entry for {} names row {}, which docs/parity.md does not carry",
-            entry.scenario,
+            entry.fragment,
             entry.row
         );
+        // Row 25 is what this corpus measures, so a difference it keeps is a
+        // gap unless the scorecard decided to keep it.
         assert!(
-            recorded.contains_key(entry.scenario),
-            "the ledger entry names {}, which the corpus does not record",
-            entry.scenario
+            entry.row != "25" || SCORECARD.contains(&format!("| {OWN_PROSE} |")),
+            "the ledger entry for {} keeps a row 25 difference that no accepted divergence \
+             decides",
+            entry.fragment
         );
         assert!(
-            entry.pointer.starts_with('/') && !entry.reason.is_empty(),
-            "the ledger entry for {} needs a pointer and a reason",
-            entry.scenario
+            !entry.scenarios.is_empty()
+                && entry
+                    .scenarios
+                    .iter()
+                    .all(|scenario| recorded.contains_key(*scenario))
+                && entry.fragment.starts_with('/')
+                && !entry.reason.is_empty(),
+            "the ledger entry for {} needs recorded scenarios, a pointer fragment and a reason",
+            entry.fragment
         );
     }
 }
@@ -297,7 +309,7 @@ fn every_ledger_entry_names_a_scorecard_row_and_a_recorded_scenario() {
 #[test]
 fn the_committed_corpus_still_matches_the_pinned_reference() {
     let root = reference_root();
-    if let Some(reason) = off_pin_reason(&root, "ACP") {
+    if let Some(reason) = off_pin_reason(&root, "project links") {
         eprintln!("{reason}");
         eprintln!("the committed corpus replayed regardless; restore with `{RESTORE_COMMAND}`");
         return;
