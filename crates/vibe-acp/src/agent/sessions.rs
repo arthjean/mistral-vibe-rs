@@ -401,6 +401,7 @@ where
         };
         let bridge = service.client_tools();
         let frames = self.client.is_some().then(|| attach_client_tools(&bridge));
+        let experiments = self.session_experiments(&service);
         let session_id = match service.start_session(&options) {
             Ok(session_id) => session_id,
             Err(error) => {
@@ -411,7 +412,7 @@ where
         let census = service
             .workspace_service()
             .session_census(std::path::Path::new(cwd), false);
-        let harness = Arc::new(self.adopt(service, &session_id)?);
+        let harness = Arc::new(Self::adopt(service, &session_id, experiments)?);
         if let Some(experiments) = harness.experiments.as_ref() {
             experiments.announce_when_ready(&session_id, census);
             if let Some(process) = self.experiments.as_ref() {

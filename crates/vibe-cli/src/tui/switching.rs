@@ -1,6 +1,6 @@
 //! Deferred model and agent switching with an observable busy frame.
 
-use serde_json::json;
+use serde_json::{Value, json};
 
 use super::chat_input::{ChatInputState, InputEvent};
 use super::state::{EntryStatus, TuiState};
@@ -98,6 +98,52 @@ pub(super) fn apply_pending(
         }
     }
     let _ = composer.apply(InputEvent::Switching { active: false });
+}
+
+/// Moves a new session onto the model its rollout routed it to, once the
+/// lookup it was waiting on settles.
+///
+/// Reference `initialize_experiments` refreshes the configuration of a session
+/// built without a cached rollout, and `_apply_config_to_ui` then shows the
+/// active model it resolves: the routed default, unless the operator pinned a
+/// model. Nothing is persisted, because the routing is the rollout's choice
+/// rather than the operator's.
+pub(super) fn sync_routed_model(runtime: &mut InteractiveRuntime) {
+    let awaiting = runtime
+        .experiments
+        .as_ref()
+        .is_some_and(|experiments| experiments.awaiting_model());
+    if awaiting || !std::mem::take(&mut runtime.awaiting_model) {
+        return;
+    }
+    let Some(view) = runtime.published_config() else {
+        return;
+    };
+    if view
+        .get("activeModelPinned")
+        .and_then(Value::as_bool)
+        .unwrap_or(true)
+    {
+        return;
+    }
+    let Some(alias) = view
+        .pointer("/activeModel/alias")
+        .and_then(Value::as_str)
+        .filter(|alias| *alias != runtime.model)
+        .map(ToOwned::to_owned)
+    else {
+        return;
+    };
+    if runtime
+        .service
+        .public_call(
+            "session/overrides/write",
+            json!({"sessionId": runtime.session_id, "model": alias}),
+        )
+        .is_ok()
+    {
+        runtime.model = alias;
+    }
 }
 
 #[cfg(test)]

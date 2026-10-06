@@ -5,10 +5,10 @@ This rank splits across three reference subtrees that are never read in
 isolation: the engine under ``vibe/core/experiments/``, the only place a variant
 becomes a configuration value in ``vibe/core/config/layers/growthbook.py``, and
 the promo under ``vibe/cli/vscode_extension_promo/``. This capture drives every
-one of them directly, over inputs this script authors, and writes two corpora
-because the two replays live in two crates.
+one of them directly, over inputs this script authors, and writes three corpora
+because the three replays live in three crates.
 
-The engine corpus records thirteen families the Rust replay in
+The engine corpus records seventeen families the Rust replay in
 ``crates/vibe-core/src/experiments_parity_tests.rs`` compares this build
 against::
 
@@ -25,6 +25,15 @@ against::
     layerPrecedence     the effective value when a layer and a variant collide
     sessionGates        which gate stops an initialization and what it attempted
     attributes          the attributes a launch context and an identity produce
+    surfaces            the surfaces each experiment applies on and reports for
+    typedVariants       typed values through resolution, filtering and labels
+    typedMapping        the field set the layer writes for every typed mapper
+    evalCache           what the eval cache loads, stores and refuses
+
+The startup corpus records one family, replayed from
+``crates/vibe-app-server/src/experiments/startup_parity_tests.rs``::
+
+    startup             a session's configuration before and after its lookup
 
 The promo corpus records four more, replayed from
 ``crates/vibe-cli/src/tui/promo_parity_tests.rs``::
@@ -39,6 +48,8 @@ Three artifacts come out of a run::
     .parity/experiments-corpus.json                 the full capture, gitignored
     crates/vibe-core/tests/experiments/corpus.json  the committed engine corpus
     crates/vibe-cli/tests/promo/corpus.json         the committed promo corpus
+    crates/vibe-app-server/tests/experiments/corpus.json
+                                                    the committed startup corpus
 
 The capture asserts its own isolation. Every environment variable a scenario
 names is set to a sentinel before anything runs, a resolved credential is
@@ -88,6 +99,7 @@ SCHEMA_VERSION = 1
 DEFAULT_OUTPUT = Path(".parity/experiments-corpus.json")
 DEFAULT_CORPUS = Path("crates/vibe-core/tests/experiments/corpus.json")
 DEFAULT_PROMO_CORPUS = Path("crates/vibe-cli/tests/promo/corpus.json")
+DEFAULT_STARTUP_CORPUS = Path("crates/vibe-app-server/tests/experiments/corpus.json")
 DEFAULT_CACHE = Path(".parity")
 
 #: Set on the re-executed process so it does not extract and re-exec forever.
@@ -435,6 +447,13 @@ SYSTEM_PROMPT = "vibe_cli_system_prompt"
 MANAGED_SHELL = "vibe_cli_managed_shell_tools"
 MODEL_ROUTING = "vibe_cli_default_routing_model"
 
+#: The five keys the reference added since, spelled for the same reason.
+SMART_APPROVE = "vibe_cli_smart_approve"
+SMART_APPROVE_DEFAULT = "vibe_cli_smart_approve_default"
+EXTRA_MODELS = "vibe_cli_extra_models"
+REGISTRY_SKILLS = "vibe_cli_registry_skills"
+UNIFIED_HARNESS = "vibe_cli_unified_harness_rollout"
+
 #: A model definition the routing variant carries, authored so the layer has
 #: something valid to re-encode and the orchestrator something to merge.
 ROUTED_ALIAS = "oracle-routed-alias"
@@ -445,6 +464,22 @@ ROUTED_MODEL_CONFIG: dict[str, Any] = {
     "input_price": "0.0",
     "output_price": "0.0",
     "supports_images": False,
+}
+
+#: Two model definitions the extra-models variant carries, authored like the
+#: routed one so the layer has valid entries to key by alias.
+EXTRA_MODEL: dict[str, Any] = {
+    "name": "oracle-extra-model",
+    "provider": "mistral",
+    "alias": "oracle-extra-alias",
+    "input_price": 0.5,
+    "output_price": 1.5,
+}
+SECOND_EXTRA_MODEL: dict[str, Any] = {
+    "name": "oracle-second-extra-model",
+    "provider": "mistral",
+    "alias": "oracle-second-extra-alias",
+    "thinking": "high",
 }
 
 #: The user document every orchestrator scenario starts from, so a precedence
@@ -2187,6 +2222,768 @@ def capture_promo_prose() -> list[dict[str, Any]]:
 # --------------------------------------------------------------------------
 
 
+# --------------------------------------------------------------------------
+# surfaces
+# --------------------------------------------------------------------------
+
+
+def capture_surfaces() -> list[dict[str, Any]]:
+    from vibe.core.experiments.active import (
+        EXPERIMENT_SURFACES,
+        ExperimentName,
+        ExperimentSurface,
+        is_exposure_eligible,
+    )
+
+    cases: list[dict[str, Any]] = [
+        {
+            "id": "surfaceNames",
+            "surfaces": [surface.value for surface in ExperimentSurface],
+            "eligible": None,
+        }
+    ]
+    for name in ExperimentName:
+        with captured_logs():
+            eligible = {
+                surface.value: is_exposure_eligible(name, surface)
+                for surface in ExperimentSurface
+            }
+        cases.append(
+            {
+                "id": name.value,
+                "surfaces": sorted(surface.value for surface in EXPERIMENT_SURFACES[name]),
+                "eligible": eligible,
+            }
+        )
+    return cases
+
+
+# --------------------------------------------------------------------------
+# typedVariants
+# --------------------------------------------------------------------------
+
+
+def capture_typed_variants() -> list[dict[str, Any]]:
+    from vibe.core.experiments.active import ExperimentName
+
+    responses: list[tuple[str, dict[str, Any]]] = [
+        (
+            "every-name-at-its-typed-default",
+            {
+                "features": {
+                    SYSTEM_PROMPT: feature("cli"),
+                    MANAGED_SHELL: feature("legacy"),
+                    MODEL_ROUTING: feature({}),
+                    SMART_APPROVE: feature(False),
+                    SMART_APPROVE_DEFAULT: feature(False),
+                    EXTRA_MODELS: feature({}),
+                    REGISTRY_SKILLS: feature(False),
+                    UNIFIED_HARNESS: feature("legacy"),
+                }
+            },
+        ),
+        (
+            "every-name-forced-off-its-default",
+            {
+                "features": {
+                    SYSTEM_PROMPT: feature("cli", [{"force": "lean", "tracks": [track()]}]),
+                    MANAGED_SHELL: feature("legacy", [{"force": "managed"}]),
+                    MODEL_ROUTING: feature({}, [{"force": {"active_model": ROUTED_ALIAS}}]),
+                    SMART_APPROVE: feature(
+                        False, [{"force": True, "tracks": [track(key=SMART_APPROVE)]}]
+                    ),
+                    SMART_APPROVE_DEFAULT: feature(False, [{"force": True}]),
+                    EXTRA_MODELS: feature(
+                        {},
+                        [
+                            {
+                                "force": [EXTRA_MODEL],
+                                "tracks": [track(key=EXTRA_MODELS, value=[EXTRA_MODEL])],
+                            }
+                        ],
+                    ),
+                    REGISTRY_SKILLS: feature(False, [{"force": "on"}]),
+                    UNIFIED_HARNESS: feature(
+                        "legacy",
+                        [{"force": "unified", "tracks": [track(key=UNIFIED_HARNESS)]}],
+                    ),
+                }
+            },
+        ),
+        (
+            "python-numeric-equality",
+            {
+                "features": {
+                    SMART_APPROVE: feature(None, [{"force": 0}]),
+                    SMART_APPROVE_DEFAULT: feature(None, [{"force": 0.0}]),
+                    REGISTRY_SKILLS: feature(None, [{"force": 1}]),
+                    MANAGED_SHELL: feature(None, [{"force": 1}]),
+                }
+            },
+        ),
+        (
+            "empty-collections",
+            {
+                "features": {
+                    MODEL_ROUTING: feature(None, [{"force": {}}]),
+                    EXTRA_MODELS: feature(None, [{"force": []}]),
+                    SYSTEM_PROMPT: feature(""),
+                }
+            },
+        ),
+        (
+            "booleans-spelled-as-strings",
+            {
+                "features": {
+                    SMART_APPROVE: feature("false"),
+                    SMART_APPROVE_DEFAULT: feature("true"),
+                    REGISTRY_SKILLS: feature(None, [{"force": "False"}]),
+                }
+            },
+        ),
+        (
+            "default-value-off-its-baseline",
+            {
+                "features": {
+                    SYSTEM_PROMPT: feature("lean"),
+                    UNIFIED_HARNESS: feature("unified"),
+                    EXTRA_MODELS: feature({"models": [EXTRA_MODEL]}),
+                }
+            },
+        ),
+        (
+            "exposure-labels-of-typed-values",
+            {
+                "features": {
+                    SMART_APPROVE: feature(
+                        False, [{"force": True, "tracks": [track(key=SMART_APPROVE)]}]
+                    ),
+                    SMART_APPROVE_DEFAULT: feature(
+                        None,
+                        [
+                            {
+                                "force": 0.5,
+                                "tracks": [track(key=SMART_APPROVE_DEFAULT)],
+                            }
+                        ],
+                    ),
+                    MODEL_ROUTING: feature(
+                        {},
+                        [
+                            {
+                                "force": {"b": 1, "a": [1.0, None, "é"]},
+                                "tracks": [track(key=MODEL_ROUTING)],
+                            }
+                        ],
+                    ),
+                    REGISTRY_SKILLS: feature(
+                        False,
+                        [
+                            {
+                                "force": True,
+                                "tracks": [
+                                    track(key=REGISTRY_SKILLS, in_experiment=False),
+                                    track(key=REGISTRY_SKILLS, value=False),
+                                ],
+                            }
+                        ],
+                    ),
+                }
+            },
+        ),
+    ]
+    cases: list[dict[str, Any]] = []
+    for identifier, response in responses:
+        manager = manager_with(response)
+        cases.append(
+            {
+                "id": identifier,
+                "response": response,
+                "variants": {
+                    name.value: manager.get_variant(name) for name in ExperimentName
+                },
+                "variantsOrNone": {
+                    name.value: manager.get_variant_or_none(name)
+                    for name in ExperimentName
+                },
+                "configVariants": manager.config_variants(),
+                "assignments": assignment_records(manager),
+            }
+        )
+    return cases
+
+
+# --------------------------------------------------------------------------
+# typedMapping
+# --------------------------------------------------------------------------
+
+
+def capture_typed_mapping() -> list[dict[str, Any]]:
+    from vibe.core.config.layers.growthbook import GrowthbookLayer
+    from vibe.core.config.types import MISSING_BACKING_STORE_DATA_FINGERPRINT
+
+    unaliased = {"name": "oracle-unaliased-model", "provider": "mistral"}
+    variants: list[tuple[str, dict[str, Any]]] = [
+        ("smart-approve-true", {SMART_APPROVE: True}),
+        ("smart-approve-on-tokens", {SMART_APPROVE: " On ", SMART_APPROVE_DEFAULT: "TRUE"}),
+        ("smart-approve-off-tokens", {SMART_APPROVE: "off", SMART_APPROVE_DEFAULT: False}),
+        ("smart-approve-one-is-not-true", {SMART_APPROVE: 1, SMART_APPROVE_DEFAULT: "1"}),
+        ("smart-approve-default-alone", {SMART_APPROVE_DEFAULT: True}),
+        ("registry-skills-true-string", {REGISTRY_SKILLS: "true"}),
+        ("registry-skills-yes", {REGISTRY_SKILLS: "yes"}),
+        ("registry-skills-typed", {REGISTRY_SKILLS: True}),
+        ("managed-shell-typed-true", {MANAGED_SHELL: True}),
+        ("managed-shell-padded", {MANAGED_SHELL: "  Managed\n"}),
+        ("managed-shell-true-string", {MANAGED_SHELL: "TRUE"}),
+        ("managed-shell-on-is-not-managed", {MANAGED_SHELL: "on"}),
+        ("system-prompt-not-a-string", {SYSTEM_PROMPT: 7}),
+        (
+            "routing-typed-object",
+            {MODEL_ROUTING: {"active_model": ROUTED_ALIAS, "model_config": ROUTED_MODEL_CONFIG}},
+        ),
+        ("routing-typed-array", {MODEL_ROUTING: [ROUTED_ALIAS]}),
+        (
+            "routing-model-config-without-an-alias",
+            {MODEL_ROUTING: {"active_model": "oracle-unaliased-model", "model_config": unaliased}},
+        ),
+        (
+            "routing-model-config-that-does-not-validate",
+            {MODEL_ROUTING: {"active_model": ROUTED_ALIAS, "model_config": {"name": "x"}}},
+        ),
+        ("extra-models-list", {EXTRA_MODELS: [EXTRA_MODEL, SECOND_EXTRA_MODEL]}),
+        ("extra-models-object", {EXTRA_MODELS: {"models": [EXTRA_MODEL]}}),
+        ("extra-models-json-text", {EXTRA_MODELS: json.dumps([SECOND_EXTRA_MODEL])}),
+        (
+            "extra-models-json-text-object",
+            {EXTRA_MODELS: json.dumps({"models": [EXTRA_MODEL]})},
+        ),
+        ("extra-models-mixed-entries", {EXTRA_MODELS: [EXTRA_MODEL, "text", 3, None, []]}),
+        ("extra-models-empty-list", {EXTRA_MODELS: []}),
+        ("extra-models-only-non-objects", {EXTRA_MODELS: ["a", 1]}),
+        ("extra-models-object-without-models", {EXTRA_MODELS: {"a": 1}}),
+        ("extra-models-models-not-a-list", {EXTRA_MODELS: {"models": EXTRA_MODEL}}),
+        ("extra-models-not-json-text", {EXTRA_MODELS: "not json"}),
+        ("extra-models-scalar", {EXTRA_MODELS: 3}),
+        ("extra-models-invalid-definition", {EXTRA_MODELS: [{"name": "x"}, EXTRA_MODEL]}),
+        ("extra-models-without-an-alias", {EXTRA_MODELS: [unaliased]}),
+        (
+            "extra-models-empty-alias",
+            {EXTRA_MODELS: [{**EXTRA_MODEL, "alias": ""}]},
+        ),
+        (
+            "extra-models-null-alias",
+            {EXTRA_MODELS: [{**EXTRA_MODEL, "alias": None}]},
+        ),
+        (
+            "extra-models-duplicate-alias",
+            {
+                EXTRA_MODELS: [
+                    EXTRA_MODEL,
+                    SECOND_EXTRA_MODEL,
+                    {**EXTRA_MODEL, "name": "oracle-replacement-model"},
+                ]
+            },
+        ),
+        (
+            "routing-and-extra-models-share-an-alias",
+            {
+                MODEL_ROUTING: {"active_model": ROUTED_ALIAS, "model_config": ROUTED_MODEL_CONFIG},
+                EXTRA_MODELS: [{**ROUTED_MODEL_CONFIG, "name": "oracle-extra-routed-model"}],
+            },
+        ),
+        ("unified-harness-maps-to-nothing", {UNIFIED_HARNESS: "unified"}),
+        (
+            "every-typed-experiment",
+            {
+                SYSTEM_PROMPT: "lean",
+                MODEL_ROUTING: {"active_model": ROUTED_ALIAS, "model_config": ROUTED_MODEL_CONFIG},
+                EXTRA_MODELS: {"models": [EXTRA_MODEL]},
+                MANAGED_SHELL: True,
+                SMART_APPROVE: "on",
+                SMART_APPROVE_DEFAULT: True,
+                REGISTRY_SKILLS: "TRUE",
+                UNIFIED_HARNESS: "unified",
+            },
+        ),
+        (
+            "authored-in-reverse-order",
+            {
+                REGISTRY_SKILLS: True,
+                SMART_APPROVE_DEFAULT: True,
+                SMART_APPROVE: True,
+                MANAGED_SHELL: True,
+                EXTRA_MODELS: [EXTRA_MODEL],
+                MODEL_ROUTING: {"active_model": ROUTED_ALIAS, "model_config": ROUTED_MODEL_CONFIG},
+                SYSTEM_PROMPT: "lean",
+            },
+        ),
+    ]
+    cases: list[dict[str, Any]] = []
+    for identifier, variant_map in variants:
+        layer = GrowthbookLayer()
+        layer.set_variants(variant_map)
+        data = asyncio.run(layer.load())
+        cases.append(
+            {
+                "id": identifier,
+                "variants": variant_map,
+                "data": data.model_dump(),
+                "hasFingerprint": layer.fingerprint
+                not in (None, MISSING_BACKING_STORE_DATA_FINGERPRINT),
+            }
+        )
+    return cases
+
+
+# --------------------------------------------------------------------------
+# evalCache
+# --------------------------------------------------------------------------
+
+#: The instant every cache scenario runs at, in seconds since the epoch. The
+#: fraction proves the reference truncates the clock before comparing it.
+CACHE_NOW = 1_800_000_000
+CACHE_CLOCK = CACHE_NOW + 0.75
+
+#: The response the cache scenarios store and seed, with a confirmed exposure so
+#: the dump carries every track field.
+CACHED_RESPONSE: dict[str, Any] = {
+    "features": {
+        SYSTEM_PROMPT: feature("lean", [{"force": "tests", "tracks": [track()]}]),
+        SMART_APPROVE: feature(False, [{"force": True}]),
+    }
+}
+
+
+def _cache_entry(stored_at: Any, payload: Any = None) -> dict[str, Any]:
+    return {
+        "stored_at_timestamp": stored_at,
+        "payload": CACHED_RESPONSE if payload is None else payload,
+    }
+
+
+def _patched_cache_clock():
+    from types import SimpleNamespace
+    from unittest import mock
+
+    from vibe.core.experiments import cache as cache_module
+
+    return mock.patch.object(cache_module, "time", SimpleNamespace(time=lambda: CACHE_CLOCK))
+
+
+def capture_eval_cache(scratch: Path) -> list[dict[str, Any]]:
+    from vibe.core.experiments import cache as cache_module
+    from vibe.core.experiments.manager import hash_api_key
+    from vibe.core.experiments.models import EvalResponse
+
+    key = hash_api_key(SENTINELS["ORACLE_MISTRAL_KEY"])
+    ttl = cache_module._EVAL_CACHE_TTL_SECONDS  # noqa: SLF001 - the bound is the subject
+    gates = {configuration["id"]: configuration["toml"] for configuration in GATE_CONFIGURATIONS}
+
+    def text(document: Any) -> str:
+        return json.dumps(document)
+
+    load_seeds: list[tuple[str, str, str | None]] = [
+        ("absent-file", "mistral-active", None),
+        ("fresh-entry", "mistral-active", text({key: _cache_entry(CACHE_NOW)})),
+        (
+            "one-second-inside-the-bound",
+            "mistral-active",
+            text({key: _cache_entry(CACHE_NOW - ttl + 1)}),
+        ),
+        ("exactly-at-the-bound", "mistral-active", text({key: _cache_entry(CACHE_NOW - ttl)})),
+        ("stored-in-the-future", "mistral-active", text({key: _cache_entry(CACHE_NOW + 3600)})),
+        ("another-key-only", "mistral-active", text({"0" * 32: _cache_entry(CACHE_NOW)})),
+        ("not-json", "mistral-active", "not json"),
+        ("json-array", "mistral-active", "[]"),
+        ("utf8-bom", "mistral-active", "﻿" + text({key: _cache_entry(CACHE_NOW)})),
+        ("entry-not-an-object", "mistral-active", text({key: "text"})),
+        ("stored-at-text", "mistral-active", text({key: _cache_entry(str(CACHE_NOW))})),
+        ("stored-at-float", "mistral-active", text({key: _cache_entry(float(CACHE_NOW))})),
+        ("stored-at-boolean", "mistral-active", text({key: _cache_entry(True)})),
+        ("stored-at-null", "mistral-active", text({key: _cache_entry(None)})),
+        ("stored-at-missing", "mistral-active", text({key: {"payload": CACHED_RESPONSE}})),
+        ("payload-missing", "mistral-active", text({key: {"stored_at_timestamp": CACHE_NOW}})),
+        ("payload-list", "mistral-active", text({key: _cache_entry(CACHE_NOW, [])})),
+        (
+            "payload-does-not-validate",
+            "mistral-active",
+            text({key: _cache_entry(CACHE_NOW, {"features": 3})}),
+        ),
+        ("payload-empty", "mistral-active", text({key: _cache_entry(CACHE_NOW, {})})),
+        (
+            "payload-with-unknown-features-and-keys",
+            "mistral-active",
+            text(
+                {
+                    key: _cache_entry(
+                        CACHE_NOW,
+                        {
+                            "features": {
+                                "vibe_cli_unknown_rollout": feature("x"),
+                                SYSTEM_PROMPT: feature("lean"),
+                            },
+                            "status": 200,
+                        },
+                    )
+                }
+            ),
+        ),
+        (
+            "duplicate-key-last-wins",
+            "mistral-active",
+            '{"%s": %s, "%s": %s}'
+            % (key, text(_cache_entry(CACHE_NOW - ttl)), key, text(_cache_entry(CACHE_NOW))),
+        ),
+        ("telemetry-disabled", "telemetry-disabled", text({key: _cache_entry(CACHE_NOW)})),
+        ("experiments-disabled", "experiments-disabled", text({key: _cache_entry(CACHE_NOW)})),
+        ("third-party-only", "third-party-only", text({key: _cache_entry(CACHE_NOW)})),
+        (
+            "mistral-without-a-resolvable-key",
+            "mistral-without-a-resolvable-key",
+            text({key: _cache_entry(CACHE_NOW)}),
+        ),
+    ]
+    store_seeds: list[tuple[str, str, str | None, dict[str, Any]]] = [
+        ("into-an-absent-file", "mistral-active", None, CACHED_RESPONSE),
+        (
+            "replaces-its-entry-in-place",
+            "mistral-active",
+            text(
+                {
+                    "first": _cache_entry(1, {"features": {}}),
+                    key: _cache_entry(2, {}),
+                    "last": "kept as written",
+                }
+            ),
+            CACHED_RESPONSE,
+        ),
+        ("over-unreadable-text", "mistral-active", "not json", CACHED_RESPONSE),
+        ("over-a-json-array", "mistral-active", "[1, 2]", CACHED_RESPONSE),
+        (
+            "rewrites-other-entries-as-python-dumps-them",
+            "mistral-active",
+            '{"other": {"n": 1.5, "e": 1e5, "f": 1.0, "big": 12345678901234567890, '
+            '"neg": -0.0, "small": 1e-7, "text": "caf\\u00e9 \\ud83d\\ude00", '
+            '"raw": "é", "ctl": "\\u001f\\t", "nested": [true, false, null, {}]}}',
+            CACHED_RESPONSE,
+        ),
+        (
+            "non-ascii-payload",
+            "mistral-active",
+            None,
+            {"features": {SYSTEM_PROMPT: feature("café ☃", [{"force": {"é": 1}}])}},
+        ),
+        ("telemetry-disabled-writes-nothing", "telemetry-disabled", None, CACHED_RESPONSE),
+        (
+            "experiments-disabled-leaves-the-file",
+            "experiments-disabled",
+            text({key: _cache_entry(1)}),
+            CACHED_RESPONSE,
+        ),
+        ("third-party-only-writes-nothing", "third-party-only", None, CACHED_RESPONSE),
+    ]
+
+    cases: list[dict[str, Any]] = [
+        {
+            "id": "constants",
+            "operation": "constants",
+            "configuration": None,
+            "seed": None,
+            "response": None,
+            "loaded": None,
+            "file": {
+                "name": cache_module.EXPERIMENT_EVAL_CACHE_FILE.path.name,
+                "ttlSeconds": ttl,
+                "key": key,
+            },
+        }
+    ]
+    for index, (identifier, configuration, seed) in enumerate(load_seeds):
+        home = scratch / f"cache-load-{index}"
+        home.mkdir(parents=True, exist_ok=True)
+        cache_file = home / "experiment_eval_cache.json"
+        if seed is not None:
+            cache_file.write_text(seed, encoding="utf-8")
+        with patched_environ({"VIBE_HOME": str(home)}), _patched_cache_clock():
+            loaded = cache_module.load_cached_eval_response(build_config(gates[configuration]))
+        cases.append(
+            {
+                "id": f"load/{identifier}",
+                "operation": "load",
+                "configuration": configuration,
+                "seed": seed,
+                "response": None,
+                "loaded": loaded.model_dump(mode="json") if loaded is not None else None,
+                "file": None,
+            }
+        )
+    for index, (identifier, configuration, seed, response) in enumerate(store_seeds):
+        home = scratch / f"cache-store-{index}"
+        home.mkdir(parents=True, exist_ok=True)
+        cache_file = home / "experiment_eval_cache.json"
+        if seed is not None:
+            cache_file.write_text(seed, encoding="utf-8")
+        with patched_environ({"VIBE_HOME": str(home)}), _patched_cache_clock():
+            cache_module.store_cached_eval_response(
+                build_config(gates[configuration]), EvalResponse.model_validate(response)
+            )
+        cases.append(
+            {
+                "id": f"store/{identifier}",
+                "operation": "store",
+                "configuration": configuration,
+                "seed": seed,
+                "response": response,
+                "loaded": None,
+                "file": cache_file.read_text(encoding="utf-8") if cache_file.exists() else None,
+            }
+        )
+    cases.extend(capture_cache_initialize(scratch, key))
+    return cases
+
+
+def capture_cache_initialize(scratch: Path, key: str) -> list[dict[str, Any]]:
+    """What a resolved lookup leaves in the cache: only a lookup that ran with
+    a user identifier stores, and it stores the response the manager kept."""
+
+    from vibe.core.experiments.active import ExperimentSurface
+    from vibe.core.experiments.session import initialize_experiments
+    from vibe.core.identity import IdentityResult
+
+    live = {
+        "features": {
+            SYSTEM_PROMPT: feature("cli", [{"force": "tests", "tracks": [track()]}]),
+            "vibe_cli_unknown_rollout": feature("x"),
+        }
+    }
+    gates = {configuration["id"]: configuration["toml"] for configuration in GATE_CONFIGURATIONS}
+    scenarios: list[tuple[str, str, bool, dict[str, Any]]] = [
+        ("stores-what-the-manager-kept", "mistral-active", True, {"body": live}),
+        ("no-user-identifier-stores-nothing", "mistral-active", False, {"body": live}),
+        ("failed-lookup-stores-nothing", "mistral-active", True, {"status": 500, "body": live}),
+        ("experiments-disabled-stores-nothing", "experiments-disabled", True, {"body": live}),
+    ]
+    cases: list[dict[str, Any]] = []
+    for index, (identifier, configuration, identity_present, keywords) in enumerate(scenarios):
+        home = scratch / f"cache-initialize-{index}"
+        home.mkdir(parents=True, exist_ok=True)
+        cache_file = home / "experiment_eval_cache.json"
+
+        async def resolve_identity(
+            *, base_url: str, api_key: str, timeout: float | None = None
+        ) -> Any:
+            if not identity_present:
+                return None
+            return IdentityResult.model_validate({"id": "oracle-user"})
+
+        transport = RecordingEvalTransport(**keywords)
+        manager = manager_with(None)
+        manager._client = eval_client(  # noqa: SLF001
+            transport, url=f"{ORACLE_API_HOST}/api/eval/{ORACLE_CLIENT_KEY}"
+        )
+        with patched_environ({"VIBE_HOME": str(home)}), _patched_cache_clock():
+            with captured_logs():
+                asyncio.run(
+                    initialize_experiments(
+                        config=build_config(gates[configuration]),
+                        manager=manager,
+                        session_logger=_RecordingSessionLogger(),
+                        launch_context=None,
+                        harness=ExperimentSurface(ORACLE_HARNESS),
+                        resolve_identity=resolve_identity,
+                        resolve_whoami=no_whoami,
+                    )
+                )
+        stored = None
+        if cache_file.exists():
+            entries = json.loads(cache_file.read_text(encoding="utf-8"))
+            entry = entries.get(key, {})
+            stored = {
+                "keys": list(entries),
+                "storedAtIsNow": entry.get("stored_at_timestamp") == CACHE_NOW,
+                "payload": entry.get("payload"),
+            }
+        cases.append(
+            {
+                "id": f"initialize/{identifier}",
+                "operation": "initialize",
+                "configuration": configuration,
+                "seed": None,
+                "response": {"identity": identity_present, **keywords},
+                "loaded": None,
+                "file": stored,
+            }
+        )
+    return cases
+
+
+# --------------------------------------------------------------------------
+# startup
+# --------------------------------------------------------------------------
+
+#: The fields a startup scenario reads off the configuration: every field a
+#: rollout reaches except the routed model, which `layerPrecedence` covers.
+STARTUP_FIELDS = (
+    "system_prompt_id",
+    "managed_shell_tools_enabled",
+    "smart_approve_available",
+    "smart_approve_default",
+    "experimental_enable_registry_skills",
+)
+
+#: What a previous session left in the cache: a prompt off its baseline and a
+#: confirmed smart-approve exposure.
+STARTUP_CACHED: dict[str, Any] = {
+    "features": {
+        SYSTEM_PROMPT: feature("lean"),
+        SMART_APPROVE: feature(False, [{"force": True, "tracks": [track(key=SMART_APPROVE)]}]),
+    }
+}
+
+#: A cached response whose every value sits at its baseline, so it maps to no
+#: configuration variant at all.
+STARTUP_INERT: dict[str, Any] = {
+    "features": {SYSTEM_PROMPT: feature("cli"), SMART_APPROVE: feature(False)}
+}
+
+#: What the live lookup answers, deliberately different from the cache. It
+#: leaves the registry-skills flag alone: turning it on starts a registry sync,
+#: which would leave the process.
+STARTUP_LIVE: dict[str, Any] = {
+    "features": {
+        SYSTEM_PROMPT: feature("cli", [{"force": "tests", "tracks": [track()]}]),
+        SMART_APPROVE_DEFAULT: feature(False, [{"force": True}]),
+    }
+}
+
+#: The seeds a startup scenario finds under the vibe home: nothing, a recent
+#: entry, one past the bound, one that maps to nothing, and one for another
+#: credential. Ages are relative to the scenario's clock so a replay can seed
+#: the same entry against its own.
+STARTUP_SEEDS: list[tuple[str, dict[str, Any] | None]] = [
+    ("nothing-cached", None),
+    ("cached", {"owner": "oracle", "ageSeconds": 60, "payload": STARTUP_CACHED}),
+    (
+        "cached-past-the-bound",
+        {"owner": "oracle", "ageSeconds": 7 * 24 * 60 * 60, "payload": STARTUP_CACHED},
+    ),
+    ("cached-at-the-baseline", {"owner": "oracle", "ageSeconds": 60, "payload": STARTUP_INERT}),
+    ("cached-for-another-key", {"owner": "other", "ageSeconds": 60, "payload": STARTUP_CACHED}),
+]
+
+
+def _startup_document(configuration: str) -> str:
+    """One gate document, with the connector catalog off so building a session
+    stays inside the process."""
+
+    toml = next(entry["toml"] for entry in GATE_CONFIGURATIONS if entry["id"] == configuration)
+    return "enable_connectors = false\n" + toml
+
+
+def _startup_fields(config: Any) -> dict[str, Any]:
+    return {field: _json_value(getattr(config, field)) for field in STARTUP_FIELDS}
+
+
+def capture_startup(scratch: Path) -> list[dict[str, Any]]:
+    """A session built the way the reference's app server builds one, from the
+    cached rollout through the live lookup.
+
+    ``HarnessProcess.build_root_blueprint`` applies the cache to the session
+    configuration (``_apply_cached_experiment_variants``), the blueprint hands
+    the cached response to the loop and decides whether the loop waits on its
+    lookup for a model, and ``start_initialize_experiments`` runs the lookup as
+    a task. The eval request, the identity and the account read are answered
+    one call before the connection.
+    """
+
+    from vibe.app_server._runtime import HarnessProcess
+    from vibe.app_server.protocol import ClientInfo, SessionOptions
+    from vibe.core.config.harness_files import HarnessFilesManager
+    from vibe.core.experiments.manager import hash_api_key
+    from vibe.core.identity import IdentityResult
+    from vibe.core.telemetry.send import TelemetryClient
+
+    key = hash_api_key(SENTINELS["ORACLE_MISTRAL_KEY"])
+    # A session that refreshes its configuration reports it, and the report
+    # would leave the process; what it says is the telemetry corpus's subject.
+    TelemetryClient.send_telemetry_event = lambda *_, **__: None  # type: ignore[method-assign]
+
+    async def resolve_identity(**_: Any) -> Any:
+        return IdentityResult.model_validate({"id": "oracle-user"})
+
+    async def build_and_look_up(work: Path, session: str) -> dict[str, Any]:
+        process = HarnessProcess(HarnessFilesManager(sources=("user",)))
+        blueprint = await process.build_root_blueprint(
+            SessionOptions(cwd=str(work)), ClientInfo(name="oracle-client", version="1.2.3")
+        )
+        start_config = _startup_fields(blueprint.config)
+        loop = blueprint.build(
+            session_id="oracle-resumed-session" if session == "resumed" else None
+        )
+        state = loop.experiment_manager.export_state()
+        awaiting = loop.awaiting_experiment_model
+        loop.experiment_manager._client._http = RecordingEvalTransport(  # noqa: SLF001
+            body=STARTUP_LIVE
+        )
+        loop.identity_cache.resolve = resolve_identity
+        loop.whoami_cache.resolve = no_whoami
+        loop.start_initialize_experiments()
+        await loop._experiments_task  # noqa: SLF001 - the lookup is the subject
+        answers = {
+            "startConfig": start_config,
+            "awaitingExperimentModel": awaiting,
+            "hydrated": state.model_dump(mode="json") if state is not None else None,
+            "afterLookup": _startup_fields(loop.config),
+            "awaitingAfterLookup": loop.awaiting_experiment_model,
+        }
+        await loop.aclose()
+        return answers
+
+    cases: list[dict[str, Any]] = []
+    for configuration in ("mistral-active", "telemetry-disabled", "experiments-disabled"):
+        for seed_id, seed in STARTUP_SEEDS:
+            for session in ("new", "resumed"):
+                home = scratch / f"startup-{configuration}-{seed_id}-{session}"
+                work = home / "project"
+                work.mkdir(parents=True, exist_ok=True)
+                document = _startup_document(configuration)
+                (home / "config.toml").write_text(document, encoding="utf-8")
+                cache_file = home / "experiment_eval_cache.json"
+                if seed is not None:
+                    owner = key if seed["owner"] == "oracle" else "0" * 32
+                    cache_file.write_text(
+                        json.dumps(
+                            {
+                                owner: {
+                                    "stored_at_timestamp": CACHE_NOW - seed["ageSeconds"],
+                                    "payload": seed["payload"],
+                                }
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+                with patched_environ({"VIBE_HOME": str(home)}), _patched_cache_clock():
+                    with captured_logs():
+                        answers = asyncio.run(build_and_look_up(work, session))
+                stored = None
+                if cache_file.exists():
+                    stored = (
+                        json.loads(cache_file.read_text(encoding="utf-8")).get(key, {}).get("payload")
+                    )
+                cases.append(
+                    {
+                        "id": f"{configuration}/{seed_id}/{session}",
+                        "document": document,
+                        "cached": seed,
+                        "session": session,
+                        "live": STARTUP_LIVE,
+                        **answers,
+                        "cachedAfterLookup": stored,
+                    }
+                )
+    return cases
+
+
 def build_engine_families(scratch: Path) -> dict[str, Any]:
     return {
         "constants": capture_constants(),
@@ -2202,7 +2999,15 @@ def build_engine_families(scratch: Path) -> dict[str, Any]:
         "layerPrecedence": capture_layer_precedence(scratch),
         "sessionGates": capture_session_gates(scratch),
         "attributes": capture_attributes(scratch),
+        "surfaces": capture_surfaces(),
+        "typedVariants": capture_typed_variants(),
+        "typedMapping": capture_typed_mapping(),
+        "evalCache": capture_eval_cache(scratch),
     }
+
+
+def build_startup_families(scratch: Path) -> dict[str, Any]:
+    return {"startup": capture_startup(scratch)}
 
 
 def build_promo_families(scratch: Path) -> dict[str, Any]:
@@ -2232,6 +3037,16 @@ PROMO_NOTE = (
     "shipping reference-authored prose; the replay asserts this port's own sentences never match "
     "either digest. Regenerate with scripts/parity/experiments.py --corpus when the pinned "
     "reference moves."
+)
+
+
+STARTUP_NOTE = (
+    "Experiments startup corpus: what a session the pinned reference's app server builds "
+    "configures before and after its rollout lookup, for each gate document, each eval cache seed "
+    "and a new or a resumed session. The cache seed is recorded by its age against the scenario's "
+    "clock, the lookup is answered one call before the connection, and the only key derivative "
+    "the capture reads is the 32-character API-key digest. Regenerate with "
+    "scripts/parity/experiments.py --corpus when the pinned reference moves."
 )
 
 
@@ -2285,6 +3100,15 @@ def parse_arguments() -> argparse.Namespace:
             f"{DEFAULT_PROMO_CORPUS}"
         ),
     )
+    parser.add_argument(
+        "--startup-corpus",
+        type=Path,
+        default=None,
+        help=(
+            "where the committed startup corpus goes; defaults beside --corpus at "
+            f"{DEFAULT_STARTUP_CORPUS}"
+        ),
+    )
     parser.add_argument("--cache", type=Path, default=DEFAULT_CACHE)
     parser.add_argument("--expected-commit", default=EXPECTED_COMMIT)
     return parser.parse_args()
@@ -2336,6 +3160,7 @@ def main() -> int:
                 api_keys.get_api_key_from_keyring = lambda _: None
                 engine = build_engine_families(scratch)
                 promo = build_promo_families(scratch)
+                startup = build_startup_families(scratch)
     except OracleError as error:
         print(f"experiments capture failed: {error}", file=sys.stderr)
         return 1
@@ -2349,9 +3174,11 @@ def main() -> int:
 
     engine_corpus = build_corpus(reference["commit"], engine, ENGINE_NOTE)
     promo_corpus = build_corpus(reference["commit"], promo, PROMO_NOTE)
+    startup_corpus = build_corpus(reference["commit"], startup, STARTUP_NOTE)
     try:
         assert_no_credential_leaked(engine_corpus)
         assert_no_credential_leaked(promo_corpus)
+        assert_no_credential_leaked(startup_corpus)
     except OracleError as error:
         print(f"experiments capture failed: {error}", file=sys.stderr)
         return 1
@@ -2361,6 +3188,7 @@ def main() -> int:
         {
             "engine": engine_corpus,
             "promo": promo_corpus,
+            "startup": startup_corpus,
             "reference": reference,
             "platform": platform.system().lower(),
             "python": platform.python_version(),
@@ -2370,8 +3198,14 @@ def main() -> int:
         write_json(arguments.corpus, engine_corpus)
         promo_path = arguments.promo_corpus or DEFAULT_PROMO_CORPUS
         write_json(promo_path, promo_corpus)
+        startup_path = arguments.startup_corpus or DEFAULT_STARTUP_CORPUS
+        write_json(startup_path, startup_corpus)
 
-    counted = {**count_comparisons(engine), **count_comparisons(promo)}
+    counted = {
+        **count_comparisons(engine),
+        **count_comparisons(promo),
+        **count_comparisons(startup),
+    }
     total = sum(counted.values())
     print(
         f"captured {total} records across {len(counted)} families "
@@ -2380,7 +3214,9 @@ def main() -> int:
     for family, count in counted.items():
         print(f"  {family}: {count}")
     if arguments.corpus is not None:
-        print(f"wrote the committed corpora to {arguments.corpus} and {promo_path}")
+        print(
+            f"wrote the committed corpora to {arguments.corpus}, {promo_path} and {startup_path}"
+        )
     return 0
 
 

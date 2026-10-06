@@ -3,7 +3,7 @@
 //!
 //! `scripts/parity/experiments.py` drives the reference's own
 //! `RemoteEvalClient`, `ExperimentManager`, `GrowthbookLayer` and session
-//! helpers over inputs the script authors, and records thirteen families into
+//! helpers over inputs the script authors, and records seventeen families into
 //! `crates/vibe-core/tests/experiments/corpus.json`. This module replays that
 //! corpus against this build unconditionally: only the recapture probe at the
 //! bottom skips when the checkout is absent or off-pin.
@@ -40,19 +40,22 @@ use toml::Table;
 use crate::config::registry::default_document;
 use crate::config::{
     ConfigPaths, ConfigTarget, EXPERIMENTS_LAYER_NAME, ExperimentsLayer, LayeredConfig,
-    configured_fields, default_model_alias,
+    MAPPED_EXPERIMENTS, configured_fields, default_model_alias,
 };
 use crate::experiments::recorder::{Outcome, RecordingSink, RecordingTransport};
 use crate::experiments::{
-    BUCKETING_KEY_LENGTH, EVAL_PATH_TEMPLATE, EVAL_REQUEST_TIMEOUT, EXPERIMENT_IDENTITY_TIMEOUT,
-    EvalPayload, EvalResponse, ExperimentAttributes, ExperimentManager, ExperimentName,
-    FeatureDefinition, JsonValue, PlanSources, RemoteEvalClient, build_attributes, build_eval_url,
+    BUCKETING_KEY_LENGTH, EVAL_CACHE_FILE_NAME, EVAL_CACHE_TTL, EVAL_PATH_TEMPLATE,
+    EVAL_REQUEST_TIMEOUT, EXPERIMENT_IDENTITY_TIMEOUT, EvalCache, EvalPayload, EvalResponse,
+    ExperimentAttributes, ExperimentManager, ExperimentName, ExperimentSurface, FeatureDefinition,
+    JsonValue, OrderedMap, PlanSources, RemoteEvalClient, build_attributes, build_eval_url,
     hash_api_key, hydrate_experiments_from_session, initialize_experiments,
 };
 use crate::identity::IDENTITY_PATH;
 use crate::identity::recorder::RecordingResolver;
 use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
-use crate::telemetry::{HARNESS_LEGACY, LaunchContext, platform_arch, platform_id, version};
+use crate::telemetry::{
+    ExperimentAssignment, HARNESS_LEGACY, LaunchContext, platform_arch, platform_id, version,
+};
 use crate::whoami::recorder::Unanswered;
 
 const CORPUS_RELATIVE: &str = "crates/vibe-core/tests/experiments/corpus.json";
@@ -62,7 +65,7 @@ const CAPTURE_SCRIPT: &str = "scripts/parity/experiments.py";
 const CORPUS_SCHEMA_VERSION: u32 = 1;
 /// The comparison floor this replay commits to, so a regeneration that captured
 /// almost nothing fails instead of reporting a clean but empty run.
-const MINIMUM_COMPARISONS: usize = 480;
+const MINIMUM_COMPARISONS: usize = 680;
 
 /// Keys the corpus carries that are not families: the pin, the layout and the
 /// prose-free note.
@@ -181,181 +184,42 @@ const FAMILIES: &[Family] = &[
         answers: &["attributes", "payloadKeys", "credentialVariable"],
         toml_document: false,
     },
+    Family {
+        name: "surfaces",
+        inputs: &[],
+        answers: &["surfaces", "eligible"],
+        toml_document: false,
+    },
+    Family {
+        name: "typedVariants",
+        inputs: &["response"],
+        answers: &[
+            "variants",
+            "variantsOrNone",
+            "configVariants",
+            "assignments",
+        ],
+        toml_document: false,
+    },
+    Family {
+        name: "typedMapping",
+        inputs: &["variants"],
+        answers: &["data", "hasFingerprint"],
+        toml_document: false,
+    },
+    Family {
+        name: "evalCache",
+        inputs: &["operation", "configuration", "seed", "response"],
+        answers: &["loaded", "file"],
+        toml_document: false,
+    },
 ];
 
 /// Cases where this build answers something other than the reference, each
-/// with the reason: the reference change, where it lives at the pin, and what
-/// this build does instead.
-///
-/// Every entry was recorded when the pin moved from b78b451 (v2.24.0) to
-/// 4a96003 (v2.25.7): the families all replayed conforming at the old pin, and
-/// what these rows measure is what the reference changed since. One entry per
-/// case and field, so a row goes stale on its own the moment this build
-/// answers it.
-const DIVERGENCES: &[(&str, &str)] = &[
-    ("constants/value/experimentNames", EXPERIMENT_NAMES),
-    ("constants/value/defaultVariants", TYPED_DEFAULTS),
-    ("constants/value/configuredFields", CONFIGURED_FIELDS),
-    ("evalFailures/variants/connection-error", TYPED_VARIANTS),
-    ("evalFailures/variants/timeout", TYPED_VARIANTS),
-    ("evalFailures/variants/status-400", TYPED_VARIANTS),
-    ("evalFailures/variants/status-404", TYPED_VARIANTS),
-    ("evalFailures/variants/status-500", TYPED_VARIANTS),
-    ("evalFailures/variants/status-503", TYPED_VARIANTS),
-    ("evalFailures/variants/non-json-body", TYPED_VARIANTS),
-    (
-        "evalFailures/variants/body-fails-validation",
-        TYPED_VARIANTS,
-    ),
-    ("evalFailures/variants/url-unset", TYPED_VARIANTS),
-    ("variantResolution/variants/uninitialized", TYPED_VARIANTS),
-    (
-        "variantResolution/variantsOrNone/uninitialized",
-        TYPED_VARIANTS,
-    ),
-    ("variantResolution/variants/empty-features", TYPED_VARIANTS),
-    (
-        "variantResolution/variantsOrNone/empty-features",
-        TYPED_VARIANTS,
-    ),
-    ("variantResolution/variants/string-value", TYPED_VARIANTS),
-    (
-        "variantResolution/variantsOrNone/string-value",
-        TYPED_VARIANTS,
-    ),
-    ("variantResolution/variants/object-value", TYPED_VARIANTS),
-    (
-        "variantResolution/variantsOrNone/object-value",
-        TYPED_VARIANTS,
-    ),
-    ("variantResolution/variants/array-value", TYPED_VARIANTS),
-    (
-        "variantResolution/variantsOrNone/array-value",
-        TYPED_VARIANTS,
-    ),
-    ("variantResolution/variants/numeric-value", TYPED_VARIANTS),
-    (
-        "variantResolution/variantsOrNone/numeric-value",
-        TYPED_VARIANTS,
-    ),
-    ("variantResolution/variants/boolean-value", TYPED_VARIANTS),
-    (
-        "variantResolution/variantsOrNone/boolean-value",
-        TYPED_VARIANTS,
-    ),
-    ("variantResolution/variants/resolved-null", TYPED_VARIANTS),
-    (
-        "variantResolution/variantsOrNone/resolved-null",
-        TYPED_VARIANTS,
-    ),
-    (
-        "variantResolution/variants/default-value-without-a-force",
-        TYPED_VARIANTS,
-    ),
-    (
-        "variantResolution/variantsOrNone/default-value-without-a-force",
-        TYPED_VARIANTS,
-    ),
-    (
-        "variantResolution/variants/unknown-feature-key",
-        TYPED_VARIANTS,
-    ),
-    (
-        "variantResolution/variantsOrNone/unknown-feature-key",
-        TYPED_VARIANTS,
-    ),
-    (
-        "variantResolution/variants/every-known-feature",
-        TYPED_VARIANTS,
-    ),
-    (
-        "variantResolution/variantsOrNone/every-known-feature",
-        TYPED_VARIANTS,
-    ),
-    (
-        "configVariants/assignments/confirmed-exposure",
-        ASSIGNMENT_RECORDS,
-    ),
-    (
-        "configVariants/assignments/default-value-without-a-force",
-        ASSIGNMENT_RECORDS,
-    ),
-    (
-        "configVariants/configVariants/default-value-without-a-force",
-        CONFIG_VARIANTS_DROP_DEFAULT,
-    ),
-    (
-        "configVariants/configVariants/forced-object-without-tracks",
-        CONFIG_VARIANTS_TYPED,
-    ),
-    (
-        "configVariants/assignments/experiment-key-differs-from-the-feature-key",
-        ASSIGNMENT_RECORDS,
-    ),
-    (
-        "configVariants/assignments/mixed-confirmed-and-forced",
-        ASSIGNMENT_RECORDS,
-    ),
-    (
-        "configVariants/configVariants/mixed-confirmed-and-forced",
-        CONFIG_VARIANTS_EVERY_RESOLVED,
-    ),
-    (
-        "variantLabels/assignments/track-value-string",
-        ASSIGNMENT_RECORDS,
-    ),
-    (
-        "variantLabels/assignments/track-value-object",
-        ASSIGNMENT_RECORDS,
-    ),
-    (
-        "variantLabels/assignments/falls-back-to-the-resolved-value",
-        ASSIGNMENT_RECORDS,
-    ),
-    (
-        "variantLabels/assignments/falls-back-to-the-default-value",
-        ASSIGNMENT_RECORDS,
-    ),
-    (
-        "variantLabels/assignments/falls-back-to-the-result-key",
-        ASSIGNMENT_RECORDS,
-    ),
-    (
-        "variantLabels/assignments/falls-back-to-the-variation-id",
-        ASSIGNMENT_RECORDS,
-    ),
-    (
-        "variantLabels/assignments/variation-id-zero",
-        ASSIGNMENT_RECORDS,
-    ),
-    (
-        "variantLabels/assignments/last-confirmed-track-wins",
-        ASSIGNMENT_RECORDS,
-    ),
-    (
-        "configMapping/data/routing-with-model-config",
-        ROUTED_MODELS_MAP,
-    ),
-    ("configMapping/data/every-experiment", ROUTED_MODELS_MAP),
-];
-
-const EXPERIMENT_NAMES: &str = "v2.24.5, v2.25.0 and v2.25.1 added five experiment names (vibe/core/experiments/active.py:14-27 at 4a96003): vibe_cli_extra_models, vibe_cli_registry_skills, vibe_cli_smart_approve, vibe_cli_smart_approve_default and vibe_cli_unified_harness_rollout. This build's ExperimentName::ALL still declares the three names of v2.24.0 (crates/vibe-core/src/experiments.rs:94).";
-
-const TYPED_DEFAULTS: &str = "v2.25.1 typed DEFAULT_VARIANTS (vibe/core/experiments/active.py:30-39 at 4a96003): the routing default is the object {} rather than the text \"{}\", and the five names added since v2.24.5 default to false, {} or \"legacy\". This build's default_variant answers text for its three names only (crates/vibe-core/src/experiments.rs:119-127).";
-
-const CONFIGURED_FIELDS: &str = "v2.24.5, v2.25.0 and v2.25.1 added four GrowthBook mappings (vibe/core/config/layers/growthbook.py:88-116 at 4a96003): vibe_cli_extra_models to routed_extra_models, vibe_cli_smart_approve to smart_approve_available, vibe_cli_smart_approve_default to smart_approve_default, and vibe_cli_registry_skills to experimental_enable_registry_skills. This build maps its three experiments only (crates/vibe-core/src/config/experiments_layer.rs:41-47).";
-
-const TYPED_VARIANTS: &str = "v2.25.1 made variant resolution typed (vibe/core/experiments/resolve.py:27-39 at 4a96003) and v2.24.5 to v2.25.1 added five names (vibe/core/experiments/active.py:14-39): get_variant and get_variant_or_none answer the JSON value itself for eight names. This build answers text, JSON-encoding a non-string value, for its three names (crates/vibe-core/src/experiments/manager.rs:106-123).";
-
-const ASSIGNMENT_RECORDS: &str = "v2.24.3 turned assignments() into ExperimentAssignment records (vibe/core/experiments/resolve.py:59-86 and vibe/core/telemetry/types.py:49-60 at 4a96003) that carry experiment_name, variation_id, in_experiment, hash_attribute, hash_value and feature_id beside the feature key and the label. This build answers a map from feature key to label (crates/vibe-core/src/experiments/manager.rs:158), so only experiment_id and variation_name have a counterpart.";
-
-const CONFIG_VARIANTS_DROP_DEFAULT: &str = "v2.25.1 rewrote config_variants (vibe/core/experiments/resolve.py:42-56 at 4a96003): it keeps each known name's resolved value unless it equals the typed default, and no longer adds the confirmed assignment labels, so a defaultValue of \"cli\" reaches no layer. This build still unions the assignment labels in (crates/vibe-core/src/experiments/manager.rs:125-148) and passes the label \"cli\" on.";
-
-const CONFIG_VARIANTS_TYPED: &str = "v2.25.1 made config_variants typed (vibe/core/experiments/resolve.py:42-56 at 4a96003): a forced object reaches the layer as that object. This build passes its JSON text on (crates/vibe-core/src/experiments/manager.rs:125-148).";
-
-const CONFIG_VARIANTS_EVERY_RESOLVED: &str = "Under the v2.25.1 rule (vibe/core/experiments/resolve.py:42-56 at 4a96003) every known name whose resolved value differs from its typed default reaches the layer: the routing feature's defaultValue, the text \"{}\", differs from the default object {} (vibe/core/experiments/active.py:33), so the reference passes it on. This build lets only a confirmed label or a forced value through (crates/vibe-core/src/experiments/manager.rs:125-148) and drops the unforced routing feature.";
-
-const ROUTED_MODELS_MAP: &str = "v2.25.0 made the GrowthBook layer also write a models table keyed by alias for every routed model definition that validates (vibe/core/config/layers/growthbook.py:147-153,166-183 at 4a96003). This build's ExperimentsLayer writes only the mapped fields (crates/vibe-core/src/config/experiments_layer.rs:79-99).";
+/// with the reason: the reference behavior, where it lives at the pin, and what
+/// this build does instead. One entry per case and field, so a row goes stale
+/// on its own the moment this build answers it. Empty: every family conforms.
+const DIVERGENCES: &[(&str, &str)] = &[];
 
 /// One family's shape: which case fields the capture authored and which ones
 /// both sides answer.
@@ -624,6 +488,10 @@ fn port_case(family: &str, case: &Case<'_>, runtime: &Runtime) -> Option<Map<Str
         "layerPrecedence" => Some(layer_precedence_answer(case)),
         "sessionGates" => Some(session_gates_answer(case, runtime)),
         "attributes" => Some(attributes_answer(case)),
+        "surfaces" => surfaces_answer(case.id),
+        "typedVariants" => Some(typed_variants_answer(case)),
+        "typedMapping" => Some(config_mapping_answer(case)),
+        "evalCache" => Some(eval_cache_answer(case, runtime)),
         _ => None,
     }
 }
@@ -660,7 +528,7 @@ fn constants_answer(case: &str) -> Option<Map<String, Value>> {
                 .map(|name| Value::String(name.key().to_owned()))
                 .collect(),
         ),
-        "defaultVariants" => by_experiment(|name| Value::String(name.default_variant().to_owned())),
+        "defaultVariants" => by_experiment(|name| as_value(&name.default_variant())),
         // The reference ties its names to its defaults with a module-level
         // assertion. Here `default_variant` is an exhaustive match, so a name
         // added without a default does not compile and this answer is a
@@ -672,14 +540,22 @@ fn constants_answer(case: &str) -> Option<Map<String, Value>> {
         "evalTimeoutSeconds" => timeout_seconds(),
         "bucketingKeyLength" => Value::from(BUCKETING_KEY_LENGTH),
         "layerName" => Value::String(EXPERIMENTS_LAYER_NAME.to_owned()),
-        "configuredFields" => by_experiment(|name| {
-            Value::Array(
-                configured_fields(name)
-                    .iter()
-                    .map(|field| Value::String((*field).to_owned()))
-                    .collect(),
-            )
-        }),
+        "configuredFields" => Value::Object(
+            MAPPED_EXPERIMENTS
+                .into_iter()
+                .map(|name| {
+                    (
+                        name.key().to_owned(),
+                        Value::Array(
+                            configured_fields(name)
+                                .iter()
+                                .map(|field| Value::String((*field).to_owned()))
+                                .collect(),
+                        ),
+                    )
+                })
+                .collect(),
+        ),
         "payloadKeys" => {
             let payload =
                 serde_json::to_value(EvalPayload::new(oracle_attributes("every-attribute")))
@@ -1040,8 +916,8 @@ fn eval_failures_answer(case: &Case<'_>, runtime: &Runtime) -> Map<String, Value
                 .map_or(0, |recorder| recorder.request_count()),
         ),
     );
-    let variants = by_experiment(|name| Value::String(manager.variant(name)));
-    let defaults = by_experiment(|name| Value::String(name.default_variant().to_owned()));
+    let variants = by_experiment(|name| as_value(&manager.variant(name)));
+    let defaults = by_experiment(|name| as_value(&name.default_variant()));
     answers.insert(
         "variantsAreDefaults".to_owned(),
         Value::Bool(variants == defaults),
@@ -1053,7 +929,7 @@ fn eval_failures_answer(case: &Case<'_>, runtime: &Runtime) -> Map<String, Value
     );
     answers.insert(
         "configVariants".to_owned(),
-        serde_json::to_value(manager.config_variants()).unwrap_or(Value::Null),
+        as_value(&JsonValue::Object(manager.config_variants())),
     );
 
     // The same scenario a second time, through the seam that hands the failure
@@ -1123,25 +999,42 @@ fn manager_over(response: Option<&str>) -> ExperimentManager {
     manager
 }
 
-/// This build's exposures in the shape the corpus records them.
-///
-/// The reference answers one `ExperimentAssignment` record per experiment
-/// (`vibe/core/experiments/resolve.py:59-86` at the pin), where this build
-/// answers a map from the feature key to its label. The map carries the
-/// record's `experiment_id` and `variation_name` and nothing else, so those are
-/// the only two keys written: the rest of the record is not something this
-/// build answers, and filling it with nulls would claim answers it never gave.
-fn assignment_records(assignments: &BTreeMap<String, String>) -> Value {
+/// This build's exposures in the shape the corpus records them: one
+/// `ExperimentAssignment` record per experiment, every field present as
+/// `model_dump(mode="json")` writes it, an absent one as null.
+fn assignment_records(assignments: &[ExperimentAssignment]) -> Value {
     Value::Array(
         assignments
             .iter()
-            .map(|(feature, label)| {
+            .map(|record| {
+                let text = |value: Option<&String>| {
+                    value.map_or(Value::Null, |text| Value::String(text.clone()))
+                };
                 Value::Object(
                     [
-                        ("experiment_id".to_owned(), Value::String(feature.clone())),
-                        ("variation_name".to_owned(), Value::String(label.clone())),
+                        ("experiment_id", Value::String(record.experiment_id.clone())),
+                        (
+                            "experiment_name",
+                            Value::String(record.experiment_name.clone()),
+                        ),
+                        (
+                            "variation_name",
+                            Value::String(record.variation_name.clone()),
+                        ),
+                        (
+                            "variation_id",
+                            record.variation_id.map_or(Value::Null, Value::from),
+                        ),
+                        (
+                            "in_experiment",
+                            record.in_experiment.map_or(Value::Null, Value::Bool),
+                        ),
+                        ("hash_attribute", text(record.hash_attribute.as_ref())),
+                        ("hash_value", text(record.hash_value.as_ref())),
+                        ("feature_id", text(record.feature_id.as_ref())),
                     ]
                     .into_iter()
+                    .map(|(key, value)| (key.to_owned(), value))
                     .collect(),
                 )
             })
@@ -1162,14 +1055,14 @@ fn variant_resolution_answer(case: &Case<'_>) -> Map<String, Value> {
     );
     answers.insert(
         "variants".to_owned(),
-        by_experiment(|name| Value::String(manager.variant(name))),
+        by_experiment(|name| as_value(&manager.variant(name))),
     );
     answers.insert(
         "variantsOrNone".to_owned(),
         by_experiment(|name| {
             manager
                 .variant_or_none(name)
-                .map_or(Value::Null, Value::String)
+                .map_or(Value::Null, |value| as_value(&value))
         }),
     );
     answers
@@ -1184,7 +1077,7 @@ fn config_variants_answer(case: &Case<'_>) -> Map<String, Value> {
     );
     answers.insert(
         "configVariants".to_owned(),
-        serde_json::to_value(manager.config_variants()).unwrap_or(Value::Null),
+        as_value(&JsonValue::Object(manager.config_variants())),
     );
     answers
 }
@@ -1202,7 +1095,11 @@ fn variant_labels_answer(case: &Case<'_>) -> Map<String, Value> {
     let mut answers = Map::new();
     answers.insert(
         "reported".to_owned(),
-        Value::Bool(assignments.contains_key(ExperimentName::SystemPrompt.key())),
+        Value::Bool(
+            assignments
+                .iter()
+                .any(|record| record.experiment_id == ExperimentName::SystemPrompt.key()),
+        ),
     );
     answers.insert("assignments".to_owned(), assignment_records(&assignments));
     answers
@@ -1217,19 +1114,14 @@ fn prompt_resolves(prompt_id: &str) -> bool {
     crate::system_prompt::load_system_prompt(prompt_id, &[]).is_ok()
 }
 
-/// The configuration variants one case is driven over.
-fn case_variants(case: &Case<'_>) -> BTreeMap<String, String> {
-    case.object
-        .get("variants")
-        .and_then(Value::as_object)
-        .map(|entries| {
-            entries
-                .iter()
-                .filter_map(|(key, value)| {
-                    value.as_str().map(|text| (key.clone(), text.to_owned()))
-                })
-                .collect()
-        })
+/// The configuration variants one case is driven over, typed and in the order
+/// the capture wrote them.
+fn case_variants(case: &Case<'_>) -> OrderedMap<JsonValue> {
+    case.ordered
+        .as_object()
+        .and_then(|fields| fields.get("variants"))
+        .and_then(JsonValue::as_object)
+        .cloned()
         .unwrap_or_default()
 }
 
@@ -1669,6 +1561,7 @@ fn session_gates_answer(case: &Case<'_>, runtime: &Runtime) -> Map<String, Value
                 None,
                 &sources,
                 &sink,
+                None,
             ));
             let calls = resolver.calls();
             answers.insert(
@@ -1817,6 +1710,185 @@ fn attributes_answer(case: &Case<'_>) -> Map<String, Value> {
 // --------------------------------------------------------------------------
 // The replay
 // --------------------------------------------------------------------------
+
+// -- surfaces -------------------------------------------------------------
+
+fn surfaces_answer(case: &str) -> Option<Map<String, Value>> {
+    let spelled = |surfaces: &[ExperimentSurface]| {
+        Value::Array(
+            surfaces
+                .iter()
+                .map(|surface| Value::String(surface.as_str().to_owned()))
+                .collect(),
+        )
+    };
+    let mut answers = Map::new();
+    if case == "surfaceNames" {
+        answers.insert("surfaces".to_owned(), spelled(&ExperimentSurface::ALL));
+        answers.insert("eligible".to_owned(), Value::Null);
+        return Some(answers);
+    }
+    let name = ExperimentName::from_key(case)?;
+    let mut surfaces = name.surfaces().to_vec();
+    surfaces.sort_by_key(|surface| surface.as_str());
+    answers.insert("surfaces".to_owned(), spelled(&surfaces));
+    answers.insert(
+        "eligible".to_owned(),
+        Value::Object(
+            ExperimentSurface::ALL
+                .into_iter()
+                .map(|surface| {
+                    (
+                        surface.as_str().to_owned(),
+                        Value::Bool(name.is_exposure_eligible(surface)),
+                    )
+                })
+                .collect(),
+        ),
+    );
+    Some(answers)
+}
+
+// -- typedVariants ---------------------------------------------------------
+
+fn typed_variants_answer(case: &Case<'_>) -> Map<String, Value> {
+    let mut answers = variant_resolution_answer(case);
+    answers.remove("knownFeatures");
+    answers.extend(config_variants_answer(case));
+    answers
+}
+
+// -- evalCache -------------------------------------------------------------
+
+/// The instant every cache scenario runs at, `CACHE_NOW` in the capture.
+const CACHE_NOW: i64 = 1_800_000_000;
+
+fn eval_cache_answer(case: &Case<'_>, runtime: &Runtime) -> Map<String, Value> {
+    let operation = case
+        .input_str("operation")
+        .expect("every cache case names its operation");
+    let mut answers = Map::new();
+    answers.insert("loaded".to_owned(), Value::Null);
+    answers.insert("file".to_owned(), Value::Null);
+    if operation == "constants" {
+        answers.insert(
+            "file".to_owned(),
+            serde_json::json!({
+                "name": EVAL_CACHE_FILE_NAME,
+                "ttlSeconds": EVAL_CACHE_TTL.as_secs(),
+                "key": hash_api_key(SENTINELS[1].1),
+            }),
+        );
+        return answers;
+    }
+    let configuration = case
+        .input_str("configuration")
+        .expect("every cache case names its configuration");
+    let effective = gate_effective(configuration);
+    let home = tempfile::tempdir().expect("a scratch vibe home");
+    let cache = EvalCache::new(home.path());
+    if let Some(seed) = case.input_str("seed") {
+        fs::write(cache.path(), seed).expect("the seed writes");
+    }
+    let written = || fs::read_to_string(cache.path()).ok();
+    match operation {
+        "load" => {
+            let loaded = cache.load_at(&effective, &gate_credentials, CACHE_NOW);
+            answers.insert(
+                "loaded".to_owned(),
+                loaded.map_or(Value::Null, |response| {
+                    serde_json::to_value(response).unwrap_or(Value::Null)
+                }),
+            );
+        }
+        "store" => {
+            let response = case
+                .input_text("response")
+                .and_then(|text| serde_json::from_str::<EvalResponse>(&text).ok())
+                .expect("the authored response validates");
+            cache.store_at(&effective, &gate_credentials, &response, CACHE_NOW);
+            answers.insert(
+                "file".to_owned(),
+                written().map_or(Value::Null, Value::String),
+            );
+        }
+        _ => {
+            let scenario = case.object.get("response").cloned().unwrap_or(Value::Null);
+            // The body in the order the capture wrote it, which is the order
+            // the stored payload keeps.
+            let body = case
+                .ordered
+                .as_object()
+                .and_then(|fields| fields.get("response"))
+                .and_then(JsonValue::as_object)
+                .and_then(|response| response.get("body"))
+                .map(JsonValue::python_json)
+                .unwrap_or_default();
+            let outcome = match scenario.get("status").and_then(Value::as_u64) {
+                Some(status) => Outcome::Answer {
+                    status: u16::try_from(status).expect("an HTTP status"),
+                    body,
+                },
+                None => Outcome::ok(&body),
+            };
+            let identity = scenario
+                .get("identity")
+                .and_then(Value::as_bool)
+                .unwrap_or_default()
+                .then_some(ORACLE_ORGANIZATION);
+            let transport = Arc::new(RecordingTransport::new(outcome));
+            let mut manager = ExperimentManager::new(RemoteEvalClient::with_transport(
+                build_eval_url(ORACLE_API_HOST, ORACLE_CLIENT_KEY),
+                Arc::clone(&transport) as _,
+            ));
+            let resolver = RecordingResolver::answering(identity, SENTINELS[1].1);
+            let sources = PlanSources {
+                identity: &resolver,
+                whoami: &Unanswered,
+                harness: HARNESS_LEGACY,
+            };
+            let before = now_seconds();
+            runtime.block_on(initialize_experiments(
+                &effective,
+                &gate_credentials,
+                &mut manager,
+                None,
+                &sources,
+                &RecordingSink::default(),
+                Some(&cache),
+            ));
+            let after = now_seconds();
+            let stored = written()
+                .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+                .map(|entries| {
+                    let entry = entries
+                        .get(hash_api_key(SENTINELS[1].1))
+                        .cloned()
+                        .unwrap_or(Value::Null);
+                    let stored_at = entry.get("stored_at_timestamp").and_then(Value::as_i64);
+                    serde_json::json!({
+                        "keys": entries
+                            .as_object()
+                            .map(|entries| entries.keys().cloned().collect::<Vec<_>>())
+                            .unwrap_or_default(),
+                        "storedAtIsNow": stored_at.is_some_and(|at| (before..=after).contains(&at)),
+                        "payload": entry.get("payload").cloned().unwrap_or(Value::Null),
+                    })
+                });
+            answers.insert("file".to_owned(), stored.unwrap_or(Value::Null));
+        }
+    }
+    answers
+}
+
+/// The current second, which a lookup stores its entry at.
+fn now_seconds() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| {
+            i64::try_from(elapsed.as_secs()).unwrap_or(i64::MAX)
+        })
+}
 
 /// One expectation with every null a TOML document cannot hold dropped.
 ///
@@ -2081,6 +2153,8 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
         .arg(&recaptured)
         .arg("--promo-corpus")
         .arg(&promo)
+        .arg("--startup-corpus")
+        .arg(repository.join("target/experiments-startup-corpus.json"))
         .current_dir(&repository)
         .output()
         .expect("the experiments capture script runs");

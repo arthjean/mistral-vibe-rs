@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use super::{EVAL_PATH_TEMPLATE, ExperimentName, build_eval_url};
 
 #[test]
-fn every_name_carries_a_key_and_a_default() {
+fn every_name_carries_a_key_and_a_typed_default() {
     // The reference pairs its names with its defaults in a dictionary and holds
     // the two together with a module-level assertion. Here the pairing is an
     // exhaustive match, so this test states the values rather than the tie.
@@ -15,12 +15,26 @@ fn every_name_carries_a_key_and_a_default() {
         [
             "vibe_cli_system_prompt",
             "vibe_cli_managed_shell_tools",
-            "vibe_cli_default_routing_model"
+            "vibe_cli_default_routing_model",
+            "vibe_cli_smart_approve",
+            "vibe_cli_smart_approve_default",
+            "vibe_cli_extra_models",
+            "vibe_cli_registry_skills",
+            "vibe_cli_unified_harness_rollout",
         ]
     );
     assert_eq!(
-        ExperimentName::ALL.map(ExperimentName::default_variant),
-        ["cli", "legacy", "{}"]
+        ExperimentName::ALL.map(|name| name.default_variant().python_json()),
+        [
+            "\"cli\"",
+            "\"legacy\"",
+            "{}",
+            "false",
+            "false",
+            "{}",
+            "false",
+            "\"legacy\"",
+        ]
     );
     let keys = ExperimentName::ALL
         .into_iter()
@@ -31,6 +45,31 @@ fn every_name_carries_a_key_and_a_default() {
         ExperimentName::ALL.len(),
         "the keys are distinct"
     );
+}
+
+#[test]
+fn an_exposure_is_eligible_only_on_a_surface_with_a_consumer() {
+    use super::ExperimentSurface::{Legacy, Unified};
+    assert!(ExperimentName::ManagedShellTools.is_exposure_eligible(Legacy));
+    assert!(!ExperimentName::ManagedShellTools.is_exposure_eligible(Unified));
+    for smart in [
+        ExperimentName::SmartApprove,
+        ExperimentName::SmartApproveDefault,
+    ] {
+        assert!(!smart.is_exposure_eligible(Legacy));
+        assert!(smart.is_exposure_eligible(Unified));
+    }
+    for both in [
+        ExperimentName::SystemPrompt,
+        ExperimentName::CliModelRouting,
+        ExperimentName::CliExtraModels,
+        ExperimentName::RegistrySkills,
+        ExperimentName::UnifiedHarnessRollout,
+    ] {
+        assert!(both.is_exposure_eligible(Legacy) && both.is_exposure_eligible(Unified));
+    }
+    assert_eq!(Legacy.as_str(), "legacy");
+    assert_eq!(Unified.as_str(), "unified");
 }
 
 #[test]

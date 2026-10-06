@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
@@ -10,6 +11,7 @@ use toml::{Table, Value};
 use url::Url;
 
 use crate::atomic_file::AtomicWriteError;
+use crate::experiments::{JsonValue as ExperimentJson, OrderedMap};
 use crate::mcp::{
     DEFAULT_MCP_STARTUP_TIMEOUT_MS, DEFAULT_MCP_TOOL_TIMEOUT_MS, McpAuthConfig, McpServerConfig,
     McpTransportConfig,
@@ -51,7 +53,7 @@ pub(crate) use effective::user_home_directory;
 pub use effective::{active_model_alias, available_model_aliases, default_model_alias};
 pub use events::{ConfigChangeBus, ConfigChangeEvent, ConfigSubscription};
 pub use experiments_layer::{
-    EXPERIMENTS_LAYER_NAME, ExperimentsLayer, PromptResolves, configured_fields,
+    EXPERIMENTS_LAYER_NAME, ExperimentsLayer, MAPPED_EXPERIMENTS, PromptResolves, configured_fields,
 };
 pub use harness::{ConfigSource, HarnessFiles};
 pub use introspect::{ConfigFieldView, ConfigFields, ConfigLayerValue, HIDDEN_FIELDS};
@@ -225,6 +227,11 @@ pub struct ConfigSnapshot {
     /// What the load repaired rather than rejected, in the order the repairs
     /// were made. Reference `VibeConfigSchema.validation_warnings`.
     pub validation_warnings: Vec<String>,
+    /// Whether a session started without a cached rollout is still waiting
+    /// for the lookup that may route it onto another model. Reference
+    /// `AgentLoop.awaiting_experiment_model`, published as
+    /// `ConfigView.awaitingExperimentModel`.
+    pub awaiting_experiment_model: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -472,6 +479,9 @@ pub struct LayeredConfig {
     /// The document behind [`ConfigLayerKind::Admin`], shared by every clone
     /// for the same reason the experiment layer is.
     admin: Arc<Mutex<Table>>,
+    /// Whether the rollout that may route this store's sessions onto another
+    /// model is still being looked up, shared for the same reason.
+    experiment_model_pending: Arc<AtomicBool>,
     runtime: Table,
     agent: Table,
     environment: BTreeMap<String, String>,
@@ -509,6 +519,7 @@ impl LayeredConfig {
             discovery: None,
             experiments: Arc::new(Mutex::new(Table::new())),
             admin: Arc::new(Mutex::new(Table::new())),
+            experiment_model_pending: Arc::new(AtomicBool::new(false)),
             runtime: Table::new(),
             agent: Table::new(),
             environment: BTreeMap::new(),
@@ -613,13 +624,21 @@ impl LayeredConfig {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = values;
     }
 
+    /// Publishes whether a rollout that may route this store's sessions onto
+    /// another model is still being looked up, which every later snapshot
+    /// reports as [`ConfigSnapshot::awaiting_experiment_model`].
+    pub fn set_experiment_model_pending(&self, pending: bool) {
+        self.experiment_model_pending
+            .store(pending, Ordering::Release);
+    }
+
     /// Publishes the variants a resolved rollout assigned, mapped onto the
     /// fields the layer writes.
     ///
     /// Reference `_sync_growthbook_layer_variants`.
     pub fn set_experiment_variants(
         &self,
-        variants: &BTreeMap<String, String>,
+        variants: &OrderedMap<ExperimentJson>,
         prompt_resolves: PromptResolves,
     ) {
         self.set_experiments(
@@ -637,7 +656,7 @@ impl LayeredConfig {
     #[must_use]
     pub fn with_experiment_variants(
         self,
-        variants: &BTreeMap<String, String>,
+        variants: &OrderedMap<ExperimentJson>,
         prompt_resolves: PromptResolves,
     ) -> Self {
         self.set_experiment_variants(variants, prompt_resolves);
@@ -919,6 +938,7 @@ impl LayeredConfig {
             target_values,
             layer_values: layers,
             validation_warnings,
+            awaiting_experiment_model: self.experiment_model_pending.load(Ordering::Acquire),
         };
         // The observers run under the same guards the load holds, which is what
         // keeps a cache from reading a document another load is replacing. None
@@ -1899,6 +1919,7 @@ disabled_tools = ["admin"]
             target_values: BTreeMap::new(),
             layer_values: Vec::new(),
             validation_warnings: Vec::new(),
+            awaiting_experiment_model: false,
         };
         let servers = snapshot
             .mcp_servers(&working_directory)
@@ -2059,6 +2080,7 @@ command = "top-secret-command"
             target_values: BTreeMap::new(),
             layer_values: Vec::new(),
             validation_warnings: Vec::new(),
+            awaiting_experiment_model: false,
         };
         let error = snapshot
             .mcp_servers(Path::new("/workspace"))
@@ -2085,6 +2107,7 @@ command = "must-not-run"
             target_values: BTreeMap::new(),
             layer_values: Vec::new(),
             validation_warnings: Vec::new(),
+            awaiting_experiment_model: false,
         };
         let error = snapshot
             .mcp_servers(Path::new("/workspace"))

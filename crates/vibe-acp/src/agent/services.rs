@@ -29,7 +29,14 @@ where
 {
     /// The enrollment one session resolves, or [`None`] when this process
     /// resolves none.
-    fn session_experiments(&self, service: &HeadlessService<D>) -> Option<Arc<SessionExperiments>> {
+    ///
+    /// Built before the session starts, because building it applies the
+    /// rollout cached for this user to the configuration the session is about
+    /// to read, as reference `_build_session_config` does.
+    pub(in crate::agent) fn session_experiments(
+        &self,
+        service: &HeadlessService<D>,
+    ) -> Option<Arc<SessionExperiments>> {
         let experiments = self.experiments.as_ref()?;
         // Reference `_build_launch_context_from_services`: every session reports
         // the client descriptor the app server was handed, which for an editor
@@ -58,13 +65,13 @@ where
         ))
     }
 
-    /// One adopted harness, with the enrollment this process resolves attached.
+    /// One adopted harness, with the enrollment [`Self::session_experiments`]
+    /// built for its service attached.
     pub(in crate::agent) fn adopt(
-        &self,
         service: HeadlessService<D>,
         session_id: &str,
+        experiments: Option<Arc<SessionExperiments>>,
     ) -> Result<AcpHarness<D>, AcpError> {
-        let experiments = self.session_experiments(&service);
         let harness = AcpHarness::adopt(service, session_id)?;
         Ok(match experiments {
             Some(experiments) => harness.resolving_experiments(experiments),

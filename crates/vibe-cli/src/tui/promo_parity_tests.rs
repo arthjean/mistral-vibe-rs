@@ -482,6 +482,8 @@ fn the_committed_corpus_still_matches_the_pinned_reference() {
         .arg(repository.join("target/promo-engine-corpus.json"))
         .arg("--promo-corpus")
         .arg(&recaptured)
+        .arg("--startup-corpus")
+        .arg(repository.join("target/promo-startup-corpus.json"))
         .current_dir(&repository)
         .output()
         .expect("the experiments capture script runs");

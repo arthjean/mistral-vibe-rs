@@ -191,29 +191,102 @@ impl JsonValue {
         }
     }
 
+    /// The array this value carries, or [`None`] when it is not one.
+    #[must_use]
+    pub fn as_array(&self) -> Option<&[Self]> {
+        match self {
+            Self::Array(items) => Some(items),
+            _ => None,
+        }
+    }
+
+    /// Whether two values are equal as Python's `==` compares the objects
+    /// `json.loads` decodes them to.
+    ///
+    /// Python's booleans are integers, so `False == 0` and `True == 1.0`; an
+    /// integer and a float compare by value; a dict compares regardless of key
+    /// order. Every other pair compares by kind and content. The configuration
+    /// variants drop a value equal to the declared default this way, so a
+    /// rollout forcing `0` onto a flag defaulting to `false` reaches no layer,
+    /// as upstream.
+    #[must_use]
+    pub fn python_eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Null, Self::Null) => true,
+            (Self::String(left), Self::String(right)) => left == right,
+            (Self::Array(left), Self::Array(right)) => {
+                left.len() == right.len()
+                    && left
+                        .iter()
+                        .zip(right)
+                        .all(|(left, right)| left.python_eq(right))
+            }
+            (Self::Object(left), Self::Object(right)) => {
+                left.len() == right.len()
+                    && left.iter().all(|(key, value)| {
+                        right
+                            .get(key)
+                            .is_some_and(|candidate| value.python_eq(candidate))
+                    })
+            }
+            (left, right) => match (left.python_number(), right.python_number()) {
+                (Some(left), Some(right)) => left == right,
+                _ => false,
+            },
+        }
+    }
+
+    /// A boolean or a number as the value Python compares it by.
+    fn python_number(&self) -> Option<PythonNumber> {
+        match self {
+            Self::Bool(flag) => Some(PythonNumber::Integer(i128::from(*flag))),
+            Self::Number(number) => number
+                .as_i64()
+                .map(i128::from)
+                .or_else(|| number.as_u64().map(i128::from))
+                .map(PythonNumber::Integer)
+                .or_else(|| number.as_f64().map(PythonNumber::Float)),
+            _ => None,
+        }
+    }
+
     /// The text `json.dumps` gives this value with its default settings: a
     /// space after every separator, and every non-ASCII character escaped.
     #[must_use]
     pub fn python_json(&self) -> String {
         let mut rendered = String::new();
-        self.write_python_json(&mut rendered);
+        self.write_python_json(&mut rendered, Separators::DEFAULT);
         rendered
     }
 
-    fn write_python_json(&self, out: &mut String) {
+    /// The text `json.dumps(value, separators=(",", ":"))` gives this value:
+    /// no space anywhere, every non-ASCII character still escaped.
+    #[must_use]
+    pub fn python_json_compact(&self) -> String {
+        let mut rendered = String::new();
+        self.write_python_json(&mut rendered, Separators::COMPACT);
+        rendered
+    }
+
+    fn write_python_json(&self, out: &mut String, separators: Separators) {
         match self {
             Self::Null => out.push_str("null"),
             Self::Bool(true) => out.push_str("true"),
             Self::Bool(false) => out.push_str("false"),
-            Self::Number(number) => out.push_str(&number.to_string()),
+            // `json.dumps` writes a float as its `repr`, whose exponent is
+            // signed and at least two digits long.
+            Self::Number(number) => match number.as_f64().filter(|_| number.is_f64()) {
+                Some(float) => out.push_str(&crate::mcp::render::python_float(float)),
+                None => out.push_str(&number.to_string()),
+            },
             Self::String(text) => write_python_string(out, text),
             Self::Array(items) => {
                 out.push('[');
                 for (position, item) in items.iter().enumerate() {
                     if position > 0 {
-                        out.push_str(", ");
+                        out.push_str(separators.item);
                     }
-                    item.write_python_json(out);
+                    item.write_python_json(out, separators);
                 }
                 out.push(']');
             }
@@ -221,16 +294,55 @@ impl JsonValue {
                 out.push('{');
                 for (position, (key, value)) in entries.iter().enumerate() {
                     if position > 0 {
-                        out.push_str(", ");
+                        out.push_str(separators.item);
                     }
                     write_python_string(out, key);
-                    out.push_str(": ");
-                    value.write_python_json(out);
+                    out.push_str(separators.key);
+                    value.write_python_json(out, separators);
                 }
                 out.push('}');
             }
         }
     }
+}
+
+/// A number as Python compares it: an integer exactly, a float by value.
+#[derive(Clone, Copy)]
+enum PythonNumber {
+    Integer(i128),
+    Float(f64),
+}
+
+impl PartialEq for PythonNumber {
+    #[allow(clippy::cast_precision_loss, clippy::float_cmp)]
+    fn eq(&self, other: &Self) -> bool {
+        match (*self, *other) {
+            (Self::Integer(left), Self::Integer(right)) => left == right,
+            (Self::Float(left), Self::Float(right)) => left == right,
+            (Self::Integer(integer), Self::Float(float))
+            | (Self::Float(float), Self::Integer(integer)) => {
+                float.fract() == 0.0 && integer as f64 == float
+            }
+        }
+    }
+}
+
+/// The two separators `json.dumps` writes between items and after a key.
+#[derive(Clone, Copy)]
+struct Separators {
+    item: &'static str,
+    key: &'static str,
+}
+
+impl Separators {
+    const DEFAULT: Self = Self {
+        item: ", ",
+        key: ": ",
+    };
+    const COMPACT: Self = Self {
+        item: ",",
+        key: ":",
+    };
 }
 
 /// One string as `json.dumps` writes it: the two mandatory escapes, the five

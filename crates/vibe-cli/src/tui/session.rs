@@ -29,11 +29,23 @@ pub(super) fn start_runtime(
     credential: String,
     ui_operation_sender: tokio::sync::mpsc::UnboundedSender<UiOperationCompletion>,
 ) -> Result<InteractiveRuntime, CliError> {
+    let telemetry =
+        crate::telemetry_observer_for(arguments, &workspace, crate::tui_launch_context())?;
+    // Reference `_build_session_config` applies the rollout cached for this
+    // user before anything reads the configuration, so the banner, the model
+    // and the mode below already see a cached routing or prompt variant.
+    let experiments = Arc::new(
+        SessionExperiments::new(
+            &workspace,
+            crate::cli_credentials(arguments),
+            Some(crate::tui_launch_context()),
+            telemetry.exposures(),
+        )
+        .reporting_to(telemetry.clone()),
+    );
     let banner = banner_metrics_from_workspace(&workspace, arguments, working_directory);
     let skills = runtime_skills(&workspace);
     let preferences = startup_preferences(arguments, &workspace)?;
-    let telemetry =
-        crate::telemetry_observer_for(arguments, &workspace, crate::tui_launch_context())?;
     let mut driver = LiveTurnDriver::from_credential(
         bootstrap::live_driver_config(arguments, &preferences.model, &workspace)?,
         credential.clone(),
@@ -66,16 +78,8 @@ pub(super) fn start_runtime(
     // moment the session exists, so nothing between here and the first frame
     // waits on a rollout service. A resumed or forked session first takes
     // back the variants its metadata carries.
-    let experiments = Arc::new(
-        SessionExperiments::new(
-            &configuration,
-            crate::cli_credentials(arguments),
-            Some(crate::tui_launch_context()),
-            telemetry.exposures(),
-        )
-        .reporting_to(telemetry.clone()),
-    );
     experiments.start(&session_id);
+    let awaiting_model = experiments.awaits_model();
     experiments.follow_resets(
         &telemetry.context().session_resets,
         &session_id,
@@ -150,6 +154,7 @@ pub(super) fn start_runtime(
         shell: None,
         cloud: CloudWorkflowState::default(),
         pending_switch: None,
+        awaiting_model,
         telemetry: Some(telemetry),
         session_init_duration_ms: Some(session_init_duration_ms),
         voice,

@@ -894,6 +894,7 @@ fn callback_viewport_keeps_the_focused_action_visible_at_fixed_widths() {
                             connectors_total: 0,
                             hooks_count: 0,
                             plan: None,
+                            model_spinner: None,
                         },
                         tokens: TokenState::default(),
                     },

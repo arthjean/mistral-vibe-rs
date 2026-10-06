@@ -637,6 +637,7 @@ fn overlays_preserve_typed_actions_and_render_at_fixed_widths() {
                                 connectors_total: 0,
                                 hooks_count: 0,
                                 plan: None,
+                                model_spinner: None,
                             },
                             tokens: TokenState::default(),
                         },

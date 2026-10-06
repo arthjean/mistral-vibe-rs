@@ -74,6 +74,10 @@ pub(super) struct InteractiveRuntime {
     pub(super) shell: Option<ActiveShell>,
     pub(super) cloud: CloudWorkflowState,
     pub(super) pending_switch: Option<switching::SwitchRequest>,
+    /// Whether the session still owes a move onto the model its rollout may
+    /// route: set when it was built to wait on the lookup, taken once the
+    /// lookup settled, however fast that was.
+    pub(super) awaiting_model: bool,
     pub(super) telemetry: Option<Arc<CliTelemetryObserver>>,
     /// How long `session/new` took, which is one of the three durations
     /// `vibe.startup` reports. Reference
@@ -524,6 +528,7 @@ pub(in crate::tui) fn interactive_test_runtime_with_trust(
         shell: None,
         cloud: CloudWorkflowState::default(),
         pending_switch: None,
+        awaiting_model: false,
         telemetry: None,
         session_init_duration_ms: None,
         voice: VoiceManager::production(

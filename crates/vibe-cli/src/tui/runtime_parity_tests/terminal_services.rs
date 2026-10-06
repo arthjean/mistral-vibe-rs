@@ -1108,6 +1108,7 @@ fn terminal_service_surfaces_render_at_reference_widths() {
                                 connectors_total: 0,
                                 hooks_count: 0,
                                 plan: None,
+                                model_spinner: None,
                             },
                             tokens: TokenState::default(),
                         },

@@ -3,16 +3,35 @@
 
 use std::sync::Arc;
 
-use super::ExperimentName;
 use super::client::RemoteEvalClient;
+use super::json::JsonValue;
 use super::manager::{BUCKETING_KEY_LENGTH, ExperimentManager, hash_api_key};
 use super::models::{EvalResponse, ExperimentAttributes};
 use super::recorder::{Outcome, RecordingTransport};
+use super::{ExperimentName, OrderedMap};
 
 fn hydrated(document: &str) -> ExperimentManager {
     let mut manager = ExperimentManager::new(RemoteEvalClient::with_url(None));
     manager.hydrate(serde_json::from_str::<EvalResponse>(document).expect("the response parses"));
     manager
+}
+
+/// One JSON document as the typed value a variant is answered as.
+fn json(text: &str) -> JsonValue {
+    serde_json::from_str(text).expect("the value parses")
+}
+
+fn text(value: &str) -> JsonValue {
+    JsonValue::String(value.to_owned())
+}
+
+/// The label one experiment's exposure is reported under, if it is reported.
+fn label(manager: &ExperimentManager, key: &str) -> Option<String> {
+    manager
+        .assignments()
+        .into_iter()
+        .find(|record| record.experiment_id == key)
+        .map(|record| record.variation_name)
 }
 
 fn attributes() -> ExperimentAttributes {
@@ -81,20 +100,21 @@ fn a_feature_this_build_does_not_know_is_dropped_on_the_way_in() {
         state.features.keys().collect::<Vec<_>>(),
         ["vibe_cli_system_prompt"]
     );
-    assert_eq!(manager.variant(ExperimentName::SystemPrompt), "tests");
+    assert_eq!(manager.variant(ExperimentName::SystemPrompt), text("tests"));
 }
 
 #[test]
-fn an_object_or_array_variant_answers_its_json_serialization() {
+fn an_object_or_array_variant_answers_the_value_it_carries() {
     let manager = hydrated(
         r#"{"features": {"vibe_cli_default_routing_model": {"defaultValue": null, "rules": [
             {"force": {"active_model": "alias", "model_config": {"name": "n", "provider": "p"}}}
         ]}}}"#,
     );
+    let routed = manager.variant(ExperimentName::CliModelRouting);
     assert_eq!(
-        manager.variant(ExperimentName::CliModelRouting),
+        routed.python_json(),
         r#"{"active_model": "alias", "model_config": {"name": "n", "provider": "p"}}"#,
-        "the payload reaches the caller in the order the wire carried"
+        "the payload reaches the caller typed, in the order the wire carried"
     );
 
     let array = hydrated(
@@ -102,13 +122,16 @@ fn an_object_or_array_variant_answers_its_json_serialization() {
     );
     assert_eq!(
         array.variant(ExperimentName::SystemPrompt),
-        r#"["cli", "lean"]"#
+        json(r#"["cli", "lean"]"#)
     );
 
     let scalar = hydrated(
         r#"{"features": {"vibe_cli_managed_shell_tools": {"defaultValue": null, "rules": [{"force": true}]}}}"#,
     );
-    assert_eq!(scalar.variant(ExperimentName::ManagedShellTools), "true");
+    assert_eq!(
+        scalar.variant(ExperimentName::ManagedShellTools),
+        JsonValue::Bool(true)
+    );
 }
 
 #[test]
@@ -117,10 +140,10 @@ fn a_feature_resolving_to_nothing_falls_back_to_the_default_variant() {
         r#"{"features": {"vibe_cli_system_prompt": {"defaultValue": null, "rules": [{"tracks": []}]}}}"#,
     );
     assert_eq!(manager.variant_or_none(ExperimentName::SystemPrompt), None);
-    assert_eq!(manager.variant(ExperimentName::SystemPrompt), "cli");
+    assert_eq!(manager.variant(ExperimentName::SystemPrompt), text("cli"));
     assert_eq!(
         manager.variant(ExperimentName::CliModelRouting),
-        "{}",
+        JsonValue::Object(OrderedMap::new()),
         "a feature the response never carried falls back too"
     );
 }
@@ -135,11 +158,8 @@ fn a_force_reaches_configuration_and_only_a_confirmed_track_reaches_telemetry() 
         "a force is not an enrollment"
     );
     assert_eq!(
-        forced
-            .config_variants()
-            .get("vibe_cli_system_prompt")
-            .map(String::as_str),
-        Some("tests"),
+        forced.config_variants().get("vibe_cli_system_prompt"),
+        Some(&text("tests")),
         "but configuration still honors it"
     );
 
@@ -159,13 +179,43 @@ fn a_force_reaches_configuration_and_only_a_confirmed_track_reaches_telemetry() 
         ]}}}"#,
     );
     assert_eq!(
-        confirmed
-            .assignments()
-            .get("vibe_cli_system_prompt")
-            .map(String::as_str),
+        label(&confirmed, "vibe_cli_system_prompt").as_deref(),
         Some("tests")
     );
-    assert_eq!(confirmed.assignments(), confirmed.config_variants());
+    assert_eq!(
+        confirmed.config_variants().get("vibe_cli_system_prompt"),
+        Some(&text("tests"))
+    );
+}
+
+#[test]
+fn a_feature_default_reaches_configuration_unless_it_is_this_builds_default() {
+    // A feature carrying no force resolves to its own default, which reaches
+    // configuration like a force does.
+    let defaulted = hydrated(
+        r#"{"features": {"vibe_cli_system_prompt": {"defaultValue": "lean", "rules": []}}}"#,
+    );
+    assert_eq!(
+        defaulted.config_variants().get("vibe_cli_system_prompt"),
+        Some(&text("lean"))
+    );
+
+    // A value equal to this build's typed default is dropped, compared as
+    // Python compares it: a forced zero equals a false flag.
+    let baseline = hydrated(
+        r#"{"features": {
+            "vibe_cli_system_prompt": {"defaultValue": "cli", "rules": []},
+            "vibe_cli_smart_approve": {"defaultValue": null, "rules": [{"force": 0}]},
+            "vibe_cli_extra_models": {"defaultValue": {}, "rules": []},
+            "vibe_cli_default_routing_model": {"defaultValue": "{}", "rules": []}
+        }}"#,
+    );
+    let variants = baseline.config_variants();
+    assert_eq!(
+        variants.keys().collect::<Vec<_>>(),
+        ["vibe_cli_default_routing_model"],
+        "only the text that is not the default object survives"
+    );
 }
 
 #[test]
@@ -185,10 +235,7 @@ fn the_label_falls_back_four_levels_and_an_exhausted_one_is_not_reported() {
         r#""cli""#,
     ));
     assert_eq!(
-        from_track
-            .assignments()
-            .get("vibe_cli_system_prompt")
-            .map(String::as_str),
+        label(&from_track, "vibe_cli_system_prompt").as_deref(),
         Some("from-track")
     );
 
@@ -198,10 +245,7 @@ fn the_label_falls_back_four_levels_and_an_exhausted_one_is_not_reported() {
         "null",
     ));
     assert_eq!(
-        object
-            .assignments()
-            .get("vibe_cli_system_prompt")
-            .map(String::as_str),
+        label(&object, "vibe_cli_system_prompt").as_deref(),
         Some(r#"{"variant": "managed"}"#)
     );
 
@@ -211,10 +255,7 @@ fn the_label_falls_back_four_levels_and_an_exhausted_one_is_not_reported() {
         r#""cli""#,
     ));
     assert_eq!(
-        resolved
-            .assignments()
-            .get("vibe_cli_system_prompt")
-            .map(String::as_str),
+        label(&resolved, "vibe_cli_system_prompt").as_deref(),
         Some("cli")
     );
 
@@ -224,9 +265,7 @@ fn the_label_falls_back_four_levels_and_an_exhausted_one_is_not_reported() {
         "null",
     ));
     assert_eq!(
-        key.assignments()
-            .get("vibe_cli_system_prompt")
-            .map(String::as_str),
+        label(&key, "vibe_cli_system_prompt").as_deref(),
         Some("control")
     );
 
@@ -237,10 +276,7 @@ fn the_label_falls_back_four_levels_and_an_exhausted_one_is_not_reported() {
     ] {
         let variation = hydrated(&with_default(track(result), "null"));
         assert_eq!(
-            variation
-                .assignments()
-                .get("vibe_cli_system_prompt")
-                .map(String::as_str),
+            label(&variation, "vibe_cli_system_prompt").as_deref(),
             Some(expected)
         );
     }
@@ -261,10 +297,7 @@ fn the_last_confirmed_track_of_a_feature_wins() {
         ]}}}"#,
     );
     assert_eq!(
-        manager
-            .assignments()
-            .get("vibe_cli_system_prompt")
-            .map(String::as_str),
+        label(&manager, "vibe_cli_system_prompt").as_deref(),
         Some("second")
     );
 }
@@ -277,10 +310,7 @@ fn the_experiment_key_of_a_track_does_not_have_to_be_the_feature_key() {
         ]}}}"#,
     );
     assert_eq!(
-        manager
-            .assignments()
-            .get("vibe_cli_managed_shell_tools")
-            .map(String::as_str),
+        label(&manager, "vibe_cli_managed_shell_tools").as_deref(),
         Some("managed"),
         "the feature key is what an exposure is reported under"
     );
@@ -297,7 +327,7 @@ fn a_second_initialization_replaces_the_previous_state() {
         Arc::clone(&first) as _,
     ));
     runtime.block_on(manager.initialize(&attributes()));
-    assert_eq!(manager.variant(ExperimentName::SystemPrompt), "tests");
+    assert_eq!(manager.variant(ExperimentName::SystemPrompt), text("tests"));
 
     // A second response replaces rather than merges: the first feature is gone.
     manager.hydrate(
@@ -306,10 +336,10 @@ fn a_second_initialization_replaces_the_previous_state() {
         )
         .expect("the second response parses"),
     );
-    assert_eq!(manager.variant(ExperimentName::SystemPrompt), "cli");
+    assert_eq!(manager.variant(ExperimentName::SystemPrompt), text("cli"));
     assert_eq!(
         manager.variant(ExperimentName::ManagedShellTools),
-        "managed"
+        text("managed")
     );
 }
 
@@ -330,7 +360,7 @@ fn a_failed_lookup_leaves_the_previous_state_untouched() {
     runtime.block_on(manager.initialize(&attributes()));
     assert_eq!(
         manager.variant(ExperimentName::SystemPrompt),
-        "tests",
+        text("tests"),
         "a failed refresh cannot empty a session that had already resolved"
     );
     assert_eq!(failing.request_count(), 1);

@@ -47,6 +47,7 @@ fn test_context(secret_input: bool) -> UiContext<'static> {
             connectors_total: 17,
             hooks_count: 0,
             plan: Some("Free"),
+            model_spinner: None,
         },
         tokens: TokenState {
             max_tokens: 200_000,
@@ -569,6 +570,55 @@ fn composer_uses_upstream_chrome_modes_completion_and_footer() {
             .expect("composer body cell")
             .bg,
         Color::Reset
+    );
+}
+
+/// A new session waiting on the rollout that may route its model shows a
+/// spinner frame in the model slot, reference `SpinnerText` set pending, and
+/// the frame advances every tenth of a second through the braille cycle.
+#[test]
+fn the_banner_spins_in_place_of_a_model_the_rollout_may_route() {
+    let backend = TestBackend::new(84, 30);
+    let mut terminal = Terminal::new(backend).expect("test terminal");
+    let mut state = TuiState::new("session");
+    let editor = PromptEditor::default();
+    let mut context = test_context(false);
+    context.banner.model_spinner = Some(model_spinner_frame(0));
+
+    terminal
+        .draw(|frame| {
+            draw(
+                frame,
+                &mut state,
+                &editor,
+                &CompletionEngine::default(),
+                InputMode::Prompt,
+                theme(true),
+                context,
+            );
+        })
+        .expect("the waiting banner renders");
+
+    let text = terminal
+        .backend()
+        .buffer()
+        .content
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    assert!(text.contains(&format!(
+        "Mistral Vibe v{} · ⠋ · Free",
+        env!("CARGO_PKG_VERSION")
+    )));
+    assert!(!text.contains("mistral-medium-3.5"));
+
+    assert_eq!(model_spinner_frame(99), "⠋");
+    assert_eq!(model_spinner_frame(100), "⠙");
+    assert_eq!(model_spinner_frame(950), "⠏");
+    assert_eq!(
+        model_spinner_frame(1_000),
+        "⠋",
+        "the cycle wraps after ten frames"
     );
 }
 

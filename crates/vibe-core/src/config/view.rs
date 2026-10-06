@@ -52,7 +52,7 @@ impl ConfigSnapshot {
             "activeModel": active_model,
             "activeModelPinned": self.active_model_pinned(),
             "imagesSupported": images_supported,
-            "awaitingExperimentModel": false,
+            "awaitingExperimentModel": self.awaiting_experiment_model,
             "defaultModelAlias": super::effective::default_model_alias(&self.effective)
                 .unwrap_or(super::registry::DEFAULT_ACTIVE_MODEL_ALIAS),
             "defaultAgent": self.string_field("default_agent", "accept-edits"),

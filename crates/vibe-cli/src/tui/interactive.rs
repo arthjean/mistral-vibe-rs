@@ -237,6 +237,9 @@ impl Session {
         self.plan_review_monitor
             .sync(plan_path, &mut self.state)
             .await;
+        if let Some(runtime) = self.runtime.as_mut() {
+            super::switching::sync_routed_model(runtime);
+        }
         hold_for_typing(&mut self.controls, &mut self.state, now_ms);
         sync_callback_presentation(&self.controls, &mut self.state, now_ms);
         self.state.sync_activity(now_ms);
@@ -297,6 +300,10 @@ impl Session {
                 connectors_total: banner.connectors_total,
                 hooks_count: banner.hooks_count,
                 plan: banner.plan.as_deref(),
+                model_spinner: runtime
+                    .and_then(|runtime| runtime.experiments.as_ref())
+                    .filter(|experiments| experiments.awaiting_model())
+                    .map(|_| super::render::model_spinner_frame(super::unix_millis())),
             },
             tokens,
         };

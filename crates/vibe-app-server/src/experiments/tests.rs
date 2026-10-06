@@ -53,7 +53,7 @@ alias = "oracle"
     )
 }
 
-fn credentials() -> Credentials {
+pub(super) fn credentials() -> Credentials {
     Arc::new(|name: &str| (name == ORACLE_VARIABLE).then(|| ORACLE_KEY.to_owned()))
 }
 
@@ -79,7 +79,7 @@ impl IdentityResolver for CountingIdentity {
 }
 
 /// A service over a scratch home carrying `document`.
-fn service(root: &Path, document: &str) -> WorkspaceService {
+pub(super) fn service(root: &Path, document: &str) -> WorkspaceService {
     let home = root.join("home/.vibe");
     let working = root.join("project");
     std::fs::create_dir_all(&home).expect("the home directory");
@@ -97,8 +97,8 @@ fn service(root: &Path, document: &str) -> WorkspaceService {
 }
 
 /// An eval endpoint that answers one authored body and counts its requests.
-struct EvalStub {
-    port: u16,
+pub(super) struct EvalStub {
+    pub(super) port: u16,
     requests: Arc<std::sync::atomic::AtomicUsize>,
     handle: tokio::task::JoinHandle<()>,
 }
@@ -109,7 +109,8 @@ impl EvalStub {
     /// The stub is what makes "no request was issued" observable: a scenario
     /// that never connects leaves the counter at zero, and one that does leaves
     /// it at one, without either depending on a rollout service.
-    async fn start(body: &'static str) -> Self {
+    pub(super) async fn start(body: impl Into<String>) -> Self {
+        let body = Arc::new(body.into());
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
             .expect("a loopback listener binds");
@@ -152,7 +153,9 @@ impl Drop for EvalStub {
     }
 }
 
-/// One session, resolved end to end over the stub.
+/// One new session, resolved end to end over the stub. It starts the lookup
+/// as an adapter does, so the session waits on it and applies what it
+/// resolved, which a session built on a cached rollout or resumed does not.
 async fn resolve_over(
     root: &TempDir,
     document: &str,
@@ -168,7 +171,8 @@ async fn resolve_over(
         SessionExperiments::new(&service, credentials(), None, exposures.clone())
             .resolving_identity_through(identity),
     );
-    experiments.resolve(&session.id).await;
+    experiments.start(&session.id);
+    experiments.settle().await;
     experiments.close().await;
     (service, exposures, session.id)
 }

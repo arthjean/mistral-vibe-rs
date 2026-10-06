@@ -270,6 +270,7 @@ fn picker_overlay_is_rendered_above_the_transcript_with_keyboard_help() {
                         connectors_total: 0,
                         hooks_count: 0,
                         plan: None,
+                        model_spinner: None,
                     },
                     tokens: TokenState {
                         max_tokens: 1,
@@ -348,6 +349,7 @@ fn rendered_transcript(state: &mut TuiState, height: u16) -> String {
                         connectors_total: 0,
                         hooks_count: 0,
                         plan: None,
+                        model_spinner: None,
                     },
                     tokens: TokenState {
                         max_tokens: 1,
@@ -829,6 +831,7 @@ fn overlay_rendering_survives_a_tiny_terminal_and_wide_unicode_labels() {
                         connectors_total: 0,
                         hooks_count: 0,
                         plan: None,
+                        model_spinner: None,
                     },
                     tokens: TokenState {
                         max_tokens: 1,

@@ -2995,5 +2995,2492 @@
       ],
       "credentialVariable": null
     }
+  ],
+  "surfaces": [
+    {
+      "id": "surfaceNames",
+      "surfaces": [
+        "legacy",
+        "unified"
+      ],
+      "eligible": null
+    },
+    {
+      "id": "vibe_cli_system_prompt",
+      "surfaces": [
+        "legacy",
+        "unified"
+      ],
+      "eligible": {
+        "legacy": true,
+        "unified": true
+      }
+    },
+    {
+      "id": "vibe_cli_managed_shell_tools",
+      "surfaces": [
+        "legacy"
+      ],
+      "eligible": {
+        "legacy": true,
+        "unified": false
+      }
+    },
+    {
+      "id": "vibe_cli_default_routing_model",
+      "surfaces": [
+        "legacy",
+        "unified"
+      ],
+      "eligible": {
+        "legacy": true,
+        "unified": true
+      }
+    },
+    {
+      "id": "vibe_cli_smart_approve",
+      "surfaces": [
+        "unified"
+      ],
+      "eligible": {
+        "legacy": false,
+        "unified": true
+      }
+    },
+    {
+      "id": "vibe_cli_smart_approve_default",
+      "surfaces": [
+        "unified"
+      ],
+      "eligible": {
+        "legacy": false,
+        "unified": true
+      }
+    },
+    {
+      "id": "vibe_cli_extra_models",
+      "surfaces": [
+        "legacy",
+        "unified"
+      ],
+      "eligible": {
+        "legacy": true,
+        "unified": true
+      }
+    },
+    {
+      "id": "vibe_cli_registry_skills",
+      "surfaces": [
+        "legacy",
+        "unified"
+      ],
+      "eligible": {
+        "legacy": true,
+        "unified": true
+      }
+    },
+    {
+      "id": "vibe_cli_unified_harness_rollout",
+      "surfaces": [
+        "legacy",
+        "unified"
+      ],
+      "eligible": {
+        "legacy": true,
+        "unified": true
+      }
+    }
+  ],
+  "typedVariants": [
+    {
+      "id": "every-name-at-its-typed-default",
+      "response": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "cli",
+            "rules": []
+          },
+          "vibe_cli_managed_shell_tools": {
+            "defaultValue": "legacy",
+            "rules": []
+          },
+          "vibe_cli_default_routing_model": {
+            "defaultValue": {},
+            "rules": []
+          },
+          "vibe_cli_smart_approve": {
+            "defaultValue": false,
+            "rules": []
+          },
+          "vibe_cli_smart_approve_default": {
+            "defaultValue": false,
+            "rules": []
+          },
+          "vibe_cli_extra_models": {
+            "defaultValue": {},
+            "rules": []
+          },
+          "vibe_cli_registry_skills": {
+            "defaultValue": false,
+            "rules": []
+          },
+          "vibe_cli_unified_harness_rollout": {
+            "defaultValue": "legacy",
+            "rules": []
+          }
+        }
+      },
+      "variants": {
+        "vibe_cli_system_prompt": "cli",
+        "vibe_cli_managed_shell_tools": "legacy",
+        "vibe_cli_default_routing_model": {},
+        "vibe_cli_smart_approve": false,
+        "vibe_cli_smart_approve_default": false,
+        "vibe_cli_extra_models": {},
+        "vibe_cli_registry_skills": false,
+        "vibe_cli_unified_harness_rollout": "legacy"
+      },
+      "variantsOrNone": {
+        "vibe_cli_system_prompt": "cli",
+        "vibe_cli_managed_shell_tools": "legacy",
+        "vibe_cli_default_routing_model": {},
+        "vibe_cli_smart_approve": false,
+        "vibe_cli_smart_approve_default": false,
+        "vibe_cli_extra_models": {},
+        "vibe_cli_registry_skills": false,
+        "vibe_cli_unified_harness_rollout": "legacy"
+      },
+      "configVariants": {},
+      "assignments": []
+    },
+    {
+      "id": "every-name-forced-off-its-default",
+      "response": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "cli",
+            "rules": [
+              {
+                "force": "lean",
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_system_prompt"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "inExperiment": true
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "vibe_cli_managed_shell_tools": {
+            "defaultValue": "legacy",
+            "rules": [
+              {
+                "force": "managed"
+              }
+            ]
+          },
+          "vibe_cli_default_routing_model": {
+            "defaultValue": {},
+            "rules": [
+              {
+                "force": {
+                  "active_model": "oracle-routed-alias"
+                }
+              }
+            ]
+          },
+          "vibe_cli_smart_approve": {
+            "defaultValue": false,
+            "rules": [
+              {
+                "force": true,
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_smart_approve"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "inExperiment": true
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "vibe_cli_smart_approve_default": {
+            "defaultValue": false,
+            "rules": [
+              {
+                "force": true
+              }
+            ]
+          },
+          "vibe_cli_extra_models": {
+            "defaultValue": {},
+            "rules": [
+              {
+                "force": [
+                  {
+                    "name": "oracle-extra-model",
+                    "provider": "mistral",
+                    "alias": "oracle-extra-alias",
+                    "input_price": 0.5,
+                    "output_price": 1.5
+                  }
+                ],
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_extra_models"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "value": [
+                        {
+                          "name": "oracle-extra-model",
+                          "provider": "mistral",
+                          "alias": "oracle-extra-alias",
+                          "input_price": 0.5,
+                          "output_price": 1.5
+                        }
+                      ],
+                      "inExperiment": true
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "vibe_cli_registry_skills": {
+            "defaultValue": false,
+            "rules": [
+              {
+                "force": "on"
+              }
+            ]
+          },
+          "vibe_cli_unified_harness_rollout": {
+            "defaultValue": "legacy",
+            "rules": [
+              {
+                "force": "unified",
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_unified_harness_rollout"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "inExperiment": true
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "variants": {
+        "vibe_cli_system_prompt": "lean",
+        "vibe_cli_managed_shell_tools": "managed",
+        "vibe_cli_default_routing_model": {
+          "active_model": "oracle-routed-alias"
+        },
+        "vibe_cli_smart_approve": true,
+        "vibe_cli_smart_approve_default": true,
+        "vibe_cli_extra_models": [
+          {
+            "name": "oracle-extra-model",
+            "provider": "mistral",
+            "alias": "oracle-extra-alias",
+            "input_price": 0.5,
+            "output_price": 1.5
+          }
+        ],
+        "vibe_cli_registry_skills": "on",
+        "vibe_cli_unified_harness_rollout": "unified"
+      },
+      "variantsOrNone": {
+        "vibe_cli_system_prompt": "lean",
+        "vibe_cli_managed_shell_tools": "managed",
+        "vibe_cli_default_routing_model": {
+          "active_model": "oracle-routed-alias"
+        },
+        "vibe_cli_smart_approve": true,
+        "vibe_cli_smart_approve_default": true,
+        "vibe_cli_extra_models": [
+          {
+            "name": "oracle-extra-model",
+            "provider": "mistral",
+            "alias": "oracle-extra-alias",
+            "input_price": 0.5,
+            "output_price": 1.5
+          }
+        ],
+        "vibe_cli_registry_skills": "on",
+        "vibe_cli_unified_harness_rollout": "unified"
+      },
+      "configVariants": {
+        "vibe_cli_system_prompt": "lean",
+        "vibe_cli_managed_shell_tools": "managed",
+        "vibe_cli_default_routing_model": {
+          "active_model": "oracle-routed-alias"
+        },
+        "vibe_cli_smart_approve": true,
+        "vibe_cli_smart_approve_default": true,
+        "vibe_cli_extra_models": [
+          {
+            "name": "oracle-extra-model",
+            "provider": "mistral",
+            "alias": "oracle-extra-alias",
+            "input_price": 0.5,
+            "output_price": 1.5
+          }
+        ],
+        "vibe_cli_registry_skills": "on",
+        "vibe_cli_unified_harness_rollout": "unified"
+      },
+      "assignments": [
+        {
+          "experiment_id": "vibe_cli_system_prompt",
+          "experiment_name": "vibe_cli_system_prompt",
+          "variation_name": "lean",
+          "variation_id": 1,
+          "in_experiment": true,
+          "hash_attribute": null,
+          "hash_value": null,
+          "feature_id": null
+        },
+        {
+          "experiment_id": "vibe_cli_smart_approve",
+          "experiment_name": "vibe_cli_smart_approve",
+          "variation_name": "true",
+          "variation_id": 1,
+          "in_experiment": true,
+          "hash_attribute": null,
+          "hash_value": null,
+          "feature_id": null
+        },
+        {
+          "experiment_id": "vibe_cli_extra_models",
+          "experiment_name": "vibe_cli_extra_models",
+          "variation_name": "[{\"name\": \"oracle-extra-model\", \"provider\": \"mistral\", \"alias\": \"oracle-extra-alias\", \"input_price\": 0.5, \"output_price\": 1.5}]",
+          "variation_id": 1,
+          "in_experiment": true,
+          "hash_attribute": null,
+          "hash_value": null,
+          "feature_id": null
+        },
+        {
+          "experiment_id": "vibe_cli_unified_harness_rollout",
+          "experiment_name": "vibe_cli_unified_harness_rollout",
+          "variation_name": "unified",
+          "variation_id": 1,
+          "in_experiment": true,
+          "hash_attribute": null,
+          "hash_value": null,
+          "feature_id": null
+        }
+      ]
+    },
+    {
+      "id": "python-numeric-equality",
+      "response": {
+        "features": {
+          "vibe_cli_smart_approve": {
+            "defaultValue": null,
+            "rules": [
+              {
+                "force": 0
+              }
+            ]
+          },
+          "vibe_cli_smart_approve_default": {
+            "defaultValue": null,
+            "rules": [
+              {
+                "force": 0.0
+              }
+            ]
+          },
+          "vibe_cli_registry_skills": {
+            "defaultValue": null,
+            "rules": [
+              {
+                "force": 1
+              }
+            ]
+          },
+          "vibe_cli_managed_shell_tools": {
+            "defaultValue": null,
+            "rules": [
+              {
+                "force": 1
+              }
+            ]
+          }
+        }
+      },
+      "variants": {
+        "vibe_cli_system_prompt": "cli",
+        "vibe_cli_managed_shell_tools": 1,
+        "vibe_cli_default_routing_model": {},
+        "vibe_cli_smart_approve": 0,
+        "vibe_cli_smart_approve_default": 0.0,
+        "vibe_cli_extra_models": {},
+        "vibe_cli_registry_skills": 1,
+        "vibe_cli_unified_harness_rollout": "legacy"
+      },
+      "variantsOrNone": {
+        "vibe_cli_system_prompt": null,
+        "vibe_cli_managed_shell_tools": 1,
+        "vibe_cli_default_routing_model": null,
+        "vibe_cli_smart_approve": 0,
+        "vibe_cli_smart_approve_default": 0.0,
+        "vibe_cli_extra_models": null,
+        "vibe_cli_registry_skills": 1,
+        "vibe_cli_unified_harness_rollout": null
+      },
+      "configVariants": {
+        "vibe_cli_managed_shell_tools": 1,
+        "vibe_cli_registry_skills": 1
+      },
+      "assignments": []
+    },
+    {
+      "id": "empty-collections",
+      "response": {
+        "features": {
+          "vibe_cli_default_routing_model": {
+            "defaultValue": null,
+            "rules": [
+              {
+                "force": {}
+              }
+            ]
+          },
+          "vibe_cli_extra_models": {
+            "defaultValue": null,
+            "rules": [
+              {
+                "force": []
+              }
+            ]
+          },
+          "vibe_cli_system_prompt": {
+            "defaultValue": "",
+            "rules": []
+          }
+        }
+      },
+      "variants": {
+        "vibe_cli_system_prompt": "",
+        "vibe_cli_managed_shell_tools": "legacy",
+        "vibe_cli_default_routing_model": {},
+        "vibe_cli_smart_approve": false,
+        "vibe_cli_smart_approve_default": false,
+        "vibe_cli_extra_models": [],
+        "vibe_cli_registry_skills": false,
+        "vibe_cli_unified_harness_rollout": "legacy"
+      },
+      "variantsOrNone": {
+        "vibe_cli_system_prompt": "",
+        "vibe_cli_managed_shell_tools": null,
+        "vibe_cli_default_routing_model": {},
+        "vibe_cli_smart_approve": null,
+        "vibe_cli_smart_approve_default": null,
+        "vibe_cli_extra_models": [],
+        "vibe_cli_registry_skills": null,
+        "vibe_cli_unified_harness_rollout": null
+      },
+      "configVariants": {
+        "vibe_cli_system_prompt": "",
+        "vibe_cli_extra_models": []
+      },
+      "assignments": []
+    },
+    {
+      "id": "booleans-spelled-as-strings",
+      "response": {
+        "features": {
+          "vibe_cli_smart_approve": {
+            "defaultValue": "false",
+            "rules": []
+          },
+          "vibe_cli_smart_approve_default": {
+            "defaultValue": "true",
+            "rules": []
+          },
+          "vibe_cli_registry_skills": {
+            "defaultValue": null,
+            "rules": [
+              {
+                "force": "False"
+              }
+            ]
+          }
+        }
+      },
+      "variants": {
+        "vibe_cli_system_prompt": "cli",
+        "vibe_cli_managed_shell_tools": "legacy",
+        "vibe_cli_default_routing_model": {},
+        "vibe_cli_smart_approve": "false",
+        "vibe_cli_smart_approve_default": "true",
+        "vibe_cli_extra_models": {},
+        "vibe_cli_registry_skills": "False",
+        "vibe_cli_unified_harness_rollout": "legacy"
+      },
+      "variantsOrNone": {
+        "vibe_cli_system_prompt": null,
+        "vibe_cli_managed_shell_tools": null,
+        "vibe_cli_default_routing_model": null,
+        "vibe_cli_smart_approve": "false",
+        "vibe_cli_smart_approve_default": "true",
+        "vibe_cli_extra_models": null,
+        "vibe_cli_registry_skills": "False",
+        "vibe_cli_unified_harness_rollout": null
+      },
+      "configVariants": {
+        "vibe_cli_smart_approve": "false",
+        "vibe_cli_smart_approve_default": "true",
+        "vibe_cli_registry_skills": "False"
+      },
+      "assignments": []
+    },
+    {
+      "id": "default-value-off-its-baseline",
+      "response": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "lean",
+            "rules": []
+          },
+          "vibe_cli_unified_harness_rollout": {
+            "defaultValue": "unified",
+            "rules": []
+          },
+          "vibe_cli_extra_models": {
+            "defaultValue": {
+              "models": [
+                {
+                  "name": "oracle-extra-model",
+                  "provider": "mistral",
+                  "alias": "oracle-extra-alias",
+                  "input_price": 0.5,
+                  "output_price": 1.5
+                }
+              ]
+            },
+            "rules": []
+          }
+        }
+      },
+      "variants": {
+        "vibe_cli_system_prompt": "lean",
+        "vibe_cli_managed_shell_tools": "legacy",
+        "vibe_cli_default_routing_model": {},
+        "vibe_cli_smart_approve": false,
+        "vibe_cli_smart_approve_default": false,
+        "vibe_cli_extra_models": {
+          "models": [
+            {
+              "name": "oracle-extra-model",
+              "provider": "mistral",
+              "alias": "oracle-extra-alias",
+              "input_price": 0.5,
+              "output_price": 1.5
+            }
+          ]
+        },
+        "vibe_cli_registry_skills": false,
+        "vibe_cli_unified_harness_rollout": "unified"
+      },
+      "variantsOrNone": {
+        "vibe_cli_system_prompt": "lean",
+        "vibe_cli_managed_shell_tools": null,
+        "vibe_cli_default_routing_model": null,
+        "vibe_cli_smart_approve": null,
+        "vibe_cli_smart_approve_default": null,
+        "vibe_cli_extra_models": {
+          "models": [
+            {
+              "name": "oracle-extra-model",
+              "provider": "mistral",
+              "alias": "oracle-extra-alias",
+              "input_price": 0.5,
+              "output_price": 1.5
+            }
+          ]
+        },
+        "vibe_cli_registry_skills": null,
+        "vibe_cli_unified_harness_rollout": "unified"
+      },
+      "configVariants": {
+        "vibe_cli_system_prompt": "lean",
+        "vibe_cli_extra_models": {
+          "models": [
+            {
+              "name": "oracle-extra-model",
+              "provider": "mistral",
+              "alias": "oracle-extra-alias",
+              "input_price": 0.5,
+              "output_price": 1.5
+            }
+          ]
+        },
+        "vibe_cli_unified_harness_rollout": "unified"
+      },
+      "assignments": []
+    },
+    {
+      "id": "exposure-labels-of-typed-values",
+      "response": {
+        "features": {
+          "vibe_cli_smart_approve": {
+            "defaultValue": false,
+            "rules": [
+              {
+                "force": true,
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_smart_approve"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "inExperiment": true
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "vibe_cli_smart_approve_default": {
+            "defaultValue": null,
+            "rules": [
+              {
+                "force": 0.5,
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_smart_approve_default"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "inExperiment": true
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "vibe_cli_default_routing_model": {
+            "defaultValue": {},
+            "rules": [
+              {
+                "force": {
+                  "b": 1,
+                  "a": [
+                    1.0,
+                    null,
+                    "é"
+                  ]
+                },
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_default_routing_model"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "inExperiment": true
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "vibe_cli_registry_skills": {
+            "defaultValue": false,
+            "rules": [
+              {
+                "force": true,
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_registry_skills"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "inExperiment": false
+                    }
+                  },
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_registry_skills"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "value": false,
+                      "inExperiment": true
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      },
+      "variants": {
+        "vibe_cli_system_prompt": "cli",
+        "vibe_cli_managed_shell_tools": "legacy",
+        "vibe_cli_default_routing_model": {
+          "b": 1,
+          "a": [
+            1.0,
+            null,
+            "é"
+          ]
+        },
+        "vibe_cli_smart_approve": true,
+        "vibe_cli_smart_approve_default": 0.5,
+        "vibe_cli_extra_models": {},
+        "vibe_cli_registry_skills": true,
+        "vibe_cli_unified_harness_rollout": "legacy"
+      },
+      "variantsOrNone": {
+        "vibe_cli_system_prompt": null,
+        "vibe_cli_managed_shell_tools": null,
+        "vibe_cli_default_routing_model": {
+          "b": 1,
+          "a": [
+            1.0,
+            null,
+            "é"
+          ]
+        },
+        "vibe_cli_smart_approve": true,
+        "vibe_cli_smart_approve_default": 0.5,
+        "vibe_cli_extra_models": null,
+        "vibe_cli_registry_skills": true,
+        "vibe_cli_unified_harness_rollout": null
+      },
+      "configVariants": {
+        "vibe_cli_default_routing_model": {
+          "b": 1,
+          "a": [
+            1.0,
+            null,
+            "é"
+          ]
+        },
+        "vibe_cli_smart_approve": true,
+        "vibe_cli_smart_approve_default": 0.5,
+        "vibe_cli_registry_skills": true
+      },
+      "assignments": [
+        {
+          "experiment_id": "vibe_cli_smart_approve",
+          "experiment_name": "vibe_cli_smart_approve",
+          "variation_name": "true",
+          "variation_id": 1,
+          "in_experiment": true,
+          "hash_attribute": null,
+          "hash_value": null,
+          "feature_id": null
+        },
+        {
+          "experiment_id": "vibe_cli_smart_approve_default",
+          "experiment_name": "vibe_cli_smart_approve_default",
+          "variation_name": "0.5",
+          "variation_id": 1,
+          "in_experiment": true,
+          "hash_attribute": null,
+          "hash_value": null,
+          "feature_id": null
+        },
+        {
+          "experiment_id": "vibe_cli_default_routing_model",
+          "experiment_name": "vibe_cli_default_routing_model",
+          "variation_name": "{\"b\": 1, \"a\": [1.0, null, \"\\u00e9\"]}",
+          "variation_id": 1,
+          "in_experiment": true,
+          "hash_attribute": null,
+          "hash_value": null,
+          "feature_id": null
+        },
+        {
+          "experiment_id": "vibe_cli_registry_skills",
+          "experiment_name": "vibe_cli_registry_skills",
+          "variation_name": "false",
+          "variation_id": 1,
+          "in_experiment": true,
+          "hash_attribute": null,
+          "hash_value": null,
+          "feature_id": null
+        }
+      ]
+    }
+  ],
+  "typedMapping": [
+    {
+      "id": "smart-approve-true",
+      "variants": {
+        "vibe_cli_smart_approve": true
+      },
+      "data": {
+        "smart_approve_available": true
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "smart-approve-on-tokens",
+      "variants": {
+        "vibe_cli_smart_approve": " On ",
+        "vibe_cli_smart_approve_default": "TRUE"
+      },
+      "data": {
+        "smart_approve_available": true,
+        "smart_approve_default": true
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "smart-approve-off-tokens",
+      "variants": {
+        "vibe_cli_smart_approve": "off",
+        "vibe_cli_smart_approve_default": false
+      },
+      "data": {},
+      "hasFingerprint": false
+    },
+    {
+      "id": "smart-approve-one-is-not-true",
+      "variants": {
+        "vibe_cli_smart_approve": 1,
+        "vibe_cli_smart_approve_default": "1"
+      },
+      "data": {},
+      "hasFingerprint": false
+    },
+    {
+      "id": "smart-approve-default-alone",
+      "variants": {
+        "vibe_cli_smart_approve_default": true
+      },
+      "data": {
+        "smart_approve_default": true
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "registry-skills-true-string",
+      "variants": {
+        "vibe_cli_registry_skills": "true"
+      },
+      "data": {
+        "experimental_enable_registry_skills": true
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "registry-skills-yes",
+      "variants": {
+        "vibe_cli_registry_skills": "yes"
+      },
+      "data": {},
+      "hasFingerprint": false
+    },
+    {
+      "id": "registry-skills-typed",
+      "variants": {
+        "vibe_cli_registry_skills": true
+      },
+      "data": {
+        "experimental_enable_registry_skills": true
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "managed-shell-typed-true",
+      "variants": {
+        "vibe_cli_managed_shell_tools": true
+      },
+      "data": {
+        "managed_shell_tools_enabled": true
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "managed-shell-padded",
+      "variants": {
+        "vibe_cli_managed_shell_tools": "  Managed\n"
+      },
+      "data": {
+        "managed_shell_tools_enabled": true
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "managed-shell-true-string",
+      "variants": {
+        "vibe_cli_managed_shell_tools": "TRUE"
+      },
+      "data": {
+        "managed_shell_tools_enabled": true
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "managed-shell-on-is-not-managed",
+      "variants": {
+        "vibe_cli_managed_shell_tools": "on"
+      },
+      "data": {},
+      "hasFingerprint": false
+    },
+    {
+      "id": "system-prompt-not-a-string",
+      "variants": {
+        "vibe_cli_system_prompt": 7
+      },
+      "data": {},
+      "hasFingerprint": false
+    },
+    {
+      "id": "routing-typed-object",
+      "variants": {
+        "vibe_cli_default_routing_model": {
+          "active_model": "oracle-routed-alias",
+          "model_config": {
+            "name": "oracle-routed-model",
+            "provider": "mistral",
+            "alias": "oracle-routed-alias",
+            "input_price": "0.0",
+            "output_price": "0.0",
+            "supports_images": false
+          }
+        }
+      },
+      "data": {
+        "routed_default_model": "oracle-routed-alias",
+        "routed_model_config": "{\"name\": \"oracle-routed-model\", \"provider\": \"mistral\", \"alias\": \"oracle-routed-alias\", \"input_price\": \"0.0\", \"output_price\": \"0.0\", \"supports_images\": false}",
+        "models": {
+          "oracle-routed-alias": {
+            "name": "oracle-routed-model",
+            "provider": "mistral",
+            "alias": "oracle-routed-alias",
+            "input_price": "0.0",
+            "output_price": "0.0",
+            "supports_images": false
+          }
+        }
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "routing-typed-array",
+      "variants": {
+        "vibe_cli_default_routing_model": [
+          "oracle-routed-alias"
+        ]
+      },
+      "data": {},
+      "hasFingerprint": false
+    },
+    {
+      "id": "routing-model-config-without-an-alias",
+      "variants": {
+        "vibe_cli_default_routing_model": {
+          "active_model": "oracle-unaliased-model",
+          "model_config": {
+            "name": "oracle-unaliased-model",
+            "provider": "mistral"
+          }
+        }
+      },
+      "data": {
+        "routed_default_model": "oracle-unaliased-model",
+        "routed_model_config": "{\"name\": \"oracle-unaliased-model\", \"provider\": \"mistral\"}",
+        "models": {
+          "oracle-unaliased-model": {
+            "name": "oracle-unaliased-model",
+            "provider": "mistral",
+            "alias": "oracle-unaliased-model"
+          }
+        }
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "routing-model-config-that-does-not-validate",
+      "variants": {
+        "vibe_cli_default_routing_model": {
+          "active_model": "oracle-routed-alias",
+          "model_config": {
+            "name": "x"
+          }
+        }
+      },
+      "data": {
+        "routed_default_model": "oracle-routed-alias",
+        "routed_model_config": "{\"name\": \"x\"}"
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "extra-models-list",
+      "variants": {
+        "vibe_cli_extra_models": [
+          {
+            "name": "oracle-extra-model",
+            "provider": "mistral",
+            "alias": "oracle-extra-alias",
+            "input_price": 0.5,
+            "output_price": 1.5
+          },
+          {
+            "name": "oracle-second-extra-model",
+            "provider": "mistral",
+            "alias": "oracle-second-extra-alias",
+            "thinking": "high"
+          }
+        ]
+      },
+      "data": {
+        "routed_extra_models": "[{\"name\": \"oracle-extra-model\", \"provider\": \"mistral\", \"alias\": \"oracle-extra-alias\", \"input_price\": 0.5, \"output_price\": 1.5}, {\"name\": \"oracle-second-extra-model\", \"provider\": \"mistral\", \"alias\": \"oracle-second-extra-alias\", \"thinking\": \"high\"}]",
+        "models": {
+          "oracle-extra-alias": {
+            "name": "oracle-extra-model",
+            "provider": "mistral",
+            "alias": "oracle-extra-alias",
+            "input_price": 0.5,
+            "output_price": 1.5
+          },
+          "oracle-second-extra-alias": {
+            "name": "oracle-second-extra-model",
+            "provider": "mistral",
+            "alias": "oracle-second-extra-alias",
+            "thinking": "high"
+          }
+        }
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "extra-models-object",
+      "variants": {
+        "vibe_cli_extra_models": {
+          "models": [
+            {
+              "name": "oracle-extra-model",
+              "provider": "mistral",
+              "alias": "oracle-extra-alias",
+              "input_price": 0.5,
+              "output_price": 1.5
+            }
+          ]
+        }
+      },
+      "data": {
+        "routed_extra_models": "[{\"name\": \"oracle-extra-model\", \"provider\": \"mistral\", \"alias\": \"oracle-extra-alias\", \"input_price\": 0.5, \"output_price\": 1.5}]",
+        "models": {
+          "oracle-extra-alias": {
+            "name": "oracle-extra-model",
+            "provider": "mistral",
+            "alias": "oracle-extra-alias",
+            "input_price": 0.5,
+            "output_price": 1.5
+          }
+        }
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "extra-models-json-text",
+      "variants": {
+        "vibe_cli_extra_models": "[{\"name\": \"oracle-second-extra-model\", \"provider\": \"mistral\", \"alias\": \"oracle-second-extra-alias\", \"thinking\": \"high\"}]"
+      },
+      "data": {
+        "routed_extra_models": "[{\"name\": \"oracle-second-extra-model\", \"provider\": \"mistral\", \"alias\": \"oracle-second-extra-alias\", \"thinking\": \"high\"}]",
+        "models": {
+          "oracle-second-extra-alias": {
+            "name": "oracle-second-extra-model",
+            "provider": "mistral",
+            "alias": "oracle-second-extra-alias",
+            "thinking": "high"
+          }
+        }
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "extra-models-json-text-object",
+      "variants": {
+        "vibe_cli_extra_models": "{\"models\": [{\"name\": \"oracle-extra-model\", \"provider\": \"mistral\", \"alias\": \"oracle-extra-alias\", \"input_price\": 0.5, \"output_price\": 1.5}]}"
+      },
+      "data": {
+        "routed_extra_models": "[{\"name\": \"oracle-extra-model\", \"provider\": \"mistral\", \"alias\": \"oracle-extra-alias\", \"input_price\": 0.5, \"output_price\": 1.5}]",
+        "models": {
+          "oracle-extra-alias": {
+            "name": "oracle-extra-model",
+            "provider": "mistral",
+            "alias": "oracle-extra-alias",
+            "input_price": 0.5,
+            "output_price": 1.5
+          }
+        }
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "extra-models-mixed-entries",
+      "variants": {
+        "vibe_cli_extra_models": [
+          {
+            "name": "oracle-extra-model",
+            "provider": "mistral",
+            "alias": "oracle-extra-alias",
+            "input_price": 0.5,
+            "output_price": 1.5
+          },
+          "text",
+          3,
+          null,
+          []
+        ]
+      },
+      "data": {
+        "routed_extra_models": "[{\"name\": \"oracle-extra-model\", \"provider\": \"mistral\", \"alias\": \"oracle-extra-alias\", \"input_price\": 0.5, \"output_price\": 1.5}]",
+        "models": {
+          "oracle-extra-alias": {
+            "name": "oracle-extra-model",
+            "provider": "mistral",
+            "alias": "oracle-extra-alias",
+            "input_price": 0.5,
+            "output_price": 1.5
+          }
+        }
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "extra-models-empty-list",
+      "variants": {
+        "vibe_cli_extra_models": []
+      },
+      "data": {},
+      "hasFingerprint": false
+    },
+    {
+      "id": "extra-models-only-non-objects",
+      "variants": {
+        "vibe_cli_extra_models": [
+          "a",
+          1
+        ]
+      },
+      "data": {},
+      "hasFingerprint": false
+    },
+    {
+      "id": "extra-models-object-without-models",
+      "variants": {
+        "vibe_cli_extra_models": {
+          "a": 1
+        }
+      },
+      "data": {},
+      "hasFingerprint": false
+    },
+    {
+      "id": "extra-models-models-not-a-list",
+      "variants": {
+        "vibe_cli_extra_models": {
+          "models": {
+            "name": "oracle-extra-model",
+            "provider": "mistral",
+            "alias": "oracle-extra-alias",
+            "input_price": 0.5,
+            "output_price": 1.5
+          }
+        }
+      },
+      "data": {},
+      "hasFingerprint": false
+    },
+    {
+      "id": "extra-models-not-json-text",
+      "variants": {
+        "vibe_cli_extra_models": "not json"
+      },
+      "data": {},
+      "hasFingerprint": false
+    },
+    {
+      "id": "extra-models-scalar",
+      "variants": {
+        "vibe_cli_extra_models": 3
+      },
+      "data": {},
+      "hasFingerprint": false
+    },
+    {
+      "id": "extra-models-invalid-definition",
+      "variants": {
+        "vibe_cli_extra_models": [
+          {
+            "name": "x"
+          },
+          {
+            "name": "oracle-extra-model",
+            "provider": "mistral",
+            "alias": "oracle-extra-alias",
+            "input_price": 0.5,
+            "output_price": 1.5
+          }
+        ]
+      },
+      "data": {
+        "routed_extra_models": "[{\"name\": \"x\"}, {\"name\": \"oracle-extra-model\", \"provider\": \"mistral\", \"alias\": \"oracle-extra-alias\", \"input_price\": 0.5, \"output_price\": 1.5}]",
+        "models": {
+          "oracle-extra-alias": {
+            "name": "oracle-extra-model",
+            "provider": "mistral",
+            "alias": "oracle-extra-alias",
+            "input_price": 0.5,
+            "output_price": 1.5
+          }
+        }
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "extra-models-without-an-alias",
+      "variants": {
+        "vibe_cli_extra_models": [
+          {
+            "name": "oracle-unaliased-model",
+            "provider": "mistral"
+          }
+        ]
+      },
+      "data": {
+        "routed_extra_models": "[{\"name\": \"oracle-unaliased-model\", \"provider\": \"mistral\"}]",
+        "models": {
+          "oracle-unaliased-model": {
+            "name": "oracle-unaliased-model",
+            "provider": "mistral",
+            "alias": "oracle-unaliased-model"
+          }
+        }
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "extra-models-empty-alias",
+      "variants": {
+        "vibe_cli_extra_models": [
+          {
+            "name": "oracle-extra-model",
+            "provider": "mistral",
+            "alias": "",
+            "input_price": 0.5,
+            "output_price": 1.5
+          }
+        ]
+      },
+      "data": {
+        "routed_extra_models": "[{\"name\": \"oracle-extra-model\", \"provider\": \"mistral\", \"alias\": \"\", \"input_price\": 0.5, \"output_price\": 1.5}]"
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "extra-models-null-alias",
+      "variants": {
+        "vibe_cli_extra_models": [
+          {
+            "name": "oracle-extra-model",
+            "provider": "mistral",
+            "alias": null,
+            "input_price": 0.5,
+            "output_price": 1.5
+          }
+        ]
+      },
+      "data": {
+        "routed_extra_models": "[{\"name\": \"oracle-extra-model\", \"provider\": \"mistral\", \"alias\": null, \"input_price\": 0.5, \"output_price\": 1.5}]",
+        "models": {
+          "oracle-extra-model": {
+            "name": "oracle-extra-model",
+            "provider": "mistral",
+            "alias": "oracle-extra-model",
+            "input_price": 0.5,
+            "output_price": 1.5
+          }
+        }
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "extra-models-duplicate-alias",
+      "variants": {
+        "vibe_cli_extra_models": [
+          {
+            "name": "oracle-extra-model",
+            "provider": "mistral",
+            "alias": "oracle-extra-alias",
+            "input_price": 0.5,
+            "output_price": 1.5
+          },
+          {
+            "name": "oracle-second-extra-model",
+            "provider": "mistral",
+            "alias": "oracle-second-extra-alias",
+            "thinking": "high"
+          },
+          {
+            "name": "oracle-replacement-model",
+            "provider": "mistral",
+            "alias": "oracle-extra-alias",
+            "input_price": 0.5,
+            "output_price": 1.5
+          }
+        ]
+      },
+      "data": {
+        "routed_extra_models": "[{\"name\": \"oracle-extra-model\", \"provider\": \"mistral\", \"alias\": \"oracle-extra-alias\", \"input_price\": 0.5, \"output_price\": 1.5}, {\"name\": \"oracle-second-extra-model\", \"provider\": \"mistral\", \"alias\": \"oracle-second-extra-alias\", \"thinking\": \"high\"}, {\"name\": \"oracle-replacement-model\", \"provider\": \"mistral\", \"alias\": \"oracle-extra-alias\", \"input_price\": 0.5, \"output_price\": 1.5}]",
+        "models": {
+          "oracle-extra-alias": {
+            "name": "oracle-replacement-model",
+            "provider": "mistral",
+            "alias": "oracle-extra-alias",
+            "input_price": 0.5,
+            "output_price": 1.5
+          },
+          "oracle-second-extra-alias": {
+            "name": "oracle-second-extra-model",
+            "provider": "mistral",
+            "alias": "oracle-second-extra-alias",
+            "thinking": "high"
+          }
+        }
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "routing-and-extra-models-share-an-alias",
+      "variants": {
+        "vibe_cli_default_routing_model": {
+          "active_model": "oracle-routed-alias",
+          "model_config": {
+            "name": "oracle-routed-model",
+            "provider": "mistral",
+            "alias": "oracle-routed-alias",
+            "input_price": "0.0",
+            "output_price": "0.0",
+            "supports_images": false
+          }
+        },
+        "vibe_cli_extra_models": [
+          {
+            "name": "oracle-extra-routed-model",
+            "provider": "mistral",
+            "alias": "oracle-routed-alias",
+            "input_price": "0.0",
+            "output_price": "0.0",
+            "supports_images": false
+          }
+        ]
+      },
+      "data": {
+        "routed_default_model": "oracle-routed-alias",
+        "routed_model_config": "{\"name\": \"oracle-routed-model\", \"provider\": \"mistral\", \"alias\": \"oracle-routed-alias\", \"input_price\": \"0.0\", \"output_price\": \"0.0\", \"supports_images\": false}",
+        "routed_extra_models": "[{\"name\": \"oracle-extra-routed-model\", \"provider\": \"mistral\", \"alias\": \"oracle-routed-alias\", \"input_price\": \"0.0\", \"output_price\": \"0.0\", \"supports_images\": false}]",
+        "models": {
+          "oracle-routed-alias": {
+            "name": "oracle-extra-routed-model",
+            "provider": "mistral",
+            "alias": "oracle-routed-alias",
+            "input_price": "0.0",
+            "output_price": "0.0",
+            "supports_images": false
+          }
+        }
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "unified-harness-maps-to-nothing",
+      "variants": {
+        "vibe_cli_unified_harness_rollout": "unified"
+      },
+      "data": {},
+      "hasFingerprint": false
+    },
+    {
+      "id": "every-typed-experiment",
+      "variants": {
+        "vibe_cli_system_prompt": "lean",
+        "vibe_cli_default_routing_model": {
+          "active_model": "oracle-routed-alias",
+          "model_config": {
+            "name": "oracle-routed-model",
+            "provider": "mistral",
+            "alias": "oracle-routed-alias",
+            "input_price": "0.0",
+            "output_price": "0.0",
+            "supports_images": false
+          }
+        },
+        "vibe_cli_extra_models": {
+          "models": [
+            {
+              "name": "oracle-extra-model",
+              "provider": "mistral",
+              "alias": "oracle-extra-alias",
+              "input_price": 0.5,
+              "output_price": 1.5
+            }
+          ]
+        },
+        "vibe_cli_managed_shell_tools": true,
+        "vibe_cli_smart_approve": "on",
+        "vibe_cli_smart_approve_default": true,
+        "vibe_cli_registry_skills": "TRUE",
+        "vibe_cli_unified_harness_rollout": "unified"
+      },
+      "data": {
+        "system_prompt_id": "lean",
+        "routed_default_model": "oracle-routed-alias",
+        "routed_model_config": "{\"name\": \"oracle-routed-model\", \"provider\": \"mistral\", \"alias\": \"oracle-routed-alias\", \"input_price\": \"0.0\", \"output_price\": \"0.0\", \"supports_images\": false}",
+        "routed_extra_models": "[{\"name\": \"oracle-extra-model\", \"provider\": \"mistral\", \"alias\": \"oracle-extra-alias\", \"input_price\": 0.5, \"output_price\": 1.5}]",
+        "managed_shell_tools_enabled": true,
+        "smart_approve_available": true,
+        "smart_approve_default": true,
+        "experimental_enable_registry_skills": true,
+        "models": {
+          "oracle-routed-alias": {
+            "name": "oracle-routed-model",
+            "provider": "mistral",
+            "alias": "oracle-routed-alias",
+            "input_price": "0.0",
+            "output_price": "0.0",
+            "supports_images": false
+          },
+          "oracle-extra-alias": {
+            "name": "oracle-extra-model",
+            "provider": "mistral",
+            "alias": "oracle-extra-alias",
+            "input_price": 0.5,
+            "output_price": 1.5
+          }
+        }
+      },
+      "hasFingerprint": true
+    },
+    {
+      "id": "authored-in-reverse-order",
+      "variants": {
+        "vibe_cli_registry_skills": true,
+        "vibe_cli_smart_approve_default": true,
+        "vibe_cli_smart_approve": true,
+        "vibe_cli_managed_shell_tools": true,
+        "vibe_cli_extra_models": [
+          {
+            "name": "oracle-extra-model",
+            "provider": "mistral",
+            "alias": "oracle-extra-alias",
+            "input_price": 0.5,
+            "output_price": 1.5
+          }
+        ],
+        "vibe_cli_default_routing_model": {
+          "active_model": "oracle-routed-alias",
+          "model_config": {
+            "name": "oracle-routed-model",
+            "provider": "mistral",
+            "alias": "oracle-routed-alias",
+            "input_price": "0.0",
+            "output_price": "0.0",
+            "supports_images": false
+          }
+        },
+        "vibe_cli_system_prompt": "lean"
+      },
+      "data": {
+        "system_prompt_id": "lean",
+        "routed_default_model": "oracle-routed-alias",
+        "routed_model_config": "{\"name\": \"oracle-routed-model\", \"provider\": \"mistral\", \"alias\": \"oracle-routed-alias\", \"input_price\": \"0.0\", \"output_price\": \"0.0\", \"supports_images\": false}",
+        "routed_extra_models": "[{\"name\": \"oracle-extra-model\", \"provider\": \"mistral\", \"alias\": \"oracle-extra-alias\", \"input_price\": 0.5, \"output_price\": 1.5}]",
+        "managed_shell_tools_enabled": true,
+        "smart_approve_available": true,
+        "smart_approve_default": true,
+        "experimental_enable_registry_skills": true,
+        "models": {
+          "oracle-routed-alias": {
+            "name": "oracle-routed-model",
+            "provider": "mistral",
+            "alias": "oracle-routed-alias",
+            "input_price": "0.0",
+            "output_price": "0.0",
+            "supports_images": false
+          },
+          "oracle-extra-alias": {
+            "name": "oracle-extra-model",
+            "provider": "mistral",
+            "alias": "oracle-extra-alias",
+            "input_price": 0.5,
+            "output_price": 1.5
+          }
+        }
+      },
+      "hasFingerprint": true
+    }
+  ],
+  "evalCache": [
+    {
+      "id": "constants",
+      "operation": "constants",
+      "configuration": null,
+      "seed": null,
+      "response": null,
+      "loaded": null,
+      "file": {
+        "name": "experiment_eval_cache.json",
+        "ttlSeconds": 604800,
+        "key": "0889ce8313bb7ddbccdae21c86f894ce"
+      }
+    },
+    {
+      "id": "load/absent-file",
+      "operation": "load",
+      "configuration": "mistral-active",
+      "seed": null,
+      "response": null,
+      "loaded": null,
+      "file": null
+    },
+    {
+      "id": "load/fresh-entry",
+      "operation": "load",
+      "configuration": "mistral-active",
+      "seed": "{\"0889ce8313bb7ddbccdae21c86f894ce\": {\"stored_at_timestamp\": 1800000000, \"payload\": {\"features\": {\"vibe_cli_system_prompt\": {\"defaultValue\": \"lean\", \"rules\": [{\"force\": \"tests\", \"tracks\": [{\"experiment\": {\"key\": \"vibe_cli_system_prompt\"}, \"result\": {\"key\": \"1\", \"variationId\": 1, \"inExperiment\": true}}]}]}, \"vibe_cli_smart_approve\": {\"defaultValue\": false, \"rules\": [{\"force\": true}]}}}}}",
+      "response": null,
+      "loaded": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "lean",
+            "rules": [
+              {
+                "force": "tests",
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_system_prompt"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "value": null,
+                      "inExperiment": true,
+                      "hashAttribute": null,
+                      "hashValue": null,
+                      "featureId": null
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "vibe_cli_smart_approve": {
+            "defaultValue": false,
+            "rules": [
+              {
+                "force": true,
+                "tracks": []
+              }
+            ]
+          }
+        }
+      },
+      "file": null
+    },
+    {
+      "id": "load/one-second-inside-the-bound",
+      "operation": "load",
+      "configuration": "mistral-active",
+      "seed": "{\"0889ce8313bb7ddbccdae21c86f894ce\": {\"stored_at_timestamp\": 1799395201, \"payload\": {\"features\": {\"vibe_cli_system_prompt\": {\"defaultValue\": \"lean\", \"rules\": [{\"force\": \"tests\", \"tracks\": [{\"experiment\": {\"key\": \"vibe_cli_system_prompt\"}, \"result\": {\"key\": \"1\", \"variationId\": 1, \"inExperiment\": true}}]}]}, \"vibe_cli_smart_approve\": {\"defaultValue\": false, \"rules\": [{\"force\": true}]}}}}}",
+      "response": null,
+      "loaded": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "lean",
+            "rules": [
+              {
+                "force": "tests",
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_system_prompt"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "value": null,
+                      "inExperiment": true,
+                      "hashAttribute": null,
+                      "hashValue": null,
+                      "featureId": null
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "vibe_cli_smart_approve": {
+            "defaultValue": false,
+            "rules": [
+              {
+                "force": true,
+                "tracks": []
+              }
+            ]
+          }
+        }
+      },
+      "file": null
+    },
+    {
+      "id": "load/exactly-at-the-bound",
+      "operation": "load",
+      "configuration": "mistral-active",
+      "seed": "{\"0889ce8313bb7ddbccdae21c86f894ce\": {\"stored_at_timestamp\": 1799395200, \"payload\": {\"features\": {\"vibe_cli_system_prompt\": {\"defaultValue\": \"lean\", \"rules\": [{\"force\": \"tests\", \"tracks\": [{\"experiment\": {\"key\": \"vibe_cli_system_prompt\"}, \"result\": {\"key\": \"1\", \"variationId\": 1, \"inExperiment\": true}}]}]}, \"vibe_cli_smart_approve\": {\"defaultValue\": false, \"rules\": [{\"force\": true}]}}}}}",
+      "response": null,
+      "loaded": null,
+      "file": null
+    },
+    {
+      "id": "load/stored-in-the-future",
+      "operation": "load",
+      "configuration": "mistral-active",
+      "seed": "{\"0889ce8313bb7ddbccdae21c86f894ce\": {\"stored_at_timestamp\": 1800003600, \"payload\": {\"features\": {\"vibe_cli_system_prompt\": {\"defaultValue\": \"lean\", \"rules\": [{\"force\": \"tests\", \"tracks\": [{\"experiment\": {\"key\": \"vibe_cli_system_prompt\"}, \"result\": {\"key\": \"1\", \"variationId\": 1, \"inExperiment\": true}}]}]}, \"vibe_cli_smart_approve\": {\"defaultValue\": false, \"rules\": [{\"force\": true}]}}}}}",
+      "response": null,
+      "loaded": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "lean",
+            "rules": [
+              {
+                "force": "tests",
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_system_prompt"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "value": null,
+                      "inExperiment": true,
+                      "hashAttribute": null,
+                      "hashValue": null,
+                      "featureId": null
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "vibe_cli_smart_approve": {
+            "defaultValue": false,
+            "rules": [
+              {
+                "force": true,
+                "tracks": []
+              }
+            ]
+          }
+        }
+      },
+      "file": null
+    },
+    {
+      "id": "load/another-key-only",
+      "operation": "load",
+      "configuration": "mistral-active",
+      "seed": "{\"00000000000000000000000000000000\": {\"stored_at_timestamp\": 1800000000, \"payload\": {\"features\": {\"vibe_cli_system_prompt\": {\"defaultValue\": \"lean\", \"rules\": [{\"force\": \"tests\", \"tracks\": [{\"experiment\": {\"key\": \"vibe_cli_system_prompt\"}, \"result\": {\"key\": \"1\", \"variationId\": 1, \"inExperiment\": true}}]}]}, \"vibe_cli_smart_approve\": {\"defaultValue\": false, \"rules\": [{\"force\": true}]}}}}}",
+      "response": null,
+      "loaded": null,
+      "file": null
+    },
+    {
+      "id": "load/not-json",
+      "operation": "load",
+      "configuration": "mistral-active",
+      "seed": "not json",
+      "response": null,
+      "loaded": null,
+      "file": null
+    },
+    {
+      "id": "load/json-array",
+      "operation": "load",
+      "configuration": "mistral-active",
+      "seed": "[]",
+      "response": null,
+      "loaded": null,
+      "file": null
+    },
+    {
+      "id": "load/utf8-bom",
+      "operation": "load",
+      "configuration": "mistral-active",
+      "seed": "﻿{\"0889ce8313bb7ddbccdae21c86f894ce\": {\"stored_at_timestamp\": 1800000000, \"payload\": {\"features\": {\"vibe_cli_system_prompt\": {\"defaultValue\": \"lean\", \"rules\": [{\"force\": \"tests\", \"tracks\": [{\"experiment\": {\"key\": \"vibe_cli_system_prompt\"}, \"result\": {\"key\": \"1\", \"variationId\": 1, \"inExperiment\": true}}]}]}, \"vibe_cli_smart_approve\": {\"defaultValue\": false, \"rules\": [{\"force\": true}]}}}}}",
+      "response": null,
+      "loaded": null,
+      "file": null
+    },
+    {
+      "id": "load/entry-not-an-object",
+      "operation": "load",
+      "configuration": "mistral-active",
+      "seed": "{\"0889ce8313bb7ddbccdae21c86f894ce\": \"text\"}",
+      "response": null,
+      "loaded": null,
+      "file": null
+    },
+    {
+      "id": "load/stored-at-text",
+      "operation": "load",
+      "configuration": "mistral-active",
+      "seed": "{\"0889ce8313bb7ddbccdae21c86f894ce\": {\"stored_at_timestamp\": \"1800000000\", \"payload\": {\"features\": {\"vibe_cli_system_prompt\": {\"defaultValue\": \"lean\", \"rules\": [{\"force\": \"tests\", \"tracks\": [{\"experiment\": {\"key\": \"vibe_cli_system_prompt\"}, \"result\": {\"key\": \"1\", \"variationId\": 1, \"inExperiment\": true}}]}]}, \"vibe_cli_smart_approve\": {\"defaultValue\": false, \"rules\": [{\"force\": true}]}}}}}",
+      "response": null,
+      "loaded": null,
+      "file": null
+    },
+    {
+      "id": "load/stored-at-float",
+      "operation": "load",
+      "configuration": "mistral-active",
+      "seed": "{\"0889ce8313bb7ddbccdae21c86f894ce\": {\"stored_at_timestamp\": 1800000000.0, \"payload\": {\"features\": {\"vibe_cli_system_prompt\": {\"defaultValue\": \"lean\", \"rules\": [{\"force\": \"tests\", \"tracks\": [{\"experiment\": {\"key\": \"vibe_cli_system_prompt\"}, \"result\": {\"key\": \"1\", \"variationId\": 1, \"inExperiment\": true}}]}]}, \"vibe_cli_smart_approve\": {\"defaultValue\": false, \"rules\": [{\"force\": true}]}}}}}",
+      "response": null,
+      "loaded": null,
+      "file": null
+    },
+    {
+      "id": "load/stored-at-boolean",
+      "operation": "load",
+      "configuration": "mistral-active",
+      "seed": "{\"0889ce8313bb7ddbccdae21c86f894ce\": {\"stored_at_timestamp\": true, \"payload\": {\"features\": {\"vibe_cli_system_prompt\": {\"defaultValue\": \"lean\", \"rules\": [{\"force\": \"tests\", \"tracks\": [{\"experiment\": {\"key\": \"vibe_cli_system_prompt\"}, \"result\": {\"key\": \"1\", \"variationId\": 1, \"inExperiment\": true}}]}]}, \"vibe_cli_smart_approve\": {\"defaultValue\": false, \"rules\": [{\"force\": true}]}}}}}",
+      "response": null,
+      "loaded": null,
+      "file": null
+    },
+    {
+      "id": "load/stored-at-null",
+      "operation": "load",
+      "configuration": "mistral-active",
+      "seed": "{\"0889ce8313bb7ddbccdae21c86f894ce\": {\"stored_at_timestamp\": null, \"payload\": {\"features\": {\"vibe_cli_system_prompt\": {\"defaultValue\": \"lean\", \"rules\": [{\"force\": \"tests\", \"tracks\": [{\"experiment\": {\"key\": \"vibe_cli_system_prompt\"}, \"result\": {\"key\": \"1\", \"variationId\": 1, \"inExperiment\": true}}]}]}, \"vibe_cli_smart_approve\": {\"defaultValue\": false, \"rules\": [{\"force\": true}]}}}}}",
+      "response": null,
+      "loaded": null,
+      "file": null
+    },
+    {
+      "id": "load/stored-at-missing",
+      "operation": "load",
+      "configuration": "mistral-active",
+      "seed": "{\"0889ce8313bb7ddbccdae21c86f894ce\": {\"payload\": {\"features\": {\"vibe_cli_system_prompt\": {\"defaultValue\": \"lean\", \"rules\": [{\"force\": \"tests\", \"tracks\": [{\"experiment\": {\"key\": \"vibe_cli_system_prompt\"}, \"result\": {\"key\": \"1\", \"variationId\": 1, \"inExperiment\": true}}]}]}, \"vibe_cli_smart_approve\": {\"defaultValue\": false, \"rules\": [{\"force\": true}]}}}}}",
+      "response": null,
+      "loaded": null,
+      "file": null
+    },
+    {
+      "id": "load/payload-missing",
+      "operation": "load",
+      "configuration": "mistral-active",
+      "seed": "{\"0889ce8313bb7ddbccdae21c86f894ce\": {\"stored_at_timestamp\": 1800000000}}",
+      "response": null,
+      "loaded": null,
+      "file": null
+    },
+    {
+      "id": "load/payload-list",
+      "operation": "load",
+      "configuration": "mistral-active",
+      "seed": "{\"0889ce8313bb7ddbccdae21c86f894ce\": {\"stored_at_timestamp\": 1800000000, \"payload\": []}}",
+      "response": null,
+      "loaded": null,
+      "file": null
+    },
+    {
+      "id": "load/payload-does-not-validate",
+      "operation": "load",
+      "configuration": "mistral-active",
+      "seed": "{\"0889ce8313bb7ddbccdae21c86f894ce\": {\"stored_at_timestamp\": 1800000000, \"payload\": {\"features\": 3}}}",
+      "response": null,
+      "loaded": null,
+      "file": null
+    },
+    {
+      "id": "load/payload-empty",
+      "operation": "load",
+      "configuration": "mistral-active",
+      "seed": "{\"0889ce8313bb7ddbccdae21c86f894ce\": {\"stored_at_timestamp\": 1800000000, \"payload\": {}}}",
+      "response": null,
+      "loaded": {
+        "features": {}
+      },
+      "file": null
+    },
+    {
+      "id": "load/payload-with-unknown-features-and-keys",
+      "operation": "load",
+      "configuration": "mistral-active",
+      "seed": "{\"0889ce8313bb7ddbccdae21c86f894ce\": {\"stored_at_timestamp\": 1800000000, \"payload\": {\"features\": {\"vibe_cli_unknown_rollout\": {\"defaultValue\": \"x\", \"rules\": []}, \"vibe_cli_system_prompt\": {\"defaultValue\": \"lean\", \"rules\": []}}, \"status\": 200}}}",
+      "response": null,
+      "loaded": {
+        "features": {
+          "vibe_cli_unknown_rollout": {
+            "defaultValue": "x",
+            "rules": []
+          },
+          "vibe_cli_system_prompt": {
+            "defaultValue": "lean",
+            "rules": []
+          }
+        }
+      },
+      "file": null
+    },
+    {
+      "id": "load/duplicate-key-last-wins",
+      "operation": "load",
+      "configuration": "mistral-active",
+      "seed": "{\"0889ce8313bb7ddbccdae21c86f894ce\": {\"stored_at_timestamp\": 1799395200, \"payload\": {\"features\": {\"vibe_cli_system_prompt\": {\"defaultValue\": \"lean\", \"rules\": [{\"force\": \"tests\", \"tracks\": [{\"experiment\": {\"key\": \"vibe_cli_system_prompt\"}, \"result\": {\"key\": \"1\", \"variationId\": 1, \"inExperiment\": true}}]}]}, \"vibe_cli_smart_approve\": {\"defaultValue\": false, \"rules\": [{\"force\": true}]}}}}, \"0889ce8313bb7ddbccdae21c86f894ce\": {\"stored_at_timestamp\": 1800000000, \"payload\": {\"features\": {\"vibe_cli_system_prompt\": {\"defaultValue\": \"lean\", \"rules\": [{\"force\": \"tests\", \"tracks\": [{\"experiment\": {\"key\": \"vibe_cli_system_prompt\"}, \"result\": {\"key\": \"1\", \"variationId\": 1, \"inExperiment\": true}}]}]}, \"vibe_cli_smart_approve\": {\"defaultValue\": false, \"rules\": [{\"force\": true}]}}}}}",
+      "response": null,
+      "loaded": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "lean",
+            "rules": [
+              {
+                "force": "tests",
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_system_prompt"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "value": null,
+                      "inExperiment": true,
+                      "hashAttribute": null,
+                      "hashValue": null,
+                      "featureId": null
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "vibe_cli_smart_approve": {
+            "defaultValue": false,
+            "rules": [
+              {
+                "force": true,
+                "tracks": []
+              }
+            ]
+          }
+        }
+      },
+      "file": null
+    },
+    {
+      "id": "load/telemetry-disabled",
+      "operation": "load",
+      "configuration": "telemetry-disabled",
+      "seed": "{\"0889ce8313bb7ddbccdae21c86f894ce\": {\"stored_at_timestamp\": 1800000000, \"payload\": {\"features\": {\"vibe_cli_system_prompt\": {\"defaultValue\": \"lean\", \"rules\": [{\"force\": \"tests\", \"tracks\": [{\"experiment\": {\"key\": \"vibe_cli_system_prompt\"}, \"result\": {\"key\": \"1\", \"variationId\": 1, \"inExperiment\": true}}]}]}, \"vibe_cli_smart_approve\": {\"defaultValue\": false, \"rules\": [{\"force\": true}]}}}}}",
+      "response": null,
+      "loaded": null,
+      "file": null
+    },
+    {
+      "id": "load/experiments-disabled",
+      "operation": "load",
+      "configuration": "experiments-disabled",
+      "seed": "{\"0889ce8313bb7ddbccdae21c86f894ce\": {\"stored_at_timestamp\": 1800000000, \"payload\": {\"features\": {\"vibe_cli_system_prompt\": {\"defaultValue\": \"lean\", \"rules\": [{\"force\": \"tests\", \"tracks\": [{\"experiment\": {\"key\": \"vibe_cli_system_prompt\"}, \"result\": {\"key\": \"1\", \"variationId\": 1, \"inExperiment\": true}}]}]}, \"vibe_cli_smart_approve\": {\"defaultValue\": false, \"rules\": [{\"force\": true}]}}}}}",
+      "response": null,
+      "loaded": null,
+      "file": null
+    },
+    {
+      "id": "load/third-party-only",
+      "operation": "load",
+      "configuration": "third-party-only",
+      "seed": "{\"0889ce8313bb7ddbccdae21c86f894ce\": {\"stored_at_timestamp\": 1800000000, \"payload\": {\"features\": {\"vibe_cli_system_prompt\": {\"defaultValue\": \"lean\", \"rules\": [{\"force\": \"tests\", \"tracks\": [{\"experiment\": {\"key\": \"vibe_cli_system_prompt\"}, \"result\": {\"key\": \"1\", \"variationId\": 1, \"inExperiment\": true}}]}]}, \"vibe_cli_smart_approve\": {\"defaultValue\": false, \"rules\": [{\"force\": true}]}}}}}",
+      "response": null,
+      "loaded": null,
+      "file": null
+    },
+    {
+      "id": "load/mistral-without-a-resolvable-key",
+      "operation": "load",
+      "configuration": "mistral-without-a-resolvable-key",
+      "seed": "{\"0889ce8313bb7ddbccdae21c86f894ce\": {\"stored_at_timestamp\": 1800000000, \"payload\": {\"features\": {\"vibe_cli_system_prompt\": {\"defaultValue\": \"lean\", \"rules\": [{\"force\": \"tests\", \"tracks\": [{\"experiment\": {\"key\": \"vibe_cli_system_prompt\"}, \"result\": {\"key\": \"1\", \"variationId\": 1, \"inExperiment\": true}}]}]}, \"vibe_cli_smart_approve\": {\"defaultValue\": false, \"rules\": [{\"force\": true}]}}}}}",
+      "response": null,
+      "loaded": null,
+      "file": null
+    },
+    {
+      "id": "store/into-an-absent-file",
+      "operation": "store",
+      "configuration": "mistral-active",
+      "seed": null,
+      "response": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "lean",
+            "rules": [
+              {
+                "force": "tests",
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_system_prompt"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "inExperiment": true
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "vibe_cli_smart_approve": {
+            "defaultValue": false,
+            "rules": [
+              {
+                "force": true
+              }
+            ]
+          }
+        }
+      },
+      "loaded": null,
+      "file": "{\"0889ce8313bb7ddbccdae21c86f894ce\":{\"stored_at_timestamp\":1800000000,\"payload\":{\"features\":{\"vibe_cli_system_prompt\":{\"defaultValue\":\"lean\",\"rules\":[{\"force\":\"tests\",\"tracks\":[{\"experiment\":{\"key\":\"vibe_cli_system_prompt\"},\"result\":{\"key\":\"1\",\"variationId\":1,\"value\":null,\"inExperiment\":true,\"hashAttribute\":null,\"hashValue\":null,\"featureId\":null}}]}]},\"vibe_cli_smart_approve\":{\"defaultValue\":false,\"rules\":[{\"force\":true,\"tracks\":[]}]}}}}}"
+    },
+    {
+      "id": "store/replaces-its-entry-in-place",
+      "operation": "store",
+      "configuration": "mistral-active",
+      "seed": "{\"first\": {\"stored_at_timestamp\": 1, \"payload\": {\"features\": {}}}, \"0889ce8313bb7ddbccdae21c86f894ce\": {\"stored_at_timestamp\": 2, \"payload\": {}}, \"last\": \"kept as written\"}",
+      "response": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "lean",
+            "rules": [
+              {
+                "force": "tests",
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_system_prompt"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "inExperiment": true
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "vibe_cli_smart_approve": {
+            "defaultValue": false,
+            "rules": [
+              {
+                "force": true
+              }
+            ]
+          }
+        }
+      },
+      "loaded": null,
+      "file": "{\"first\":{\"stored_at_timestamp\":1,\"payload\":{\"features\":{}}},\"0889ce8313bb7ddbccdae21c86f894ce\":{\"stored_at_timestamp\":1800000000,\"payload\":{\"features\":{\"vibe_cli_system_prompt\":{\"defaultValue\":\"lean\",\"rules\":[{\"force\":\"tests\",\"tracks\":[{\"experiment\":{\"key\":\"vibe_cli_system_prompt\"},\"result\":{\"key\":\"1\",\"variationId\":1,\"value\":null,\"inExperiment\":true,\"hashAttribute\":null,\"hashValue\":null,\"featureId\":null}}]}]},\"vibe_cli_smart_approve\":{\"defaultValue\":false,\"rules\":[{\"force\":true,\"tracks\":[]}]}}}},\"last\":\"kept as written\"}"
+    },
+    {
+      "id": "store/over-unreadable-text",
+      "operation": "store",
+      "configuration": "mistral-active",
+      "seed": "not json",
+      "response": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "lean",
+            "rules": [
+              {
+                "force": "tests",
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_system_prompt"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "inExperiment": true
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "vibe_cli_smart_approve": {
+            "defaultValue": false,
+            "rules": [
+              {
+                "force": true
+              }
+            ]
+          }
+        }
+      },
+      "loaded": null,
+      "file": "{\"0889ce8313bb7ddbccdae21c86f894ce\":{\"stored_at_timestamp\":1800000000,\"payload\":{\"features\":{\"vibe_cli_system_prompt\":{\"defaultValue\":\"lean\",\"rules\":[{\"force\":\"tests\",\"tracks\":[{\"experiment\":{\"key\":\"vibe_cli_system_prompt\"},\"result\":{\"key\":\"1\",\"variationId\":1,\"value\":null,\"inExperiment\":true,\"hashAttribute\":null,\"hashValue\":null,\"featureId\":null}}]}]},\"vibe_cli_smart_approve\":{\"defaultValue\":false,\"rules\":[{\"force\":true,\"tracks\":[]}]}}}}}"
+    },
+    {
+      "id": "store/over-a-json-array",
+      "operation": "store",
+      "configuration": "mistral-active",
+      "seed": "[1, 2]",
+      "response": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "lean",
+            "rules": [
+              {
+                "force": "tests",
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_system_prompt"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "inExperiment": true
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "vibe_cli_smart_approve": {
+            "defaultValue": false,
+            "rules": [
+              {
+                "force": true
+              }
+            ]
+          }
+        }
+      },
+      "loaded": null,
+      "file": "{\"0889ce8313bb7ddbccdae21c86f894ce\":{\"stored_at_timestamp\":1800000000,\"payload\":{\"features\":{\"vibe_cli_system_prompt\":{\"defaultValue\":\"lean\",\"rules\":[{\"force\":\"tests\",\"tracks\":[{\"experiment\":{\"key\":\"vibe_cli_system_prompt\"},\"result\":{\"key\":\"1\",\"variationId\":1,\"value\":null,\"inExperiment\":true,\"hashAttribute\":null,\"hashValue\":null,\"featureId\":null}}]}]},\"vibe_cli_smart_approve\":{\"defaultValue\":false,\"rules\":[{\"force\":true,\"tracks\":[]}]}}}}}"
+    },
+    {
+      "id": "store/rewrites-other-entries-as-python-dumps-them",
+      "operation": "store",
+      "configuration": "mistral-active",
+      "seed": "{\"other\": {\"n\": 1.5, \"e\": 1e5, \"f\": 1.0, \"big\": 12345678901234567890, \"neg\": -0.0, \"small\": 1e-7, \"text\": \"caf\\u00e9 \\ud83d\\ude00\", \"raw\": \"é\", \"ctl\": \"\\u001f\\t\", \"nested\": [true, false, null, {}]}}",
+      "response": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "lean",
+            "rules": [
+              {
+                "force": "tests",
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_system_prompt"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "inExperiment": true
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "vibe_cli_smart_approve": {
+            "defaultValue": false,
+            "rules": [
+              {
+                "force": true
+              }
+            ]
+          }
+        }
+      },
+      "loaded": null,
+      "file": "{\"other\":{\"n\":1.5,\"e\":100000.0,\"f\":1.0,\"big\":12345678901234567890,\"neg\":-0.0,\"small\":1e-07,\"text\":\"caf\\u00e9 \\ud83d\\ude00\",\"raw\":\"\\u00e9\",\"ctl\":\"\\u001f\\t\",\"nested\":[true,false,null,{}]},\"0889ce8313bb7ddbccdae21c86f894ce\":{\"stored_at_timestamp\":1800000000,\"payload\":{\"features\":{\"vibe_cli_system_prompt\":{\"defaultValue\":\"lean\",\"rules\":[{\"force\":\"tests\",\"tracks\":[{\"experiment\":{\"key\":\"vibe_cli_system_prompt\"},\"result\":{\"key\":\"1\",\"variationId\":1,\"value\":null,\"inExperiment\":true,\"hashAttribute\":null,\"hashValue\":null,\"featureId\":null}}]}]},\"vibe_cli_smart_approve\":{\"defaultValue\":false,\"rules\":[{\"force\":true,\"tracks\":[]}]}}}}}"
+    },
+    {
+      "id": "store/non-ascii-payload",
+      "operation": "store",
+      "configuration": "mistral-active",
+      "seed": null,
+      "response": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "café ☃",
+            "rules": [
+              {
+                "force": {
+                  "é": 1
+                }
+              }
+            ]
+          }
+        }
+      },
+      "loaded": null,
+      "file": "{\"0889ce8313bb7ddbccdae21c86f894ce\":{\"stored_at_timestamp\":1800000000,\"payload\":{\"features\":{\"vibe_cli_system_prompt\":{\"defaultValue\":\"caf\\u00e9 \\u2603\",\"rules\":[{\"force\":{\"\\u00e9\":1},\"tracks\":[]}]}}}}}"
+    },
+    {
+      "id": "store/telemetry-disabled-writes-nothing",
+      "operation": "store",
+      "configuration": "telemetry-disabled",
+      "seed": null,
+      "response": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "lean",
+            "rules": [
+              {
+                "force": "tests",
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_system_prompt"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "inExperiment": true
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "vibe_cli_smart_approve": {
+            "defaultValue": false,
+            "rules": [
+              {
+                "force": true
+              }
+            ]
+          }
+        }
+      },
+      "loaded": null,
+      "file": null
+    },
+    {
+      "id": "store/experiments-disabled-leaves-the-file",
+      "operation": "store",
+      "configuration": "experiments-disabled",
+      "seed": "{\"0889ce8313bb7ddbccdae21c86f894ce\": {\"stored_at_timestamp\": 1, \"payload\": {\"features\": {\"vibe_cli_system_prompt\": {\"defaultValue\": \"lean\", \"rules\": [{\"force\": \"tests\", \"tracks\": [{\"experiment\": {\"key\": \"vibe_cli_system_prompt\"}, \"result\": {\"key\": \"1\", \"variationId\": 1, \"inExperiment\": true}}]}]}, \"vibe_cli_smart_approve\": {\"defaultValue\": false, \"rules\": [{\"force\": true}]}}}}}",
+      "response": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "lean",
+            "rules": [
+              {
+                "force": "tests",
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_system_prompt"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "inExperiment": true
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "vibe_cli_smart_approve": {
+            "defaultValue": false,
+            "rules": [
+              {
+                "force": true
+              }
+            ]
+          }
+        }
+      },
+      "loaded": null,
+      "file": "{\"0889ce8313bb7ddbccdae21c86f894ce\": {\"stored_at_timestamp\": 1, \"payload\": {\"features\": {\"vibe_cli_system_prompt\": {\"defaultValue\": \"lean\", \"rules\": [{\"force\": \"tests\", \"tracks\": [{\"experiment\": {\"key\": \"vibe_cli_system_prompt\"}, \"result\": {\"key\": \"1\", \"variationId\": 1, \"inExperiment\": true}}]}]}, \"vibe_cli_smart_approve\": {\"defaultValue\": false, \"rules\": [{\"force\": true}]}}}}}"
+    },
+    {
+      "id": "store/third-party-only-writes-nothing",
+      "operation": "store",
+      "configuration": "third-party-only",
+      "seed": null,
+      "response": {
+        "features": {
+          "vibe_cli_system_prompt": {
+            "defaultValue": "lean",
+            "rules": [
+              {
+                "force": "tests",
+                "tracks": [
+                  {
+                    "experiment": {
+                      "key": "vibe_cli_system_prompt"
+                    },
+                    "result": {
+                      "key": "1",
+                      "variationId": 1,
+                      "inExperiment": true
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "vibe_cli_smart_approve": {
+            "defaultValue": false,
+            "rules": [
+              {
+                "force": true
+              }
+            ]
+          }
+        }
+      },
+      "loaded": null,
+      "file": null
+    },
+    {
+      "id": "initialize/stores-what-the-manager-kept",
+      "operation": "initialize",
+      "configuration": "mistral-active",
+      "seed": null,
+      "response": {
+        "identity": true,
+        "body": {
+          "features": {
+            "vibe_cli_system_prompt": {
+              "defaultValue": "cli",
+              "rules": [
+                {
+                  "force": "tests",
+                  "tracks": [
+                    {
+                      "experiment": {
+                        "key": "vibe_cli_system_prompt"
+                      },
+                      "result": {
+                        "key": "1",
+                        "variationId": 1,
+                        "inExperiment": true
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "vibe_cli_unknown_rollout": {
+              "defaultValue": "x",
+              "rules": []
+            }
+          }
+        }
+      },
+      "loaded": null,
+      "file": {
+        "keys": [
+          "0889ce8313bb7ddbccdae21c86f894ce"
+        ],
+        "storedAtIsNow": true,
+        "payload": {
+          "features": {
+            "vibe_cli_system_prompt": {
+              "defaultValue": "cli",
+              "rules": [
+                {
+                  "force": "tests",
+                  "tracks": [
+                    {
+                      "experiment": {
+                        "key": "vibe_cli_system_prompt"
+                      },
+                      "result": {
+                        "key": "1",
+                        "variationId": 1,
+                        "value": null,
+                        "inExperiment": true,
+                        "hashAttribute": null,
+                        "hashValue": null,
+                        "featureId": null
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "initialize/no-user-identifier-stores-nothing",
+      "operation": "initialize",
+      "configuration": "mistral-active",
+      "seed": null,
+      "response": {
+        "identity": false,
+        "body": {
+          "features": {
+            "vibe_cli_system_prompt": {
+              "defaultValue": "cli",
+              "rules": [
+                {
+                  "force": "tests",
+                  "tracks": [
+                    {
+                      "experiment": {
+                        "key": "vibe_cli_system_prompt"
+                      },
+                      "result": {
+                        "key": "1",
+                        "variationId": 1,
+                        "inExperiment": true
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "vibe_cli_unknown_rollout": {
+              "defaultValue": "x",
+              "rules": []
+            }
+          }
+        }
+      },
+      "loaded": null,
+      "file": null
+    },
+    {
+      "id": "initialize/failed-lookup-stores-nothing",
+      "operation": "initialize",
+      "configuration": "mistral-active",
+      "seed": null,
+      "response": {
+        "identity": true,
+        "status": 500,
+        "body": {
+          "features": {
+            "vibe_cli_system_prompt": {
+              "defaultValue": "cli",
+              "rules": [
+                {
+                  "force": "tests",
+                  "tracks": [
+                    {
+                      "experiment": {
+                        "key": "vibe_cli_system_prompt"
+                      },
+                      "result": {
+                        "key": "1",
+                        "variationId": 1,
+                        "inExperiment": true
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "vibe_cli_unknown_rollout": {
+              "defaultValue": "x",
+              "rules": []
+            }
+          }
+        }
+      },
+      "loaded": null,
+      "file": null
+    },
+    {
+      "id": "initialize/experiments-disabled-stores-nothing",
+      "operation": "initialize",
+      "configuration": "experiments-disabled",
+      "seed": null,
+      "response": {
+        "identity": true,
+        "body": {
+          "features": {
+            "vibe_cli_system_prompt": {
+              "defaultValue": "cli",
+              "rules": [
+                {
+                  "force": "tests",
+                  "tracks": [
+                    {
+                      "experiment": {
+                        "key": "vibe_cli_system_prompt"
+                      },
+                      "result": {
+                        "key": "1",
+                        "variationId": 1,
+                        "inExperiment": true
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            "vibe_cli_unknown_rollout": {
+              "defaultValue": "x",
+              "rules": []
+            }
+          }
+        }
+      },
+      "loaded": null,
+      "file": null
+    }
   ]
 }

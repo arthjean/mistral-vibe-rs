@@ -10,10 +10,14 @@
 //! client, so shutdown is bounded by the cancellation rather than by the
 //! request.
 //!
-//! Every session looks the rollout up when it starts. A resumed session first
-//! takes back the variants it wrote, and a forked one the variants its parent
-//! resolved, because the fork copies the metadata field; the lookup that
-//! follows replaces them only when it answers.
+//! A session applies the last rollout its user resolved before anything reads
+//! the configuration, from the eval cache under the vibe home, and then looks
+//! the rollout up. A resumed session first takes back the variants it wrote,
+//! and a forked one the variants its parent resolved, because the fork copies
+//! the metadata field. Only a new session that found nothing cached lets the
+//! lookup change its configuration: every other one keeps the variants it
+//! started on, so a resume never re-buckets, and the answer reaches the cache,
+//! the metadata and the telemetry census, which the next session reads.
 //!
 //! What a resolution changes is published rather than returned: the variants go
 //! into the shared configuration layer and one load carries them to every cache
@@ -30,9 +34,11 @@
 
 use std::sync::{Arc, Mutex};
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use vibe_core::config::LayeredConfig;
 use vibe_core::experiments::{
-    EvalResponse, ExperimentManager, ExperimentStateSink, PlanSources, RemoteEvalClient,
+    EvalCache, EvalResponse, ExperimentManager, ExperimentStateSink, PlanSources, RemoteEvalClient,
     hydrate_experiments_from_session, initialize_experiments,
 };
 use vibe_core::identity::{
@@ -44,6 +50,8 @@ use vibe_core::whoami::{WhoAmICache, WhoAmIResolver};
 
 use crate::workspace::WorkspaceService;
 
+#[cfg(test)]
+mod startup_parity_tests;
 #[cfg(test)]
 mod tests;
 
@@ -62,6 +70,15 @@ pub struct SessionExperiments {
     /// populates or invalidates. Absent once a test replaced the resolver.
     account_cache: Option<Arc<WhoAmICache>>,
     manager: tokio::sync::Mutex<ExperimentManager>,
+    /// Where the last resolved rollout is kept for the next session.
+    cache: EvalCache,
+    /// Whether this session was built on a cached rollout, which is what
+    /// keeps the lookup from changing its configuration.
+    started_cached: bool,
+    /// Reference `_await_experiment_model`: a new session that found nothing
+    /// cached, whose configuration the lookup may still change. Decided by
+    /// [`Self::start`].
+    await_model: AtomicBool,
     exposures: ExperimentExposures,
     launch: Option<LaunchContext>,
     /// Where the admin-config outcome is reported, when the adapter has a
@@ -97,7 +114,11 @@ impl SessionExperiments {
     ///
     /// The eval client is built from the merged configuration's own
     /// `[experiments]` table, so a document that blanks the host or the key
-    /// produces a client that issues nothing.
+    /// produces a client that issues nothing. A recent rollout cached for the
+    /// same credential is applied to the configuration here, before the
+    /// session reads it, and taken in by the manager, which is reference
+    /// `_apply_cached_experiment_variants` followed by the loop's
+    /// `experiment_state` hydration.
     #[must_use]
     pub fn new(
         service: &WorkspaceService,
@@ -125,6 +146,14 @@ impl SessionExperiments {
                 .to_owned()
         };
         let client = RemoteEvalClient::from_settings(&read("api_host"), &read("client_key"));
+        let cache = EvalCache::new(config.harness_files().vibe_home());
+        let mut manager = ExperimentManager::new(client);
+        let cached = apply_cached_variants(&config, &cache, credentials.as_ref());
+        let started_cached = cached.is_some();
+        if let Some(cached) = cached {
+            manager.hydrate(cached);
+            exposures.publish(manager.assignments());
+        }
         let identity: Arc<dyn IdentityResolver> =
             match CachedIdentity::production(Arc::new(IdentityCache::new())) {
                 Some(resolver) => Arc::new(resolver),
@@ -140,7 +169,10 @@ impl SessionExperiments {
             identity,
             whoami: account_cache.clone(),
             account_cache: Some(account_cache),
-            manager: tokio::sync::Mutex::new(ExperimentManager::new(client)),
+            manager: tokio::sync::Mutex::new(manager),
+            cache,
+            started_cached,
+            await_model: AtomicBool::new(false),
             exposures,
             launch,
             telemetry: None,
@@ -215,6 +247,7 @@ impl SessionExperiments {
             self.launch.as_ref(),
             &sources,
             &sink,
+            Some(&self.cache),
         )
         .await;
         self.exposures.publish_user_plan(user_plan);
@@ -224,10 +257,27 @@ impl SessionExperiments {
                 .and_then(|attributes| serde_json::to_value(attributes).ok())
                 .and_then(|value| value.as_object().cloned()),
         );
-        self.exposures.publish(manager.assignment_records());
-        if changed {
+        self.exposures.publish(manager.assignments());
+        // Reference `initialize_experiments` on the loop: only a session that
+        // is waiting on the lookup for its model applies what it resolved.
+        if changed && self.await_model.load(Ordering::Acquire) {
             self.refresh(&manager);
         }
+    }
+
+    /// Whether this session was built to wait on its lookup for a model, settled
+    /// or not: a new session that found no cached rollout. Reference
+    /// `_await_experiment_model`, decided by [`Self::start`].
+    #[must_use]
+    pub fn awaits_model(&self) -> bool {
+        self.await_model.load(Ordering::Acquire)
+    }
+
+    /// Whether a new session built without a cached rollout is still waiting
+    /// for its lookup. Reference `AgentLoop.awaiting_experiment_model`.
+    #[must_use]
+    pub fn awaiting_model(&self) -> bool {
+        self.await_model.load(Ordering::Acquire) && !*self.settled.borrow()
     }
 
     /// Starts the resolution off the caller's path.
@@ -236,6 +286,11 @@ impl SessionExperiments {
     /// returns immediately, which is what keeps time to first prompt
     /// independent of a rollout service. Calling this twice starts one lookup:
     /// the second call sees a task already held.
+    ///
+    /// A session nothing has saved yet is a new one, reference
+    /// `session_id is None` at the blueprint; built on no cached rollout, it
+    /// waits on this lookup for its model, which the configuration reports as
+    /// `awaitingExperimentModel` until the lookup settles.
     pub fn start(self: &Arc<Self>, session_id: &str) {
         let mut slot = self
             .task
@@ -244,17 +299,22 @@ impl SessionExperiments {
         if slot.is_some() {
             return;
         }
+        let fresh = self.store.metadata(session_id).is_err();
+        if fresh && !self.started_cached {
+            self.await_model.store(true, Ordering::Release);
+            self.config.set_experiment_model_pending(true);
+        }
         let Ok(handle) = tokio::runtime::Handle::try_current() else {
             // No runtime to detach onto, which is a caller that never awaits
             // anything: there is nothing to start and nothing to report.
-            self.settled.send_replace(true);
+            self.settle_lookup();
             return;
         };
         let session = session_id.to_owned();
         let runtime = Arc::clone(self);
         *slot = Some(handle.spawn(async move {
             runtime.resolve(&session).await;
-            runtime.settled.send_replace(true);
+            runtime.settle_lookup();
         }));
         drop(slot);
         if let Some(telemetry) = self.telemetry.clone() {
@@ -442,8 +502,17 @@ impl SessionExperiments {
                 drop(task.await);
             }
         }
-        self.settled.send_replace(true);
+        self.settle_lookup();
         self.manager.lock().await.close().await;
+    }
+
+    /// Marks the lookup settled, which also ends the wait on the model it
+    /// may have routed.
+    fn settle_lookup(&self) {
+        if self.await_model.load(Ordering::Acquire) {
+            self.config.set_experiment_model_pending(false);
+        }
+        self.settled.send_replace(true);
     }
 
     /// What the session already resolved, if it carries anything.
@@ -472,8 +541,34 @@ impl SessionExperiments {
                 vibe_core::system_prompt::load_system_prompt(prompt_id, &directories).is_ok()
             });
         drop(self.config.load());
-        self.exposures.publish(manager.assignment_records());
+        self.exposures.publish(manager.assignments());
     }
+}
+
+/// Applies the rollout cached for this configuration's credential to its
+/// experiments layer and answers it, or answers nothing where none is cached.
+///
+/// A cached rollout that maps to no configuration variant leaves the layer as
+/// it was. Reference `_apply_cached_experiment_variants`, which every session
+/// configuration and every host read runs before the first render.
+pub fn apply_cached_variants(
+    config: &LayeredConfig,
+    cache: &EvalCache,
+    credentials: &vibe_core::experiments::CredentialSource,
+) -> Option<EvalResponse> {
+    let effective = config.load().ok()?.effective;
+    let cached = cache.load(&effective, credentials)?;
+    let mut manager = ExperimentManager::new(RemoteEvalClient::with_url(None));
+    manager.hydrate(cached.clone());
+    let variants = manager.config_variants();
+    if !variants.is_empty() {
+        let directories = config.harness_files().prompts_dirs();
+        config.set_experiment_variants(&variants, &|prompt_id| {
+            vibe_core::system_prompt::load_system_prompt(prompt_id, &directories).is_ok()
+        });
+        drop(config.load());
+    }
+    Some(cached)
 }
 
 /// A resolver for a process that cannot build an HTTP client.

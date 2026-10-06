@@ -48,6 +48,23 @@ pub struct BannerContext<'a> {
     pub connectors_total: usize,
     pub hooks_count: usize,
     pub plan: Option<&'a str>,
+    /// The spinner frame shown in place of the model while a new session
+    /// waits on the rollout that may route it onto another one. Reference
+    /// `SpinnerText`, driven by `ConfigView.awaitingExperimentModel`.
+    pub model_spinner: Option<&'static str>,
+}
+
+/// The frames reference `BrailleSpinner` cycles through.
+const MODEL_SPINNER_FRAMES: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+/// How long one spinner frame shows, reference `SpinnerText._SPINNER_INTERVAL`.
+const MODEL_SPINNER_INTERVAL_MS: u64 = 100;
+
+/// The spinner frame the model slot shows at `now_ms`.
+#[must_use]
+pub fn model_spinner_frame(now_ms: u64) -> &'static str {
+    let index = usize::try_from((now_ms / MODEL_SPINNER_INTERVAL_MS) % 10).unwrap_or(0);
+    MODEL_SPINNER_FRAMES.get(index).copied().unwrap_or("⠋")
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -414,10 +431,15 @@ fn banner_lines(
             theme.base(),
         ),
         Span::styled(
-            format!(
-                "{}[{}]",
-                sanitize_inline(banner.model),
-                sanitize_inline(banner.thinking)
+            banner.model_spinner.map_or_else(
+                || {
+                    format!(
+                        "{}[{}]",
+                        sanitize_inline(banner.model),
+                        sanitize_inline(banner.thinking)
+                    )
+                },
+                ToOwned::to_owned,
             ),
             theme.secondary(),
         ),

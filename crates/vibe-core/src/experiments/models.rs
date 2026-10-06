@@ -11,6 +11,13 @@
 //! for that reason, so a payload from a newer proxy resolves rather than
 //! failing the whole lookup and dropping the user back to defaults.
 //!
+//! The response models serialize every field they declare, a null and an empty
+//! list included, because that is what `model_dump(mode="json")` writes and
+//! both places a response is persisted, the session metadata and the eval
+//! cache, are files the reference reads back. The attributes are the
+//! exception: they are posted with `exclude_none=True`, so an absent field is
+//! left out.
+//!
 //! The values a rule forces are [`JsonValue`] rather than [`serde_json::Value`]
 //! because the reference answers an object-valued variant with `json.dumps` of
 //! the decoded payload, and that string carries the key order the wire carried.
@@ -96,31 +103,19 @@ pub struct TrackedExperiment {
 /// it false or absent for a forced value, a coverage exclusion or a default.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct TrackedExperimentResult {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub key: Option<String>,
-    #[serde(
-        rename = "variationId",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "variationId", default)]
     pub variation_id: Option<i64>,
-    #[serde(default, skip_serializing_if = "JsonValue::is_null")]
+    #[serde(default)]
     pub value: JsonValue,
-    #[serde(
-        rename = "inExperiment",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "inExperiment", default)]
     pub in_experiment: Option<bool>,
-    #[serde(
-        rename = "hashAttribute",
-        default,
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(rename = "hashAttribute", default)]
     pub hash_attribute: Option<String>,
-    #[serde(rename = "hashValue", default, skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "hashValue", default)]
     pub hash_value: Option<String>,
-    #[serde(rename = "featureId", default, skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "featureId", default)]
     pub feature_id: Option<String>,
 }
 
@@ -143,9 +138,9 @@ pub struct TrackData {
 /// Reference `FeatureRule`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct FeatureRule {
-    #[serde(default, skip_serializing_if = "JsonValue::is_null")]
+    #[serde(default)]
     pub force: JsonValue,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub tracks: Vec<TrackData>,
 }
 
@@ -154,7 +149,7 @@ pub struct FeatureRule {
 pub struct FeatureDefinition {
     #[serde(rename = "defaultValue", default)]
     pub default_value: JsonValue,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub rules: Vec<FeatureRule>,
 }
 

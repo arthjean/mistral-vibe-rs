@@ -6,10 +6,9 @@
 //! cannot: the refusal a write through the layer meets, and the provenance a
 //! snapshot reports for an assigned value.
 
-use std::collections::BTreeMap;
-
 use super::registry::default_document;
 use super::*;
+use crate::experiments::{JsonValue as Variant, OrderedMap};
 
 /// A prompt resolution that accepts the identifiers this fixture declares and
 /// refuses everything else, standing where a session hands its own resolver.
@@ -17,22 +16,41 @@ fn resolves(known: &'static [&'static str]) -> impl Fn(&str) -> bool {
     move |prompt_id: &str| known.contains(&prompt_id)
 }
 
-fn variants(entries: &[(&str, &str)]) -> BTreeMap<String, String> {
+fn variants(entries: &[(&str, &str)]) -> OrderedMap<Variant> {
     entries
         .iter()
-        .map(|(key, value)| ((*key).to_owned(), (*value).to_owned()))
+        .map(|(key, value)| ((*key).to_owned(), Variant::String((*value).to_owned())))
         .collect()
 }
 
 /// The layer one variant set composes, with `tests` and `lean` resolvable.
 fn layer(entries: &[(&str, &str)]) -> ExperimentsLayer {
+    typed_layer(&variants(entries))
+}
+
+/// The layer a typed variant set composes, the way a JSON feature delivers one.
+fn typed_layer(variants: &OrderedMap<Variant>) -> ExperimentsLayer {
     let known = resolves(&["cli", "tests", "lean"]);
-    ExperimentsLayer::from_variants(&variants(entries), &known)
+    ExperimentsLayer::from_variants(variants, &known)
+}
+
+/// One typed variant, read from the JSON it is written as.
+fn typed(key: &str, json: &str) -> OrderedMap<Variant> {
+    [(
+        key.to_owned(),
+        serde_json::from_str::<Variant>(json).expect("the variant parses"),
+    )]
+    .into_iter()
+    .collect()
 }
 
 const SYSTEM_PROMPT: &str = "vibe_cli_system_prompt";
 const MANAGED_SHELL: &str = "vibe_cli_managed_shell_tools";
 const MODEL_ROUTING: &str = "vibe_cli_default_routing_model";
+const EXTRA_MODELS: &str = "vibe_cli_extra_models";
+const SMART_APPROVE: &str = "vibe_cli_smart_approve";
+const SMART_APPROVE_DEFAULT: &str = "vibe_cli_smart_approve_default";
+const REGISTRY_SKILLS: &str = "vibe_cli_registry_skills";
 
 // --------------------------------------------------------------------------
 // US-009: the mapping
@@ -109,16 +127,141 @@ fn a_routing_definition_that_is_not_an_object_leaves_the_alias_standing() {
 
 #[test]
 fn only_the_managed_arm_enables_the_managed_shell_family() {
+    for accepted in ["managed", "true", " Managed\n", "TRUE"] {
+        assert_eq!(
+            layer(&[(MANAGED_SHELL, accepted)]).values()["managed_shell_tools_enabled"].as_bool(),
+            Some(true),
+            "`{accepted}`"
+        );
+    }
     assert_eq!(
-        layer(&[(MANAGED_SHELL, "managed")]).values()["managed_shell_tools_enabled"].as_bool(),
-        Some(true)
+        typed_layer(&typed(MANAGED_SHELL, "true")).values()["managed_shell_tools_enabled"]
+            .as_bool(),
+        Some(true),
+        "a boolean feature enables it too"
     );
-    for refused in ["legacy", "something-else", ""] {
+    for refused in ["legacy", "something-else", "", "on"] {
         assert!(
             layer(&[(MANAGED_SHELL, refused)]).values().is_empty(),
             "`{refused}` wrote the toggle"
         );
     }
+    for refused in ["false", "1", "1.0"] {
+        assert!(
+            typed_layer(&typed(MANAGED_SHELL, refused))
+                .values()
+                .is_empty(),
+            "{refused} wrote the toggle"
+        );
+    }
+}
+
+#[test]
+fn a_rollout_flag_is_on_for_true_and_its_two_words_and_off_otherwise() {
+    for (key, field) in [
+        (SMART_APPROVE, "smart_approve_available"),
+        (SMART_APPROVE_DEFAULT, "smart_approve_default"),
+        (REGISTRY_SKILLS, "experimental_enable_registry_skills"),
+    ] {
+        for accepted in ["\"on\"", "\"true\"", "\" ON \"", "\"True\"", "true"] {
+            assert_eq!(
+                typed_layer(&typed(key, accepted)).values()[field].as_bool(),
+                Some(true),
+                "{key} {accepted}"
+            );
+        }
+        // `_map_on` compares by identity with `True`, so a number equal to it
+        // is not a switch, and nothing ever writes the field false.
+        for refused in ["false", "1", "\"off\"", "\"yes\"", "\"\"", "{}"] {
+            assert!(
+                typed_layer(&typed(key, refused)).values().is_empty(),
+                "{key} {refused} wrote the field"
+            );
+        }
+    }
+}
+
+#[test]
+fn an_extra_models_variant_writes_the_objects_it_lists_and_routes_their_models() {
+    let listed = typed_layer(&typed(
+        EXTRA_MODELS,
+        r#"{"models": [{"name": "extra-one", "provider": "mistral", "alias": "one"}, 7, {"name": "extra-two", "provider": "mistral"}]}"#,
+    ));
+    assert_eq!(
+        listed.values()["routed_extra_models"].as_str(),
+        Some(
+            r#"[{"name": "extra-one", "provider": "mistral", "alias": "one"}, {"name": "extra-two", "provider": "mistral"}]"#
+        ),
+        "the objects alone, re-encoded as the proxy wrote them"
+    );
+    let models = listed.values()["models"]
+        .as_table()
+        .expect("the routed models are written");
+    assert_eq!(models.keys().collect::<Vec<_>>(), ["one", "extra-two"]);
+    assert_eq!(
+        models["extra-two"]["alias"].as_str(),
+        Some("extra-two"),
+        "an entry naming no alias is keyed by and carries its name"
+    );
+
+    let bare = layer(&[(
+        EXTRA_MODELS,
+        r#"[{"name": "bare", "provider": "mistral", "alias": "bare"}]"#,
+    )]);
+    assert!(
+        bare.values()["models"]
+            .as_table()
+            .is_some_and(|models| models.contains_key("bare"))
+    );
+
+    for refused in [
+        "[]",
+        "[1, 2]",
+        r#"{"models": []}"#,
+        r#"{"other": []}"#,
+        "\"text\"",
+        "{}",
+    ] {
+        assert!(
+            typed_layer(&typed(EXTRA_MODELS, refused))
+                .values()
+                .is_empty(),
+            "{refused} wrote a field"
+        );
+    }
+}
+
+#[test]
+fn a_routed_definition_that_does_not_validate_writes_no_model() {
+    let refused = layer(&[(
+        MODEL_ROUTING,
+        r#"{"active_model": "routed", "model_config": {"name": "vibe-routed", "provider": 7}}"#,
+    )]);
+    assert_eq!(
+        refused.values()["routed_default_model"].as_str(),
+        Some("routed")
+    );
+    assert!(refused.values().contains_key("routed_model_config"));
+    assert!(
+        !refused.values().contains_key("models"),
+        "a provider that is not text does not validate"
+    );
+}
+
+#[test]
+fn a_typed_routing_variant_reads_as_the_object_it_is() {
+    let mapped = typed_layer(&typed(
+        MODEL_ROUTING,
+        r#"{"active_model": "routed", "model_config": {"name": "vibe-routed", "provider": "mistral", "alias": "routed"}}"#,
+    ));
+    assert_eq!(
+        mapped.values()["routed_default_model"].as_str(),
+        Some("routed")
+    );
+    assert_eq!(
+        mapped.values()["models"]["routed"]["name"].as_str(),
+        Some("vibe-routed")
+    );
 }
 
 #[test]

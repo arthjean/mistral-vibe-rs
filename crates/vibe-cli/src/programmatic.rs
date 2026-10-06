@@ -84,17 +84,30 @@ pub(crate) async fn run(
     workspace
         .migrate_configuration()
         .map_err(|error| CliError::Configuration(error.to_string()))?;
+    let telemetry = crate::telemetry_observer_for(
+        &arguments,
+        &workspace,
+        crate::programmatic_launch_context(),
+    )?;
+    // Reference `_build_session_config` applies the rollout cached for this
+    // user before the session reads its configuration, so a cached routing
+    // variant already chooses the model routed below. The lookup itself
+    // starts once the session exists.
+    let experiments = Arc::new(
+        SessionExperiments::new(
+            &workspace,
+            crate::cli_credentials(&arguments),
+            Some(crate::programmatic_launch_context()),
+            telemetry.exposures(),
+        )
+        .reporting_to(telemetry.clone()),
+    );
     let route = bootstrap::programmatic_route(&arguments, &workspace)?;
     let mut arguments = arguments;
     arguments.model.clone_from(&route.model);
     let credential = bootstrap::programmatic_credential(&arguments, &route.provider)?;
     crate::validate_arguments(&arguments)?;
     let config = bootstrap::route_driver_config(&route, &workspace)?;
-    let telemetry = crate::telemetry_observer_for(
-        &arguments,
-        &workspace,
-        crate::programmatic_launch_context(),
-    )?;
     let census_service = workspace.clone();
     let mut driver =
         vibe_app_server::client::LiveTurnDriver::from_credential(config, credential.clone())?;
@@ -116,18 +129,6 @@ pub(crate) async fn run(
         .map(|working_directory| {
             crate::session_census(&census_service, &working_directory, arguments.trust)
         });
-    // Reference builds the manager with the loop and starts the lookup as a
-    // detached task once the session exists, so the programmatic path reports
-    // the same enrollment an interactive one does.
-    let experiments = Arc::new(
-        SessionExperiments::new(
-            &census_service,
-            crate::cli_credentials(&arguments),
-            Some(crate::programmatic_launch_context()),
-            telemetry.exposures(),
-        )
-        .reporting_to(telemetry.clone()),
-    );
     let result = execute_with_server(
         arguments,
         driver,

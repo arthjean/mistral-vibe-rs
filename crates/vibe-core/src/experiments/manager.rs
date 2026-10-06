@@ -6,14 +6,13 @@
 //! decide is local, and one decision matters more than the rest.
 //! [`ExperimentManager::config_variants`] and
 //! [`ExperimentManager::assignments`] read the same response and deliberately
-//! disagree. Configuration honors a forced value, because a force is how a
-//! rollout pins a build to a variant. Telemetry reports only a confirmed
-//! exposure, because a force is not an enrollment and counting it as one would
-//! corrupt the experiment's own analysis.
+//! disagree. Configuration honors whatever value resolved, because a force or
+//! a feature default is how a rollout pins a build to a variant. Telemetry
+//! reports only a confirmed exposure, because a force is not an enrollment and
+//! counting it as one would corrupt the experiment's own analysis.
 //!
-//! Reference: `vibe/core/experiments/manager.py` at the pinned commit.
-
-use std::collections::BTreeMap;
+//! Reference: `vibe/core/experiments/manager.py` and
+//! `vibe/core/experiments/resolve.py` at the pinned commit.
 
 use sha2::{Digest, Sha256};
 
@@ -22,7 +21,7 @@ use crate::text::hex_encode;
 
 use super::ExperimentName;
 use super::client::RemoteEvalClient;
-use super::json::JsonValue;
+use super::json::{JsonValue, OrderedMap};
 use super::models::{EvalResponse, ExperimentAttributes, FeatureDefinition, TrackData};
 
 /// How many hexadecimal characters of the digest the bucketing key keeps.
@@ -119,68 +118,46 @@ impl ExperimentManager {
     }
 
     /// The resolved value of one experiment, or [`None`] when the response
-    /// carries nothing usable for it.
+    /// carries nothing for it: the value of the first rule that forces one,
+    /// else the feature's default, typed as the payload carried it.
     ///
-    /// An object- or array-valued feature answers its JSON serialization
-    /// rather than falling back to the default, so a caller receives the real
-    /// payload: the routing experiment carries a whole model definition this
-    /// way.
-    ///
-    /// Reference `ExperimentManager.get_variant_or_none`.
+    /// Reference `resolve.variant_or_none`.
     #[must_use]
-    pub fn variant_or_none(&self, name: ExperimentName) -> Option<String> {
+    pub fn variant_or_none(&self, name: ExperimentName) -> Option<JsonValue> {
         let feature = self.response.as_ref()?.features.get(name.key())?;
-        match feature.resolved_value() {
-            JsonValue::Null => None,
-            JsonValue::String(text) => Some(text.clone()),
-            other => Some(other.python_json()),
-        }
+        let value = feature.resolved_value();
+        (!value.is_null()).then(|| value.clone())
     }
 
     /// The resolved value of one experiment, falling back to this build's own
     /// default.
     ///
-    /// Reference `ExperimentManager.get_variant`.
+    /// Reference `resolve.variant`.
     #[must_use]
-    pub fn variant(&self, name: ExperimentName) -> String {
+    pub fn variant(&self, name: ExperimentName) -> JsonValue {
         self.variant_or_none(name)
-            .unwrap_or_else(|| name.default_variant().to_owned())
+            .unwrap_or_else(|| name.default_variant())
     }
 
-    /// The variants allowed to reach the configuration layers: every confirmed
-    /// exposure, plus a forced value for any experiment that has one and was
-    /// not confirmed.
+    /// The variants allowed to reach the configuration layers, by feature key
+    /// in the order the names are declared: every known experiment whose
+    /// resolved value differs from its declared default.
     ///
-    /// Reference `ExperimentManager.config_variants`.
-    #[must_use]
-    pub fn config_variants(&self) -> BTreeMap<String, String> {
-        let mut result = self.assignments();
-        let Some(response) = self.response.as_ref() else {
-            return result;
-        };
-        for name in ExperimentName::ALL {
-            if result.contains_key(name.key()) {
-                continue;
-            }
-            let Some(feature) = response.features.get(name.key()) else {
-                continue;
-            };
-            if let Some(variant) = forced_variant_or_none(feature) {
-                result.insert(name.key().to_owned(), variant);
-            }
-        }
-        result
-    }
-
-    /// The confirmed exposures, and nothing else, by experiment.
+    /// A forced value and a feature default reach the layer alike, because
+    /// the proxy already resolved which applies; a confirmed exposure adds
+    /// nothing a resolved value did not already say. A value equal to the
+    /// default is dropped, so the low-precedence layer only ever expresses a
+    /// deviation from the schema.
     ///
-    /// Reference `{a.experiment_id: a.variation_name for a in assignments}`,
-    /// read off [`Self::assignment_records`].
+    /// Reference `resolve.config_variants`.
     #[must_use]
-    pub fn assignments(&self) -> BTreeMap<String, String> {
-        self.assignment_records()
+    pub fn config_variants(&self) -> OrderedMap<JsonValue> {
+        ExperimentName::ALL
             .into_iter()
-            .map(|record| (record.experiment_id, record.variation_name))
+            .filter_map(|name| {
+                let value = self.variant_or_none(name)?;
+                (!value.python_eq(&name.default_variant())).then(|| (name.key().to_owned(), value))
+            })
             .collect()
     }
 
@@ -194,7 +171,7 @@ impl ExperimentManager {
     ///
     /// Reference `resolve.assignments`.
     #[must_use]
-    pub fn assignment_records(&self) -> Vec<ExperimentAssignment> {
+    pub fn assignments(&self) -> Vec<ExperimentAssignment> {
         let mut records: Vec<ExperimentAssignment> = Vec::new();
         let Some(response) = self.response.as_ref() else {
             return records;
@@ -245,7 +222,7 @@ impl ExperimentManager {
 /// alike. Applied on hydration as well as on initialization, so a session
 /// written by a newer client cannot smuggle one back in.
 ///
-/// Reference `ExperimentManager._filter_to_known_experiments`.
+/// Reference `resolve.filter_to_known`.
 fn filter_to_known_experiments(mut response: EvalResponse) -> EvalResponse {
     response
         .features
@@ -253,28 +230,12 @@ fn filter_to_known_experiments(mut response: EvalResponse) -> EvalResponse {
     response
 }
 
-/// The first value a rule forces, as a string, or [`None`] when no rule forces
-/// one.
-///
-/// Reference `ExperimentManager._forced_variant_or_none`.
-fn forced_variant_or_none(feature: &FeatureDefinition) -> Option<String> {
-    feature
-        .rules
-        .iter()
-        .map(|rule| &rule.force)
-        .find(|force| !force.is_null())
-        .map(|force| match force {
-            JsonValue::String(text) => text.clone(),
-            other => other.python_json(),
-        })
-}
-
 /// How one confirmed exposure is named, in the order the reference tries: the
 /// value the track carried, then the value the feature resolves to, then the
 /// key of the result, then its variation number. An exhausted fallback is the
 /// empty string, which the caller reads as "not reportable".
 ///
-/// Reference `ExperimentManager._variant_label`.
+/// Reference `resolve._variant_label`.
 fn variant_label(feature: &FeatureDefinition, track: &TrackData) -> String {
     if let Some(label) = label_of(&track.result.value) {
         return label;

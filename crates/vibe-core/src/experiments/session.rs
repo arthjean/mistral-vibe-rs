@@ -24,6 +24,7 @@ use crate::identity::{IdentityResolver, IdentityResult};
 use crate::telemetry::{LaunchContext, mistral_provider, platform_arch, platform_id};
 use crate::whoami::{NO_PLAN_DATA, WhoAmIResolver, WhoAmIResult, derive_user_plan};
 
+use super::cache::EvalCache;
 use super::manager::ExperimentManager;
 use super::models::{EvalResponse, ExperimentAttributes};
 
@@ -110,7 +111,8 @@ async fn fetch_plan_attributes(
 const DEFAULT_CONSOLE_BASE_URL: &str = "https://console.mistral.ai";
 
 /// Resolves the snapshot and the plan, then looks the rollout up for this
-/// session and records what it resolved.
+/// session and records what it resolved: in `cache` for the next session of
+/// the same user, and through `sink` for this one.
 ///
 /// Answers whether the variants changed, which is what decides a configuration
 /// refresh, beside the plan label the account lookup derived. A missing
@@ -127,6 +129,7 @@ pub async fn initialize_experiments(
     launch: Option<&LaunchContext>,
     sources: &PlanSources<'_>,
     sink: &dyn ExperimentStateSink,
+    cache: Option<&EvalCache>,
 ) -> (bool, Option<String>) {
     if !telemetry_enabled(effective) {
         return (false, None);
@@ -146,6 +149,13 @@ pub async fn initialize_experiments(
     let Some(state) = manager.export_state() else {
         return (false, user_plan);
     };
+    // Without the hash attribute the response carries no assignment, and
+    // caching that empty answer would overwrite a good entry.
+    if attributes.user_id.is_some()
+        && let Some(cache) = cache
+    {
+        cache.store(effective, credentials, state);
+    }
     sink.persist(state);
     (true, user_plan)
 }

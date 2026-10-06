@@ -126,6 +126,7 @@ fn initialize(document: &str, outcome: Outcome, organization: Option<&'static st
         None,
         &sources,
         &sink,
+        None,
     ));
     let attributes = transport.requests().first().and_then(|request| {
         request
@@ -176,7 +177,7 @@ fn a_configured_session_looks_the_rollout_up_once_and_persists_what_it_resolved(
     assert_eq!(attributes.harness, HARNESS_LEGACY);
     assert_eq!(
         run.manager.variant(super::ExperimentName::SystemPrompt),
-        "tests"
+        super::JsonValue::String("tests".to_owned())
     );
 }
 
@@ -227,6 +228,7 @@ fn no_mistral_provider_reports_the_sentinel_and_no_key_reports_nothing() {
         None,
         &sources,
         &RecordingSink::default(),
+        None,
     ));
     assert!(!refreshed);
     assert_eq!(resolver.calls().len(), 0);
@@ -260,7 +262,7 @@ fn a_failed_lookup_persists_nothing_and_asks_for_no_refresh() {
         assert_eq!(run.persisted, 0);
         assert_eq!(
             run.manager.variant(super::ExperimentName::SystemPrompt),
-            "cli",
+            super::JsonValue::String("cli".to_owned()),
             "the session keeps its declared default"
         );
     }

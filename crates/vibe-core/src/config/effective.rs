@@ -260,10 +260,15 @@ fn complete_routed_threshold(effective: &mut Table) {
 /// numbers they spell. A key the model does not declare is dropped, as
 /// `extra="ignore"` drops it, and the field defaults are left to the completion
 /// every other model entry goes through.
-fn validate_model_definition(value: &JsonValue) -> Option<Table> {
+pub(super) fn validate_model_definition(value: &JsonValue) -> Option<Table> {
     let object = value.as_object()?;
     let mut entry = Table::new();
     for (key, value) in object {
+        // Reference `_default_alias_to_name` replaces a null alias with the
+        // name before the field is read, so a null alias is an absent one.
+        if key == "alias" && value.is_null() {
+            continue;
+        }
         if let Some(value) = coerce_model_field(key, value)? {
             entry.insert(key.clone(), value);
         }

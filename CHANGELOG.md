@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Resolve the five rollouts the reference added (smart approve and its
+  default, extra models, registry skills and the Unified Harness rollout)
+  with typed values: a flag can be a boolean or `"on"`, extra models join the
+  model list by alias, and a variant equal to its default leaves the
+  configuration alone. Exposures report the reference's assignment records.
+
+- Keep the last resolved rollout in `experiment_eval_cache.json` under the
+  vibe home, shared with the reference, and apply it before a session's first
+  read. A new session that found nothing cached shows a spinner in place of
+  the model until its lookup settles and moves onto the model it routed;
+  a cached or resumed session keeps the variants it started on.
+
 - Sign in to a split-horizon deployment: the custom-domain setup screen takes
   an optional sign-in API base (Tab switches fields), and the editor's custom
   sign-in target accepts `apiBaseUrl`. When the two origins differ the origin
