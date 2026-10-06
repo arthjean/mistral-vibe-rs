@@ -221,6 +221,19 @@ pub trait Compactor: Send + Sync {
         messages: &'a [ModelMessage],
     ) -> CompactionFuture<'a>;
 
+    /// [`Self::compact`], with every summarization request passed through
+    /// `requests` before it is sent. A compactor that makes no request of its
+    /// own has nothing to pass through.
+    fn compact_reporting<'a>(
+        &'a self,
+        current_session_id: &'a str,
+        messages: &'a [ModelMessage],
+        requests: crate::compaction::manager::SummaryRequests,
+    ) -> CompactionFuture<'a> {
+        drop(requests);
+        self.compact(current_session_id, messages)
+    }
+
     /// Mints the identifier a cleared transcript continues under.
     ///
     /// Clearing borrows the compactor's naming authority without its summary:

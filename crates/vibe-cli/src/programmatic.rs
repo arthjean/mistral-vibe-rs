@@ -98,7 +98,9 @@ pub(crate) async fn run(
     let census_service = workspace.clone();
     let mut driver =
         vibe_app_server::client::LiveTurnDriver::from_credential(config, credential.clone())?;
-    driver = driver.with_event_observer(telemetry.clone());
+    driver = driver
+        .with_event_observer(telemetry.clone())
+        .with_request_census(telemetry.context());
     let server = bootstrap::route_resource_server(
         &arguments,
         workspace,
@@ -117,12 +119,15 @@ pub(crate) async fn run(
     // Reference builds the manager with the loop and starts the lookup as a
     // detached task once the session exists, so the programmatic path reports
     // the same enrollment an interactive one does.
-    let experiments = Arc::new(SessionExperiments::new(
-        &census_service,
-        crate::cli_credentials(&arguments),
-        Some(crate::programmatic_launch_context()),
-        telemetry.exposures(),
-    ));
+    let experiments = Arc::new(
+        SessionExperiments::new(
+            &census_service,
+            crate::cli_credentials(&arguments),
+            Some(crate::programmatic_launch_context()),
+            telemetry.exposures(),
+        )
+        .reporting_to(telemetry.clone()),
+    );
     let result = execute_with_server(
         arguments,
         driver,
@@ -190,17 +195,20 @@ where
         &working_directory,
         stderr,
     )?;
-    // Reference `emit_new_session_telemetry` and `emit_ready_telemetry`: the
-    // agent loop raises both once its initialization settles, whichever
-    // entrypoint launched it.
+    // Reference `wait_until_ready`: the agent loop raises `vibe.ready` and then
+    // `vibe.new_session` once its experiments task settles, so both carry the
+    // enrollment, the snapshot and the plan it resolved, whichever entrypoint
+    // launched it.
     if let Some(telemetry) = telemetry.as_ref() {
         if let Some(experiments) = telemetry.experiments.as_ref() {
             experiments.start(&session_id);
-        }
-        if let Some(census) = telemetry.census.clone() {
-            let _ = telemetry
-                .observer
-                .enqueue(&TelemetryRecord::NewSession(census), Some(&session_id));
+            experiments.follow_resets(
+                &telemetry.observer.context().session_resets,
+                &session_id,
+                &working_directory,
+                arguments.trust,
+            );
+            experiments.settle().await;
         }
         let _ = telemetry.observer.enqueue(
             &TelemetryRecord::Ready {
@@ -208,6 +216,11 @@ where
             },
             Some(&session_id),
         );
+        if let Some(census) = telemetry.census.clone() {
+            let _ = telemetry
+                .observer
+                .enqueue(&TelemetryRecord::NewSession(census), Some(&session_id));
+        }
     }
     let mut output = Output::new(arguments.output);
     let mut run = Run {

@@ -367,11 +367,15 @@ impl CommandBackend for LiveBackend<'_> {
         let Some(runtime) = self.runtime.as_mut() else {
             return Err(SETUP_REQUIRED.to_owned());
         };
-        if adopt_hydrated_session(runtime, self.state, self.controls, session_id) {
-            Ok(())
-        } else {
-            Err("the new conversation could not be opened".to_owned())
+        // Reference `_reset_session`: the session left behind reports its
+        // close, the new one resolves its rollout, then reports itself.
+        runtime.report(&TelemetryRecord::SessionClosed);
+        let previous = runtime.session_id.clone();
+        if !adopt_hydrated_session(runtime, self.state, self.controls, session_id) {
+            return Err("the new conversation could not be opened".to_owned());
         }
+        runtime.report_reset_session(&previous);
+        Ok(())
     }
 
     fn last_assistant_message(&self) -> Option<String> {

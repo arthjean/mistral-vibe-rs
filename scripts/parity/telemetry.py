@@ -435,6 +435,24 @@ alias = "oracle"
 """,
     },
     {
+        "id": "mistral-on-a-regional-host",
+        "toml": """
+enable_telemetry = true
+active_model = "oracle"
+
+[[providers]]
+name = "mistral"
+api_base = "https://api.eu.mistral.ai/v1"
+api_key_env_var = "ORACLE_MISTRAL_KEY"
+backend = "mistral"
+
+[[models]]
+name = "oracle-model"
+provider = "mistral"
+alias = "oracle"
+""",
+    },
+    {
         "id": "mistral-base-without-a-version-segment",
         "toml": """
 enable_telemetry = true
@@ -1387,6 +1405,8 @@ EXPORTER_CASES: list[dict[str, Any]] = [
     {"case": "derived-from-mistral", "endpoint": "", "configuration": "mistral-active"},
     {"case": "derived-from-a-proxy", "endpoint": "",
      "configuration": "mistral-behind-a-proxy"},
+    {"case": "derived-from-a-regional-host", "endpoint": "",
+     "configuration": "mistral-on-a-regional-host"},
     {"case": "derived-from-a-base-without-a-version",
      "endpoint": "", "configuration": "mistral-base-without-a-version-segment"},
     {"case": "derived-without-a-resolvable-key", "endpoint": "",

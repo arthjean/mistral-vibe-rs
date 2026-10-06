@@ -98,8 +98,12 @@ fn context() -> TelemetryContext {
             terminal_emulator: Some("ghostty".to_owned()),
         }),
         parent_session_id: Some("oracle-parent-session".to_owned()),
-        experiments: ExperimentExposures::default(),
-        user_plan: Some("oracle-plan".to_owned()),
+        experiments: {
+            let exposures = ExperimentExposures::default();
+            exposures.publish_user_plan(Some("oracle-plan".to_owned()));
+            exposures
+        },
+        ..TelemetryContext::default()
     }
 }
 
@@ -154,6 +158,11 @@ fn the_endpoint_is_derived_from_the_provider_base() {
         // A bearer token never travels in the clear, and never past a
         // credential of someone else's.
         ("http://plain.example.test/v1", None),
+        // A loopback stand-in is reached in the clear, as a model endpoint is.
+        (
+            "http://127.0.0.1:8080/v1",
+            Some("http://127.0.0.1:8080/v1/datalake/events"),
+        ),
         ("https://user:password@proxy.example.test/v1", None),
     ] {
         assert_eq!(
@@ -480,6 +489,7 @@ fn request_event() -> EventEnvelope {
             nb_images: 0,
             supports_images: true,
             message_id: Some("oracle-message".to_owned()),
+            call_type: TelemetryCallType::MainCall,
         },
     }
 }
@@ -600,10 +610,17 @@ fn experiments_are_absent_rather_than_empty() {
             .properties()
             .contains_key("experiments")
     );
-    let filled = TelemetryContext {
-        experiments: BTreeMap::from([("ab".to_owned(), "on".to_owned())]).into(),
-        ..context()
-    };
+    let filled = context();
+    filled.experiments.publish(vec![ExperimentAssignment {
+        experiment_id: "ab".to_owned(),
+        experiment_name: "oracle-ab".to_owned(),
+        variation_name: "on".to_owned(),
+        variation_id: None,
+        in_experiment: None,
+        hash_attribute: None,
+        hash_value: None,
+        feature_id: None,
+    }]);
     assert_eq!(
         filled.base_metadata(None).properties()["experiments"],
         json!({"ab": "on"})
@@ -840,7 +857,7 @@ async fn a_request_event_reports_the_reference_payload() {
     );
 }
 
-/// US-009: an answered tool call reports the eleven reference fields, with the
+/// US-009: an answered tool call reports the twelve reference fields, with the
 /// model, the profile and the message identifier read off the request it
 /// belongs to.
 #[test]
@@ -863,6 +880,7 @@ fn a_tool_call_reports_the_reference_payload() {
         keys,
         [
             "agent_profile_name",
+            "approval_source",
             "approval_type",
             "decision",
             "file_extension",
@@ -873,7 +891,7 @@ fn a_tool_call_reports_the_reference_payload() {
             "status",
             "tool_name",
         ],
-        "the eleventh field, `bash_background`, is omitted where no mode was named"
+        "the twelfth field, `bash_background`, is omitted where no mode was named"
     );
     assert_eq!(properties["tool_name"], json!("write_file"));
     assert_eq!(properties["status"], json!("success"));
@@ -1208,9 +1226,11 @@ fn every_published_event_name_has_a_record() {
             nb_context_tokens_before: 0,
             auto_compact_threshold: 0,
             status: "success",
+            session: None,
         },
         TelemetryRecord::CompactionFailed {
             reason: "tool_call",
+            session: None,
         },
         TelemetryRecord::SlashCommandUsed {
             command: "help".to_owned(),
@@ -1219,6 +1239,7 @@ fn every_published_event_name_has_a_record() {
         TelemetryRecord::UserCopiedText { text_length: 1 },
         TelemetryRecord::UserCancelledAction {
             action: "interrupt_agent".to_owned(),
+            outcome: None,
         },
         TelemetryRecord::VoiceModeToggled { enabled: true },
         TelemetryRecord::OnboardingApiKeyAdded {
@@ -1270,6 +1291,11 @@ fn every_published_event_name_has_a_record() {
         TelemetryRecord::SessionBranched {
             source_session_id: "source".to_owned(),
             new_session_id: "copy".to_owned(),
+        },
+        TelemetryRecord::AdminConfigApplied {
+            outcome: records::AdminConfigOutcome::Applied,
+            nb_enforced_fields: Some(1),
+            has_error: false,
         },
     ];
     let produced = records
@@ -1332,7 +1358,8 @@ fn a_compaction_outcome_reports_the_reference_payload() {
 }
 
 /// US-151: a classified failure reports the failure record too, carrying the
-/// reason and nothing else.
+/// reason and the session's parent, which the reference writes beside the
+/// session it passes.
 #[test]
 fn a_classified_failure_reports_both_records() {
     let projections = project(&compaction_outcome(
@@ -1346,8 +1373,8 @@ fn a_classified_failure_reports_both_records() {
     assert_eq!(failed.event(), TelemetryEvent::CompactionFailed);
     assert_eq!(
         Value::Object(properties(failed)),
-        json!({"reason": "tool_call"}),
-        "the failure record carries the reason and no transcript"
+        json!({"reason": "tool_call", "parent_session_id": "oracle-parent-session"}),
+        "the failure record carries the reason and the session's parent, no transcript"
     );
 }
 

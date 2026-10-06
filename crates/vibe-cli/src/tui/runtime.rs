@@ -314,6 +314,19 @@ impl InteractiveRuntime {
             .unwrap_or_default()
     }
 
+    /// Hands the session this runtime just adopted in place of `previous` to
+    /// the enrollment that follows it, which resolves its rollout and reports
+    /// it. Reference `_reset_session`, which `/clear` and a forking rewind run.
+    pub(super) fn report_reset_session(&self, previous: &str) {
+        if let Some(experiments) = self.experiments.as_ref() {
+            vibe_core::telemetry::SessionReset::reset(
+                experiments.as_ref(),
+                previous,
+                &self.session_id,
+            );
+        }
+    }
+
     /// Sends one telemetry record under this session.
     ///
     /// Telemetry is best effort on both sides, so a session that enabled none

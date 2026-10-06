@@ -46,13 +46,14 @@ use crate::experiments::recorder::{Outcome, RecordingSink, RecordingTransport};
 use crate::experiments::{
     BUCKETING_KEY_LENGTH, EVAL_PATH_TEMPLATE, EVAL_REQUEST_TIMEOUT, EXPERIMENT_IDENTITY_TIMEOUT,
     EvalPayload, EvalResponse, ExperimentAttributes, ExperimentManager, ExperimentName,
-    FeatureDefinition, JsonValue, RemoteEvalClient, build_attributes, build_eval_url, hash_api_key,
-    hydrate_experiments_from_session, initialize_experiments,
+    FeatureDefinition, JsonValue, PlanSources, RemoteEvalClient, build_attributes, build_eval_url,
+    hash_api_key, hydrate_experiments_from_session, initialize_experiments,
 };
 use crate::identity::IDENTITY_PATH;
 use crate::identity::recorder::RecordingResolver;
 use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
-use crate::telemetry::{LaunchContext, platform_id, version};
+use crate::telemetry::{HARNESS_LEGACY, LaunchContext, platform_arch, platform_id, version};
+use crate::whoami::recorder::Unanswered;
 
 const CORPUS_RELATIVE: &str = "crates/vibe-core/tests/experiments/corpus.json";
 const CAPTURE_SCRIPT: &str = "scripts/parity/experiments.py";
@@ -194,29 +195,7 @@ const FAMILIES: &[Family] = &[
 const DIVERGENCES: &[(&str, &str)] = &[
     ("constants/value/experimentNames", EXPERIMENT_NAMES),
     ("constants/value/defaultVariants", TYPED_DEFAULTS),
-    ("constants/value/identityTimeoutSeconds", IDENTITY_TIMEOUT),
     ("constants/value/configuredFields", CONFIGURED_FIELDS),
-    (
-        "evalRequest/attributeKeys/every-attribute",
-        POSTED_ATTRIBUTES,
-    ),
-    ("evalRequest/attributes/every-attribute", POSTED_ATTRIBUTES),
-    (
-        "evalRequest/attributeKeys/optional-attributes-absent",
-        POSTED_ATTRIBUTES,
-    ),
-    (
-        "evalRequest/attributes/optional-attributes-absent",
-        POSTED_ATTRIBUTES,
-    ),
-    (
-        "evalRequest/attributeKeys/custom-system-prompt",
-        POSTED_ATTRIBUTES,
-    ),
-    (
-        "evalRequest/attributes/custom-system-prompt",
-        POSTED_ATTRIBUTES,
-    ),
     ("evalFailures/variants/connection-error", TYPED_VARIANTS),
     ("evalFailures/variants/timeout", TYPED_VARIANTS),
     ("evalFailures/variants/status-400", TYPED_VARIANTS),
@@ -362,139 +341,13 @@ const DIVERGENCES: &[(&str, &str)] = &[
         "layerPrecedence/effective/routing-variant-loses-to-a-pinned-model",
         PINNED_ROUTING,
     ),
-    (
-        "sessionGates/identityTimeout/initialize/mistral-active/identity",
-        IDENTITY_TIMEOUT,
-    ),
-    (
-        "sessionGates/identityTimeout/initialize/mistral-active/no-identity",
-        IDENTITY_TIMEOUT,
-    ),
-    (
-        "sessionGates/identityRequests/initialize/experiments-disabled/identity",
-        IDENTITY_BEFORE_EXPERIMENTS_GATE,
-    ),
-    (
-        "sessionGates/identityTimeout/initialize/experiments-disabled/identity",
-        IDENTITY_BEFORE_EXPERIMENTS_GATE,
-    ),
-    (
-        "sessionGates/identityRequests/initialize/experiments-disabled/no-identity",
-        IDENTITY_BEFORE_EXPERIMENTS_GATE,
-    ),
-    (
-        "sessionGates/identityTimeout/initialize/experiments-disabled/no-identity",
-        IDENTITY_BEFORE_EXPERIMENTS_GATE,
-    ),
-    (
-        "sessionGates/returned/initialize/third-party-only/identity",
-        NO_PLAN_SENTINEL,
-    ),
-    (
-        "sessionGates/returned/initialize/third-party-only/no-identity",
-        NO_PLAN_SENTINEL,
-    ),
-    (
-        "sessionGates/identityTimeout/initialize/custom-system-prompt/identity",
-        IDENTITY_TIMEOUT,
-    ),
-    (
-        "sessionGates/identityTimeout/initialize/custom-system-prompt/no-identity",
-        IDENTITY_TIMEOUT,
-    ),
-    (
-        "sessionGates/identityTimeout/initialize/eval-fails",
-        IDENTITY_TIMEOUT,
-    ),
-    (
-        "sessionGates/identityTimeout/initialize/eval-returns-nothing",
-        IDENTITY_TIMEOUT,
-    ),
-    (
-        "attributes/attributes/default-prompt/no-launch-context",
-        BUILT_ATTRIBUTES,
-    ),
-    (
-        "attributes/payloadKeys/default-prompt/no-launch-context",
-        POSTED_ATTRIBUTE_KEYS,
-    ),
-    ("attributes/attributes/default-prompt/cli", BUILT_ATTRIBUTES),
-    (
-        "attributes/payloadKeys/default-prompt/cli",
-        POSTED_ATTRIBUTE_KEYS,
-    ),
-    (
-        "attributes/attributes/default-prompt/cli-in-vscode",
-        BUILT_ATTRIBUTES,
-    ),
-    (
-        "attributes/payloadKeys/default-prompt/cli-in-vscode",
-        POSTED_ATTRIBUTE_KEYS,
-    ),
-    (
-        "attributes/attributes/default-prompt/acp-in-cursor",
-        BUILT_ATTRIBUTES,
-    ),
-    (
-        "attributes/payloadKeys/default-prompt/acp-in-cursor",
-        POSTED_ATTRIBUTE_KEYS,
-    ),
-    (
-        "attributes/attributes/default-prompt/programmatic",
-        BUILT_ATTRIBUTES,
-    ),
-    (
-        "attributes/payloadKeys/default-prompt/programmatic",
-        POSTED_ATTRIBUTE_KEYS,
-    ),
-    (
-        "attributes/attributes/custom-prompt/no-launch-context",
-        BUILT_ATTRIBUTES,
-    ),
-    (
-        "attributes/payloadKeys/custom-prompt/no-launch-context",
-        POSTED_ATTRIBUTE_KEYS,
-    ),
-    ("attributes/attributes/custom-prompt/cli", BUILT_ATTRIBUTES),
-    (
-        "attributes/payloadKeys/custom-prompt/cli",
-        POSTED_ATTRIBUTE_KEYS,
-    ),
-    (
-        "attributes/attributes/custom-prompt/cli-in-vscode",
-        BUILT_ATTRIBUTES,
-    ),
-    (
-        "attributes/payloadKeys/custom-prompt/cli-in-vscode",
-        POSTED_ATTRIBUTE_KEYS,
-    ),
-    (
-        "attributes/attributes/custom-prompt/acp-in-cursor",
-        BUILT_ATTRIBUTES,
-    ),
-    (
-        "attributes/payloadKeys/custom-prompt/acp-in-cursor",
-        POSTED_ATTRIBUTE_KEYS,
-    ),
-    (
-        "attributes/attributes/custom-prompt/programmatic",
-        BUILT_ATTRIBUTES,
-    ),
-    (
-        "attributes/payloadKeys/custom-prompt/programmatic",
-        POSTED_ATTRIBUTE_KEYS,
-    ),
 ];
 
 const EXPERIMENT_NAMES: &str = "v2.24.5, v2.25.0 and v2.25.1 added five experiment names (vibe/core/experiments/active.py:14-27 at 4a96003): vibe_cli_extra_models, vibe_cli_registry_skills, vibe_cli_smart_approve, vibe_cli_smart_approve_default and vibe_cli_unified_harness_rollout. This build's ExperimentName::ALL still declares the three names of v2.24.0 (crates/vibe-core/src/experiments.rs:94).";
 
 const TYPED_DEFAULTS: &str = "v2.25.1 typed DEFAULT_VARIANTS (vibe/core/experiments/active.py:30-39 at 4a96003): the routing default is the object {} rather than the text \"{}\", and the five names added since v2.24.5 default to false, {} or \"legacy\". This build's default_variant answers text for its three names only (crates/vibe-core/src/experiments.rs:119-127).";
 
-const IDENTITY_TIMEOUT: &str = "v2.24.4 raised EXPERIMENT_IDENTITY_TIMEOUT_S from 4.0 to 10.0 seconds (vibe/core/experiments/session.py:28 at 4a96003). This build still bounds the identity lookup at 4 seconds (crates/vibe-core/src/experiments/session.rs:37).";
-
 const CONFIGURED_FIELDS: &str = "v2.24.5, v2.25.0 and v2.25.1 added four GrowthBook mappings (vibe/core/config/layers/growthbook.py:88-116 at 4a96003): vibe_cli_extra_models to routed_extra_models, vibe_cli_smart_approve to smart_approve_available, vibe_cli_smart_approve_default to smart_approve_default, and vibe_cli_registry_skills to experimental_enable_registry_skills. This build maps its three experiments only (crates/vibe-core/src/config/experiments_layer.rs:41-47).";
-
-const POSTED_ATTRIBUTES: &str = "v2.25.0 added the required harness attribute and the arch attribute, which defaults to the host's lowercased machine name (vibe/core/experiments/models.py:27,32 at 4a96003); the capture posts the legacy surface and records arch as a placeholder. This build's ExperimentAttributes carries neither and posts only its nine v2.24.0 keys (crates/vibe-core/src/experiments/models.rs:36-59).";
 
 const TYPED_VARIANTS: &str = "v2.25.1 made variant resolution typed (vibe/core/experiments/resolve.py:27-39 at 4a96003) and v2.24.5 to v2.25.1 added five names (vibe/core/experiments/active.py:14-39): get_variant and get_variant_or_none answer the JSON value itself for eight names. This build answers text, JSON-encoding a non-string value, for its three names (crates/vibe-core/src/experiments/manager.rs:106-123).";
 
@@ -509,14 +362,6 @@ const CONFIG_VARIANTS_EVERY_RESOLVED: &str = "Under the v2.25.1 rule (vibe/core/
 const ROUTED_MODELS_MAP: &str = "v2.25.0 made the GrowthBook layer also write a models table keyed by alias for every routed model definition that validates (vibe/core/config/layers/growthbook.py:147-153,166-183 at 4a96003). This build's ExperimentsLayer writes only the mapped fields (crates/vibe-core/src/config/experiments_layer.rs:79-99).";
 
 const PINNED_ROUTING: &str = "v2.24.1 relaxed the unpinned-only guard in _inject_routed_model to also inject when active_model equals the routed alias, and v2.24.2 removed the guard entirely (vibe/core/config/vibe_schema.py:836-855 at 4a96003, against vibe/core/config/vibe_schema.py:604-617 at b78b451), and v2.25.0 also routes the definition through the layer's models table (vibe/core/config/layers/growthbook.py:147-153), so a pinned installation declares the routed alias and resolves it as the default. This build still skips the injection when active_model is pinned (crates/vibe-core/src/config/effective.rs:255-268) and resolves mistral-medium-3.5.";
-
-const IDENTITY_BEFORE_EXPERIMENTS_GATE: &str = "v2.24.4 reordered initialize_experiments (vibe/core/experiments/session.py:103-130 at 4a96003): only enable_telemetry precedes the identity and whoami lookups, and experiments.enable = false now skips the eval alone, so the identity is still requested once with the 10 second budget. This build checks both gates before any lookup (crates/vibe-core/src/experiments/session.rs:72-74,121-133) and requests nothing.";
-
-const NO_PLAN_SENTINEL: &str = "v2.24.4 made initialize_experiments return (refreshed, user_plan) and answer the NO_PLAN_DATA plan when no Mistral provider is configured (vibe/core/experiments/session.py:64-71,111-131 at 4a96003; vibe/setup/auth/whoami.py:42). This build resolves no plan (crates/vibe-core/src/experiments/session.rs:64-92), which the replay reads as a false refresh beside an absent plan.";
-
-const BUILT_ATTRIBUTES: &str = "v2.24.2 to v2.25.0 reshaped _build_attributes (vibe/core/experiments/session.py:215-257 at 4a96003): userId is the identity's id rather than hash_api_key of the key, harness and arch are set, and organizationKind, workspaceId, customerId, planType and planName are declared (vibe/core/experiments/models.py:23-40). This build still derives userId from the key digest and declares nine fields (crates/vibe-core/src/experiments/session.rs:173-196, crates/vibe-core/src/experiments/models.rs:36-59).";
-
-const POSTED_ATTRIBUTE_KEYS: &str = "v2.25.0 added harness and arch to the posted attributes (vibe/core/experiments/models.py:27,32 at 4a96003), and neither is None for a built attribute set. This build posts neither (crates/vibe-core/src/experiments/models.rs:36-59).";
 
 /// One family's shape: which case fields the capture authored and which ones
 /// both sides answer.
@@ -703,6 +548,10 @@ const PLATFORM_ID_PLACEHOLDER: &str = "{platformId}";
 /// What the capture writes in place of the running build's own version, which
 /// is what an attribute answers when no adapter reports one.
 const VERSION_PLACEHOLDER: &str = "{version}";
+
+/// What the capture writes in place of the machine's own architecture, under
+/// the `arch` key only.
+const ARCH_PLACEHOLDER: &str = "{arch}";
 
 /// The credential sentinels the capture exports, mirroring `SENTINELS` in
 /// `scripts/parity/experiments.py`. They are authored strings that stand where
@@ -952,15 +801,22 @@ fn eval_url_answer(case: &Case<'_>) -> Map<String, Value> {
 /// The attributes one request scenario posts.
 fn oracle_attributes(case: &str) -> ExperimentAttributes {
     let mut attributes = ExperimentAttributes {
-        user_id: ORACLE_USER_ID.to_owned(),
+        user_id: Some(ORACLE_USER_ID.to_owned()),
         entrypoint: "cli".to_owned(),
+        harness: "legacy".to_owned(),
         agent_version: "9.9.9".to_owned(),
         client_name: Some("oracle-client".to_owned()),
         client_version: Some("1.2.3".to_owned()),
         os: platform_id(),
+        arch: platform_arch(),
         terminal_emulator: Some("vscode".to_owned()),
         custom_system_prompt: false,
         organization_id: Some("oracle-organization".to_owned()),
+        organization_kind: None,
+        workspace_id: None,
+        customer_id: None,
+        plan_type: None,
+        plan_name: None,
     };
     match case {
         "optional-attributes-absent" => {
@@ -990,7 +846,12 @@ fn scrub(value: &Value) -> Value {
         Value::Object(entries) => Value::Object(
             entries
                 .iter()
-                .map(|(key, item)| (key.clone(), scrub(item)))
+                .map(|(key, item)| match item {
+                    Value::String(text) if key == "arch" && *text == platform_arch() => {
+                        (key.clone(), Value::String(ARCH_PLACEHOLDER.to_owned()))
+                    }
+                    _ => (key.clone(), scrub(item)),
+                })
                 .collect(),
         ),
         other => other.clone(),
@@ -1802,23 +1663,26 @@ fn session_gates_answer(case: &Case<'_>, runtime: &Runtime) -> Map<String, Value
             ));
             let resolver = RecordingResolver::answering(identity, SENTINELS[1].1);
             let sink = RecordingSink::default();
-            let refreshed = runtime.block_on(initialize_experiments(
+            let sources = PlanSources {
+                identity: &resolver,
+                whoami: &Unanswered,
+                harness: HARNESS_LEGACY,
+            };
+            let (refreshed, user_plan) = runtime.block_on(initialize_experiments(
                 &effective,
                 &gate_credentials,
                 &mut manager,
                 None,
-                &resolver,
+                &sources,
                 &sink,
             ));
             let calls = resolver.calls();
-            // The reference returns `(refreshed, user_plan)`
-            // (`vibe/core/experiments/session.py:103-152` at the pin). This
-            // build's helper resolves no plan, so its answer is the refresh
-            // flag beside an absent plan, which is what the reference answers
-            // too wherever its plan lookup comes back empty.
             answers.insert(
                 "returned".to_owned(),
-                Value::Array(vec![Value::Bool(refreshed), Value::Null]),
+                Value::Array(vec![
+                    Value::Bool(refreshed),
+                    user_plan.map_or(Value::Null, Value::String),
+                ]),
             );
             answers.insert(
                 "evalRequests".to_owned(),
@@ -1878,8 +1742,9 @@ fn attribute_object(attributes: &ExperimentAttributes) -> Value {
         |value: Option<&String>| value.map_or(Value::Null, |value| Value::String(value.clone()));
     Value::Object(
         [
-            ("userId", Value::String(attributes.user_id.clone())),
+            ("userId", text(attributes.user_id.as_ref())),
             ("entrypoint", Value::String(attributes.entrypoint.clone())),
+            ("harness", Value::String(attributes.harness.clone())),
             (
                 "agent_version",
                 Value::String(attributes.agent_version.clone()),
@@ -1887,6 +1752,7 @@ fn attribute_object(attributes: &ExperimentAttributes) -> Value {
             ("client_name", text(attributes.client_name.as_ref())),
             ("client_version", text(attributes.client_version.as_ref())),
             ("os", Value::String(attributes.os.clone())),
+            ("arch", Value::String(attributes.arch.clone())),
             (
                 "terminal_emulator",
                 text(attributes.terminal_emulator.as_ref()),
@@ -1896,6 +1762,14 @@ fn attribute_object(attributes: &ExperimentAttributes) -> Value {
                 Value::Bool(attributes.custom_system_prompt),
             ),
             ("organizationId", text(attributes.organization_id.as_ref())),
+            (
+                "organizationKind",
+                text(attributes.organization_kind.as_ref()),
+            ),
+            ("workspaceId", text(attributes.workspace_id.as_ref())),
+            ("customerId", text(attributes.customer_id.as_ref())),
+            ("planType", text(attributes.plan_type.as_ref())),
+            ("planName", text(attributes.plan_name.as_ref())),
         ]
         .into_iter()
         .map(|(key, value)| (key.to_owned(), value))
@@ -1912,11 +1786,24 @@ fn attributes_answer(case: &Case<'_>) -> Map<String, Value> {
         .input_str("context")
         .expect("every attributes case names its launch context");
     let launch = launch_context(context);
+    // The capture's identity always answers its id and drops only the
+    // organization for the bare context.
+    let identity: crate::identity::IdentityResult =
+        serde_json::from_value(if context == "no-launch-context" {
+            serde_json::json!({"id": "oracle-user"})
+        } else {
+            serde_json::json!({
+                "id": "oracle-user",
+                "organization": {"id": ORACLE_ORGANIZATION, "name": "Oracle"},
+            })
+        })
+        .expect("the authored identity validates");
     let attributes = build_attributes(
         &gate_effective(configuration),
-        SENTINELS[1].1,
         launch.as_ref(),
-        (context != "no-launch-context").then(|| ORACLE_ORGANIZATION.to_owned()),
+        HARNESS_LEGACY,
+        Some(&identity),
+        None,
     );
     let posted = serde_json::to_value(&attributes).expect("the attributes serialize");
     let mut answers = Map::new();
@@ -1927,7 +1814,7 @@ fn attributes_answer(case: &Case<'_>) -> Map<String, Value> {
     answers.insert("payloadKeys".to_owned(), sorted_keys(&posted));
     answers.insert(
         "credentialVariable".to_owned(),
-        sentinel_variable(&attributes.user_id)
+        sentinel_variable(attributes.user_id.as_deref().unwrap_or_default())
             .map_or(Value::Null, |variable| Value::String(variable.to_owned())),
     );
     answers

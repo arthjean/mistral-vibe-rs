@@ -75,6 +75,12 @@ pub struct AcpExperiments {
     pub exposures: ExperimentExposures,
     pub credentials: Credentials,
     pub launch: LaunchContext,
+    /// Where the editor's own descriptor is declared once a session opens,
+    /// shared with the telemetry context every event reads.
+    pub declared_launch: vibe_core::telemetry::DeclaredLaunch,
+    /// Where a session whose context is cleared is handed for its reset,
+    /// shared with the telemetry context that observes the clear.
+    pub session_resets: vibe_core::telemetry::SessionResets,
 }
 
 impl<D> AcpAgent<D>

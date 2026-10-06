@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+- Report telemetry as the reference does across the terminal, `vibe -p` and
+  the editor. Every event now carries the full session census: the
+  experiment assignments and attributes, the harness backend, the parent of a
+  subagent, a forked or resumed session, and the account plan read from the
+  console's `whoami` endpoint, cached for six hours under the Vibe home. Model
+  requests carry the same census without the experiment fields, as the
+  reference sends it. `account/read` reports a revoked key as
+  `unauthorized`.
+
+- Apply the organization's managed configuration under every other layer once
+  a session starts, and report `vibe.admin_config_applied` with its outcome,
+  the number of enforced keys and whether an error occurred.
+
+- Label every compaction summary request `secondary_call`, report it with
+  `vibe.request_sent` on the compaction model, and name the parent session on
+  `vibe.auto_compact_triggered` and `vibe.compaction_failed`.
+
+- Close the session and open a new one in telemetry on `/clear` and on a
+  rewind fork, re-evaluating experiments for the new session, as the
+  reference does. The interactive client now reports itself as `vibe_tui`, and
+  an interrupt still settling after two seconds is reported as slow.
+
+- Send the interactive client's model requests to the `api_base` configured
+  for the active model's provider instead of the default endpoint.
+
+- Export traces to the default server when the Mistral provider points at a
+  regional host such as `api.eu.mistral.ai`, as the reference does.
+
 - Keep Vibe Code project links where the reference keeps them, in
   `projects.toml` under the Vibe home, so the terminal, an editor and the
   reference itself share them. A link now names either a Git checkout and its

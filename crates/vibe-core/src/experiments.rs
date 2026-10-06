@@ -28,8 +28,8 @@ pub use json::{JsonValue, OrderedMap};
 pub use manager::{BUCKETING_KEY_LENGTH, ExperimentManager, hash_api_key};
 pub use models::{EvalResponse, ExperimentAttributes, FeatureDefinition};
 pub use session::{
-    EXPERIMENT_IDENTITY_TIMEOUT, ExperimentStateSink, build_attributes,
-    hydrate_experiments_from_session, initialize_experiments,
+    EXPERIMENT_IDENTITY_TIMEOUT, ExperimentStateSink, PlanSources, build_attributes,
+    hydrate_experiments_from_session, initialize_experiments, resolve_plan_attributes,
 };
 
 /// The transport the unit tests and the parity replay stand one call before a

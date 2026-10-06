@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 
 use sha2::{Digest, Sha256};
 
+use crate::telemetry::ExperimentAssignment;
 use crate::text::hex_encode;
 
 use super::ExperimentName;
@@ -52,6 +53,9 @@ pub struct ExperimentManager {
     /// What the last successful lookup or hydration resolved, filtered to the
     /// experiments this build knows.
     response: Option<EvalResponse>,
+    /// The snapshot the last lookup posted, or the one set without a lookup,
+    /// which telemetry reports beside the exposures it segmented.
+    attributes: Option<ExperimentAttributes>,
 }
 
 impl ExperimentManager {
@@ -60,6 +64,7 @@ impl ExperimentManager {
         Self {
             client,
             response: None,
+            attributes: None,
         }
     }
 
@@ -72,17 +77,37 @@ impl ExperimentManager {
     ///
     /// Reference `ExperimentManager.initialize`.
     pub async fn initialize(&mut self, attributes: &ExperimentAttributes) {
+        // Retained before the lookup, so a failed one still reports the
+        // snapshot it posted.
+        self.attributes = Some(attributes.clone());
         if let Some(response) = self.client.evaluate(attributes).await {
             self.response = Some(filter_to_known_experiments(response));
         }
     }
 
     /// Takes a state in without a lookup, which is what a resumed or forked
-    /// session does. Replaces whatever was there rather than merging into it.
+    /// session does. Replaces whatever was there rather than merging into it,
+    /// the snapshot included: a hydrated session has none until its plan
+    /// attributes are resolved again.
     ///
     /// Reference `ExperimentManager.hydrate`.
     pub fn hydrate(&mut self, response: EvalResponse) {
+        self.attributes = None;
         self.response = Some(filter_to_known_experiments(response));
+    }
+
+    /// The snapshot the last lookup posted. Reference
+    /// `ExperimentManager.attributes`.
+    #[must_use]
+    pub fn attributes(&self) -> Option<&ExperimentAttributes> {
+        self.attributes.as_ref()
+    }
+
+    /// Sets the snapshot without a lookup, which is what a session with
+    /// nothing to evaluate still reports. Reference
+    /// `ExperimentManager.set_attributes`.
+    pub fn set_attributes(&mut self, attributes: ExperimentAttributes) {
+        self.attributes = Some(attributes);
     }
 
     /// What this manager would hand a session to persist.
@@ -147,18 +172,32 @@ impl ExperimentManager {
         result
     }
 
-    /// The confirmed exposures, and nothing else.
+    /// The confirmed exposures, and nothing else, by experiment.
+    ///
+    /// Reference `{a.experiment_id: a.variation_name for a in assignments}`,
+    /// read off [`Self::assignment_records`].
+    #[must_use]
+    pub fn assignments(&self) -> BTreeMap<String, String> {
+        self.assignment_records()
+            .into_iter()
+            .map(|record| (record.experiment_id, record.variation_name))
+            .collect()
+    }
+
+    /// The confirmed exposures as the records a census carries: at most one
+    /// per experiment, the last confirmed track winning, in the order the
+    /// response lists its features.
     ///
     /// A track the proxy did not mark `inExperiment` is skipped, and so is one
     /// whose label bottoms out empty, so telemetry never reports an enrollment
     /// that did not happen or one it cannot name.
     ///
-    /// Reference `ExperimentManager.assignments`.
+    /// Reference `resolve.assignments`.
     #[must_use]
-    pub fn assignments(&self) -> BTreeMap<String, String> {
-        let mut result = BTreeMap::new();
+    pub fn assignment_records(&self) -> Vec<ExperimentAssignment> {
+        let mut records: Vec<ExperimentAssignment> = Vec::new();
         let Some(response) = self.response.as_ref() else {
-            return result;
+            return records;
         };
         for (key, feature) in response.features.iter() {
             for track in feature.rules.iter().flat_map(|rule| &rule.tracks) {
@@ -166,12 +205,29 @@ impl ExperimentManager {
                     continue;
                 }
                 let label = variant_label(feature, track);
-                if !label.is_empty() {
-                    result.insert(key.to_owned(), label);
+                if label.is_empty() {
+                    continue;
+                }
+                let record = ExperimentAssignment {
+                    experiment_id: key.to_owned(),
+                    experiment_name: track.experiment.key.clone(),
+                    variation_name: label,
+                    variation_id: track.result.variation_id,
+                    in_experiment: track.result.in_experiment,
+                    hash_attribute: track.result.hash_attribute.clone(),
+                    hash_value: track.result.hash_value.clone(),
+                    feature_id: track.result.feature_id.clone(),
+                };
+                match records
+                    .iter_mut()
+                    .find(|existing| existing.experiment_id == record.experiment_id)
+                {
+                    Some(existing) => *existing = record,
+                    None => records.push(record),
                 }
             }
         }
-        result
+        records
     }
 
     /// Releases the client's transport.

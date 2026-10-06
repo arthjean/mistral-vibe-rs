@@ -18,6 +18,7 @@
 //! Reference: `vibe/core/compaction/manager.py` at the pinned commit.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::events::{ModelMessage, ModelToolCall};
 use crate::prompt::library::{UtilityPrompt, load_prompt};
@@ -157,6 +158,27 @@ pub struct CompactionPlan {
     /// The session both calls pin their affinity to, as the reference's turn
     /// calls do: compaction reaches the model through `AgentLoop._complete`.
     pub session_id: Option<String>,
+    /// What every summarization request passes through before it is sent.
+    pub requests: Option<SummaryRequests>,
+}
+
+/// What a summarization request passes through before it is sent: the
+/// census it carries and the report it makes.
+///
+/// Reference `AgentLoop._complete` with `call_type="secondary_call"`, which
+/// every summarization call goes through, the overflow retries included.
+pub trait SummaryRequestHook: Send + Sync {
+    fn before_request(&self, input: &mut ProviderInput);
+}
+
+/// A shared [`SummaryRequestHook`], held by a plan.
+#[derive(Clone)]
+pub struct SummaryRequests(pub Arc<dyn SummaryRequestHook>);
+
+impl std::fmt::Debug for SummaryRequests {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("SummaryRequests")
+    }
 }
 
 impl Default for CompactionPlan {
@@ -171,6 +193,7 @@ impl Default for CompactionPlan {
             limits: RequestLimits::default(),
             max_preserved_tokens: COMPACT_USER_MESSAGE_MAX_TOKENS,
             session_id: None,
+            requests: None,
         }
     }
 }
@@ -392,7 +415,10 @@ async fn summarize_call(
 ) -> Result<(AssistantMessage, Vec<ModelMessage>), CompactionFailure> {
     let mut tries_left = COMPACTION_OVERFLOW_RETRIES;
     loop {
-        let input = build_input(plan, shape, &working, request);
+        let mut input = build_input(plan, shape, &working, request);
+        if let Some(SummaryRequests(hook)) = &plan.requests {
+            hook.before_request(&mut input);
+        }
         match provider.complete(&input).await {
             Ok(answer) => {
                 usage.input_tokens = usage.input_tokens.saturating_add(answer.usage.input_tokens);

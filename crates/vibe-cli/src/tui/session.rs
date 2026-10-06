@@ -19,7 +19,7 @@ use super::runtime::{BannerMetrics, InteractiveRuntime, RuntimeSkill, UiOperatio
 use super::voice::{SpeechManager, VoiceManager, audio_credentials, audio_metadata};
 use super::{
     Arguments, CliError, DEFAULT_CONTEXT_WINDOW, DEFAULT_MODEL, active_agent_safety, bootstrap,
-    startup, telemetry_observer,
+    startup,
 };
 
 pub(super) fn start_runtime(
@@ -32,12 +32,15 @@ pub(super) fn start_runtime(
     let banner = banner_metrics_from_workspace(&workspace, arguments, working_directory);
     let skills = runtime_skills(&workspace);
     let preferences = startup_preferences(arguments, &workspace)?;
-    let telemetry = telemetry_observer(arguments, &workspace)?;
+    let telemetry =
+        crate::telemetry_observer_for(arguments, &workspace, crate::tui_launch_context())?;
     let mut driver = LiveTurnDriver::from_credential(
         bootstrap::live_driver_config(arguments, &preferences.model, &workspace)?,
         credential.clone(),
     )?;
-    driver = driver.with_event_observer(telemetry.clone());
+    driver = driver
+        .with_event_observer(telemetry.clone())
+        .with_request_census(telemetry.context());
     let configuration = workspace.clone();
     let server = bootstrap::resource_server(
         arguments,
@@ -61,15 +64,24 @@ pub(super) fn start_runtime(
         u64::try_from(session_start.elapsed().as_millis()).unwrap_or(u64::MAX);
     // Reference `start_initialize_experiments`: the lookup is detached the
     // moment the session exists, so nothing between here and the first frame
-    // waits on a rollout service. A resumed or forked session hydrates from
-    // what its metadata already carries and issues no request at all.
-    let experiments = Arc::new(SessionExperiments::new(
-        &configuration,
-        crate::cli_credentials(arguments),
-        Some(crate::cli_launch_context()),
-        telemetry.exposures(),
-    ));
+    // waits on a rollout service. A resumed or forked session first takes
+    // back the variants its metadata carries.
+    let experiments = Arc::new(
+        SessionExperiments::new(
+            &configuration,
+            crate::cli_credentials(arguments),
+            Some(crate::tui_launch_context()),
+            telemetry.exposures(),
+        )
+        .reporting_to(telemetry.clone()),
+    );
     experiments.start(&session_id);
+    experiments.follow_resets(
+        &telemetry.context().session_resets,
+        &session_id,
+        working_directory,
+        arguments.trust,
+    );
     // The audio surface is resolved from the configuration this session
     // publishes, not from the LLM endpoint: the transcription model, its wire
     // values, the provider's endpoint and the variable its credential is read

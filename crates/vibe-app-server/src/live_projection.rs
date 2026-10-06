@@ -285,6 +285,7 @@ impl EventObserver for AppServerEventObserver {
                 | EngineEvent::ToolCallUnresolved { .. }
                 | EngineEvent::Lifecycle { .. }
                 | EngineEvent::RequestSent { .. }
+                | EngineEvent::TurnOpened { .. }
                 | EngineEvent::CompactionOutcome { .. }
         );
         if checks_stats && std::mem::take(&mut projection.stats_pending) {

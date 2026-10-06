@@ -101,7 +101,7 @@ use self::terminal::{CrosstermOps, TerminalGuard};
 use self::turn::{
     ActiveTurn, request_active_turn_interrupt, settle_unstarted_reservation, start_active_turn,
 };
-use crate::{Arguments, CliError, CliTelemetryObserver, bootstrap, telemetry_observer};
+use crate::{Arguments, CliError, CliTelemetryObserver, bootstrap};
 use vibe_app_server::client::PublicNoticeLevel;
 use vibe_core::clock::{now_millis as unix_millis, now_seconds as unix_seconds};
 

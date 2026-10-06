@@ -19,8 +19,8 @@ use vibe_core::compaction::manager::{
 use vibe_core::engine::{
     CancellationToken, CompactionResult, Compactor, CompletionProvider, CompositeEventObserver,
     ConversationEngine, EngineLimits, EventObserver, NoopEventObserver, SessionStats,
-    SessionTranscriptSink, ToolExecutor, ToolFuture, ToolStreamSink, TurnControl,
-    TurnControlHandle, TurnOutcome, TurnStopReason,
+    SessionTranscriptSink, SummaryRequestRecorder, ToolExecutor, ToolFuture, ToolStreamSink,
+    TurnControl, TurnControlHandle, TurnOutcome, TurnStopReason,
 };
 use vibe_core::events::{ModelMessage, ProjectionReducer, RemoteToolOrigin};
 use vibe_core::extensions::{
@@ -128,6 +128,10 @@ pub struct LiveTurnDriver {
     /// switch retargets in place.
     turn_tools: Mutex<HashMap<String, SessionToolExecutor>>,
     event_observer: Arc<dyn EventObserver>,
+    /// What every request reports as its `metadata`. Reference
+    /// `_build_backend_metadata`, read off the same census the session's
+    /// telemetry client reports.
+    request_census: Option<vibe_core::telemetry::TelemetryContext>,
     /// What background session titles run on (reference
     /// `select_utility_model`), when this driver's configuration has a model
     /// to run them on.
@@ -172,9 +176,11 @@ impl ProviderSessionCompactor {
         current_session_id: &str,
         messages: &[ModelMessage],
         extra_instructions: &str,
+        requests: Option<compaction_manager::SummaryRequests>,
     ) -> Result<CompactionResult, CompactionFailure> {
         let plan = CompactionPlan {
             session_id: Some(current_session_id.to_owned()),
+            requests,
             ..(*self.plan).clone()
         };
         let summarized = compaction_manager::compact(
@@ -222,7 +228,19 @@ impl Compactor for ProviderSessionCompactor {
         messages: &'a [ModelMessage],
     ) -> vibe_core::engine::CompactionFuture<'a> {
         Box::pin(async move {
-            self.compact_with_instructions(current_session_id, messages, "")
+            self.compact_with_instructions(current_session_id, messages, "", None)
+                .await
+        })
+    }
+
+    fn compact_reporting<'a>(
+        &'a self,
+        current_session_id: &'a str,
+        messages: &'a [ModelMessage],
+        requests: compaction_manager::SummaryRequests,
+    ) -> vibe_core::engine::CompactionFuture<'a> {
+        Box::pin(async move {
+            self.compact_with_instructions(current_session_id, messages, "", Some(requests))
                 .await
         })
     }
@@ -436,6 +454,7 @@ impl LiveTurnDriver {
             plan_agents: Mutex::new(HashMap::new()),
             turn_tools: Mutex::new(HashMap::new()),
             event_observer: Arc::new(NoopEventObserver),
+            request_census: None,
             titles: None,
         }
     }
@@ -508,6 +527,7 @@ impl LiveTurnDriver {
             plan_agents: Mutex::new(HashMap::new()),
             turn_tools: Mutex::new(HashMap::new()),
             event_observer: Arc::new(NoopEventObserver),
+            request_census: None,
             titles,
         })
     }
@@ -515,6 +535,14 @@ impl LiveTurnDriver {
     #[must_use]
     pub fn with_event_observer(mut self, observer: Arc<dyn EventObserver>) -> Self {
         self.event_observer = observer;
+        self
+    }
+
+    /// Stamps every request this driver makes with the census `context`
+    /// builds.
+    #[must_use]
+    pub fn with_request_census(mut self, context: vibe_core::telemetry::TelemetryContext) -> Self {
+        self.request_census = Some(context);
         self
     }
 
@@ -653,7 +681,9 @@ impl LiveTurnDriver {
                 max_tokens: None,
                 temperature_millis: None,
             },
-            metadata: turn_metadata(reservation),
+            // The provider reads the request census and nothing else; what the
+            // client said about its own message stays with the turn.
+            metadata: BTreeMap::new(),
         };
         let (sink, baseline, engine_session_id) = match transcript {
             Some(transcript) => (
@@ -685,6 +715,9 @@ impl LiveTurnDriver {
             .with_agent_profile(agent_profile)
             .with_working_directory(&reservation.working_directory)
             .with_observer(observer);
+        if let Some(census) = &self.request_census {
+            engine = engine.with_request_census(census.clone());
+        }
         // Registered after automatic compaction and before nothing, which is
         // where `_setup_middleware` puts it: a cycle that reached the threshold
         // compacts instead of warning about a window it is about to replace.
@@ -847,30 +880,6 @@ impl LiveTurnDriver {
 
 /// The client-supplied identifiers a provider request carries alongside the
 /// conversation, each present only when the client sent it.
-fn turn_metadata(reservation: &TurnReservation) -> BTreeMap<String, String> {
-    [
-        (
-            "client_user_message_id",
-            reservation
-                .client_user_message_id
-                .as_ref()
-                .map(|value| json!(value)),
-        ),
-        (
-            "auto_title",
-            reservation.auto_title.as_ref().map(|value| json!(value)),
-        ),
-        (
-            "user_display_content",
-            reservation.user_display_content.clone(),
-        ),
-        ("mention_stats", reservation.mention_stats.clone()),
-    ]
-    .into_iter()
-    .filter_map(|(key, value)| value.map(|value| (key.to_owned(), value.to_string())))
-    .collect()
-}
-
 fn resource_contexts(reservation: &TurnReservation) -> Vec<String> {
     reservation
         .input
@@ -1005,15 +1014,49 @@ impl TurnDriver for LiveTurnDriver {
                 }
                 Err(error) => return Err(DriverError::Storage(error)),
             };
+            // Reference `_current_user_message_id`: the request reports the
+            // operator's latest message.
+            let message_id = hydrated
+                .messages
+                .iter()
+                .rev()
+                .find_map(|message| match message {
+                    ModelMessage::User {
+                        injected: false,
+                        message_id,
+                        ..
+                    } => Some(message_id.clone()),
+                    _ => None,
+                });
+            let requests = Arc::new(SummaryRequestRecorder::new(
+                self.request_census.clone(),
+                hydrated.metadata.id.clone(),
+                message_id.flatten(),
+                String::new(),
+                self.provider.model().map(ToOwned::to_owned),
+            ));
             let compaction = self
                 .compactor
                 .compact_with_instructions(
                     &hydrated.metadata.id,
                     &hydrated.messages,
                     extra_instructions,
+                    Some(compaction_manager::SummaryRequests(requests.clone())),
                 )
-                .await
-                .map_err(|failure| DriverError::Compaction(failure.message))?;
+                .await;
+            for (event_id, event) in requests.take().into_iter().enumerate() {
+                let envelope = vibe_core::events::EventEnvelope {
+                    session_id: hydrated.metadata.id.clone(),
+                    turn_id: None,
+                    emitted_at: crate::host::now_millis(),
+                    working_directory: Some(PathBuf::from(working_directory)),
+                    event_id: event_id as u64,
+                    event,
+                };
+                drop(self.event_observer.observe(&envelope));
+            }
+            let compaction =
+                compaction.map_err(|failure| DriverError::Compaction(failure.message))?;
             // The conversation is kept and the envelope written after it,
             // under the same session, and the summarization's usage counts
             // toward the session's own, as every model call of the reference

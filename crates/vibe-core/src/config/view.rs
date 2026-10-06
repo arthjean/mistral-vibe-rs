@@ -158,17 +158,23 @@ impl ConfigSnapshot {
             .and_then(Value::as_integer)
             .and_then(|threshold| u64::try_from(threshold).ok())
             .unwrap_or_default();
-        let compaction_model = self
+        let configured = self
             .effective
             .get("compaction_model")
-            .and_then(Value::as_table)
-            .and_then(|entry| entry.get("name"))
-            .or_else(|| active.as_ref().and_then(|entry| entry.get("name")))
-            .and_then(Value::as_str)
-            .map(ToOwned::to_owned);
+            .and_then(Value::as_table);
+        let compaction_field = |field: &str| {
+            configured
+                .and_then(|entry| entry.get(field))
+                .or_else(|| active.as_ref().and_then(|entry| entry.get(field)))
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned)
+        };
+        let compaction_model = compaction_field("name");
+        let compaction_model_alias = compaction_field("alias");
         CompactionSettings {
             auto_compact_threshold: threshold,
             compaction_model,
+            compaction_model_alias,
             compaction_prompt_id: self
                 .string_field("compaction_prompt_id", DEFAULT_COMPACTION_PROMPT_ID),
             context_warnings: self.bool_field("context_warnings", false),

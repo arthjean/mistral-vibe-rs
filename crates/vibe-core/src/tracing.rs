@@ -174,6 +174,7 @@ pub fn build_span_exporter_config(
         .and_then(|provider| provider.get("api_base"))
         .and_then(toml::Value::as_str)
         .and_then(server_url_from_api_base)
+        .filter(|server| !serves_no_telemetry(server))
         .unwrap_or_else(|| DEFAULT_MISTRAL_SERVER_URL.to_owned());
     let variable = otel_credential_variable(effective);
     let collector = Url::parse(&server).ok()?.join(MISTRAL_OTEL_PATH).ok()?;
@@ -185,6 +186,18 @@ pub fn build_span_exporter_config(
             "Authorization".to_owned(),
             SecretString::from(format!("{TELEMETRY_AUTHORIZATION_SCHEME} {credential}")),
         )]),
+    })
+}
+
+/// The public regional API hosts, which serve no collector, so a provider
+/// on one exports to the default server instead. Reference
+/// `_PUBLIC_REGIONAL_MISTRAL_API_HOSTS`.
+const PUBLIC_REGIONAL_MISTRAL_API_HOSTS: [&str; 2] = ["api.eu.mistral.ai", "api.us.mistral.ai"];
+
+fn serves_no_telemetry(server: &str) -> bool {
+    Url::parse(server).ok().is_some_and(|url| {
+        url.host_str()
+            .is_some_and(|host| PUBLIC_REGIONAL_MISTRAL_API_HOSTS.contains(&host))
     })
 }
 

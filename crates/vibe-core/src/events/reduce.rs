@@ -697,6 +697,7 @@ pub(super) fn reduce_event(
         EngineEvent::Stats { .. }
         | EngineEvent::Retrying { .. }
         | EngineEvent::RequestSent { .. }
+        | EngineEvent::TurnOpened { .. }
         | EngineEvent::CompactionOutcome { .. } => {}
         EngineEvent::Lifecycle {
             state: next,

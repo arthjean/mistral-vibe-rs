@@ -245,6 +245,16 @@ pub enum EngineEvent {
     /// would have read travels here. It carries more than any one payload
     /// needs: the profile and the image support are what the *tool* events this
     /// request produces report, resolved once where they are known.
+    /// What every telemetry event of the turn reports about it, published as
+    /// the turn opens so the calls it makes before its first request, a
+    /// mentioned file's read among them, report it too. Reference
+    /// `_handle_tool_response` reads the same three off the agent loop.
+    TurnOpened {
+        model: String,
+        agent_profile: String,
+        #[serde(default)]
+        message_id: Option<String>,
+    },
     RequestSent {
         /// The model the request addresses, resolved from the turn's override
         /// or from the provider itself.
@@ -266,6 +276,11 @@ pub enum EngineEvent {
         /// what the reference calls `_current_user_message_id`.
         #[serde(default)]
         message_id: Option<String>,
+        /// The first request of a user turn is the main call; every request
+        /// after it, a summarization included, is secondary. Reference
+        /// `_is_user_prompt_call`.
+        #[serde(default)]
+        call_type: crate::telemetry::TelemetryCallType,
     },
 }
 

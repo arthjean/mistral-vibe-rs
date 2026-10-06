@@ -47,7 +47,7 @@ pub(crate) fn launch_provider(
     arguments: &Arguments,
     routing: &ModelRouting,
 ) -> Result<ProviderConfig, CliError> {
-    routing
+    let mut provider = routing
         .launch_provider(
             &arguments.provider_style,
             &arguments.api_base,
@@ -58,7 +58,19 @@ pub(crate) fn launch_provider(
                 "`{}` is not a provider style this build speaks",
                 arguments.provider_style
             ))
-        })
+        })?;
+    // Reference `get_provider_for_model`: a launch that names no endpoint of
+    // its own reaches the one the active model's provider configures.
+    if !provider_arguments_given(arguments)
+        && let Some(configured) = routing
+            .model(None)
+            .ok()
+            .and_then(|model| routing.provider_for(&model).ok())
+            .filter(|configured| configured.backend == provider.backend)
+    {
+        provider.api_base = configured.api_base;
+    }
+    Ok(provider)
 }
 
 /// The providers and models the merged configuration declares.

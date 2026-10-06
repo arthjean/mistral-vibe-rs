@@ -176,6 +176,13 @@ where
         }
     }
 
+    /// What every event this observer reports carries before its payload,
+    /// which a request census is built from as well.
+    #[must_use]
+    pub fn context(&self) -> &TelemetryContext {
+        &self.context
+    }
+
     /// Queues one event raised outside the engine stream, which is how every
     /// client surface reports: the rating prompt, the slash commands, the voice
     /// toggle, the two audio managers and the teleport tracker.
@@ -206,7 +213,7 @@ where
                 .properties(),
             None => self.context.base_metadata(session_id).properties(),
         };
-        let attributes = record.attributes(self.context.launch.as_ref())?;
+        let attributes = record.attributes(self.context.resolved_launch().as_ref())?;
         let envelope = TelemetryEnvelope::new(
             record.event().event_name(),
             merge_properties(census, attributes.into_properties()),
@@ -279,24 +286,35 @@ where
                 nb_images,
                 supports_images,
                 message_id,
+                call_type,
             } => {
                 turn.model.clone_from(model);
                 turn.agent_profile.clone_from(agent_profile);
                 turn.message_id.clone_from(message_id);
-                turn.last_correlation_id.clone_from(&event.turn_id);
+                // A request made outside a turn, a manual compaction's, leaves
+                // the last turn's correlation in place.
+                if event.turn_id.is_some() {
+                    turn.last_correlation_id.clone_from(&event.turn_id);
+                }
                 vec![TelemetryRecord::RequestSent(records::RequestSent {
                     model: model.clone(),
                     nb_context_chars: *nb_context_chars,
                     nb_context_messages: *nb_context_messages,
                     nb_prompt_chars: *nb_prompt_chars,
-                    // Every request this port makes is the turn's own. The
-                    // summarization request is the reference's only secondary
-                    // call, and `docs/parity.md` records that it carries no
-                    // census here.
-                    call_type: TelemetryCallType::MainCall,
+                    call_type: *call_type,
                     message_id: message_id.clone(),
                     attachment_counts: attachment_counts(*nb_images as usize, *supports_images),
                 })]
+            }
+            EngineEvent::TurnOpened {
+                model,
+                agent_profile,
+                message_id,
+            } => {
+                turn.model.clone_from(model);
+                turn.agent_profile.clone_from(agent_profile);
+                turn.message_id.clone_from(message_id);
+                Vec::new()
             }
             EngineEvent::ToolCall {
                 call_id,
@@ -319,6 +337,7 @@ where
                 typed_result,
                 is_error,
                 skipped,
+                approval,
                 ..
             } => {
                 let Some(call) = turn.calls.remove(call_id) else {
@@ -336,9 +355,27 @@ where
                     (false, true) => records::TelemetryToolStatus::Failure,
                     (false, false) => records::TelemetryToolStatus::Success,
                 };
-                let decision = declined.then_some(records::ToolDecision {
-                    verdict: records::TelemetryToolVerdict::Skip,
-                    approval_type: records::TelemetryApprovalType::Ask,
+                // The gate's own verdict when it reported one. A refusal that
+                // crossed the boundary as a message alone is a permission set
+                // to `never`, which is the only one the gate denies without
+                // asking; a skip it did not attribute is the operator's.
+                let decision = approval.map(tool_decision).or_else(|| {
+                    let (approval_type, approval_source) = if *skipped {
+                        (
+                            records::TelemetryApprovalType::Ask,
+                            records::TelemetryApprovalSource::User,
+                        )
+                    } else {
+                        (
+                            records::TelemetryApprovalType::Never,
+                            records::TelemetryApprovalSource::Never,
+                        )
+                    };
+                    declined.then_some(records::ToolDecision {
+                        verdict: records::TelemetryToolVerdict::Skip,
+                        approval_type,
+                        approval_source: Some(approval_source),
+                    })
                 });
                 vec![TelemetryRecord::ToolCallFinished(
                     records::ToolCallFinished::new(records::ToolCallReport {
@@ -360,10 +397,14 @@ where
                 reason,
                 ..
             } => {
+                let session = Some(records::CompactedSession {
+                    parent_session_id: self.context.parent_of(Some(&event.session_id)),
+                });
                 let compaction = TelemetryRecord::AutoCompactTriggered {
                     nb_context_tokens_before: *context_tokens_before,
                     auto_compact_threshold: *threshold,
                     status: status.label(),
+                    session: session.clone(),
                 };
                 match reason {
                     // The reference's failure record carries the classified
@@ -373,6 +414,7 @@ where
                         compaction,
                         TelemetryRecord::CompactionFailed {
                             reason: reason.label(),
+                            session,
                         },
                     ],
                     None => vec![compaction],
@@ -386,9 +428,34 @@ where
                 nb_context_tokens_before: 0,
                 auto_compact_threshold: 0,
                 status: CompactionStatus::Success.label(),
+                session: None,
             }],
             _ => Vec::new(),
         }
+    }
+}
+
+/// The gate's verdict as a payload reports it. Reference
+/// `send_tool_call_finished` reads the three values off `ToolDecision`.
+fn tool_decision(approval: crate::tools::ToolApproval) -> records::ToolDecision {
+    use crate::tools::{ToolApprovalSource, ToolApprovalType, ToolVerdict};
+    records::ToolDecision {
+        verdict: match approval.decision {
+            ToolVerdict::Execute => records::TelemetryToolVerdict::Execute,
+            ToolVerdict::Skip => records::TelemetryToolVerdict::Skip,
+        },
+        approval_type: match approval.approval_type {
+            ToolApprovalType::Always => records::TelemetryApprovalType::Always,
+            ToolApprovalType::Never => records::TelemetryApprovalType::Never,
+            ToolApprovalType::Ask => records::TelemetryApprovalType::Ask,
+        },
+        approval_source: Some(match approval.approval_source {
+            ToolApprovalSource::Config => records::TelemetryApprovalSource::Config,
+            ToolApprovalSource::Smart => records::TelemetryApprovalSource::Smart,
+            ToolApprovalSource::User => records::TelemetryApprovalSource::User,
+            ToolApprovalSource::Bypass => records::TelemetryApprovalSource::Bypass,
+            ToolApprovalSource::Never => records::TelemetryApprovalSource::Never,
+        }),
     }
 }
 
@@ -433,6 +500,22 @@ where
     fn observe(&self, event: &EventEnvelope) -> Result<(), String> {
         for record in self.project(event) {
             let _ = self.queue(&record, Some(&event.session_id), None);
+        }
+        // Reference `_reset_session`, which clearing the context for a plan's
+        // implementation runs: the session left behind reports its close, the
+        // new one starts with no parent, and its own reset resolves the
+        // rollout before it reports itself.
+        if let EngineEvent::SessionHandoff {
+            from_session_id,
+            to_session_id,
+            cause: crate::events::SessionHandoffCause::ContextCleared { .. },
+        } = &event.event
+        {
+            let _ = self.queue(&TelemetryRecord::SessionClosed, Some(from_session_id), None);
+            self.context.session_parents.bind(to_session_id, None);
+            self.context
+                .session_resets
+                .reset(from_session_id, to_session_id);
         }
         Ok(())
     }

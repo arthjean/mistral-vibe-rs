@@ -408,7 +408,21 @@ where
                 return Err(start_error(error, resume.as_deref()));
             }
         };
+        let census = service
+            .workspace_service()
+            .session_census(std::path::Path::new(cwd), false);
         let harness = Arc::new(self.adopt(service, &session_id)?);
+        if let Some(experiments) = harness.experiments.as_ref() {
+            experiments.announce_when_ready(&session_id, census);
+            if let Some(process) = self.experiments.as_ref() {
+                experiments.follow_resets(
+                    &process.session_resets,
+                    &session_id,
+                    std::path::Path::new(cwd),
+                    false,
+                );
+            }
+        }
         if let Ok(state) = self.session_state(&harness).await {
             if let Some(session) = state.get("session") {
                 harness.seed_display_title(session);
@@ -584,6 +598,7 @@ where
     harness.abort_tasks();
     let _ = harness.request_cancel();
     if let Some(experiments) = harness.experiments.as_ref() {
+        experiments.report_closed(&harness.canonical_id());
         experiments.close().await;
     }
     let mut service = harness.service.lock().await;

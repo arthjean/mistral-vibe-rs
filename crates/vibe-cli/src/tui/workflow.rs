@@ -603,13 +603,25 @@ fn accept_rewind(
     // stored metadata, so the session to adopt is named there. A fork lands on
     // a new identifier and an in-place rewind on the same one.
     let previous_session_id = runtime.session_id.clone();
-    if let Some(session_id) = result
+    let rewound = result
         .get("state")
         .and_then(|state| state.pointer("/session/id"))
         .and_then(Value::as_str)
-        .map(ToOwned::to_owned)
+        .map(ToOwned::to_owned);
+    // Reference `_reset_session` on a fork: the session left behind reports
+    // its close before the new one is adopted.
+    let forked = rewound
+        .as_deref()
+        .is_some_and(|session_id| session_id != previous_session_id);
+    if forked {
+        runtime.report(&vibe_core::telemetry::TelemetryRecord::SessionClosed);
+    }
+    if let Some(session_id) = rewound
         && adopt_hydrated_session(runtime, state, controls, session_id)
     {
+        if forked {
+            runtime.report_reset_session(&previous_session_id);
+        }
         composer.replace_text(message);
         for error in restore_errors {
             state.push_diagnostic(format!("File restoration warning: {error}"));

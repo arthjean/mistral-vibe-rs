@@ -19,6 +19,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -33,10 +34,13 @@ use super::context::{
     extract_summary, parse_previous_user_messages, render_compaction_context,
 };
 use super::manager::{
-    CompactionPlan, CompactionPromptResolution, CompactionPrompts, PLACEHOLDER_SUMMARY, compact,
+    CompactionPlan, CompactionPromptResolution, CompactionPrompts, PLACEHOLDER_SUMMARY,
+    SummaryRequests, compact,
 };
 use super::manager_tests::{ScriptedAnswer, ScriptedProvider};
 use super::tokens::{approx_token_count, truncate_middle_to_tokens};
+use crate::engine::SummaryRequestRecorder;
+use crate::events::EngineEvent;
 use crate::provider::{ToolChoice, Usage};
 
 const CORPUS_RELATIVE: &str = "crates/vibe-core/tests/compaction/corpus.json";
@@ -72,12 +76,6 @@ const DIVERGENCES: &[(&str, &str)] = &[
     (
         "placeholderSummary/placeholder",
         "LICENSING: original wording for the summary a failed summarization falls back to",
-    ),
-    (
-        "managerCallType/callType",
-        "The reference labels the compaction request with the telemetry call type its request \
-         census reads back; no model call here is routed through a census yet, so this port marks \
-         the same request through the provider metadata instead",
     ),
 ];
 
@@ -713,10 +711,10 @@ async fn the_committed_corpus_replays_every_family_the_reference_answered() {
 ///
 /// Each scenario is compared on five axes: the sequence of calls, what each one
 /// carried, how the compaction ended, which failure reasons were reported, and
-/// the transcript left behind. Two axes cannot be compared as recorded and are
-/// named in the ledger instead: the reference's telemetry call type, which this
-/// port marks through the provider metadata, and the placeholder summary, which
-/// is reference-authored prose this port writes its own wording for.
+/// the transcript left behind, and the telemetry call type every request
+/// reports. The placeholder summary cannot be compared as recorded and is
+/// named in the ledger instead: it is reference-authored prose this port
+/// writes its own wording for.
 async fn replay_manager(corpus: &Corpus) -> Tally {
     let mut report = Report::default();
     let mut call_type = Report::default();
@@ -742,7 +740,15 @@ async fn replay_manager(corpus: &Corpus) -> Tally {
             .first()
             .map(|call| call.model.clone())
             .unwrap_or_default();
+        let requests = Arc::new(SummaryRequestRecorder::new(
+            None,
+            "oracle-session".to_owned(),
+            None,
+            String::new(),
+            None,
+        ));
         let plan = CompactionPlan {
+            requests: Some(SummaryRequests(requests.clone())),
             prompts: CompactionPromptResolution::Resolved(CompactionPrompts {
                 request: "compaction request".to_owned(),
                 fallback_system: "fallback system".to_owned(),
@@ -761,6 +767,14 @@ async fn replay_manager(corpus: &Corpus) -> Tally {
         let outcome = compact(&provider, &plan, &messages, &scenario.extra_instructions).await;
 
         let calls = provider.calls();
+        let reported = requests
+            .take()
+            .into_iter()
+            .filter_map(|event| match event {
+                EngineEvent::RequestSent { call_type, .. } => Some(call_type.label().to_owned()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
         report.check(
             "managerScenarios",
             &scenario.case,
@@ -797,15 +811,13 @@ async fn replay_manager(corpus: &Corpus) -> Tally {
                     actual.overflow,
                 ),
             );
-            if call_type.total == 0 {
-                call_type.check(
-                    "managerCallType",
-                    "callType",
-                    "label",
-                    &expected.call_type,
-                    &"session_compaction".to_owned(),
-                );
-            }
+            call_type.check(
+                "managerCallType",
+                &scenario.case,
+                &field,
+                &expected.call_type,
+                &reported.get(index).cloned().unwrap_or_default(),
+            );
         }
 
         let (observed_outcome, observed_reason, observed_failures, replaced) = match &outcome {
@@ -910,11 +922,10 @@ async fn replay_manager(corpus: &Corpus) -> Tally {
         }
     }
 
-    // Both recorded divergences are settled against the ledger without joining
-    // the conformance count, the way the envelope's prose already is.
-    settle(&call_type, "managerCallType");
+    // The placeholder is settled against the ledger without joining the
+    // conformance count, the way the envelope's prose already is.
     settle(&placeholder, "placeholderSummary");
-    settle(&report, "managerScenarios")
+    settle(&call_type, "managerCallType") + settle(&report, "managerScenarios")
 }
 
 /// The label the corpus records for a tool choice, which is the string the

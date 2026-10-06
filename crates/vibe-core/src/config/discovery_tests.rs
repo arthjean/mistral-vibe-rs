@@ -71,6 +71,7 @@ fn the_discovered_layer_sits_above_the_defaults_and_below_the_selected_file() {
             ConfigLayerKind::Environment,
             ConfigLayerKind::Runtime,
             ConfigLayerKind::Agent,
+            ConfigLayerKind::Admin,
         ]
     );
     // The defaults ship `auto`; discovery overrides it because it composes on

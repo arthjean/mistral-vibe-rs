@@ -255,7 +255,7 @@ async fn a_forced_variant_configures_without_reporting_an_exposure() {
 }
 
 #[tokio::test]
-async fn a_session_that_already_resolved_hydrates_without_a_second_request() {
+async fn a_resumed_session_takes_its_variants_back_and_looks_the_rollout_up_again() {
     let stub = EvalStub::start(MANAGED_SHELL_ROLLOUT).await;
     let root = tempfile::tempdir().expect("a scratch directory");
     let document = document(stub.port);
@@ -263,8 +263,10 @@ async fn a_session_that_already_resolved_hydrates_without_a_second_request() {
     let (service, _, session_id) = resolve_over(&root, &document, Arc::clone(&identity) as _).await;
     assert_eq!(stub.count(), 1);
 
-    // A second runtime over the same session, which is what a resume opens and
-    // what a fork inherits, since the fork copies the metadata field.
+    // A second runtime over the same session, which is what a resume opens.
+    // Reference `AgentLoop` starts `initialize_experiments` for every loop, the
+    // resumed one included, after `hydrate_experiments_from_session` restored
+    // the variants it wrote.
     let exposures = ExperimentExposures::default();
     let resumed = Arc::new(
         SessionExperiments::new(&service, credentials(), None, exposures.clone())
@@ -273,8 +275,12 @@ async fn a_session_that_already_resolved_hydrates_without_a_second_request() {
     resumed.resolve(&session_id).await;
     resumed.close().await;
 
-    assert_eq!(stub.count(), 1, "a resumed session issues no eval request");
-    assert_eq!(identity.count(), 1, "and no identity request either");
+    assert_eq!(
+        stub.count(),
+        2,
+        "a resumed session looks the rollout up again"
+    );
+    assert_eq!(identity.count(), 2, "and rebuilds its plan attributes");
     assert_eq!(
         exposures.resolved().get("vibe_cli_managed_shell_tools"),
         Some(&"managed".to_owned()),
@@ -283,10 +289,10 @@ async fn a_session_that_already_resolved_hydrates_without_a_second_request() {
 }
 
 /// A fork inherits what its parent resolved, because the fork copies the
-/// metadata field the parent wrote. The child therefore hydrates and issues no
-/// lookup of its own.
+/// metadata field the parent wrote. The child hydrates those variants first and
+/// then runs its own lookup, as every reference loop does.
 #[tokio::test]
-async fn a_forked_session_inherits_its_parent_state_without_a_request() {
+async fn a_forked_session_inherits_its_parent_state_before_its_own_lookup() {
     let stub = EvalStub::start(MANAGED_SHELL_ROLLOUT).await;
     let root = tempfile::tempdir().expect("a scratch directory");
     let identity = Arc::new(CountingIdentity(std::sync::atomic::AtomicUsize::new(0)));
@@ -326,8 +332,8 @@ async fn a_forked_session_inherits_its_parent_state_without_a_request() {
     forked.resolve(&child.metadata.id).await;
     forked.close().await;
 
-    assert_eq!(stub.count(), 1, "a forked session issues no eval request");
-    assert_eq!(identity.count(), 1, "and no identity request either");
+    assert_eq!(stub.count(), 2, "a forked session runs its own lookup");
+    assert_eq!(identity.count(), 2, "and rebuilds its plan attributes");
     assert_eq!(
         exposures.resolved().get("vibe_cli_managed_shell_tools"),
         Some(&"managed".to_owned()),
@@ -336,7 +342,7 @@ async fn a_forked_session_inherits_its_parent_state_without_a_request() {
 }
 
 #[tokio::test]
-async fn a_disabled_gate_issues_nothing_and_reports_nothing() {
+async fn a_disabled_gate_issues_no_lookup_and_reports_nothing() {
     for gate in ["enable_telemetry = false", "experiments_off"] {
         let stub = EvalStub::start(MANAGED_SHELL_ROLLOUT).await;
         let root = tempfile::tempdir().expect("a scratch directory");
@@ -349,7 +355,14 @@ async fn a_disabled_gate_issues_nothing_and_reports_nothing() {
             resolve_over(&root, &document, Arc::clone(&identity) as _).await;
 
         assert_eq!(stub.count(), 0, "{gate} issues no eval request");
-        assert_eq!(identity.count(), 0, "{gate} issues no identity request");
+        // Reference `initialize_experiments` stops before the identity only
+        // when telemetry is off; the opt-out keeps the attribute snapshot.
+        let identity_requests = usize::from(gate == "experiments_off");
+        assert_eq!(
+            identity.count(),
+            identity_requests,
+            "{gate} asks for the identity {identity_requests} times"
+        );
         assert!(
             exposures.resolved().is_empty(),
             "{gate} reports no exposure"

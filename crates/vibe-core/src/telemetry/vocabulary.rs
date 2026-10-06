@@ -17,11 +17,8 @@ use super::{TelemetryError, validate_safe_label};
 
 /// Every event name this port publishes.
 ///
-/// The reference raises 26 across its client and its five satellite emitters.
-/// This vocabulary carries 25 of them: `vibe.admin_config_applied` reports on
-/// the org-managed configuration layer, which no part of this port fetches or
-/// composes, and the accepted-divergence table of `docs/parity.md` records that
-/// rather than declaring a name nothing can raise.
+/// The reference raises 27 across its client, its app server and its five
+/// satellite emitters, and this vocabulary carries every one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TelemetryEvent {
@@ -51,12 +48,13 @@ pub enum TelemetryEvent {
     ReadAloudPlayStarted,
     ReadAloudEnded,
     SessionBranched,
+    AdminConfigApplied,
 }
 
 impl TelemetryEvent {
     /// Every name this port publishes, which is what the replay measures the
     /// vocabulary against.
-    pub const ALL: [Self; 26] = [
+    pub const ALL: [Self; 27] = [
         Self::NewSession,
         Self::SessionClosed,
         Self::Ready,
@@ -83,6 +81,7 @@ impl TelemetryEvent {
         Self::ReadAloudPlayStarted,
         Self::ReadAloudEnded,
         Self::SessionBranched,
+        Self::AdminConfigApplied,
     ];
 
     #[must_use]
@@ -114,6 +113,7 @@ impl TelemetryEvent {
             Self::ReadAloudPlayStarted => "vibe.read_aloud.play_started",
             Self::ReadAloudEnded => "vibe.read_aloud.ended",
             Self::SessionBranched => "vibe.session_branched",
+            Self::AdminConfigApplied => "vibe.admin_config_applied",
         }
     }
 }
@@ -180,6 +180,7 @@ pub enum TelemetryField {
     Reason,
     RecordingDurationMs,
     RecordingId,
+    ParentSessionId,
     SavedProjectLinkCleared,
     SessionInitDurationMs,
     SourceSessionId,
@@ -194,11 +195,33 @@ pub enum TelemetryField {
     TranscriptionDurationMs,
     Trigger,
     Version,
+    ApprovalSource,
+    HarnessSelectionSource,
+    HasError,
+    HasInitialPrompt,
+    HostKind,
+    IsColdStart,
+    IsResumingSession,
+    NbEnforcedFields,
+    PromptForWorkspaceTrust,
+    ShowResumePicker,
+    TeleportOnStart,
 }
 
 impl TelemetryField {
     const fn key(self) -> &'static str {
         match self {
+            Self::ApprovalSource => "approval_source",
+            Self::HarnessSelectionSource => "harness_selection_source",
+            Self::HasError => "has_error",
+            Self::HasInitialPrompt => "has_initial_prompt",
+            Self::HostKind => "host_kind",
+            Self::IsColdStart => "is_cold_start",
+            Self::IsResumingSession => "is_resuming_session",
+            Self::NbEnforcedFields => "nb_enforced_fields",
+            Self::PromptForWorkspaceTrust => "prompt_for_workspace_trust",
+            Self::ShowResumePicker => "show_resume_picker",
+            Self::TeleportOnStart => "teleport_on_start",
             Self::Action => "action",
             Self::AgentProfileName => "agent_profile_name",
             Self::AgentReadyDurationMs => "agent_ready_duration_ms",
@@ -256,6 +279,7 @@ impl TelemetryField {
             Self::Reason => "reason",
             Self::RecordingDurationMs => "recording_duration_ms",
             Self::RecordingId => "recording_id",
+            Self::ParentSessionId => "parent_session_id",
             Self::SavedProjectLinkCleared => "saved_project_link_cleared",
             Self::SessionInitDurationMs => "session_init_duration_ms",
             Self::SourceSessionId => "source_session_id",
@@ -338,6 +362,13 @@ impl TelemetryAttributes {
     pub fn flag(&mut self, field: TelemetryField, value: bool) -> &mut Self {
         self.0.insert(field.key().to_owned(), Value::Bool(value));
         self
+    }
+
+    pub fn optional_flag(&mut self, field: TelemetryField, value: Option<bool>) -> &mut Self {
+        match value {
+            Some(value) => self.flag(field, value),
+            None => self.null(field),
+        }
     }
 
     /// A map of counts, as `attachment_counts`, `context_types` and

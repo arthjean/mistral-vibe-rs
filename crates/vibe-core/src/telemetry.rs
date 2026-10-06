@@ -123,10 +123,12 @@ pub(crate) fn server_url_from_api_base(api_base: &str) -> Option<String> {
 /// Reference `TelemetryClient._get_telemetry_url`: the server derived from the
 /// provider's `api_base`, or the default one, joined with the datalake path.
 ///
-/// The credential travels as a bearer token, so a base that is not HTTPS, or
-/// that carries a credential of its own, resolves to nothing rather than being
-/// sent to. The reference's regex admits `http://`; this port refuses it, which
-/// is recorded in the accepted-divergence table of `docs/parity.md`.
+/// The credential travels as a bearer token, so a base that is neither HTTPS
+/// nor plain HTTP to a loopback host, or that carries a credential of its own,
+/// resolves to nothing rather than being sent to. The reference's regex admits
+/// any `http://` host; this port admits the loopback one only, the rule its
+/// model endpoint follows, which is recorded in the accepted-divergence table
+/// of `docs/parity.md`.
 #[must_use]
 pub fn telemetry_endpoint(api_base: &str) -> Option<Url> {
     let base =
@@ -135,7 +137,7 @@ pub fn telemetry_endpoint(api_base: &str) -> Option<Url> {
         .ok()?
         .join(TELEMETRY_PATH)
         .ok()?;
-    if endpoint.scheme() != "https"
+    if !crate::text::is_secure_transport(&endpoint)
         || endpoint.host_str().is_none()
         || endpoint.username() != ""
         || endpoint.password().is_some()
@@ -367,9 +369,43 @@ pub struct TelemetryBaseMetadata {
     /// dropped rather than sent empty, which is axis 32 of `docs/parity.md`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub experiments: Option<BTreeMap<String, String>>,
+    /// The confirmed exposures as records, one per experiment.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub experiment_assignments: Option<Vec<ExperimentAssignment>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub user_plan: Option<String>,
+    /// The attribute snapshot the proxy bucketed on, as it was posted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub experiment_attributes: Option<Map<String, Value>>,
+    /// The backend serving the session, reference `ExperimentSurface`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub harness_backend: Option<String>,
 }
+
+/// One confirmed exposure, as a census reports it. Every optional field is
+/// dropped when absent, which is the reference's recursive `exclude_none`.
+///
+/// Reference `ExperimentAssignment`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExperimentAssignment {
+    pub experiment_id: String,
+    pub experiment_name: String,
+    pub variation_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub variation_id: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub in_experiment: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hash_attribute: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hash_value: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feature_id: Option<String>,
+}
+
+/// Reference `ExperimentSurface.LEGACY`: the backend every session of this
+/// port runs on.
+pub const HARNESS_LEGACY: &str = "legacy";
 
 impl TelemetryBaseMetadata {
     /// The census as the properties an envelope carries.
@@ -380,9 +416,10 @@ impl TelemetryBaseMetadata {
 }
 
 /// Reference `TelemetryCallType`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TelemetryCallType {
+    #[default]
     MainCall,
     SecondaryCall,
 }
@@ -427,33 +464,134 @@ fn properties_of<T: Serialize>(census: &T) -> Map<String, Value> {
         .unwrap_or_default()
 }
 
-/// The confirmed exposures every event of this process reports, as the handle a
+/// What the experiments path resolved for this session, as every census reads
+/// it: the confirmed exposures, the attribute snapshot and the plan label.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ExperimentCensus {
+    pub assignments: Vec<ExperimentAssignment>,
+    pub attributes: Option<Map<String, Value>>,
+    /// The plan label the account lookup derived, which the snapshot's own
+    /// plan fields take precedence over.
+    pub user_plan: Option<String>,
+}
+
+impl ExperimentCensus {
+    /// Reference `AgentLoop.user_plan`: the snapshot's plan fields decide the
+    /// label whenever a snapshot exists, so the label and the attributes an
+    /// event carries never disagree, and the label the lookup derived is the
+    /// fallback.
+    #[must_use]
+    pub fn user_plan(&self) -> Option<String> {
+        match &self.attributes {
+            Some(attributes) => crate::whoami::resolve_user_plan(
+                attributes.get("planType").and_then(Value::as_str),
+                attributes.get("planName").and_then(Value::as_str),
+            ),
+            None => self.user_plan.clone(),
+        }
+    }
+
+    /// Reference `{a.experiment_id: a.variation_name for a in assignments}`.
+    #[must_use]
+    pub fn experiments(&self) -> BTreeMap<String, String> {
+        self.assignments
+            .iter()
+            .map(|assignment| {
+                (
+                    assignment.experiment_id.clone(),
+                    assignment.variation_name.clone(),
+                )
+            })
+            .collect()
+    }
+}
+
+/// The experiment state every event of this process reports, as the handle a
 /// session publishes into and a census reads out of.
 ///
 /// A rollout is resolved off the startup path and lands after the telemetry
-/// client is already built, so the exposures cannot be a value the context was
-/// constructed with. The reference reads them through a getter closed over its
-/// experiment manager; this is that getter, as a handle every clone of the
-/// context shares. A context nobody publishes into reports nothing, which is
-/// what an unenrolled session, a disabled gate and a failed lookup all produce.
+/// client is already built, so the state cannot be a value the context was
+/// constructed with. The reference reads it through getters closed over its
+/// agent loop and experiment manager; this is those getters, as a handle every
+/// clone of the context shares. A context nobody publishes into reports
+/// nothing, which is what a disabled gate and a missing credential produce.
 #[derive(Debug, Clone, Default)]
-pub struct ExperimentExposures(Arc<Mutex<BTreeMap<String, String>>>);
+pub struct ExperimentExposures(Arc<Mutex<ExperimentCensus>>);
 
 impl ExperimentExposures {
-    /// Replaces what every later event reports.
+    fn with<R>(&self, read: impl FnOnce(&mut ExperimentCensus) -> R) -> R {
+        read(
+            &mut self
+                .0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        )
+    }
+
+    /// Replaces the confirmed exposures every later event reports.
     ///
     /// Reference `ExperimentManager.assignments` is re-read on every send, so
     /// the last publication is what an event carries.
-    pub fn publish(&self, assignments: BTreeMap<String, String>) {
-        *self
-            .0
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = assignments;
+    pub fn publish(&self, assignments: Vec<ExperimentAssignment>) {
+        self.with(|census| census.assignments = assignments);
+    }
+
+    /// Replaces the attribute snapshot. Reference
+    /// `ExperimentManager.set_attributes`.
+    pub fn publish_attributes(&self, attributes: Option<Map<String, Value>>) {
+        self.with(|census| census.attributes = attributes);
+    }
+
+    /// Replaces the plan label the lookup derived. Reference
+    /// `AgentLoop.set_user_plan`.
+    pub fn publish_user_plan(&self, user_plan: Option<String>) {
+        self.with(|census| census.user_plan = user_plan);
+    }
+
+    /// Forgets everything, which is what a reset session starts from.
+    pub fn clear(&self) {
+        self.with(|census| *census = ExperimentCensus::default());
     }
 
     /// What an event built now would report.
     #[must_use]
+    pub fn census(&self) -> ExperimentCensus {
+        self.with(|census| census.clone())
+    }
+
+    /// The confirmed exposures an event built now would report, by experiment.
+    #[must_use]
     pub fn resolved(&self) -> BTreeMap<String, String> {
+        self.with(|census| census.experiments())
+    }
+}
+
+/// Two handles are equal when they report the same state, which is what a
+/// census comparison is about.
+impl PartialEq for ExperimentExposures {
+    fn eq(&self, other: &Self) -> bool {
+        self.census() == other.census()
+    }
+}
+
+impl Eq for ExperimentExposures {}
+
+/// The launch a client declared once it connected, shared by every clone of
+/// the context that reports it.
+#[derive(Debug, Clone, Default)]
+pub struct DeclaredLaunch(Arc<Mutex<Option<LaunchContext>>>);
+
+impl DeclaredLaunch {
+    /// Replaces what every later event reports.
+    pub fn declare(&self, launch: LaunchContext) {
+        *self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(launch);
+    }
+
+    #[must_use]
+    pub fn get(&self) -> Option<LaunchContext> {
         self.0
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -461,21 +599,107 @@ impl ExperimentExposures {
     }
 }
 
-impl From<BTreeMap<String, String>> for ExperimentExposures {
-    fn from(assignments: BTreeMap<String, String>) -> Self {
-        Self(Arc::new(Mutex::new(assignments)))
-    }
-}
-
-/// Two handles are equal when they report the same exposures, which is what a
-/// census comparison is about.
-impl PartialEq for ExperimentExposures {
+impl PartialEq for DeclaredLaunch {
     fn eq(&self, other: &Self) -> bool {
-        self.resolved() == other.resolved()
+        self.get() == other.get()
     }
 }
 
-impl Eq for ExperimentExposures {}
+impl Eq for DeclaredLaunch {}
+
+/// The parent each session reports, bound whenever a session takes a new
+/// identity: a clear starts one with none, a fork names the session it left,
+/// and a resume takes what the session recorded. Reference
+/// `parent_session_id_getter`, which reads the loop's own field as
+/// `_reset_session` and `resume` rebind it.
+#[derive(Debug, Clone, Default)]
+pub struct SessionParents(Arc<Mutex<BTreeMap<String, Option<String>>>>);
+
+impl SessionParents {
+    pub fn bind(&self, session_id: &str, parent_session_id: Option<String>) {
+        self.0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(session_id.to_owned(), parent_session_id);
+    }
+
+    #[must_use]
+    pub fn get(&self, session_id: &str) -> Option<Option<String>> {
+        self.0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(session_id)
+            .cloned()
+    }
+}
+
+impl SessionParents {
+    fn snapshot(&self) -> BTreeMap<String, Option<String>> {
+        self.0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+}
+
+impl PartialEq for SessionParents {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0) || self.snapshot() == other.snapshot()
+    }
+}
+
+impl Eq for SessionParents {}
+
+/// What takes over when a session's context is cleared into a new one: the
+/// rollout is resolved again for the new session, which then reports itself.
+pub trait SessionReset: Send + Sync {
+    /// Answers whether this reset owned `from_session_id` and took it over.
+    fn reset(&self, from_session_id: &str, to_session_id: &str) -> bool;
+}
+
+/// Every [`SessionReset`] of this process, which the observer hands a cleared
+/// session to. Held weakly, so a session that closed simply stops answering.
+#[derive(Clone, Default)]
+pub struct SessionResets(Arc<Mutex<Vec<std::sync::Weak<dyn SessionReset>>>>);
+
+impl SessionResets {
+    pub fn register(&self, reset: std::sync::Weak<dyn SessionReset>) {
+        let mut resets = self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        resets.retain(|reset| reset.strong_count() > 0);
+        resets.push(reset);
+    }
+
+    /// Hands the reset of `from_session_id` to whichever reset owns it.
+    pub fn reset(&self, from_session_id: &str, to_session_id: &str) -> bool {
+        let resets = self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .iter()
+            .filter_map(std::sync::Weak::upgrade)
+            .collect::<Vec<_>>();
+        resets
+            .iter()
+            .any(|reset| reset.reset(from_session_id, to_session_id))
+    }
+}
+
+impl std::fmt::Debug for SessionResets {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("SessionResets")
+    }
+}
+
+impl PartialEq for SessionResets {
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+
+impl Eq for SessionResets {}
 
 /// What every event of this process reports before its own payload. Reference
 /// `TelemetryClient.__init__`'s six getters, held as values because this port
@@ -486,16 +710,45 @@ impl Eq for ExperimentExposures {}
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TelemetryContext {
     pub launch: Option<LaunchContext>,
+    /// What the client declared about itself once it connected, which takes
+    /// precedence over [`Self::launch`]. Reference
+    /// `_build_launch_context_from_services` reads the client descriptor
+    /// lazily, after the handshake, which is what an editor's name reaches the
+    /// census through.
+    pub declared_launch: DeclaredLaunch,
+    /// The parent a session reports when none was bound for it.
     pub parent_session_id: Option<String>,
+    pub session_parents: SessionParents,
+    pub session_resets: SessionResets,
     pub experiments: ExperimentExposures,
-    pub user_plan: Option<String>,
+    /// Reference `TelemetryClient._harness_backend`, fixed when the client is
+    /// built.
+    pub harness_backend: Option<String>,
 }
 
 impl TelemetryContext {
+    /// The launch every event reports: what the client declared, or what the
+    /// adapter was built with.
+    #[must_use]
+    pub fn resolved_launch(&self) -> Option<LaunchContext> {
+        self.declared_launch.get().or_else(|| self.launch.clone())
+    }
+
+    /// The parent `session_id` reports: the one bound for it, or the
+    /// context's own.
+    #[must_use]
+    pub fn parent_of(&self, session_id: Option<&str>) -> Option<String> {
+        session_id
+            .and_then(|session_id| self.session_parents.get(session_id))
+            .unwrap_or_else(|| self.parent_session_id.clone())
+    }
+
     /// Reference `build_base_metadata`.
     #[must_use]
     pub fn base_metadata(&self, session_id: Option<&str>) -> TelemetryBaseMetadata {
-        let launch = self.launch.as_ref();
+        let resolved = self.resolved_launch();
+        let launch = resolved.as_ref();
+        let census = self.experiments.census();
         TelemetryBaseMetadata {
             agent_entrypoint: launch.map(|launch| launch.agent_entrypoint.clone()),
             agent_version: launch.map(|launch| launch.agent_version.clone()),
@@ -507,11 +760,15 @@ impl TelemetryContext {
             version: Some(VERSION.to_owned()),
             terminal_emulator: launch.and_then(|launch| launch.terminal_emulator.clone()),
             session_id: session_id.map(ToOwned::to_owned),
-            parent_session_id: self.parent_session_id.clone(),
+            parent_session_id: self.parent_of(session_id),
             // Reference `experiments or None`: an empty map is absent rather
-            // than an empty object, which is what an unenrolled session sends.
-            experiments: Some(self.experiments.resolved()).filter(|map| !map.is_empty()),
-            user_plan: self.user_plan.clone(),
+            // than an empty object, which is what an unenrolled session sends,
+            // and the same holds for the records and the snapshot.
+            experiments: Some(census.experiments()).filter(|map| !map.is_empty()),
+            user_plan: census.user_plan(),
+            experiment_assignments: Some(census.assignments).filter(|list| !list.is_empty()),
+            experiment_attributes: census.attributes.filter(|map| !map.is_empty()),
+            harness_backend: self.harness_backend.clone(),
         }
     }
 
@@ -525,9 +782,12 @@ impl TelemetryContext {
     ) -> TelemetryRequestMetadata {
         TelemetryRequestMetadata {
             base: TelemetryBaseMetadata {
-                // The reference's request model carries no experiments: the
-                // field is declared on the base and left unset by the builder.
+                // The reference's request builder sets the plan and leaves the
+                // experiment fields and the backend unset.
                 experiments: None,
+                experiment_assignments: None,
+                experiment_attributes: None,
+                harness_backend: None,
                 ..self.base_metadata(session_id)
             },
             call_type,

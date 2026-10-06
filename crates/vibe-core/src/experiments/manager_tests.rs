@@ -17,15 +17,22 @@ fn hydrated(document: &str) -> ExperimentManager {
 
 fn attributes() -> ExperimentAttributes {
     ExperimentAttributes {
-        user_id: hash_api_key("oracle-mistral-sentinel"),
+        user_id: Some(hash_api_key("oracle-mistral-sentinel")),
         entrypoint: "cli".to_owned(),
+        harness: "legacy".to_owned(),
         agent_version: "9.9.9".to_owned(),
         client_name: None,
         client_version: None,
         os: "linux".to_owned(),
+        arch: "x86_64".to_owned(),
         terminal_emulator: None,
         custom_system_prompt: false,
         organization_id: None,
+        organization_kind: None,
+        workspace_id: None,
+        customer_id: None,
+        plan_type: None,
+        plan_name: None,
     }
 }
 

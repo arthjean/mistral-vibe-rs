@@ -22,11 +22,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use clap::{ArgAction, Parser, ValueEnum};
-use serde_json::Value;
 use thiserror::Error;
 use vibe_app_server::client::{ClientError, TurnDriver};
 use vibe_app_server::server::AppServer;
 use vibe_app_server::workspace::WorkspaceService;
+#[cfg(test)]
+pub(crate) use vibe_app_server::workspace::has_agents_md;
 use vibe_core::auth::KeyringStore;
 use vibe_core::observability::{self, init_file_logging};
 use vibe_core::telemetry::{
@@ -429,50 +430,14 @@ pub(crate) fn arguments_for_test() -> Arguments {
     }
 }
 
-/// Reference `emit_new_session_telemetry`'s four counts, read off the same
-/// services a session is built from: the workspace instructions file, every
-/// discovered skill, the MCP servers this session would connect and the models
-/// the merged configuration declares.
+/// The census `vibe.new_session` reports for a session opened in
+/// `working_directory`.
 pub(crate) fn session_census(
     workspace: &WorkspaceService,
     working_directory: &Path,
     trust: bool,
 ) -> vibe_core::telemetry::records::NewSession {
-    let nb_skills = workspace
-        .dispatch("skills/list", &BTreeMap::new())
-        .ok()
-        .and_then(|dispatch| dispatch.result.get("skills").cloned())
-        .as_ref()
-        .and_then(Value::as_array)
-        .map_or(0, Vec::len) as u64;
-    let nb_mcp_servers = workspace
-        .mcp_servers_for_session(working_directory, trust, &[])
-        .map_or(0, |servers| servers.len()) as u64;
-    let nb_models = workspace
-        .layered_config()
-        .load()
-        .ok()
-        .and_then(|snapshot| snapshot.effective.get("models").cloned())
-        .map_or(0, |models| match models {
-            toml::Value::Array(entries) => entries.len(),
-            toml::Value::Table(entries) => entries.len(),
-            _ => 0,
-        }) as u64;
-    vibe_core::telemetry::records::NewSession {
-        has_agents_md: has_agents_md(working_directory),
-        nb_skills,
-        nb_mcp_servers,
-        nb_models,
-    }
-}
-
-/// Reference `has_agents_md_file`: the workspace publishes instructions to the
-/// agent under either spelling.
-#[must_use]
-pub(crate) fn has_agents_md(working_directory: &Path) -> bool {
-    ["AGENTS.md", "VIBE.md"]
-        .into_iter()
-        .any(|name| working_directory.join(name).is_file())
+    workspace.session_census(working_directory, trust)
 }
 
 /// Reference `PROCESS_START_MONOTONIC`: what the startup durations are
@@ -505,6 +470,11 @@ impl CliTelemetryObserver {
     /// The handle a resolved rollout publishes its confirmed exposures into.
     pub(crate) fn exposures(&self) -> ExperimentExposures {
         self.exposures.clone()
+    }
+
+    /// The census every event carries, which every request reports too.
+    pub(crate) fn context(&self) -> vibe_core::telemetry::TelemetryContext {
+        self.events.context().clone()
     }
 
     /// Queues best-effort telemetry for the rating prompt. Delivery errors
@@ -590,6 +560,18 @@ pub(crate) fn cli_launch_context() -> LaunchContext {
     }
 }
 
+/// What the interactive client reports about itself once its session runs.
+/// Reference `run_cli` declares the `vibe_tui` client to the harness, and the
+/// census reads the client descriptor (`_build_launch_context_from_services`);
+/// [`cli_launch_context`] stays what onboarding reports, as the reference's
+/// own `_build_cli_launch_context` does.
+pub(crate) fn tui_launch_context() -> LaunchContext {
+    LaunchContext {
+        client_name: "vibe_tui".to_owned(),
+        ..cli_launch_context()
+    }
+}
+
 /// What a programmatic launch reports about itself. Reference
 /// `_build_launch_context_from_services`, which reads the `ClientInfo`
 /// `_run_programmatic_mode` declared.
@@ -610,6 +592,7 @@ fn cli_telemetry_context(
     TelemetryContext {
         launch: Some(launch),
         experiments: exposures,
+        harness_backend: Some(vibe_core::telemetry::HARNESS_LEGACY.to_owned()),
         ..TelemetryContext::default()
     }
 }
@@ -970,10 +953,16 @@ mod tests {
                 .contains_key("experiments"),
             "an unenrolled session reports no field at all"
         );
-        exposures.publish(BTreeMap::from([(
-            "vibe_cli_system_prompt".to_owned(),
-            "lean".to_owned(),
-        )]));
+        exposures.publish(vec![vibe_core::telemetry::ExperimentAssignment {
+            experiment_id: "vibe_cli_system_prompt".to_owned(),
+            experiment_name: "vibe_cli_system_prompt".to_owned(),
+            variation_name: "lean".to_owned(),
+            variation_id: None,
+            in_experiment: None,
+            hash_attribute: None,
+            hash_value: None,
+            feature_id: None,
+        }]);
         assert_eq!(
             context.base_metadata(None).properties()["experiments"],
             serde_json::json!({"vibe_cli_system_prompt": "lean"})

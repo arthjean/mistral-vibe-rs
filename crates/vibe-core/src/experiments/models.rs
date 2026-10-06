@@ -22,29 +22,31 @@ use serde::{Deserialize, Serialize};
 
 use super::json::{JsonValue, OrderedMap};
 
-/// The attributes the client posts for the proxy to evaluate against.
+/// The attributes the client posts for the proxy to evaluate against, which
+/// a telemetry census also carries as the snapshot exposures are segmented by.
 ///
-/// `user_id` is the GrowthBook hash attribute, and it is a digest rather than
-/// an identity: [`super::manager::hash_api_key`] derives it from the Mistral
-/// API key so bucketing is stable per user without the credential leaving the
-/// process. The wire spelling is `userId`, which is the attribute name a
-/// rollout selects in its "assign variation based on attribute" setting, so the
-/// rename is part of the contract rather than a style choice.
+/// `userId` is the GrowthBook hash attribute: the Mistral user identifier
+/// `/v1/users/me` answers, stable per user and owned by the server. The wire
+/// spelling is the attribute name a rollout selects in its "assign variation
+/// based on attribute" setting, so the camel-case renames are part of the
+/// contract rather than a style choice. Every optional field is absent rather
+/// than null on the wire, which is the reference's `exclude_none=True`.
 ///
 /// Reference `ExperimentAttributes`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExperimentAttributes {
-    #[serde(rename = "userId")]
-    pub user_id: String,
+    #[serde(rename = "userId", default, skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<String>,
     pub entrypoint: String,
+    /// The backend serving the session, reference `ExperimentSurface`.
+    pub harness: String,
     pub agent_version: String,
-    /// Absent rather than null on the wire, which is what the reference's
-    /// `exclude_none=True` produces.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client_name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client_version: Option<String>,
     pub os: String,
+    pub arch: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terminal_emulator: Option<String>,
     /// Whether the session runs a system prompt other than the schema default.
@@ -56,6 +58,28 @@ pub struct ExperimentAttributes {
         skip_serializing_if = "Option::is_none"
     )]
     pub organization_id: Option<String>,
+    #[serde(
+        rename = "organizationKind",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub organization_kind: Option<String>,
+    #[serde(
+        rename = "workspaceId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub workspace_id: Option<String>,
+    #[serde(
+        rename = "customerId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub customer_id: Option<String>,
+    #[serde(rename = "planType", default, skip_serializing_if = "Option::is_none")]
+    pub plan_type: Option<String>,
+    #[serde(rename = "planName", default, skip_serializing_if = "Option::is_none")]
+    pub plan_name: Option<String>,
 }
 
 /// The experiment a track names. Reference `TrackedExperiment`.

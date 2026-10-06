@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 mod account;
+pub use account::AccountLookup;
 mod agents;
 mod config;
 mod internal;
@@ -777,6 +778,44 @@ impl WorkspaceService {
         scoped.dispatch(method, params)
     }
 
+    /// Reference `emit_new_session_telemetry`'s four counts, read off the
+    /// same services a session is built from: the workspace instructions
+    /// file, every discovered skill, the MCP servers this session would
+    /// connect and the models the merged configuration declares.
+    #[must_use]
+    pub fn session_census(
+        &self,
+        working_directory: &Path,
+        trust: bool,
+    ) -> vibe_core::telemetry::records::NewSession {
+        let nb_skills = self
+            .dispatch("skills/list", &BTreeMap::new())
+            .ok()
+            .and_then(|dispatch| dispatch.result.get("skills").cloned())
+            .as_ref()
+            .and_then(Value::as_array)
+            .map_or(0, Vec::len) as u64;
+        let nb_mcp_servers = self
+            .mcp_servers_for_session(working_directory, trust, &[])
+            .map_or(0, |servers| servers.len()) as u64;
+        let nb_models = self
+            .layered_config()
+            .load()
+            .ok()
+            .and_then(|snapshot| snapshot.effective.get("models").cloned())
+            .map_or(0, |models| match models {
+                TomlValue::Array(entries) => entries.len(),
+                TomlValue::Table(entries) => entries.len(),
+                _ => 0,
+            }) as u64;
+        vibe_core::telemetry::records::NewSession {
+            has_agents_md: has_agents_md(working_directory),
+            nb_skills,
+            nb_mcp_servers,
+            nb_models,
+        }
+    }
+
     pub fn mcp_servers_for_session(
         &self,
         working_directory: &Path,
@@ -882,3 +921,12 @@ pub enum WorkspaceServiceError {
 
 #[cfg(test)]
 mod workspace_tests;
+
+/// Reference `has_agents_md_file`: the workspace publishes instructions to the
+/// agent under either spelling.
+#[must_use]
+pub fn has_agents_md(working_directory: &Path) -> bool {
+    ["AGENTS.md", "VIBE.md"]
+        .into_iter()
+        .any(|name| working_directory.join(name).is_file())
+}

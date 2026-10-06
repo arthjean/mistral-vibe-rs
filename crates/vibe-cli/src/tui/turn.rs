@@ -41,6 +41,8 @@ pub(super) struct ActiveTurn {
     pub(super) turn_id: String,
     scheduled_loop_id: Option<String>,
     pub(super) cancellation: CancellationPhase,
+    /// When the operator asked for the interrupt, until the slow hint fired.
+    interrupted_at: Option<std::time::Instant>,
     updates: tokio::sync::mpsc::Receiver<ProgrammaticUpdate>,
     task: JoinHandle<(TurnReservation, Result<PublicTurnOutcome, DriverError>)>,
 }
@@ -59,6 +61,7 @@ impl ActiveTurn {
             turn_id,
             scheduled_loop_id: None,
             cancellation,
+            interrupted_at: None,
             updates,
             task,
         }
@@ -114,6 +117,7 @@ pub(super) fn start_active_turn(
         turn_id,
         scheduled_loop_id,
         cancellation: CancellationPhase::Active,
+        interrupted_at: None,
         updates,
         task,
     })
@@ -164,6 +168,37 @@ pub(super) fn settle_unstarted_reservation(
     }
 }
 
+/// How long an interrupt may take before the operator is told how to force
+/// the exit. Reference `SLOW_INTERRUPT_HINT_DELAY`.
+const SLOW_INTERRUPT_HINT_DELAY: Duration = Duration::from_secs(2);
+
+/// Reports an interrupt the turn has not settled within the hint delay, once.
+/// Reference `_interrupt_server_turn`: the wait goes on, the operator is told
+/// how to force the exit, and the slowness is recorded beside the interrupt.
+pub(super) fn report_slow_interrupt(
+    runtime: Option<&InteractiveRuntime>,
+    active: Option<&mut ActiveTurn>,
+    state: &mut TuiState,
+) {
+    let (Some(runtime), Some(active)) = (runtime, active) else {
+        return;
+    };
+    if !active
+        .interrupted_at
+        .is_some_and(|at| at.elapsed() >= SLOW_INTERRUPT_HINT_DELAY)
+    {
+        return;
+    }
+    active.interrupted_at = None;
+    runtime.report(
+        &vibe_core::telemetry::TelemetryRecord::UserCancelledAction {
+            action: "interrupt_agent".to_owned(),
+            outcome: Some("slow"),
+        },
+    );
+    state.push_diagnostic("The interrupt is still settling; press Ctrl+C twice to quit now.");
+}
+
 pub(super) fn request_active_turn_interrupt(
     runtime: &mut Option<InteractiveRuntime>,
     active: &mut Option<ActiveTurn>,
@@ -190,6 +225,7 @@ pub(super) fn request_active_turn_interrupt(
             }
         };
         let _ = controls.interrupt();
+        active.interrupted_at = Some(std::time::Instant::now());
         cancel_open_callback_notices(state);
         let diagnostic = match interrupt {
             InterruptOutcome::Complete => {
@@ -338,6 +374,7 @@ pub(super) async fn finish_active(
         turn_id,
         scheduled_loop_id,
         cancellation,
+        interrupted_at: _,
         mut updates,
         task,
     } = active_turn;

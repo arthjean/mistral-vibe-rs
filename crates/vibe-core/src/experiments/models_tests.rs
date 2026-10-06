@@ -113,15 +113,22 @@ fn a_malformed_response_is_an_error_rather_than_a_panic() {
 #[test]
 fn the_attributes_omit_what_is_absent_and_keep_what_is_false() {
     let attributes = ExperimentAttributes {
-        user_id: "0123456789abcdef0123456789abcdef".to_owned(),
+        user_id: Some("0123456789abcdef0123456789abcdef".to_owned()),
         entrypoint: "cli".to_owned(),
+        harness: "legacy".to_owned(),
         agent_version: "9.9.9".to_owned(),
         client_name: None,
         client_version: None,
         os: "linux".to_owned(),
+        arch: "x86_64".to_owned(),
         terminal_emulator: None,
         custom_system_prompt: false,
         organization_id: None,
+        organization_kind: None,
+        workspace_id: None,
+        customer_id: None,
+        plan_type: None,
+        plan_name: None,
     };
     let encoded = serde_json::to_value(&attributes).expect("the attributes serialize");
     let object = encoded.as_object().expect("the attributes are an object");
@@ -129,8 +136,10 @@ fn the_attributes_omit_what_is_absent_and_keep_what_is_false() {
         object.keys().map(String::as_str).collect::<Vec<_>>(),
         [
             "agent_version",
+            "arch",
             "custom_system_prompt",
             "entrypoint",
+            "harness",
             "os",
             "userId"
         ],
@@ -145,15 +154,22 @@ fn the_attributes_omit_what_is_absent_and_keep_what_is_false() {
 #[test]
 fn the_attributes_spell_the_two_camel_case_names_the_proxy_expects() {
     let attributes = ExperimentAttributes {
-        user_id: "digest".to_owned(),
+        user_id: Some("digest".to_owned()),
         entrypoint: "acp".to_owned(),
+        harness: "legacy".to_owned(),
         agent_version: "9.9.9".to_owned(),
         client_name: Some("oracle-client".to_owned()),
         client_version: Some("1.2.3".to_owned()),
         os: "linux".to_owned(),
+        arch: "x86_64".to_owned(),
         terminal_emulator: Some("vscode".to_owned()),
         custom_system_prompt: true,
         organization_id: Some("oracle-organization".to_owned()),
+        organization_kind: None,
+        workspace_id: None,
+        customer_id: None,
+        plan_type: None,
+        plan_name: None,
     };
     let encoded = serde_json::to_value(&attributes).expect("the attributes serialize");
     let object = encoded.as_object().expect("the attributes are an object");
@@ -162,9 +178,5 @@ fn the_attributes_spell_the_two_camel_case_names_the_proxy_expects() {
         "the hash attribute keeps its wire name"
     );
     assert!(object.contains_key("organizationId"));
-    assert_eq!(
-        object.len(),
-        9,
-        "every attribute is posted when every one is set"
-    );
+    assert_eq!(object.len(), 11, "every attribute set here is posted");
 }

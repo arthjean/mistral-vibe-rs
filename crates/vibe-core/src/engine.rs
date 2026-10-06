@@ -36,6 +36,122 @@ use crate::tracing::{
 mod contracts;
 mod ledger;
 
+/// The census one request reports as its `metadata`. Reference
+/// `_build_backend_metadata`, dumped without its absent fields; every value it
+/// carries is a string.
+fn census_metadata(
+    census: &crate::telemetry::TelemetryContext,
+    session_id: &str,
+    call_type: crate::telemetry::TelemetryCallType,
+    message_id: &Option<String>,
+) -> std::collections::BTreeMap<String, String> {
+    census
+        .request_metadata(Some(session_id), call_type, message_id.clone())
+        .properties()
+        .into_iter()
+        .filter_map(|(key, value)| match value {
+            serde_json::Value::String(value) => Some((key, value)),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The size of the operator's latest message among those a request sends,
+/// zero when it sends none, as after a compaction whose envelope replaced it.
+/// Reference `send_request_sent(nb_prompt_chars=...)` over the last user message
+/// that is not injected.
+fn prompt_chars(messages: &[ModelMessage]) -> u64 {
+    messages
+        .iter()
+        .rev()
+        .find_map(|message| match message {
+            ModelMessage::User {
+                content,
+                injected: false,
+                ..
+            } => Some(content.chars().count() as u64),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
+/// The summarization requests one compaction made: each is stamped with the
+/// census as a secondary call and kept as the `RequestSent` it reports.
+///
+/// Reference `AgentLoop._complete` with `call_type="secondary_call"`, which
+/// sends `vibe.request_sent` before every summarization call, the fallback and
+/// the overflow retries included, under the current user message.
+pub struct SummaryRequestRecorder {
+    census: Option<crate::telemetry::TelemetryContext>,
+    session_id: String,
+    message_id: Option<String>,
+    agent_profile: String,
+    /// The label every request reports as its model, the summarizing model's
+    /// alias.
+    model: Option<String>,
+    sent: Mutex<Vec<EngineEvent>>,
+}
+
+impl SummaryRequestRecorder {
+    #[must_use]
+    pub fn new(
+        census: Option<crate::telemetry::TelemetryContext>,
+        session_id: String,
+        message_id: Option<String>,
+        agent_profile: String,
+        model: Option<String>,
+    ) -> Self {
+        Self {
+            census,
+            session_id,
+            message_id,
+            agent_profile,
+            model,
+            sent: Mutex::new(Vec::new()),
+        }
+    }
+
+    /// The reports of every request made so far, in order.
+    pub fn take(&self) -> Vec<EngineEvent> {
+        self.sent
+            .lock()
+            .map(|mut sent| std::mem::take(&mut *sent))
+            .unwrap_or_default()
+    }
+}
+
+impl crate::compaction::manager::SummaryRequestHook for SummaryRequestRecorder {
+    fn before_request(&self, input: &mut ProviderInput) {
+        let call_type = crate::telemetry::TelemetryCallType::SecondaryCall;
+        if let Some(census) = &self.census {
+            input.metadata = census_metadata(census, &self.session_id, call_type, &self.message_id);
+        }
+        let nb_prompt_chars = prompt_chars(&input.messages);
+        let report = EngineEvent::RequestSent {
+            model: self
+                .model
+                .clone()
+                .or_else(|| input.model_override.clone())
+                .unwrap_or_default(),
+            agent_profile: self.agent_profile.clone(),
+            nb_context_chars: input
+                .messages
+                .iter()
+                .map(|message| message.content().chars().count() as u64)
+                .sum(),
+            nb_context_messages: input.messages.len() as u64,
+            nb_prompt_chars,
+            nb_images: 0,
+            supports_images: true,
+            message_id: self.message_id.clone(),
+            call_type,
+        };
+        if let Ok(mut sent) = self.sent.lock() {
+            sent.push(report);
+        }
+    }
+}
+
 use contracts::ChannelRetrySink;
 pub use contracts::{
     Compactor, CompletionProvider, CompositeEventObserver, EventObserver, NoTools,
@@ -317,6 +433,9 @@ struct TurnSettings {
     working_directory: Option<PathBuf>,
     /// The hooks this turn runs, when the session loaded any.
     hooks: Option<TurnHooks>,
+    /// What every request carries as its `metadata`, built per request.
+    /// Reference `_build_backend_metadata`.
+    request_census: Option<crate::telemetry::TelemetryContext>,
 }
 
 /// The hooks a turn runs, and the session fields every invocation carries.
@@ -358,6 +477,7 @@ impl Default for TurnSettings {
             agent_profile: DEFAULT_AGENT_PROFILE.to_owned(),
             working_directory: None,
             hooks: None,
+            request_census: None,
         }
     }
 }
@@ -478,6 +598,14 @@ impl<P, T, C, S> ConversationEngine<P, T, C, S> {
         self
     }
 
+    /// Stamps every request with the request census the context builds.
+    /// Absent, a request carries no `metadata`.
+    #[must_use]
+    pub fn with_request_census(mut self, context: crate::telemetry::TelemetryContext) -> Self {
+        self.settings.request_census = Some(context);
+        self
+    }
+
     /// Names the agent profile this turn runs under. Absent, the turn reports
     /// the reference's default profile.
     #[must_use]
@@ -579,6 +707,9 @@ where
         // transcript that still overflows after a compaction is reported
         // instead of compacting again.
         let mut reactive_recovery_used = false;
+        // Reference `first_llm_turn`: the request that answers the operator is
+        // the main call until one completes, an overflow retry included.
+        let mut first_call = true;
         // The budget policies answer at the top of every cycle, as part of the
         // full pipeline.
         let mut pipeline = MiddlewarePipeline::from_limits(&self.settings.limits);
@@ -613,6 +744,11 @@ where
         } else {
             recorder.last_history_entry_id()
         };
+        recorder.emit(EngineEvent::TurnOpened {
+            model: self.resolved_model(&input).unwrap_or_default(),
+            agent_profile: self.settings.agent_profile.clone(),
+            message_id: message_id.clone(),
+        })?;
         if !self.settings.injected_prompt {
             // Reference `_open_user_turn`: the operator's message is a step of
             // the session, which is what the turn budget subtracts back out.
@@ -692,6 +828,7 @@ where
                         .compact(
                             &mut recorder,
                             &mut messages,
+                            message_id.clone(),
                             &pipeline,
                             &mut ledger,
                             &cancellation,
@@ -722,7 +859,18 @@ where
             // transcript keeps what came before it.
             input.messages = crate::compaction::context::select_model_context(&messages);
             input.session_id = Some(recorder.state().session_id.clone());
-            self.record_request(&mut recorder, &input, &prompt, message_id.clone())?;
+            let call_type = if first_call {
+                crate::telemetry::TelemetryCallType::MainCall
+            } else {
+                crate::telemetry::TelemetryCallType::SecondaryCall
+            };
+            self.stamp_request(
+                &mut input,
+                &recorder.state().session_id,
+                call_type,
+                &message_id,
+            );
+            self.record_request(&mut recorder, &input, message_id.clone(), call_type)?;
             let call_started = Instant::now();
             let completion = match self
                 .stream_completion(&mut recorder, &input, &cancellation)
@@ -749,6 +897,7 @@ where
                         .compact(
                             &mut recorder,
                             &mut messages,
+                            message_id.clone(),
                             &pipeline,
                             &mut ledger,
                             &cancellation,
@@ -799,6 +948,7 @@ where
                 }
             };
 
+            first_call = false;
             ledger.record_completion(&completion.usage, &self.settings.limits);
             ledger.last_call = Some(ModelCallStats {
                 prompt_tokens: completion.usage.input_tokens,
@@ -1137,8 +1287,8 @@ where
         &self,
         recorder: &mut TurnRecorder<'_>,
         input: &ProviderInput,
-        prompt: &str,
         message_id: Option<String>,
+        call_type: crate::telemetry::TelemetryCallType,
     ) -> Result<(), EngineError> {
         let model = self.resolved_model(input).unwrap_or_default();
         recorder.emit(EngineEvent::RequestSent {
@@ -1150,14 +1300,30 @@ where
                 .map(|message| message.content().chars().count() as u64)
                 .sum(),
             nb_context_messages: input.messages.len() as u64,
-            nb_prompt_chars: prompt.chars().count() as u64,
+            nb_prompt_chars: prompt_chars(&input.messages),
             nb_images: input.images.len() as u64,
             // Every provider this port ships accepts images on the request it
             // builds; a backend that refuses one refuses it at the wire, which
             // is not a telemetry decision.
             supports_images: true,
             message_id,
+            call_type,
         })
+    }
+
+    /// Replaces the request's `metadata` with the census this request
+    /// reports. Reference `_build_backend_metadata`, dumped without its
+    /// absent fields; every value it carries is a string.
+    fn stamp_request(
+        &self,
+        input: &mut ProviderInput,
+        session_id: &str,
+        call_type: crate::telemetry::TelemetryCallType,
+        message_id: &Option<String>,
+    ) {
+        if let Some(census) = &self.settings.request_census {
+            input.metadata = census_metadata(census, session_id, call_type, message_id);
+        }
     }
 
     /// Streams one completion under the span that reports it. Reference opens
@@ -1329,6 +1495,7 @@ where
         &self,
         recorder: &mut TurnRecorder<'_>,
         messages: &mut Vec<ModelMessage>,
+        message_id: Option<String>,
         pipeline: &MiddlewarePipeline,
         ledger: &mut TurnLedger,
         cancellation: &CancellationToken,
@@ -1349,12 +1516,32 @@ where
             threshold,
             reason,
         };
+        let requests = Arc::new(SummaryRequestRecorder::new(
+            self.settings.request_census.clone(),
+            old_session_id.clone(),
+            message_id,
+            self.settings.agent_profile.clone(),
+            self.settings
+                .compaction
+                .compaction_model_alias
+                .clone()
+                .or_else(|| self.provider.model().map(ToOwned::to_owned)),
+        ));
         let compaction = tokio::select! {
-            result = self.compactor.compact(&old_session_id, messages) => result,
-            () = cancellation.cancelled() => {
-                recorder.emit(outcome(CompactionStatus::Cancelled, None))?;
-                return Ok(None);
-            }
+            result = self.compactor.compact_reporting(
+                &old_session_id,
+                messages,
+                crate::compaction::manager::SummaryRequests(requests.clone()),
+            ) => Some(result),
+            () = cancellation.cancelled() => None,
+        };
+        // Every request made was reported, a cancelled compaction's included.
+        for report in requests.take() {
+            recorder.emit(report)?;
+        }
+        let Some(compaction) = compaction else {
+            recorder.emit(outcome(CompactionStatus::Cancelled, None))?;
+            return Ok(None);
         };
         let compaction = match compaction {
             Ok(compaction) => compaction,

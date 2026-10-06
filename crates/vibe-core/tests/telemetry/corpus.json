@@ -1346,6 +1346,10 @@
       "toml": "\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://proxy.example.test/gateway/v1\"\napi_key_env_var = \"ORACLE_PROXY_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n"
     },
     {
+      "id": "mistral-on-a-regional-host",
+      "toml": "\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://api.eu.mistral.ai/v1\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n"
+    },
+    {
       "id": "mistral-base-without-a-version-segment",
       "toml": "\nenable_telemetry = true\nactive_model = \"oracle\"\n\n[[providers]]\nname = \"mistral\"\napi_base = \"https://bare.example.test\"\napi_key_env_var = \"ORACLE_MISTRAL_KEY\"\nbackend = \"mistral\"\n\n[[models]]\nname = \"oracle-model\"\nprovider = \"mistral\"\nalias = \"oracle\"\n"
     },
@@ -1864,6 +1868,147 @@
       },
       "sent": true,
       "url": "https://proxy.example.test/v1/datalake/events",
+      "userAgent": "mistral-client-python/Mistral-Vibe/{version}"
+    },
+    {
+      "active": true,
+      "bodyKeys": [
+        "event",
+        "properties"
+      ],
+      "case": "mistral-on-a-regional-host-correlation-no",
+      "configuration": "mistral-on-a-regional-host",
+      "contentType": "application/json",
+      "correlationId": null,
+      "correlationIdRequested": false,
+      "credentialResolved": true,
+      "credentialVariable": "ORACLE_MISTRAL_KEY",
+      "enabled": true,
+      "event": "vibe.ready",
+      "flushed": true,
+      "headerNames": [
+        "Authorization",
+        "Content-Type",
+        "User-Agent"
+      ],
+      "properties": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "init_duration_ms": 1234,
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "terminal_emulator": "ghostty",
+        "user_plan": "oracle-plan",
+        "version": "{version}"
+      },
+      "propertyKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "arch",
+        "client_name",
+        "client_version",
+        "init_duration_ms",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "propertyTypes": {
+        "agent_entrypoint": "string",
+        "agent_version": "string",
+        "arch": "string",
+        "client_name": "string",
+        "client_version": "string",
+        "init_duration_ms": "int",
+        "os": "string",
+        "os_version": "string",
+        "parent_session_id": "string",
+        "session_id": "string",
+        "terminal_emulator": "string",
+        "user_plan": "string",
+        "version": "string"
+      },
+      "sent": true,
+      "url": "https://api.eu.mistral.ai/v1/datalake/events",
+      "userAgent": "mistral-client-python/Mistral-Vibe/{version}"
+    },
+    {
+      "active": true,
+      "bodyKeys": [
+        "correlation_id",
+        "event",
+        "properties"
+      ],
+      "case": "mistral-on-a-regional-host-correlation-yes",
+      "configuration": "mistral-on-a-regional-host",
+      "contentType": "application/json",
+      "correlationId": "oracle-correlation",
+      "correlationIdRequested": true,
+      "credentialResolved": true,
+      "credentialVariable": "ORACLE_MISTRAL_KEY",
+      "enabled": true,
+      "event": "vibe.ready",
+      "flushed": true,
+      "headerNames": [
+        "Authorization",
+        "Content-Type",
+        "User-Agent"
+      ],
+      "properties": {
+        "agent_entrypoint": "cli",
+        "agent_version": "oracle-agent-version",
+        "arch": "{arch}",
+        "client_name": "oracle-client",
+        "client_version": "oracle-client-version",
+        "init_duration_ms": 1234,
+        "os": "{platformId}",
+        "os_version": "{platformVersion}",
+        "parent_session_id": "oracle-parent-session",
+        "session_id": "oracle-session",
+        "terminal_emulator": "ghostty",
+        "user_plan": "oracle-plan",
+        "version": "{version}"
+      },
+      "propertyKeys": [
+        "agent_entrypoint",
+        "agent_version",
+        "arch",
+        "client_name",
+        "client_version",
+        "init_duration_ms",
+        "os",
+        "os_version",
+        "parent_session_id",
+        "session_id",
+        "terminal_emulator",
+        "user_plan",
+        "version"
+      ],
+      "propertyTypes": {
+        "agent_entrypoint": "string",
+        "agent_version": "string",
+        "arch": "string",
+        "client_name": "string",
+        "client_version": "string",
+        "init_duration_ms": "int",
+        "os": "string",
+        "os_version": "string",
+        "parent_session_id": "string",
+        "session_id": "string",
+        "terminal_emulator": "string",
+        "user_plan": "string",
+        "version": "string"
+      },
+      "sent": true,
+      "url": "https://api.eu.mistral.ai/v1/datalake/events",
       "userAgent": "mistral-client-python/Mistral-Vibe/{version}"
     },
     {
@@ -3087,6 +3232,20 @@
       "enableOtel": null,
       "enableTelemetry": null,
       "endpoint": "https://proxy.example.test/telemetry/v1/traces",
+      "endpointRequested": "",
+      "headerNames": [
+        "Authorization"
+      ],
+      "providerInstalled": null,
+      "resolved": true
+    },
+    {
+      "case": "derived-from-a-regional-host",
+      "configuration": "mistral-on-a-regional-host",
+      "credentialVariable": "ORACLE_MISTRAL_KEY",
+      "enableOtel": null,
+      "enableTelemetry": null,
+      "endpoint": "https://api.mistral.ai/telemetry/v1/traces",
       "endpointRequested": "",
       "headerNames": [
         "Authorization"

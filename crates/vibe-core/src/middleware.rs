@@ -73,6 +73,9 @@ pub struct CompactionSettings {
     /// and otherwise the active model. `None` means no configuration named
     /// either, so the provider's own model answers.
     pub compaction_model: Option<String>,
+    /// The alias of that model, which is what its requests report. Reference
+    /// `send_request_sent(model=model.alias)`.
+    pub compaction_model_alias: Option<String>,
     /// The identifier of the prompt the compaction request is built from.
     pub compaction_prompt_id: String,
     /// Whether the conversation is warned once it approaches the threshold.
@@ -88,6 +91,7 @@ impl Default for CompactionSettings {
         Self {
             auto_compact_threshold: 0,
             compaction_model: None,
+            compaction_model_alias: None,
             compaction_prompt_id: DEFAULT_COMPACTION_PROMPT_ID.to_owned(),
             context_warnings: false,
             raise_on_compaction_failure: false,

@@ -64,10 +64,10 @@ use crate::tracing::{
 };
 
 use super::{
-    ExperimentExposures, LaunchContext, TELEMETRY_ATTACHMENT_IMAGE, TELEMETRY_AUTHORIZATION_SCHEME,
-    TELEMETRY_CALL_SOURCE, TELEMETRY_DEFAULT_API_KEY_VARIABLE, TELEMETRY_DEFAULT_BASE_URL,
-    TELEMETRY_MAX_CONNECTIONS, TELEMETRY_MAX_KEEPALIVE_CONNECTIONS, TELEMETRY_PATH,
-    TELEMETRY_TIMEOUT_SECONDS, TelemetryCallType, TelemetryClient, TelemetryConfig,
+    ExperimentAssignment, ExperimentExposures, LaunchContext, TELEMETRY_ATTACHMENT_IMAGE,
+    TELEMETRY_AUTHORIZATION_SCHEME, TELEMETRY_CALL_SOURCE, TELEMETRY_DEFAULT_API_KEY_VARIABLE,
+    TELEMETRY_DEFAULT_BASE_URL, TELEMETRY_MAX_CONNECTIONS, TELEMETRY_MAX_KEEPALIVE_CONNECTIONS,
+    TELEMETRY_PATH, TELEMETRY_TIMEOUT_SECONDS, TelemetryCallType, TelemetryClient, TelemetryConfig,
     TelemetryContext, TelemetryEnvelope, TelemetryEvent, TelemetryFuture, TelemetryRecord,
     TelemetryTransport, attachment_counts, merge_properties, platform_id, platform_version,
     records, telemetry_headers, telemetry_user_agent,
@@ -126,23 +126,6 @@ const FAMILIES: [&str; 15] = [
 /// over.
 const METADATA: [&str; 4] = ["schemaVersion", "reference", "note", "documents"];
 
-/// Why a base census with experiments diverges at 4a960031.
-const REPIN_BASE_ARCH_ASSIGNMENTS: &str = "OPEN: v2.24.3 made the builder take \
-     `experiment_assignments` and echo them beside the `experiments` map it now derives from them \
-     (vibe/core/telemetry/build_metadata.py:22-53, vibe/core/telemetry/types.py:49-60,78 at \
-     4a960031); this port's `TelemetryBaseMetadata` carries the map only \
-     (crates/vibe-core/src/telemetry.rs:332-361)";
-/// Why `vibe.new_session` diverges at 4a960031.
-const REPIN_NEW_SESSION_HOST_KIND: &str = "OPEN: v2.25.0 adds `host_kind`, always `local`, to \
-     `send_new_session` (vibe/core/telemetry/send.py:447 at 4a960031); this port's `NewSession` \
-     projection sends no such key (crates/vibe-core/src/telemetry/records.rs:864-888)";
-/// Why `vibe.tool_call_finished` diverges at 4a960031.
-const REPIN_TOOL_CALL_APPROVAL_SOURCE: &str = "OPEN: v2.25.5 adds `approval_source`, the \
-     decision's `ApprovalSource` value or null (vibe/core/telemetry/send.py:363-367,379 and \
-     vibe/core/agent_loop/_loop.py:248-265 at 4a960031; the capture authors a user approval, so \
-     the type is string); this port's `ToolDecision` carries a verdict and an approval type only \
-     (crates/vibe-core/src/telemetry/records.rs:330-333,922-936)";
-
 /// Cases where this build answers something other than the reference, each with
 /// the reason and the story that closes it.
 ///
@@ -156,25 +139,6 @@ const DIVERGENCES: &[(&str, &str)] = &[
         "baseMetadata/sentryTags/*",
         "ACCEPTED: the reference ships Sentry dormant, both DSNs null at the pin, so no crash \
          reporter exists here to tag; US-020 records the dormancy",
-    ),
-    // -- EP-003: closed. What the epic left standing ------------------------
-    (
-        "eventVocabulary/published/vibe.admin_config_applied",
-        "ACCEPTED: the event reports on the org-managed configuration layer, which this port \
-         neither fetches nor composes; declaring a name nothing can raise would be worse than \
-         recording its absence, and US-020 records it",
-    ),
-    (
-        "eventPayloads/propertyKeys/vibe.admin_config_applied",
-        "ACCEPTED: as above",
-    ),
-    (
-        "eventPayloads/propertyTypes/vibe.admin_config_applied",
-        "ACCEPTED: as above",
-    ),
-    (
-        "eventPayloads/correlated/vibe.admin_config_applied",
-        "ACCEPTED: as above",
     ),
     // -- EP-005: closed. What the epic left standing ------------------------
     (
@@ -203,76 +167,6 @@ const DIVERGENCES: &[(&str, &str)] = &[
     (
         "logPagination/cursor/file-shrank-between-polls",
         "ACCEPTED: as above",
-    ),
-    // -- Re-pin to v2.25.7 (4a960031): reference drift this port has not followed
-    (
-        "constants/agentEntrypoints/declared",
-        "OPEN: v2.24.4 added `desktop` to `AgentEntrypoint` (vibe/utils/__init__.py:8 at \
-         4a960031); `vibe_protocol::ClientEntrypoint` still declares only unknown, cli, acp and \
-         programmatic (crates/vibe-protocol/src/handshake.rs:8-18)",
-    ),
-    (
-        "constants/baseMetadataFields/declared",
-        "OPEN: `TelemetryBaseMetadata` grew from 12 to 16 fields: `experiment_assignments` \
-         (v2.24.3), `experiment_attributes` (v2.24.4), `arch` and `harness_backend` (v2.25.0) \
-         (vibe/core/telemetry/types.py:63-94 at 4a960031); this port's base metadata publishes \
-         the 12 fields of v2.24.0 and `arch`",
-    ),
-    (
-        "baseMetadata/baseKeys/full-launch-context-main_call",
-        REPIN_BASE_ARCH_ASSIGNMENTS,
-    ),
-    (
-        "baseMetadata/base/full-launch-context-main_call",
-        REPIN_BASE_ARCH_ASSIGNMENTS,
-    ),
-    (
-        "baseMetadata/baseKeys/full-launch-context-secondary_call",
-        REPIN_BASE_ARCH_ASSIGNMENTS,
-    ),
-    (
-        "baseMetadata/base/full-launch-context-secondary_call",
-        REPIN_BASE_ARCH_ASSIGNMENTS,
-    ),
-    (
-        "baseMetadata/baseKeys/no-user-plan-main_call",
-        REPIN_BASE_ARCH_ASSIGNMENTS,
-    ),
-    (
-        "baseMetadata/base/no-user-plan-main_call",
-        REPIN_BASE_ARCH_ASSIGNMENTS,
-    ),
-    (
-        "baseMetadata/baseKeys/no-user-plan-secondary_call",
-        REPIN_BASE_ARCH_ASSIGNMENTS,
-    ),
-    (
-        "baseMetadata/base/no-user-plan-secondary_call",
-        REPIN_BASE_ARCH_ASSIGNMENTS,
-    ),
-    (
-        "eventPayloads/propertyKeys/vibe.new_session",
-        REPIN_NEW_SESSION_HOST_KIND,
-    ),
-    (
-        "eventPayloads/propertyTypes/vibe.new_session",
-        REPIN_NEW_SESSION_HOST_KIND,
-    ),
-    (
-        "eventPayloads/propertyKeys/vibe.tool_call_finished",
-        REPIN_TOOL_CALL_APPROVAL_SOURCE,
-    ),
-    (
-        "eventPayloads/propertyTypes/vibe.tool_call_finished",
-        REPIN_TOOL_CALL_APPROVAL_SOURCE,
-    ),
-    (
-        "eventPayloads/propertyKeys/vibe.startup",
-        "OPEN: `vibe.startup` grew from three durations to ten keys: v2.24.1 added \
-         `has_initial_prompt`, `teleport_on_start`, `show_resume_picker`, `is_resuming_session`, \
-         `prompt_for_workspace_trust` and `is_cold_start`, and v2.25.1 `harness_selection_source` \
-         (vibe/cli/textual_ui/app.py:1708-1729 at 4a960031); this port's `Startup` record sends the \
-         three durations only (crates/vibe-core/src/telemetry/records.rs:289-293,894-907)",
     ),
 ];
 
@@ -828,6 +722,7 @@ const fn declared_name(event: TelemetryEvent) -> &'static str {
         TelemetryEvent::RemoteProjectConfigured => "vibe.remote_project_configured",
         TelemetryEvent::TranscriptionStarted => "vibe.audio.transcription.start",
         TelemetryEvent::TranscriptionCancelled => "vibe.audio.transcription.cancel_recording",
+        TelemetryEvent::AdminConfigApplied => "vibe.admin_config_applied",
         TelemetryEvent::TranscriptionDone => "vibe.audio.transcription.done",
         TelemetryEvent::TranscriptionFailed => "vibe.audio.transcription.error",
         TelemetryEvent::ReadAloudRequested => "vibe.read_aloud.requested",
@@ -860,9 +755,32 @@ fn oracle_context() -> TelemetryContext {
     TelemetryContext {
         launch: Some(oracle_launch(Some("ghostty"))),
         parent_session_id: Some("oracle-parent-session".to_owned()),
-        experiments: ExperimentExposures::default(),
-        user_plan: Some("oracle-plan".to_owned()),
+        experiments: oracle_exposures(&[], Some("oracle-plan")),
+        ..TelemetryContext::default()
     }
+}
+
+/// A census as the capture builds it: one confirmed assignment per feature,
+/// named `oracle-<feature>`, beside the plan its getter answers.
+fn oracle_exposures(assignments: &[(&str, &str)], user_plan: Option<&str>) -> ExperimentExposures {
+    let exposures = ExperimentExposures::default();
+    exposures.publish(
+        assignments
+            .iter()
+            .map(|(feature, label)| ExperimentAssignment {
+                experiment_id: (*feature).to_owned(),
+                experiment_name: format!("oracle-{feature}"),
+                variation_name: (*label).to_owned(),
+                variation_id: None,
+                in_experiment: None,
+                hash_attribute: None,
+                hash_value: None,
+                feature_id: None,
+            })
+            .collect(),
+    );
+    exposures.publish_user_plan(user_plan.map(ToOwned::to_owned));
+    exposures
 }
 
 /// The sentinels the capture set before driving the reference, named here by
@@ -1030,9 +948,7 @@ const VOLATILE_KEYS: [&str; 5] = [
 /// The record this build raises for one reference event name, built with the
 /// inputs the capture drove the reference's own sender with.
 ///
-/// Every name the corpus carries is answered here except
-/// `vibe.admin_config_applied`, which reports on the org-managed configuration
-/// layer this port does not compose; the ledger records that.
+/// Every name the corpus carries is answered here.
 fn port_record(event: &str) -> Option<TelemetryRecord> {
     let picker = || records::ProjectPicker {
         shown: true,
@@ -1057,7 +973,19 @@ fn port_record(event: &str) -> Option<TelemetryRecord> {
             first_frame_duration_ms: Some(12),
             agent_ready_duration_ms: Some(34),
             session_init_duration_ms: Some(56),
+            has_initial_prompt: false,
+            teleport_on_start: false,
+            show_resume_picker: false,
+            is_resuming_session: false,
+            prompt_for_workspace_trust: false,
+            is_cold_start: Some(false),
+            harness_selection_source: Some("default".to_owned()),
         }),
+        "vibe.admin_config_applied" => TelemetryRecord::AdminConfigApplied {
+            outcome: records::AdminConfigOutcome::Applied,
+            nb_enforced_fields: Some(2),
+            has_error: true,
+        },
         "vibe.request_sent" => TelemetryRecord::RequestSent(records::RequestSent {
             model: "oracle-model".to_owned(),
             nb_context_chars: 2048,
@@ -1079,6 +1007,7 @@ fn port_record(event: &str) -> Option<TelemetryRecord> {
                 decision: Some(records::ToolDecision {
                     verdict: records::TelemetryToolVerdict::Execute,
                     approval_type: records::TelemetryApprovalType::Ask,
+                    approval_source: Some(records::TelemetryApprovalSource::User),
                 }),
                 agent_profile_name: "oracle-profile",
                 model: "oracle-model",
@@ -1097,9 +1026,11 @@ fn port_record(event: &str) -> Option<TelemetryRecord> {
             nb_context_tokens_before: 150_000,
             auto_compact_threshold: 120_000,
             status: CompactionStatus::Success.label(),
+            session: None,
         },
         "vibe.compaction_failed" => TelemetryRecord::CompactionFailed {
             reason: CompactionFailureReason::ToolCall.label(),
+            session: None,
         },
         "vibe.slash_command_used" => TelemetryRecord::SlashCommandUsed {
             command: "/oracle".to_owned(),
@@ -1108,6 +1039,7 @@ fn port_record(event: &str) -> Option<TelemetryRecord> {
         "vibe.user_copied_text" => TelemetryRecord::UserCopiedText { text_length: 11 },
         "vibe.user_cancelled_action" => TelemetryRecord::UserCancelledAction {
             action: "interrupt_agent".to_owned(),
+            outcome: None,
         },
         "vibe.voice_mode_toggled" => TelemetryRecord::VoiceModeToggled { enabled: true },
         "vibe.onboarding_api_key_added" => TelemetryRecord::OnboardingApiKeyAdded {
@@ -1515,6 +1447,7 @@ fn run_vocabularies(vocabularies: &Vocabularies, report: &mut Report) {
         &serde_variants::<vibe_protocol::ClientEntrypoint>(&[
             vibe_protocol::ClientEntrypoint::Unknown,
             vibe_protocol::ClientEntrypoint::Cli,
+            vibe_protocol::ClientEntrypoint::Desktop,
             vibe_protocol::ClientEntrypoint::Acp,
             vibe_protocol::ClientEntrypoint::Programmatic,
         ]),
@@ -1582,9 +1515,19 @@ fn run_vocabularies(vocabularies: &Vocabularies, report: &mut Report) {
     let populated = TelemetryContext {
         launch: Some(oracle_launch(Some("ghostty"))),
         parent_session_id: Some("oracle-parent-session".to_owned()),
-        experiments: BTreeMap::from([("ab".to_owned(), "on".to_owned())]).into(),
-        user_plan: Some("oracle-plan".to_owned()),
+        experiments: oracle_exposures(&[("ab", "on")], Some("oracle-plan")),
+        harness_backend: Some(super::HARNESS_LEGACY.to_owned()),
+        ..TelemetryContext::default()
     };
+    populated.experiments.publish_attributes(Some(
+        [
+            ("entrypoint".to_owned(), json!("cli")),
+            ("planType".to_owned(), json!("api")),
+            ("planName".to_owned(), json!("FREE_TRIAL")),
+        ]
+        .into_iter()
+        .collect(),
+    ));
     let base = Value::Object(populated.base_metadata(Some("oracle-session")).properties());
     let mut declared = vocabularies.base_metadata_fields.clone();
     declared.sort_unstable();
@@ -1901,21 +1844,14 @@ fn run_envelope(corpus: &Corpus, report: &mut Report) {
 fn metadata_inputs(scenario: &str) -> Option<(TelemetryContext, Option<&'static str>)> {
     let session = Some("oracle-session");
     let parent = Some("oracle-parent-session".to_owned());
-    let plan = Some("oracle-plan".to_owned());
-    let experiments = |pairs: &[(&str, &str)]| {
-        pairs
-            .iter()
-            .map(|(key, value)| ((*key).to_owned(), (*value).to_owned()))
-            .collect::<BTreeMap<_, _>>()
-            .into()
-    };
+    let plan = Some("oracle-plan");
     Some(match scenario {
         "full-launch-context" => (
             TelemetryContext {
                 launch: Some(oracle_launch(Some("ghostty"))),
                 parent_session_id: parent,
-                experiments: experiments(&[("ab", "on")]),
-                user_plan: plan,
+                experiments: oracle_exposures(&[("ab", "on")], plan),
+                ..TelemetryContext::default()
             },
             session,
         ),
@@ -1923,8 +1859,8 @@ fn metadata_inputs(scenario: &str) -> Option<(TelemetryContext, Option<&'static 
             TelemetryContext {
                 launch: None,
                 parent_session_id: parent,
-                experiments: ExperimentExposures::default(),
-                user_plan: plan,
+                experiments: oracle_exposures(&[], plan),
+                ..TelemetryContext::default()
             },
             session,
         ),
@@ -1954,8 +1890,8 @@ fn metadata_inputs(scenario: &str) -> Option<(TelemetryContext, Option<&'static 
             TelemetryContext {
                 launch: Some(oracle_launch(Some("ghostty"))),
                 parent_session_id: parent,
-                experiments: experiments(&[("ab", "off")]),
-                user_plan: None,
+                experiments: oracle_exposures(&[("ab", "off")], None),
+                ..TelemetryContext::default()
             },
             session,
         ),

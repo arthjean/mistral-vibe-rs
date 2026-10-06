@@ -113,11 +113,21 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // The exposures are created before the client so a rollout resolved by any
     // session of this process reaches the census of every event it sends.
     let exposures = ExperimentExposures::default();
-    let telemetry = acp_telemetry_observer(&vibe_home, &dotenv, exposures.clone());
+    let declared_launch = vibe_core::telemetry::DeclaredLaunch::default();
+    let session_resets = vibe_core::telemetry::SessionResets::default();
+    let telemetry = acp_telemetry_observer(
+        &vibe_home,
+        &dotenv,
+        exposures.clone(),
+        declared_launch.clone(),
+        session_resets.clone(),
+    );
     let experiments = telemetry.as_ref().map(|_| vibe_acp::AcpExperiments {
         exposures,
         credentials: acp_credentials(&vibe_home),
         launch: acp_launch_context(),
+        declared_launch,
+        session_resets,
     });
     let driver = DeferredTurnDriver::new({
         let vibe_home = vibe_home.clone();
@@ -128,7 +138,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 &DotenvValues::global(&vibe_home),
             )?;
             Ok(match telemetry.clone() {
-                Some(telemetry) => driver.with_event_observer(telemetry),
+                Some(telemetry) => driver
+                    .with_request_census(telemetry.context().clone())
+                    .with_event_observer(telemetry),
                 None => driver,
             })
         }
@@ -191,10 +203,17 @@ fn ambient_workspace(vibe_home: &Path) -> Option<WorkspaceService> {
     .ok()
 }
 
-fn acp_telemetry_context(exposures: ExperimentExposures) -> TelemetryContext {
+fn acp_telemetry_context(
+    exposures: ExperimentExposures,
+    declared_launch: vibe_core::telemetry::DeclaredLaunch,
+    session_resets: vibe_core::telemetry::SessionResets,
+) -> TelemetryContext {
     TelemetryContext {
         launch: Some(acp_launch_context()),
+        declared_launch,
+        session_resets,
         experiments: exposures,
+        harness_backend: Some(vibe_core::telemetry::HARNESS_LEGACY.to_owned()),
         ..TelemetryContext::default()
     }
 }
@@ -211,6 +230,8 @@ fn acp_telemetry_observer(
     vibe_home: &Path,
     dotenv: &DotenvValues,
     exposures: ExperimentExposures,
+    declared_launch: vibe_core::telemetry::DeclaredLaunch,
+    session_resets: vibe_core::telemetry::SessionResets,
 ) -> Option<Arc<TelemetryEventObserver<ReqwestTelemetryTransport>>> {
     let configuration = ambient_workspace(vibe_home)?.layered_config();
     let environment = dotenv.environment();
@@ -226,7 +247,7 @@ fn acp_telemetry_observer(
     let transport = ReqwestTelemetryTransport::try_new().ok()?;
     Some(Arc::new(TelemetryEventObserver::new(
         TelemetryClient::new(config, transport),
-        acp_telemetry_context(exposures),
+        acp_telemetry_context(exposures, declared_launch, session_resets),
     )))
 }
 

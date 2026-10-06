@@ -15,15 +15,22 @@ const ORACLE_URL: &str = "https://experiments.example.test/api/eval/sdk-key";
 
 fn attributes() -> ExperimentAttributes {
     ExperimentAttributes {
-        user_id: "0123456789abcdef0123456789abcdef".to_owned(),
+        user_id: Some("0123456789abcdef0123456789abcdef".to_owned()),
         entrypoint: "cli".to_owned(),
+        harness: "legacy".to_owned(),
         agent_version: "9.9.9".to_owned(),
         client_name: Some("oracle-client".to_owned()),
         client_version: Some("1.2.3".to_owned()),
         os: "linux".to_owned(),
+        arch: "x86_64".to_owned(),
         terminal_emulator: Some("vscode".to_owned()),
         custom_system_prompt: false,
         organization_id: Some("oracle-organization".to_owned()),
+        organization_kind: None,
+        workspace_id: None,
+        customer_id: None,
+        plan_type: None,
+        plan_name: None,
     }
 }
 

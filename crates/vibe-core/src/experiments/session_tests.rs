@@ -8,14 +8,16 @@ use toml::Table;
 use crate::config::registry::default_document;
 use crate::config::{ConfigPaths, LayeredConfig};
 use crate::identity::recorder::RecordingResolver;
-use crate::telemetry::LaunchContext;
+use crate::telemetry::{HARNESS_LEGACY, LaunchContext};
+use crate::whoami::recorder::Unanswered;
+use crate::whoami::{NO_PLAN_DATA, WhoAmIResult};
 
 use super::client::RemoteEvalClient;
-use super::manager::{ExperimentManager, hash_api_key};
+use super::manager::ExperimentManager;
 use super::models::{EvalResponse, ExperimentAttributes};
 use super::recorder::{Outcome, RecordingSink, RecordingTransport};
 use super::session::{
-    EXPERIMENT_IDENTITY_TIMEOUT, build_attributes, experiments_allowed,
+    EXPERIMENT_IDENTITY_TIMEOUT, PlanSources, build_attributes, experiments_allowed,
     hydrate_experiments_from_session, initialize_experiments, mistral_provider_and_api_key,
 };
 
@@ -93,6 +95,7 @@ fn credentials(name: &str) -> Option<String> {
 
 struct Run {
     refreshed: bool,
+    user_plan: Option<String>,
     eval_requests: usize,
     identity_calls: Vec<crate::identity::recorder::RecordedResolution>,
     persisted: usize,
@@ -111,12 +114,17 @@ fn initialize(document: &str, outcome: Outcome, organization: Option<&'static st
     ));
     let resolver = RecordingResolver::answering(organization, ORACLE_KEY);
     let sink = RecordingSink::default();
-    let refreshed = runtime().block_on(initialize_experiments(
+    let sources = PlanSources {
+        identity: &resolver,
+        whoami: &Unanswered,
+        harness: HARNESS_LEGACY,
+    };
+    let (refreshed, user_plan) = runtime().block_on(initialize_experiments(
         &effective,
         &credentials,
         &mut manager,
         None,
-        &resolver,
+        &sources,
         &sink,
     ));
     let attributes = transport.requests().first().and_then(|request| {
@@ -128,6 +136,7 @@ fn initialize(document: &str, outcome: Outcome, organization: Option<&'static st
     });
     Run {
         refreshed,
+        user_plan,
         eval_requests: transport.request_count(),
         identity_calls: resolver.calls(),
         persisted: sink.count(),
@@ -159,8 +168,12 @@ fn a_configured_session_looks_the_rollout_up_once_and_persists_what_it_resolved(
         attributes.organization_id.as_deref(),
         Some("oracle-organization")
     );
-    assert_eq!(attributes.user_id, hash_api_key(ORACLE_KEY));
-    assert_ne!(attributes.user_id, ORACLE_KEY);
+    assert_eq!(
+        attributes.user_id.as_deref(),
+        Some("oracle-user"),
+        "the identity's own identifier, never the credential"
+    );
+    assert_eq!(attributes.harness, HARNESS_LEGACY);
     assert_eq!(
         run.manager.variant(super::ExperimentName::SystemPrompt),
         "tests"
@@ -168,10 +181,9 @@ fn a_configured_session_looks_the_rollout_up_once_and_persists_what_it_resolved(
 }
 
 #[test]
-fn either_gate_stops_every_request_before_it_is_built() {
+fn disabled_telemetry_stops_every_request_before_it_is_built() {
     for document in [
         format!("enable_telemetry = false\n{MISTRAL_PROVIDER}"),
-        format!("[experiments]\nenable = false\n{MISTRAL_PROVIDER}"),
         format!("enable_telemetry = false\n[experiments]\nenable = false\n{MISTRAL_PROVIDER}"),
     ] {
         let run = initialize(&document, Outcome::ok(ORACLE_RESPONSE), Some("oracle"));
@@ -179,20 +191,57 @@ fn either_gate_stops_every_request_before_it_is_built() {
         assert_eq!(run.eval_requests, 0, "{document}");
         assert_eq!(run.identity_calls.len(), 0, "{document}");
         assert_eq!(run.persisted, 0, "{document}");
+        assert_eq!(run.manager.attributes(), None, "{document}");
     }
 }
 
+/// The experiments opt-out skips the evaluation only: the identity is still
+/// read, because the snapshot segments every telemetry event.
 #[test]
-fn no_mistral_provider_and_no_resolvable_key_both_stop_the_lookup() {
-    for document in [
-        THIRD_PARTY_PROVIDER.to_owned(),
-        MISTRAL_PROVIDER.replace(ORACLE_VARIABLE, "ORACLE_ABSENT_KEY"),
-    ] {
-        let run = initialize(&document, Outcome::ok(ORACLE_RESPONSE), Some("oracle"));
-        assert!(!run.refreshed, "{document}");
-        assert_eq!(run.eval_requests, 0, "{document}");
-        assert_eq!(run.identity_calls.len(), 0, "{document}");
-    }
+fn the_experiments_opt_out_keeps_the_snapshot_and_skips_the_lookup() {
+    let document = format!("[experiments]\nenable = false\n{MISTRAL_PROVIDER}");
+    let run = initialize(&document, Outcome::ok(ORACLE_RESPONSE), Some("oracle"));
+    assert!(!run.refreshed);
+    assert_eq!(run.eval_requests, 0);
+    assert_eq!(run.identity_calls.len(), 1);
+    assert_eq!(run.persisted, 0);
+    let attributes = run.manager.attributes().expect("the snapshot is kept");
+    assert_eq!(attributes.organization_id.as_deref(), Some("oracle"));
+}
+
+#[test]
+fn no_mistral_provider_reports_the_sentinel_and_no_key_reports_nothing() {
+    // Read raw: the shipped defaults declare a Mistral provider of their own.
+    let third_party: Table = THIRD_PARTY_PROVIDER.parse().expect("the document parses");
+    let resolver = RecordingResolver::answering(Some("oracle"), ORACLE_KEY);
+    let mut manager = ExperimentManager::new(RemoteEvalClient::with_url(None));
+    let sources = PlanSources {
+        identity: &resolver,
+        whoami: &Unanswered,
+        harness: HARNESS_LEGACY,
+    };
+    let (refreshed, user_plan) = runtime().block_on(initialize_experiments(
+        &third_party,
+        &credentials,
+        &mut manager,
+        None,
+        &sources,
+        &RecordingSink::default(),
+    ));
+    assert!(!refreshed);
+    assert_eq!(resolver.calls().len(), 0);
+    assert_eq!(user_plan.as_deref(), Some(NO_PLAN_DATA));
+    let sentinel = manager.attributes().expect("the sentinel snapshot");
+    assert_eq!(sentinel.plan_type.as_deref(), Some(NO_PLAN_DATA));
+    assert_eq!(sentinel.plan_name.as_deref(), Some(NO_PLAN_DATA));
+
+    let document = MISTRAL_PROVIDER.replace(ORACLE_VARIABLE, "ORACLE_ABSENT_KEY");
+    let run = initialize(&document, Outcome::ok(ORACLE_RESPONSE), Some("oracle"));
+    assert!(!run.refreshed);
+    assert_eq!(run.eval_requests, 0);
+    assert_eq!(run.identity_calls.len(), 0);
+    assert_eq!(run.user_plan, None);
+    assert_eq!(run.manager.attributes(), None);
 }
 
 #[test]
@@ -322,8 +371,10 @@ fn a_third_party_credential_never_resolves_for_a_mistral_endpoint() {
 #[test]
 fn the_attributes_follow_the_launch_context_and_the_prompt_the_document_names() {
     let document = effective(MISTRAL_PROVIDER);
-    let bare = build_attributes(&document, ORACLE_KEY, None, None);
+    let bare = build_attributes(&document, None, HARNESS_LEGACY, None, None);
+    assert_eq!(bare.user_id, None);
     assert_eq!(bare.entrypoint, "unknown");
+    assert_eq!(bare.harness, HARNESS_LEGACY);
     assert_eq!(bare.agent_version, crate::telemetry::version());
     assert_eq!(bare.client_name, None);
     assert_eq!(bare.client_version, None);
@@ -337,12 +388,32 @@ fn the_attributes_follow_the_launch_context_and_the_prompt_the_document_names() 
         client_version: "0.1.0".to_owned(),
         terminal_emulator: Some("cursor".to_owned()),
     };
+    let identity: crate::identity::IdentityResult = serde_json::from_value(serde_json::json!({
+        "id": "oracle-user",
+        "organization": {"id": "oracle-organization", "name": "Oracle"},
+        "workspace": {"id": "oracle-workspace", "name": "Oracle"},
+    }))
+    .expect("the identity parses");
+    let account: WhoAmIResult = serde_json::from_value(serde_json::json!({
+        "plan_type": "api",
+        "plan_name": "FREE_TRIAL",
+        "organization_kind": "personal",
+        "customer_id": "oracle-customer",
+    }))
+    .expect("the account parses");
     let launched = build_attributes(
         &document,
-        ORACLE_KEY,
         Some(&launch),
-        Some("oracle-organization".to_owned()),
+        HARNESS_LEGACY,
+        Some(&identity),
+        Some(&account),
     );
+    assert_eq!(launched.user_id.as_deref(), Some("oracle-user"));
+    assert_eq!(launched.workspace_id.as_deref(), Some("oracle-workspace"));
+    assert_eq!(launched.organization_kind.as_deref(), Some("personal"));
+    assert_eq!(launched.customer_id.as_deref(), Some("oracle-customer"));
+    assert_eq!(launched.plan_type.as_deref(), Some("api"));
+    assert_eq!(launched.plan_name.as_deref(), Some("FREE_TRIAL"));
     assert_eq!(launched.entrypoint, "acp");
     assert_eq!(launched.agent_version, "9.9.9");
     assert_eq!(launched.client_name.as_deref(), Some("zed"));
@@ -354,5 +425,5 @@ fn the_attributes_follow_the_launch_context_and_the_prompt_the_document_names() 
     );
 
     let custom = effective(&format!("system_prompt_id = \"lean\"\n{MISTRAL_PROVIDER}"));
-    assert!(build_attributes(&custom, ORACLE_KEY, None, None).custom_system_prompt);
+    assert!(build_attributes(&custom, None, HARNESS_LEGACY, None, None).custom_system_prompt);
 }

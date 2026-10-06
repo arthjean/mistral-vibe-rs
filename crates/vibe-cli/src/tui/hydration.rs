@@ -65,6 +65,20 @@ pub(super) fn adopt_hydrated_session(
     };
     replacement.resize(state.viewport.0, state.viewport.1);
     runtime.session_id.clone_from(&session_id);
+    // Reference `resume` and `_reset_session` rebind the loop's parent, which
+    // every later event's census reads: what the adopted session recorded.
+    if let Some(telemetry) = runtime.telemetry.as_ref() {
+        let parent = runtime
+            .workspace
+            .session_store()
+            .open(&session_id)
+            .ok()
+            .and_then(|session| session.metadata.parent_session_id);
+        telemetry
+            .context()
+            .session_parents
+            .bind(&session_id, parent);
+    }
     if let Ok(mut audio_session_id) = runtime.audio_session_id.lock() {
         audio_session_id.clone_from(&session_id);
     }

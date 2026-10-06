@@ -45,7 +45,7 @@ use super::shell::{finish_shell, interrupt_shell};
 use super::state::{
     EntrySource, EntryStatus, ServerEvent, TranscriptEntry, TranscriptKind, TuiState,
 };
-use super::telemetry::{report_session_opened, report_startup};
+use super::telemetry::{refresh_account_when_ready, report_session_opened, report_startup};
 use super::terminal::{CrosstermOps, TerminalGuard};
 use super::turn::{
     ActiveTurn, CancellationPhase, drain_updates, finish_active, request_active_turn_interrupt,
@@ -111,6 +111,8 @@ struct Session {
     /// settles and the second where the first frame has been drawn.
     session_reported: bool,
     startup_reported: bool,
+    /// The plan title the post-ready account read answers, once it lands.
+    startup_account: Option<tokio::sync::oneshot::Receiver<Option<String>>>,
 }
 
 impl Session {
@@ -143,6 +145,21 @@ impl Session {
         {
             self.session_reported = true;
             report_session_opened(runtime, &self.working_directory, &self.arguments);
+            self.startup_account = refresh_account_when_ready(runtime);
+        }
+        if let (Some(runtime), Some(pending)) =
+            (self.runtime.as_mut(), self.startup_account.as_mut())
+        {
+            match pending.try_recv() {
+                Ok(plan) => {
+                    runtime.banner.plan = plan;
+                    self.startup_account = None;
+                }
+                Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
+                    self.startup_account = None;
+                }
+                Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {}
+            }
         }
         if let Some(runtime) = self.runtime.as_mut() {
             while let Some(event) = runtime.voice.try_next_event() {
@@ -171,6 +188,11 @@ impl Session {
             &mut self.controls,
         );
         drain_callback_requests(self.runtime.as_mut(), &mut self.state, &mut self.controls);
+        super::turn::report_slow_interrupt(
+            self.runtime.as_ref(),
+            self.active.as_mut(),
+            &mut self.state,
+        );
         finish_active(
             &mut self.state,
             &mut self.controls,
@@ -298,7 +320,11 @@ impl Session {
             && !self.startup_reported
         {
             self.startup_reported = true;
-            report_startup(runtime);
+            report_startup(
+                runtime,
+                &self.arguments,
+                Some(crate::since_process_start_ms()),
+            );
         }
         Ok(())
     }
@@ -547,6 +573,7 @@ pub async fn run_interactive(
         deferred_enter: None,
         session_reported: false,
         startup_reported: false,
+        startup_account: None,
     };
 
     let mut events = EventStream::new();

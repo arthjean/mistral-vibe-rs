@@ -12,7 +12,13 @@ use vibe_protocol::{
     CallbackKind, ClientCapabilities, ClientEntrypoint, ClientInfo, TerminalEmulator,
 };
 
+use vibe_core::telemetry::LaunchContext;
+
 use crate::agent::AcpAgent;
+
+/// What the session's client descriptor names when the editor declared none.
+const ACP_CLIENT_NAME: &str = "vibe_acp_client";
+const ACP_CLIENT_VERSION: &str = "unknown";
 use crate::client_tools::declared_client_tools;
 use crate::protocol::AcpError;
 use crate::session::AcpHarness;
@@ -25,12 +31,31 @@ where
     /// resolves none.
     fn session_experiments(&self, service: &HeadlessService<D>) -> Option<Arc<SessionExperiments>> {
         let experiments = self.experiments.as_ref()?;
-        Some(Arc::new(SessionExperiments::new(
-            &service.workspace_service(),
-            Arc::clone(&experiments.credentials),
-            Some(experiments.launch.clone()),
-            experiments.exposures.clone(),
-        )))
+        // Reference `_build_launch_context_from_services`: every session reports
+        // the client descriptor the app server was handed, which for an editor
+        // names the editor rather than this adapter.
+        let client_info = self.lock_state().ok()?.client_info.clone();
+        let launch = LaunchContext {
+            client_name: client_info
+                .as_ref()
+                .map_or_else(|| ACP_CLIENT_NAME.to_owned(), |info| info.name.clone()),
+            client_version: client_info.as_ref().map_or_else(
+                || ACP_CLIENT_VERSION.to_owned(),
+                |info| info.version.clone(),
+            ),
+            terminal_emulator: Some("unknown".to_owned()),
+            ..experiments.launch.clone()
+        };
+        experiments.declared_launch.declare(launch.clone());
+        Some(Arc::new(
+            SessionExperiments::new(
+                &service.workspace_service(),
+                Arc::clone(&experiments.credentials),
+                Some(launch),
+                experiments.exposures.clone(),
+            )
+            .reporting_to(Arc::clone(&self.telemetry)),
+        ))
     }
 
     /// One adopted harness, with the enrollment this process resolves attached.
@@ -83,10 +108,11 @@ where
                 ClientInfo {
                     name: client_info
                         .as_ref()
-                        .map_or_else(|| "vibe_acp_client".to_owned(), |info| info.name.clone()),
-                    version: client_info
-                        .as_ref()
-                        .map_or_else(|| "unknown".to_owned(), |info| info.version.clone()),
+                        .map_or_else(|| ACP_CLIENT_NAME.to_owned(), |info| info.name.clone()),
+                    version: client_info.as_ref().map_or_else(
+                        || ACP_CLIENT_VERSION.to_owned(),
+                        |info| info.version.clone(),
+                    ),
                     title: client_info.and_then(|info| info.title),
                     entrypoint: ClientEntrypoint::Acp,
                     terminal_emulator: TerminalEmulator::Unknown,

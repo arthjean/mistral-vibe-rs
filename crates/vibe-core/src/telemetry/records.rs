@@ -68,6 +68,29 @@ impl TelemetryApprovalType {
     }
 }
 
+/// Reference `ApprovalSource`: what settled the permission gate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TelemetryApprovalSource {
+    Config,
+    Smart,
+    User,
+    Bypass,
+    Never,
+}
+
+impl TelemetryApprovalSource {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Config => "config",
+            Self::Smart => "smart",
+            Self::User => "user",
+            Self::Bypass => "bypass",
+            Self::Never => "never",
+        }
+    }
+}
+
 /// What one tool call ended as. Reference `_handle_tool_response`'s three
 /// statuses: a call the operator declined is `skipped`, never `cancelled`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -284,12 +307,71 @@ pub struct NewSession {
 const UNKNOWN_ENTRYPOINT: &str = "unknown";
 
 /// Reference `_send_startup_telemetry_once`: three durations, each null when
-/// its measurement never happened.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+/// its measurement never happened, and how the launch was asked to start.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Startup {
     pub first_frame_duration_ms: Option<u64>,
     pub agent_ready_duration_ms: Option<u64>,
     pub session_init_duration_ms: Option<u64>,
+    pub has_initial_prompt: bool,
+    pub teleport_on_start: bool,
+    pub show_resume_picker: bool,
+    pub is_resuming_session: bool,
+    pub prompt_for_workspace_trust: bool,
+    /// Whether the bytecode cache was rebuilt by this launch. A compiled
+    /// binary has none, which is the reference's own null for a frozen build.
+    pub is_cold_start: Option<bool>,
+    /// The `config/read` answer's `harness_selection_source`.
+    pub harness_selection_source: Option<String>,
+}
+
+/// The session a compaction ran in, which both compaction events name
+/// explicitly. Reference `send_auto_compact_triggered` and
+/// `send_compaction_failed` write the parent beside the session whenever a
+/// session is passed, as null for a session that has none.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompactedSession {
+    pub parent_session_id: Option<String>,
+}
+
+impl CompactedSession {
+    fn report(
+        session: Option<&Self>,
+        attributes: &mut TelemetryAttributes,
+    ) -> Result<(), TelemetryError> {
+        if let Some(session) = session {
+            attributes.optional_label(
+                TelemetryField::ParentSessionId,
+                session.parent_session_id.clone(),
+            )?;
+        }
+        Ok(())
+    }
+}
+
+/// Reference `AdminConfigOutcome`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AdminConfigOutcome {
+    Applied,
+    Disabled,
+    NoApiKey,
+    FetchFailed,
+    ParseFailed,
+    ApplyFailed,
+}
+
+impl AdminConfigOutcome {
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Applied => "applied",
+            Self::Disabled => "disabled",
+            Self::NoApiKey => "no_api_key",
+            Self::FetchFailed => "fetch_failed",
+            Self::ParseFailed => "parse_failed",
+            Self::ApplyFailed => "apply_failed",
+        }
+    }
 }
 
 /// Reference `send_request_sent`.
@@ -330,6 +412,8 @@ pub struct ToolCallFinished {
 pub struct ToolDecision {
     pub verdict: TelemetryToolVerdict,
     pub approval_type: TelemetryApprovalType,
+    /// Null on the wire when a gate settled the call without naming a source.
+    pub approval_source: Option<TelemetryApprovalSource>,
 }
 
 /// One answered tool call, as the event stream reports it. Reference
@@ -723,6 +807,13 @@ pub enum TelemetryRecord {
         init_duration_ms: u64,
     },
     Startup(Startup),
+    /// Reference `send_admin_config_applied`: the count travels only with the
+    /// keys an applied layer enforced, and the error flag only with an error.
+    AdminConfigApplied {
+        outcome: AdminConfigOutcome,
+        nb_enforced_fields: Option<u64>,
+        has_error: bool,
+    },
     RequestSent(RequestSent),
     ToolCallFinished(ToolCallFinished),
     AtMentionInserted(AtMentionInserted),
@@ -730,9 +821,11 @@ pub enum TelemetryRecord {
         nb_context_tokens_before: u64,
         auto_compact_threshold: u64,
         status: &'static str,
+        session: Option<CompactedSession>,
     },
     CompactionFailed {
         reason: &'static str,
+        session: Option<CompactedSession>,
     },
     SlashCommandUsed {
         command: String,
@@ -749,6 +842,9 @@ pub enum TelemetryRecord {
     },
     UserCancelledAction {
         action: String,
+        /// `slow` for an interrupt still settling after the hint delay, which
+        /// the reference reports beside the immediate one.
+        outcome: Option<&'static str>,
     },
     VoiceModeToggled {
         enabled: bool,
@@ -814,6 +910,7 @@ impl TelemetryRecord {
             Self::SessionClosed => TelemetryEvent::SessionClosed,
             Self::Ready { .. } => TelemetryEvent::Ready,
             Self::Startup(_) => TelemetryEvent::Startup,
+            Self::AdminConfigApplied { .. } => TelemetryEvent::AdminConfigApplied,
             Self::RequestSent(_) => TelemetryEvent::RequestSent,
             Self::ToolCallFinished(_) => TelemetryEvent::ToolCallFinished,
             Self::AtMentionInserted(_) => TelemetryEvent::AtMentionInserted,
@@ -880,6 +977,7 @@ impl TelemetryRecord {
                             launch.agent_entrypoint.as_str()
                         }),
                     )?
+                    .label(TelemetryField::HostKind, super::TELEMETRY_HOST_KIND)?
                     .label(TelemetryField::Version, VERSION)?
                     .optional_label(
                         TelemetryField::ClientName,
@@ -911,7 +1009,36 @@ impl TelemetryRecord {
                     .optional_count(
                         TelemetryField::SessionInitDurationMs,
                         startup.session_init_duration_ms,
-                    );
+                    )
+                    .flag(TelemetryField::HasInitialPrompt, startup.has_initial_prompt)
+                    .flag(TelemetryField::TeleportOnStart, startup.teleport_on_start)
+                    .flag(TelemetryField::ShowResumePicker, startup.show_resume_picker)
+                    .flag(
+                        TelemetryField::IsResumingSession,
+                        startup.is_resuming_session,
+                    )
+                    .flag(
+                        TelemetryField::PromptForWorkspaceTrust,
+                        startup.prompt_for_workspace_trust,
+                    )
+                    .optional_flag(TelemetryField::IsColdStart, startup.is_cold_start)
+                    .optional_label(
+                        TelemetryField::HarnessSelectionSource,
+                        startup.harness_selection_source.clone(),
+                    )?;
+            }
+            Self::AdminConfigApplied {
+                outcome,
+                nb_enforced_fields,
+                has_error,
+            } => {
+                attributes.label(TelemetryField::Outcome, outcome.label())?;
+                if let Some(count) = nb_enforced_fields {
+                    attributes.count(TelemetryField::NbEnforcedFields, *count);
+                }
+                if *has_error {
+                    attributes.flag(TelemetryField::HasError, true);
+                }
             }
             Self::RequestSent(request) => {
                 attributes
@@ -941,6 +1068,12 @@ impl TelemetryRecord {
                         call.decision
                             .map(|decision| decision.approval_type.label().to_owned()),
                     )?
+                    .optional_label(
+                        TelemetryField::ApprovalSource,
+                        call.decision
+                            .and_then(|decision| decision.approval_source)
+                            .map(|source| source.label().to_owned()),
+                    )?
                     .label(TelemetryField::AgentProfileName, &call.agent_profile_name)?
                     .label(TelemetryField::Model, &call.model)?
                     .count(TelemetryField::NbFilesCreated, call.nb_files_created)
@@ -965,6 +1098,7 @@ impl TelemetryRecord {
                 nb_context_tokens_before,
                 auto_compact_threshold,
                 status,
+                session,
             } => {
                 attributes
                     .count(
@@ -976,9 +1110,11 @@ impl TelemetryRecord {
                         *auto_compact_threshold,
                     )
                     .label(TelemetryField::Status, *status)?;
+                CompactedSession::report(session.as_ref(), &mut attributes)?;
             }
-            Self::CompactionFailed { reason } => {
+            Self::CompactionFailed { reason, session } => {
                 attributes.label(TelemetryField::Reason, *reason)?;
+                CompactedSession::report(session.as_ref(), &mut attributes)?;
             }
             Self::SlashCommandUsed { command, kind } => {
                 attributes
@@ -997,8 +1133,11 @@ impl TelemetryRecord {
                     .label(TelemetryField::SourceSessionId, source_session_id)?
                     .label(TelemetryField::NewSessionId, new_session_id)?;
             }
-            Self::UserCancelledAction { action } => {
+            Self::UserCancelledAction { action, outcome } => {
                 attributes.label(TelemetryField::Action, action)?;
+                if let Some(outcome) = outcome {
+                    attributes.label(TelemetryField::Outcome, *outcome)?;
+                }
             }
             Self::VoiceModeToggled { enabled } => {
                 attributes.flag(TelemetryField::Enabled, *enabled);

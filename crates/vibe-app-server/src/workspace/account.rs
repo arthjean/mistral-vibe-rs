@@ -6,49 +6,60 @@
 
 use std::time::Duration;
 
-use serde::Deserialize;
 use serde_json::{Value, json};
 use toml::Value as TomlValue;
 use vibe_core::config::DotenvValues;
+use vibe_core::whoami::{
+    HttpWhoAmIGateway, WhoAmIFailure, WhoAmIGateway, WhoAmIResult, store_cached_whoami,
+    whoami_cache_path,
+};
 
 use super::WorkspaceService;
 use crate::vocabulary::{AccountActionKind, AccountPlanKind, AccountStatus};
 
-const WHOAMI_PATH: &str = "/api/vibe/whoami";
 const DEFAULT_CONSOLE_BASE_URL: &str = "https://console.mistral.ai";
 /// Chat plan names the reference sells as Pro.
 const PAID_CHAT_PLANS: [&str; 3] = ["INDIVIDUAL", "EDU", "TEAM"];
 /// The reference's HTTP client keeps httpx's five-second default.
 const WHOAMI_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Reference `WhoAmIResult`, reduced to the fields the view reads.
-#[derive(Debug, Deserialize)]
-struct WhoAmI {
-    plan_type: String,
-    plan_name: String,
-    #[serde(default)]
-    prompt_switching_to_pro_plan: bool,
-}
-
-enum Gateway {
-    Plan(WhoAmI),
-    Unauthorized,
-    Unavailable,
+/// What one account read learned that the session's telemetry reconciles
+/// with. Reference `AccountController.read` calls the agent loop back with it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AccountLookup {
+    /// No Mistral provider is configured: the plan is the sentinel.
+    NoMistralProvider,
+    /// The console answered a plan for this key.
+    Plan {
+        console: String,
+        key: String,
+        result: WhoAmIResult,
+    },
+    /// The console refused this key.
+    Unauthorized { key: String },
+    /// Nothing to reconcile: a missing key, an unreachable console, or an
+    /// unreadable configuration.
+    Nothing,
 }
 
 impl WorkspaceService {
     /// The account as `AccountView` declares it.
     pub async fn read_account(&self) -> Value {
+        self.read_account_lookup().await.0
+    }
+
+    /// The account, and what the read learned for the session's telemetry.
+    pub async fn read_account_lookup(&self) -> (Value, AccountLookup) {
         let upgrade = self.account_action(AccountActionKind::UpgradeToPro);
         let unavailable = view(AccountStatus::Unavailable, &upgrade);
         let Ok(snapshot) = self.config.load() else {
-            return unavailable;
+            return (unavailable, AccountLookup::Nothing);
         };
         // Reference `get_mistral_provider_and_api_key`: the active provider
         // when it is Mistral, else the first Mistral provider configured. A
         // provider that declares no backend is a generic one.
         let Some(provider) = vibe_core::telemetry::mistral_provider(&snapshot.effective) else {
-            return unavailable;
+            return (unavailable, AccountLookup::NoMistralProvider);
         };
         let variable = provider
             .get("api_key_env_var")
@@ -65,7 +76,7 @@ impl WorkspaceService {
             } else {
                 AccountStatus::Unavailable
             };
-            return view(status, &upgrade);
+            return (view(status, &upgrade), AccountLookup::Nothing);
         };
         let console = snapshot
             .effective
@@ -73,26 +84,41 @@ impl WorkspaceService {
             .and_then(TomlValue::as_str)
             .unwrap_or(DEFAULT_CONSOLE_BASE_URL)
             .to_owned();
-        match fetch_whoami(&console, &key).await {
-            Gateway::Unauthorized => {
+        let Some(gateway) = HttpWhoAmIGateway::production() else {
+            return (unavailable, AccountLookup::Nothing);
+        };
+        match gateway.read(&console, &key, Some(WHOAMI_TIMEOUT)).await {
+            Err(WhoAmIFailure::Unauthorized) => {
                 let mut account = view(AccountStatus::Unauthorized, &upgrade);
                 account["planOffer"] = upgrade.clone();
                 account["rateLimitAction"] = upgrade;
-                account
+                (account, AccountLookup::Unauthorized { key })
             }
-            Gateway::Unavailable => unavailable,
-            Gateway::Plan(whoami) => self.plan_view(&whoami).unwrap_or(unavailable),
+            Err(WhoAmIFailure::Unavailable) => (unavailable, AccountLookup::Nothing),
+            Ok(whoami) => {
+                // Reference warms the cross-session cache with every live
+                // answer, so the next session starts from it.
+                store_cached_whoami(&whoami_cache_path(self.vibe_home()), &key, &whoami);
+                let account = self.plan_view(&whoami).unwrap_or(unavailable);
+                (
+                    account,
+                    AccountLookup::Plan {
+                        console,
+                        key,
+                        result: whoami,
+                    },
+                )
+            }
         }
     }
 
     /// Reference `_Plan` read into the `ready` view, or `None` for a plan
     /// kind the reference's model rejects.
-    fn plan_view(&self, whoami: &WhoAmI) -> Option<Value> {
-        let kind = match whoami.plan_type.trim().to_lowercase().as_str() {
-            "api" => AccountPlanKind::Api,
-            "chat" => AccountPlanKind::Chat,
-            "mistral_code" => AccountPlanKind::MistralCode,
-            _ => return None,
+    fn plan_view(&self, whoami: &WhoAmIResult) -> Option<Value> {
+        let kind = match whoami.plan_type {
+            vibe_core::whoami::AccountPlanKind::Api => AccountPlanKind::Api,
+            vibe_core::whoami::AccountPlanKind::Chat => AccountPlanKind::Chat,
+            vibe_core::whoami::AccountPlanKind::MistralCode => AccountPlanKind::MistralCode,
         };
         let name = whoami.plan_name.trim();
         let normalized = name.to_uppercase();
@@ -151,29 +177,6 @@ fn view(status: AccountStatus, teleport_action: &Value) -> Value {
         "teleportEligible": false,
         "teleportAction": teleport_action,
     })
-}
-
-/// Reference `HttpAccountGateway.read`: a rejected key is `Unauthorized`, and
-/// anything else short of a well-formed plan is `Unavailable`.
-async fn fetch_whoami(console: &str, key: &str) -> Gateway {
-    let Ok(client) = reqwest::Client::builder().timeout(WHOAMI_TIMEOUT).build() else {
-        return Gateway::Unavailable;
-    };
-    let url = format!("{}{WHOAMI_PATH}", console.trim_end_matches('/'));
-    let Ok(response) = client.get(url).bearer_auth(key).send().await else {
-        return Gateway::Unavailable;
-    };
-    let status = response.status();
-    if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
-        return Gateway::Unauthorized;
-    }
-    if !status.is_success() {
-        return Gateway::Unavailable;
-    }
-    response
-        .json::<WhoAmI>()
-        .await
-        .map_or(Gateway::Unavailable, Gateway::Plan)
 }
 
 impl WorkspaceService {

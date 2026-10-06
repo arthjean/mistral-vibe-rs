@@ -27,6 +27,7 @@ use transaction::{
     rollback_prepared, sync_directory, write_journal,
 };
 
+pub mod admin;
 mod document;
 pub mod dotenv;
 mod effective;
@@ -119,6 +120,11 @@ pub enum ConfigLayerKind {
     Environment,
     Runtime,
     Agent,
+    /// What an organization enforces, fetched at session start. Reference
+    /// `AdminConfigLayer`, the highest-priority layer: what it sets shadows
+    /// every other layer, which is the whole enforcement mechanism. Held in
+    /// memory only and fetched again by the next process.
+    Admin,
 }
 
 /// A runtime discovery pass, run once per [`LayeredConfig::load`].
@@ -448,6 +454,9 @@ pub struct LayeredConfig {
     /// the orchestrator's own layer object, and every reader that had already
     /// taken a handle composes with what it wrote.
     experiments: Arc<Mutex<Table>>,
+    /// The document behind [`ConfigLayerKind::Admin`], shared by every clone
+    /// for the same reason the experiment layer is.
+    admin: Arc<Mutex<Table>>,
     runtime: Table,
     agent: Table,
     environment: BTreeMap<String, String>,
@@ -484,6 +493,7 @@ impl LayeredConfig {
             defaults,
             discovery: None,
             experiments: Arc::new(Mutex::new(Table::new())),
+            admin: Arc::new(Mutex::new(Table::new())),
             runtime: Table::new(),
             agent: Table::new(),
             environment: BTreeMap::new(),
@@ -617,6 +627,20 @@ impl LayeredConfig {
     ) -> Self {
         self.set_experiment_variants(variants, prompt_resolves);
         self
+    }
+
+    /// Replaces what [`ConfigLayerKind::Admin`] composes, for every handle
+    /// onto this store, and answers what it held before, so a document that
+    /// fails validation can be put back. Reference
+    /// `AdminConfigLayer.load_managed_toml` and `restore`.
+    pub fn set_admin(&self, values: Table) -> Table {
+        std::mem::replace(
+            &mut *self
+                .admin
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+            values,
+        )
     }
 
     #[must_use]
@@ -771,6 +795,14 @@ impl LayeredConfig {
             ConfigLayer {
                 kind: ConfigLayerKind::Agent,
                 values: self.agent.clone(),
+            },
+            ConfigLayer {
+                kind: ConfigLayerKind::Admin,
+                values: self
+                    .admin
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone(),
             },
         ];
         let mut effective = Table::new();
