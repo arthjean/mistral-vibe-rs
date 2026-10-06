@@ -11,11 +11,16 @@ use serde_json::Value;
 use toml::Table;
 use vibe_app_server::workspace::{WorkspacePaths, WorkspaceService};
 use vibe_core::auth::{
-    AuthState, HttpSignInGateway, KeyringStore, PersistOutcome, RemoveError, SignInAttempt,
-    SignInError, SignInErrorCode, SignInService, SystemSignInRuntime, resolve_active_provider,
+    AuthState, DEFAULT_CONSOLE_BASE_URL, DEFAULT_VIBE_BASE_URL, HttpSignInGateway, KeyringStore,
+    PersistOutcome, ProviderCredentialsRequest, ProviderCredentialsResult, RemoveError,
+    SignInAttempt, SignInError, SignInErrorCode, SignInService, SystemSignInRuntime,
+    resolve_active_provider,
 };
+use vibe_core::whoami::{HttpWhoAmIGateway, resolve_tenant_domains};
 
-use crate::auth::{AcpAuthEnvironment, AuthAttemptFuture, AuthKeyFuture};
+use crate::auth::{
+    AcpAuthEnvironment, AuthAttemptFuture, AuthKeyFuture, ConfiguredBases, TenantDomainsFuture,
+};
 
 /// The production environment: the effective configuration through the
 /// workspace service, the OS keyring, the global dotenv, and the HTTP sign-in
@@ -69,6 +74,17 @@ impl ProductionAuthEnvironment {
         )
     }
 
+    /// The raw effective configuration, `None` when it cannot be read.
+    /// The raw snapshot is load-bearing: the public view redacts
+    /// `api_key_env_var` as a sensitive key, and a redacted name cannot
+    /// address a credential.
+    fn effective_config(&self) -> Option<Value> {
+        self.workspace()
+            .ok()
+            .and_then(|service| service.layered_config().load().ok())
+            .and_then(|snapshot| serde_json::to_value(snapshot.effective).ok())
+    }
+
     fn environ(&self) -> BTreeMap<String, String> {
         let mut environ: BTreeMap<String, String> = std::env::vars().collect();
         if let Ok(overlay) = self.overlay.lock() {
@@ -99,14 +115,7 @@ impl AcpAuthEnvironment for ProductionAuthEnvironment {
     fn load_provider(&self) -> Table {
         // Reference `OnboardingContext.load` falls back to the shipped
         // defaults rather than failing when the configuration cannot be read.
-        // The raw effective snapshot is load-bearing here: the public view
-        // redacts `api_key_env_var` as a sensitive key, and a redacted name
-        // cannot address a credential.
-        let document = self
-            .workspace()
-            .ok()
-            .and_then(|service| service.layered_config().load().ok())
-            .and_then(|snapshot| serde_json::to_value(snapshot.effective).ok());
+        let document = self.effective_config();
         let field = |name: &str| document.as_ref().and_then(|document| document.get(name));
         resolve_active_provider(
             field("active_model").and_then(Value::as_str),
@@ -152,10 +161,61 @@ impl AcpAuthEnvironment for ProductionAuthEnvironment {
         vibe_core::auth::remove_api_key(env_key, &mut overlay, &self.env_file, &self.store)
     }
 
-    fn persist_provider(&self, provider: &Table) -> bool {
-        self.workspace()
-            .and_then(|service| service.persist_provider(provider))
-            .is_ok()
+    fn load_bases(&self) -> ConfiguredBases {
+        let document = self.effective_config();
+        let field = |name: &str, default: &str| {
+            document
+                .as_ref()
+                .and_then(|document| document.get(name))
+                .and_then(Value::as_str)
+                .filter(|value| !value.is_empty())
+                .unwrap_or(default)
+                .to_owned()
+        };
+        ConfiguredBases {
+            console_base_url: field("console_base_url", DEFAULT_CONSOLE_BASE_URL),
+            vibe_base_url: field("vibe_base_url", DEFAULT_VIBE_BASE_URL),
+        }
+    }
+
+    fn persist_provider_credentials(
+        &self,
+        request: &ProviderCredentialsRequest,
+    ) -> ProviderCredentialsResult {
+        match self.workspace() {
+            Ok(service) => {
+                vibe_core::auth::persist_provider_credentials(&service.layered_config(), request)
+            }
+            Err(_) => ProviderCredentialsResult {
+                provider: false,
+                console_base_url: request.console_base_url.as_ref().map(|_| false),
+                vibe_base_url: request.vibe_base_url.as_ref().map(|_| false),
+            },
+        }
+    }
+
+    fn resolve_tenant_domains<'a>(
+        &'a self,
+        provider: Table,
+        console_base_url: &'a str,
+        api_key: &'a str,
+        vibe_base_url: &'a str,
+    ) -> TenantDomainsFuture<'a> {
+        Box::pin(async move {
+            match HttpWhoAmIGateway::production() {
+                Some(gateway) => {
+                    resolve_tenant_domains(
+                        &gateway,
+                        provider,
+                        console_base_url,
+                        api_key,
+                        vibe_base_url,
+                    )
+                    .await
+                }
+                None => (provider, vibe_base_url.to_owned()),
+            }
+        })
     }
 
     fn browser_authenticate<'a>(&'a self, provider: &'a Table) -> AuthKeyFuture<'a> {

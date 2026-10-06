@@ -14,11 +14,13 @@ use std::fmt::Write as _;
 
 use toml::{Table, Value};
 use vibe_core::auth::{
-    DEFAULT_BROWSER_AUTH_API_BASE_URL, DEFAULT_BROWSER_AUTH_BASE_URL, PersistOutcome,
-    SignInErrorCode, SignInStatus,
+    DEFAULT_BROWSER_AUTH_API_BASE_URL, DEFAULT_BROWSER_AUTH_BASE_URL, DEFAULT_CONSOLE_BASE_URL,
+    DEFAULT_MISTRAL_API_BASE, DEFAULT_VIBE_BASE_URL, PersistOutcome, ProviderCredentialsRequest,
+    ProviderCredentialsResult, SignInErrorCode, SignInStatus, apply_browser_auth_urls,
+    browser_auth_account_base, same_provider,
 };
 
-use super::context::{self, DomainFeedback, OnboardingContext};
+use super::context::{self, ApiBaseFeedback, DomainFeedback, FeedbackLine, OnboardingContext};
 use crate::tui::themes::sorted_theme_names;
 
 /// Reference `SUCCESS_EXIT_DELAY_SECONDS`: how long the success state holds
@@ -98,9 +100,9 @@ impl OnboardingOutcome {
     }
 }
 
-/// The two persistence primitives the flow reaches outside itself, which is
-/// exactly what the reference corpus records: each key save with its
-/// resolved variable, and each provider write.
+/// What the flow reaches outside itself, which is exactly what the reference
+/// corpus records: each key save with its resolved variable, each tenant
+/// lookup, and each batch of configuration writes.
 pub trait OnboardingPorts {
     /// Persists the API key for the resolved provider. Reference
     /// `persist_api_key`; the outcome vocabulary is the reference's.
@@ -112,9 +114,22 @@ pub trait OnboardingPorts {
         custom_domain: bool,
     ) -> PersistOutcome;
 
-    /// Upserts the provider entry into the configuration. Reference
-    /// `persist_provider_to_config`: answers whether the write landed.
-    fn persist_provider(&mut self, provider: &Table) -> bool;
+    /// Writes the provider entry and any moved base URL. Reference
+    /// `persist_provider_credentials`: answers what landed, field by field.
+    fn persist_provider_credentials(
+        &mut self,
+        request: &ProviderCredentialsRequest,
+    ) -> ProviderCredentialsResult;
+
+    /// Asks the console which API and chat hosts its tenant uses. Reference
+    /// `resolve_tenant_domains`: the inputs come back unchanged on any failure.
+    fn resolve_tenant_domains(
+        &mut self,
+        provider: Table,
+        console_base_url: &str,
+        api_key: &str,
+        vibe_base_url: &str,
+    ) -> (Table, String);
 }
 
 /// A key press the driver already normalized.
@@ -126,6 +141,10 @@ pub enum KeyPress {
     Up,
     Down,
     Backspace,
+    /// Moves the focus to the next input, wrapping.
+    Tab,
+    /// Moves the focus to the previous input, wrapping.
+    BackTab,
     Char(char),
 }
 
@@ -239,6 +258,33 @@ const TARGET_OTHER: usize = 1;
 /// is the manual key entry.
 const METHOD_BROWSER: usize = 0;
 
+/// The two inputs of the custom-domain screen, in focus order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DomainInput {
+    /// The console domain, required.
+    Domain,
+    /// The browser-auth API base of a split-horizon deployment, optional.
+    ApiBase,
+}
+
+impl DomainInput {
+    /// The widget id the reference gives this input.
+    #[must_use]
+    pub const fn id(self) -> &'static str {
+        match self {
+            Self::Domain => "domain",
+            Self::ApiBase => "api-base",
+        }
+    }
+
+    const fn other(self) -> Self {
+        match self {
+            Self::Domain => Self::ApiBase,
+            Self::ApiBase => Self::Domain,
+        }
+    }
+}
+
 /// The machine. One instance is one run of the flow.
 pub struct OnboardingModel {
     context: OnboardingContext,
@@ -252,8 +298,18 @@ pub struct OnboardingModel {
     method_index: usize,
     target_index: usize,
     override_armed: bool,
+    domain_focus: DomainInput,
     domain_value: String,
-    domain_feedback_visible: bool,
+    api_base_value: String,
+    domain_box: Option<DomainFeedback>,
+    api_base_box: Option<ApiBaseFeedback>,
+    feedback_line: Option<FeedbackLine>,
+    /// Reference `_suppress_domain_feedback`: the next change of the input
+    /// is the screen's own reset, not the operator's, and renders nothing.
+    suppress_domain_feedback: bool,
+    suppress_api_base_feedback: bool,
+    console_base_url: String,
+    vibe_base_url: String,
     key_value: String,
     key_feedback: Option<bool>,
     attempt_number: u64,
@@ -272,6 +328,8 @@ impl OnboardingModel {
         Self {
             provider: context.provider.clone(),
             supports_browser: context.supports_browser_sign_in(),
+            console_base_url: context.console_base_url.clone(),
+            vibe_base_url: context.vibe_base_url.clone(),
             context,
             screen: ScreenId::Welcome,
             outcome: None,
@@ -281,8 +339,14 @@ impl OnboardingModel {
             method_index: METHOD_BROWSER,
             target_index: TARGET_MISTRAL,
             override_armed: false,
+            domain_focus: DomainInput::Domain,
             domain_value: String::new(),
-            domain_feedback_visible: false,
+            api_base_value: String::new(),
+            domain_box: None,
+            api_base_box: None,
+            feedback_line: None,
+            suppress_domain_feedback: false,
+            suppress_api_base_feedback: false,
             key_value: String::new(),
             key_feedback: None,
             attempt_number: 0,
@@ -388,9 +452,22 @@ impl OnboardingModel {
         &self.context.provider
     }
 
+    /// The chat base the flow started from, which the key screen links to.
     #[must_use]
     pub fn vibe_base_url(&self) -> &str {
         &self.context.vibe_base_url
+    }
+
+    /// The console base account calls go to, as the flow has moved it.
+    #[must_use]
+    pub fn working_console_base_url(&self) -> &str {
+        &self.console_base_url
+    }
+
+    /// The chat base, as the flow has moved it.
+    #[must_use]
+    pub fn working_vibe_base_url(&self) -> &str {
+        &self.vibe_base_url
     }
 
     #[must_use]
@@ -423,17 +500,45 @@ impl OnboardingModel {
         &self.domain_value
     }
 
-    /// The validation classes the domain input currently shows, `None` while
-    /// feedback is suppressed after a reset.
     #[must_use]
-    pub fn domain_feedback(&self) -> Option<DomainFeedback> {
-        self.domain_feedback_visible
-            .then(|| context::domain_feedback(&self.domain_value))
+    pub fn api_base_value(&self) -> &str {
+        &self.api_base_value
+    }
+
+    /// The custom-domain input holding the focus.
+    #[must_use]
+    pub const fn domain_focus(&self) -> DomainInput {
+        self.domain_focus
+    }
+
+    /// The validation classes the domain box currently carries, `None` until
+    /// a change or a submission renders them.
+    #[must_use]
+    pub const fn domain_feedback(&self) -> Option<DomainFeedback> {
+        self.domain_box
+    }
+
+    /// The validation classes the API base box currently carries.
+    #[must_use]
+    pub const fn api_base_feedback(&self) -> Option<ApiBaseFeedback> {
+        self.api_base_box
+    }
+
+    /// What the shared feedback line currently says, and for which input.
+    #[must_use]
+    pub const fn feedback_line(&self) -> Option<FeedbackLine> {
+        self.feedback_line
     }
 
     #[must_use]
     pub const fn sign_in_view(&self) -> &SignInViewState {
         &self.sign_in
+    }
+
+    /// The working provider's origin-rewrite flag, `false` when absent.
+    #[must_use]
+    pub fn provider_allows_origin_rewrite(&self) -> bool {
+        vibe_core::auth::allows_origin_rewrite(&self.provider)
     }
 
     /// The applied browser-auth URLs, empty strings reading as absent, which
@@ -600,13 +705,20 @@ impl OnboardingModel {
             },
             ScreenId::CustomDomain => match key {
                 KeyPress::Char(character) => {
-                    self.domain_value.push(character);
-                    self.domain_feedback_visible = true;
+                    let input = self.domain_focus;
+                    self.input_value_mut(input).push(character);
+                    self.input_changed(input);
                     Vec::new()
                 }
                 KeyPress::Backspace => {
-                    self.domain_value.pop();
-                    self.domain_feedback_visible = true;
+                    let input = self.domain_focus;
+                    if self.input_value_mut(input).pop().is_some() {
+                        self.input_changed(input);
+                    }
+                    Vec::new()
+                }
+                KeyPress::Tab | KeyPress::BackTab => {
+                    self.domain_focus = self.domain_focus.other();
                     Vec::new()
                 }
                 KeyPress::Enter => self.submit_domain(),
@@ -681,17 +793,25 @@ impl OnboardingModel {
     // Screen actions
     // ----------------------------------------------------------------------
 
+    /// The configured console the default target would overwrite: the
+    /// custom domain, or a split-horizon API base on the default console.
+    #[must_use]
+    pub fn configured_override_target(&self) -> Option<String> {
+        context::configured_custom_domain(&self.context.provider)
+            .map(str::to_owned)
+            .or_else(|| context::configured_custom_api_base(&self.context.provider))
+    }
+
     /// Reference `SignInTargetScreen.action_select`: the other option opens
     /// the domain screen, and the default target overwrites a configured
-    /// custom domain only after a second confirmation.
+    /// custom domain or split-horizon API base only after a second
+    /// confirmation.
     fn select_sign_in_target(&mut self) -> Vec<ModelEffect> {
         if self.target_index == TARGET_OTHER {
             self.override_armed = false;
             return self.switch(ScreenId::CustomDomain);
         }
-        if context::configured_custom_domain(&self.context.provider).is_some()
-            && !self.override_armed
-        {
+        if self.configured_override_target().is_some() && !self.override_armed {
             self.override_armed = true;
             return Vec::new();
         }
@@ -699,36 +819,132 @@ impl OnboardingModel {
         self.switch(ScreenId::BrowserSignIn)
     }
 
-    /// Reference `CustomDomainScreen.on_input_submitted`: an invalid value
-    /// keeps the screen and shows the failure; a valid one derives the URLs
-    /// and moves on to the sign-in.
+    /// Reference `CustomDomainScreen.on_input_submitted`, from either input:
+    /// an invalid domain, or a non-blank invalid API base, keeps the screen
+    /// and shows the failure; otherwise the URLs are derived and the sign-in
+    /// starts.
     fn submit_domain(&mut self) -> Vec<ModelEffect> {
         let domain = self.domain_value.trim().to_owned();
         if !context::is_valid_custom_domain(&domain) {
-            self.domain_feedback_visible = true;
+            self.render_domain_feedback(&domain);
             return Vec::new();
         }
-        self.apply_custom_domain(&domain);
+        let api_base = self.api_base_value.trim().to_owned();
+        if !api_base.is_empty() && !context::is_valid_custom_domain(&api_base) {
+            self.render_api_base_feedback(&api_base);
+            return Vec::new();
+        }
+        self.apply_custom_domain(&domain, (!api_base.is_empty()).then_some(api_base.as_str()));
         self.switch(ScreenId::BrowserSignIn)
     }
 
-    fn apply_custom_domain(&mut self, domain: &str) {
-        let (base, api) = context::resolve_browser_auth_urls(domain);
-        self.provider
-            .insert("browser_auth_base_url".to_owned(), Value::String(base));
-        self.provider
-            .insert("browser_auth_api_base_url".to_owned(), Value::String(api));
+    /// Reference `OnboardingApp.apply_custom_domain`: both browser-auth URLs,
+    /// the origin rewrite a split between them needs, and the console account
+    /// calls go to, which on a split-horizon deployment is the API origin.
+    fn apply_custom_domain(&mut self, domain: &str, api_base_url: Option<&str>) {
+        let (base, api) = context::resolve_browser_auth_urls(domain, api_base_url);
+        apply_browser_auth_urls(&mut self.provider, &base, &api);
+        self.console_base_url = browser_auth_account_base(&base, Some(&api));
     }
 
+    /// Reference `OnboardingApp.apply_mistral_default_domain`: the shipped
+    /// browser-auth URLs and API base, no rewrite, and the public console and
+    /// chat bases.
     fn apply_mistral_default_domain(&mut self) {
+        let field = |value: &str| Value::String(value.to_owned());
         self.provider.insert(
             "browser_auth_base_url".to_owned(),
-            Value::String(DEFAULT_BROWSER_AUTH_BASE_URL.to_owned()),
+            field(DEFAULT_BROWSER_AUTH_BASE_URL),
         );
         self.provider.insert(
             "browser_auth_api_base_url".to_owned(),
-            Value::String(DEFAULT_BROWSER_AUTH_API_BASE_URL.to_owned()),
+            field(DEFAULT_BROWSER_AUTH_API_BASE_URL),
         );
+        self.provider.insert(
+            "browser_auth_allow_origin_rewrite".to_owned(),
+            Value::Boolean(false),
+        );
+        self.provider
+            .insert("api_base".to_owned(), field(DEFAULT_MISTRAL_API_BASE));
+        DEFAULT_CONSOLE_BASE_URL.clone_into(&mut self.console_base_url);
+        DEFAULT_VIBE_BASE_URL.clone_into(&mut self.vibe_base_url);
+    }
+
+    /// Replaces a custom-domain input's whole value at once, as assigning a
+    /// widget's value does: one change when the value differs, none when it
+    /// does not. Typing raises one change per keystroke instead.
+    pub fn set_input_value(&mut self, input: DomainInput, value: &str) {
+        if self.screen != ScreenId::CustomDomain || self.input_value_mut(input) == value {
+            return;
+        }
+        value.clone_into(self.input_value_mut(input));
+        self.input_changed(input);
+    }
+
+    fn input_value_mut(&mut self, input: DomainInput) -> &mut String {
+        match input {
+            DomainInput::Domain => &mut self.domain_value,
+            DomainInput::ApiBase => &mut self.api_base_value,
+        }
+    }
+
+    /// Reference `CustomDomainScreen.on_input_changed`: a change the screen's
+    /// reset caused renders nothing; any other renders the changed input.
+    fn input_changed(&mut self, input: DomainInput) {
+        match input {
+            DomainInput::Domain => {
+                if std::mem::take(&mut self.suppress_domain_feedback) {
+                    return;
+                }
+                let value = self.domain_value.clone();
+                self.render_domain_feedback(&value);
+            }
+            DomainInput::ApiBase => {
+                if std::mem::take(&mut self.suppress_api_base_feedback) {
+                    return;
+                }
+                let value = self.api_base_value.clone();
+                self.render_api_base_feedback(&value);
+            }
+        }
+    }
+
+    /// Reference `_render_domain_feedback`: the shared line and the domain
+    /// box speak for the domain; the API base box keeps its classes.
+    fn render_domain_feedback(&mut self, value: &str) {
+        let feedback = context::domain_feedback(value);
+        self.domain_box = Some(feedback);
+        self.feedback_line = Some(FeedbackLine::Domain(feedback));
+    }
+
+    /// Reference `_render_api_base_feedback`: a blank value clears the shared
+    /// line and the API base box.
+    fn render_api_base_feedback(&mut self, value: &str) {
+        let feedback = context::api_base_feedback(value);
+        self.api_base_box = feedback;
+        self.feedback_line = feedback.map(FeedbackLine::ApiBase);
+    }
+
+    /// Reference `CustomDomainScreen._reset_input`, run on every entry: both
+    /// inputs take the configured values, the domain input takes the focus,
+    /// and every class is cleared. Setting an input to a different value
+    /// raises a change the screen swallows; setting it to the value it
+    /// already holds raises none, so the swallow stays armed for the next
+    /// keystroke.
+    fn reset_custom_domain(&mut self) {
+        let domain_seed = context::configured_custom_domain(&self.context.provider)
+            .unwrap_or_default()
+            .to_owned();
+        let api_seed =
+            context::configured_custom_api_base(&self.context.provider).unwrap_or_default();
+        self.suppress_domain_feedback = !domain_seed.is_empty() && domain_seed == self.domain_value;
+        self.suppress_api_base_feedback = !api_seed.is_empty() && api_seed == self.api_base_value;
+        self.domain_value = domain_seed;
+        self.api_base_value = api_seed;
+        self.domain_focus = DomainInput::Domain;
+        self.domain_box = None;
+        self.api_base_box = None;
+        self.feedback_line = None;
     }
 
     fn apply_sign_in_status(&mut self, status: SignInStatus) {
@@ -744,8 +960,10 @@ impl OnboardingModel {
     }
 
     /// Reference `OnboardingApp.persist_credentials`: the key goes to the
-    /// resolved provider, and a modified provider entry follows it into the
-    /// configuration only after the key landed.
+    /// resolved provider first. When the flow moved the provider or either
+    /// base URL, a custom console is asked for its tenant's hosts, then the
+    /// provider entry and every moved base URL are written in one batch, the
+    /// first failed field naming the error.
     fn persist_credentials(
         &mut self,
         api_key: &str,
@@ -763,17 +981,46 @@ impl OnboardingModel {
             .and_then(Value::as_str)
             .is_some_and(|base| !base.is_empty() && base != DEFAULT_BROWSER_AUTH_BASE_URL);
         match ports.persist_api_key(&env_key, &resolved, api_key, custom_domain) {
-            PersistOutcome::Completed => {
-                if self.provider != self.context.provider && !ports.persist_provider(&self.provider)
-                {
-                    return OnboardingOutcome::ProviderConfigError {
-                        detail: "the provider entry could not be written".to_owned(),
-                    };
-                }
-                OnboardingOutcome::Completed
-            }
+            PersistOutcome::Completed => self.persist_provider_credentials(api_key, ports),
             PersistOutcome::EnvVarError { detail } => OnboardingOutcome::EnvVarError { detail },
             PersistOutcome::SaveError { detail } => OnboardingOutcome::SaveError { detail },
+        }
+    }
+
+    fn persist_provider_credentials(
+        &mut self,
+        api_key: &str,
+        ports: &mut dyn OnboardingPorts,
+    ) -> OnboardingOutcome {
+        if same_provider(&self.provider, &self.context.provider)
+            && self.console_base_url == self.context.console_base_url
+            && self.vibe_base_url == self.context.vibe_base_url
+        {
+            return OnboardingOutcome::Completed;
+        }
+        // The public console has no tenant to discover.
+        if self.console_base_url != DEFAULT_CONSOLE_BASE_URL {
+            let (provider, vibe_base_url) = ports.resolve_tenant_domains(
+                self.provider.clone(),
+                &self.console_base_url,
+                api_key,
+                &self.vibe_base_url,
+            );
+            self.provider = provider;
+            self.vibe_base_url = vibe_base_url;
+        }
+        let moved =
+            |working: &str, configured: &str| (working != configured).then(|| working.to_owned());
+        let request = ProviderCredentialsRequest {
+            provider: self.provider.clone(),
+            console_base_url: moved(&self.console_base_url, &self.context.console_base_url),
+            vibe_base_url: moved(&self.vibe_base_url, &self.context.vibe_base_url),
+        };
+        match ports.persist_provider_credentials(&request).first_failure() {
+            Some(field) => OnboardingOutcome::ProviderConfigError {
+                detail: format!("failed to persist {field}"),
+            },
+            None => OnboardingOutcome::Completed,
         }
     }
 
@@ -791,11 +1038,7 @@ impl OnboardingModel {
                 Vec::new()
             }
             ScreenId::CustomDomain => {
-                let seed = context::configured_custom_domain(&self.context.provider)
-                    .unwrap_or_default()
-                    .to_owned();
-                self.domain_value = seed;
-                self.domain_feedback_visible = false;
+                self.reset_custom_domain();
                 Vec::new()
             }
             ScreenId::BrowserSignIn => self.start_attempt(),

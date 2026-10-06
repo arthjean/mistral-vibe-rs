@@ -6,12 +6,15 @@
 use std::path::Path;
 
 use toml::{Table, Value};
-use vibe_core::auth::{PersistOutcome, SignInStatus};
+use vibe_core::auth::{
+    PersistOutcome, ProviderCredentialsRequest, ProviderCredentialsResult, SignInStatus,
+};
 
+use super::context::{ApiBaseFeedback, FeedbackLine};
 use super::context::{OnboardingContext, default_mistral_provider};
 use super::model::{
-    KeyPress, ModelEffect, ModelEvent, OnboardingModel, OnboardingOutcome, OnboardingPorts,
-    SignInVariant,
+    DomainInput, KeyPress, ModelEffect, ModelEvent, OnboardingModel, OnboardingOutcome,
+    OnboardingPorts, SignInVariant,
 };
 use super::{ExitPlan, exit_plan};
 
@@ -19,7 +22,8 @@ use super::{ExitPlan, exit_plan};
 #[derive(Default)]
 struct RecorderPorts {
     persist_calls: Vec<(String, String, bool)>,
-    provider_writes: usize,
+    requests: Vec<ProviderCredentialsRequest>,
+    tenant_lookups: Vec<String>,
     persist_outcome: Option<PersistOutcome>,
     provider_write_ok: Option<bool>,
 }
@@ -39,9 +43,27 @@ impl OnboardingPorts for RecorderPorts {
             .unwrap_or(PersistOutcome::Completed)
     }
 
-    fn persist_provider(&mut self, _provider: &Table) -> bool {
-        self.provider_writes += 1;
-        self.provider_write_ok.unwrap_or(true)
+    fn persist_provider_credentials(
+        &mut self,
+        request: &ProviderCredentialsRequest,
+    ) -> ProviderCredentialsResult {
+        self.requests.push(request.clone());
+        ProviderCredentialsResult {
+            provider: self.provider_write_ok.unwrap_or(true),
+            console_base_url: request.console_base_url.as_ref().map(|_| true),
+            vibe_base_url: request.vibe_base_url.as_ref().map(|_| true),
+        }
+    }
+
+    fn resolve_tenant_domains(
+        &mut self,
+        provider: Table,
+        console_base_url: &str,
+        _api_key: &str,
+        vibe_base_url: &str,
+    ) -> (Table, String) {
+        self.tenant_lookups.push(console_base_url.to_owned());
+        (provider, vibe_base_url.to_owned())
     }
 }
 
@@ -49,6 +71,7 @@ fn browser_context() -> OnboardingContext {
     OnboardingContext {
         provider: default_mistral_provider(),
         vibe_base_url: "https://chat.mistral.ai".to_owned(),
+        console_base_url: "https://console.mistral.ai".to_owned(),
         theme: "auto".to_owned(),
     }
 }
@@ -62,6 +85,7 @@ fn manual_context() -> OnboardingContext {
     OnboardingContext {
         provider,
         vibe_base_url: "https://chat.mistral.ai".to_owned(),
+        console_base_url: "https://console.mistral.ai".to_owned(),
         theme: "auto".to_owned(),
     }
 }
@@ -257,11 +281,70 @@ fn a_failed_provider_write_terminates_with_the_provider_config_error() {
         },
         &mut ports,
     );
-    assert_eq!(ports.provider_writes, 1);
-    let Some(ModelEffect::Exit(OnboardingOutcome::ProviderConfigError { .. })) = effects.first()
+    assert_eq!(ports.requests.len(), 1);
+    assert_eq!(
+        ports.requests[0].console_base_url.as_deref(),
+        Some("https://console.internal.example")
+    );
+    assert_eq!(ports.tenant_lookups, ["https://console.internal.example"]);
+    let Some(ModelEffect::Exit(OnboardingOutcome::ProviderConfigError { detail })) =
+        effects.first()
     else {
         panic!("a failed provider write terminates immediately, got {effects:?}");
     };
+    assert_eq!(detail, "failed to persist provider");
+}
+
+#[test]
+fn tab_moves_typing_to_the_api_base_and_a_split_origin_turns_the_rewrite_on() {
+    let mut ports = RecorderPorts::default();
+    let mut model = OnboardingModel::new(browser_context());
+    model.handle(ModelEvent::WelcomeTypingFinished, &mut ports);
+    for press in [
+        KeyPress::Enter,
+        KeyPress::Enter,
+        KeyPress::Enter,
+        KeyPress::Down,
+    ] {
+        key(&mut model, &mut ports, press);
+    }
+    key(&mut model, &mut ports, KeyPress::Enter);
+    assert_eq!(model.domain_focus(), DomainInput::Domain);
+    for character in "console.internal.example".chars() {
+        key(&mut model, &mut ports, KeyPress::Char(character));
+    }
+    key(&mut model, &mut ports, KeyPress::Tab);
+    assert_eq!(model.domain_focus(), DomainInput::ApiBase);
+    for character in "http:/broken".chars() {
+        key(&mut model, &mut ports, KeyPress::Char(character));
+    }
+    assert_eq!(
+        model.feedback_line(),
+        Some(FeedbackLine::ApiBase(ApiBaseFeedback::Invalid))
+    );
+    key(&mut model, &mut ports, KeyPress::Enter);
+    assert_eq!(model.current_screen().name(), "custom_domain");
+    for _ in 0.."http:/broken".len() {
+        key(&mut model, &mut ports, KeyPress::Backspace);
+    }
+    assert_eq!(model.feedback_line(), None);
+    for character in "connector.internal.example/api".chars() {
+        key(&mut model, &mut ports, KeyPress::Char(character));
+    }
+    key(&mut model, &mut ports, KeyPress::Enter);
+    assert_eq!(model.current_screen().name(), "browser_sign_in");
+    assert_eq!(
+        model.provider_browser_auth(),
+        (
+            Some("https://console.internal.example"),
+            Some("https://connector.internal.example/api")
+        )
+    );
+    assert!(model.provider_allows_origin_rewrite());
+    assert_eq!(
+        model.working_console_base_url(),
+        "https://connector.internal.example"
+    );
 }
 
 #[test]

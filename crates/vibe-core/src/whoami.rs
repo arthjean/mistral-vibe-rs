@@ -215,19 +215,29 @@ impl WhoAmIGateway for HttpWhoAmIGateway {
                 .await
                 .map_err(|_| WhoAmIFailure::Unavailable)?;
             let status = response.status().as_u16();
-            if status == 401 || status == 403 {
-                return Err(WhoAmIFailure::Unauthorized);
-            }
-            if !response.status().is_success() {
-                return Err(WhoAmIFailure::Unavailable);
+            if !(200..300).contains(&status) {
+                return read_whoami_response(status, "");
             }
             let body = response
                 .text()
                 .await
                 .map_err(|_| WhoAmIFailure::Unavailable)?;
-            serde_json::from_str(&body).map_err(|_| WhoAmIFailure::Unavailable)
+            read_whoami_response(status, &body)
         })
     }
+}
+
+/// What one console answer reads as: 401 and 403 refuse the credential, any
+/// other non-success status or a body that is not an account this build can
+/// read leaves the console unavailable. Reference `HttpAccountGateway`.
+pub fn read_whoami_response(status: u16, body: &str) -> Result<WhoAmIResult, WhoAmIFailure> {
+    if status == 401 || status == 403 {
+        return Err(WhoAmIFailure::Unauthorized);
+    }
+    if !(200..300).contains(&status) {
+        return Err(WhoAmIFailure::Unavailable);
+    }
+    serde_json::from_str(body).map_err(|_| WhoAmIFailure::Unavailable)
 }
 
 /// The account, or [`None`] on any failure, reported once and dropped.
@@ -497,4 +507,173 @@ pub fn resolve_user_plan(plan_type: Option<&str>, plan_name: Option<&str>) -> Op
 pub fn derive_user_plan(result: Option<&WhoAmIResult>) -> Option<String> {
     let result = result?;
     resolve_user_plan(Some(result.plan_type.as_str()), Some(&result.plan_name))
+}
+
+// --------------------------------------------------------------------------
+// Tenant domains
+// --------------------------------------------------------------------------
+
+/// How long tenant discovery waits on the console. The reference builds its
+/// client without a timeout, so httpx's five-second default applies.
+pub const TENANT_DISCOVERY_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// The tenant URL `/whoami` advertised, when it is safe to send traffic to.
+///
+/// Trust boundary: the answer decides where later API and chat traffic goes,
+/// so anything that is not plainly an HTTPS origin is refused, and so is a
+/// path that climbs with `..`. Trailing slashes are dropped from what is kept.
+/// Reference `_sanitize_tenant_url`.
+#[must_use]
+pub fn sanitize_tenant_url(candidate: &str, field: &str) -> Option<String> {
+    let stripped = candidate.trim_end_matches('/');
+    let warn = |reason: &str| {
+        observability::log(
+            LogLevel::Warning,
+            &format!("Rejecting tenant {field} URL: {reason} ({candidate:?})"),
+        );
+    };
+    let Ok(parsed) = crate::pyurl::PyUrl::try_parse(stripped) else {
+        warn("unparsable value");
+        return None;
+    };
+    if parsed.scheme != "https" || parsed.netloc.is_empty() {
+        warn("expected https origin");
+        return None;
+    }
+    if parsed.path.contains("..") {
+        warn("path contains '..'");
+        return None;
+    }
+    Some(stripped.to_owned())
+}
+
+/// The provider entry and chat base after adopting what one `/whoami` answer
+/// advertises: the API base as `{api_base}/v1` and the chat base as given,
+/// each only when present, non-empty and safe. Without an answer, or with
+/// one that advertises neither, both come back unchanged.
+#[must_use]
+pub fn adopt_tenant_domains(
+    whoami: Option<&WhoAmIResult>,
+    mut provider: toml::Table,
+    current_vibe_base_url: &str,
+) -> (toml::Table, String) {
+    let mut vibe_base_url = current_vibe_base_url.to_owned();
+    let Some(whoami) = whoami else {
+        return (provider, vibe_base_url);
+    };
+    if let Some(api_base) = whoami.api_base.as_deref().filter(|value| !value.is_empty())
+        && let Some(sanitized) = sanitize_tenant_url(api_base, "api")
+    {
+        provider.insert(
+            "api_base".to_owned(),
+            toml::Value::String(format!("{sanitized}/v1")),
+        );
+    }
+    if let Some(vibe_base) = whoami
+        .vibe_base
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        && let Some(sanitized) = sanitize_tenant_url(vibe_base, "vibe_base")
+    {
+        vibe_base_url = sanitized;
+    }
+    (provider, vibe_base_url)
+}
+
+/// Fetches `/whoami` from `console_base_url` and adopts the tenant domains it
+/// advertises. Every failure degrades to the inputs unchanged rather than
+/// blocking the sign-in. Reference `resolve_tenant_domains`.
+pub async fn resolve_tenant_domains(
+    gateway: &dyn WhoAmIGateway,
+    provider: toml::Table,
+    console_base_url: &str,
+    api_key: &str,
+    current_vibe_base_url: &str,
+) -> (toml::Table, String) {
+    let whoami = fetch_whoami(
+        gateway,
+        console_base_url,
+        api_key,
+        Some(TENANT_DISCOVERY_TIMEOUT),
+    )
+    .await;
+    adopt_tenant_domains(whoami.as_ref(), provider, current_vibe_base_url)
+}
+
+/// The change-event reason an account read's configuration heal carries.
+const RECONCILE_REASON: &str = "tenant-domain-reconcile";
+
+/// Heals the configuration with the tenant hosts one `/whoami` answer
+/// advertises: the Mistral provider named `provider_name` moves to
+/// `{api_base}/v1` and the chat base to `vibe_base`, each written only when
+/// it is safe and differs from what the configuration resolves now. Called
+/// after every successful account read, so a failed discovery at sign-in or a
+/// tenant that moved heals on the next read. A failed write is logged and
+/// dropped. Reference `reconcile_tenant_domains` in
+/// `vibe/app_server/_account.py`.
+pub fn reconcile_tenant_domains(
+    config: &crate::config::LayeredConfig,
+    whoami: &WhoAmIResult,
+    provider_name: &str,
+) {
+    if whoami.api_base.is_none() && whoami.vibe_base.is_none() {
+        return;
+    }
+    let Ok(current) = config.load() else {
+        return;
+    };
+    let report = |field: &str, result: Result<crate::config::ConfigSnapshot, _>| {
+        if let Err(error) = result {
+            observability::log(
+                LogLevel::Error,
+                &format!("Failed to persist {field} to config: {error}"),
+            );
+        }
+    };
+    if let Some(api_base) = whoami.api_base.as_deref().filter(|value| !value.is_empty())
+        && let Some(sanitized) = sanitize_tenant_url(api_base, "api_base")
+    {
+        let desired = format!("{sanitized}/v1");
+        let provider = current
+            .effective
+            .get("providers")
+            .and_then(toml::Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(toml::Value::as_table)
+            .find(|candidate| {
+                candidate.get("name").and_then(toml::Value::as_str) == Some(provider_name)
+                    && candidate.get("backend").and_then(toml::Value::as_str) == Some("mistral")
+            });
+        if let Some(provider) = provider
+            && provider.get("api_base").and_then(toml::Value::as_str) != Some(desired.as_str())
+        {
+            let mut moved = provider.clone();
+            moved.insert("api_base".to_owned(), toml::Value::String(desired));
+            report(
+                "provider",
+                config.persist_provider(&moved, RECONCILE_REASON),
+            );
+        }
+    }
+    if let Some(vibe_base) = whoami
+        .vibe_base
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        && let Some(sanitized) = sanitize_tenant_url(vibe_base, "vibe_base")
+        && current
+            .effective
+            .get("vibe_base_url")
+            .and_then(toml::Value::as_str)
+            != Some(sanitized.as_str())
+    {
+        report(
+            "vibe_base_url",
+            config.persist_field(
+                "vibe_base_url",
+                toml::Value::String(sanitized),
+                RECONCILE_REASON,
+            ),
+        );
+    }
 }

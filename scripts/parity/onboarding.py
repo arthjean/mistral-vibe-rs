@@ -8,8 +8,9 @@ the installed screen set, the ordered transitions taken, the focus target per
 screen, the validation class per input state, the effects persisted and the
 terminating value. The sign-in service, the credential persistence and the
 config orchestrator are injected or patched to recorders, and the ``/whoami``
-tenant discovery to its no-data branch, so a run touches no network, no
-keyring and no real ``VIBE_HOME``.
+fetch tenant discovery makes to a scripted answer, so a run touches no
+network, no keyring and no real ``VIBE_HOME`` while the reference's own
+``resolve_tenant_domains`` still decides what an answer changes.
 
 Four families come out, and are what the Rust replay compares:
 
@@ -64,7 +65,7 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 DEFAULT_OUTPUT = Path(".parity/onboarding-corpus.json")
 DEFAULT_CORPUS = Path("crates/vibe-cli/tests/onboarding/corpus.json")
 DEFAULT_CACHE = Path(".parity")
@@ -323,10 +324,15 @@ class PersistRecorder:
     """Scripted stand-in for ``persist_api_key`` and the provider upsert."""
 
     def __init__(
-        self, *, outcome: str = "completed", provider_write_ok: bool = True
+        self,
+        *,
+        outcome: str = "completed",
+        provider_write_ok: bool = True,
+        console_write_ok: bool = True,
     ) -> None:
         self.outcome = outcome
         self.provider_write_ok = provider_write_ok
+        self.console_write_ok = console_write_ok
         self.persist_calls: list[dict[str, Any]] = []
         self.provider_writes: list[dict[str, Any]] = []
         self.base_url_writes: list[dict[str, Any]] = []
@@ -354,9 +360,9 @@ class PersistRecorder:
 
         The provider half is recorded as ``providerWrites`` and each non-None
         base URL half as ``baseUrlWrites``, in the order the reference writes
-        them (``vibe/setup/auth/api_key_persistence.py:162-187``). The base URL
-        halves always report success, so only the provider write can fail
-        (``ProviderCredentialsPersistResult.first_failure``, ``:142-149``).
+        them (``vibe/setup/auth/api_key_persistence.py:162-187``). The provider
+        and the console write fail when the scenario scripts it, which is what
+        ``ProviderCredentialsPersistResult.first_failure`` (``:142-149``) names.
         """
 
         from vibe.setup.auth.api_key_persistence import (
@@ -367,8 +373,12 @@ class PersistRecorder:
         self.provider_writes.append(
             {
                 "provider": provider.name,
+                "apiBase": provider.api_base,
                 "browserAuthBaseUrl": provider.browser_auth_base_url,
                 "browserAuthApiBaseUrl": provider.browser_auth_api_base_url,
+                "browserAuthAllowOriginRewrite": (
+                    provider.browser_auth_allow_origin_rewrite
+                ),
             }
         )
         for field in ("console_base_url", "vibe_base_url"):
@@ -377,24 +387,40 @@ class PersistRecorder:
                 self.base_url_writes.append({"field": field, "value": value})
         return ProviderCredentialsPersistResult(
             provider=self.provider_write_ok,
-            console_base_url=True if request.console_base_url is not None else None,
+            console_base_url=(
+                self.console_write_ok if request.console_base_url is not None else None
+            ),
             vibe_base_url=True if request.vibe_base_url is not None else None,
         )
 
 
-async def resolve_tenant_domains_without_whoami(
-    provider: Any, console_base_url: str, api_key: str, current_vibe_base_url: str
-) -> tuple[Any, str]:
-    """The reference's own no-data branch of tenant discovery.
+class WhoamiRecorder:
+    """Scripted stand-in for ``fetch_whoami``, the one network call tenant
+    discovery makes.
 
-    ``persist_credentials`` fetches ``/whoami`` whenever the console is not the
-    public one (``vibe/setup/onboarding/__init__.py:214-219``); the capture
-    runs offline, so the stand-in returns the inputs unchanged exactly as
-    ``vibe/setup/auth/whoami.py:388-389`` does when ``fetch_whoami`` yields
-    nothing.
+    ``persist_credentials`` asks ``/whoami`` whenever the console is not the
+    public one (``vibe/setup/onboarding/__init__.py:214-219``). The reference's
+    own ``resolve_tenant_domains`` runs unpatched around this stand-in, so the
+    sanitization and the adoption of what an answer advertises are the
+    reference's; only the fetch is scripted. ``None`` is the failed or
+    unreachable console, which ``fetch_whoami`` reports the same way.
     """
 
-    return provider, current_vibe_base_url
+    def __init__(self, answer: dict[str, Any] | None) -> None:
+        self.answer = answer
+        self.lookups: list[dict[str, Any]] = []
+
+    async def fetch_whoami(
+        self, base_url: str, api_key: str, *, timeout: float | None = None
+    ) -> Any:
+        from vibe.setup.auth.whoami import WhoAmIResult
+
+        self.lookups.append({"baseUrl": base_url, "apiKey": api_key})
+        if self.answer is None:
+            return None
+        return WhoAmIResult.model_validate(
+            {"plan_type": "api", "plan_name": "oracle", **self.answer}
+        )
 
 
 # --------------------------------------------------------------------------
@@ -469,6 +495,10 @@ def build_app(
     browser: bool,
     factory: Any = None,
     configured_domain: str | None = None,
+    configured_api_base: str | None = None,
+    console_base_url: str | None = None,
+    vibe_base_url: str | None = None,
+    provider_api_base: str | None = None,
 ) -> Any:
     from vibe.core.config import DEFAULT_PROVIDERS
     from vibe.setup.onboarding import OnboardingApp
@@ -477,17 +507,29 @@ def build_app(
     mistral = next(p for p in DEFAULT_PROVIDERS if p.name == "mistral")
     if browser:
         provider = mistral
-        if configured_domain is not None:
+        if configured_domain is not None or configured_api_base is not None:
+            browser_base = configured_domain or provider.browser_auth_base_url
+            api_base = configured_api_base or f"{browser_base}/api"
             provider = mistral.model_copy(
                 update={
-                    "browser_auth_base_url": configured_domain,
-                    "browser_auth_api_base_url": f"{configured_domain}/api",
+                    "browser_auth_base_url": browser_base,
+                    "browser_auth_api_base_url": api_base,
+                    "browser_auth_allow_origin_rewrite": (
+                        configured_api_base is not None
+                    ),
                 }
             )
     else:
         provider = mistral.model_copy(update={"browser_auth_base_url": None})
+    if provider_api_base is not None:
+        provider = provider.model_copy(update={"api_base": provider_api_base})
 
-    context = OnboardingContext(provider=provider)
+    bases: dict[str, str] = {}
+    if console_base_url is not None:
+        bases["console_base_url"] = console_base_url
+    if vibe_base_url is not None:
+        bases["vibe_base_url"] = vibe_base_url
+    context = OnboardingContext(provider=provider, **bases)
     return OnboardingApp(
         config=context,
         browser_sign_in_service_factory=factory,
@@ -498,6 +540,7 @@ def build_app(
 
 
 async def run_scenario(scenario: dict[str, Any]) -> dict[str, Any]:
+    import vibe.setup.auth.whoami as whoami_module
     import vibe.setup.onboarding as onboarding_module
 
     effects: dict[str, Any] = {}
@@ -506,11 +549,17 @@ async def run_scenario(scenario: dict[str, Any]) -> dict[str, Any]:
     recorder = PersistRecorder(
         outcome=scenario.get("persistOutcome", "completed"),
         provider_write_ok=scenario.get("providerWriteOk", True),
+        console_write_ok=scenario.get("consoleWriteOk", True),
     )
+    whoami = WhoamiRecorder(scenario.get("whoami"))
     app = build_app(
         browser=scenario.get("browser", False),
         factory=factory,
         configured_domain=scenario.get("configuredDomain"),
+        configured_api_base=scenario.get("configuredApiBase"),
+        console_base_url=scenario.get("consoleBaseUrl"),
+        vibe_base_url=scenario.get("vibeBaseUrl"),
+        provider_api_base=scenario.get("providerApiBase"),
     )
     observer = GraphObserver(app)
 
@@ -521,11 +570,7 @@ async def run_scenario(scenario: dict[str, Any]) -> dict[str, Any]:
             "persist_provider_credentials",
             recorder.persist_provider_credentials,
         ),
-        patched(
-            onboarding_module,
-            "resolve_tenant_domains",
-            resolve_tenant_domains_without_whoami,
-        ),
+        patched(whoami_module, "fetch_whoami", whoami.fetch_whoami),
     ):
         async with app.run_test(size=VIEWPORT) as pilot:
             await observer.settle(pilot)
@@ -552,12 +597,19 @@ async def run_scenario(scenario: dict[str, Any]) -> dict[str, Any]:
             "persistCalls": recorder.persist_calls,
             "providerWrites": recorder.provider_writes,
             "baseUrlWrites": recorder.base_url_writes,
+            "whoamiLookups": whoami.lookups,
         },
         "result": result,
         "selectedTheme": app.selected_theme,
         "providerBrowserAuth": {
             "baseUrl": app._provider.browser_auth_base_url,
             "apiBaseUrl": app._provider.browser_auth_api_base_url,
+            "allowOriginRewrite": app._provider.browser_auth_allow_origin_rewrite,
+        },
+        "workingBases": {
+            "apiBase": app._provider.api_base,
+            "consoleBaseUrl": app._console_base_url,
+            "vibeBaseUrl": app._vibe_base_url,
         },
     }
     extra = scenario.get("extra")
@@ -915,6 +967,189 @@ def graph_scenarios() -> list[dict[str, Any]]:
         await _skip_welcome(app, pilot, observer)
         await observer.press(pilot, "escape")
 
+    async def _onto_custom_domain(
+        app: Any, pilot: Any, observer: GraphObserver
+    ) -> Any:
+        await _skip_welcome(app, pilot, observer)
+        await observer.press(pilot, "enter")
+        await observer.press(pilot, "enter")
+        await observer.press(pilot, "down")
+        await observer.press(pilot, "enter")
+        return app.screen
+
+    def _domain_screen_state(app: Any, screen: Any) -> dict[str, Any]:
+        """Both inputs, the focus and every validation class the screen shows."""
+
+        def classes(selector: str, names: tuple[str, ...]) -> list[str]:
+            return sorted(c for c in screen.query_one(selector).classes if c in names)
+
+        focused = app.focused
+        return {
+            "domain": screen.domain_input.value,
+            "apiBase": screen.api_base_input.value,
+            "focus": None if focused is None else focused.id,
+            "feedbackClasses": classes("#feedback", ("error", "success", "warning")),
+            "domainBoxClasses": classes("#domain-box", ("valid", "invalid", "warning")),
+            "apiBaseBoxClasses": classes(
+                "#api-base-box", ("valid", "invalid", "warning")
+            ),
+        }
+
+    async def _set_input(
+        observer: GraphObserver, pilot: Any, widget: Any, value: str
+    ) -> None:
+        widget.value = value
+        await observer.settle(pilot)
+
+    async def api_base_validation_classes(
+        app: Any, pilot: Any, observer: GraphObserver
+    ) -> None:
+        """The optional input's classes, and the line both inputs share."""
+
+        screen = await _onto_custom_domain(app, pilot, observer)
+        states = [_domain_screen_state(app, screen)]
+        await observer.press(pilot, "tab")
+        states.append(_domain_screen_state(app, screen))
+        for value in (
+            "connector.internal.example/api",
+            "http:/broken",
+            "",
+            "   ",
+            "https://connector.internal.example:8443/api",
+        ):
+            await _set_input(observer, pilot, screen.api_base_input, value)
+            states.append(_domain_screen_state(app, screen))
+        await _set_input(
+            observer, pilot, screen.domain_input, "console.oracle.mistral.ai"
+        )
+        states.append(_domain_screen_state(app, screen))
+        await observer.press(pilot, "tab")
+        states.append(_domain_screen_state(app, screen))
+        observer.focus["custom_domain:apiBaseStates"] = states
+        await observer.press(pilot, "escape")
+        await observer.press(pilot, "escape")
+        await observer.press(pilot, "escape")
+
+    async def invalid_api_base_submission_stays(
+        app: Any, pilot: Any, observer: GraphObserver
+    ) -> None:
+        screen = await _onto_custom_domain(app, pilot, observer)
+        await _set_input(
+            observer, pilot, screen.domain_input, "console.internal.example"
+        )
+        await _set_input(observer, pilot, screen.api_base_input, "http:/broken")
+        await _set_input(
+            observer, pilot, screen.domain_input, "console.internal.example/x"
+        )
+        await observer.press(pilot, "enter")
+        observer.focus["custom_domain:afterInvalidApiBase"] = _domain_screen_state(
+            app, screen
+        )
+        await observer.press(pilot, "escape")
+        await observer.press(pilot, "escape")
+        await observer.press(pilot, "escape")
+
+    def submit_custom_target(domain: str, api_base: str = ""):
+        """Submits ``domain`` and ``api_base`` and waits for the sign-in to end."""
+
+        async def drive(app: Any, pilot: Any, observer: GraphObserver) -> None:
+            screen = await _onto_custom_domain(app, pilot, observer)
+            if screen.domain_input.value != domain:
+                await _set_input(observer, pilot, screen.domain_input, domain)
+            if api_base:
+                await _set_input(observer, pilot, screen.api_base_input, api_base)
+            await observer.press(pilot, "enter")
+            await observer.wait_for(
+                pilot, lambda: app._exit, "the sign-in worker to exit the app"
+            )
+
+        return drive
+
+    async def seeds_a_configured_split_horizon(
+        app: Any, pilot: Any, observer: GraphObserver
+    ) -> None:
+        """The seeds, and the change a re-entry with unchanged seeds swallows.
+
+        Re-entering resets both inputs to their seeds; an input that already
+        holds its seed raises no change, so the swallow armed for the reset is
+        still armed for the operator's next one.
+        """
+
+        screen = await _onto_custom_domain(app, pilot, observer)
+        states = [_domain_screen_state(app, screen)]
+        await _set_input(
+            observer, pilot, screen.domain_input, "console.oracle.mistral.ai"
+        )
+        states.append(_domain_screen_state(app, screen))
+        await _set_input(
+            observer, pilot, screen.domain_input, "https://console.internal.example"
+        )
+        states.append(_domain_screen_state(app, screen))
+        await observer.press(pilot, "escape")
+        await observer.press(pilot, "enter")
+        states.append(_domain_screen_state(app, screen))
+        await _set_input(
+            observer, pilot, screen.domain_input, "https://console.internal.examplez"
+        )
+        states.append(_domain_screen_state(app, screen))
+        await _set_input(observer, pilot, screen.domain_input, "http:/broken")
+        states.append(_domain_screen_state(app, screen))
+        await observer.press(pilot, "tab")
+        await _set_input(observer, pilot, screen.api_base_input, "http:/broken")
+        states.append(_domain_screen_state(app, screen))
+        await _set_input(observer, pilot, screen.api_base_input, "ftp://x")
+        states.append(_domain_screen_state(app, screen))
+        observer.focus["custom_domain:seededStates"] = states
+        await observer.press(pilot, "escape")
+        await observer.press(pilot, "escape")
+        await observer.press(pilot, "escape")
+
+    async def default_target_over_a_configured_console(
+        app: Any, pilot: Any, observer: GraphObserver
+    ) -> None:
+        await _skip_welcome(app, pilot, observer)
+        await observer.press(pilot, "enter")
+        await observer.press(pilot, "enter")
+        screen = app.get_screen("sign_in_target")
+        await observer.press(pilot, "enter")
+        observer.focus["sign_in_target:armedAfterFirstEnter"] = (
+            screen._override_confirm_armed
+        )
+        await observer.press(pilot, "enter")
+        await observer.wait_for(
+            pilot, lambda: app._exit, "the sign-in worker to exit the app"
+        )
+
+    async def default_target_arms_then_hangs(
+        app: Any, pilot: Any, observer: GraphObserver
+    ) -> None:
+        await _skip_welcome(app, pilot, observer)
+        await observer.press(pilot, "enter")
+        await observer.press(pilot, "enter")
+        screen = app.get_screen("sign_in_target")
+        await observer.press(pilot, "enter")
+        observer.focus["sign_in_target:armedAfterFirstEnter"] = (
+            screen._override_confirm_armed
+        )
+        await observer.press(pilot, "enter")
+        await observer.press(pilot, "escape")
+
+    async def custom_domain_manual_key(
+        app: Any, pilot: Any, observer: GraphObserver
+    ) -> None:
+        screen = await _onto_custom_domain(app, pilot, observer)
+        await _set_input(
+            observer, pilot, screen.domain_input, "console.internal.example"
+        )
+        await observer.press(pilot, "enter")
+        sign_in = app.screen
+        await observer.wait_for(
+            pilot, lambda: sign_in.state.running, "the attempt to be running"
+        )
+        await observer.press(pilot, "m")
+        await observer.press(pilot, *"oracle-key")
+        await observer.press(pilot, "enter")
+
     def theme_extra(app: Any) -> dict[str, Any]:
         from vibe.cli.textual_ui.widgets.theme_picker import sorted_theme_names
 
@@ -1063,6 +1298,126 @@ def graph_scenarios() -> list[dict[str, Any]]:
             "browser": True,
             "attempts": [hang],
             "drive": browser_sign_in_manual_fallback,
+        },
+        {
+            "case": "custom-domain-api-base-validation-classes",
+            "browser": True,
+            "attempts": [],
+            "drive": api_base_validation_classes,
+        },
+        {
+            "case": "custom-domain-invalid-api-base-submission-stays",
+            "browser": True,
+            "attempts": [],
+            "drive": invalid_api_base_submission_stays,
+        },
+        {
+            "case": "custom-domain-split-horizon-signs-in",
+            "browser": True,
+            "attempts": [success],
+            "drive": submit_custom_target(
+                "console.internal.example", "connector.internal.example/api"
+            ),
+        },
+        {
+            "case": "custom-domain-same-origin-api-base-keeps-the-console-path",
+            "browser": True,
+            "attempts": [success],
+            "drive": submit_custom_target(
+                "https://console.internal.example/portal/",
+                "https://Console.Internal.Example:443/portal/api",
+            ),
+        },
+        {
+            "case": "custom-domain-tenant-discovery-adopts-the-advertised-hosts",
+            "browser": True,
+            "attempts": [success],
+            "whoami": {
+                "api_base": "https://api.tenant.example/",
+                "vibe_base": "https://chat.tenant.example",
+            },
+            "drive": submit_custom_target("console.internal.example"),
+        },
+        {
+            "case": "custom-domain-tenant-discovery-refuses-unsafe-hosts",
+            "browser": True,
+            "attempts": [success],
+            "whoami": {
+                "api_base": "http://api.tenant.example",
+                "vibe_base": "https://chat.tenant.example/../evil",
+            },
+            "drive": submit_custom_target("console.internal.example"),
+        },
+        {
+            "case": "custom-domain-tenant-discovery-skips-an-empty-host",
+            "browser": True,
+            "attempts": [success],
+            "whoami": {"api_base": "", "vibe_base": "https://chat.tenant.example//"},
+            "drive": submit_custom_target(
+                "console.internal.example", "connector.internal.example/api"
+            ),
+        },
+        {
+            "case": "custom-domain-tenant-discovery-without-hosts",
+            "browser": True,
+            "attempts": [success],
+            "whoami": {},
+            "drive": submit_custom_target("console.internal.example"),
+        },
+        {
+            "case": "custom-domain-unchanged-configuration-skips-the-writes",
+            "browser": True,
+            "attempts": [success],
+            "configuredDomain": "https://console.internal.example",
+            "consoleBaseUrl": "https://console.internal.example",
+            "drive": submit_custom_target("https://console.internal.example"),
+        },
+        {
+            "case": "custom-domain-console-write-failure-names-the-field",
+            "browser": True,
+            "attempts": [success],
+            "consoleWriteOk": False,
+            "drive": submit_custom_target("console.internal.example"),
+        },
+        {
+            "case": "custom-domain-provider-write-failure-names-the-field",
+            "browser": True,
+            "attempts": [success],
+            "providerWriteOk": False,
+            "consoleWriteOk": False,
+            "drive": submit_custom_target("console.internal.example"),
+        },
+        {
+            "case": "custom-domain-seeds-a-configured-split-horizon",
+            "browser": True,
+            "attempts": [],
+            "configuredDomain": "https://console.internal.example",
+            "configuredApiBase": "https://connector.internal.example/api",
+            "drive": seeds_a_configured_split_horizon,
+        },
+        {
+            "case": "target-default-arms-for-a-configured-split-api-base",
+            "browser": True,
+            "attempts": [hang],
+            "configuredApiBase": "https://connector.internal.example/api",
+            "drive": default_target_arms_then_hangs,
+        },
+        {
+            "case": "target-default-resets-the-tenant-bases-and-signs-in",
+            "browser": True,
+            "attempts": [success],
+            "configuredDomain": "https://console.internal.example",
+            "consoleBaseUrl": "https://console.internal.example",
+            "vibeBaseUrl": "https://chat.tenant.example",
+            "providerApiBase": "https://api.tenant.example/v1",
+            "drive": default_target_over_a_configured_console,
+        },
+        {
+            "case": "custom-domain-manual-key-discovers-the-tenant",
+            "browser": True,
+            "attempts": [hang],
+            "whoami": {"vibe_base": "https://chat.tenant.example"},
+            "drive": custom_domain_manual_key,
         },
         {
             "case": "browser-sign-in-persist-failure-exits-immediately",
@@ -1222,9 +1577,14 @@ def domain_cases() -> list[str]:
 
 def capture_domain_validation() -> list[dict[str, Any]]:
     from vibe.setup.onboarding.context import (
+        browser_auth_account_base,
+        browser_auth_requires_origin_rewrite,
         is_likely_mistral_private_cloud_domain,
         is_valid_custom_domain,
         resolve_browser_auth_urls,
+    )
+    from vibe.setup.onboarding.screens.custom_domain import (
+        _is_valid_optional_custom_domain,
     )
 
     records = []
@@ -1234,6 +1594,7 @@ def capture_domain_validation() -> list[dict[str, Any]]:
             "case": value if value.strip() else f"blank-{len(value)}",
             "input": value,
             "valid": valid,
+            "validAsApiBase": _is_valid_optional_custom_domain(value),
         }
         if valid:
             base, api = resolve_browser_auth_urls(value)
@@ -1242,8 +1603,40 @@ def capture_domain_validation() -> list[dict[str, Any]]:
             )
             record["derivedBaseUrl"] = base
             record["derivedApiBaseUrl"] = api
+            record["accountBase"] = browser_auth_account_base(base, api)
+            pairs = []
+            for api_base in split_api_bases(value):
+                split_base, split_api = resolve_browser_auth_urls(value, api_base)
+                pairs.append(
+                    {
+                        "apiBase": api_base,
+                        "derivedApiBaseUrl": split_api,
+                        "requiresOriginRewrite": browser_auth_requires_origin_rewrite(
+                            split_base, split_api
+                        ),
+                        "accountBase": browser_auth_account_base(
+                            split_base, split_api
+                        ),
+                    }
+                )
+            record["splitPairs"] = pairs
         records.append(record)
     return records
+
+
+def split_api_bases(domain: str) -> list[str]:
+    """The API bases each valid domain is paired with: none, a foreign host, the
+    domain's own host spelled differently, and the domain itself."""
+
+    return [
+        "",
+        "connector.internal.example/api",
+        "https://connector.internal.example:8443/api/",
+        "HTTPS://CONSOLE.MISTRAL.AI:443/api",
+        "http://console.mistral.ai/api",
+        "localhost:8080/api",
+        domain,
+    ]
 
 
 # --------------------------------------------------------------------------

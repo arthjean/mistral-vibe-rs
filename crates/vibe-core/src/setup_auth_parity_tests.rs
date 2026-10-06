@@ -15,7 +15,14 @@
 //! Every family now has a live comparator: the auth state and persistence
 //! replay against `vibe_core::auth`, the sign-in service and gateway against
 //! `auth::sign_in` and `auth::sign_in_http` over the same scripted stubs the
-//! capture used, and the URL verdicts against `validate_url_against_base`.
+//! capture used, the URL verdicts against `validate_url_against_base`, the
+//! split-horizon re-homing against `rehome_url_against_base`, tenant
+//! discovery against `resolve_tenant_domains` over a scripted console, and the
+//! batched sign-in write against `persist_provider_credentials` over a scratch
+//! home, compared file by file, and the account read's configuration heal
+//! against `reconcile_tenant_domains`, compared by file and by the reason
+//! every change event carries. `acpSignIn` is replayed by `vibe-acp`, which
+//! publishes the controller it drives.
 //! The error taxonomy is compared for structural equality and its sentences
 //! for permanent inequality: this port's prose failing to differ from a
 //! reference digest is itself a failure. `acpAuthProse` records the same way
@@ -44,18 +51,26 @@ use crate::auth::{
     self, HttpSignInGateway, KeyringStore, PersistOutcome, RemoveError, SignInErrorCode,
     SignInGateway as _, SignInStatus, validate_url_against_base,
 };
-use crate::config::DotenvValues;
+use crate::auth::{
+    ProviderCredentialsRequest, persist_provider_credentials, rehome_url_against_base,
+};
 use crate::config::registry::default_document;
+use crate::config::{ConfigPaths, DotenvValues, LayeredConfig};
+use crate::identity::IdentityFuture;
 use crate::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
+use crate::whoami::{
+    WhoAmIFailure, WhoAmIGateway, WhoAmIResult, read_whoami_response, reconcile_tenant_domains,
+    resolve_tenant_domains, sanitize_tenant_url, whoami_url,
+};
 
 const CORPUS_RELATIVE: &str = "crates/vibe-core/tests/setup-auth/corpus.json";
 const CAPTURE_SCRIPT: &str = "scripts/parity/setup_auth.py";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 2;
+const CORPUS_SCHEMA_VERSION: u32 = 4;
 /// The scenario floor this replay commits to, so a regeneration that captured
 /// almost nothing fails instead of reporting a clean but empty run.
-const MINIMUM_SCENARIOS: usize = 140;
+const MINIMUM_SCENARIOS: usize = 280;
 /// The reference publishes eleven sign-in error codes; a corpus recording any
 /// other count was captured from something else.
 const ERROR_CODE_COUNT: usize = 11;
@@ -90,6 +105,13 @@ struct Corpus {
     persistence: Vec<PersistenceCase>,
     sign_in_protocol: Vec<ProtocolCase>,
     url_validation: Vec<UrlValidationCase>,
+    url_rewrite: Vec<UrlRewriteCase>,
+    tenant_domains: Vec<TenantDomainsCase>,
+    provider_credentials: Vec<ProviderCredentialsCase>,
+    /// Replayed by `vibe-acp`, which publishes the controller it drives.
+    #[expect(dead_code, reason = "vibe-acp replays this family")]
+    acp_sign_in: Vec<Value>,
+    tenant_reconcile: Vec<TenantReconcileCase>,
     error_taxonomy: Vec<ErrorCode>,
     acp_auth_prose: Vec<AcpProseRun>,
 }
@@ -189,6 +211,10 @@ struct ProtocolCase {
     browser_base: Option<String>,
     #[serde(default)]
     api_base: Option<String>,
+    #[serde(default)]
+    allow_origin_rewrite: bool,
+    #[serde(default)]
+    poll_input: Option<String>,
     script: Value,
     #[serde(default)]
     events: Option<Vec<Value>>,
@@ -233,6 +259,66 @@ struct UrlValidationCase {
     verdict: String,
     #[serde(default)]
     returned_unchanged: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct UrlRewriteCase {
+    case: String,
+    value: String,
+    base: String,
+    verdict: String,
+    #[serde(default)]
+    returned: Option<String>,
+}
+
+/// A `sanitize:` case carries the candidate and its verdict; a `resolve:`
+/// case carries the console, its scripted answer, the requests the reference
+/// sent and the hosts it adopted.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct TenantDomainsCase {
+    case: String,
+    #[serde(default)]
+    candidate: Option<String>,
+    #[serde(default)]
+    sanitized: Option<String>,
+    #[serde(default)]
+    console: Option<String>,
+    #[serde(default)]
+    answer: Option<Value>,
+    #[serde(default)]
+    requests: Option<Vec<Value>>,
+    #[serde(default)]
+    api_base: Option<String>,
+    #[serde(default)]
+    vibe_base_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ProviderCredentialsCase {
+    case: String,
+    user: Option<String>,
+    provider: serde_json::Map<String, Value>,
+    #[serde(default)]
+    console_base_url: Option<String>,
+    #[serde(default)]
+    vibe_base_url: Option<String>,
+    result: Value,
+    first_failure: Option<String>,
+    files: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct TenantReconcileCase {
+    case: String,
+    user: Option<String>,
+    provider_name: String,
+    whoami: serde_json::Map<String, Value>,
+    files: BTreeMap<String, String>,
+    reasons: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1157,7 +1243,8 @@ fn replay_gateway_case(case: &ProtocolCase) -> (String, String) {
         case.browser_base.as_deref().unwrap_or_default(),
         case.api_base.as_deref().unwrap_or_default(),
         client,
-    );
+    )
+    .with_origin_rewrite(case.allow_origin_rewrite);
     let operation = case.op.as_deref().unwrap_or_default();
     let outcome = block_on(async {
         match operation {
@@ -1174,13 +1261,12 @@ fn replay_gateway_case(case: &ProtocolCase) -> (String, String) {
                     )
                 }),
             "poll" => {
-                // The capture feeds an off-base URL only to the revalidation
-                // scenario; the input is not recorded, so it is restated here.
-                let poll_url = if case.case == "gateway-poll-revalidates-before-requesting" {
-                    "https://evil.example/api/oracle/poll"
-                } else {
-                    "https://console.mistral.ai/api/oracle/poll"
-                };
+                // The capture records the poll URL only when it is not the
+                // one the scripted process handed out.
+                let poll_url = case
+                    .poll_input
+                    .as_deref()
+                    .unwrap_or("https://console.mistral.ai/api/oracle/poll");
                 gateway.poll(poll_url).await.map(|poll| {
                     format!(
                         "status {} token {:?} message {:?}",
@@ -1273,6 +1359,258 @@ fn run_url_validation(cases: &[UrlValidationCase]) -> usize {
         report.check("urlValidation", &case.case, "verdict", &expected, &observed);
     }
     settle(&report, "urlValidation")
+}
+
+fn run_url_rewrite(cases: &[UrlRewriteCase]) -> usize {
+    let mut report = Report::default();
+    for case in cases {
+        let expected = match (case.verdict.as_str(), &case.returned) {
+            ("accepted", Some(returned)) => format!("accepted {returned}"),
+            ("rejected", None) => "rejected".to_owned(),
+            (verdict, returned) => panic!(
+                "urlRewrite/{} records verdict {verdict} with {returned:?}",
+                case.case
+            ),
+        };
+        let observed = match rehome_url_against_base(&case.value, &case.base, true) {
+            Ok(returned) => format!("accepted {returned}"),
+            Err(auth::UrlRejection) => "rejected".to_owned(),
+        };
+        report.check("urlRewrite", &case.case, "verdict", &expected, &observed);
+    }
+    settle(&report, "urlRewrite")
+}
+
+/// One scripted console: records each request the way the capture's mock
+/// transport does and answers the scripted status and body.
+struct ScriptedConsole {
+    status: u16,
+    body: String,
+    requests: std::sync::Mutex<Vec<Value>>,
+}
+
+impl WhoAmIGateway for ScriptedConsole {
+    fn read<'a>(
+        &'a self,
+        base_url: &'a str,
+        api_key: &'a str,
+        _timeout: Option<std::time::Duration>,
+    ) -> IdentityFuture<'a, Result<WhoAmIResult, WhoAmIFailure>> {
+        self.requests
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(serde_json::json!({
+                "method": "GET",
+                "url": whoami_url(base_url),
+                "authorization": format!("Bearer {api_key}"),
+            }));
+        let answer = read_whoami_response(self.status, &self.body);
+        Box::pin(async move { answer })
+    }
+}
+
+fn run_tenant_domains(cases: &[TenantDomainsCase]) -> usize {
+    let mut report = Report::default();
+    for case in cases {
+        if let Some(candidate) = &case.candidate {
+            let observed = sanitize_tenant_url(candidate, "api");
+            report.check(
+                "tenantDomains",
+                &case.case,
+                "sanitized",
+                &case.sanitized,
+                &observed,
+            );
+            continue;
+        }
+        let answer = case
+            .answer
+            .as_ref()
+            .expect("a resolve case records its answer");
+        let console = ScriptedConsole {
+            status: answer
+                .get("status")
+                .and_then(Value::as_u64)
+                .and_then(|status| u16::try_from(status).ok())
+                .expect("the answer records its status"),
+            body: answer.get("rawBody").and_then(Value::as_str).map_or_else(
+                || answer.get("body").map(Value::to_string).unwrap_or_default(),
+                str::to_owned,
+            ),
+            requests: std::sync::Mutex::new(Vec::new()),
+        };
+        let (provider, vibe_base_url) = block_on(resolve_tenant_domains(
+            &console,
+            published_mistral_provider(),
+            case.console.as_deref().unwrap_or_default(),
+            "oracle-key",
+            "https://chat.mistral.ai",
+        ));
+        let observed = serde_json::json!({
+            "requests": console.requests.into_inner().unwrap_or_default(),
+            "apiBase": provider.get("api_base").and_then(|value| value.as_str()),
+            "vibeBaseUrl": vibe_base_url,
+        });
+        let expected = serde_json::json!({
+            "requests": case.requests,
+            "apiBase": case.api_base,
+            "vibeBaseUrl": case.vibe_base_url,
+        });
+        report.check(
+            "tenantDomains",
+            &case.case,
+            "resolution",
+            &expected,
+            &observed,
+        );
+    }
+    settle(&report, "tenantDomains")
+}
+
+fn run_provider_credentials(cases: &[ProviderCredentialsCase]) -> usize {
+    let mut report = Report::default();
+    for case in cases {
+        let (config, home, _temporary) = scratch_config(case.user.as_deref());
+        let mut provider = published_mistral_provider();
+        for (key, value) in &case.provider {
+            let value = match value {
+                Value::Bool(flag) => toml::Value::Boolean(*flag),
+                Value::String(text) => toml::Value::String(text.clone()),
+                other => panic!("providerCredentials/{} overrides with {other}", case.case),
+            };
+            provider.insert(key.clone(), value);
+        }
+        let result = persist_provider_credentials(
+            &config,
+            &ProviderCredentialsRequest {
+                provider,
+                console_base_url: case.console_base_url.clone(),
+                vibe_base_url: case.vibe_base_url.clone(),
+            },
+        );
+        let observed_result = serde_json::json!({
+            "provider": result.provider,
+            "consoleBaseUrl": result.console_base_url,
+            "vibeBaseUrl": result.vibe_base_url,
+        });
+        report.check(
+            "providerCredentials",
+            &case.case,
+            "result",
+            &case.result,
+            &observed_result,
+        );
+        report.check(
+            "providerCredentials",
+            &case.case,
+            "firstFailure",
+            &case.first_failure.as_deref(),
+            &result.first_failure(),
+        );
+        report.check(
+            "providerCredentials",
+            &case.case,
+            "files",
+            &case.files,
+            &config_files(&home),
+        );
+    }
+    settle(&report, "providerCredentials")
+}
+
+/// A layered configuration over a scratch home holding `user`, and an empty
+/// working directory, as the capture builds the reference's.
+fn scratch_config(user: Option<&str>) -> (LayeredConfig, PathBuf, tempfile::TempDir) {
+    let temporary = tempfile::tempdir().expect("temporary root");
+    let home = temporary.path().join("vibe-home");
+    let work = temporary.path().join("work");
+    fs::create_dir_all(&home).expect("home directory");
+    fs::create_dir_all(&work).expect("working directory");
+    if let Some(user) = user {
+        fs::write(home.join("config.toml"), user).expect("user fixture");
+    }
+    let config = LayeredConfig::new(
+        ConfigPaths {
+            vibe_home: home.clone(),
+            working_directory: work,
+        },
+        default_document(),
+    );
+    (config, home, temporary)
+}
+
+/// Every `config.toml` under `home`, as the layers replay compares them: the
+/// advisory lock this port serializes writers behind is not a configuration
+/// file.
+fn config_files(home: &Path) -> BTreeMap<String, String> {
+    walk_files(home)
+        .into_iter()
+        .filter(|path| path.file_name().is_some_and(|name| name == "config.toml"))
+        .map(|path| {
+            let relative = path
+                .strip_prefix(home)
+                .expect("a walked file sits under the home")
+                .to_string_lossy()
+                .replace('\\', "/");
+            (relative, fs::read_to_string(&path).unwrap_or_default())
+        })
+        .collect()
+}
+
+fn run_tenant_reconcile(cases: &[TenantReconcileCase]) -> usize {
+    let mut report = Report::default();
+    for case in cases {
+        let (config, home, _temporary) = scratch_config(case.user.as_deref());
+        let reasons = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sink = std::sync::Arc::clone(&reasons);
+        let _subscription = config.subscribe(None, move |event| {
+            sink.lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(event.reason.clone());
+        });
+        let mut answer = case.whoami.clone();
+        answer.insert("plan_type".to_owned(), Value::from("api"));
+        answer.insert("plan_name".to_owned(), Value::from("oracle"));
+        let whoami: WhoAmIResult =
+            serde_json::from_value(Value::Object(answer)).expect("the answer is an account");
+        reconcile_tenant_domains(&config, &whoami, &case.provider_name);
+        let observed_reasons = reasons
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        report.check(
+            "tenantReconcile",
+            &case.case,
+            "reasons",
+            &case.reasons,
+            &observed_reasons,
+        );
+        report.check(
+            "tenantReconcile",
+            &case.case,
+            "files",
+            &case.files,
+            &config_files(&home),
+        );
+    }
+    settle(&report, "tenantReconcile")
+}
+
+fn walk_files(root: &Path) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(directory) = pending.pop() {
+        for entry in fs::read_dir(&directory).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                pending.push(path);
+            } else {
+                files.push(path);
+            }
+        }
+    }
+    files.sort();
+    files
 }
 
 fn run_error_taxonomy(cases: &[ErrorCode]) -> usize {
@@ -1398,10 +1736,14 @@ fn the_committed_corpus_replays_against_this_port() {
         &corpus.constants.pkce.scripted_verifier,
     );
     scenarios += run_url_validation(&corpus.url_validation);
+    scenarios += run_url_rewrite(&corpus.url_rewrite);
+    scenarios += run_tenant_domains(&corpus.tenant_domains);
+    scenarios += run_provider_credentials(&corpus.provider_credentials);
+    scenarios += run_tenant_reconcile(&corpus.tenant_reconcile);
     scenarios += run_error_taxonomy(&corpus.error_taxonomy);
     scenarios += run_acp_auth_prose(&corpus.acp_auth_prose);
     println!(
-        "setup-auth: {scenarios} scenarios across 6 families plus the constants block \
+        "setup-auth: {scenarios} scenarios across 10 families plus the constants block \
          replayed at {}",
         &corpus.reference.commit[..12],
     );

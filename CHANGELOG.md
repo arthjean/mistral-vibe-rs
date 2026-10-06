@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Sign in to a split-horizon deployment: the custom-domain setup screen takes
+  an optional sign-in API base (Tab switches fields), and the editor's custom
+  sign-in target accepts `apiBaseUrl`. When the two origins differ the origin
+  rewrite is turned on and account calls go to the API origin.
+
+- After a sign-in against a custom console, ask its `/api/vibe/whoami` for
+  the tenant's API and chat hosts, and write the provider entry together with
+  any moved `console_base_url` and `vibe_base_url`, as the reference does. A
+  later `account/read` heals those hosts into the configuration when they
+  change, and shows no plan while the active model is not a Mistral one.
+
 - Compose the user and the project configuration files as two layers, as the
   reference does: a trusted project file inherits what it leaves unset from
   the user file, and a write that names no target lands in the user file.

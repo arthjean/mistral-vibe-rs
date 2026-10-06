@@ -18,8 +18,9 @@ use std::sync::Arc;
 
 use toml::{Table, Value};
 use vibe_app_server::workspace::WorkspaceService;
-use vibe_core::auth::PersistOutcome;
+use vibe_core::auth::{PersistOutcome, ProviderCredentialsRequest, ProviderCredentialsResult};
 use vibe_core::telemetry::TelemetryRecord;
+use vibe_core::whoami::{HttpWhoAmIGateway, resolve_tenant_domains};
 
 use self::context::OnboardingContext;
 use self::model::{OnboardingOutcome, OnboardingPorts};
@@ -84,9 +85,9 @@ pub fn exit_plan(outcome: &OnboardingOutcome, global_env_file: &Path) -> ExitPla
         OnboardingOutcome::ProviderConfigError { detail } => ExitPlan {
             exit_code: None,
             message: format!(
-                "Warning: the API key was saved, but the provider entry was not: {detail}. \
-                 Update the provider's browser_auth_base_url and browser_auth_api_base_url \
-                 settings in config.toml yourself."
+                "Warning: the API key was saved, but the sign-in configuration was not \
+                 ({detail}). Update the provider's browser_auth_base_url and \
+                 browser_auth_api_base_url settings in config.toml yourself."
             ),
             persist_theme: true,
         },
@@ -98,8 +99,9 @@ pub fn exit_plan(outcome: &OnboardingOutcome, global_env_file: &Path) -> ExitPla
     }
 }
 
-/// The production ports: the shared credential store for the key, and the
-/// configuration service for the provider entry.
+/// The production ports: the shared credential store for the key, the
+/// configuration service for the provider entry and base URLs, and the
+/// console's `/whoami` for the tenant's hosts.
 struct ProductionPorts<'a> {
     store: &'a PersistedCredentialStore,
     workspace: &'a WorkspaceService,
@@ -136,8 +138,35 @@ impl OnboardingPorts for ProductionPorts<'_> {
         report.outcome
     }
 
-    fn persist_provider(&mut self, provider: &Table) -> bool {
-        self.workspace.persist_provider(provider).is_ok()
+    fn persist_provider_credentials(
+        &mut self,
+        request: &ProviderCredentialsRequest,
+    ) -> ProviderCredentialsResult {
+        vibe_core::auth::persist_provider_credentials(&self.workspace.layered_config(), request)
+    }
+
+    fn resolve_tenant_domains(
+        &mut self,
+        provider: Table,
+        console_base_url: &str,
+        api_key: &str,
+        vibe_base_url: &str,
+    ) -> (Table, String) {
+        let Some(gateway) = HttpWhoAmIGateway::production() else {
+            return (provider, vibe_base_url.to_owned());
+        };
+        // The screens wait on the lookup, as the reference's awaited
+        // `persist_credentials` holds its screen; the multi-threaded runtime
+        // keeps the other tasks running meanwhile.
+        tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(resolve_tenant_domains(
+                &gateway,
+                provider,
+                console_base_url,
+                api_key,
+                vibe_base_url,
+            ))
+        })
     }
 }
 

@@ -14,7 +14,20 @@ use toml::{Table, Value};
 
 use super::sign_in_http::{
     DEFAULT_BROWSER_AUTH_API_BASE_URL, DEFAULT_BROWSER_AUTH_BASE_URL, browser_sign_in_bases,
+    effective_browser_auth_url,
 };
+use crate::pyurl::{OriginKey, PyUrl, default_port, normalize_url_origin};
+
+/// Reference `DEFAULT_CONSOLE_BASE_URL`: the public console account calls go
+/// to, and the one console tenant discovery never asks.
+pub const DEFAULT_CONSOLE_BASE_URL: &str = "https://console.mistral.ai";
+
+/// Reference `DEFAULT_VIBE_BASE_URL`: the public chat base.
+pub const DEFAULT_VIBE_BASE_URL: &str = "https://chat.mistral.ai";
+
+/// The shipped Mistral provider's `api_base`, reference
+/// `f"{DEFAULT_MISTRAL_SERVER_URL}/v1"`.
+pub const DEFAULT_MISTRAL_API_BASE: &str = "https://api.mistral.ai/v1";
 
 /// Reference `DEFAULT_ACTIVE_MODEL_CONFIG.alias`: the alias the provider
 /// resolution falls back to when the configured active model names no entry.
@@ -50,12 +63,57 @@ pub fn is_valid_custom_domain(value: &str) -> bool {
 }
 
 /// Reference `resolve_browser_auth_urls`: the browser base is the normalized
-/// origin as typed, and the API base is that origin with `/api` appended.
+/// origin as typed, and the API base is the separately supplied one when a
+/// split-horizon deployment names it, normalized the same way, or that origin
+/// with `/api` appended otherwise. An empty API base reads as absent.
 #[must_use]
-pub fn resolve_browser_auth_urls(domain: &str) -> (String, String) {
+pub fn resolve_browser_auth_urls(domain: &str, api_base_url: Option<&str>) -> (String, String) {
     let base = normalize_origin(domain);
-    let api = format!("{base}/api");
-    (base, api)
+    match api_base_url.filter(|api| !api.is_empty()) {
+        Some(api) => (base, normalize_origin(api)),
+        None => {
+            let api = format!("{base}/api");
+            (base, api)
+        }
+    }
+}
+
+/// Reference `_origin_key`: the origin a configured URL names once
+/// normalized, a malformed port reading as the scheme's default rather than
+/// failing, since the gateway rejects that URL later anyway. `None` for a
+/// value whose bracketed host does not split, where the reference raises.
+fn origin_key(value: &str) -> Option<OriginKey> {
+    let parsed = PyUrl::try_split(&normalize_origin(value)).ok()?;
+    Some(normalize_url_origin(&parsed).unwrap_or_else(|_| {
+        let scheme = parsed.scheme.to_ascii_lowercase();
+        let port = default_port(&scheme);
+        (scheme, parsed.hostname(), port)
+    }))
+}
+
+/// Reference `browser_auth_requires_origin_rewrite`: whether the browser and
+/// API bases sit on different origins, which is what a split-horizon
+/// deployment looks like and what turns `browser_auth_allow_origin_rewrite` on.
+#[must_use]
+pub fn browser_auth_requires_origin_rewrite(browser_base_url: &str, api_base_url: &str) -> bool {
+    origin_key(browser_base_url) != origin_key(api_base_url)
+}
+
+/// Reference `browser_auth_account_base`: the base account calls (`/whoami`,
+/// plan lookups) go to. On a split-horizon deployment the browser console is
+/// not reachable from here but the API base is, so its origin answers; on a
+/// single host the normalized browser base answers, path prefix included.
+#[must_use]
+pub fn browser_auth_account_base(browser_base_url: &str, api_base_url: Option<&str>) -> String {
+    let browser_base = normalize_origin(browser_base_url);
+    let Some(api_base_url) = api_base_url.filter(|api| !api.is_empty()) else {
+        return browser_base;
+    };
+    if !browser_auth_requires_origin_rewrite(browser_base_url, api_base_url) {
+        return browser_base;
+    }
+    let parsed = PyUrl::split(&normalize_origin(api_base_url));
+    format!("{}://{}", parsed.scheme, parsed.netloc)
 }
 
 /// Reference `is_likely_mistral_private_cloud_domain`: a Mistral-hosted
@@ -83,6 +141,83 @@ pub fn configured_custom_domain(provider: &Table) -> Option<&str> {
         .get("browser_auth_base_url")
         .and_then(Value::as_str)
         .filter(|base| !base.is_empty() && *base != DEFAULT_BROWSER_AUTH_BASE_URL)
+}
+
+/// The split-horizon API base the configuration already carries: the
+/// provider's browser-auth API base when both browser-auth URLs are set and
+/// sit on different origins. A same-origin API base is the derived default,
+/// so it answers `None`. Reference `OnboardingApp.configured_custom_api_base`.
+#[must_use]
+pub fn configured_custom_api_base(provider: &Table) -> Option<String> {
+    let browser = effective_browser_auth_url(provider, "browser_auth_base_url")
+        .filter(|value| !value.is_empty())?;
+    let api = effective_browser_auth_url(provider, "browser_auth_api_base_url")
+        .filter(|value| !value.is_empty())?;
+    browser_auth_requires_origin_rewrite(&browser, &api).then_some(api)
+}
+
+/// The provider's `browser_auth_allow_origin_rewrite`, `false` when absent.
+#[must_use]
+pub fn allows_origin_rewrite(provider: &Table) -> bool {
+    provider
+        .get("browser_auth_allow_origin_rewrite")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+}
+
+/// Points `provider` at a browser console: both browser-auth URLs, and the
+/// origin-rewrite flag a split between them requires. Reference
+/// `OnboardingApp.apply_custom_domain` and the custom target of
+/// `AcpAuthController._resolve_sign_in_provider`.
+pub fn apply_browser_auth_urls(provider: &mut Table, base_url: &str, api_base_url: &str) {
+    provider.insert(
+        "browser_auth_base_url".to_owned(),
+        Value::String(base_url.to_owned()),
+    );
+    provider.insert(
+        "browser_auth_api_base_url".to_owned(),
+        Value::String(api_base_url.to_owned()),
+    );
+    provider.insert(
+        "browser_auth_allow_origin_rewrite".to_owned(),
+        Value::Boolean(browser_auth_requires_origin_rewrite(base_url, api_base_url)),
+    );
+}
+
+/// Whether two provider entries are the same provider model: equal field by
+/// field once every omitted field reads as its default, which is how the
+/// reference's validated models compare. An entry that spells a default out
+/// and one that leaves it implicit are the same provider.
+#[must_use]
+pub fn same_provider(left: &Table, right: &Table) -> bool {
+    provider_values(left) == provider_values(right)
+}
+
+fn provider_values(provider: &Table) -> Table {
+    let mut values = provider.clone();
+    let defaults = [
+        ("api_key_env_var", Value::String(String::new())),
+        ("browser_auth_allow_origin_rewrite", Value::Boolean(false)),
+        ("api_style", Value::String("openai".to_owned())),
+        ("backend", Value::String("generic".to_owned())),
+        (
+            "reasoning_field_name",
+            Value::String("reasoning_content".to_owned()),
+        ),
+        ("emits_finish_reason", Value::Boolean(true)),
+        ("project_id", Value::String(String::new())),
+        ("region", Value::String(String::new())),
+        ("extra_headers", Value::Table(Table::new())),
+    ];
+    for (key, default) in defaults {
+        values.entry(key).or_insert(default);
+    }
+    for key in ["browser_auth_base_url", "browser_auth_api_base_url"] {
+        if let Some(url) = effective_browser_auth_url(provider, key) {
+            values.insert(key.to_owned(), Value::String(url));
+        }
+    }
+    values
 }
 
 /// Whether the provider entry can browser sign-in at all, which is the
@@ -116,7 +251,7 @@ pub fn default_mistral_provider() -> Table {
     table.insert("name".to_owned(), Value::String("mistral".to_owned()));
     table.insert(
         "api_base".to_owned(),
-        Value::String("https://api.mistral.ai/v1".to_owned()),
+        Value::String(DEFAULT_MISTRAL_API_BASE.to_owned()),
     );
     table.insert(
         "api_key_env_var".to_owned(),

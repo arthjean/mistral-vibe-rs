@@ -14,14 +14,14 @@ use super::context::{
 #[test]
 fn a_scheme_less_domain_upgrades_to_https_and_an_explicit_scheme_is_respected() {
     assert_eq!(
-        resolve_browser_auth_urls("console.internal.example"),
+        resolve_browser_auth_urls("console.internal.example", None),
         (
             "https://console.internal.example".to_owned(),
             "https://console.internal.example/api".to_owned()
         )
     );
     assert_eq!(
-        resolve_browser_auth_urls("http://localhost:8080"),
+        resolve_browser_auth_urls("http://localhost:8080", Some("")),
         (
             "http://localhost:8080".to_owned(),
             "http://localhost:8080/api".to_owned()

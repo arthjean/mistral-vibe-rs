@@ -1,6 +1,6 @@
-//! The provider upsert the onboarding flow persists: keyed by name, carrying
-//! only non-default fields, writing nothing for an unchanged provider, and
-//! leaving fields this port does not model where they stand.
+//! The provider upsert the sign-in flows persist: keyed by name, carrying
+//! only non-default fields in model order, written even for an unchanged
+//! provider, and replacing the whole entry of the same name.
 
 use super::registry::default_document;
 use super::*;
@@ -26,7 +26,14 @@ fn store(user: &str) -> (LayeredConfig, PathBuf, tempfile::TempDir) {
 
 fn effective_mistral(config: &LayeredConfig) -> Table {
     let snapshot = config.load().expect("the configuration loads");
-    super::providers::provider_entry(snapshot.effective.get("providers"), "mistral")
+    snapshot
+        .effective
+        .get("providers")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_table)
+        .find(|entry| entry.get("name").and_then(Value::as_str) == Some("mistral"))
         .expect("the shipped mistral provider resolves")
         .clone()
 }
@@ -48,14 +55,26 @@ fn written_providers(path: &PathBuf) -> Vec<Table> {
 }
 
 #[test]
-fn an_unchanged_provider_writes_nothing() {
+fn an_unchanged_provider_is_written_with_its_non_default_fields_in_model_order() {
     let (config, path, _root) = store("");
     let provider = effective_mistral(&config);
-    let written = config
-        .persist_provider(&provider)
-        .expect("the comparison succeeds");
-    assert!(written.is_none(), "an identical provider is not persisted");
-    assert!(!path.exists(), "no configuration file appears");
+    config
+        .persist_provider(&provider, "onboarding")
+        .expect("the upsert succeeds");
+    let providers = written_providers(&path);
+    assert_eq!(providers.len(), 1);
+    let keys = providers[0].keys().map(String::as_str).collect::<Vec<_>>();
+    assert_eq!(
+        keys,
+        [
+            "name",
+            "api_base",
+            "api_key_env_var",
+            "browser_auth_base_url",
+            "browser_auth_api_base_url",
+            "backend"
+        ]
+    );
 }
 
 #[test]
@@ -67,9 +86,8 @@ fn a_modified_provider_is_upserted_with_only_its_non_default_fields() {
         Value::String("https://console.internal.example".to_owned()),
     );
     config
-        .persist_provider(&provider)
-        .expect("the upsert succeeds")
-        .expect("a write happened");
+        .persist_provider(&provider, "onboarding")
+        .expect("the upsert succeeds");
     let providers = written_providers(&path);
     assert_eq!(providers.len(), 1);
     let entry = &providers[0];
@@ -89,27 +107,29 @@ fn a_modified_provider_is_upserted_with_only_its_non_default_fields() {
 }
 
 #[test]
-fn unmodeled_fields_survive_the_upsert_and_a_custom_url_is_preserved() {
+fn the_upsert_replaces_the_whole_entry_and_leaves_the_others_alone() {
     let (config, path, _root) = store(concat!(
         "[[providers]]\n",
         "name = \"mistral\"\n",
         "api_base = \"https://api.mistral.ai/v1\"\n",
         "browser_auth_base_url = \"https://console.internal.example\"\n",
-        "future_field = \"kept\"\n",
+        "future_field = \"dropped\"\n",
+        "[[providers]]\n",
+        "name = \"other\"\n",
+        "api_base = \"https://other.example/v1\"\n",
+        "other_field = \"kept\"\n",
     ));
     let mut provider = effective_mistral(&config);
     provider.insert("region".to_owned(), Value::String("eu-west".to_owned()));
     config
-        .persist_provider(&provider)
-        .expect("the upsert succeeds")
-        .expect("a write happened");
+        .persist_provider(&provider, "onboarding")
+        .expect("the upsert succeeds");
     let providers = written_providers(&path);
-    assert_eq!(providers.len(), 1);
+    assert_eq!(providers.len(), 2);
     let entry = &providers[0];
-    assert_eq!(
-        entry.get("future_field").and_then(Value::as_str),
-        Some("kept"),
-        "a field this port does not model survives the write"
+    assert!(
+        !entry.contains_key("future_field"),
+        "the provider model drops a field it does not declare"
     );
     assert_eq!(
         entry.get("browser_auth_base_url").and_then(Value::as_str),
@@ -117,13 +137,18 @@ fn unmodeled_fields_survive_the_upsert_and_a_custom_url_is_preserved() {
         "the configured console URL is not replaced by the shipped default"
     );
     assert_eq!(entry.get("region").and_then(Value::as_str), Some("eu-west"));
+    assert_eq!(
+        providers[1].get("other_field").and_then(Value::as_str),
+        Some("kept"),
+        "an entry the upsert does not address keeps every field"
+    );
 }
 
 #[test]
 fn a_provider_without_a_name_is_refused() {
     let (config, path, _root) = store("");
     let error = config
-        .persist_provider(&Table::new())
+        .persist_provider(&Table::new(), "onboarding")
         .expect_err("a nameless entry cannot be keyed");
     assert!(matches!(error, ConfigError::InvalidProvider(_)));
     assert!(!path.exists());
@@ -145,9 +170,8 @@ fn an_upsert_keyed_by_name_replaces_the_entry_in_place() {
         Value::String("https://new.example/v1".to_owned()),
     );
     config
-        .persist_provider(&provider)
-        .expect("the upsert succeeds")
-        .expect("a write happened");
+        .persist_provider(&provider, "onboarding")
+        .expect("the upsert succeeds");
     let providers = written_providers(&path);
     assert_eq!(providers.len(), 2, "the unrelated entry survives");
     assert_eq!(

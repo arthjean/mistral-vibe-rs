@@ -13,14 +13,19 @@ fake clock observe the whole state machine. ``HttpBrowserSignInGateway``
 accepts its HTTP client, so a recording stub captures every request it would
 have issued and feeds it scripted ``httpx.Response`` objects.
 
-Six families come out, and are what the Rust replay compares:
+Eleven families come out, and are what the Rust replay compares:
 
-``authState``       the six provenance states over the five-source matrix
-``persistence``     save, fallback, removal and the keyring read-and-migrate
-``signInProtocol``  the service state machine and the gateway wire behavior
-``urlValidation``   the origin and path-prefix verdict per server URL
-``errorTaxonomy``   the eleven error codes and their message digests
-``acpAuthProse``    the editor-protocol method labels, as length and digest
+``authState``            the six provenance states over the five-source matrix
+``persistence``          save, fallback, removal and the keyring read-and-migrate
+``signInProtocol``       the service state machine and the gateway wire behavior
+``urlValidation``        the origin and path-prefix verdict per server URL
+``urlRewrite``           the URL a split-horizon gateway re-homes each one onto
+``tenantDomains``        what ``/whoami`` tenant discovery adopts and refuses
+``providerCredentials``  the configuration a sign-in's batched write leaves
+``acpSignIn``            what the editor-protocol sign-in resolves and writes
+``tenantReconcile``      what an account read heals in the configuration
+``errorTaxonomy``        the eleven error codes and their message digests
+``acpAuthProse``         the editor-protocol method labels, as length and digest
 
 Two artifacts come out of a run::
 
@@ -73,7 +78,7 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 4
 DEFAULT_OUTPUT = Path(".parity/setup-auth-corpus.json")
 DEFAULT_CORPUS = Path("crates/vibe-core/tests/setup-auth/corpus.json")
 DEFAULT_CACHE = Path(".parity")
@@ -1145,6 +1150,14 @@ API_BASE = "https://console.mistral.ai/api"
 CUSTOM_BROWSER_BASE = "https://console.internal.example"
 CUSTOM_API_BASE = "https://console.internal.example/api"
 
+SPLIT_API_BASE = "https://connector.internal.example:8443/api"
+PUBLIC_CREATE = {
+    "process_id": "oracle-process",
+    "sign_in_url": "https://console.public.example/oracle/sign-in?x=1#y",
+    "poll_url": "https://console.public.example/api/oracle/poll",
+    "expires_at": "2026-01-01T00:10:00Z",
+}
+
 WELL_FORMED_CREATE = {
     "process_id": "oracle-process",
     "sign_in_url": f"{BROWSER_BASE}/oracle/sign-in",
@@ -1305,6 +1318,53 @@ def gateway_cases() -> list[dict[str, Any]]:
             "op": "exchange",
             "responses": [{"rawBody": ""}],
         },
+        {
+            "case": "gateway-create-rehomes-split-horizon-urls",
+            "op": "create",
+            "browserBase": CUSTOM_BROWSER_BASE,
+            "apiBase": SPLIT_API_BASE,
+            "allowOriginRewrite": True,
+            "responses": [{"body": PUBLIC_CREATE}],
+        },
+        {
+            "case": "gateway-create-refuses-foreign-urls-without-the-rewrite",
+            "op": "create",
+            "browserBase": CUSTOM_BROWSER_BASE,
+            "apiBase": SPLIT_API_BASE,
+            "responses": [{"body": PUBLIC_CREATE}],
+        },
+        {
+            "case": "gateway-create-rewrite-still-holds-the-path",
+            "op": "create",
+            "browserBase": CUSTOM_BROWSER_BASE,
+            "apiBase": SPLIT_API_BASE,
+            "allowOriginRewrite": True,
+            "responses": [
+                {
+                    "body": {
+                        **PUBLIC_CREATE,
+                        "poll_url": "https://console.public.example/elsewhere/poll",
+                    }
+                }
+            ],
+        },
+        {
+            "case": "gateway-poll-rehomes-a-foreign-poll-url",
+            "op": "poll",
+            "browserBase": CUSTOM_BROWSER_BASE,
+            "apiBase": SPLIT_API_BASE,
+            "allowOriginRewrite": True,
+            "pollUrl": "https://console.public.example/api/oracle/poll?attempt=1",
+            "responses": [{"body": {"status": "pending"}}],
+        },
+        {
+            "case": "gateway-exchange-goes-to-the-configured-api-base",
+            "op": "exchange",
+            "browserBase": CUSTOM_BROWSER_BASE,
+            "apiBase": SPLIT_API_BASE,
+            "allowOriginRewrite": True,
+            "responses": [{"body": {"api_key": "oracle-api-key"}}],
+        },
     ]
 
 
@@ -1319,6 +1379,7 @@ def capture_gateway() -> tuple[list[dict[str, Any]], dict[str, list[str]]]:
         gateway = HttpBrowserSignInGateway(
             case.get("browserBase", BROWSER_BASE),
             case.get("apiBase", API_BASE),
+            allow_origin_rewrite=case.get("allowOriginRewrite", False),
             client=client,  # type: ignore[arg-type]
         )
 
@@ -1359,6 +1420,8 @@ def capture_gateway() -> tuple[list[dict[str, Any]], dict[str, list[str]]]:
                 "op": case["op"],
                 "browserBase": case.get("browserBase", BROWSER_BASE),
                 "apiBase": case.get("apiBase", API_BASE),
+                "allowOriginRewrite": case.get("allowOriginRewrite", False),
+                **({"pollInput": case["pollUrl"]} if "pollUrl" in case else {}),
                 "script": case["responses"],
                 "requests": client.requests,
                 **outcome,
@@ -1509,6 +1572,851 @@ def capture_url_validation() -> list[dict[str, Any]]:
         except BrowserSignInError:
             outcome = {"verdict": "rejected"}
         records.append({**case, **outcome})
+    return records
+
+
+# --------------------------------------------------------------------------
+# urlRewrite
+# --------------------------------------------------------------------------
+
+
+def url_rewrite_cases() -> list[dict[str, Any]]:
+    """Every validation case again, plus the shapes only a re-homing gateway
+    meets: a foreign origin under the base path, a base carrying its own port
+    or credentials, and values a WHATWG parser would normalize."""
+
+    connector = "https://connector.internal.example:8443/api"
+    public = "https://console.public.example"
+    extra = [
+        ("foreign-origin-rehomed", f"{public}/api/vibe/sign-in/1", connector),
+        ("foreign-origin-outside-the-base-path", f"{public}/other/1", connector),
+        ("foreign-origin-onto-a-bare-base", f"{public}/any/path?q=1", "https://connector.internal.example"),
+        ("base-default-port-kept-verbatim", f"{public}/api/poll", "https://connector.internal.example:443/api"),
+        ("base-credentials-spliced-in", f"{public}/api/poll", "https://user:secret@connector.internal.example/api"),
+        ("value-credentials-dropped", "https://user:pw@console.public.example/api/poll", connector),
+        ("value-dot-segment-kept-verbatim", f"{public}/api/./poll?x=1#f", connector),
+        ("value-encoding-kept-verbatim", f"{public}/api/a%20b/%7Euser", connector),
+        ("value-empty-path-under-bare-base", public, "https://connector.internal.example"),
+        ("value-upper-case-host", "https://CONSOLE.PUBLIC.EXAMPLE/api/poll", connector),
+        ("relative-value-rehomed", "/api/poll?x=1", connector),
+        ("schemeless-value-stays-outside", "console.public.example/api/poll", connector),
+        ("network-path-value-rehomed", "//console.public.example/api/poll", connector),
+        ("custom-scheme-value-rehomed", "custom://console.public.example/api/poll", connector),
+        ("file-scheme-value-rehomed", "file:///api/poll", connector),
+        ("http-base-for-an-https-value", f"{public}/api/x", "http://gateway.local:8080/api"),
+        ("ipv6-base", f"{public}/api/x", "https://[::1]:8443/api"),
+        ("ipv6-value", "https://[2001:db8::1]/api/x", connector),
+        ("bad-ipv6-value", "https://[::1/api/x", connector),
+        ("bad-port-on-the-base", f"{public}/api/x", "https://connector.internal.example:port/api"),
+        ("encoded-escape-under-rewrite", f"{public}/api/%2e%2e/admin", connector),
+        ("tab-and-newline-in-the-value", f"{public}/api/\tpo\nll", connector),
+        ("leading-space-in-the-value", f"  {public}/api/poll", connector),
+    ]
+    return [
+        *({"case": case["case"], "value": case["value"], "base": case["base"]} for case in url_validation_cases()),
+        *({"case": name, "value": value, "base": base} for name, value, base in extra),
+    ]
+
+
+def capture_url_rewrite() -> list[dict[str, Any]]:
+    """``_validate_url_against_base_url`` with the rewrite on. A value
+    ``urlsplit`` refuses raises before the validation's own error, which the
+    gateway's start turns into the same refusal, so both read as rejected."""
+
+    from vibe.setup.auth.browser_sign_in_gateway import (
+        BrowserSignInError,
+        BrowserSignInErrorCode,
+    )
+    from vibe.setup.auth.http_browser_sign_in_gateway import (
+        _validate_url_against_base_url,
+    )
+
+    records = []
+    for case in url_rewrite_cases():
+        try:
+            returned = _validate_url_against_base_url(
+                case["value"],
+                base_url=case["base"],
+                message="oracle probe",
+                code=BrowserSignInErrorCode.POLL_FAILED,
+                allow_origin_rewrite=True,
+            )
+            outcome: dict[str, Any] = {"verdict": "accepted", "returned": returned}
+        except (BrowserSignInError, ValueError):
+            outcome = {"verdict": "rejected"}
+        records.append({**case, **outcome})
+    return records
+
+
+# --------------------------------------------------------------------------
+# tenantDomains
+# --------------------------------------------------------------------------
+
+
+def tenant_sanitize_cases() -> list[str]:
+    return [
+        "https://api.tenant.example",
+        "https://api.tenant.example/",
+        "https://api.tenant.example///",
+        "https://gateway.tenant.example/mistral",
+        "HTTPS://API.TENANT.EXAMPLE",
+        "https://user:pw@api.tenant.example:8443/",
+        "http://api.tenant.example",
+        "ftp://api.tenant.example",
+        "api.tenant.example",
+        "//api.tenant.example",
+        "https://",
+        "https:///path",
+        "",
+        "https://api.tenant.example/../evil",
+        "https://api.tenant.example/a..b",
+        "https://api.tenant.example/x;..",
+        "https://api.tenant.example?q=..",
+        "https://api.tenant.example#..",
+        "https://[::1",
+        "https://[::1]:8443/v",
+        " https://api.tenant.example",
+    ]
+
+
+#: Each answer the console gives, as a status and a body; ``rawBody`` is a
+#: body that is not JSON.
+TENANT_ANSWERS: list[dict[str, Any]] = [
+    {"case": "unreachable-console", "status": 503, "body": {}},
+    {"case": "refused-credential", "status": 401, "body": {}},
+    {"case": "forbidden-credential", "status": 403, "body": {}},
+    {"case": "no-hosts", "status": 200, "body": {"plan_type": "api", "plan_name": "x"}},
+    {
+        "case": "api-host-only",
+        "status": 200,
+        "body": {"plan_type": "api", "plan_name": "x", "api_base": "https://api.tenant.example/"},
+    },
+    {
+        "case": "chat-host-only",
+        "status": 200,
+        "body": {"plan_type": "chat", "plan_name": "TEAM", "vibe_base": "https://chat.tenant.example"},
+    },
+    {
+        "case": "both-hosts",
+        "status": 200,
+        "body": {
+            "plan_type": "mistral_code",
+            "plan_name": "E",
+            "api_base": "https://gateway.tenant.example/mistral",
+            "vibe_base": "https://chat.tenant.example/",
+        },
+    },
+    {
+        "case": "unsafe-api-host-safe-chat-host",
+        "status": 200,
+        "body": {
+            "plan_type": "api",
+            "plan_name": "x",
+            "api_base": "http://api.tenant.example",
+            "vibe_base": "https://chat.tenant.example",
+        },
+    },
+    {
+        "case": "empty-hosts",
+        "status": 200,
+        "body": {"plan_type": "api", "plan_name": "x", "api_base": "", "vibe_base": ""},
+    },
+    {
+        "case": "null-hosts",
+        "status": 200,
+        "body": {"plan_type": "api", "plan_name": "x", "api_base": None, "vibe_base": None},
+    },
+    {
+        "case": "host-of-the-wrong-type",
+        "status": 200,
+        "body": {"plan_type": "api", "plan_name": "x", "api_base": 5},
+    },
+    {
+        "case": "unknown-plan-type",
+        "status": 200,
+        "body": {"plan_type": "enterprise", "plan_name": "x", "api_base": "https://api.tenant.example"},
+    },
+    {
+        "case": "mixed-case-plan-type",
+        "status": 200,
+        "body": {"plan_type": " API ", "plan_name": "x", "api_base": "https://api.tenant.example"},
+    },
+    {
+        "case": "extra-fields-ignored",
+        "status": 200,
+        "body": {"plan_type": "api", "plan_name": "x", "unknown": [1], "api_base": "https://api.tenant.example"},
+    },
+    {"case": "body-not-json", "status": 200, "rawBody": "<html>"},
+    {"case": "body-not-an-object", "status": 200, "body": ["api_base"]},
+]
+
+
+def capture_tenant_domains() -> list[dict[str, Any]]:
+    """``_sanitize_tenant_url`` over hostile and benign values, then the
+    reference's own ``resolve_tenant_domains`` against a scripted console: only
+    the HTTP transport is replaced, so the gateway's status handling, the
+    strict answer model and the adoption are all the reference's."""
+
+    import httpx
+
+    import vibe.setup.auth.whoami as whoami_module
+    from vibe.core.config import DEFAULT_PROVIDERS
+
+    records: list[dict[str, Any]] = []
+    for candidate in tenant_sanitize_cases():
+        records.append(
+            {
+                "case": f"sanitize:{candidate}" if candidate else "sanitize:<empty>",
+                "candidate": candidate,
+                "sanitized": whoami_module._sanitize_tenant_url(candidate, field="api"),
+            }
+        )
+
+    mistral = next(p for p in DEFAULT_PROVIDERS if p.name == "mistral")
+    original_client = whoami_module.VibeAsyncHTTPClient
+    for answer in TENANT_ANSWERS:
+        for console in ("https://console.internal.example", "https://connector.internal.example:8443/"):
+            requests: list[dict[str, Any]] = []
+
+            def handler(request: httpx.Request, answer: dict[str, Any] = answer) -> httpx.Response:
+                requests.append(
+                    {
+                        "method": request.method,
+                        "url": str(request.url),
+                        "authorization": request.headers.get("authorization"),
+                    }
+                )
+                if "rawBody" in answer:
+                    return httpx.Response(answer["status"], text=answer["rawBody"])
+                return httpx.Response(answer["status"], json=answer["body"])
+
+            def client(**keywords: Any) -> Any:
+                return original_client(transport=httpx.MockTransport(handler), **keywords)
+
+            with patched(whoami_module, "VibeAsyncHTTPClient", client):
+                provider, vibe_base_url = asyncio.run(
+                    whoami_module.resolve_tenant_domains(
+                        mistral, console, "oracle-key", "https://chat.mistral.ai"
+                    )
+                )
+            records.append(
+                {
+                    "case": f"resolve:{answer['case']}@{console}",
+                    "console": console,
+                    "answer": {key: value for key, value in answer.items() if key != "case"},
+                    "requests": requests,
+                    "apiBase": provider.api_base,
+                    "vibeBaseUrl": vibe_base_url,
+                }
+            )
+    return records
+
+
+# --------------------------------------------------------------------------
+# providerCredentials
+# --------------------------------------------------------------------------
+
+
+def provider_credentials_cases() -> list[dict[str, Any]]:
+    custom = {
+        "browser_auth_base_url": "https://console.internal.example",
+        "browser_auth_api_base_url": "https://console.internal.example/api",
+    }
+    split = {
+        "browser_auth_base_url": "https://console.internal.example",
+        "browser_auth_api_base_url": "https://connector.internal.example/api",
+        "browser_auth_allow_origin_rewrite": True,
+    }
+    return [
+        {
+            "case": "fresh-home-custom-console",
+            "user": None,
+            "provider": custom,
+            "consoleBaseUrl": "https://console.internal.example",
+        },
+        {
+            "case": "fresh-home-split-horizon-with-tenant-hosts",
+            "user": None,
+            "provider": {**split, "api_base": "https://api.tenant.example/v1"},
+            "consoleBaseUrl": "https://connector.internal.example",
+            "vibeBaseUrl": "https://chat.tenant.example",
+        },
+        {
+            "case": "replaces-the-configured-entry",
+            "user": (
+                'theme = "dark"\n'
+                'console_base_url = "https://old.example"\n\n'
+                "[[providers]]\n"
+                'name = "mistral"\n'
+                'api_base = "https://api.old.example/v1"\n'
+                'api_key_env_var = "MISTRAL_API_KEY"\n'
+                'browser_auth_base_url = "https://old.example"\n'
+                "browser_auth_allow_origin_rewrite = true\n"
+                'backend = "mistral"\n'
+                'custom_note = "kept or dropped"\n\n'
+                "[[providers]]\n"
+                'name = "other"\n'
+                'api_base = "https://other.example/v1"\n'
+                'other_note = "kept or dropped"\n'
+            ),
+            "provider": custom,
+            "consoleBaseUrl": "https://console.internal.example",
+        },
+        {
+            "case": "provider-only",
+            "user": 'console_base_url = "https://console.internal.example"\n',
+            "provider": custom,
+        },
+        {
+            "case": "default-provider-with-moved-bases",
+            "user": None,
+            "provider": {},
+            "consoleBaseUrl": "https://console.mistral.ai",
+            "vibeBaseUrl": "https://chat.mistral.ai",
+        },
+        {
+            "case": "keeps-unrelated-tables",
+            "user": (
+                'active_model = "devstral"\n\n'
+                "[tools.bash]\n"
+                'permission = "always"\n'
+            ),
+            "provider": split,
+            "vibeBaseUrl": "https://chat.tenant.example",
+        },
+    ]
+
+
+def capture_provider_credentials() -> list[dict[str, Any]]:
+    """The reference's own ``persist_provider_credentials`` against a scratch
+    vibe home and an empty working directory, recording the result per field
+    and every file the batch leaves under the home."""
+
+    from vibe.core.config import DEFAULT_PROVIDERS
+    from vibe.core.config.harness_files import init_harness_files_manager
+    from vibe.setup.auth.api_key_persistence import (
+        ProviderCredentialsPersistRequest,
+        persist_provider_credentials,
+    )
+
+    # The sources the terminal and the editor initialize before onboarding.
+    init_harness_files_manager("user", "project")
+    mistral = next(p for p in DEFAULT_PROVIDERS if p.name == "mistral")
+    records = []
+    for case in provider_credentials_cases():
+        saved = dict(os.environ)
+        previous = os.getcwd()
+        with tempfile.TemporaryDirectory(prefix="setup-auth-credentials-") as scratch:
+            home = Path(scratch) / "vibe-home"
+            home.mkdir()
+            cwd = Path(scratch) / "work"
+            cwd.mkdir()
+            if case["user"] is not None:
+                (home / "config.toml").write_text(case["user"], encoding="utf-8")
+            try:
+                for key in [key for key in os.environ if key.startswith("VIBE_")]:
+                    os.environ.pop(key)
+                os.environ["VIBE_HOME"] = str(home)
+                os.chdir(cwd)
+                request = ProviderCredentialsPersistRequest(
+                    provider=mistral.model_copy(update=case["provider"]),
+                    console_base_url=case.get("consoleBaseUrl"),
+                    vibe_base_url=case.get("vibeBaseUrl"),
+                )
+                result = asyncio.run(persist_provider_credentials(request))
+            finally:
+                os.chdir(previous)
+                os.environ.clear()
+                os.environ.update(saved)
+            files = {
+                str(path.relative_to(home)): path.read_text(encoding="utf-8")
+                for path in sorted(home.rglob("*"))
+                if path.is_file()
+            }
+        records.append(
+            {
+                **case,
+                "result": {
+                    "provider": result.provider,
+                    "consoleBaseUrl": result.console_base_url,
+                    "vibeBaseUrl": result.vibe_base_url,
+                },
+                "firstFailure": result.first_failure(),
+                "files": files,
+            }
+        )
+    return records
+
+
+# --------------------------------------------------------------------------
+# tenantReconcile
+# --------------------------------------------------------------------------
+
+
+def tenant_reconcile_cases() -> list[dict[str, Any]]:
+    """Each case: the user file, the provider the account read used, and the
+    ``/whoami`` hosts the console answered."""
+
+    tenant_provider = (
+        "[[providers]]\n"
+        'name = "mistral"\n'
+        'api_base = "https://api.tenant.example/v1"\n'
+        'api_key_env_var = "MISTRAL_API_KEY"\n'
+        'browser_auth_base_url = "https://console.internal.example"\n'
+        'backend = "mistral"\n'
+    )
+    return [
+        {"case": "no-hosts-writes-nothing", "user": None, "providerName": "mistral", "whoami": {}},
+        {
+            "case": "a-new-api-host-moves-the-provider",
+            "user": None,
+            "providerName": "mistral",
+            "whoami": {"api_base": "https://api.tenant.example/"},
+        },
+        {
+            "case": "the-configured-api-host-writes-nothing",
+            "user": tenant_provider,
+            "providerName": "mistral",
+            "whoami": {"api_base": "https://api.tenant.example"},
+        },
+        {
+            "case": "a-moved-api-host-replaces-the-entry",
+            "user": 'theme = "dark"\n\n' + tenant_provider + 'custom_note = "dropped"\n',
+            "providerName": "mistral",
+            "whoami": {"api_base": "https://gateway.tenant.example/mistral"},
+        },
+        {
+            "case": "a-new-chat-host-moves-the-chat-base",
+            "user": None,
+            "providerName": "mistral",
+            "whoami": {"vibe_base": "https://chat.tenant.example/"},
+        },
+        {
+            "case": "the-configured-chat-host-writes-nothing",
+            "user": 'vibe_base_url = "https://chat.tenant.example"\n',
+            "providerName": "mistral",
+            "whoami": {"vibe_base": "https://chat.tenant.example"},
+        },
+        {
+            "case": "both-hosts-move-together",
+            "user": 'theme = "dark"\n',
+            "providerName": "mistral",
+            "whoami": {
+                "api_base": "https://api.tenant.example",
+                "vibe_base": "https://chat.tenant.example",
+            },
+        },
+        {
+            "case": "an-unsafe-api-host-is-refused",
+            "user": None,
+            "providerName": "mistral",
+            "whoami": {
+                "api_base": "http://api.tenant.example",
+                "vibe_base": "https://chat.tenant.example",
+            },
+        },
+        {
+            "case": "empty-hosts-write-nothing",
+            "user": None,
+            "providerName": "mistral",
+            "whoami": {"api_base": "", "vibe_base": ""},
+        },
+        {
+            "case": "an-unknown-provider-keeps-its-api-base",
+            "user": None,
+            "providerName": "other",
+            "whoami": {"api_base": "https://api.tenant.example"},
+        },
+        {
+            "case": "a-generic-provider-of-that-name-is-skipped",
+            "user": (
+                "[[providers]]\n"
+                'name = "gateway"\n'
+                'api_base = "https://llm.example/v1"\n'
+                'api_key_env_var = "GATEWAY_KEY"\n'
+            ),
+            "providerName": "gateway",
+            "whoami": {"api_base": "https://api.tenant.example"},
+        },
+    ]
+
+
+def capture_tenant_reconcile() -> list[dict[str, Any]]:
+    """The reference's own ``reconcile_tenant_domains`` over an orchestrator
+    built by ``build_default_orchestrator`` in a scratch home, recording the
+    files it leaves under the home and the reason of every change event."""
+
+    from vibe.app_server._account import reconcile_tenant_domains
+    from vibe.core.config.default_orchestrator import build_default_orchestrator
+    from vibe.core.config.harness_files import HarnessFilesManager
+    from vibe.core.trusted_folders import TrustedFoldersManager
+    from vibe.setup.auth.whoami import WhoAmIResult
+
+    records = []
+    for case in tenant_reconcile_cases():
+        saved = dict(os.environ)
+        previous = os.getcwd()
+        reasons: list[str] = []
+        with tempfile.TemporaryDirectory(prefix="setup-auth-reconcile-") as scratch:
+            home = Path(scratch) / "vibe-home"
+            home.mkdir()
+            cwd = Path(scratch) / "work"
+            cwd.mkdir()
+            if case["user"] is not None:
+                (home / "config.toml").write_text(case["user"], encoding="utf-8")
+            try:
+                for key in [key for key in os.environ if key.startswith("VIBE_")]:
+                    os.environ.pop(key)
+                os.environ["VIBE_HOME"] = str(home)
+                os.chdir(cwd)
+
+                async def run() -> None:
+                    manager = HarnessFilesManager(
+                        sources=("user", "project"),
+                        cwd=cwd,
+                        trust_store=TrustedFoldersManager(),
+                    )
+                    orchestrator = await build_default_orchestrator(harness_files=manager)
+                    orchestrator.subscribe(lambda event: reasons.append(event.reason))
+                    await reconcile_tenant_domains(
+                        orchestrator,
+                        WhoAmIResult.model_validate(
+                            {"plan_type": "api", "plan_name": "oracle", **case["whoami"]}
+                        ),
+                        provider_name=case["providerName"],
+                    )
+
+                asyncio.run(run())
+            finally:
+                os.chdir(previous)
+                os.environ.clear()
+                os.environ.update(saved)
+            files = {
+                str(path.relative_to(home)): path.read_text(encoding="utf-8")
+                for path in sorted(home.rglob("config.toml"))
+            }
+        records.append({**case, "files": files, "reasons": reasons})
+    return records
+
+
+# --------------------------------------------------------------------------
+# acpSignIn
+# --------------------------------------------------------------------------
+
+ACP_CUSTOM = {
+    "browser_auth_base_url": "https://console.internal.example",
+    "browser_auth_api_base_url": "https://console.internal.example/api",
+}
+ACP_SPLIT = {
+    "browser_auth_base_url": "https://console.internal.example",
+    "browser_auth_api_base_url": "https://connector.internal.example:8443/api",
+    "browser_auth_allow_origin_rewrite": True,
+}
+ACP_PUBLIC_SPLIT = {
+    "browser_auth_api_base_url": "https://connector.internal.example/api",
+    "browser_auth_allow_origin_rewrite": True,
+}
+ACP_TENANT = {
+    "api_base": "https://api.tenant.example",
+    "vibe_base": "https://chat.tenant.example",
+}
+
+
+def acp_sign_in_cases() -> list[dict[str, Any]]:
+    """Each case: the configured provider (overrides on the shipped Mistral
+    entry, or ``generic`` for a provider without browser sign-in), the
+    configured bases, the ``authenticate`` arguments, the ``/whoami`` answer,
+    and what the scripted persisters report."""
+
+    def case(name: str, **fields: Any) -> dict[str, Any]:
+        return {
+            "case": name,
+            "provider": fields.pop("provider", {}),
+            "consoleBaseUrl": fields.pop("consoleBaseUrl", "https://console.mistral.ai"),
+            "vibeBaseUrl": fields.pop("vibeBaseUrl", "https://chat.mistral.ai"),
+            "arguments": fields.pop("arguments", {}),
+            "whoami": fields.pop("whoami", None),
+            "apiKeyResult": fields.pop("apiKeyResult", "completed"),
+            "providerOk": fields.pop("providerOk", True),
+            "consoleOk": fields.pop("consoleOk", True),
+            "vibeOk": fields.pop("vibeOk", True),
+            **fields,
+        }
+
+    custom = lambda **extra: {"signInTarget": "custom", **extra}  # noqa: E731
+    return [
+        case("no-target-default-provider-skips-the-batch"),
+        case(
+            "no-target-custom-provider-with-aligned-console-skips",
+            provider=ACP_CUSTOM,
+            consoleBaseUrl="https://console.internal.example",
+        ),
+        case(
+            "no-target-custom-provider-aligns-the-console",
+            provider=ACP_CUSTOM,
+            whoami=ACP_TENANT,
+        ),
+        case(
+            "no-target-public-split-aligns-to-the-connector",
+            provider=ACP_PUBLIC_SPLIT,
+            whoami={"vibe_base": "https://chat.tenant.example"},
+        ),
+        case(
+            "no-target-split-provider-on-the-connector-skips",
+            provider=ACP_SPLIT,
+            consoleBaseUrl="https://connector.internal.example:8443",
+        ),
+        case(
+            "mistral-target-on-the-default-provider-skips",
+            arguments={"signInTarget": "mistral"},
+        ),
+        case(
+            "mistral-target-resets-a-custom-provider",
+            provider=ACP_SPLIT,
+            consoleBaseUrl="https://connector.internal.example:8443",
+            vibeBaseUrl="https://chat.tenant.example",
+            arguments={"signInTarget": "mistral"},
+        ),
+        case(
+            "null-target-is-no-target",
+            arguments={"signInTarget": None},
+        ),
+        case(
+            "custom-target-derives-the-api-base",
+            arguments=custom(domain="https://console.internal.example"),
+        ),
+        case(
+            "custom-target-adopts-the-tenant-hosts",
+            arguments=custom(domain="https://console.internal.example/"),
+            whoami=ACP_TENANT,
+        ),
+        case(
+            "custom-target-split-api-base-turns-the-rewrite-on",
+            arguments=custom(
+                domain="https://console.internal.example",
+                apiBaseUrl="https://connector.internal.example:8443/api",
+            ),
+            whoami=ACP_TENANT,
+        ),
+        case(
+            "custom-target-same-origin-api-base-keeps-the-rewrite-off",
+            arguments=custom(
+                domain="https://console.internal.example",
+                apiBaseUrl="https://console.internal.example/connector/api",
+            ),
+        ),
+        case(
+            "custom-target-strips-the-api-base",
+            arguments=custom(
+                domain="https://console.internal.example",
+                apiBaseUrl="  https://connector.internal.example/api  ",
+            ),
+        ),
+        case(
+            "custom-target-blank-api-base-derives",
+            arguments=custom(domain="https://console.internal.example", apiBaseUrl="   "),
+        ),
+        case(
+            "custom-target-null-api-base-derives",
+            arguments=custom(domain="https://console.internal.example", apiBaseUrl=None),
+        ),
+        case(
+            "custom-target-non-string-api-base-is-refused",
+            arguments=custom(domain="https://console.internal.example", apiBaseUrl=8443),
+        ),
+        case(
+            "custom-target-local-http-api-base-is-kept",
+            arguments=custom(
+                domain="https://console.internal.example",
+                apiBaseUrl="http://localhost:8080/api",
+            ),
+        ),
+        case(
+            "custom-target-schemeless-api-base-gains-https",
+            arguments=custom(
+                domain="https://console.internal.example",
+                apiBaseUrl="connector.internal.example/api",
+            ),
+        ),
+        case(
+            "custom-target-invalid-api-base-is-refused",
+            arguments=custom(
+                domain="https://console.internal.example",
+                apiBaseUrl="https:/connector.internal.example",
+            ),
+        ),
+        case(
+            "custom-target-schemeless-domain-gains-https",
+            arguments=custom(domain="console.internal.example"),
+        ),
+        case(
+            "custom-target-invalid-domain-is-refused",
+            arguments=custom(domain="https:/console.internal.example"),
+        ),
+        case(
+            "custom-target-blank-domain-is-refused",
+            arguments=custom(domain="   "),
+        ),
+        case("custom-target-missing-domain-is-refused", arguments=custom()),
+        case(
+            "custom-target-non-string-domain-is-refused",
+            arguments=custom(domain=["https://console.internal.example"]),
+        ),
+        case("unknown-target-is-refused", arguments={"signInTarget": "other"}),
+        case("non-string-target-is-refused", arguments={"signInTarget": 7}),
+        case("unsupported-action-is-refused", arguments={"action": "complete"}),
+        case("generic-provider-is-refused", provider="generic"),
+        case(
+            "the-tenant-repeats-the-configured-chat-host",
+            arguments=custom(domain="https://console.internal.example"),
+            vibeBaseUrl="https://chat.tenant.example",
+            whoami=ACP_TENANT,
+        ),
+        case(
+            "a-failed-key-save-still-writes-the-provider",
+            arguments=custom(domain="https://console.internal.example"),
+            apiKeyResult="save_error:disk full",
+        ),
+        case(
+            "each-failed-write-is-reported",
+            arguments=custom(domain="https://console.internal.example"),
+            whoami=ACP_TENANT,
+            providerOk=False,
+            consoleOk=False,
+            vibeOk=False,
+        ),
+    ]
+
+
+def _acp_provider_fields(provider: Any) -> dict[str, Any]:
+    return {
+        "name": provider.name,
+        "apiBase": provider.api_base,
+        "browserAuthBaseUrl": provider.browser_auth_base_url,
+        "browserAuthApiBaseUrl": provider.browser_auth_api_base_url,
+        "allowOriginRewrite": provider.browser_auth_allow_origin_rewrite,
+    }
+
+
+def capture_acp_sign_in() -> list[dict[str, Any]]:
+    """The reference's ``AcpAuthController`` over its own constructor ports:
+    a scripted context, a stub sign-in service answering one key, recording
+    key and credentials persisters, and the reference's own
+    ``resolve_tenant_domains`` around a scripted ``fetch_whoami``."""
+
+    # This directory holds an ``acp.py`` capture script that would shadow the
+    # protocol package the reference controller imports.
+    here = Path(__file__).resolve().parent
+    sys.path[:] = [entry for entry in sys.path if Path(entry or ".").resolve() != here]
+    import vibe.setup.auth.whoami as whoami_module
+    from vibe.acp.auth import AcpAuthController
+    from vibe.acp.exceptions import InternalError, InvalidRequestError
+    from vibe.core.config import DEFAULT_PROVIDERS, ProviderConfig
+    from vibe.setup.auth.api_key_persistence import ProviderCredentialsPersistResult
+    from vibe.setup.auth.whoami import WhoAmIResult
+    from vibe.setup.onboarding.context import OnboardingContext
+
+    mistral = next(p for p in DEFAULT_PROVIDERS if p.name == "mistral")
+    records = []
+    for spec in acp_sign_in_cases():
+        if spec["provider"] == "generic":
+            provider = ProviderConfig(
+                name="generic",
+                api_base="https://llm.example/v1",
+                api_key_env_var="GENERIC_API_KEY",
+            )
+        else:
+            provider = mistral.model_copy(update=spec["provider"])
+        context = OnboardingContext(
+            provider=provider,
+            vibe_base_url=spec["vibeBaseUrl"],
+            console_base_url=spec["consoleBaseUrl"],
+        )
+        observed: dict[str, list[Any]] = {
+            "serviceProviders": [],
+            "apiKeyPersists": [],
+            "tenantLookups": [],
+            "persistRequests": [],
+        }
+
+        class _Service:
+            async def authenticate(self) -> str:
+                return "oracle-key"
+
+            async def aclose(self) -> None:
+                return None
+
+        def service_factory(resolved: Any) -> Any:
+            observed["serviceProviders"].append(_acp_provider_fields(resolved))
+            return _Service()
+
+        def api_key_persister(
+            resolved: Any, api_key: str, *, custom_domain: bool = False
+        ) -> str:
+            observed["apiKeyPersists"].append(
+                {
+                    "envKey": resolved.api_key_env_var,
+                    "backend": str(resolved.backend),
+                    "apiKey": api_key,
+                    "customDomain": custom_domain,
+                }
+            )
+            return spec["apiKeyResult"]
+
+        async def fetch_whoami(
+            base_url: str, api_key: str, *, timeout: float | None = None
+        ) -> Any:
+            if spec["whoami"] is None:
+                return None
+            return WhoAmIResult.model_validate(
+                {"plan_type": "api", "plan_name": "oracle", **spec["whoami"]}
+            )
+
+        async def tenant_resolver(
+            resolved: Any, console: str, api_key: str, vibe: str
+        ) -> Any:
+            observed["tenantLookups"].append(
+                {"consoleBaseUrl": console, "apiKey": api_key, "vibeBaseUrl": vibe}
+            )
+            with patched(whoami_module, "fetch_whoami", fetch_whoami):
+                return await whoami_module.resolve_tenant_domains(
+                    resolved, console, api_key, vibe
+                )
+
+        async def credentials_persister(request: Any) -> Any:
+            observed["persistRequests"].append(
+                {
+                    "provider": _acp_provider_fields(request.provider),
+                    "consoleBaseUrl": request.console_base_url,
+                    "vibeBaseUrl": request.vibe_base_url,
+                }
+            )
+            return ProviderCredentialsPersistResult(
+                provider=spec["providerOk"],
+                console_base_url=(
+                    None if request.console_base_url is None else spec["consoleOk"]
+                ),
+                vibe_base_url=None if request.vibe_base_url is None else spec["vibeOk"],
+            )
+
+        controller = AcpAuthController(
+            context_loader=lambda: context,
+            service_factory=service_factory,
+            api_key_persister=api_key_persister,
+            credentials_persister=credentials_persister,
+            tenant_domain_resolver=tenant_resolver,
+            environ_before_dotenv_load={},
+        )
+        try:
+            response = asyncio.run(
+                controller.authenticate("browser-auth", spec["arguments"])
+            )
+            outcome: dict[str, Any] = {
+                "meta": response.field_meta["browser-auth"],
+            }
+        except (InvalidRequestError, InternalError) as error:
+            outcome = {"errorCode": error.code}
+        records.append({**spec, "outcome": outcome, **observed})
     return records
 
 
@@ -1716,6 +2624,11 @@ def main() -> int:
             service_records, service_messages = capture_service()
             gateway_records, gateway_messages = capture_gateway()
             url_validation = capture_url_validation()
+            url_rewrite = capture_url_rewrite()
+            tenant_domains = capture_tenant_domains()
+        provider_credentials = capture_provider_credentials()
+        acp_sign_in = capture_acp_sign_in()
+        tenant_reconcile = capture_tenant_reconcile()
         harvested: dict[str, list[str]] = {}
         for source in (service_messages, gateway_messages):
             for code, sentences in source.items():
@@ -1748,6 +2661,11 @@ def main() -> int:
         "persistence": persistence,
         "signInProtocol": service_records + gateway_records,
         "urlValidation": url_validation,
+        "urlRewrite": url_rewrite,
+        "tenantDomains": tenant_domains,
+        "providerCredentials": provider_credentials,
+        "acpSignIn": acp_sign_in,
+        "tenantReconcile": tenant_reconcile,
         "errorTaxonomy": taxonomy,
         "acpAuthProse": acp_auth_prose,
     }
@@ -1783,6 +2701,11 @@ def main() -> int:
         "persistence": len(persistence),
         "signInProtocol": len(service_records) + len(gateway_records),
         "urlValidation": len(url_validation),
+        "urlRewrite": len(url_rewrite),
+        "tenantDomains": len(tenant_domains),
+        "providerCredentials": len(provider_credentials),
+        "acpSignIn": len(acp_sign_in),
+        "tenantReconcile": len(tenant_reconcile),
         "errorTaxonomy": len(taxonomy),
         "acpAuthProse": len(acp_auth_prose),
     }

@@ -26,6 +26,7 @@ use super::{
     AuthUrlSink, ClientInformation, Headless, LATEST_PROTOCOL_VERSION, McpOAuthError,
     McpOAuthStore, OAUTH_INVALID_GRANT, OAuthClientConfig, OAuthToken, any_http_url, now_seconds,
 };
+use crate::pyurl::PyUrl;
 
 /// What the flow may do when the operator has to authorize.
 pub(crate) enum Interaction {
@@ -1014,92 +1015,6 @@ pub(crate) fn check_resource_allowed(requested: &str, configured: &str) -> bool 
         }
     };
     with_slash(&requested.path).starts_with(&with_slash(&configured.path))
-}
-
-/// The parts `urllib.parse` splits a URL into.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub(crate) struct PyUrl {
-    pub scheme: String,
-    pub netloc: String,
-    pub path: String,
-    pub query: String,
-    pub fragment: String,
-}
-
-impl PyUrl {
-    /// `urlsplit`: the scheme lowercased, nothing else normalized.
-    pub(crate) fn split(url: &str) -> Self {
-        let mut rest = url;
-        let mut parts = Self::default();
-        if let Some(colon) = rest.find(':') {
-            let candidate = &rest[..colon];
-            if candidate
-                .chars()
-                .next()
-                .is_some_and(|first| first.is_ascii_alphabetic())
-                && candidate
-                    .chars()
-                    .all(|character| character.is_ascii_alphanumeric() || "+-.".contains(character))
-            {
-                parts.scheme = candidate.to_ascii_lowercase();
-                rest = &rest[colon + 1..];
-            }
-        }
-        if let Some(after) = rest.strip_prefix("//") {
-            let end = after.find(['/', '?', '#']).unwrap_or(after.len());
-            parts.netloc = after[..end].to_owned();
-            rest = &after[end..];
-        }
-        if let Some(hash) = rest.find('#') {
-            parts.fragment = rest[hash + 1..].to_owned();
-            rest = &rest[..hash];
-        }
-        if let Some(question) = rest.find('?') {
-            parts.query = rest[question + 1..].to_owned();
-            rest = &rest[..question];
-        }
-        parts.path = rest.to_owned();
-        parts
-    }
-
-    /// `urlparse`: as `urlsplit`, with the `;params` of the last segment
-    /// taken off the path.
-    pub(crate) fn parse(url: &str) -> Self {
-        let mut parts = Self::split(url);
-        let last = parts.path.rfind('/').unwrap_or(0);
-        if let Some(semicolon) = parts.path[last..].find(';') {
-            parts.path.truncate(last + semicolon);
-        }
-        parts
-    }
-
-    /// `urlunsplit`.
-    pub(crate) fn unsplit(&self) -> String {
-        let mut url = self.path.clone();
-        if !self.netloc.is_empty() {
-            if !url.is_empty() && !url.starts_with('/') {
-                url.insert(0, '/');
-            }
-            url = format!("//{}{url}", self.netloc);
-        } else if url.starts_with("//")
-            || (matches!(
-                self.scheme.as_str(),
-                "http" | "https" | "ftp" | "file" | "ws" | "wss"
-            ) && (url.is_empty() || url.starts_with('/')))
-        {
-            url = format!("//{url}");
-        }
-        if !self.scheme.is_empty() {
-            url = format!("{}:{url}", self.scheme);
-        }
-        if !self.query.is_empty() {
-            let _ = write!(url, "?{}", self.query);
-        }
-        if !self.fragment.is_empty() {
-            let _ = write!(url, "#{}", self.fragment);
-        }
-        url
-    }
 }
 
 /// `urllib.parse.quote(text, safe="")`.

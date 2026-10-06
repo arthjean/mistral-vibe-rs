@@ -14,6 +14,8 @@
 use serde_json::{Map, Value, json};
 use toml::Table;
 
+use crate::pyurl::{PyUrl, normalize_url_origin};
+
 use super::sign_in::{
     CODE_CHALLENGE_METHOD, SignInError, SignInErrorCode, SignInGateway, SignInPoll, SignInProcess,
     UtcTimestamp,
@@ -26,8 +28,7 @@ pub const EXCHANGE_PATH_TEMPLATE: &str = "/vibe/sign-in/{process_id}/exchange";
 /// The poll status the reference maps to an expired attempt rather than a
 /// transport failure.
 pub const HTTP_GONE: u16 = 410;
-/// The schemes whose omitted port equals an explicit default one.
-pub const DEFAULT_PORTS: [(&str, u16); 2] = [("http", 80), ("https", 443)];
+pub use crate::pyurl::DEFAULT_PORTS;
 
 /// The browser-auth defaults the mistral provider resolves to when its entry
 /// carries no explicit URL, matching the registry's published defaults.
@@ -51,23 +52,34 @@ pub fn browser_sign_in_bases(provider: &Table) -> Option<(String, String)> {
     if backend != Some("mistral") && name != Some("mistral") {
         return None;
     }
+    let resolve =
+        |key: &str| effective_browser_auth_url(provider, key).filter(|value| !value.is_empty());
+    Some((
+        resolve("browser_auth_base_url")?,
+        resolve("browser_auth_api_base_url")?,
+    ))
+}
+
+/// One browser-auth URL field as the reference provider model holds it after
+/// validation: the explicit value, empty or not, and for the mistral provider
+/// (backend `mistral`, or no backend recorded on a provider named `mistral`)
+/// the shipped default when the entry carries none. Reference
+/// `ProviderConfig._apply_legacy_mistral_browser_auth_defaults`.
+#[must_use]
+pub fn effective_browser_auth_url(provider: &Table, key: &str) -> Option<String> {
+    if let Some(value) = provider.get(key).and_then(toml::Value::as_str) {
+        return Some(value.to_owned());
+    }
+    let name = provider.get("name").and_then(toml::Value::as_str);
+    let backend = provider.get("backend").and_then(toml::Value::as_str);
     let uses_mistral_defaults =
         name == Some("mistral") && matches!(backend, None | Some("mistral"));
-    let resolve = |key: &str, default: &str| -> Option<String> {
-        match provider.get(key).and_then(toml::Value::as_str) {
-            Some(value) => Some(value.to_owned()),
-            None if uses_mistral_defaults => Some(default.to_owned()),
-            None => None,
-        }
-        .filter(|value| !value.is_empty())
+    let default = match key {
+        "browser_auth_base_url" => DEFAULT_BROWSER_AUTH_BASE_URL,
+        "browser_auth_api_base_url" => DEFAULT_BROWSER_AUTH_API_BASE_URL,
+        _ => return None,
     };
-    Some((
-        resolve("browser_auth_base_url", DEFAULT_BROWSER_AUTH_BASE_URL)?,
-        resolve(
-            "browser_auth_api_base_url",
-            DEFAULT_BROWSER_AUTH_API_BASE_URL,
-        )?,
-    ))
+    uses_mistral_defaults.then(|| default.to_owned())
 }
 
 // --------------------------------------------------------------------------
@@ -82,8 +94,8 @@ pub struct UrlRejection;
 /// Accepts `value` only when its origin equals the base's origin, with
 /// omitted and explicit default ports treated as equal, and its decoded,
 /// dot-segment-normalized path sits at or under the base's path on a segment
-/// boundary. Everything else, including anything that does not parse as an
-/// absolute URL, is rejected.
+/// boundary. Everything else, including a URL whose port or bracketed host
+/// does not parse, is rejected.
 pub fn validate_url_against_base(value: &str, base_url: &str) -> Result<(), UrlRejection> {
     rehome_url_against_base(value, base_url, false).map(|_| ())
 }
@@ -91,57 +103,62 @@ pub fn validate_url_against_base(value: &str, base_url: &str) -> Result<(), UrlR
 /// [`validate_url_against_base`], answering the URL to use.
 ///
 /// With `allow_origin_rewrite`, the provider's `browser_auth_allow_origin_rewrite`,
-/// a URL on another origin is not rejected but re-homed onto the base's scheme,
-/// host and port, its path still held under the base path. That is what a
-/// split-horizon deployment needs, where the server only knows its own public
-/// host and the client reaches the console under another one. Reference
-/// `_validate_url_against_base`.
+/// a URL on another origin is not rejected but re-homed onto the base's scheme
+/// and network location, its path still held under the base path. That is what
+/// a split-horizon deployment needs, where the server only knows its own public
+/// host and the client reaches the console under another one. Both URLs are
+/// split as `urlsplit` splits them, so a URL on the base's origin comes back
+/// verbatim and a re-homed one keeps its own path, query and fragment exactly
+/// as written, with the base's network location spliced in whole, credentials
+/// and explicit port included. Reference `_validate_url_against_base_url`.
 pub fn rehome_url_against_base(
     value: &str,
     base_url: &str,
     allow_origin_rewrite: bool,
 ) -> Result<String, UrlRejection> {
-    let mut value_url = url::Url::parse(value).map_err(|_| UrlRejection)?;
-    let base = url::Url::parse(base_url).map_err(|_| UrlRejection)?;
-    let origin_matches = normalized_origin(&value_url) == normalized_origin(&base);
+    let current = PyUrl::try_split(value).map_err(|_| UrlRejection)?;
+    let base = PyUrl::try_split(base_url).map_err(|_| UrlRejection)?;
+    let current_origin = normalize_url_origin(&current).map_err(|_| UrlRejection)?;
+    let base_origin = normalize_url_origin(&base).map_err(|_| UrlRejection)?;
+    let origin_matches = current_origin == base_origin;
     if !origin_matches && !allow_origin_rewrite {
         return Err(UrlRejection);
     }
-    if !is_path_under_base_path(value_url.path(), base.path()) {
+    if !is_path_under_base_path(&current.path, &base.path) {
         return Err(UrlRejection);
     }
-    if origin_matches {
-        return Ok(value.to_owned());
+    let returned = if origin_matches {
+        value.to_owned()
+    } else {
+        PyUrl {
+            scheme: base.scheme,
+            netloc: base.netloc,
+            ..current
+        }
+        .unsplit()
+    };
+    if !sends_under_base(&returned, base_url) {
+        return Err(UrlRejection);
     }
-    value_url
-        .set_scheme(base.scheme())
-        .map_err(|()| UrlRejection)?;
-    value_url
-        .set_host(base.host_str())
-        .map_err(|_| UrlRejection)?;
-    value_url.set_port(base.port()).map_err(|()| UrlRejection)?;
-    // The reference swaps the whole network location, so the returned URL
-    // carries the base's credentials, or none, never its own.
-    value_url
-        .set_username(base.username())
-        .map_err(|()| UrlRejection)?;
-    value_url
-        .set_password(base.password())
-        .map_err(|()| UrlRejection)?;
-    Ok(value_url.to_string())
+    Ok(returned)
 }
 
-fn normalized_origin(parsed: &url::Url) -> (String, Option<String>, Option<u16>) {
-    let scheme = parsed.scheme().to_ascii_lowercase();
-    let port = parsed.port().or_else(|| default_port(&scheme));
-    (scheme, parsed.host_str().map(str::to_ascii_lowercase), port)
-}
-
-fn default_port(scheme: &str) -> Option<u16> {
-    DEFAULT_PORTS
-        .iter()
-        .find(|(known, _)| *known == scheme)
-        .map(|(_, port)| *port)
+/// Whether the HTTP client, which parses URLs as WHATWG does rather than as
+/// `urlsplit` does, would also send `url` to the base's origin and under its
+/// path. The two parsers disagree on inputs such as a backslash before an
+/// `@`, which `urlsplit` reads as credentials and WHATWG as a path delimiter,
+/// so a URL vouched for by the first could still reach another host through
+/// the second. The reference sends through a parser of its own and never
+/// meets this difference; refusing it here keeps the check about the request
+/// that is actually made.
+fn sends_under_base(url: &str, base_url: &str) -> bool {
+    let (Ok(url), Ok(base)) = (url::Url::parse(url), url::Url::parse(base_url)) else {
+        return false;
+    };
+    url.scheme() == base.scheme()
+        && url.host_str() == base.host_str()
+        && url.port_or_known_default() == base.port_or_known_default()
+        && is_path_under_base_path(url.path(), base.path())
 }
 
 fn is_path_under_base_path(path: &str, base_path: &str) -> bool {

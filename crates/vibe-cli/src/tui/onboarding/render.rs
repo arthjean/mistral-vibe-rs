@@ -13,10 +13,10 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 
-use super::context::DomainFeedback;
+use super::context::{ApiBaseFeedback, DomainFeedback, FeedbackLine};
 use super::model::{
-    GRADIENT_COLORS, OnboardingModel, ScreenId, SignInVariant, THEME_VISIBLE_NEIGHBORS,
-    gradient_color, masked, theme_fade_class, theme_preview_height,
+    DomainInput, GRADIENT_COLORS, OnboardingModel, ScreenId, SignInVariant,
+    THEME_VISIBLE_NEIGHBORS, gradient_color, masked, theme_fade_class, theme_preview_height,
 };
 use crate::tui::themes;
 
@@ -305,9 +305,7 @@ fn draw_auth_method(frame: &mut Frame<'_>, area: Rect, model: &OnboardingModel) 
 
 fn draw_sign_in_target(frame: &mut Frame<'_>, area: Rect, model: &OnboardingModel) {
     let warning = model.override_armed().then(|| {
-        let domain = super::context::configured_custom_domain(model.initial_provider())
-            .unwrap_or_default()
-            .to_owned();
+        let domain = model.configured_override_target().unwrap_or_default();
         format!(
             "Continuing replaces the configured custom domain ({domain}). Press Enter once \
              more to confirm."
@@ -337,32 +335,22 @@ fn draw_sign_in_target(frame: &mut Frame<'_>, area: Rect, model: &OnboardingMode
 }
 
 fn draw_custom_domain(frame: &mut Frame<'_>, area: Rect, model: &OnboardingModel) {
-    let feedback = model.domain_feedback();
-    let border_color = match feedback {
-        Some(DomainFeedback::Valid) => Color::Green,
-        Some(DomainFeedback::Warning) => Color::Yellow,
-        Some(DomainFeedback::Invalid) => Color::Red,
-        None => Color::Reset,
-    };
-    let value = if model.domain_value().is_empty() {
-        Span::styled(
-            "console.mistral.ai",
-            Style::default().add_modifier(Modifier::DIM),
-        )
-    } else {
-        Span::raw(model.domain_value().to_owned())
-    };
-    let feedback_line = match feedback {
-        Some(DomainFeedback::Valid) => {
-            Line::styled("Press Enter to continue", Style::default().fg(Color::Green))
-        }
-        Some(DomainFeedback::Warning) => Line::styled(
+    let feedback_line = match model.feedback_line() {
+        Some(
+            FeedbackLine::Domain(DomainFeedback::Valid)
+            | FeedbackLine::ApiBase(ApiBaseFeedback::Valid),
+        ) => Line::styled("Press Enter to continue", Style::default().fg(Color::Green)),
+        Some(FeedbackLine::Domain(DomainFeedback::Warning)) => Line::styled(
             "This looks like a Mistral private-cloud domain. Mistral-hosted accounts sign in \
              at console.mistral.ai; continue only for a self-hosted deployment.",
             Style::default().fg(Color::Yellow),
         ),
-        Some(DomainFeedback::Invalid) => Line::styled(
+        Some(FeedbackLine::Domain(DomainFeedback::Invalid)) => Line::styled(
             "This is not a usable domain or URL.",
+            Style::default().fg(Color::Red),
+        ),
+        Some(FeedbackLine::ApiBase(ApiBaseFeedback::Invalid)) => Line::styled(
+            "This is not a usable API base URL.",
             Style::default().fg(Color::Red),
         ),
         None => Line::raw(""),
@@ -379,27 +367,72 @@ fn draw_custom_domain(frame: &mut Frame<'_>, area: Rect, model: &OnboardingModel
         )
         .alignment(Alignment::Center),
     ];
-    let [header_area, input_area, feedback_area] = Layout::vertical([
+    let [header_area, domain_area, api_base_area, feedback_area] = Layout::vertical([
+        Constraint::Length(3),
         Constraint::Length(3),
         Constraint::Length(3),
         Constraint::Length(3),
     ])
-    .areas(centered(area, 9));
+    .areas(centered(area, 12));
     frame.render_widget(Paragraph::new(lines), header_area);
-    frame.render_widget(
-        Paragraph::new(Line::from(value)).block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(border_color))
-                .title(" Custom domain "),
+    let domain_color = match model.domain_feedback() {
+        Some(DomainFeedback::Valid) => Color::Green,
+        Some(DomainFeedback::Warning) => Color::Yellow,
+        Some(DomainFeedback::Invalid) => Color::Red,
+        None => Color::Reset,
+    };
+    let api_base_color = match model.api_base_feedback() {
+        Some(ApiBaseFeedback::Valid) => Color::Green,
+        Some(ApiBaseFeedback::Invalid) => Color::Red,
+        None => Color::Reset,
+    };
+    let focus = model.domain_focus();
+    for (input, value, placeholder, title, color, input_area) in [
+        (
+            DomainInput::Domain,
+            model.domain_value(),
+            "console.mistral.ai",
+            " Custom domain ",
+            domain_color,
+            domain_area,
         ),
-        input_area,
-    );
+        (
+            DomainInput::ApiBase,
+            model.api_base_value(),
+            "https://connector.internal.example/api",
+            " Sign-in API base, split-horizon only (optional) ",
+            api_base_color,
+            api_base_area,
+        ),
+    ] {
+        let text = if value.is_empty() {
+            Span::styled(
+                placeholder.to_owned(),
+                Style::default().add_modifier(Modifier::DIM),
+            )
+        } else {
+            Span::raw(value.to_owned())
+        };
+        let title_style = if input == focus {
+            Style::default().add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().add_modifier(Modifier::DIM)
+        };
+        frame.render_widget(
+            Paragraph::new(Line::from(text)).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(color))
+                    .title(Span::styled(title, title_style)),
+            ),
+            input_area,
+        );
+    }
     frame.render_widget(
         Paragraph::new(vec![
             feedback_line,
             Line::styled(
-                "Esc goes back",
+                "Tab switches fields  Esc goes back",
                 Style::default().add_modifier(Modifier::DIM),
             ),
         ])

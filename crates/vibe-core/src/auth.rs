@@ -18,6 +18,7 @@ pub mod keyring;
 pub mod mcp_oauth;
 pub mod persistence;
 pub mod provider;
+pub mod provider_credentials;
 pub mod sign_in;
 pub mod sign_in_http;
 pub mod state;
@@ -49,9 +50,15 @@ pub use persistence::{
     PersistOutcome, PersistReport, RemoveError, persist_api_key, remove_api_key,
 };
 pub use provider::{
-    configured_custom_domain, default_mistral_provider, is_likely_mistral_private_cloud_domain,
-    is_valid_custom_domain, resolve_active_provider, resolve_api_key_provider,
-    resolve_browser_auth_urls, supports_browser_sign_in,
+    DEFAULT_CONSOLE_BASE_URL, DEFAULT_MISTRAL_API_BASE, DEFAULT_VIBE_BASE_URL,
+    allows_origin_rewrite, apply_browser_auth_urls, browser_auth_account_base,
+    browser_auth_requires_origin_rewrite, configured_custom_api_base, configured_custom_domain,
+    default_mistral_provider, is_likely_mistral_private_cloud_domain, is_valid_custom_domain,
+    resolve_active_provider, resolve_api_key_provider, resolve_browser_auth_urls, same_provider,
+    supports_browser_sign_in,
+};
+pub use provider_credentials::{
+    ProviderCredentialsRequest, ProviderCredentialsResult, persist_provider_credentials,
 };
 pub use sign_in::{
     CODE_CHALLENGE_METHOD, MAX_CONSECUTIVE_POLL_FAILURES, POLL_INTERVAL_SECONDS, SignInAttempt,
@@ -61,7 +68,8 @@ pub use sign_in::{
 };
 pub use sign_in_http::{
     DEFAULT_BROWSER_AUTH_API_BASE_URL, DEFAULT_BROWSER_AUTH_BASE_URL, HttpSignInGateway,
-    ReqwestSignInClient, UrlRejection, validate_url_against_base,
+    ReqwestSignInClient, UrlRejection, effective_browser_auth_url, rehome_url_against_base,
+    validate_url_against_base,
 };
 pub use state::{
     AuthState, AuthStateKind, DEFAULT_MISTRAL_API_ENV_KEY, assess_auth_state, resolve_api_key,

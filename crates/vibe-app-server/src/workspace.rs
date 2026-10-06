@@ -665,16 +665,6 @@ impl WorkspaceService {
             .unwrap_or(true)
     }
 
-    /// Upserts one provider entry keyed by name, answering whether a write
-    /// happened: a provider identical to what the configuration already
-    /// resolves is not written at all.
-    pub fn persist_provider(&self, provider: &toml::Table) -> Result<bool, WorkspaceServiceError> {
-        self.config
-            .persist_provider(provider)
-            .map(|written| written.is_some())
-            .map_err(config_error)
-    }
-
     /// The hooks a session in `working_directory` loads: every open project's
     /// `.vibe/hooks.toml`, then the user's. Reference `load_hooks_from_fs`
     /// over the session's `HarnessFilesManager`.

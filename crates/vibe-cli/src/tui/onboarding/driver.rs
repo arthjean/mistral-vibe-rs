@@ -156,6 +156,8 @@ fn key_press(code: KeyCode, modifiers: KeyModifiers) -> Option<KeyPress> {
         KeyCode::Up => Some(KeyPress::Up),
         KeyCode::Down => Some(KeyPress::Down),
         KeyCode::Backspace => Some(KeyPress::Backspace),
+        KeyCode::Tab => Some(KeyPress::Tab),
+        KeyCode::BackTab => Some(KeyPress::BackTab),
         KeyCode::Char(character) => Some(KeyPress::Char(character)),
         _ => None,
     }

@@ -10,8 +10,8 @@ use serde_json::{Value, json};
 use toml::Value as TomlValue;
 use vibe_core::config::DotenvValues;
 use vibe_core::whoami::{
-    HttpWhoAmIGateway, WhoAmIFailure, WhoAmIGateway, WhoAmIResult, store_cached_whoami,
-    whoami_cache_path,
+    HttpWhoAmIGateway, WhoAmIFailure, WhoAmIGateway, WhoAmIResult, reconcile_tenant_domains,
+    store_cached_whoami, whoami_cache_path,
 };
 
 use super::WorkspaceService;
@@ -87,7 +87,18 @@ impl WorkspaceService {
         let Some(gateway) = HttpWhoAmIGateway::production() else {
             return (unavailable, AccountLookup::Nothing);
         };
+        // The account is shown only while the session runs on Mistral; the
+        // plan is still read for telemetry and the tenant heal otherwise.
+        let shows_account = vibe_core::telemetry::is_active_model_mistral(&snapshot.effective);
+        let provider_name = provider
+            .get("name")
+            .and_then(TomlValue::as_str)
+            .unwrap_or_default()
+            .to_owned();
         match gateway.read(&console, &key, Some(WHOAMI_TIMEOUT)).await {
+            Err(WhoAmIFailure::Unauthorized) if !shows_account => {
+                (unavailable, AccountLookup::Unauthorized { key })
+            }
             Err(WhoAmIFailure::Unauthorized) => {
                 let mut account = view(AccountStatus::Unauthorized, &upgrade);
                 account["planOffer"] = upgrade.clone();
@@ -99,7 +110,15 @@ impl WorkspaceService {
                 // Reference warms the cross-session cache with every live
                 // answer, so the next session starts from it.
                 store_cached_whoami(&whoami_cache_path(self.vibe_home()), &key, &whoami);
-                let account = self.plan_view(&whoami).unwrap_or(unavailable);
+                let account = if shows_account {
+                    self.plan_view(&whoami).unwrap_or(unavailable)
+                } else {
+                    unavailable
+                };
+                // Reference `AccountController.read` heals the configuration
+                // with the tenant hosts after building the view, so the view
+                // still names the chat base it was read with.
+                reconcile_tenant_domains(&self.config, &whoami, &provider_name);
                 (
                     account,
                     AccountLookup::Plan {
@@ -326,3 +345,6 @@ impl WorkspaceService {
         ))
     }
 }
+
+#[cfg(test)]
+mod account_tests;

@@ -97,7 +97,7 @@ async fn handle(stream: TcpStream) -> Result<(String, Option<String>), FlowError
         .iter()
         .map(|byte| char::from(*byte))
         .collect::<String>();
-    let query = super::flow::PyUrl::parse(&target).query;
+    let query = crate::pyurl::PyUrl::parse(&target).query;
     let first = |name: &str| {
         url::form_urlencoded::parse(query.as_bytes())
             .find(|(key, value)| key == name && !value.is_empty())

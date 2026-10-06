@@ -1451,6 +1451,10 @@ pub enum ConfigError {
     /// written. Reference `ConfigPatchValidationError`.
     #[error("the configuration change was rejected: {0}")]
     PatchRejected(String),
+    /// A target's write failed past the preflight. The reference reports these
+    /// as the failures `apply_patch` returns.
+    #[error("a configuration write failed: {0}")]
+    WriteFailed(String),
     #[error("invalid VIBE environment key `{0}`")]
     InvalidEnvironmentKey(String),
     #[error("environment variable `{variable}` is not a valid {expected} for `{field}`")]

@@ -29,19 +29,21 @@ use toml::Table;
 use toml::Value as TomlValue;
 
 use vibe_core::auth::{
-    DEFAULT_BROWSER_AUTH_API_BASE_URL, DEFAULT_BROWSER_AUTH_BASE_URL, PersistOutcome,
-    SignInErrorCode, SignInStatus,
+    DEFAULT_BROWSER_AUTH_BASE_URL, PersistOutcome, ProviderCredentialsRequest,
+    ProviderCredentialsResult, SignInErrorCode, SignInStatus, allows_origin_rewrite,
+    browser_auth_account_base, browser_auth_requires_origin_rewrite, effective_browser_auth_url,
 };
 use vibe_core::parity::{REFERENCE_COMMIT, RESTORE_COMMAND, off_pin_reason, reference_root};
+use vibe_core::whoami::{WhoAmIResult, adopt_tenant_domains};
 
 use super::onboarding::context::{
-    self, OnboardingContext, is_likely_mistral_private_cloud_domain, is_valid_custom_domain,
-    resolve_browser_auth_urls,
+    self, OnboardingContext, default_mistral_provider, is_likely_mistral_private_cloud_domain,
+    is_valid_custom_domain, is_valid_optional_custom_domain, resolve_browser_auth_urls,
 };
 use super::onboarding::exit_plan;
 use super::onboarding::model::{
-    GRADIENT_COLORS, KeyPress, ModelEffect, ModelEvent, OnboardingModel, OnboardingOutcome,
-    OnboardingPorts, SIGN_IN_STEP_NAMES, SIGN_IN_URL_HELP_DELAY_SECONDS,
+    DomainInput, GRADIENT_COLORS, KeyPress, ModelEffect, ModelEvent, OnboardingModel,
+    OnboardingOutcome, OnboardingPorts, SIGN_IN_STEP_NAMES, SIGN_IN_URL_HELP_DELAY_SECONDS,
     SUCCESS_EXIT_DELAY_SECONDS, THEME_FADE_CLASSES, THEME_VISIBLE_NEIGHBORS,
 };
 use super::themes::sorted_theme_names;
@@ -50,7 +52,7 @@ const CORPUS_RELATIVE: &str = "crates/vibe-cli/tests/onboarding/corpus.json";
 const CAPTURE_SCRIPT: &str = "scripts/parity/onboarding.py";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 3;
+const CORPUS_SCHEMA_VERSION: u32 = 4;
 /// The scenario floor this replay commits to, so a regeneration that captured
 /// almost nothing fails instead of reporting a clean but empty run.
 const MINIMUM_SCENARIOS: usize = 50;
@@ -63,17 +65,7 @@ const MANUAL_SCREEN_SET: usize = 3;
 /// each keyed `family/case/field` with the reason. A comparison that diverges
 /// fails naming the family, the case, the field and the observed and expected
 /// values, and a new divergence needs a new named entry here.
-const DIVERGENCES: &[(&str, &str)] = &[(
-    "screenGraph/custom-domain-sign-in-upserts-the-provider/baseUrlWrites",
-    "row 31: since v2.24.2 (5e6aa0f6) the reference also persists the top-level \
-     console_base_url a custom-domain sign-in derives (https://console.internal.example here): \
-     apply_custom_domain sets it (vibe/setup/onboarding/__init__.py:175-177), \
-     persist_credentials puts it in the batched request when it differs from the configured \
-     one (:221-233) and persist_provider_credentials writes it \
-     (vibe/setup/auth/api_key_persistence.py:162-187), at 4a96003186b1; this port writes \
-     only the provider entry (onboarding/model.rs persist_credentials, through \
-     OnboardingPorts::persist_provider) and has no port for the console URL",
-)];
+const DIVERGENCES: &[(&str, &str)] = &[];
 
 // --------------------------------------------------------------------------
 // The corpus
@@ -134,8 +126,18 @@ struct GraphScenario {
     result: Option<String>,
     selected_theme: String,
     provider_browser_auth: ProviderBrowserAuth,
+    working_bases: WorkingBases,
     #[serde(default)]
     themes: Option<Vec<String>>,
+}
+
+/// The provider's API base and the two top-level bases as the run left them.
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct WorkingBases {
+    api_base: String,
+    console_base_url: String,
+    vibe_base_url: String,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
@@ -158,11 +160,14 @@ struct Effects {
     /// provider persist carries alongside the provider entry.
     base_url_writes: Vec<Value>,
     service_closes: u64,
+    /// Every `/whoami` tenant lookup, by console base URL and credential.
+    whoami_lookups: Vec<Value>,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ProviderBrowserAuth {
+    allow_origin_rewrite: bool,
     api_base_url: Option<String>,
     base_url: Option<String>,
 }
@@ -184,12 +189,27 @@ struct DomainCase {
     case: String,
     input: String,
     valid: bool,
+    valid_as_api_base: bool,
     #[serde(default)]
     private_cloud_warning: Option<bool>,
     #[serde(default)]
     derived_base_url: Option<String>,
     #[serde(default)]
     derived_api_base_url: Option<String>,
+    #[serde(default)]
+    account_base: Option<String>,
+    #[serde(default)]
+    split_pairs: Option<Vec<SplitPair>>,
+}
+
+/// One valid domain paired with a separately typed API base.
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SplitPair {
+    api_base: String,
+    derived_api_base_url: String,
+    requires_origin_rewrite: bool,
+    account_base: String,
 }
 
 /// A reference-authored message by length and SHA-256 only; this port's own
@@ -332,9 +352,13 @@ struct Recorder {
     persist_outcome: PersistOutcome,
     persist_calls: Vec<Value>,
     provider_writes: Vec<Value>,
-    /// Stays empty: `OnboardingPorts` has no port for the top-level console
-    /// or vibe base URL, so this port never writes either.
     base_url_writes: Vec<Value>,
+    provider_write_ok: bool,
+    console_write_ok: bool,
+    /// The scripted `/whoami` answer, `None` for a console that answers
+    /// nothing; the reference's own adoption decides what it changes.
+    whoami: Option<Value>,
+    whoami_lookups: Vec<Value>,
 }
 
 impl Recorder {
@@ -348,6 +372,10 @@ impl Recorder {
             persist_calls: Vec::new(),
             provider_writes: Vec::new(),
             base_url_writes: Vec::new(),
+            provider_write_ok: true,
+            console_write_ok: true,
+            whoami: SCRIPTED_WHOAMI.with(|answer| answer.borrow().clone()),
+            whoami_lookups: Vec::new(),
         }
     }
 }
@@ -369,15 +397,62 @@ impl OnboardingPorts for Recorder {
         self.persist_outcome.clone()
     }
 
-    fn persist_provider(&mut self, provider: &Table) -> bool {
+    fn persist_provider_credentials(
+        &mut self,
+        request: &ProviderCredentialsRequest,
+    ) -> ProviderCredentialsResult {
+        let provider = &request.provider;
         let field = |key: &str| provider.get(key).and_then(TomlValue::as_str);
         self.provider_writes.push(json!({
-            "browserAuthApiBaseUrl": field("browser_auth_api_base_url"),
-            "browserAuthBaseUrl": field("browser_auth_base_url"),
+            "apiBase": field("api_base"),
+            "browserAuthAllowOriginRewrite": allows_origin_rewrite(provider),
+            "browserAuthApiBaseUrl": effective_browser_auth_url(provider, "browser_auth_api_base_url"),
+            "browserAuthBaseUrl": effective_browser_auth_url(provider, "browser_auth_base_url"),
             "provider": field("name"),
         }));
-        true
+        for (name, value) in [
+            ("console_base_url", &request.console_base_url),
+            ("vibe_base_url", &request.vibe_base_url),
+        ] {
+            if let Some(value) = value {
+                self.base_url_writes
+                    .push(json!({"field": name, "value": value}));
+            }
+        }
+        ProviderCredentialsResult {
+            provider: self.provider_write_ok,
+            console_base_url: request
+                .console_base_url
+                .as_ref()
+                .map(|_| self.console_write_ok),
+            vibe_base_url: request.vibe_base_url.as_ref().map(|_| true),
+        }
     }
+
+    fn resolve_tenant_domains(
+        &mut self,
+        provider: Table,
+        console_base_url: &str,
+        api_key: &str,
+        vibe_base_url: &str,
+    ) -> (Table, String) {
+        self.whoami_lookups
+            .push(json!({"apiKey": api_key, "baseUrl": console_base_url}));
+        let answer = self.whoami.clone().map(|mut answer| {
+            answer["plan_type"] = json!("api");
+            answer["plan_name"] = json!("oracle");
+            serde_json::from_value::<WhoAmIResult>(answer)
+                .expect("the scripted answer is a valid account")
+        });
+        adopt_tenant_domains(answer.as_ref(), provider, vibe_base_url)
+    }
+}
+
+std::thread_local! {
+    /// The `/whoami` answer of the scenario being driven, which every
+    /// recorder that scenario builds is scripted with.
+    static SCRIPTED_WHOAMI: std::cell::RefCell<Option<Value>> =
+        const { std::cell::RefCell::new(None) };
 }
 
 /// One scripted drive: the model, the recorder, and the observations the
@@ -438,6 +513,26 @@ impl Drive {
         for _ in 0..self.model.domain_value().chars().count() {
             self.feed_key(KeyPress::Backspace);
         }
+    }
+
+    /// The capture's direct assignment of an input's value.
+    fn set_input(&mut self, input: DomainInput, value: &str) {
+        self.model.set_input_value(input, value);
+        self.note_visit();
+    }
+
+    /// Reference `_domain_screen_state`: both inputs, the focus and every
+    /// validation class the custom-domain screen shows.
+    fn domain_screen_state(&self) -> Value {
+        let model = &self.model;
+        json!({
+            "apiBase": model.api_base_value(),
+            "apiBaseBoxClasses": model.api_base_feedback().map(|f| vec![f.box_class()]).unwrap_or_default(),
+            "domain": model.domain_value(),
+            "domainBoxClasses": model.domain_feedback().map(|f| vec![f.box_class()]).unwrap_or_default(),
+            "feedbackClasses": model.feedback_line().map(|f| vec![f.feedback_class()]).unwrap_or_default(),
+            "focus": model.domain_focus().id(),
+        })
     }
 
     /// The capture's explicit wait on a worker that exits the app: the edge
@@ -551,6 +646,8 @@ fn press_label(key: KeyPress) -> String {
         KeyPress::Up => "press:up".to_owned(),
         KeyPress::Down => "press:down".to_owned(),
         KeyPress::Backspace => "press:backspace".to_owned(),
+        KeyPress::Tab => "press:tab".to_owned(),
+        KeyPress::BackTab => "press:shift+tab".to_owned(),
         KeyPress::Char(character) => format!("press:{character}"),
     }
 }
@@ -559,25 +656,28 @@ fn press_label(key: KeyPress) -> String {
 // Scripted providers
 // --------------------------------------------------------------------------
 
-fn provider(base_url: Option<&str>, api_base_url: &str) -> Table {
-    let mut table = Table::new();
-    table.insert("name".to_owned(), TomlValue::String("mistral".to_owned()));
-    table.insert(
-        "backend".to_owned(),
-        TomlValue::String("mistral".to_owned()),
-    );
-    table.insert(
-        "api_key_env_var".to_owned(),
-        TomlValue::String("MISTRAL_API_KEY".to_owned()),
-    );
-    table.insert(
-        "browser_auth_base_url".to_owned(),
-        TomlValue::String(base_url.unwrap_or_default().to_owned()),
-    );
-    table.insert(
-        "browser_auth_api_base_url".to_owned(),
-        TomlValue::String(api_base_url.to_owned()),
-    );
+/// The shipped Mistral provider with its browser-auth URLs replaced; an empty
+/// base URL is how the capture disables browser sign-in.
+fn provider(base_url: Option<&str>, api_base_url: Option<&str>, rewrite: bool) -> Table {
+    let mut table = default_mistral_provider();
+    if let Some(base_url) = base_url {
+        table.insert(
+            "browser_auth_base_url".to_owned(),
+            TomlValue::String(base_url.to_owned()),
+        );
+    }
+    if let Some(api_base_url) = api_base_url {
+        table.insert(
+            "browser_auth_api_base_url".to_owned(),
+            TomlValue::String(api_base_url.to_owned()),
+        );
+    }
+    if rewrite {
+        table.insert(
+            "browser_auth_allow_origin_rewrite".to_owned(),
+            TomlValue::Boolean(true),
+        );
+    }
     table
 }
 
@@ -585,29 +685,41 @@ fn context_for(provider: Table) -> OnboardingContext {
     OnboardingContext {
         provider,
         vibe_base_url: context::DEFAULT_VIBE_BASE_URL.to_owned(),
+        console_base_url: context::DEFAULT_CONSOLE_BASE_URL.to_owned(),
         theme: "auto".to_owned(),
     }
 }
 
 /// The browser-capable provider the capture scripts: the shipped defaults.
 fn browser_context() -> OnboardingContext {
-    context_for(provider(
-        Some(DEFAULT_BROWSER_AUTH_BASE_URL),
-        DEFAULT_BROWSER_AUTH_API_BASE_URL,
-    ))
+    context_for(provider(None, None, false))
 }
 
 /// A provider whose base URL is empty cannot browser sign-in, which is how
 /// the capture disables the four gated screens.
 fn manual_context() -> OnboardingContext {
-    context_for(provider(None, DEFAULT_BROWSER_AUTH_API_BASE_URL))
+    context_for(provider(Some(""), None, false))
 }
+
+const CONFIGURED_DOMAIN: &str = "https://console.internal.example";
+const CONFIGURED_SPLIT_API_BASE: &str = "https://connector.internal.example/api";
 
 /// A provider already configured against a custom console.
 fn custom_configured_context() -> OnboardingContext {
     context_for(provider(
-        Some("https://console.internal.example"),
-        "https://console.internal.example/api",
+        Some(CONFIGURED_DOMAIN),
+        Some(&format!("{CONFIGURED_DOMAIN}/api")),
+        false,
+    ))
+}
+
+/// A provider configured for a split-horizon deployment: its browser console
+/// is `browser_base`, and its sign-in API sits on another host.
+fn split_configured_context(browser_base: &str) -> OnboardingContext {
+    context_for(provider(
+        Some(browser_base),
+        Some(CONFIGURED_SPLIT_API_BASE),
+        true,
     ))
 }
 
@@ -687,10 +799,47 @@ fn run_domain_validation(cases: &[DomainCase], report: &mut Report) {
             &case.valid,
             &is_valid_custom_domain(&case.input),
         );
+        report.check(
+            "domainValidation",
+            &case.case,
+            "validAsApiBase",
+            &case.valid_as_api_base,
+            &is_valid_optional_custom_domain(&case.input),
+        );
         if !case.valid {
             continue;
         }
-        let (base, api) = resolve_browser_auth_urls(&case.input);
+        let (base, api) = resolve_browser_auth_urls(&case.input, None);
+        report.check(
+            "domainValidation",
+            &case.case,
+            "accountBase",
+            &case.account_base,
+            &Some(browser_auth_account_base(&base, Some(&api))),
+        );
+        let pairs = split_api_bases(&case.input)
+            .into_iter()
+            .map(|api_base| {
+                let (split_base, split_api) =
+                    resolve_browser_auth_urls(&case.input, Some(&api_base));
+                SplitPair {
+                    requires_origin_rewrite: browser_auth_requires_origin_rewrite(
+                        &split_base,
+                        &split_api,
+                    ),
+                    account_base: browser_auth_account_base(&split_base, Some(&split_api)),
+                    derived_api_base_url: split_api,
+                    api_base,
+                }
+            })
+            .collect::<Vec<_>>();
+        report.check(
+            "domainValidation",
+            &case.case,
+            "splitPairs",
+            &case.split_pairs,
+            &Some(pairs),
+        );
         report.check(
             "domainValidation",
             &case.case,
@@ -713,6 +862,23 @@ fn run_domain_validation(cases: &[DomainCase], report: &mut Report) {
             &Some(is_likely_mistral_private_cloud_domain(&case.input)),
         );
     }
+}
+
+/// Reference `split_api_bases`: the API bases each valid domain is paired
+/// with.
+fn split_api_bases(domain: &str) -> Vec<String> {
+    [
+        "",
+        "connector.internal.example/api",
+        "https://connector.internal.example:8443/api/",
+        "HTTPS://CONSOLE.MISTRAL.AI:443/api",
+        "http://console.mistral.ai/api",
+        "localhost:8080/api",
+        domain,
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect()
 }
 
 // --------------------------------------------------------------------------
@@ -1065,6 +1231,7 @@ fn onto_custom_domain(drive: &mut Drive) {
 
 fn drive_scenario(scenario: &GraphScenario) -> Drive {
     let case = scenario.case.as_str();
+    SCRIPTED_WHOAMI.with(|answer| *answer.borrow_mut() = scenario_whoami(case));
     let mut drive = match case {
         "graph-browser-provider-installs-seven-screens" => {
             let mut drive = Drive::new(browser_context(), Vec::new(), PersistOutcome::Completed);
@@ -1193,16 +1360,19 @@ fn drive_scenario(scenario: &GraphScenario) -> Drive {
                 "console.oracle.mistral.ai",
                 "http:/broken",
             ] {
-                drive.clear_domain();
-                drive.type_text(input);
+                drive.set_input(DomainInput::Domain, input);
                 let feedback = drive
                     .model
                     .domain_feedback()
-                    .expect("typing reveals the validation feedback");
+                    .expect("a change reveals the validation feedback");
+                let line = drive
+                    .model
+                    .feedback_line()
+                    .expect("a change speaks on the shared line");
                 states.push(json!({
                     "boxClasses": [feedback.box_class()],
                     "expected": feedback.box_class(),
-                    "feedbackClasses": [feedback.feedback_class()],
+                    "feedbackClasses": [line.feedback_class()],
                     "input": input,
                 }));
             }
@@ -1358,9 +1528,214 @@ fn drive_scenario(scenario: &GraphScenario) -> Drive {
             drive.press(KeyPress::Escape);
             drive
         }
+        "custom-domain-api-base-validation-classes" => {
+            let mut drive = Drive::new(browser_context(), Vec::new(), PersistOutcome::Completed);
+            onto_custom_domain(&mut drive);
+            let mut states = vec![drive.domain_screen_state()];
+            drive.feed_key(KeyPress::Tab);
+            states.push(drive.domain_screen_state());
+            for value in [
+                "connector.internal.example/api",
+                "http:/broken",
+                "",
+                "   ",
+                "https://connector.internal.example:8443/api",
+            ] {
+                drive.set_input(DomainInput::ApiBase, value);
+                states.push(drive.domain_screen_state());
+            }
+            drive.set_input(DomainInput::Domain, "console.oracle.mistral.ai");
+            states.push(drive.domain_screen_state());
+            drive.feed_key(KeyPress::Tab);
+            states.push(drive.domain_screen_state());
+            drive.probe("custom_domain:apiBaseStates", json!(states));
+            drive.press(KeyPress::Escape);
+            drive.press(KeyPress::Escape);
+            drive.press(KeyPress::Escape);
+            drive
+        }
+        "custom-domain-invalid-api-base-submission-stays" => {
+            let mut drive = Drive::new(browser_context(), Vec::new(), PersistOutcome::Completed);
+            onto_custom_domain(&mut drive);
+            drive.set_input(DomainInput::Domain, "console.internal.example");
+            drive.set_input(DomainInput::ApiBase, "http:/broken");
+            drive.set_input(DomainInput::Domain, "console.internal.example/x");
+            drive.feed_key(KeyPress::Enter);
+            let state = drive.domain_screen_state();
+            drive.probe("custom_domain:afterInvalidApiBase", state);
+            drive.press(KeyPress::Escape);
+            drive.press(KeyPress::Escape);
+            drive.press(KeyPress::Escape);
+            drive
+        }
+        "custom-domain-split-horizon-signs-in"
+        | "custom-domain-tenant-discovery-skips-an-empty-host" => submit_custom_target(
+            browser_context(),
+            "console.internal.example",
+            "connector.internal.example/api",
+            |_| {},
+        ),
+        "custom-domain-same-origin-api-base-keeps-the-console-path" => submit_custom_target(
+            browser_context(),
+            "https://console.internal.example/portal/",
+            "https://Console.Internal.Example:443/portal/api",
+            |_| {},
+        ),
+        "custom-domain-tenant-discovery-adopts-the-advertised-hosts"
+        | "custom-domain-tenant-discovery-refuses-unsafe-hosts"
+        | "custom-domain-tenant-discovery-without-hosts" => {
+            submit_custom_target(browser_context(), "console.internal.example", "", |_| {})
+        }
+        "custom-domain-unchanged-configuration-skips-the-writes" => {
+            let mut context = custom_configured_context();
+            CONFIGURED_DOMAIN.clone_into(&mut context.console_base_url);
+            submit_custom_target(context, CONFIGURED_DOMAIN, "", |_| {})
+        }
+        "custom-domain-console-write-failure-names-the-field" => submit_custom_target(
+            browser_context(),
+            "console.internal.example",
+            "",
+            |recorder| recorder.console_write_ok = false,
+        ),
+        "custom-domain-provider-write-failure-names-the-field" => submit_custom_target(
+            browser_context(),
+            "console.internal.example",
+            "",
+            |recorder| {
+                recorder.provider_write_ok = false;
+                recorder.console_write_ok = false;
+            },
+        ),
+        "custom-domain-seeds-a-configured-split-horizon" => {
+            let mut drive = Drive::new(
+                split_configured_context(CONFIGURED_DOMAIN),
+                Vec::new(),
+                PersistOutcome::Completed,
+            );
+            onto_custom_domain(&mut drive);
+            let mut states = vec![drive.domain_screen_state()];
+            drive.set_input(DomainInput::Domain, "console.oracle.mistral.ai");
+            states.push(drive.domain_screen_state());
+            drive.set_input(DomainInput::Domain, CONFIGURED_DOMAIN);
+            states.push(drive.domain_screen_state());
+            drive.press(KeyPress::Escape);
+            drive.press(KeyPress::Enter);
+            states.push(drive.domain_screen_state());
+            drive.set_input(DomainInput::Domain, "https://console.internal.examplez");
+            states.push(drive.domain_screen_state());
+            drive.set_input(DomainInput::Domain, "http:/broken");
+            states.push(drive.domain_screen_state());
+            drive.feed_key(KeyPress::Tab);
+            drive.set_input(DomainInput::ApiBase, "http:/broken");
+            states.push(drive.domain_screen_state());
+            drive.set_input(DomainInput::ApiBase, "ftp://x");
+            states.push(drive.domain_screen_state());
+            drive.probe("custom_domain:seededStates", json!(states));
+            drive.press(KeyPress::Escape);
+            drive.press(KeyPress::Escape);
+            drive.press(KeyPress::Escape);
+            drive
+        }
+        "target-default-arms-for-a-configured-split-api-base" => {
+            let mut drive = Drive::new(
+                split_configured_context(DEFAULT_BROWSER_AUTH_BASE_URL),
+                vec![Feed::Pending],
+                PersistOutcome::Completed,
+            );
+            onto_target(&mut drive);
+            drive.feed_key(KeyPress::Enter);
+            let armed = drive.model.override_armed();
+            drive.probe("sign_in_target:armedAfterFirstEnter", json!(armed));
+            drive.press(KeyPress::Enter);
+            drive.press(KeyPress::Escape);
+            drive
+        }
+        "target-default-resets-the-tenant-bases-and-signs-in" => {
+            let mut context = custom_configured_context();
+            CONFIGURED_DOMAIN.clone_into(&mut context.console_base_url);
+            "https://chat.tenant.example".clone_into(&mut context.vibe_base_url);
+            context.provider.insert(
+                "api_base".to_owned(),
+                TomlValue::String("https://api.tenant.example/v1".to_owned()),
+            );
+            let mut drive = Drive::new(
+                context,
+                vec![Feed::Success("oracle-signed-in-key")],
+                PersistOutcome::Completed,
+            );
+            onto_target(&mut drive);
+            drive.feed_key(KeyPress::Enter);
+            let armed = drive.model.override_armed();
+            drive.probe("sign_in_target:armedAfterFirstEnter", json!(armed));
+            drive.press(KeyPress::Enter);
+            drive.wait("the sign-in worker to exit the app");
+            drive
+        }
+        "custom-domain-manual-key-discovers-the-tenant" => {
+            let mut drive = Drive::new(
+                browser_context(),
+                vec![Feed::Pending],
+                PersistOutcome::Completed,
+            );
+            onto_custom_domain(&mut drive);
+            drive.set_input(DomainInput::Domain, "console.internal.example");
+            drive.press(KeyPress::Enter);
+            drive.press(KeyPress::Char('m'));
+            drive.type_text("oracle-key");
+            drive.press(KeyPress::Enter);
+            drive
+        }
         other => panic!("no drive is scripted for corpus scenario {other}"),
     };
     drive.note_visit();
+    drive
+}
+
+/// The `/whoami` answer each tenant scenario scripts, as the capture does.
+fn scenario_whoami(case: &str) -> Option<Value> {
+    Some(match case {
+        "custom-domain-tenant-discovery-adopts-the-advertised-hosts" => json!({
+            "api_base": "https://api.tenant.example/",
+            "vibe_base": "https://chat.tenant.example",
+        }),
+        "custom-domain-tenant-discovery-refuses-unsafe-hosts" => json!({
+            "api_base": "http://api.tenant.example",
+            "vibe_base": "https://chat.tenant.example/../evil",
+        }),
+        "custom-domain-tenant-discovery-skips-an-empty-host" => json!({
+            "api_base": "",
+            "vibe_base": "https://chat.tenant.example//",
+        }),
+        "custom-domain-tenant-discovery-without-hosts" => json!({}),
+        "custom-domain-manual-key-discovers-the-tenant" => {
+            json!({"vibe_base": "https://chat.tenant.example"})
+        }
+        _ => return None,
+    })
+}
+
+/// Reference `submit_custom_target`: walks onto the custom-domain screen,
+/// assigns the domain when it differs and the API base when one is given,
+/// submits, and waits for the successful sign-in to exit.
+fn submit_custom_target(
+    context: OnboardingContext,
+    domain: &str,
+    api_base: &str,
+    script: impl FnOnce(&mut Recorder),
+) -> Drive {
+    let mut drive = Drive::new(
+        context,
+        vec![Feed::Success("oracle-signed-in-key")],
+        PersistOutcome::Completed,
+    );
+    script(&mut drive.recorder);
+    onto_custom_domain(&mut drive);
+    drive.set_input(DomainInput::Domain, domain);
+    if !api_base.is_empty() {
+        drive.set_input(DomainInput::ApiBase, api_base);
+    }
+    drive.press(KeyPress::Enter);
+    drive.wait("the sign-in worker to exit the app");
     drive
 }
 
@@ -1464,9 +1839,34 @@ fn run_screen_graph(cases: &[GraphScenario], report: &mut Report) {
             "providerBrowserAuth",
             &scenario.provider_browser_auth,
             &ProviderBrowserAuth {
+                allow_origin_rewrite: drive.model.provider_allows_origin_rewrite(),
                 api_base_url: api.map(str::to_owned),
                 base_url: base.map(str::to_owned),
             },
+        );
+        report.check(
+            "screenGraph",
+            case,
+            "workingBases",
+            &scenario.working_bases,
+            &WorkingBases {
+                api_base: drive
+                    .model
+                    .provider()
+                    .get("api_base")
+                    .and_then(TomlValue::as_str)
+                    .unwrap_or_default()
+                    .to_owned(),
+                console_base_url: drive.model.working_console_base_url().to_owned(),
+                vibe_base_url: drive.model.working_vibe_base_url().to_owned(),
+            },
+        );
+        report.check(
+            "screenGraph",
+            case,
+            "whoamiLookups",
+            &scenario.effects.whoami_lookups,
+            &drive.recorder.whoami_lookups,
         );
         report.check(
             "screenGraph",

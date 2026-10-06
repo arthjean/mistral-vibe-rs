@@ -285,3 +285,19 @@ fn an_origin_rewrite_rehomes_a_foreign_url_and_still_checks_its_path() {
         "a URL already on the base origin is kept as sent"
     );
 }
+
+/// `urlsplit` reads `evil.example\` as credentials and the console as the
+/// host; the HTTP client reads the backslash as a path delimiter and would
+/// send the request to `evil.example`. Neither form may pass.
+#[test]
+fn a_url_the_client_would_send_elsewhere_is_refused() {
+    let base = "https://console.mistral.ai/api";
+    let value = "https://evil.example\\@console.mistral.ai/api/oracle/poll";
+    for allow_origin_rewrite in [false, true] {
+        assert_eq!(
+            super::rehome_url_against_base(value, base, allow_origin_rewrite),
+            Err(super::UrlRejection),
+            "rewrite {allow_origin_rewrite}"
+        );
+    }
+}

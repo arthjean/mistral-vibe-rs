@@ -19,13 +19,18 @@ use std::pin::Pin;
 
 use serde_json::{Value, json};
 use toml::Table;
-use vibe_core::auth::{AuthState, PersistOutcome, RemoveError, SignInAttempt, SignInError};
+use vibe_core::auth::{
+    AuthState, PersistOutcome, ProviderCredentialsRequest, ProviderCredentialsResult, RemoveError,
+    SignInAttempt, SignInError,
+};
 
 pub(crate) use controller::AuthController;
 pub use environment::ProductionAuthEnvironment;
 
 #[cfg(test)]
 mod prose_tests;
+#[cfg(test)]
+mod sign_in_parity_tests;
 
 /// The reference's sign-in target vocabulary.
 const SIGN_IN_TARGET_MISTRAL: &str = "mistral";
@@ -52,10 +57,20 @@ pub fn default_vibe_home() -> PathBuf {
 pub type AuthKeyFuture<'a> = Pin<Box<dyn Future<Output = Result<String, SignInError>> + Send + 'a>>;
 pub type AuthAttemptFuture<'a> =
     Pin<Box<dyn Future<Output = Result<SignInAttempt, SignInError>> + Send + 'a>>;
+pub type TenantDomainsFuture<'a> = Pin<Box<dyn Future<Output = (Table, String)> + Send + 'a>>;
+
+/// The top-level console and chat bases the configuration carries.
+/// Reference `OnboardingContext.console_base_url` and `vibe_base_url`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfiguredBases {
+    pub console_base_url: String,
+    pub vibe_base_url: String,
+}
 
 /// The ambient world the authentication surface runs against. Reference
 /// `AcpAuthController`'s constructor ports: the context loader, the sign-in
-/// service factory, the key persister and remover, and the provider persister.
+/// service factory, the key persister and remover, the credentials persister,
+/// and the tenant domain resolver.
 pub trait AcpAuthEnvironment: Send + Sync {
     /// The provider the flows authenticate, resolved from the effective
     /// configuration; the shipped Mistral entry when nothing resolves.
@@ -89,9 +104,27 @@ pub trait AcpAuthEnvironment: Send + Sync {
     /// `vibe_core::auth::remove_api_key` reports them.
     fn remove_api_key(&self, env_key: &str) -> Result<(), RemoveError>;
 
-    /// Upserts `provider` into the configuration; `false` when the write did
-    /// not land.
-    fn persist_provider(&self, provider: &Table) -> bool;
+    /// The console and chat bases the effective configuration carries, the
+    /// public defaults when it names none.
+    fn load_bases(&self) -> ConfiguredBases;
+
+    /// Writes the provider entry and any moved base URL, answering what
+    /// landed field by field. Reference `persist_provider_credentials`.
+    fn persist_provider_credentials(
+        &self,
+        request: &ProviderCredentialsRequest,
+    ) -> ProviderCredentialsResult;
+
+    /// Asks `console_base_url` which API and chat hosts its tenant uses,
+    /// answering the inputs unchanged on any failure. Reference
+    /// `resolve_tenant_domains`.
+    fn resolve_tenant_domains<'a>(
+        &'a self,
+        provider: Table,
+        console_base_url: &'a str,
+        api_key: &'a str,
+        vibe_base_url: &'a str,
+    ) -> TenantDomainsFuture<'a>;
 
     /// The whole browser flow for `provider`: create, open, poll, exchange.
     fn browser_authenticate<'a>(&'a self, provider: &'a Table) -> AuthKeyFuture<'a>;
