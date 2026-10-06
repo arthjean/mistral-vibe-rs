@@ -574,23 +574,7 @@ impl WorkspaceService {
         let mut roots = self.discovery_roots.clone();
         roots.agents = self.agent_search_paths();
         roots.skills = self.skill_discovery(&self.paths.working_directory, self.project_trusted);
-        let mut seeded = vibe_core::skills::builtins::builtin_skills();
-        // `experimental_enable_registry_skills` gates the ported registry
-        // subtree: disabled returns before any registry code runs, so no cache
-        // directory is created and no transport is constructed, and enabled
-        // reaches the subtree through its one door, which publishes nothing
-        // until the reference publishes a load lifecycle to reproduce
-        // (skills-parity PRD, open question 3). Either way the catalog is
-        // unchanged, which is the reference's own behavior for a key nothing
-        // upstream reads.
-        if self
-            .config
-            .load()
-            .ok()
-            .is_some_and(|snapshot| snapshot.registry_skills_enabled())
-        {
-            seeded.extend(vibe_core::skills::registry::published_skills());
-        }
+        let seeded = vibe_core::skills::builtins::builtin_skills();
         discover_extensions(&roots, builtin_agents, seeded, BTreeMap::new())
     }
 
@@ -613,6 +597,23 @@ impl WorkspaceService {
             projects.push(working_directory.to_path_buf());
             projects.extend(project_skill_roots(&self.config, trusted));
         }
+        // Reference `_discover_registry_skills`: the pins load only while the
+        // experiment is on, from the global manifest and the open roots'.
+        let registry = snapshot
+            .as_ref()
+            .is_some_and(ConfigSnapshot::registry_skills_enabled)
+            .then(|| {
+                let mut project_roots: Vec<PathBuf> = Vec::new();
+                for root in &projects {
+                    if !project_roots.contains(root) {
+                        project_roots.push(root.clone());
+                    }
+                }
+                RegistrySources {
+                    vibe_home: self.paths.vibe_home.clone(),
+                    project_roots,
+                }
+            });
         SkillDiscovery {
             roots: search_paths(&SearchInputs {
                 configured: &configured,
@@ -634,6 +635,7 @@ impl WorkspaceService {
                 .as_ref()
                 .map(ConfigSnapshot::disabled_skills)
                 .unwrap_or_default(),
+            registry,
         }
     }
 
@@ -688,8 +690,11 @@ impl WorkspaceService {
         self.catalog()
             .issues
             .into_iter()
-            .filter(|issue| issue.mechanism == "skills")
-            .map(|issue| (issue.path.to_string_lossy().into_owned(), issue.message))
+            .filter_map(|issue| {
+                issue
+                    .skill_issue_message()
+                    .map(|message| (issue.path.to_string_lossy().into_owned(), message))
+            })
             .collect()
     }
 }

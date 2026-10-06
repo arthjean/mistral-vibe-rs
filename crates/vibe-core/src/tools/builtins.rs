@@ -1136,6 +1136,7 @@ mod tests {
             source: crate::skills::SkillSource::Builtin,
             scope: crate::skills::SkillScope::Builtin,
             path: None,
+            registry: None,
         };
 
         let rendered = render_skill(&skill, None);

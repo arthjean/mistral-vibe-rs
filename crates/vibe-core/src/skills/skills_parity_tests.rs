@@ -10,25 +10,22 @@
 //! reference-authored sentence, which is what `NOTICE` allows. Only the live
 //! recapture probe skips, and it names the pin and the way back when it does.
 //!
-//! The oracle preceded the implementation, and the ledger below had burned
-//! down to decided divergences only until the re-pin to v2.25.7 reopened it:
-//! the `OPEN` entries record what the reference changed since v2.24.0 and the
-//! port has not followed, and the stale check retires any entry the moment
-//! its case conforms. `frontmatter`,
-//! `metadata` and `projection` are compared for real since EP-047 landed the
-//! parser, the schema and the whole model. `discovery` and `filtering` are
-//! compared for real since EP-048 landed the five roots, the configured paths
-//! and the two filter keys: the wiring reproduced here is
-//! `WorkspaceService::skill_discovery`, which resolves the roots through
-//! `search_paths` and hands them plus the filters to `discover_extensions`.
-//! EP-049 seeded the builtin catalog, so both families now conform whole and
-//! the `builtins` block is compared for real: structure and vocabulary must
-//! match, and the two prose digests must never match, which is the `NOTICE`
-//! boundary enforced mechanically. EP-051 ported the registry store and the
-//! manifests, so `store` and `manifest` are compared for real too, over a
-//! scratch store root per case; the store's fallback description is this
-//! port's own prose, masked in the trees the way the capture masks the
-//! reference's and held permanently unequal by digest.
+//! The oracle preceded the implementation, and the ledger below holds decided
+//! divergences only: the stale check retires any entry the moment its case
+//! conforms. `frontmatter`, `metadata` and `projection` compare the parser,
+//! the schema and the wire summary. `discovery` and `filtering` compare the
+//! roots, the scope each one publishes and the two filter keys: the wiring
+//! reproduced here is `WorkspaceService::skill_discovery`, which resolves the
+//! roots through `search_paths` and hands them plus the filters to
+//! `discover_extensions`. The `builtins` block compares structure and
+//! vocabulary for equality and the two prose digests for permanent
+//! inequality, which is the `NOTICE` boundary enforced mechanically. `store`
+//! and `manifest` compare the registry store and the manifests over a scratch
+//! store root per case; the store's fallback description is this port's own
+//! prose, masked in the trees the way the capture masks the reference's and
+//! held permanently unequal by digest. The six families that measure what a
+//! session loads and the registry lifecycle behind it are replayed by
+//! `skills_registry_parity_tests`.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -61,24 +58,15 @@ const CORPUS_SCHEMA_VERSION: u32 = 1;
 /// captured almost nothing fails instead of reporting a clean but empty run.
 const MINIMUM_SCENARIOS: usize = 120;
 
-/// v2.25.0 scoped each skill root: project harness roots publish `project`.
-const DISCOVERY_PROJECT_SCOPE: &str = "OPEN: (row 28) v2.25.0 made the reference's \
-     `_compute_search_paths` pair every root with a scope \
-     (`vibe/core/skills/manager.py:86-115` at 4a96003186b1), so a skill found under a \
-     project harness root (`.vibe/skills` or `.agents/skills` in the trusted cwd) publishes \
-     `scope: project`; the port's `discover_extensions` still publishes every disk skill as \
-     `global` (`crates/vibe-core/src/extensions.rs:449`)";
-
 /// Cases where this port answers something other than the reference, each with
 /// the reason. A case that conforms while listed here fails the replay as a
 /// stale entry, and a case that diverges without an entry fails naming the
 /// family, the case and the observed and expected values.
 ///
 /// A `family/*` entry covers every case of its family and goes stale only
-/// when the whole family conforms; none is used. The `ACCEPTED` entries are
-/// decided divergences: the deprecated legacy root and the prose digests
-/// `NOTICE` holds permanently unequal. The `OPEN` entries are reference
-/// changes since v2.24.0 the port has not followed, one per affected case.
+/// when the whole family conforms; none is used. Every entry is a decided
+/// divergence: the deprecated legacy root and the prose digests `NOTICE`
+/// holds permanently unequal.
 const DIVERGENCES: &[(&str, &str)] = &[
     (
         "discovery/legacy-extensions-root-unread",
@@ -91,13 +79,11 @@ const DIVERGENCES: &[(&str, &str)] = &[
         "ACCEPTED: `NOTICE` forbids shipping the reference's builtin prose, so the `vibe` body \
          is written originally in `crates/vibe-core/src/skills/assets/vibe.md`; this entry \
          keeps the digest divergence permanent, and the replay fails the moment the body \
-         conforms to the reference digest, so it can never be closed by copying. The body was \
-         written against the v2.24.0 directive coverage: at 4a96003186b1 the reference prompt \
-         (`vibe/core/skills/builtins/vibe.py`) is 59337 characters, up from 39666, and adds \
-         directives on OpenTelemetry tracing (v2.24.1, `vibe.py:213`), session titles \
-         (v2.24.4, `vibe.py:107`) and plugins (v2.25.1, `vibe.py:1019-1111`: manifest, \
-         contents, foreign formats, pinning and reload, example tree), none of which `vibe.md` \
-         covers, so the coverage gap is open beyond the permanent digest divergence",
+         conforms to the reference digest, so it can never be closed by copying. The body \
+         covers the directives the reference prompt (`vibe/core/skills/builtins/vibe.py`) \
+         carries at 4a96003186b1, OpenTelemetry tracing, session titles, plugins, project \
+         instructions, the exit, update and resume lifecycle and the input queue included, \
+         each stated for what this build does",
     ),
     (
         "builtins/builtinProse-vibe-description",
@@ -109,13 +95,9 @@ const DIVERGENCES: &[(&str, &str)] = &[
         "ACCEPTED: `NOTICE` forbids shipping the reference's builtin prose, so the \
          `skill-creator` body is written originally in \
          `crates/vibe-core/src/skills/assets/skill_creator.md`, and conforming to the reference \
-         digest fails the replay. The body was written against the v2.24.0 directive \
-         coverage: at 4a96003186b1 the reference prompt \
-         (`vibe/core/skills/builtins/skill_creator.py`) is 4678 characters, up from 4500, and \
-         documents the `disable-model-invocation` frontmatter key (v2.25.5, \
-         `skill_creator.py:80`) with the routing-visibility statement qualified to match, \
-         which `skill_creator.md` does not cover, so the coverage gap is open beyond the \
-         permanent digest divergence",
+         digest fails the replay. The body covers the directives the reference prompt \
+         (`vibe/core/skills/builtins/skill_creator.py`) carries at 4a96003186b1, the \
+         `disable-model-invocation` key and the routing-visibility qualification included",
     ),
     (
         "builtins/builtinProse-skill-creator-description",
@@ -134,44 +116,6 @@ const DIVERGENCES: &[(&str, &str)] = &[
          for the same purpose; the recorded trees mask it as `{fallbackDescription}` on both \
          sides, and this entry holds the two digests permanently unequal, failing the replay \
          the moment the sentence conforms",
-    ),
-    ("discovery/project-vibe-skills", DISCOVERY_PROJECT_SCOPE),
-    ("discovery/project-agents-skills", DISCOVERY_PROJECT_SCOPE),
-    ("discovery/project-both-roots", DISCOVERY_PROJECT_SCOPE),
-    (
-        "discovery/project-vibe-beats-agents",
-        DISCOVERY_PROJECT_SCOPE,
-    ),
-    ("discovery/project-beats-user", DISCOVERY_PROJECT_SCOPE),
-    (
-        "discovery/nonexistent-configured-path",
-        DISCOVERY_PROJECT_SCOPE,
-    ),
-    (
-        "discovery/configured-path-is-a-file",
-        DISCOVERY_PROJECT_SCOPE,
-    ),
-    (
-        "discovery/duplicate-name-within-one-root",
-        DISCOVERY_PROJECT_SCOPE,
-    ),
-    ("discovery/clutter-ignored", DISCOVERY_PROJECT_SCOPE),
-    (
-        "discovery/malformed-skill-becomes-issue",
-        DISCOVERY_PROJECT_SCOPE,
-    ),
-    (
-        "discovery/frontmatter-name-wins-over-directory",
-        DISCOVERY_PROJECT_SCOPE,
-    ),
-    (
-        "store/prune-keeps-active",
-        "OPEN: (row 28) v2.25.0 scoped the reference's `_prune` to the ids named in the \
-         active set (`vibe/core/skills/registry/_store.py:264-267` at 4a96003186b1), so id \
-         `b`, absent from the active set, keeps `b/1/SKILL.md`; the port's \
-         `vibe_core::skills::registry::store::prune` \
-         (`crates/vibe-core/src/skills/registry/store.rs:349-379`) still removes every \
-         inactive version under every id directory, so only `a/2/SKILL.md` survives",
     ),
 ];
 
@@ -197,6 +141,12 @@ struct Corpus {
     projection: Vec<ProjectionCase>,
     store: StoreFamily,
     manifest: Vec<ManifestCase>,
+    loading: Vec<super::skills_registry_parity_tests::LoadingCase>,
+    installed_marks: Vec<super::skills_registry_parity_tests::MarksCase>,
+    lifecycle: Vec<super::skills_registry_parity_tests::LifecycleCase>,
+    sync: Vec<super::skills_registry_parity_tests::RegistryCase>,
+    service: Vec<super::skills_registry_parity_tests::RegistryCase>,
+    ledger: Vec<Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -260,6 +210,9 @@ struct MetadataCase {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct DiscoveryScenario {
     case: String,
+    /// The scenario root the session opens in, `project` unless it says.
+    #[serde(default)]
+    cwd: Option<String>,
     skill_paths: Vec<String>,
     enabled_skills: Vec<String>,
     disabled_skills: Vec<String>,
@@ -395,6 +348,9 @@ struct StoreCase {
     fail_write: Option<bool>,
     #[serde(default)]
     active: Option<Vec<(String, i64)>>,
+    /// The set a concurrent claim answers when the prune re-reads it.
+    #[serde(default)]
+    recheck: Option<Vec<(String, i64)>>,
     #[serde(default)]
     error: Option<String>,
     #[serde(default)]
@@ -483,7 +439,7 @@ fn ledger() -> BTreeMap<String, String> {
 /// Records one comparison, so a family reports a count and a divergence names
 /// itself instead of stopping at the first one.
 #[derive(Default)]
-struct Report {
+pub(super) struct Report {
     conformant: usize,
     total: usize,
     divergences: Vec<String>,
@@ -491,7 +447,7 @@ struct Report {
 }
 
 impl Report {
-    fn check<T: PartialEq + std::fmt::Debug>(
+    pub(super) fn check<T: PartialEq + std::fmt::Debug>(
         &mut self,
         family: &str,
         case: &str,
@@ -514,7 +470,7 @@ impl Report {
 /// Fails on any divergence the ledger does not name, and on any ledger entry
 /// whose divergence no longer reproduces. A `family/*` entry is stale once its
 /// family diverges nowhere.
-fn settle(report: &Report, family: &str) -> usize {
+pub(super) fn settle(report: &Report, family: &str) -> usize {
     let recorded = ledger();
     let wildcard = format!("{family}/*");
     let unrecorded = report
@@ -577,7 +533,7 @@ type CatalogAnswer = (
 
 /// The wire spelling of a serialized vocabulary word, for comparing the
 /// port's enums against the strings the corpus records.
-fn vocabulary<T: Serialize>(value: T) -> String {
+pub(super) fn vocabulary<T: Serialize>(value: T) -> String {
     serde_json::to_value(value)
         .ok()
         .and_then(|value| value.as_str().map(ToOwned::to_owned))
@@ -620,7 +576,7 @@ fn expected_catalog(scenario: &DiscoveryScenario) -> CatalogAnswer {
 
 /// The scenario's own spelling of a root, with `${label}` standing for the
 /// materialized directory the capture script anchored the entry on.
-fn substitute(entry: &str, roots: &BTreeMap<String, PathBuf>) -> String {
+pub(super) fn substitute(entry: &str, roots: &BTreeMap<String, PathBuf>) -> String {
     let mut rendered = entry.to_owned();
     for (label, root) in roots {
         rendered = rendered.replace(
@@ -633,7 +589,10 @@ fn substitute(entry: &str, roots: &BTreeMap<String, PathBuf>) -> String {
 
 /// The label and root-relative path of `path`, against the scenario roots. The
 /// root itself is spelled `.`, which is how the capture script records it.
-fn label_path(path: &Path, roots: &BTreeMap<String, PathBuf>) -> Option<(String, String)> {
+pub(super) fn label_path(
+    path: &Path,
+    roots: &BTreeMap<String, PathBuf>,
+) -> Option<(String, String)> {
     for (label, root) in roots {
         if let Ok(relative) = path.strip_prefix(root) {
             let relative = relative.to_string_lossy().replace('\\', "/");
@@ -698,8 +657,9 @@ fn discovery_answer(scenario: &DiscoveryScenario) -> Option<CatalogAnswer> {
     // `discover_extensions` seeds the builtin catalog ahead of the walk and
     // filters the result with the two keys. The scenario's `home` stands in for
     // the operator's home and `home/.vibe` for the Vibe home.
+    let cwd = roots[scenario.cwd.as_deref().unwrap_or("project")].clone();
     let projects = if scenario.project_trusted {
-        vec![roots["project"].clone()]
+        vec![cwd.clone()]
     } else {
         Vec::new()
     };
@@ -713,11 +673,11 @@ fn discovery_answer(scenario: &DiscoveryScenario) -> Option<CatalogAnswer> {
         projects: &projects,
         vibe_home: &roots["home"].join(".vibe"),
         user_home: Some(&roots["home"]),
-        working_directory: &roots["project"],
+        working_directory: &cwd,
     });
     let observed_paths = walked
         .iter()
-        .filter_map(|path| label_path(path, &roots))
+        .filter_map(|(path, _)| label_path(path, &roots))
         .collect::<Vec<_>>();
     let catalog = discover_extensions(
         &DiscoveryRoots {
@@ -725,6 +685,7 @@ fn discovery_answer(scenario: &DiscoveryScenario) -> Option<CatalogAnswer> {
                 roots: walked,
                 enabled: scenario.enabled_skills.clone(),
                 disabled: scenario.disabled_skills.clone(),
+                registry: None,
             },
             ..DiscoveryRoots::default()
         },
@@ -853,6 +814,7 @@ fn named_definition(name: &str) -> SkillDefinition {
         source: SkillSource::Local,
         scope: SkillScope::Global,
         path: None,
+        registry: None,
     }
 }
 
@@ -913,10 +875,25 @@ fn projection_definition(skill: &Value) -> SkillDefinition {
         source: match skill.get("source").and_then(Value::as_str) {
             Some("builtin") => SkillSource::Builtin,
             Some("registry") => SkillSource::Registry,
+            Some("plugin") => SkillSource::Plugin,
             _ => SkillSource::Local,
         },
-        scope: SkillScope::Global,
+        scope: match skill.get("scope").and_then(Value::as_str) {
+            Some("project") => SkillScope::Project,
+            Some("builtin") => SkillScope::Builtin,
+            _ => SkillScope::Global,
+        },
         path: None,
+        registry: skill
+            .get("registry")
+            .map(|registry| crate::skills::RegistryRef {
+                skill_id: registry["skill_id"].as_str().unwrap_or_default().to_owned(),
+                version: registry["version"].as_i64().unwrap_or_default(),
+                alias: registry
+                    .get("alias")
+                    .and_then(Value::as_str)
+                    .map(ToOwned::to_owned),
+            }),
     }
 }
 
@@ -928,7 +905,7 @@ fn projection_definition(skill: &Value) -> SkillDefinition {
 /// record, exactly as the capture script's `_item` builds one for the
 /// reference: the payload defaults stand in for every field the record does
 /// not spell.
-fn store_item(spec: &Value) -> RegistrySkillItem {
+pub(super) fn store_item(spec: &Value) -> RegistrySkillItem {
     let text = |key: &str, default: &str| {
         spec.get(key)
             .and_then(Value::as_str)
@@ -983,7 +960,7 @@ fn store_item(spec: &Value) -> RegistrySkillItem {
 /// path, its content and its execute bits, sorted the way the capture sorts
 /// them. `mask` replaces this port's fallback description the way the capture
 /// replaces the reference's, so the comparison stays about structure.
-fn tree_of(root: &Path, mask: Option<(&str, &str)>) -> Value {
+pub(super) fn tree_of(root: &Path, mask: Option<(&str, &str)>) -> Value {
     let mut files = Vec::new();
     collect_files(root, root, &mut files);
     files.sort_by(|a, b| a.0.split('/').cmp(b.0.split('/')));
@@ -1005,7 +982,7 @@ fn tree_of(root: &Path, mask: Option<(&str, &str)>) -> Value {
     )
 }
 
-fn collect_files(
+pub(super) fn collect_files(
     root: &Path,
     directory: &Path,
     files: &mut Vec<(String, String, (bool, bool, bool))>,
@@ -1050,7 +1027,7 @@ fn exec_bits(_path: &Path) -> (bool, bool, bool) {
 /// Strips the `exec` fields from a recorded answer on platforms that cannot
 /// measure them, so the comparison stays about the fields the platform can
 /// answer.
-fn comparable_tree_fields(answer: &Value) -> Value {
+pub(super) fn comparable_tree_fields(answer: &Value) -> Value {
     if cfg!(unix) {
         return answer.clone();
     }
@@ -1193,7 +1170,19 @@ fn store_answer(case: &StoreCase, fallback: &mut Option<String>) -> Value {
                 .unwrap_or_default()
                 .into_iter()
                 .collect();
-            store::prune(&root, &active).expect("the recorded prune succeeds");
+            let claimed: Option<BTreeSet<(String, i64)>> = case
+                .recheck
+                .clone()
+                .map(|claimed| claimed.into_iter().collect());
+            let recheck = || claimed.clone().unwrap_or_default();
+            store::prune(
+                &root,
+                &active,
+                claimed
+                    .is_some()
+                    .then_some(&recheck as &dyn Fn() -> BTreeSet<(String, i64)>),
+            )
+            .expect("the recorded prune succeeds");
             let mut surviving = Vec::new();
             collect_files(&root, &root, &mut surviving);
             let mut surviving: Vec<String> =
@@ -1226,7 +1215,7 @@ fn store_expected(case: &StoreCase) -> Value {
 
 /// The recorded form of a manifest's entries, matching the capture's
 /// `model_dump` of each one.
-fn manifest_entries(manifest: &SkillManifest) -> Value {
+pub(super) fn manifest_entries(manifest: &SkillManifest) -> Value {
     Value::Array(
         manifest
             .skills
@@ -1301,6 +1290,28 @@ fn manifest_answer(case: &ManifestCase) -> (Value, Value) {
                 "b",
                 "y",
                 ManifestVersion::Alias("latest".to_owned()),
+            ));
+            (
+                json!({"skills": case.skills}),
+                json!({"skills": manifest_entries(&manifest)}),
+            )
+        }
+        "upsert-replaces-by-skill-id" => {
+            let mut manifest = SkillManifest::default();
+            manifest.upsert(manifest_entry(
+                "old-name",
+                "same-id",
+                ManifestVersion::Frozen(1),
+            ));
+            manifest.upsert(manifest_entry(
+                "other",
+                "other-id",
+                ManifestVersion::Frozen(1),
+            ));
+            manifest.upsert(manifest_entry(
+                "new-name",
+                "same-id",
+                ManifestVersion::Frozen(2),
             ));
             (
                 json!({"skills": case.skills}),
@@ -1538,6 +1549,7 @@ fn the_committed_corpus_replays_every_family_the_reference_answered() {
                 roots: Vec::new(),
                 enabled: case.enabled_skills.clone(),
                 disabled: case.disabled_skills.clone(),
+                registry: None,
             },
         );
         let mut kept = case.kept.clone();
@@ -1641,6 +1653,15 @@ fn the_committed_corpus_replays_every_family_the_reference_answered() {
     }
     scenarios += settle(&report, "manifest");
 
+    scenarios += super::skills_registry_parity_tests::replay(
+        &corpus.loading,
+        &corpus.installed_marks,
+        &corpus.lifecycle,
+        &corpus.sync,
+        &corpus.service,
+        &corpus.ledger,
+    );
+
     // The builtin catalog: everything structural must equal the reference,
     // and the two prose digests must never equal it, which is `NOTICE`
     // enforced by the stale-entry check the ledger already runs.
@@ -1704,7 +1725,7 @@ fn the_committed_corpus_replays_every_family_the_reference_answered() {
     scenarios += settle(&report, "builtins");
 
     println!(
-        "skills: {scenarios} scenarios across 8 families plus the builtin catalog replayed at {}",
+        "skills: {scenarios} scenarios across 14 families plus the builtin catalog replayed at {}",
         &corpus.reference.commit[..12],
     );
     assert!(

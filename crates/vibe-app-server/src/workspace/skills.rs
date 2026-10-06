@@ -10,66 +10,44 @@
 use serde_json::{Value, json};
 use toml::Value as TomlValue;
 use vibe_core::config::DotenvValues;
-use vibe_core::extensions::discover_extensions;
-use vibe_core::matching::NameFilter;
 use vibe_core::skills::registry::manifest::{self, SkillManifest};
 use vibe_core::skills::registry::pins::{self, PinTarget, SkillScope};
 use vibe_core::skills::registry::service::{self, RegistryEndpoint};
-use vibe_core::skills::{SkillSource, skill_summary};
+use vibe_core::skills::registry::sync::{self, SyncScope};
+use vibe_core::skills::{installed_marks, installed_skills, skill_summary};
 use vibe_core::worktree::python_repr;
 use vibe_protocol::ProtocolErrorCode;
 
 use super::{MISTRAL_KEY, WorkspaceService};
 
 impl WorkspaceService {
-    /// One row per skill the session could load, builtins aside, disabled
-    /// ones included and marked, so a browser can turn them back on.
+    /// One row per installed skill, builtins aside, disabled ones included and
+    /// marked, so a browser can turn them back on (reference
+    /// `project_installed_skills`).
     ///
-    /// `enabled` is whether the session loads the skill and `locked` whether
-    /// a toggle could change that: an allowlist decides alone and locks every
-    /// row, a skill a pattern disables, rather than its own name, stays
-    /// disabled whatever a toggle writes, and so does one only another layer
-    /// than the writable one disables, since `disabled_skills` concatenates
-    /// across layers.
+    /// Rows are not collapsed by name: a skill two roots hold, or one pinned
+    /// globally and in the project, is one row per scope, each managed on its
+    /// own. `enabled` and `locked` follow [`installed_marks`].
     #[must_use]
     pub fn skills_installed(&self) -> Value {
-        let mut roots = self.discovery_roots.clone();
-        let mut discovery =
-            self.skill_discovery(&self.paths.working_directory, self.project_trusted);
-        let allowed = std::mem::take(&mut discovery.enabled);
-        let disabled = std::mem::take(&mut discovery.disabled);
-        roots.skills = discovery;
-        let catalog = discover_extensions(
-            &roots,
-            Default::default(),
-            Default::default(),
-            Default::default(),
-        );
-        let allow = NameFilter::new(&allowed);
-        let deny = NameFilter::new(&disabled);
+        let discovery = self.skill_discovery(&self.paths.working_directory, self.project_trusted);
+        let builtin_names = vibe_core::skills::builtins::builtin_skills()
+            .into_keys()
+            .collect();
+        let (installed, _issues) = installed_skills(&discovery, &builtin_names);
         let own = self
             .writable_disabled_skills()
-            .unwrap_or_else(|| disabled.clone());
-        let rows = catalog
-            .skills
-            .values()
-            .filter(|skill| skill.source != SkillSource::Builtin)
+            .unwrap_or_else(|| discovery.disabled.clone());
+        let rows = installed
+            .iter()
             .map(|skill| {
-                let name = skill.name.as_str();
-                let (enabled, locked) = if !allowed.is_empty() {
-                    (allow.matches(name), true)
-                } else if disabled.is_empty() {
-                    (true, false)
-                } else {
-                    let others = disabled
-                        .iter()
-                        .filter(|pattern| pattern.as_str() != name)
-                        .collect::<Vec<_>>();
-                    let denied = deny.matches(name);
-                    let locked = NameFilter::new(&others).matches(name)
-                        || (denied && !own.iter().any(|entry| entry == name));
-                    (!denied, locked)
-                };
+                let (enabled, locked) = installed_marks(
+                    &skill.name,
+                    skill.source,
+                    &discovery.enabled,
+                    &discovery.disabled,
+                    &own,
+                );
                 let mut row = skill_summary(skill);
                 row["enabled"] = json!(enabled);
                 row["locked"] = json!(locked);
@@ -289,9 +267,57 @@ impl WorkspaceService {
                         )
                     })?;
             }
-            _ => {}
+            _ => return Ok(None),
         }
+        // Reference `_refreshed`: every mutation but a conversion republishes
+        // this repository's pins, so a sibling repository's prune sees a pin
+        // added or removed mid-session.
+        sync::publish_local_pins(SyncScope {
+            vibe_home: &self.paths.vibe_home,
+            roots: &roots,
+        });
         Ok(None)
+    }
+
+    /// Whether `experimental_enable_registry_skills` is on in the merged
+    /// configuration.
+    #[must_use]
+    pub fn registry_skills_enabled(&self) -> bool {
+        self.config
+            .load()
+            .ok()
+            .is_some_and(|snapshot| snapshot.registry_skills_enabled())
+    }
+
+    /// Reference `AgentLoop._refresh_registry_skills`: the session-start sync
+    /// of the registry pins a session in `working_directory` reads, skipped
+    /// while `experimental_enable_registry_skills` is off or no Mistral
+    /// endpoint resolves.
+    pub async fn refresh_registry_skills(
+        &self,
+        working_directory: &std::path::Path,
+        trusted: bool,
+    ) -> sync::SyncResult {
+        let discovery = self.skill_discovery(working_directory, trusted);
+        let roots = discovery
+            .registry
+            .map(|sources| sources.project_roots)
+            .unwrap_or_default();
+        let enabled = self.registry_skills_enabled();
+        let endpoint = if enabled {
+            self.registry_endpoint()
+        } else {
+            None
+        };
+        sync::refresh_registry_skills(
+            enabled,
+            endpoint.as_ref(),
+            SyncScope {
+                vibe_home: &self.paths.vibe_home,
+                roots: &roots,
+            },
+        )
+        .await
     }
 
     /// Reference `_resolve_endpoint`: the active provider when it is a

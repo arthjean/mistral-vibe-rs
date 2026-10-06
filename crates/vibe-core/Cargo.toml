@@ -33,6 +33,7 @@ secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde-saphyr.workspace = true
+sha1.workspace = true
 sha2.workspace = true
 shlex.workspace = true
 thiserror.workspace = true

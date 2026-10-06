@@ -283,15 +283,7 @@ impl WorkspaceService {
     /// The skills a session in `working_directory` may load, builtins
     /// included. Reference `SkillManager.available_skills`.
     fn prompt_skills(&self, working_directory: &Path, trusted: bool) -> Vec<PromptSkill> {
-        let mut seeded = vibe_core::skills::builtins::builtin_skills();
-        if self
-            .config
-            .load()
-            .ok()
-            .is_some_and(|snapshot| snapshot.registry_skills_enabled())
-        {
-            seeded.extend(vibe_core::skills::registry::published_skills());
-        }
+        let seeded = vibe_core::skills::builtins::builtin_skills();
         let roots = DiscoveryRoots {
             skills: self.skill_discovery(working_directory, trusted),
             ..DiscoveryRoots::default()

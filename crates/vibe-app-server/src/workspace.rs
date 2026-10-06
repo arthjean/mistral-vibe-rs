@@ -52,7 +52,9 @@ use vibe_core::extensions::{
 use vibe_core::mcp::McpServerConfig;
 use vibe_core::middleware::CompactionSettings;
 use vibe_core::policy::AllowlistPersistence;
-use vibe_core::skills::{SearchInputs, SkillDiscovery, search_paths, skill_summary};
+use vibe_core::skills::{
+    RegistrySources, SearchInputs, SkillDiscovery, search_paths, skill_summary,
+};
 use vibe_core::storage::{HydratedSession, SessionLogging, SessionStore, StorageError};
 use vibe_core::tools::config::ToolConfigResolver;
 use vibe_core::tools::descriptions::{

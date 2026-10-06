@@ -884,6 +884,45 @@ impl AppServer {
     fn lock_sessions(&self) -> Result<std::sync::MutexGuard<'_, SessionRegistry>, ServerError> {
         self.sessions.lock().map_err(|_| ServerError::StatePoisoned)
     }
+
+    /// Reference `AgentLoop._start_refresh_registry_skills`: once a session
+    /// opens, the registry pins it reads are synced in the background while
+    /// `experimental_enable_registry_skills` is on. A sync that wrote the
+    /// store drops the session's composed system prompt, so the next turn
+    /// lists the skills it adopted (reference `_adopt_synced_skills` and
+    /// `_refresh_system_prompt_unless_reloaded`); the skill tool reads the
+    /// store at every call and needs nothing.
+    pub(crate) fn start_registry_sync(&self, session_id: &str) {
+        if !self.workspace.registry_skills_enabled() {
+            return;
+        }
+        let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+            return;
+        };
+        let Some((working_directory, trusted)) = self.lock_sessions().ok().and_then(|sessions| {
+            sessions
+                .get(session_id)
+                .map(|session| (session.working_directory.clone(), session.intent.trusted))
+        }) else {
+            return;
+        };
+        let workspace = Arc::clone(&self.workspace);
+        let sessions = Arc::clone(&self.sessions);
+        let session_id = session_id.to_owned();
+        runtime.spawn(async move {
+            let result = workspace
+                .refresh_registry_skills(std::path::Path::new(&working_directory), trusted)
+                .await;
+            if result.status != vibe_core::skills::registry::sync::SyncStatus::Ok {
+                return;
+            }
+            if let Ok(mut sessions) = sessions.lock()
+                && let Some(session) = sessions.get_mut(&session_id)
+            {
+                session.system_prompt = None;
+            }
+        });
+    }
 }
 
 #[derive(Debug, Error)]

@@ -75,6 +75,7 @@ impl Tree {
             }),
             enabled: Vec::new(),
             disabled: Vec::new(),
+            registry: None,
         }
     }
 
@@ -201,7 +202,7 @@ fn a_root_reached_twice_is_walked_once() {
     let roots = tree.discovery(&configured, true).roots;
 
     assert_eq!(
-        roots.iter().filter(|root| **root == tree.extra).count(),
+        roots.iter().filter(|(root, _)| *root == tree.extra).count(),
         1,
         "the two spellings resolve to one root: {roots:?}"
     );
@@ -229,7 +230,7 @@ fn configured_paths_lead_and_unusable_entries_are_skipped() {
     let discovery = tree.discovery(&configured, true);
 
     assert_eq!(
-        discovery.roots.first(),
+        discovery.roots.first().map(|(root, _)| root),
         Some(&tree.extra),
         "the one usable configured entry is the first root: {:?}",
         discovery.roots
@@ -319,6 +320,7 @@ fn seeded(name: &str) -> SkillDefinition {
         source: SkillSource::Builtin,
         scope: SkillScope::Global,
         path: None,
+        registry: None,
     }
 }
 

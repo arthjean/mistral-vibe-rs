@@ -864,7 +864,10 @@ impl AppServer {
                 tools,
             },
         )
-        .map_err(|error| ServerError::Resource(error.to_string()))
+        .map_err(|error| ServerError::Resource(error.to_string()))?;
+        drop(sessions);
+        self.start_registry_sync(&attachment.id);
+        Ok(())
     }
 
     /// Registers the builtin tool surface for a session root.

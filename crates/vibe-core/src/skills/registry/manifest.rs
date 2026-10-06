@@ -64,10 +64,12 @@ pub struct SkillManifest {
 }
 
 impl SkillManifest {
-    /// Replaces the entry of the same name, so the newest write wins and a
-    /// name appears once.
+    /// Replaces any entry of the same name or the same registry id, so the
+    /// newest write wins and neither a name nor an id appears twice
+    /// (reference `SkillManifest.upsert`).
     pub fn upsert(&mut self, entry: ManifestEntry) {
-        self.skills.retain(|existing| existing.name != entry.name);
+        self.skills
+            .retain(|existing| existing.name != entry.name && existing.skill_id != entry.skill_id);
         self.skills.push(entry);
     }
 
@@ -197,7 +199,7 @@ fn toml_string(value: &str) -> String {
 /// The reference's non-strict `resolve` over a path that may not exist yet:
 /// the deepest existing ancestor is canonicalized and the remainder appended,
 /// so two spellings of one location compare equal.
-fn resolve_lenient(path: &Path) -> PathBuf {
+pub(crate) fn resolve_lenient(path: &Path) -> PathBuf {
     if let Ok(resolved) = fs::canonicalize(path) {
         return resolved;
     }

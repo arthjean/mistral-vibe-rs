@@ -1301,7 +1301,7 @@ async fn harness_for(
         .and_then(Value::as_array)
         .filter(|entries| entries.iter().any(|entry| entry.get("directory").is_some()))
         .map_or_else(SkillDiscovery::default, |_| SkillDiscovery {
-            roots: vec![tree.join("skills")],
+            roots: vec![(tree.join("skills"), SkillScope::Global)],
             ..SkillDiscovery::default()
         });
 
@@ -1342,6 +1342,7 @@ async fn harness_for(
                 source: SkillSource::Builtin,
                 scope: SkillScope::Global,
                 path: None,
+                registry: None,
             }
         });
     detached

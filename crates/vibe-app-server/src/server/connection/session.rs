@@ -60,7 +60,7 @@ impl ServerConnection {
         }
         if let Ok(mut resources) = self.server.resources.lock() {
             for (file, message) in issues {
-                resources.record_diagnostic_once(&file, &format!("Failed to load: {message}"));
+                resources.record_diagnostic_once(&file, &message);
             }
         }
     }
@@ -333,6 +333,7 @@ impl ServerConnection {
             .map(public_session_state)
             .unwrap_or(Value::Null);
         drop(sessions);
+        self.server.start_registry_sync(&session_id);
         // Reference `init_duration_ms`, which `session/ready/wait` answers: how
         // long the session took to become usable.
         if let Ok(mut resources) = self.server.resources.lock() {

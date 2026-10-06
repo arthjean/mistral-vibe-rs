@@ -1476,6 +1476,109 @@
       }
     },
     {
+      "case": "session-in-home-stays-global",
+      "customSkillsCount": 1,
+      "cwd": "home",
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": "Home is not a project",
+          "name": "kappa",
+          "relPath": ".vibe/skills/kappa/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [
+        [
+          "home",
+          ".vibe/skills"
+        ]
+      ],
+      "skillPaths": [],
+      "symlinks": [],
+      "tree": {
+        "home": {
+          ".vibe/skills/kappa/SKILL.md": "---\nname: kappa\ndescription: Home is not a project\n---\n\nProbe body.\n"
+        }
+      }
+    },
+    {
+      "case": "configured-project-root-stays-global",
+      "customSkillsCount": 1,
+      "disabledSkills": [],
+      "enabledSkills": [],
+      "issues": [],
+      "projectTrusted": true,
+      "published": [
+        {
+          "description": "Configured first",
+          "name": "lambda",
+          "relPath": ".vibe/skills/lambda/SKILL.md",
+          "root": "project",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "skill-creator",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "name": "vibe",
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "searchPaths": [
+        [
+          "project",
+          ".vibe/skills"
+        ]
+      ],
+      "skillPaths": [
+        "${project}/.vibe/skills"
+      ],
+      "symlinks": [],
+      "tree": {
+        "project": {
+          ".vibe/skills/lambda/SKILL.md": "---\nname: lambda\ndescription: Configured first\n---\n\nProbe body.\n"
+        }
+      }
+    },
+    {
       "case": "untrusted-project-not-walked",
       "customSkillsCount": 1,
       "disabledSkills": [],
@@ -2018,6 +2121,2785 @@
       }
     }
   ],
+  "installedMarks": [
+    {
+      "case": "no-filters",
+      "disabled": [],
+      "enabled": [],
+      "own": null,
+      "rows": [
+        {
+          "enabled": true,
+          "locked": false,
+          "name": "alpha",
+          "source": "local"
+        },
+        {
+          "enabled": true,
+          "locked": false,
+          "name": "beta",
+          "source": "registry"
+        }
+      ],
+      "skills": [
+        [
+          "alpha",
+          "local"
+        ],
+        [
+          "beta",
+          "registry"
+        ]
+      ]
+    },
+    {
+      "case": "allowlist-decides",
+      "disabled": [],
+      "enabled": [
+        "alpha"
+      ],
+      "own": null,
+      "rows": [
+        {
+          "enabled": true,
+          "locked": true,
+          "name": "alpha",
+          "source": "local"
+        },
+        {
+          "enabled": false,
+          "locked": true,
+          "name": "beta",
+          "source": "local"
+        }
+      ],
+      "skills": [
+        [
+          "alpha",
+          "local"
+        ],
+        [
+          "beta",
+          "local"
+        ]
+      ]
+    },
+    {
+      "case": "allowlist-pattern",
+      "disabled": [],
+      "enabled": [
+        "re:al.*"
+      ],
+      "own": null,
+      "rows": [
+        {
+          "enabled": true,
+          "locked": true,
+          "name": "alpha",
+          "source": "local"
+        },
+        {
+          "enabled": false,
+          "locked": true,
+          "name": "beta",
+          "source": "registry"
+        }
+      ],
+      "skills": [
+        [
+          "alpha",
+          "local"
+        ],
+        [
+          "beta",
+          "registry"
+        ]
+      ]
+    },
+    {
+      "case": "allowlist-ignores-disabled",
+      "disabled": [
+        "alpha"
+      ],
+      "enabled": [
+        "alpha"
+      ],
+      "own": [
+        "alpha"
+      ],
+      "rows": [
+        {
+          "enabled": true,
+          "locked": true,
+          "name": "alpha",
+          "source": "local"
+        },
+        {
+          "enabled": false,
+          "locked": true,
+          "name": "beta",
+          "source": "local"
+        }
+      ],
+      "skills": [
+        [
+          "alpha",
+          "local"
+        ],
+        [
+          "beta",
+          "local"
+        ]
+      ]
+    },
+    {
+      "case": "disabled-by-own-name",
+      "disabled": [
+        "alpha"
+      ],
+      "enabled": [],
+      "own": [
+        "alpha"
+      ],
+      "rows": [
+        {
+          "enabled": false,
+          "locked": false,
+          "name": "alpha",
+          "source": "local"
+        },
+        {
+          "enabled": true,
+          "locked": false,
+          "name": "beta",
+          "source": "local"
+        }
+      ],
+      "skills": [
+        [
+          "alpha",
+          "local"
+        ],
+        [
+          "beta",
+          "local"
+        ]
+      ]
+    },
+    {
+      "case": "disabled-in-another-layer",
+      "disabled": [
+        "alpha"
+      ],
+      "enabled": [],
+      "own": [],
+      "rows": [
+        {
+          "enabled": false,
+          "locked": true,
+          "name": "alpha",
+          "source": "local"
+        }
+      ],
+      "skills": [
+        [
+          "alpha",
+          "local"
+        ]
+      ]
+    },
+    {
+      "case": "disabled-by-pattern",
+      "disabled": [
+        "al*"
+      ],
+      "enabled": [],
+      "own": [
+        "al*"
+      ],
+      "rows": [
+        {
+          "enabled": false,
+          "locked": true,
+          "name": "alpha",
+          "source": "local"
+        },
+        {
+          "enabled": true,
+          "locked": false,
+          "name": "beta",
+          "source": "local"
+        }
+      ],
+      "skills": [
+        [
+          "alpha",
+          "local"
+        ],
+        [
+          "beta",
+          "local"
+        ]
+      ]
+    },
+    {
+      "case": "disabled-by-name-and-pattern",
+      "disabled": [
+        "alpha",
+        "a*"
+      ],
+      "enabled": [],
+      "own": [
+        "alpha",
+        "a*"
+      ],
+      "rows": [
+        {
+          "enabled": false,
+          "locked": true,
+          "name": "alpha",
+          "source": "local"
+        }
+      ],
+      "skills": [
+        [
+          "alpha",
+          "local"
+        ]
+      ]
+    },
+    {
+      "case": "single-layer-assumed",
+      "disabled": [
+        "alpha"
+      ],
+      "enabled": [],
+      "own": null,
+      "rows": [
+        {
+          "enabled": false,
+          "locked": false,
+          "name": "alpha",
+          "source": "local"
+        }
+      ],
+      "skills": [
+        [
+          "alpha",
+          "local"
+        ]
+      ]
+    },
+    {
+      "case": "unrelated-disabled",
+      "disabled": [
+        "zeta"
+      ],
+      "enabled": [],
+      "own": [
+        "zeta"
+      ],
+      "rows": [
+        {
+          "enabled": true,
+          "locked": false,
+          "name": "alpha",
+          "source": "registry"
+        }
+      ],
+      "skills": [
+        [
+          "alpha",
+          "registry"
+        ]
+      ]
+    },
+    {
+      "case": "blank-disabled-pattern",
+      "disabled": [
+        "  "
+      ],
+      "enabled": [],
+      "own": [
+        "  "
+      ],
+      "rows": [
+        {
+          "enabled": true,
+          "locked": false,
+          "name": "alpha",
+          "source": "local"
+        }
+      ],
+      "skills": [
+        [
+          "alpha",
+          "local"
+        ]
+      ]
+    },
+    {
+      "case": "plugin-always-locked",
+      "disabled": [
+        "alpha"
+      ],
+      "enabled": [],
+      "own": [
+        "alpha"
+      ],
+      "rows": [
+        {
+          "enabled": true,
+          "locked": true,
+          "name": "alpha",
+          "source": "plugin"
+        },
+        {
+          "enabled": true,
+          "locked": true,
+          "name": "beta",
+          "source": "plugin"
+        }
+      ],
+      "skills": [
+        [
+          "alpha",
+          "plugin"
+        ],
+        [
+          "beta",
+          "plugin"
+        ]
+      ]
+    },
+    {
+      "case": "plugin-under-allowlist",
+      "disabled": [],
+      "enabled": [
+        "gamma"
+      ],
+      "own": null,
+      "rows": [
+        {
+          "enabled": true,
+          "locked": true,
+          "name": "alpha",
+          "source": "plugin"
+        },
+        {
+          "enabled": false,
+          "locked": true,
+          "name": "beta",
+          "source": "local"
+        }
+      ],
+      "skills": [
+        [
+          "alpha",
+          "plugin"
+        ],
+        [
+          "beta",
+          "local"
+        ]
+      ]
+    },
+    {
+      "case": "case-insensitive-glob",
+      "disabled": [
+        "ALPHA"
+      ],
+      "enabled": [],
+      "own": [
+        "ALPHA"
+      ],
+      "rows": [
+        {
+          "enabled": false,
+          "locked": true,
+          "name": "alpha",
+          "source": "local"
+        }
+      ],
+      "skills": [
+        [
+          "alpha",
+          "local"
+        ]
+      ]
+    }
+  ],
+  "ledger": [
+    {
+      "case": "repo-key-shape",
+      "distinctFromOne": true,
+      "emptyKey": "global",
+      "length": 40,
+      "lowercaseHex": true,
+      "orderIndependent": true,
+      "spellingIndependent": true
+    },
+    {
+      "case": "record-sorts-as-text",
+      "record": "a@10\na@2\nb@2",
+      "union": [
+        [
+          "a",
+          2
+        ],
+        [
+          "a",
+          10
+        ],
+        [
+          "b",
+          2
+        ],
+        [
+          "c",
+          1
+        ]
+      ]
+    },
+    {
+      "case": "empty-record-is-removed",
+      "files": [
+        "k2.txt"
+      ],
+      "union": [
+        [
+          "a",
+          2
+        ],
+        [
+          "c",
+          1
+        ]
+      ]
+    },
+    {
+      "case": "union-skips-malformed-lines",
+      "union": [
+        [
+          "a",
+          2
+        ],
+        [
+          "c",
+          1
+        ],
+        [
+          "d",
+          4
+        ],
+        [
+          "e",
+          2
+        ],
+        [
+          "f@",
+          6
+        ]
+      ]
+    },
+    {
+      "case": "union-without-records",
+      "union": []
+    }
+  ],
+  "lifecycle": [
+    {
+      "available": [
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "skill-creator",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "vibe",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "case": "experiment-off-loads-no-pin",
+      "disabledSkills": [],
+      "installed": [],
+      "issues": [],
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ]
+      },
+      "registryEnabled": false,
+      "registryPins": [],
+      "resolved": [],
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v1",
+            "skillId": "sid-a",
+            "version": 1
+          },
+          "name": "remote"
+        }
+      ],
+      "tree": {},
+      "trusted": true
+    },
+    {
+      "available": [
+        {
+          "description": "remote v1",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-a",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "skill-creator",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "vibe",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "case": "frozen-pin-loads",
+      "disabledSkills": [],
+      "installed": [
+        {
+          "description": "remote v1",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-a",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "issues": [],
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ]
+      },
+      "registryEnabled": true,
+      "registryPins": [
+        {
+          "description": "remote v1",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-a",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "resolved": [],
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v1",
+            "skillId": "sid-a",
+            "version": 1
+          },
+          "name": "remote"
+        },
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v2",
+            "skillId": "sid-a",
+            "version": 2
+          },
+          "name": "remote"
+        }
+      ],
+      "tree": {},
+      "trusted": true
+    },
+    {
+      "available": [
+        {
+          "description": "remote v4",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": "latest",
+            "skill_id": "sid-a",
+            "version": 4
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/4/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "skill-creator",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "vibe",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "case": "latest-pin-loads-newest-on-disk",
+      "disabledSkills": [],
+      "installed": [
+        {
+          "description": "remote v4",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": "latest",
+            "skill_id": "sid-a",
+            "version": 4
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/4/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "issues": [],
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": "latest"
+          }
+        ]
+      },
+      "registryEnabled": true,
+      "registryPins": [
+        {
+          "description": "remote v4",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": "latest",
+            "skill_id": "sid-a",
+            "version": 4
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/4/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "resolved": [],
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v1",
+            "skillId": "sid-a",
+            "version": 1
+          },
+          "name": "remote"
+        },
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v4",
+            "skillId": "sid-a",
+            "version": 4
+          },
+          "name": "remote"
+        }
+      ],
+      "tree": {},
+      "trusted": true
+    },
+    {
+      "available": [
+        {
+          "description": "remote v1",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": "stable",
+            "skill_id": "sid-a",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "skill-creator",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "vibe",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "case": "custom-alias-loads-recorded-version",
+      "disabledSkills": [],
+      "installed": [
+        {
+          "description": "remote v1",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": "stable",
+            "skill_id": "sid-a",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "issues": [],
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": "stable"
+          }
+        ]
+      },
+      "registryEnabled": true,
+      "registryPins": [
+        {
+          "description": "remote v1",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": "stable",
+            "skill_id": "sid-a",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "resolved": [
+        [
+          "sid-a",
+          "stable",
+          1
+        ]
+      ],
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v1",
+            "skillId": "sid-a",
+            "version": 1
+          },
+          "name": "remote"
+        },
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v2",
+            "skillId": "sid-a",
+            "version": 2
+          },
+          "name": "remote"
+        }
+      ],
+      "tree": {},
+      "trusted": true
+    },
+    {
+      "available": [
+        {
+          "description": "remote v2",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": "stable",
+            "skill_id": "sid-a",
+            "version": 2
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/2/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "skill-creator",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "vibe",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "case": "custom-alias-recorded-but-missing-falls-back",
+      "disabledSkills": [],
+      "installed": [
+        {
+          "description": "remote v2",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": "stable",
+            "skill_id": "sid-a",
+            "version": 2
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/2/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "issues": [],
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": "stable"
+          }
+        ]
+      },
+      "registryEnabled": true,
+      "registryPins": [
+        {
+          "description": "remote v2",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": "stable",
+            "skill_id": "sid-a",
+            "version": 2
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/2/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "resolved": [
+        [
+          "sid-a",
+          "stable",
+          1
+        ]
+      ],
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v2",
+            "skillId": "sid-a",
+            "version": 2
+          },
+          "name": "remote"
+        }
+      ],
+      "tree": {},
+      "trusted": true
+    },
+    {
+      "available": [
+        {
+          "description": "remote v3",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": "stable",
+            "skill_id": "sid-a",
+            "version": 3
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/3/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "skill-creator",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "vibe",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "case": "custom-alias-unrecorded-falls-back",
+      "disabledSkills": [],
+      "installed": [
+        {
+          "description": "remote v3",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": "stable",
+            "skill_id": "sid-a",
+            "version": 3
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/3/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "issues": [],
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": "stable"
+          }
+        ]
+      },
+      "registryEnabled": true,
+      "registryPins": [
+        {
+          "description": "remote v3",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": "stable",
+            "skill_id": "sid-a",
+            "version": 3
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/3/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "resolved": [],
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v3",
+            "skillId": "sid-a",
+            "version": 3
+          },
+          "name": "remote"
+        }
+      ],
+      "tree": {},
+      "trusted": true
+    },
+    {
+      "available": [
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "skill-creator",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "vibe",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "case": "frozen-pin-not-materialized-skipped",
+      "disabledSkills": [],
+      "installed": [],
+      "issues": [],
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ]
+      },
+      "registryEnabled": true,
+      "registryPins": [],
+      "resolved": [],
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v2",
+            "skillId": "sid-a",
+            "version": 2
+          },
+          "name": "remote"
+        }
+      ],
+      "tree": {},
+      "trusted": true
+    },
+    {
+      "available": [
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "skill-creator",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "vibe",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "case": "latest-pin-nothing-on-disk-skipped",
+      "disabledSkills": [],
+      "installed": [],
+      "issues": [],
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": "latest"
+          }
+        ]
+      },
+      "registryEnabled": true,
+      "registryPins": [],
+      "resolved": [],
+      "store": [],
+      "tree": {},
+      "trusted": true
+    },
+    {
+      "available": [
+        {
+          "description": "remote v1",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-a",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "skill-creator",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "vibe",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "case": "unsafe-id-skipped",
+      "disabledSkills": [],
+      "installed": [
+        {
+          "description": "remote v1",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-a",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "issues": [],
+      "manifests": {
+        "global": [
+          {
+            "name": "escape",
+            "skill_id": "../sid-a",
+            "version": 1
+          },
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ]
+      },
+      "registryEnabled": true,
+      "registryPins": [
+        {
+          "description": "remote v1",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-a",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "resolved": [],
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v1",
+            "skillId": "sid-a",
+            "version": 1
+          },
+          "name": "remote"
+        }
+      ],
+      "tree": {},
+      "trusted": true
+    },
+    {
+      "available": [
+        {
+          "description": "Local copy",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": null,
+          "relPath": ".vibe/skills/remote/SKILL.md",
+          "root": "project",
+          "scope": "project",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "skill-creator",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "vibe",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "case": "local-skill-wins-over-pin",
+      "disabledSkills": [],
+      "installed": [
+        {
+          "description": "remote v1",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-a",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        },
+        {
+          "description": "Local copy",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": null,
+          "relPath": ".vibe/skills/remote/SKILL.md",
+          "root": "project",
+          "scope": "project",
+          "source": "local",
+          "userInvocable": true
+        }
+      ],
+      "issues": [],
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ]
+      },
+      "registryEnabled": true,
+      "registryPins": [
+        {
+          "description": "remote v1",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-a",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "resolved": [],
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v1",
+            "skillId": "sid-a",
+            "version": 1
+          },
+          "name": "remote"
+        }
+      ],
+      "tree": {
+        "project": {
+          ".vibe/skills/remote/SKILL.md": "---\nname: remote\ndescription: Local copy\n---\n\nProbe body.\n"
+        }
+      },
+      "trusted": true
+    },
+    {
+      "available": [
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "skill-creator",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "vibe",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "case": "builtin-name-wins-over-pin",
+      "disabledSkills": [],
+      "installed": [
+        {
+          "description": "vibe v1",
+          "modelInvocable": true,
+          "name": "vibe",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-v",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-v/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "issues": [],
+      "manifests": {
+        "global": [
+          {
+            "name": "vibe",
+            "skill_id": "sid-v",
+            "version": 1
+          }
+        ]
+      },
+      "registryEnabled": true,
+      "registryPins": [
+        {
+          "description": "vibe v1",
+          "modelInvocable": true,
+          "name": "vibe",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-v",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-v/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "resolved": [],
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "vibe v1",
+            "skillId": "sid-v",
+            "version": 1
+          },
+          "name": "vibe"
+        }
+      ],
+      "tree": {},
+      "trusted": true
+    },
+    {
+      "available": [
+        {
+          "description": "shared v2",
+          "modelInvocable": true,
+          "name": "shared",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-p",
+            "version": 2
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-p/2/SKILL.md",
+          "root": "home",
+          "scope": "project",
+          "source": "registry",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "skill-creator",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "vibe",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "case": "project-pin-wins-over-global",
+      "disabledSkills": [],
+      "installed": [
+        {
+          "description": "shared v1",
+          "modelInvocable": true,
+          "name": "shared",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-g",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-g/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        },
+        {
+          "description": "shared v2",
+          "modelInvocable": true,
+          "name": "shared",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-p",
+            "version": 2
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-p/2/SKILL.md",
+          "root": "home",
+          "scope": "project",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "issues": [],
+      "manifests": {
+        "global": [
+          {
+            "name": "shared",
+            "skill_id": "sid-g",
+            "version": 1
+          }
+        ],
+        "project": [
+          {
+            "name": "shared",
+            "skill_id": "sid-p",
+            "version": 2
+          }
+        ]
+      },
+      "registryEnabled": true,
+      "registryPins": [
+        {
+          "description": "shared v1",
+          "modelInvocable": true,
+          "name": "shared",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-g",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-g/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        },
+        {
+          "description": "shared v2",
+          "modelInvocable": true,
+          "name": "shared",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-p",
+            "version": 2
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-p/2/SKILL.md",
+          "root": "home",
+          "scope": "project",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "resolved": [],
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "shared v1",
+            "skillId": "sid-g",
+            "version": 1
+          },
+          "name": "shared"
+        },
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "shared v2",
+            "skillId": "sid-p",
+            "version": 2
+          },
+          "name": "shared"
+        }
+      ],
+      "tree": {},
+      "trusted": true
+    },
+    {
+      "available": [
+        {
+          "description": "global-one v1",
+          "modelInvocable": true,
+          "name": "global-one",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-g",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-g/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "skill-creator",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "vibe",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "case": "untrusted-project-manifest-unread",
+      "disabledSkills": [],
+      "installed": [
+        {
+          "description": "global-one v1",
+          "modelInvocable": true,
+          "name": "global-one",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-g",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-g/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "issues": [],
+      "manifests": {
+        "global": [
+          {
+            "name": "global-one",
+            "skill_id": "sid-g",
+            "version": 1
+          }
+        ],
+        "project": [
+          {
+            "name": "project-one",
+            "skill_id": "sid-p",
+            "version": 2
+          }
+        ]
+      },
+      "registryEnabled": true,
+      "registryPins": [
+        {
+          "description": "global-one v1",
+          "modelInvocable": true,
+          "name": "global-one",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-g",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-g/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "resolved": [],
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "global-one v1",
+            "skillId": "sid-g",
+            "version": 1
+          },
+          "name": "global-one"
+        },
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "project-one v2",
+            "skillId": "sid-p",
+            "version": 2
+          },
+          "name": "project-one"
+        }
+      ],
+      "tree": {},
+      "trusted": false
+    },
+    {
+      "available": [
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "skill-creator",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "vibe",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "case": "disabled-pin-hidden-but-installed",
+      "disabledSkills": [
+        "remote"
+      ],
+      "installed": [
+        {
+          "description": "remote v1",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-a",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "issues": [],
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ]
+      },
+      "registryEnabled": true,
+      "registryPins": [
+        {
+          "description": "remote v1",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-a",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "resolved": [],
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v1",
+            "skillId": "sid-a",
+            "version": 1
+          },
+          "name": "remote"
+        }
+      ],
+      "tree": {},
+      "trusted": true
+    },
+    {
+      "available": [
+        {
+          "description": "remote v1",
+          "modelInvocable": false,
+          "name": "remote",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-a",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "skill-creator",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "vibe",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "case": "pin-keeps-disabled-invocation",
+      "disabledSkills": [],
+      "installed": [
+        {
+          "description": "remote v1",
+          "modelInvocable": false,
+          "name": "remote",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-a",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "issues": [],
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ]
+      },
+      "registryEnabled": true,
+      "registryPins": [
+        {
+          "description": "remote v1",
+          "modelInvocable": false,
+          "name": "remote",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-a",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "resolved": [],
+      "store": [
+        {
+          "item": {
+            "body": "---\nname: x\ndescription: y\ndisable-model-invocation: true\n---\n\n# Explicit only",
+            "description": "remote v1",
+            "skillId": "sid-a",
+            "version": 1
+          },
+          "name": "remote"
+        }
+      ],
+      "tree": {},
+      "trusted": true
+    },
+    {
+      "available": [
+        {
+          "description": "Project copy",
+          "modelInvocable": true,
+          "name": "shared",
+          "registry": null,
+          "relPath": ".vibe/skills/shared/SKILL.md",
+          "root": "project",
+          "scope": "project",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "skill-creator",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": "Only here",
+          "modelInvocable": true,
+          "name": "solo",
+          "registry": null,
+          "relPath": ".vibe/skills/solo/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "vibe",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "case": "installed-keeps-shadowed-rows",
+      "disabledSkills": [],
+      "installed": [
+        {
+          "description": "User copy",
+          "modelInvocable": true,
+          "name": "shared",
+          "registry": null,
+          "relPath": ".vibe/skills/shared/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": "shared v1",
+          "modelInvocable": true,
+          "name": "shared",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-s",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-s/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        },
+        {
+          "description": "Project copy",
+          "modelInvocable": true,
+          "name": "shared",
+          "registry": null,
+          "relPath": ".vibe/skills/shared/SKILL.md",
+          "root": "project",
+          "scope": "project",
+          "source": "local",
+          "userInvocable": true
+        },
+        {
+          "description": "shared v1",
+          "modelInvocable": true,
+          "name": "shared",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-s",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-s/1/SKILL.md",
+          "root": "home",
+          "scope": "project",
+          "source": "registry",
+          "userInvocable": true
+        },
+        {
+          "description": "Only here",
+          "modelInvocable": true,
+          "name": "solo",
+          "registry": null,
+          "relPath": ".vibe/skills/solo/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "local",
+          "userInvocable": true
+        }
+      ],
+      "issues": [],
+      "manifests": {
+        "global": [
+          {
+            "name": "shared",
+            "skill_id": "sid-s",
+            "version": 1
+          }
+        ],
+        "project": [
+          {
+            "name": "shared",
+            "skill_id": "sid-s",
+            "version": 1
+          }
+        ]
+      },
+      "registryEnabled": true,
+      "registryPins": [
+        {
+          "description": "shared v1",
+          "modelInvocable": true,
+          "name": "shared",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-s",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-s/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        },
+        {
+          "description": "shared v1",
+          "modelInvocable": true,
+          "name": "shared",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-s",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-s/1/SKILL.md",
+          "root": "home",
+          "scope": "project",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "resolved": [],
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "shared v1",
+            "skillId": "sid-s",
+            "version": 1
+          },
+          "name": "shared"
+        }
+      ],
+      "tree": {
+        "home": {
+          ".agents/skills/shared/SKILL.md": "---\nname: shared\ndescription: Second user copy\n---\n\nProbe body.\n",
+          ".vibe/skills/shared/SKILL.md": "---\nname: shared\ndescription: User copy\n---\n\nProbe body.\n",
+          ".vibe/skills/solo/SKILL.md": "---\nname: solo\ndescription: Only here\n---\n\nProbe body.\n",
+          ".vibe/skills/vibe/SKILL.md": "---\nname: vibe\ndescription: Reserved name\n---\n\nProbe body.\n"
+        },
+        "project": {
+          ".vibe/skills/shared/SKILL.md": "---\nname: shared\ndescription: Project copy\n---\n\nProbe body.\n"
+        }
+      },
+      "trusted": true
+    },
+    {
+      "available": [
+        {
+          "description": "remote v2",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": "latest",
+            "skill_id": "sid-a",
+            "version": 2
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/2/SKILL.md",
+          "root": "home",
+          "scope": "project",
+          "source": "registry",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "skill-creator",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": true
+        },
+        {
+          "description": null,
+          "modelInvocable": true,
+          "name": "vibe",
+          "registry": null,
+          "relPath": null,
+          "root": null,
+          "scope": "global",
+          "source": "builtin",
+          "userInvocable": false
+        }
+      ],
+      "case": "same-pin-in-both-scopes",
+      "disabledSkills": [],
+      "installed": [
+        {
+          "description": "remote v1",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-a",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        },
+        {
+          "description": "remote v2",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": "latest",
+            "skill_id": "sid-a",
+            "version": 2
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/2/SKILL.md",
+          "root": "home",
+          "scope": "project",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "issues": [],
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ],
+        "project": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": "latest"
+          }
+        ]
+      },
+      "registryEnabled": true,
+      "registryPins": [
+        {
+          "description": "remote v1",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": null,
+            "skill_id": "sid-a",
+            "version": 1
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/1/SKILL.md",
+          "root": "home",
+          "scope": "global",
+          "source": "registry",
+          "userInvocable": true
+        },
+        {
+          "description": "remote v2",
+          "modelInvocable": true,
+          "name": "remote",
+          "registry": {
+            "alias": "latest",
+            "skill_id": "sid-a",
+            "version": 2
+          },
+          "relPath": ".vibe/skills-registry-cache/store/sid-a/2/SKILL.md",
+          "root": "home",
+          "scope": "project",
+          "source": "registry",
+          "userInvocable": true
+        }
+      ],
+      "resolved": [],
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v1",
+            "skillId": "sid-a",
+            "version": 1
+          },
+          "name": "remote"
+        },
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v2",
+            "skillId": "sid-a",
+            "version": 2
+          },
+          "name": "remote"
+        }
+      ],
+      "tree": {},
+      "trusted": true
+    }
+  ],
+  "loading": [
+    {
+      "case": "openai-absent",
+      "issues": [],
+      "links": [],
+      "published": [
+        {
+          "modelInvocable": true,
+          "name": "probe",
+          "relPath": "probe/SKILL.md",
+          "root": "configured",
+          "userInvocable": true
+        }
+      ],
+      "tree": {
+        "configured": {
+          "probe/SKILL.md": "---\nname: probe\ndescription: Policy probe probe\n---\n\nPolicy body.\n"
+        }
+      }
+    },
+    {
+      "case": "openai-policy-false",
+      "issues": [],
+      "links": [],
+      "published": [
+        {
+          "modelInvocable": false,
+          "name": "probe",
+          "relPath": "probe/SKILL.md",
+          "root": "configured",
+          "userInvocable": true
+        }
+      ],
+      "tree": {
+        "configured": {
+          "probe/SKILL.md": "---\nname: probe\ndescription: Policy probe probe\n---\n\nPolicy body.\n",
+          "probe/agents/openai.yaml": "policy:\n  allow_implicit_invocation: false\n"
+        }
+      }
+    },
+    {
+      "case": "openai-policy-true",
+      "issues": [],
+      "links": [],
+      "published": [
+        {
+          "modelInvocable": true,
+          "name": "probe",
+          "relPath": "probe/SKILL.md",
+          "root": "configured",
+          "userInvocable": true
+        }
+      ],
+      "tree": {
+        "configured": {
+          "probe/SKILL.md": "---\nname: probe\ndescription: Policy probe probe\n---\n\nPolicy body.\n",
+          "probe/agents/openai.yaml": "policy:\n  allow_implicit_invocation: true\n"
+        }
+      }
+    },
+    {
+      "case": "openai-policy-yaml-no",
+      "issues": [],
+      "links": [],
+      "published": [
+        {
+          "modelInvocable": false,
+          "name": "probe",
+          "relPath": "probe/SKILL.md",
+          "root": "configured",
+          "userInvocable": true
+        }
+      ],
+      "tree": {
+        "configured": {
+          "probe/SKILL.md": "---\nname: probe\ndescription: Policy probe probe\n---\n\nPolicy body.\n",
+          "probe/agents/openai.yaml": "policy:\n  allow_implicit_invocation: no\n"
+        }
+      }
+    },
+    {
+      "case": "openai-policy-null",
+      "issues": [],
+      "links": [],
+      "published": [
+        {
+          "modelInvocable": true,
+          "name": "probe",
+          "relPath": "probe/SKILL.md",
+          "root": "configured",
+          "userInvocable": true
+        }
+      ],
+      "tree": {
+        "configured": {
+          "probe/SKILL.md": "---\nname: probe\ndescription: Policy probe probe\n---\n\nPolicy body.\n",
+          "probe/agents/openai.yaml": "policy:\n  allow_implicit_invocation: null\n"
+        }
+      }
+    },
+    {
+      "case": "openai-empty-file",
+      "issues": [],
+      "links": [],
+      "published": [
+        {
+          "modelInvocable": true,
+          "name": "probe",
+          "relPath": "probe/SKILL.md",
+          "root": "configured",
+          "userInvocable": true
+        }
+      ],
+      "tree": {
+        "configured": {
+          "probe/SKILL.md": "---\nname: probe\ndescription: Policy probe probe\n---\n\nPolicy body.\n",
+          "probe/agents/openai.yaml": ""
+        }
+      }
+    },
+    {
+      "case": "openai-null-policy",
+      "issues": [],
+      "links": [],
+      "published": [
+        {
+          "modelInvocable": true,
+          "name": "probe",
+          "relPath": "probe/SKILL.md",
+          "root": "configured",
+          "userInvocable": true
+        }
+      ],
+      "tree": {
+        "configured": {
+          "probe/SKILL.md": "---\nname: probe\ndescription: Policy probe probe\n---\n\nPolicy body.\n",
+          "probe/agents/openai.yaml": "policy: null\n"
+        }
+      }
+    },
+    {
+      "case": "openai-extra-top-level-keys",
+      "issues": [],
+      "links": [],
+      "published": [
+        {
+          "modelInvocable": false,
+          "name": "probe",
+          "relPath": "probe/SKILL.md",
+          "root": "configured",
+          "userInvocable": true
+        }
+      ],
+      "tree": {
+        "configured": {
+          "probe/SKILL.md": "---\nname: probe\ndescription: Policy probe probe\n---\n\nPolicy body.\n",
+          "probe/agents/openai.yaml": "interface:\n  display_name: Probe\npolicy:\n  allow_implicit_invocation: false\n"
+        }
+      }
+    },
+    {
+      "case": "openai-products-list",
+      "issues": [],
+      "links": [],
+      "published": [
+        {
+          "modelInvocable": true,
+          "name": "probe",
+          "relPath": "probe/SKILL.md",
+          "root": "configured",
+          "userInvocable": true
+        }
+      ],
+      "tree": {
+        "configured": {
+          "probe/SKILL.md": "---\nname: probe\ndescription: Policy probe probe\n---\n\nPolicy body.\n",
+          "probe/agents/openai.yaml": "policy:\n  products: [codex]\n"
+        }
+      }
+    },
+    {
+      "case": "openai-products-not-a-list",
+      "issues": [
+        {
+          "kind": "policy",
+          "relPath": "probe/agents/openai.yaml",
+          "root": "configured"
+        }
+      ],
+      "links": [],
+      "published": [
+        {
+          "modelInvocable": false,
+          "name": "probe",
+          "relPath": "probe/SKILL.md",
+          "root": "configured",
+          "userInvocable": true
+        }
+      ],
+      "tree": {
+        "configured": {
+          "probe/SKILL.md": "---\nname: probe\ndescription: Policy probe probe\n---\n\nPolicy body.\n",
+          "probe/agents/openai.yaml": "policy:\n  products: codex\n"
+        }
+      }
+    },
+    {
+      "case": "openai-unknown-policy-key",
+      "issues": [
+        {
+          "kind": "policy",
+          "relPath": "probe/agents/openai.yaml",
+          "root": "configured"
+        }
+      ],
+      "links": [],
+      "published": [
+        {
+          "modelInvocable": false,
+          "name": "probe",
+          "relPath": "probe/SKILL.md",
+          "root": "configured",
+          "userInvocable": true
+        }
+      ],
+      "tree": {
+        "configured": {
+          "probe/SKILL.md": "---\nname: probe\ndescription: Policy probe probe\n---\n\nPolicy body.\n",
+          "probe/agents/openai.yaml": "policy:\n  allow_implicit_invocations: true\n"
+        }
+      }
+    },
+    {
+      "case": "openai-string-boolean",
+      "issues": [
+        {
+          "kind": "policy",
+          "relPath": "probe/agents/openai.yaml",
+          "root": "configured"
+        }
+      ],
+      "links": [],
+      "published": [
+        {
+          "modelInvocable": false,
+          "name": "probe",
+          "relPath": "probe/SKILL.md",
+          "root": "configured",
+          "userInvocable": true
+        }
+      ],
+      "tree": {
+        "configured": {
+          "probe/SKILL.md": "---\nname: probe\ndescription: Policy probe probe\n---\n\nPolicy body.\n",
+          "probe/agents/openai.yaml": "policy:\n  allow_implicit_invocation: \"true\"\n"
+        }
+      }
+    },
+    {
+      "case": "openai-invalid-yaml",
+      "issues": [
+        {
+          "kind": "policy",
+          "relPath": "probe/agents/openai.yaml",
+          "root": "configured"
+        }
+      ],
+      "links": [],
+      "published": [
+        {
+          "modelInvocable": false,
+          "name": "probe",
+          "relPath": "probe/SKILL.md",
+          "root": "configured",
+          "userInvocable": true
+        }
+      ],
+      "tree": {
+        "configured": {
+          "probe/SKILL.md": "---\nname: probe\ndescription: Policy probe probe\n---\n\nPolicy body.\n",
+          "probe/agents/openai.yaml": "policy: [unclosed\n"
+        }
+      }
+    },
+    {
+      "case": "openai-scalar-document",
+      "issues": [
+        {
+          "kind": "policy",
+          "relPath": "probe/agents/openai.yaml",
+          "root": "configured"
+        }
+      ],
+      "links": [],
+      "published": [
+        {
+          "modelInvocable": false,
+          "name": "probe",
+          "relPath": "probe/SKILL.md",
+          "root": "configured",
+          "userInvocable": true
+        }
+      ],
+      "tree": {
+        "configured": {
+          "probe/SKILL.md": "---\nname: probe\ndescription: Policy probe probe\n---\n\nPolicy body.\n",
+          "probe/agents/openai.yaml": "just text\n"
+        }
+      }
+    },
+    {
+      "case": "openai-policy-scalar",
+      "issues": [
+        {
+          "kind": "policy",
+          "relPath": "probe/agents/openai.yaml",
+          "root": "configured"
+        }
+      ],
+      "links": [],
+      "published": [
+        {
+          "modelInvocable": false,
+          "name": "probe",
+          "relPath": "probe/SKILL.md",
+          "root": "configured",
+          "userInvocable": true
+        }
+      ],
+      "tree": {
+        "configured": {
+          "probe/SKILL.md": "---\nname: probe\ndescription: Policy probe probe\n---\n\nPolicy body.\n",
+          "probe/agents/openai.yaml": "policy: off\n"
+        }
+      }
+    },
+    {
+      "case": "openai-metadata-is-a-directory",
+      "issues": [],
+      "links": [],
+      "published": [
+        {
+          "modelInvocable": true,
+          "name": "probe",
+          "relPath": "probe/SKILL.md",
+          "root": "configured",
+          "userInvocable": true
+        }
+      ],
+      "tree": {
+        "configured": {
+          "probe/SKILL.md": "---\nname: probe\ndescription: Policy probe probe\n---\n\nPolicy body.\n",
+          "probe/agents/openai.yaml/keep.txt": "x\n"
+        }
+      }
+    },
+    {
+      "case": "frontmatter-disables-invocation",
+      "issues": [],
+      "links": [],
+      "published": [
+        {
+          "modelInvocable": false,
+          "name": "probe",
+          "relPath": "probe/SKILL.md",
+          "root": "configured",
+          "userInvocable": true
+        }
+      ],
+      "tree": {
+        "configured": {
+          "probe/SKILL.md": "---\nname: probe\ndescription: Policy probe probe\ndisable-model-invocation: true\n---\n\nPolicy body.\n"
+        }
+      }
+    },
+    {
+      "case": "frontmatter-and-openai-both-allow",
+      "issues": [],
+      "links": [],
+      "published": [
+        {
+          "modelInvocable": true,
+          "name": "probe",
+          "relPath": "probe/SKILL.md",
+          "root": "configured",
+          "userInvocable": true
+        }
+      ],
+      "tree": {
+        "configured": {
+          "probe/SKILL.md": "---\nname: probe\ndescription: Policy probe probe\ndisable-model-invocation: false\n---\n\nPolicy body.\n",
+          "probe/agents/openai.yaml": "policy:\n  allow_implicit_invocation: true\n"
+        }
+      }
+    },
+    {
+      "case": "invalid-policy-on-reserved-name",
+      "issues": [
+        {
+          "kind": "policy",
+          "relPath": "vibe/agents/openai.yaml",
+          "root": "configured"
+        }
+      ],
+      "links": [],
+      "published": [],
+      "tree": {
+        "configured": {
+          "vibe/SKILL.md": "---\nname: vibe\ndescription: Policy probe vibe\n---\n\nPolicy body.\n",
+          "vibe/agents/openai.yaml": "policy: [unclosed\n"
+        }
+      }
+    },
+    {
+      "case": "invalid-policy-on-malformed-skill",
+      "issues": [
+        {
+          "kind": "load",
+          "relPath": "broken/SKILL.md",
+          "root": "configured"
+        }
+      ],
+      "links": [],
+      "published": [],
+      "tree": {
+        "configured": {
+          "broken/SKILL.md": "no frontmatter\n",
+          "broken/agents/openai.yaml": "policy: [unclosed\n"
+        }
+      }
+    },
+    {
+      "case": "symlinked-skill-file-keeps-its-directory",
+      "issues": [],
+      "links": [
+        [
+          "configured",
+          "linked/SKILL.md",
+          "project",
+          "elsewhere/source.md"
+        ]
+      ],
+      "published": [
+        {
+          "modelInvocable": true,
+          "name": "linked",
+          "relPath": "linked/SKILL.md",
+          "root": "configured",
+          "userInvocable": true
+        }
+      ],
+      "tree": {
+        "configured": {},
+        "project": {
+          "elsewhere/source.md": "---\nname: linked\ndescription: Policy probe linked\n---\n\nPolicy body.\n"
+        }
+      }
+    },
+    {
+      "case": "symlinked-skill-directory-resolves",
+      "issues": [],
+      "links": [
+        [
+          "configured",
+          "aliased",
+          "project",
+          "real-skill"
+        ]
+      ],
+      "published": [
+        {
+          "modelInvocable": true,
+          "name": "aliased",
+          "relPath": "real-skill/SKILL.md",
+          "root": "project",
+          "userInvocable": true
+        }
+      ],
+      "tree": {
+        "configured": {},
+        "project": {
+          "real-skill/SKILL.md": "---\nname: aliased\ndescription: Policy probe aliased\n---\n\nPolicy body.\n"
+        }
+      }
+    }
+  ],
   "manifest": [
     {
       "alias": "latest",
@@ -2044,6 +4926,23 @@
           "name": "b",
           "skill_id": "y",
           "version": "latest"
+        }
+      ]
+    },
+    {
+      "case": "upsert-replaces-by-skill-id",
+      "skills": [
+        {
+          "description": "",
+          "name": "other",
+          "skill_id": "other-id",
+          "version": 1
+        },
+        {
+          "description": "",
+          "name": "new-name",
+          "skill_id": "same-id",
+          "version": 2
         }
       ]
     },
@@ -2732,6 +5631,138 @@
         "description": "d",
         "name": "p"
       }
+    },
+    {
+      "accepted": true,
+      "case": "disable-model-invocation-true",
+      "fields": {
+        "allowed_tools": [],
+        "compatibility": null,
+        "description": "d",
+        "disable_model_invocation": true,
+        "license": null,
+        "metadata": {},
+        "name": "p",
+        "user_invocable": true
+      },
+      "frontmatter": {
+        "description": "d",
+        "disable-model-invocation": true,
+        "name": "p"
+      }
+    },
+    {
+      "accepted": true,
+      "case": "disable-model-invocation-false",
+      "fields": {
+        "allowed_tools": [],
+        "compatibility": null,
+        "description": "d",
+        "disable_model_invocation": false,
+        "license": null,
+        "metadata": {},
+        "name": "p",
+        "user_invocable": true
+      },
+      "frontmatter": {
+        "description": "d",
+        "disable-model-invocation": false,
+        "name": "p"
+      }
+    },
+    {
+      "accepted": true,
+      "case": "disable-model-invocation-underscore",
+      "fields": {
+        "allowed_tools": [],
+        "compatibility": null,
+        "description": "d",
+        "disable_model_invocation": true,
+        "license": null,
+        "metadata": {},
+        "name": "p",
+        "user_invocable": true
+      },
+      "frontmatter": {
+        "description": "d",
+        "disable_model_invocation": true,
+        "name": "p"
+      }
+    },
+    {
+      "accepted": true,
+      "case": "disable-model-invocation-string-true",
+      "fields": {
+        "allowed_tools": [],
+        "compatibility": null,
+        "description": "d",
+        "disable_model_invocation": true,
+        "license": null,
+        "metadata": {},
+        "name": "p",
+        "user_invocable": true
+      },
+      "frontmatter": {
+        "description": "d",
+        "disable-model-invocation": "true",
+        "name": "p"
+      }
+    },
+    {
+      "accepted": true,
+      "case": "disable-model-invocation-string-yes",
+      "fields": {
+        "allowed_tools": [],
+        "compatibility": null,
+        "description": "d",
+        "disable_model_invocation": true,
+        "license": null,
+        "metadata": {},
+        "name": "p",
+        "user_invocable": true
+      },
+      "frontmatter": {
+        "description": "d",
+        "disable-model-invocation": "yes",
+        "name": "p"
+      }
+    },
+    {
+      "accepted": true,
+      "case": "disable-model-invocation-integer-one",
+      "fields": {
+        "allowed_tools": [],
+        "compatibility": null,
+        "description": "d",
+        "disable_model_invocation": true,
+        "license": null,
+        "metadata": {},
+        "name": "p",
+        "user_invocable": true
+      },
+      "frontmatter": {
+        "description": "d",
+        "disable-model-invocation": 1,
+        "name": "p"
+      }
+    },
+    {
+      "accepted": false,
+      "case": "disable-model-invocation-junk",
+      "frontmatter": {
+        "description": "d",
+        "disable-model-invocation": "maybe",
+        "name": "p"
+      }
+    },
+    {
+      "accepted": false,
+      "case": "disable-model-invocation-null",
+      "frontmatter": {
+        "description": "d",
+        "disable-model-invocation": null,
+        "name": "p"
+      }
     }
   ],
   "note": "Captured from the pinned reference by scripts/parity/skills.py. Scenario-supplied values, field names, verdicts, counts and digests are observations; no reference-authored prose is recorded. Builtin bodies and descriptions appear as length plus SHA-256 only, and the registry store's fallback description is masked as {fallbackDescription}. Normalizations: published skill lists are sorted by name because the reference walks directories in filesystem order; the winner of a duplicate name within a single root is filesystem-order dependent, so its path is recorded null; symlinked roots are mapped to the label of the directory they resolve to.",
@@ -2899,12 +5930,1880 @@
         "source": "local",
         "userInvocable": true
       }
+    },
+    {
+      "case": "registry-frozen-ref",
+      "skill": {
+        "description": "Frozen pin",
+        "name": "pinned",
+        "prompt": "Body.",
+        "registry": {
+          "skill_id": "sid-1",
+          "version": 3
+        },
+        "scope": "project",
+        "source": "registry"
+      },
+      "summary": {
+        "description": "Frozen pin",
+        "enabled": true,
+        "locked": false,
+        "name": "pinned",
+        "prompt": "Body.",
+        "registry": {
+          "alias": null,
+          "skillId": "sid-1",
+          "version": 3
+        },
+        "scope": "project",
+        "source": "registry",
+        "userInvocable": true
+      }
+    },
+    {
+      "case": "registry-alias-ref",
+      "skill": {
+        "description": "Alias pin",
+        "name": "tracking",
+        "prompt": "Body.",
+        "registry": {
+          "alias": "latest",
+          "skill_id": "sid-2",
+          "version": 5
+        },
+        "source": "registry"
+      },
+      "summary": {
+        "description": "Alias pin",
+        "enabled": true,
+        "locked": false,
+        "name": "tracking",
+        "prompt": "Body.",
+        "registry": {
+          "alias": "latest",
+          "skillId": "sid-2",
+          "version": 5
+        },
+        "scope": "global",
+        "source": "registry",
+        "userInvocable": true
+      }
+    },
+    {
+      "case": "plugin-source",
+      "skill": {
+        "description": "From a plugin",
+        "name": "plugged",
+        "prompt": "Body.",
+        "source": "plugin"
+      },
+      "summary": {
+        "description": "From a plugin",
+        "enabled": true,
+        "locked": false,
+        "name": "plugged",
+        "prompt": "Body.",
+        "registry": null,
+        "scope": "global",
+        "source": "plugin",
+        "userInvocable": true
+      }
+    },
+    {
+      "case": "project-scope",
+      "skill": {
+        "description": "Project root",
+        "name": "local",
+        "prompt": "Body.",
+        "scope": "project"
+      },
+      "summary": {
+        "description": "Project root",
+        "enabled": true,
+        "locked": false,
+        "name": "local",
+        "prompt": "Body.",
+        "registry": null,
+        "scope": "project",
+        "source": "local",
+        "userInvocable": true
+      }
     }
   ],
   "reference": {
     "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
   },
   "schemaVersion": 1,
+  "service": [
+    {
+      "args": {
+        "skillId": "sid-a"
+      },
+      "case": "import-defaults-to-latest",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {},
+      "op": "import",
+      "registry": {
+        "sid-a": {
+          "description": "Remote Skill from the registry",
+          "latest": 2,
+          "name": "Remote Skill",
+          "versions": {
+            "1": "# Remote Skill v1",
+            "2": "# Remote Skill v2"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          null,
+          "latest"
+        ]
+      ],
+      "result": {
+        "description": "Remote Skill from the registry",
+        "name": "remote-skill",
+        "skill_id": "sid-a",
+        "version": "latest"
+      },
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [
+            {
+              "description": "Remote Skill from the registry",
+              "name": "remote-skill",
+              "skill_id": "sid-a",
+              "version": "latest"
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": [
+          "sid-a/2/SKILL.md"
+        ]
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "args": {
+        "skillId": "sid-a",
+        "version": 1
+      },
+      "case": "import-frozen-version",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {},
+      "op": "import",
+      "registry": {
+        "sid-a": {
+          "description": "remote from the registry",
+          "latest": 2,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1",
+            "2": "# remote v2"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          1,
+          null
+        ]
+      ],
+      "result": {
+        "description": "remote from the registry",
+        "name": "remote",
+        "skill_id": "sid-a",
+        "version": 1
+      },
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [
+            {
+              "description": "remote from the registry",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": 1
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": [
+          "sid-a/1/SKILL.md"
+        ]
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "args": {
+        "alias": "stable",
+        "skillId": "sid-a"
+      },
+      "case": "import-custom-alias",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {},
+      "op": "import",
+      "registry": {
+        "sid-a": {
+          "aliases": {
+            "stable": 2
+          },
+          "description": "remote from the registry",
+          "latest": 3,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1",
+            "2": "# remote v2",
+            "3": "# remote v3"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          null,
+          "stable"
+        ]
+      ],
+      "result": {
+        "description": "remote from the registry",
+        "name": "remote",
+        "skill_id": "sid-a",
+        "version": "stable"
+      },
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [
+            {
+              "description": "remote from the registry",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": "stable"
+            }
+          ],
+          "project": []
+        },
+        "resolved": {
+          "sid-a@stable": 2
+        },
+        "seen": {},
+        "store": [
+          "sid-a/2/SKILL.md"
+        ]
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "args": {
+        "scope": "project",
+        "skillId": "sid-a"
+      },
+      "case": "import-project-scope",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {},
+      "op": "import",
+      "registry": {
+        "sid-a": {
+          "description": "remote from the registry",
+          "latest": 1,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          null,
+          "latest"
+        ]
+      ],
+      "result": {
+        "description": "remote from the registry",
+        "name": "remote",
+        "skill_id": "sid-a",
+        "version": "latest"
+      },
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [],
+          "project": [
+            {
+              "description": "remote from the registry",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": "latest"
+            }
+          ]
+        },
+        "resolved": {},
+        "seen": {},
+        "store": [
+          "sid-a/1/SKILL.md"
+        ]
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "args": {
+        "scope": "project",
+        "skillId": "sid-a"
+      },
+      "case": "import-project-scope-without-roots",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {},
+      "op": "import",
+      "registry": {
+        "sid-a": {
+          "description": "remote from the registry",
+          "latest": 1,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          null,
+          "latest"
+        ]
+      ],
+      "result": {
+        "error": true
+      },
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": [
+          "sid-a/1/SKILL.md"
+        ]
+      },
+      "store": [],
+      "trusted": false
+    },
+    {
+      "args": {
+        "skillId": "sid-a"
+      },
+      "case": "import-without-endpoint",
+      "endpoint": false,
+      "localSkill": null,
+      "manifests": {},
+      "op": "import",
+      "registry": {
+        "sid-a": {
+          "description": "remote from the registry",
+          "latest": 1,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1"
+          }
+        }
+      },
+      "requests": [],
+      "result": {
+        "error": true
+      },
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": []
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "args": {
+        "skillId": "sid-a"
+      },
+      "case": "import-empty-body",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {},
+      "op": "import",
+      "registry": {
+        "sid-a": {
+          "description": "remote from the registry",
+          "latest": 1,
+          "name": "remote",
+          "versions": {
+            "1": " "
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          null,
+          "latest"
+        ]
+      ],
+      "result": {
+        "error": true
+      },
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": []
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "args": {
+        "skillId": "sid-x"
+      },
+      "case": "import-unknown-skill",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {},
+      "op": "import",
+      "registry": {},
+      "requests": [
+        [
+          "skill",
+          "sid-x",
+          null,
+          "latest"
+        ]
+      ],
+      "result": {
+        "error": true
+      },
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": []
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "args": {
+        "skillId": "ab-12"
+      },
+      "case": "import-unnamed-uses-the-id",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {},
+      "op": "import",
+      "registry": {
+        "ab-12": {
+          "description": " from the registry",
+          "latest": 1,
+          "name": "",
+          "versions": {
+            "1": "#  v1"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "ab-12",
+          null,
+          "latest"
+        ]
+      ],
+      "result": {
+        "description": "from the registry",
+        "name": "skill-ab12",
+        "skill_id": "ab-12",
+        "version": "latest"
+      },
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [
+            {
+              "description": "from the registry",
+              "name": "skill-ab12",
+              "skill_id": "ab-12",
+              "version": "latest"
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": [
+          "ab-12/1/SKILL.md"
+        ]
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "args": {
+        "skillId": "sid-a",
+        "version": 2
+      },
+      "case": "import-replaces-the-same-id",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {
+        "global": [
+          {
+            "name": "old-name",
+            "skill_id": "sid-a",
+            "version": 1
+          },
+          {
+            "name": "kept",
+            "skill_id": "sid-k",
+            "version": 1
+          }
+        ]
+      },
+      "op": "import",
+      "registry": {
+        "sid-a": {
+          "description": "new-name from the registry",
+          "latest": 2,
+          "name": "new-name",
+          "versions": {
+            "1": "# new-name v1",
+            "2": "# new-name v2"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          2,
+          null
+        ]
+      ],
+      "result": {
+        "description": "new-name from the registry",
+        "name": "new-name",
+        "skill_id": "sid-a",
+        "version": 2
+      },
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "kept",
+              "skill_id": "sid-k",
+              "version": 1
+            },
+            {
+              "description": "new-name from the registry",
+              "name": "new-name",
+              "skill_id": "sid-a",
+              "version": 2
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": [
+          "sid-a/2/SKILL.md"
+        ]
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "args": {
+        "name": "remote",
+        "version": 1
+      },
+      "case": "set-version-freezes",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": "latest"
+          }
+        ]
+      },
+      "op": "setVersion",
+      "registry": {
+        "sid-a": {
+          "description": "remote from the registry",
+          "latest": 2,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1",
+            "2": "# remote v2"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          1,
+          null
+        ]
+      ],
+      "result": {
+        "description": "remote from the registry",
+        "name": "remote",
+        "skill_id": "sid-a",
+        "version": 1
+      },
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [
+            {
+              "description": "remote from the registry",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": 1
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": [
+          "sid-a/1/SKILL.md"
+        ]
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "args": {
+        "name": "remote",
+        "scope": "project"
+      },
+      "case": "set-latest-tracks",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {
+        "project": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ]
+      },
+      "op": "setLatest",
+      "registry": {
+        "sid-a": {
+          "description": "remote from the registry",
+          "latest": 2,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1",
+            "2": "# remote v2"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          null,
+          "latest"
+        ]
+      ],
+      "result": {
+        "description": "remote from the registry",
+        "name": "remote",
+        "skill_id": "sid-a",
+        "version": "latest"
+      },
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [],
+          "project": [
+            {
+              "description": "remote from the registry",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": "latest"
+            }
+          ]
+        },
+        "resolved": {},
+        "seen": {},
+        "store": [
+          "sid-a/2/SKILL.md"
+        ]
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "args": {
+        "alias": "stable",
+        "name": "remote"
+      },
+      "case": "set-alias-follows",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 2
+          }
+        ]
+      },
+      "op": "setAlias",
+      "registry": {
+        "sid-a": {
+          "aliases": {
+            "stable": 1
+          },
+          "description": "remote from the registry",
+          "latest": 2,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1",
+            "2": "# remote v2"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          null,
+          "stable"
+        ]
+      ],
+      "result": {
+        "description": "remote from the registry",
+        "name": "remote",
+        "skill_id": "sid-a",
+        "version": "stable"
+      },
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [
+            {
+              "description": "remote from the registry",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": "stable"
+            }
+          ],
+          "project": []
+        },
+        "resolved": {
+          "sid-a@stable": 1
+        },
+        "seen": {},
+        "store": [
+          "sid-a/1/SKILL.md"
+        ]
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "args": {
+        "name": "absent",
+        "version": 1
+      },
+      "case": "set-version-unknown-name",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 2
+          }
+        ]
+      },
+      "op": "setVersion",
+      "registry": {
+        "sid-a": {
+          "description": "remote from the registry",
+          "latest": 2,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1",
+            "2": "# remote v2"
+          }
+        }
+      },
+      "requests": [],
+      "result": null,
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": 2
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": []
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "args": {
+        "name": "remote",
+        "scope": "project",
+        "version": 1
+      },
+      "case": "set-version-other-scope-only",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 2
+          }
+        ]
+      },
+      "op": "setVersion",
+      "registry": {
+        "sid-a": {
+          "description": "remote from the registry",
+          "latest": 2,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1",
+            "2": "# remote v2"
+          }
+        }
+      },
+      "requests": [],
+      "result": null,
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": 2
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": []
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "args": {
+        "name": "remote"
+      },
+      "case": "remove-global-only",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ],
+        "project": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ]
+      },
+      "op": "remove",
+      "registry": {},
+      "requests": [],
+      "result": true,
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [],
+          "project": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": 1
+            }
+          ]
+        },
+        "resolved": {},
+        "seen": {},
+        "store": []
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "args": {
+        "name": "remote",
+        "scope": "project"
+      },
+      "case": "remove-project-only",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ],
+        "project": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ]
+      },
+      "op": "remove",
+      "registry": {},
+      "requests": [],
+      "result": true,
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": 1
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": []
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "args": {
+        "name": "absent"
+      },
+      "case": "remove-missing",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ]
+      },
+      "op": "remove",
+      "registry": {},
+      "requests": [],
+      "result": false,
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": 1
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": []
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "args": {
+        "name": "remote"
+      },
+      "case": "convert-global-frozen",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ]
+      },
+      "op": "convertLocal",
+      "registry": {},
+      "requests": [],
+      "result": {
+        "relPath": ".vibe/skills/remote",
+        "root": "home",
+        "tree": [
+          {
+            "content": "---\nname: remote\ndescription: remote v1\ndisable-model-invocation: true\n---\n\n# Kept body\n",
+            "exec": {
+              "group": false,
+              "other": false,
+              "user": false
+            },
+            "path": "SKILL.md"
+          }
+        ]
+      },
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": [
+          "sid-a/1/SKILL.md"
+        ]
+      },
+      "store": [
+        {
+          "item": {
+            "body": "---\nname: q\ndescription: r\ndisable-model-invocation: true\n---\n\n# Kept body",
+            "description": "remote v1",
+            "skillId": "sid-a",
+            "version": 1
+          },
+          "name": "remote"
+        }
+      ],
+      "trusted": true
+    },
+    {
+      "args": {
+        "name": "remote",
+        "scope": "project"
+      },
+      "case": "convert-project-latest",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {
+        "project": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": "latest"
+          }
+        ]
+      },
+      "op": "convertLocal",
+      "registry": {},
+      "requests": [],
+      "result": {
+        "relPath": ".vibe/skills/remote",
+        "root": "project",
+        "tree": [
+          {
+            "content": "---\nname: remote\ndescription: remote v2\n---\n\n# Registry body\n",
+            "exec": {
+              "group": false,
+              "other": false,
+              "user": false
+            },
+            "path": "SKILL.md"
+          }
+        ]
+      },
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": [
+          "sid-a/1/SKILL.md",
+          "sid-a/2/SKILL.md"
+        ]
+      },
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v1",
+            "skillId": "sid-a",
+            "version": 1
+          },
+          "name": "remote"
+        },
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v2",
+            "skillId": "sid-a",
+            "version": 2
+          },
+          "name": "remote"
+        }
+      ],
+      "trusted": true
+    },
+    {
+      "args": {
+        "name": "remote"
+      },
+      "case": "convert-not-materialized",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ]
+      },
+      "op": "convertLocal",
+      "registry": {},
+      "requests": [],
+      "result": null,
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": 1
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": []
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "args": {
+        "name": "remote"
+      },
+      "case": "convert-local-already-exists",
+      "endpoint": true,
+      "localSkill": "remote",
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ]
+      },
+      "op": "convertLocal",
+      "registry": {},
+      "requests": [],
+      "result": null,
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": 1
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": [
+          "sid-a/1/SKILL.md"
+        ]
+      },
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v1",
+            "skillId": "sid-a",
+            "version": 1
+          },
+          "name": "remote"
+        }
+      ],
+      "trusted": true
+    },
+    {
+      "args": {},
+      "case": "check-updates",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {
+        "global": [
+          {
+            "name": "behind",
+            "skill_id": "sid-a",
+            "version": 1
+          },
+          {
+            "name": "tracking",
+            "skill_id": "sid-b",
+            "version": "latest"
+          },
+          {
+            "name": "shared",
+            "skill_id": "sid-c",
+            "version": 1
+          },
+          {
+            "name": "current",
+            "skill_id": "sid-d",
+            "version": 2
+          }
+        ],
+        "project": [
+          {
+            "name": "shared",
+            "skill_id": "sid-c",
+            "version": 3
+          }
+        ]
+      },
+      "op": "checkUpdates",
+      "registry": {
+        "sid-a": {
+          "description": "behind from the registry",
+          "latest": 3,
+          "name": "behind",
+          "versions": {
+            "1": "# behind v1",
+            "2": "# behind v2",
+            "3": "# behind v3"
+          }
+        },
+        "sid-b": {
+          "description": "tracking from the registry",
+          "latest": 4,
+          "name": "tracking",
+          "versions": {
+            "1": "# tracking v1",
+            "2": "# tracking v2",
+            "3": "# tracking v3",
+            "4": "# tracking v4"
+          }
+        },
+        "sid-c": {
+          "description": "shared from the registry",
+          "latest": 2,
+          "name": "shared",
+          "versions": {
+            "1": "# shared v1",
+            "2": "# shared v2"
+          }
+        },
+        "sid-d": {
+          "description": "current from the registry",
+          "latest": 2,
+          "name": "current",
+          "versions": {
+            "1": "# current v1",
+            "2": "# current v2"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          null,
+          null
+        ],
+        [
+          "skill",
+          "sid-c",
+          null,
+          null
+        ],
+        [
+          "skill",
+          "sid-d",
+          null,
+          null
+        ]
+      ],
+      "result": [
+        {
+          "currentVersion": 1,
+          "latestVersion": 3,
+          "name": "behind"
+        }
+      ],
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "behind",
+              "skill_id": "sid-a",
+              "version": 1
+            },
+            {
+              "description": "",
+              "name": "tracking",
+              "skill_id": "sid-b",
+              "version": "latest"
+            },
+            {
+              "description": "",
+              "name": "shared",
+              "skill_id": "sid-c",
+              "version": 1
+            },
+            {
+              "description": "",
+              "name": "current",
+              "skill_id": "sid-d",
+              "version": 2
+            }
+          ],
+          "project": [
+            {
+              "description": "",
+              "name": "shared",
+              "skill_id": "sid-c",
+              "version": 3
+            }
+          ]
+        },
+        "resolved": {},
+        "seen": {},
+        "store": []
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "args": {},
+      "case": "check-updates-registry-failure",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {
+        "global": [
+          {
+            "name": "broken",
+            "skill_id": "sid-b",
+            "version": 1
+          }
+        ]
+      },
+      "op": "checkUpdates",
+      "registry": {
+        "sid-b": {
+          "description": "broken from the registry",
+          "fail": true,
+          "latest": 2,
+          "name": "broken",
+          "versions": {
+            "1": "# broken v1",
+            "2": "# broken v2"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-b",
+          null,
+          null
+        ]
+      ],
+      "result": [],
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "broken",
+              "skill_id": "sid-b",
+              "version": 1
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": []
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "args": {},
+      "case": "check-new-versions-records",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {
+        "global": [
+          {
+            "name": "behind",
+            "skill_id": "sid-a",
+            "version": 1
+          },
+          {
+            "name": "seen",
+            "skill_id": "sid-b",
+            "version": 1
+          }
+        ]
+      },
+      "op": "checkNewVersions",
+      "registry": {
+        "sid-a": {
+          "description": "behind from the registry",
+          "latest": 3,
+          "name": "behind",
+          "versions": {
+            "1": "# behind v1",
+            "2": "# behind v2",
+            "3": "# behind v3"
+          }
+        },
+        "sid-b": {
+          "description": "seen from the registry",
+          "latest": 2,
+          "name": "seen",
+          "versions": {
+            "1": "# seen v1",
+            "2": "# seen v2"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          null,
+          null
+        ],
+        [
+          "skill",
+          "sid-b",
+          null,
+          null
+        ]
+      ],
+      "result": [
+        {
+          "currentVersion": 1,
+          "latestVersion": 3,
+          "name": "behind"
+        }
+      ],
+      "seen": {
+        "sid-b": 2
+      },
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "behind",
+              "skill_id": "sid-a",
+              "version": 1
+            },
+            {
+              "description": "",
+              "name": "seen",
+              "skill_id": "sid-b",
+              "version": 1
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {
+          "sid-a": 3,
+          "sid-b": 2
+        },
+        "store": []
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "args": {},
+      "case": "catalog",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {},
+      "op": "catalog",
+      "registry": {
+        "sid-a": {
+          "description": "Alpha Skill from the registry",
+          "latest": 3,
+          "name": "Alpha Skill",
+          "sharingScope": "workspace",
+          "versions": {
+            "1": "# Alpha Skill v1",
+            "2": "# Alpha Skill v2",
+            "3": "# Alpha Skill v3"
+          }
+        },
+        "sid-b": {
+          "description": "beta from the registry",
+          "latest": 1,
+          "metadataLatest": 0,
+          "name": "beta",
+          "versions": {
+            "1": "# beta v1"
+          }
+        }
+      },
+      "requests": [
+        [
+          "catalog",
+          null,
+          null,
+          null
+        ]
+      ],
+      "result": [
+        {
+          "description": "Alpha Skill from the registry",
+          "latestVersion": 3,
+          "name": "alpha-skill",
+          "sharingScope": "workspace",
+          "skillId": "sid-a"
+        },
+        {
+          "description": "beta from the registry",
+          "latestVersion": 1,
+          "name": "beta",
+          "sharingScope": "",
+          "skillId": "sid-b"
+        }
+      ],
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": []
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "args": {},
+      "case": "catalog-without-endpoint",
+      "endpoint": false,
+      "localSkill": null,
+      "manifests": {},
+      "op": "catalog",
+      "registry": {
+        "sid-a": {
+          "description": "alpha from the registry",
+          "latest": 1,
+          "name": "alpha",
+          "versions": {
+            "1": "# alpha v1"
+          }
+        }
+      },
+      "requests": [],
+      "result": [],
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": []
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "args": {
+        "skillId": "sid-a"
+      },
+      "case": "versions",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {},
+      "op": "versions",
+      "registry": {
+        "sid-a": {
+          "aliases": {
+            "main": 2,
+            "stable": 2
+          },
+          "description": "alpha from the registry",
+          "latest": 3,
+          "name": "alpha",
+          "versions": {
+            "1": "# alpha v1",
+            "2": "# alpha v2",
+            "3": "# alpha v3"
+          }
+        }
+      },
+      "requests": [
+        [
+          "versions",
+          "sid-a",
+          null,
+          null
+        ]
+      ],
+      "result": [
+        {
+          "aliases": [],
+          "version": 3
+        },
+        {
+          "aliases": [
+            "main",
+            "stable"
+          ],
+          "version": 2
+        },
+        {
+          "aliases": [],
+          "version": 1
+        }
+      ],
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": []
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "args": {
+        "skillId": "sid-a",
+        "version": 2
+      },
+      "case": "detail",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {},
+      "op": "detail",
+      "registry": {
+        "sid-a": {
+          "aliases": {
+            "stable": 2
+          },
+          "createdBy": "someone",
+          "description": "alpha from the registry",
+          "latest": 3,
+          "name": "alpha",
+          "notes": "n",
+          "versions": {
+            "1": "# alpha v1",
+            "2": "# alpha v2",
+            "3": "# alpha v3"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          2,
+          null
+        ]
+      ],
+      "result": {
+        "aliases": [
+          "stable"
+        ],
+        "body": "# alpha v2",
+        "created_at": "",
+        "created_by": "someone",
+        "description": "alpha from the registry",
+        "last_modified_at": "",
+        "latest_version": 3,
+        "name": "alpha",
+        "notes": "n",
+        "sharing_scope": "",
+        "skill_id": "sid-a",
+        "version": 2,
+        "version_created_at": ""
+      },
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": []
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "args": {
+        "skillId": "sid-x"
+      },
+      "case": "detail-missing",
+      "endpoint": true,
+      "localSkill": null,
+      "manifests": {},
+      "op": "detail",
+      "registry": {},
+      "requests": [
+        [
+          "skill",
+          "sid-x",
+          null,
+          null
+        ]
+      ],
+      "result": null,
+      "seen": {},
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": []
+      },
+      "store": [],
+      "trusted": true
+    }
+  ],
   "store": {
     "cases": [
       {
@@ -3363,6 +8262,152 @@
         "version": 2
       },
       {
+        "case": "materialize-keeps-disabled-invocation",
+        "item": {
+          "body": "---\nname: ignored\ndescription: ignored\ndisable-model-invocation: true\n---\n\n# Body",
+          "description": "explicit only",
+          "skillId": "pol",
+          "version": 1
+        },
+        "leftoverEntries": [],
+        "name": "policy",
+        "op": "materialize",
+        "outcome": "stored",
+        "tree": [
+          {
+            "content": "---\nname: policy\ndescription: explicit only\nmetadata:\n  source: ai-registry\n  skill_id: pol\n  version: '1'\ndisable-model-invocation: true\n---\n\n# Body\n",
+            "exec": {
+              "group": false,
+              "other": false,
+              "user": false
+            },
+            "path": "SKILL.md"
+          }
+        ]
+      },
+      {
+        "case": "materialize-keeps-enabled-invocation",
+        "item": {
+          "body": "---\nname: ignored\ndescription: ignored\ndisable-model-invocation: false\n---\n\n# Body",
+          "description": "explicit flag off",
+          "skillId": "pol",
+          "version": 2
+        },
+        "leftoverEntries": [],
+        "name": "policy",
+        "op": "materialize",
+        "outcome": "stored",
+        "tree": [
+          {
+            "content": "---\nname: policy\ndescription: explicit flag off\nmetadata:\n  source: ai-registry\n  skill_id: pol\n  version: '2'\ndisable-model-invocation: false\n---\n\n# Body\n",
+            "exec": {
+              "group": false,
+              "other": false,
+              "user": false
+            },
+            "path": "SKILL.md"
+          }
+        ]
+      },
+      {
+        "case": "materialize-drops-non-boolean-invocation",
+        "item": {
+          "body": "---\nname: ignored\ndescription: ignored\ndisable-model-invocation: \"yes\"\n---\n\n# Body",
+          "description": "string flag",
+          "skillId": "pol",
+          "version": 3
+        },
+        "leftoverEntries": [],
+        "name": "policy",
+        "op": "materialize",
+        "outcome": "stored",
+        "tree": [
+          {
+            "content": "---\nname: policy\ndescription: string flag\nmetadata:\n  source: ai-registry\n  skill_id: pol\n  version: '3'\n---\n\n# Body\n",
+            "exec": {
+              "group": false,
+              "other": false,
+              "user": false
+            },
+            "path": "SKILL.md"
+          }
+        ]
+      },
+      {
+        "case": "export-local-keeps-invocation",
+        "id": "expol",
+        "op": "exportLocal",
+        "prior": [
+          {
+            "item": {
+              "body": "---\nname: x\ndescription: y\ndisable-model-invocation: true\n---\n\n# Exported",
+              "description": "exported explicit only",
+              "skillId": "expol",
+              "version": 1
+            },
+            "name": "exported-policy"
+          }
+        ],
+        "tree": [
+          {
+            "content": "---\nname: exported-policy\ndescription: exported explicit only\ndisable-model-invocation: true\n---\n\n# Exported\n",
+            "exec": {
+              "group": false,
+              "other": false,
+              "user": false
+            },
+            "path": "SKILL.md"
+          }
+        ],
+        "version": 1
+      },
+      {
+        "active": [
+          [
+            "a",
+            3
+          ]
+        ],
+        "case": "prune-recheck-keeps-claimed",
+        "op": "prune",
+        "prior": [
+          {
+            "item": {
+              "body": "# a1",
+              "skillId": "a",
+              "version": 1
+            },
+            "name": "a"
+          },
+          {
+            "item": {
+              "body": "# a2",
+              "skillId": "a",
+              "version": 2
+            },
+            "name": "a"
+          },
+          {
+            "item": {
+              "body": "# a3",
+              "skillId": "a",
+              "version": 3
+            },
+            "name": "a"
+          }
+        ],
+        "recheck": [
+          [
+            "a",
+            1
+          ]
+        ],
+        "surviving": [
+          "a/1/SKILL.md",
+          "a/3/SKILL.md"
+        ]
+      },
+      {
         "active": [
           [
             "a",
@@ -3407,5 +8452,1816 @@
       "digest": "0e92a2a1265eb0161f8f592bc8ec4dc840881be880c0e6528edb700c1a6c45d1",
       "length": 34
     }
-  }
+  },
+  "sync": [
+    {
+      "case": "experiment-off-skips",
+      "enabled": false,
+      "endpoint": true,
+      "ledger": {},
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ]
+      },
+      "op": "refresh",
+      "registry": {
+        "sid-a": {
+          "description": "remote from the registry",
+          "latest": 1,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1"
+          }
+        }
+      },
+      "requests": [],
+      "resolved": [],
+      "result": {
+        "skipped": 0,
+        "status": "skipped",
+        "written": 0
+      },
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": 1
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": []
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "case": "no-endpoint-skips",
+      "enabled": true,
+      "endpoint": false,
+      "ledger": {},
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ]
+      },
+      "op": "refresh",
+      "registry": {
+        "sid-a": {
+          "description": "remote from the registry",
+          "latest": 1,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1"
+          }
+        }
+      },
+      "requests": [],
+      "resolved": [],
+      "result": {
+        "skipped": 0,
+        "status": "skipped",
+        "written": 0
+      },
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": 1
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": []
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "case": "no-pins-skips-and-records-nothing",
+      "enabled": true,
+      "endpoint": true,
+      "ledger": {},
+      "manifests": {},
+      "op": "refresh",
+      "registry": {
+        "sid-a": {
+          "description": "remote from the registry",
+          "latest": 1,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1"
+          }
+        }
+      },
+      "requests": [],
+      "resolved": [],
+      "result": {
+        "skipped": 0,
+        "status": "skipped",
+        "written": 0
+      },
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": []
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "case": "frozen-pin-downloads",
+      "enabled": true,
+      "endpoint": true,
+      "ledger": {},
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ]
+      },
+      "op": "refresh",
+      "registry": {
+        "sid-a": {
+          "description": "remote from the registry",
+          "latest": 2,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1",
+            "2": "# remote v2"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          1,
+          null
+        ]
+      ],
+      "resolved": [],
+      "result": {
+        "skipped": 0,
+        "status": "ok",
+        "written": 1
+      },
+      "state": {
+        "ledger": {
+          "global": [
+            "sid-a@1"
+          ]
+        },
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": 1
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": [
+          "sid-a/1/SKILL.md"
+        ]
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "case": "frozen-pin-on-disk-takes-the-fast-path",
+      "enabled": true,
+      "endpoint": true,
+      "ledger": {},
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ]
+      },
+      "op": "refresh",
+      "registry": {
+        "sid-a": {
+          "description": "remote from the registry",
+          "latest": 2,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1",
+            "2": "# remote v2"
+          }
+        }
+      },
+      "requests": [],
+      "resolved": [],
+      "result": {
+        "skipped": 0,
+        "status": "skipped",
+        "written": 0
+      },
+      "state": {
+        "ledger": {
+          "global": [
+            "sid-a@1"
+          ]
+        },
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": 1
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": [
+          "sid-a/1/SKILL.md"
+        ]
+      },
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v1",
+            "skillId": "sid-a",
+            "version": 1
+          },
+          "name": "remote"
+        },
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v2",
+            "skillId": "sid-a",
+            "version": 2
+          },
+          "name": "remote"
+        }
+      ],
+      "trusted": true
+    },
+    {
+      "case": "latest-pin-resolves-and-prunes",
+      "enabled": true,
+      "endpoint": true,
+      "ledger": {},
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": "latest"
+          }
+        ]
+      },
+      "op": "refresh",
+      "registry": {
+        "sid-a": {
+          "description": "remote from the registry",
+          "latest": 3,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1",
+            "2": "# remote v2",
+            "3": "# remote v3"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          3,
+          null
+        ],
+        [
+          "skill",
+          "sid-a",
+          null,
+          null
+        ]
+      ],
+      "resolved": [],
+      "result": {
+        "skipped": 0,
+        "status": "ok",
+        "written": 1
+      },
+      "state": {
+        "ledger": {
+          "global": [
+            "sid-a@3"
+          ]
+        },
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": "latest"
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": [
+          "sid-a/3/SKILL.md"
+        ]
+      },
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v1",
+            "skillId": "sid-a",
+            "version": 1
+          },
+          "name": "remote"
+        }
+      ],
+      "trusted": true
+    },
+    {
+      "case": "latest-pin-gone-from-registry-keeps-disk",
+      "enabled": true,
+      "endpoint": true,
+      "ledger": {},
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": "latest"
+          }
+        ]
+      },
+      "op": "refresh",
+      "registry": {},
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          null,
+          null
+        ]
+      ],
+      "resolved": [],
+      "result": {
+        "skipped": 0,
+        "status": "ok",
+        "written": 0
+      },
+      "state": {
+        "ledger": {
+          "global": [
+            "sid-a@2"
+          ]
+        },
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": "latest"
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": [
+          "sid-a/2/SKILL.md"
+        ]
+      },
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v2",
+            "skillId": "sid-a",
+            "version": 2
+          },
+          "name": "remote"
+        }
+      ],
+      "trusted": true
+    },
+    {
+      "case": "latest-pin-with-nothing-anywhere",
+      "enabled": true,
+      "endpoint": true,
+      "ledger": {},
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": "latest"
+          }
+        ]
+      },
+      "op": "refresh",
+      "registry": {},
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          null,
+          null
+        ]
+      ],
+      "resolved": [],
+      "result": {
+        "skipped": 0,
+        "status": "ok",
+        "written": 0
+      },
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": "latest"
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": []
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "case": "latest-metadata-zero-uses-item-version",
+      "enabled": true,
+      "endpoint": true,
+      "ledger": {},
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": "latest"
+          }
+        ]
+      },
+      "op": "refresh",
+      "registry": {
+        "sid-a": {
+          "description": "remote from the registry",
+          "latest": 2,
+          "metadataLatest": 0,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1",
+            "2": "# remote v2"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          2,
+          null
+        ],
+        [
+          "skill",
+          "sid-a",
+          null,
+          null
+        ]
+      ],
+      "resolved": [],
+      "result": {
+        "skipped": 0,
+        "status": "ok",
+        "written": 1
+      },
+      "state": {
+        "ledger": {
+          "global": [
+            "sid-a@2"
+          ]
+        },
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": "latest"
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": [
+          "sid-a/2/SKILL.md"
+        ]
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "case": "registry-failure-fails-the-sync",
+      "enabled": true,
+      "endpoint": true,
+      "ledger": {},
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": "latest"
+          }
+        ]
+      },
+      "op": "refresh",
+      "registry": {
+        "sid-a": {
+          "description": "remote from the registry",
+          "fail": true,
+          "latest": 2,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1",
+            "2": "# remote v2"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          null,
+          null
+        ]
+      ],
+      "resolved": [],
+      "result": {
+        "skipped": 0,
+        "status": "failed",
+        "written": 0
+      },
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": "latest"
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": [
+          "sid-a/1/SKILL.md",
+          "sid-a/2/SKILL.md"
+        ]
+      },
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v1",
+            "skillId": "sid-a",
+            "version": 1
+          },
+          "name": "remote"
+        },
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v2",
+            "skillId": "sid-a",
+            "version": 2
+          },
+          "name": "remote"
+        }
+      ],
+      "trusted": true
+    },
+    {
+      "case": "custom-alias-downloads-and-records",
+      "enabled": true,
+      "endpoint": true,
+      "ledger": {},
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": "stable"
+          }
+        ]
+      },
+      "op": "refresh",
+      "registry": {
+        "sid-a": {
+          "aliases": {
+            "stable": 2
+          },
+          "description": "remote from the registry",
+          "latest": 3,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1",
+            "2": "# remote v2",
+            "3": "# remote v3"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          null,
+          "stable"
+        ]
+      ],
+      "resolved": [],
+      "result": {
+        "skipped": 0,
+        "status": "ok",
+        "written": 1
+      },
+      "state": {
+        "ledger": {
+          "global": [
+            "sid-a@2"
+          ]
+        },
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": "stable"
+            }
+          ],
+          "project": []
+        },
+        "resolved": {
+          "sid-a@stable": 2
+        },
+        "seen": {},
+        "store": [
+          "sid-a/2/SKILL.md"
+        ]
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "case": "custom-alias-already-on-disk",
+      "enabled": true,
+      "endpoint": true,
+      "ledger": {},
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": "stable"
+          }
+        ]
+      },
+      "op": "refresh",
+      "registry": {
+        "sid-a": {
+          "aliases": {
+            "stable": 2
+          },
+          "description": "remote from the registry",
+          "latest": 3,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1",
+            "2": "# remote v2",
+            "3": "# remote v3"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          null,
+          "stable"
+        ]
+      ],
+      "resolved": [],
+      "result": {
+        "skipped": 0,
+        "status": "ok",
+        "written": 0
+      },
+      "state": {
+        "ledger": {
+          "global": [
+            "sid-a@2"
+          ]
+        },
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": "stable"
+            }
+          ],
+          "project": []
+        },
+        "resolved": {
+          "sid-a@stable": 2
+        },
+        "seen": {},
+        "store": [
+          "sid-a/2/SKILL.md"
+        ]
+      },
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v2",
+            "skillId": "sid-a",
+            "version": 2
+          },
+          "name": "remote"
+        },
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v3",
+            "skillId": "sid-a",
+            "version": 3
+          },
+          "name": "remote"
+        }
+      ],
+      "trusted": true
+    },
+    {
+      "case": "custom-alias-failure-keeps-recorded",
+      "enabled": true,
+      "endpoint": true,
+      "ledger": {},
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": "stable"
+          }
+        ]
+      },
+      "op": "refresh",
+      "registry": {
+        "sid-a": {
+          "description": "remote from the registry",
+          "fail": true,
+          "latest": 2,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1",
+            "2": "# remote v2"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          null,
+          "stable"
+        ]
+      ],
+      "resolved": [
+        [
+          "sid-a",
+          "stable",
+          1
+        ]
+      ],
+      "result": {
+        "skipped": 0,
+        "status": "ok",
+        "written": 0
+      },
+      "state": {
+        "ledger": {
+          "global": [
+            "sid-a@1"
+          ]
+        },
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": "stable"
+            }
+          ],
+          "project": []
+        },
+        "resolved": {
+          "sid-a@stable": 1
+        },
+        "seen": {},
+        "store": [
+          "sid-a/1/SKILL.md"
+        ]
+      },
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v1",
+            "skillId": "sid-a",
+            "version": 1
+          },
+          "name": "remote"
+        },
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v2",
+            "skillId": "sid-a",
+            "version": 2
+          },
+          "name": "remote"
+        }
+      ],
+      "trusted": true
+    },
+    {
+      "case": "custom-alias-empty-body-keeps-newest",
+      "enabled": true,
+      "endpoint": true,
+      "ledger": {},
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": "stable"
+          }
+        ]
+      },
+      "op": "refresh",
+      "registry": {
+        "sid-a": {
+          "aliases": {
+            "stable": 2
+          },
+          "description": "remote from the registry",
+          "latest": 2,
+          "name": "remote",
+          "versions": {
+            "1": "# one",
+            "2": "   "
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          null,
+          "stable"
+        ]
+      ],
+      "resolved": [],
+      "result": {
+        "skipped": 1,
+        "status": "ok",
+        "written": 0
+      },
+      "state": {
+        "ledger": {
+          "global": [
+            "sid-a@1"
+          ]
+        },
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": "stable"
+            }
+          ],
+          "project": []
+        },
+        "resolved": {
+          "sid-a@stable": 2
+        },
+        "seen": {},
+        "store": [
+          "sid-a/1/SKILL.md"
+        ]
+      },
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v1",
+            "skillId": "sid-a",
+            "version": 1
+          },
+          "name": "remote"
+        }
+      ],
+      "trusted": true
+    },
+    {
+      "case": "same-alias-twice-asks-once",
+      "enabled": true,
+      "endpoint": true,
+      "ledger": {},
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": "stable"
+          }
+        ],
+        "project": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": "stable"
+          }
+        ]
+      },
+      "op": "refresh",
+      "registry": {
+        "sid-a": {
+          "aliases": {
+            "stable": 1
+          },
+          "description": "remote from the registry",
+          "latest": 2,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1",
+            "2": "# remote v2"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          null,
+          "stable"
+        ]
+      ],
+      "resolved": [],
+      "result": {
+        "skipped": 0,
+        "status": "ok",
+        "written": 1
+      },
+      "state": {
+        "ledger": {
+          "global": [
+            "sid-a@1"
+          ],
+          "project": [
+            "sid-a@1"
+          ]
+        },
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": "stable"
+            }
+          ],
+          "project": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": "stable"
+            }
+          ]
+        },
+        "resolved": {
+          "sid-a@stable": 1
+        },
+        "seen": {},
+        "store": [
+          "sid-a/1/SKILL.md"
+        ]
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "case": "empty-body-is-skipped",
+      "enabled": true,
+      "endpoint": true,
+      "ledger": {},
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ]
+      },
+      "op": "refresh",
+      "registry": {
+        "sid-a": {
+          "description": "remote from the registry",
+          "latest": 1,
+          "name": "remote",
+          "versions": {
+            "1": "  "
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          1,
+          null
+        ]
+      ],
+      "resolved": [],
+      "result": {
+        "skipped": 1,
+        "status": "ok",
+        "written": 0
+      },
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": 1
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": []
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "case": "missing-version-is-skipped",
+      "enabled": true,
+      "endpoint": true,
+      "ledger": {},
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 5
+          }
+        ]
+      },
+      "op": "refresh",
+      "registry": {
+        "sid-a": {
+          "description": "remote from the registry",
+          "latest": 2,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1",
+            "2": "# remote v2"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          5,
+          null
+        ]
+      ],
+      "resolved": [],
+      "result": {
+        "skipped": 1,
+        "status": "ok",
+        "written": 0
+      },
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": 5
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": []
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "case": "global-and-project-recorded-apart",
+      "enabled": true,
+      "endpoint": true,
+      "ledger": {},
+      "manifests": {
+        "global": [
+          {
+            "name": "alpha",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ],
+        "project": [
+          {
+            "name": "beta",
+            "skill_id": "sid-b",
+            "version": "latest"
+          }
+        ]
+      },
+      "op": "refresh",
+      "registry": {
+        "sid-a": {
+          "description": "alpha from the registry",
+          "latest": 1,
+          "name": "alpha",
+          "versions": {
+            "1": "# alpha v1"
+          }
+        },
+        "sid-b": {
+          "description": "beta from the registry",
+          "latest": 2,
+          "name": "beta",
+          "versions": {
+            "1": "# beta v1",
+            "2": "# beta v2"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          1,
+          null
+        ],
+        [
+          "skill",
+          "sid-b",
+          2,
+          null
+        ],
+        [
+          "skill",
+          "sid-b",
+          null,
+          null
+        ]
+      ],
+      "resolved": [],
+      "result": {
+        "skipped": 0,
+        "status": "ok",
+        "written": 2
+      },
+      "state": {
+        "ledger": {
+          "global": [
+            "sid-a@1"
+          ],
+          "project": [
+            "sid-b@2"
+          ]
+        },
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "alpha",
+              "skill_id": "sid-a",
+              "version": 1
+            }
+          ],
+          "project": [
+            {
+              "description": "",
+              "name": "beta",
+              "skill_id": "sid-b",
+              "version": "latest"
+            }
+          ]
+        },
+        "resolved": {},
+        "seen": {},
+        "store": [
+          "sid-a/1/SKILL.md",
+          "sid-b/2/SKILL.md"
+        ]
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "case": "sibling-ledger-keeps-its-version",
+      "enabled": true,
+      "endpoint": true,
+      "ledger": {
+        "sibling": [
+          [
+            "sid-a",
+            1
+          ]
+        ]
+      },
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 2
+          }
+        ]
+      },
+      "op": "refresh",
+      "registry": {
+        "sid-a": {
+          "description": "remote from the registry",
+          "latest": 2,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1",
+            "2": "# remote v2"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          2,
+          null
+        ]
+      ],
+      "resolved": [],
+      "result": {
+        "skipped": 0,
+        "status": "ok",
+        "written": 1
+      },
+      "state": {
+        "ledger": {
+          "global": [
+            "sid-a@2"
+          ],
+          "sibling": [
+            "sid-a@1"
+          ]
+        },
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": 2
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": [
+          "sid-a/1/SKILL.md",
+          "sid-a/2/SKILL.md"
+        ]
+      },
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v1",
+            "skillId": "sid-a",
+            "version": 1
+          },
+          "name": "remote"
+        }
+      ],
+      "trusted": true
+    },
+    {
+      "case": "unpinned-id-left-alone",
+      "enabled": true,
+      "endpoint": true,
+      "ledger": {},
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ]
+      },
+      "op": "refresh",
+      "registry": {
+        "sid-a": {
+          "description": "remote from the registry",
+          "latest": 1,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1"
+          }
+        }
+      },
+      "requests": [],
+      "resolved": [],
+      "result": {
+        "skipped": 0,
+        "status": "skipped",
+        "written": 0
+      },
+      "state": {
+        "ledger": {
+          "global": [
+            "sid-a@1"
+          ]
+        },
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": 1
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": [
+          "sid-a/1/SKILL.md",
+          "sid-b/1/SKILL.md"
+        ]
+      },
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v1",
+            "skillId": "sid-a",
+            "version": 1
+          },
+          "name": "remote"
+        },
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "other v1",
+            "skillId": "sid-b",
+            "version": 1
+          },
+          "name": "other"
+        }
+      ],
+      "trusted": true
+    },
+    {
+      "case": "unsafe-id-never-requested",
+      "enabled": true,
+      "endpoint": true,
+      "ledger": {},
+      "manifests": {
+        "global": [
+          {
+            "name": "escape",
+            "skill_id": "../sid-a",
+            "version": "latest"
+          },
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ]
+      },
+      "op": "refresh",
+      "registry": {
+        "sid-a": {
+          "description": "remote from the registry",
+          "latest": 1,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          1,
+          null
+        ]
+      ],
+      "resolved": [],
+      "result": {
+        "skipped": 0,
+        "status": "ok",
+        "written": 1
+      },
+      "state": {
+        "ledger": {
+          "global": [
+            "sid-a@1"
+          ]
+        },
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "escape",
+              "skill_id": "../sid-a",
+              "version": "latest"
+            },
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": 1
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": [
+          "sid-a/1/SKILL.md"
+        ]
+      },
+      "store": [],
+      "trusted": true
+    },
+    {
+      "case": "untrusted-session-reads-global-only",
+      "enabled": true,
+      "endpoint": true,
+      "ledger": {},
+      "manifests": {
+        "global": [
+          {
+            "name": "alpha",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ],
+        "project": [
+          {
+            "name": "beta",
+            "skill_id": "sid-b",
+            "version": 1
+          }
+        ]
+      },
+      "op": "refresh",
+      "registry": {
+        "sid-a": {
+          "description": "alpha from the registry",
+          "latest": 1,
+          "name": "alpha",
+          "versions": {
+            "1": "# alpha v1"
+          }
+        },
+        "sid-b": {
+          "description": "beta from the registry",
+          "latest": 1,
+          "name": "beta",
+          "versions": {
+            "1": "# beta v1"
+          }
+        }
+      },
+      "requests": [
+        [
+          "skill",
+          "sid-a",
+          1,
+          null
+        ]
+      ],
+      "resolved": [],
+      "result": {
+        "skipped": 0,
+        "status": "ok",
+        "written": 1
+      },
+      "state": {
+        "ledger": {
+          "global": [
+            "sid-a@1"
+          ]
+        },
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "alpha",
+              "skill_id": "sid-a",
+              "version": 1
+            }
+          ],
+          "project": [
+            {
+              "description": "",
+              "name": "beta",
+              "skill_id": "sid-b",
+              "version": 1
+            }
+          ]
+        },
+        "resolved": {},
+        "seen": {},
+        "store": [
+          "sid-a/1/SKILL.md"
+        ]
+      },
+      "store": [],
+      "trusted": false
+    },
+    {
+      "case": "dropped-pin-leaves-the-ledger",
+      "enabled": true,
+      "endpoint": true,
+      "ledger": {
+        "global": [
+          [
+            "sid-a",
+            1
+          ],
+          [
+            "sid-gone",
+            3
+          ]
+        ]
+      },
+      "manifests": {
+        "global": [
+          {
+            "name": "remote",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ]
+      },
+      "op": "refresh",
+      "registry": {
+        "sid-a": {
+          "description": "remote from the registry",
+          "latest": 1,
+          "name": "remote",
+          "versions": {
+            "1": "# remote v1"
+          }
+        }
+      },
+      "requests": [],
+      "resolved": [],
+      "result": {
+        "skipped": 0,
+        "status": "skipped",
+        "written": 0
+      },
+      "state": {
+        "ledger": {
+          "global": [
+            "sid-a@1"
+          ]
+        },
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "remote",
+              "skill_id": "sid-a",
+              "version": 1
+            }
+          ],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": [
+          "sid-a/1/SKILL.md"
+        ]
+      },
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "remote v1",
+            "skillId": "sid-a",
+            "version": 1
+          },
+          "name": "remote"
+        }
+      ],
+      "trusted": true
+    },
+    {
+      "case": "publish-local-pins",
+      "enabled": true,
+      "endpoint": true,
+      "ledger": {},
+      "manifests": {
+        "global": [
+          {
+            "name": "alpha",
+            "skill_id": "sid-a",
+            "version": 1
+          }
+        ],
+        "project": [
+          {
+            "name": "beta",
+            "skill_id": "sid-b",
+            "version": "latest"
+          }
+        ]
+      },
+      "op": "publish",
+      "registry": {},
+      "requests": [],
+      "resolved": [],
+      "result": null,
+      "state": {
+        "ledger": {
+          "global": [
+            "sid-a@1"
+          ],
+          "project": [
+            "sid-b@2"
+          ]
+        },
+        "manifests": {
+          "global": [
+            {
+              "description": "",
+              "name": "alpha",
+              "skill_id": "sid-a",
+              "version": 1
+            }
+          ],
+          "project": [
+            {
+              "description": "",
+              "name": "beta",
+              "skill_id": "sid-b",
+              "version": "latest"
+            }
+          ]
+        },
+        "resolved": {},
+        "seen": {},
+        "store": [
+          "sid-a/1/SKILL.md",
+          "sid-b/2/SKILL.md"
+        ]
+      },
+      "store": [
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "alpha v1",
+            "skillId": "sid-a",
+            "version": 1
+          },
+          "name": "alpha"
+        },
+        {
+          "item": {
+            "body": "# Registry body",
+            "description": "beta v2",
+            "skillId": "sid-b",
+            "version": 2
+          },
+          "name": "beta"
+        }
+      ],
+      "trusted": true
+    },
+    {
+      "case": "publish-with-nothing-pinned-clears",
+      "enabled": true,
+      "endpoint": true,
+      "ledger": {
+        "global": [
+          [
+            "sid-a",
+            1
+          ]
+        ]
+      },
+      "manifests": {},
+      "op": "publish",
+      "registry": {},
+      "requests": [],
+      "resolved": [],
+      "result": null,
+      "state": {
+        "ledger": {},
+        "manifests": {
+          "global": [],
+          "project": []
+        },
+        "resolved": {},
+        "seen": {},
+        "store": []
+      },
+      "store": [],
+      "trusted": true
+    }
+  ]
 }

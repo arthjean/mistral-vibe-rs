@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- Load registry skills as the reference does under
+  `experimental_enable_registry_skills`. A session start resolves alias pins,
+  downloads missing versions and prunes the shared store against the pins
+  every checkout on the machine records, then loads the pinned skills behind
+  the disk ones; installing, repinning or removing a skill republishes that
+  record. `skills/list` publishes each skill's registry reference.
+
+- Keep each skill root's scope: a project root that resolves to a global one
+  stays global. `skills/installed` lists every shadowed skill per name, scope
+  and source with the reference's enabled and locked marks, and an invalid
+  `agents/openai.yaml` is reported as a model-invocation issue.
+
+- Cover OpenTelemetry tracing, session titles, plugins, project instructions,
+  the exit, update and resume lifecycle and the input queue in the builtin
+  `vibe` skill, and `disable-model-invocation` in `skill-creator`.
+
 - Report telemetry as the reference does across the terminal, `vibe -p` and
   the editor. Every event now carries the full session census: the
   experiment assignments and attributes, the harness backend, the parent of a

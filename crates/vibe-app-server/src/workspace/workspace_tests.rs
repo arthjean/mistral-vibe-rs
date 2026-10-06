@@ -1635,3 +1635,120 @@ fn continuing_inside_a_fresh_managed_worktree_says_it_has_no_session_yet() {
         );
     }
 }
+
+/// Seeds one global registry pin, `deploy` frozen at version 2, with its
+/// version materialized in the shared store.
+fn seed_registry_pin(vibe_home: &Path) {
+    use vibe_core::skills::registry::{manifest, store};
+    let item = serde_json::from_value(json!({
+        "skillId": "skill-deploy",
+        "version": 2,
+        "skill": {
+            "skillName": "deploy",
+            "skillDescription": "Ship the current branch",
+            "skillBody": "Deploy body.",
+            "skillAssets": {},
+        },
+    }))
+    .expect("the registry item parses");
+    store::materialize(&store::store_root(vibe_home), &item, "deploy")
+        .expect("the pinned version materializes");
+    manifest::save(
+        &manifest::global_manifest_path(vibe_home),
+        &manifest::SkillManifest {
+            skills: vec![manifest::ManifestEntry {
+                name: "deploy".to_owned(),
+                skill_id: "skill-deploy".to_owned(),
+                version: manifest::ManifestVersion::Frozen(2),
+                description: "Ship the current branch".to_owned(),
+            }],
+        },
+    )
+    .expect("the manifest saves");
+}
+
+fn registry_service(temporary: &Path, enabled: bool) -> WorkspaceService {
+    let workspace = temporary.join("workspace");
+    let vibe_home = temporary.join("home");
+    std::fs::create_dir_all(&workspace).expect("workspace");
+    std::fs::create_dir_all(&vibe_home).expect("vibe home");
+    std::fs::write(
+        vibe_home.join("config.toml"),
+        format!("experimental_enable_registry_skills = {enabled}\n"),
+    )
+    .expect("config fixture");
+    seed_registry_pin(&vibe_home);
+    WorkspaceService::new(
+        WorkspacePaths {
+            vibe_home,
+            working_directory: workspace,
+            session_root: temporary.join("sessions"),
+        },
+        true,
+    )
+    .expect("service")
+}
+
+/// Reference `SkillManager._discover_registry_skills` and
+/// `installed_skills`: a materialized pin joins the catalog and the installed
+/// rows only while `experimental_enable_registry_skills` is on.
+#[test]
+fn registry_pins_are_published_only_under_the_experimental_flag() {
+    let temporary = tempdir().expect("tempdir");
+    let service = registry_service(temporary.path(), true);
+    assert_eq!(
+        listed_skills(&service),
+        vec!["deploy", "skill-creator", "vibe"],
+        "the pinned version is discovered beside the builtins"
+    );
+    let installed = service.skills_installed();
+    let row = installed["skills"]
+        .as_array()
+        .and_then(|rows| rows.iter().find(|row| row["name"] == "deploy"))
+        .expect("the pin is an installed row")
+        .clone();
+    assert_eq!(row["source"], "registry");
+    assert_eq!(row["scope"], "global");
+    assert_eq!(
+        row["registry"],
+        json!({"skillId": "skill-deploy", "version": 2, "alias": null})
+    );
+
+    let temporary = tempdir().expect("tempdir");
+    let service = registry_service(temporary.path(), false);
+    assert_eq!(
+        listed_skills(&service),
+        vec!["skill-creator", "vibe"],
+        "the flag off hides every registry pin"
+    );
+}
+
+/// Reference `_refreshed`: a pin mutation republishes the repository's
+/// active pins into the cross-repository ledger, so a removal leaves the
+/// global ledger key empty and deletes its file.
+#[tokio::test]
+async fn a_pin_mutation_republishes_the_ledger() {
+    use vibe_core::skills::registry::ledger;
+    let temporary = tempdir().expect("tempdir");
+    let service = registry_service(temporary.path(), true);
+    let vibe_home = service.paths.vibe_home.clone();
+    ledger::record(
+        &vibe_home,
+        ledger::GLOBAL_KEY,
+        &[("skill-deploy".to_owned(), 2)].into_iter().collect(),
+    )
+    .expect("the ledger seeds");
+
+    let mut params = serde_json::Map::new();
+    params.insert("name".to_owned(), json!("deploy"));
+    service
+        .skills_mutation("skills/remove", &params)
+        .await
+        .expect("skills/remove succeeds");
+
+    assert!(
+        ledger::union(&vibe_home).is_empty(),
+        "the removed pin leaves the ledger"
+    );
+    assert_eq!(listed_skills(&service), vec!["skill-creator", "vibe"]);
+}

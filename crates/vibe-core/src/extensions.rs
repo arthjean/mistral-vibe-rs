@@ -9,7 +9,7 @@ use toml::Table;
 use crate::atomic_file::write_atomically;
 use crate::skills::parser::parse_skill_markdown;
 use crate::skills::schema::SkillMetadata;
-use crate::skills::{SkillDiscovery, SkillScope, SkillSource};
+use crate::skills::{RegistryRef, SkillDiscovery, SkillScope, SkillSource};
 use crate::storage::StorageError;
 
 mod agents;
@@ -68,6 +68,33 @@ pub struct SkillDefinition {
     /// spelling an empty path.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<PathBuf>,
+    /// The registry version a skill materialized from the registry was
+    /// loaded from; absent for every other source.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub registry: Option<RegistryRef>,
+}
+
+/// The mechanism a skill load failure is reported under. Reference
+/// `SkillManager._try_load_skill` records it as `Failed to load: <reason>`.
+pub const SKILL_LOAD_MECHANISM: &str = "skills";
+/// The mechanism a skill whose `agents/openai.yaml` disabled model invocation
+/// is reported under. The skill still loads; reference
+/// `_openai_allows_implicit_invocation` records the issue on the metadata
+/// file as `Model invocation disabled: <reason>`.
+pub const SKILL_POLICY_MECHANISM: &str = "skill-policy";
+
+impl DiscoveryIssue {
+    /// The message a configuration issue carries for a skill issue, prefixed
+    /// the way the reference records each mechanism; `None` for any other
+    /// mechanism.
+    #[must_use]
+    pub fn skill_issue_message(&self) -> Option<String> {
+        match self.mechanism.as_str() {
+            SKILL_LOAD_MECHANISM => Some(format!("Failed to load: {}", self.message)),
+            SKILL_POLICY_MECHANISM => Some(format!("Model invocation disabled: {}", self.message)),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -215,8 +242,17 @@ pub fn discover_extensions(
     // The skill roots are their own ordered list rather than a subdirectory of
     // each extension root, and they are walked before the rest so precedence
     // reads in one place.
-    for directory in &roots.skills.roots {
-        discover_skills(&mut catalog, directory, &builtin_skill_names);
+    for (directory, scope) in &roots.skills.roots {
+        discover_skills(&mut catalog, directory, *scope, &builtin_skill_names);
+    }
+    // Reference `_discover_skills`: the registry's active set is read after
+    // every root, and a builtin or disk skill of the same name wins.
+    if let Some(sources) = &roots.skills.registry {
+        let loaded = crate::skills::registry::loader::active_skills(sources);
+        catalog.issues.extend(loaded.issues);
+        for (name, skill) in loaded.skills {
+            catalog.skills.entry(name).or_insert(skill);
+        }
     }
     crate::skills::apply_filters(&mut catalog.skills, &roots.skills);
 
@@ -304,18 +340,37 @@ fn migrate_agent_file(path: &Path) {
 fn discover_skills(
     catalog: &mut ExtensionCatalog,
     directory: &Path,
+    scope: SkillScope,
     builtin_names: &BTreeSet<String>,
 ) {
+    let (skills, issues) = skills_in_directory(directory, scope, builtin_names);
+    catalog.issues.extend(issues);
+    for (name, skill) in skills {
+        catalog.skills.entry(name).or_insert(skill);
+    }
+}
+
+/// Every skill one root publishes, first directory wins within the root, and
+/// the issues its files raised. Reference `_discover_skills_in_dir`: a
+/// directory without a `SKILL.md` is ignored, a file that does not load is an
+/// issue, and a reserved builtin name is skipped.
+pub(crate) fn skills_in_directory(
+    directory: &Path,
+    scope: SkillScope,
+    builtin_names: &BTreeSet<String>,
+) -> (BTreeMap<String, SkillDefinition>, Vec<DiscoveryIssue>) {
+    let mut skills = BTreeMap::new();
+    let mut issues = Vec::new();
     let mut directories = match fs::read_dir(directory) {
         Ok(entries) => entries.filter_map(Result::ok).collect::<Vec<_>>(),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return (skills, issues),
         Err(error) => {
-            catalog.issues.push(DiscoveryIssue {
-                mechanism: "skills".to_owned(),
+            issues.push(DiscoveryIssue {
+                mechanism: SKILL_LOAD_MECHANISM.to_owned(),
                 path: directory.to_path_buf(),
                 message: error.to_string(),
             });
-            return;
+            return (skills, issues);
         }
     };
     directories.sort_by_key(fs::DirEntry::file_name);
@@ -324,18 +379,35 @@ fn discover_skills(
         if !path.is_file() {
             continue;
         }
-        match parse_skill(&path) {
-            Ok(skill) => {
-                if !builtin_names.contains(&skill.name) && !catalog.skills.contains_key(&skill.name)
-                {
-                    catalog.skills.insert(skill.name.clone(), skill);
+        match load_skill(&path, SkillSource::Local, scope, &mut issues) {
+            Some(skill) => {
+                if !builtin_names.contains(&skill.name) && !skills.contains_key(&skill.name) {
+                    skills.insert(skill.name.clone(), skill);
                 }
             }
-            Err(error) => catalog.issues.push(DiscoveryIssue {
-                mechanism: "skills".to_owned(),
-                path,
+            None => continue,
+        }
+    }
+    (skills, issues)
+}
+
+/// Reference `SkillManager._try_load_skill`: the skill at `path`, or
+/// [`None`] with the reason recorded as an issue.
+pub(crate) fn load_skill(
+    path: &Path,
+    source: SkillSource,
+    scope: SkillScope,
+    issues: &mut Vec<DiscoveryIssue>,
+) -> Option<SkillDefinition> {
+    match parse_skill(path, source, scope, issues) {
+        Ok(skill) => Some(skill),
+        Err(error) => {
+            issues.push(DiscoveryIssue {
+                mechanism: SKILL_LOAD_MECHANISM.to_owned(),
+                path: path.to_path_buf(),
                 message: error.to_string(),
-            }),
+            });
+            None
         }
     }
 }
@@ -462,7 +534,12 @@ fn migrate_agent_table(table: &mut Table) -> bool {
     true
 }
 
-fn parse_skill(path: &Path) -> Result<SkillDefinition, ExtensionError> {
+fn parse_skill(
+    path: &Path,
+    source: SkillSource,
+    scope: SkillScope,
+    issues: &mut Vec<DiscoveryIssue>,
+) -> Result<SkillDefinition, ExtensionError> {
     let contents = read_bounded_text(path)?;
     let (frontmatter, body) = parse_skill_markdown(&contents)
         .map_err(|error| ExtensionError::InvalidSkill(error.to_string()))?;
@@ -471,7 +548,27 @@ fn parse_skill(path: &Path) -> Result<SkillDefinition, ExtensionError> {
     // A frontmatter name that differs from the directory name is a log-only
     // warning upstream, never a rejection or a diagnostic: the frontmatter
     // name wins and nothing else is observable.
-    let resolved = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    //
+    // Reference `SkillInfo.from_metadata` resolves the directory and keeps the
+    // file name, so a `SKILL.md` that is itself a symlink still names the
+    // directory it was configured in.
+    let resolved = match (path.parent(), path.file_name()) {
+        (Some(parent), Some(name)) => fs::canonicalize(parent)
+            .unwrap_or_else(|_| parent.to_path_buf())
+            .join(name),
+        _ => path.to_path_buf(),
+    };
+    let policy_allows = match crate::skills::openai_invocation_policy(path) {
+        Ok(allowed) => allowed,
+        Err(reason) => {
+            issues.push(DiscoveryIssue {
+                mechanism: SKILL_POLICY_MECHANISM.to_owned(),
+                path: crate::skills::openai_metadata_path(path).unwrap_or_default(),
+                message: reason,
+            });
+            false
+        }
+    };
     Ok(SkillDefinition {
         name: metadata.name,
         description: metadata.description,
@@ -480,12 +577,12 @@ fn parse_skill(path: &Path) -> Result<SkillDefinition, ExtensionError> {
         metadata: metadata.metadata,
         allowed_tools: metadata.allowed_tools,
         user_invocable: metadata.user_invocable,
-        model_invocable: !metadata.disable_model_invocation
-            && crate::skills::openai_allows_implicit_invocation(path),
+        model_invocable: !metadata.disable_model_invocation && policy_allows,
         body: body.trim().to_owned(),
-        source: SkillSource::Local,
-        scope: SkillScope::Global,
+        source,
+        scope,
         path: Some(resolved),
+        registry: None,
     })
 }
 
@@ -865,7 +962,10 @@ mod tests {
             fs::create_dir_all(root.join("skills/probe")).expect("skill directory");
         }
         let skill_roots = crate::skills::SkillDiscovery {
-            roots: vec![configured.join("skills"), user.join("skills")],
+            roots: vec![
+                (configured.join("skills"), crate::skills::SkillScope::Global),
+                (user.join("skills"), crate::skills::SkillScope::Global),
+            ],
             ..crate::skills::SkillDiscovery::default()
         };
         for (root, origin) in [(&configured, "configured"), (&user, "user")] {

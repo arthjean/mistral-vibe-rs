@@ -61,6 +61,7 @@ fn vibe() -> SkillDefinition {
         source: SkillSource::Builtin,
         scope: SkillScope::Global,
         path: None,
+        registry: None,
     }
 }
 
@@ -83,5 +84,6 @@ fn skill_creator() -> SkillDefinition {
         source: SkillSource::Builtin,
         scope: SkillScope::Global,
         path: None,
+        registry: None,
     }
 }

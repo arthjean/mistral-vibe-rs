@@ -30,6 +30,42 @@ A project contributes its own `.vibe/` directory with the same shape
 (`.vibe/config.toml`, `.vibe/skills/`, `.vibe/agents/`, ...), read only while
 the folder is trusted.
 
+## Project instructions
+
+`AGENTS.md` files carry standing instructions for the model. When a session
+opens, the user's `~/.vibe/AGENTS.md` and the `AGENTS.md` documents of a
+trusted project are added to the system prompt, so edits to them take effect
+in the next session.
+
+## Starting, leaving and resuming
+
+Leave with `/exit` or by typing `exit`, `quit`, `:q` or `:quit`. `Ctrl+C`
+first interrupts a running turn or clears a non-empty input, and quits when
+pressed again in quick succession; `Ctrl+D` asks for the same second press
+unless `ask_confirmation_on_exit = false`. `vibe --version` (`-v`) prints the
+version and exits.
+
+Updates are never applied silently: with `enable_update_checks` on (the
+default) a newer release is offered at the next launch and installed only when
+accepted, and `vibe update`, the same as `vibe --check-upgrade`, checks at once
+and exits.
+
+`vibe -c` (`--continue`) reopens the latest session, `vibe --resume` opens a
+picker and `vibe --resume <id>` a given session; in a session, `/resume`
+(alias `/continue`) browses them and `/branch` copies the conversation into a
+new session that can be resumed separately.
+
+## Prompts sent while the agent works
+
+A prompt submitted during a turn is queued rather than refused, and everything
+queued during one turn is delivered together as the next one, each prompt kept
+as its own editable entry. `Ctrl+C` drops the newest queued prompt, `Esc`
+interrupts the turn and pauses the queue, and an empty `Enter` steers the
+queued prompts into the running turn (or resumes a paused queue). `Up` selects
+queued prompts for editing or removal. A few read-only commands run at once
+even while busy; `!` shell commands and every other slash command wait for an
+idle session and are refused until then.
+
 ## Configuration files and precedence
 
 Configuration is composed from, in increasing precedence:
@@ -76,8 +112,19 @@ project root's `.vibe/skills` and `.agents/skills`, then `~/.vibe/skills` and
 built-in skill names (`vibe`, `skill-creator`) are reserved. `enabled_skills`
 and `disabled_skills` narrow the published set, the allowlist deciding alone
 when present. The model loads a skill with the `skill` tool; a user-invocable
-one is also reachable as `/skill-name`. A skill that fails to parse is
-reported in diagnostics rather than silently dropped.
+one is also reachable as `/skill-name`. `disable-model-invocation: true` in the
+frontmatter keeps a skill out of the model's reach while leaving it a slash
+command. A skill that fails to parse is reported in diagnostics rather than
+silently dropped.
+
+Registry skills are opt-in behind `experimental_enable_registry_skills`. Pins
+are recorded in `~/.vibe/skills.toml` for the user and `.vibe/skills.toml` for
+a trusted project, each naming a registry skill and either a fixed version or
+an alias such as `latest`; the pinned versions are downloaded into a shared
+store under the home's cache. Each session start resolves aliases, fetches
+missing versions and removes versions no checkout on this machine still pins,
+then loads the pinned skills alongside the disk ones, a disk skill of the same
+name taking precedence.
 
 ## Tools and their permission model
 
@@ -188,6 +235,36 @@ banner; `show_thinking_nodes` toggles thinking output in the transcript.
 on, `active_transcribe_model` names the transcription model,
 `active_tts_model` the synthesis model, and `narrator_enabled` reads
 responses aloud.
+
+## Session titles
+
+Every saved session records a title in its `meta.json`, tagged as generated or
+manual. Generated titles are off by default, in which case listings fall back
+to a preview of the first message; `session_logging.generate_titles = true`
+lets the session ask a small model, once a turn has answered, for a short
+title, and later turns may refine it. `/rename <title>` sets a manual title,
+which generation never replaces afterward.
+
+## OpenTelemetry tracing
+
+`enable_otel = true` exports spans for agent turns, model requests and tool
+calls over OTLP/HTTP. Without further configuration they go to Mistral's
+collector, authenticated with the Mistral key; `otel_endpoint` points them at
+another collector instead, with `/v1/traces` appended, and the standard
+`OTEL_EXPORTER_OTLP_*` variables are honored there. `otel_redaction` filters
+span attributes before they leave the machine: `default` keeps every key and
+masks credentials and personal data found in string values, `strict` also
+blanks the value of every sensitive key, prompts and tool results included,
+and `none` sends attributes unfiltered. Tracing never changes the outcome
+of a turn.
+
+## Plugins
+
+The reference CLI can load plugins, bundles of skills, MCP servers and hooks
+under `~/.vibe/plugins/` and `.vibe/plugins/`, but only on its Unified Harness.
+This build runs the legacy harness alone, so plugin directories are not read
+and `/plugins` and `/reload-plugins` are not offered; a skill a plugin would
+contribute can be installed as an ordinary skill directory instead.
 
 ## Sensitive files
 

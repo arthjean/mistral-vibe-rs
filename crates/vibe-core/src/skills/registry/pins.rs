@@ -36,7 +36,7 @@ pub struct PinTarget<'a> {
 
 impl PinTarget<'_> {
     fn store_root(&self) -> PathBuf {
-        self.vibe_home.join("skills-registry-cache").join("store")
+        store::store_root(self.vibe_home)
     }
 
     fn project_manifests(&self) -> Vec<PathBuf> {
@@ -297,7 +297,7 @@ pub fn convert_skill_to_local(
         return Ok(None);
     };
     let root = target.store_root();
-    let Some(version) = resolved_version(target.vibe_home, &root, &entry) else {
+    let Some(version) = super::loader::pinned_version(target.vibe_home, &root, &entry) else {
         return Ok(None);
     };
     let materialized = store::skill_dir(&root, &entry.skill_id, version)
@@ -335,25 +335,6 @@ pub fn convert_skill_to_local(
     Ok(Some(destination))
 }
 
-/// Reference `_resolved_version`: the materialized version a pin maps to.
-fn resolved_version(vibe_home: &Path, root: &Path, entry: &ManifestEntry) -> Option<i64> {
-    let latest = || {
-        store::latest_materialized(root, &entry.skill_id)
-            .ok()
-            .flatten()
-    };
-    match &entry.version {
-        ManifestVersion::Frozen(version) => Some(*version),
-        ManifestVersion::Alias(alias) if alias == REGISTRY_LATEST_ALIAS => latest(),
-        ManifestVersion::Alias(alias) => resolved_alias(vibe_home, &entry.skill_id, alias)
-            .filter(|version| {
-                store::skill_dir(root, &entry.skill_id, *version)
-                    .is_ok_and(|directory| directory.join("SKILL.md").is_file())
-            })
-            .or_else(latest),
-    }
-}
-
 /// Reference `_within_project_roots`: `path` resolved lies under a root.
 fn within_roots(path: &Path, roots: &[PathBuf]) -> bool {
     let resolved = resolve_lenient(path);
@@ -377,7 +358,8 @@ fn cache_path(vibe_home: &Path) -> PathBuf {
     vibe_home.join("cache.toml")
 }
 
-fn resolved_alias(vibe_home: &Path, skill_id: &str, alias: &str) -> Option<i64> {
+/// Reference `_resolved.get`: the version a custom alias last resolved to.
+pub(crate) fn resolved_alias(vibe_home: &Path, skill_id: &str, alias: &str) -> Option<i64> {
     let text = std::fs::read_to_string(cache_path(vibe_home)).ok()?;
     let document = text.parse::<toml::Table>().ok()?;
     document
@@ -388,7 +370,7 @@ fn resolved_alias(vibe_home: &Path, skill_id: &str, alias: &str) -> Option<i64> 
 
 /// Reference `_resolved.record`: merged into the section, a write that fails
 /// dropped as the reference logs and drops it.
-fn record_resolved(vibe_home: &Path, skill_id: &str, alias: &str, version: i64) {
+pub(crate) fn record_resolved(vibe_home: &Path, skill_id: &str, alias: &str, version: i64) {
     let path = cache_path(vibe_home);
     let mut document = std::fs::read_to_string(&path)
         .ok()

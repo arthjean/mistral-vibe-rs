@@ -337,9 +337,10 @@ impl ConfigSnapshot {
 
     /// Whether the registry-skills experiment is enabled.
     ///
-    /// Reference `experimental_enable_registry_skills` has exactly one
-    /// occurrence upstream, its own declaration; here the key gates the ported
-    /// registry subtree, which stays dormant behind it.
+    /// Reference `experimental_enable_registry_skills` gates loading the
+    /// pinned registry skills into a session, the session-start sync, and the
+    /// `/skills` browser (`vibe/core/skills/manager.py:188`,
+    /// `vibe/core/agent_loop/_loop.py:858-866`).
     #[must_use]
     pub fn registry_skills_enabled(&self) -> bool {
         self.effective

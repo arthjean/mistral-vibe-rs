@@ -20,6 +20,31 @@ use crate::skills::parser::parse_skill_markdown;
 /// The frontmatter `source` value every materialized skill carries.
 const REGISTRY_SOURCE: &str = "ai-registry";
 
+/// The frontmatter key a skill's own body declares its invocation policy
+/// under, which a materialized or exported copy keeps.
+const DISABLE_MODEL_INVOCATION: &str = "disable-model-invocation";
+
+/// The registry cache under a Vibe home (reference
+/// `GLOBAL_REGISTRY_SKILLS_CACHE_DIR`), shared by every repository on the
+/// machine: the store, the pin ledger and the announced versions live there.
+#[must_use]
+pub fn cache_dir(vibe_home: &Path) -> PathBuf {
+    vibe_home.join("skills-registry-cache")
+}
+
+/// The version store under a Vibe home (reference `store_root`).
+#[must_use]
+pub fn store_root(vibe_home: &Path) -> PathBuf {
+    cache_dir(vibe_home).join("store")
+}
+
+/// Whether a version's `SKILL.md` is on disk (reference `is_materialized`);
+/// an unsafe id never is.
+#[must_use]
+pub fn is_materialized(root: &Path, skill_id: &str, version: i64) -> bool {
+    skill_dir(root, skill_id, version).is_ok_and(|directory| directory.join("SKILL.md").is_file())
+}
+
 /// Entrypoint names an asset may never take in the version root, compared
 /// after normalization and case folding so `sub/../SKILL.md` and `SKILLS.MD`
 /// are both caught.
@@ -163,7 +188,9 @@ pub(crate) fn fallback_description(name: &str) -> String {
 }
 
 /// The generated entrypoint: original frontmatter carrying the resolved name
-/// and description plus the registry provenance, then the stripped body.
+/// and description plus the registry provenance, then the stripped body. A
+/// body that declares `disable-model-invocation` as a boolean keeps it, so a
+/// skill published as explicit-only stays explicit-only once installed.
 fn build_skill_markdown(name: &str, item: &RegistrySkillItem, body: &str) -> String {
     let resolved = item.resolved_description();
     let description = if resolved.is_empty() {
@@ -171,14 +198,27 @@ fn build_skill_markdown(name: &str, item: &RegistrySkillItem, body: &str) -> Str
     } else {
         resolved
     };
+    let policy = parse_skill_markdown(&item.skill.skill_body)
+        .ok()
+        .and_then(|(frontmatter, _)| invocation_policy(&frontmatter))
+        .unwrap_or_default();
     format!(
-        "---\nname: {}\ndescription: {}\nmetadata:\n  source: {}\n  skill_id: {}\n  version: {}\n---\n\n{body}\n",
+        "---\nname: {}\ndescription: {}\nmetadata:\n  source: {}\n  skill_id: {}\n  version: {}\n{policy}---\n\n{body}\n",
         yaml_scalar(name),
         yaml_scalar(&description),
         yaml_scalar(REGISTRY_SOURCE),
         yaml_scalar(&item.skill_id),
         yaml_scalar(&item.version.to_string()),
     )
+}
+
+/// The `disable-model-invocation` line a frontmatter carries over, present
+/// only when the key holds a boolean (reference `_invocation_policy_metadata`).
+fn invocation_policy(frontmatter: &serde_json::Map<String, serde_json::Value>) -> Option<String> {
+    frontmatter
+        .get(DISABLE_MODEL_INVOCATION)
+        .and_then(serde_json::Value::as_bool)
+        .map(|disabled| format!("{DISABLE_MODEL_INVOCATION}: {disabled}\n"))
 }
 
 /// A body that already carries frontmatter loses it, so the generated
@@ -272,9 +312,9 @@ fn normalize(path: &Path) -> PathBuf {
 /// Copies a materialized version into `target` as a standalone local skill.
 ///
 /// The registry frontmatter (`source`, `skill_id`, `version`) is dropped so
-/// the result reads as a plain, user-owned skill; a copy whose `SKILL.md`
-/// does not parse is left untouched, because it already carries valid text of
-/// its own.
+/// the result reads as a plain, user-owned skill, and the invocation policy is
+/// kept; a copy whose `SKILL.md` does not parse is left untouched, because it
+/// already carries valid text of its own.
 pub fn export_local(
     root: &Path,
     skill_id: &str,
@@ -304,10 +344,11 @@ pub fn export_local(
         .get("description")
         .and_then(serde_json::Value::as_str)
         .unwrap_or_default();
+    let policy = invocation_policy(&frontmatter).unwrap_or_default();
     fs::write(
         &skill_file,
         format!(
-            "---\nname: {}\ndescription: {}\n---\n\n{}\n",
+            "---\nname: {}\ndescription: {}\n{policy}---\n\n{}\n",
             yaml_scalar(&name),
             yaml_scalar(description),
             body.trim(),
@@ -331,18 +372,37 @@ fn copy_tree(source: &Path, target: &Path) -> io::Result<()> {
     Ok(())
 }
 
-/// Removes every store entry outside the active `(skill_id, version)` set,
-/// and every id directory the removal leaves empty.
-pub fn prune(root: &Path, active: &BTreeSet<(String, i64)>) -> Result<(), StoreError> {
+/// Removes the store entries the active `(skill_id, version)` set no longer
+/// holds, under the ids it names, and every id directory the removal leaves
+/// empty (reference `_prune`). An id the set does not name is left whole: it
+/// belongs to a pin this caller cannot see.
+///
+/// `recheck` re-reads the active set the moment before the first removal, so
+/// a version another process claimed after `active` was computed is kept; it
+/// runs at most once.
+pub fn prune(
+    root: &Path,
+    active: &BTreeSet<(String, i64)>,
+    recheck: Option<&dyn Fn() -> BTreeSet<(String, i64)>>,
+) -> Result<(), StoreError> {
     if !root.is_dir() {
         return Ok(());
     }
+    let active_ids = active
+        .iter()
+        .map(|(id, _)| id.as_str())
+        .collect::<BTreeSet<_>>();
+    let mut claimed: Option<BTreeSet<(String, i64)>> = None;
+    let mut is_claimed = |target: &(String, i64)| match recheck {
+        None => false,
+        Some(recheck) => claimed.get_or_insert_with(recheck).contains(target),
+    };
     for id_entry in root.read_dir()?.flatten() {
         let id_dir = id_entry.path();
-        if !id_dir.is_dir() {
+        let id = id_entry.file_name().to_string_lossy().into_owned();
+        if !id_dir.is_dir() || !active_ids.contains(id.as_str()) {
             continue;
         }
-        let id = id_entry.file_name().to_string_lossy().into_owned();
         for version_entry in id_dir.read_dir()?.flatten() {
             let version_dir = version_entry.path();
             if !version_dir.is_dir() {
@@ -351,7 +411,8 @@ pub fn prune(root: &Path, active: &BTreeSet<(String, i64)>) -> Result<(), StoreE
             let Ok(version) = version_entry.file_name().to_string_lossy().parse::<i64>() else {
                 continue;
             };
-            if !active.contains(&(id.clone(), version)) {
+            let target = (id.clone(), version);
+            if !active.contains(&target) && !is_claimed(&target) {
                 let _ = fs::remove_dir_all(&version_dir);
             }
         }

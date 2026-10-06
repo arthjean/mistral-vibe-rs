@@ -11,7 +11,9 @@ user already said:
 
 1. The name: a lowercase hyphenated slug such as `deploy-checklist`.
 2. The description: the routing text that tells the model when to load the
-   skill, which is the only part visible before it is selected.
+   skill, which is the only part the model sees before loading it (unless the
+   skill is withheld from the model, below, and reached by its `/` command
+   alone).
 3. The instructions: what the loaded skill should actually direct the model to
    do.
 
@@ -42,6 +44,13 @@ Frontmatter fields:
 - `description`, required: 1 to 1024 characters, written as a load condition.
 - `user-invocable`, optional, default true: false hides the skill from the
   `/` menu so only the model can load it.
+- `disable-model-invocation`, optional, default false: true withholds the
+  skill from the model, which neither sees it listed nor can load it, so it
+  runs only when the user types its `/` command. Use it for workflows with
+  side effects the user should start deliberately. A value that is not a
+  boolean keeps the skill from loading and is reported in diagnostics. An
+  `agents/openai.yaml` beside `SKILL.md` declaring
+  `policy.allow_implicit_invocation: false` has the same effect.
 - `allowed-tools`, optional: tools pre-approved while the skill drives,
   written as a YAML list or one space-delimited string.
 - `license`, `compatibility` and a nested `metadata` mapping of strings are
