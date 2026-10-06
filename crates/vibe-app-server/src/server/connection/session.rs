@@ -302,6 +302,7 @@ impl ServerConnection {
         session.context_window = self.server.workspace.context_window();
         session.pricing = self.server.workspace.active_model_pricing();
         session.active_model_alias = self.server.workspace.active_model_alias();
+        session.displayed_workdir = self.server.workspace.displayed_workdir();
         session.compaction = self.server.workspace.compaction_settings();
         session.hooks = self.server.workspace.session_hooks(
             Path::new(&session.working_directory),

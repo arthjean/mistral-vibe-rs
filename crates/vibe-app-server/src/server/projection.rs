@@ -152,7 +152,9 @@ pub(super) fn public_session_state(session: &SessionRuntime) -> Value {
             "bumpedAt": session.bumped_at,
             // `session/pin` is not served, so no session is ever pinned.
             "pinnedAt": null,
-            "cwd": session.working_directory,
+            // Reference `project_workdir`: the configured display directory
+            // when there is one.
+            "cwd": session.displayed_workdir.as_ref().unwrap_or(&session.working_directory),
             "workspaceRoots": workspace_roots,
             "model": session.intent.model.as_ref().or(session.active_model_alias.as_ref()),
             // Reference `build_public_state` never sets it on the legacy

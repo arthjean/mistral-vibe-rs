@@ -76,6 +76,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         provider: ProviderConfig::for_style(&style, &api_base, &credential)
             .ok_or("VIBE_PROVIDER_STYLE names no provider style")?,
         models: Vec::new(),
+        allowed_models: Vec::new(),
         model: dotenv
             .variable("VIBE_MODEL")
             .unwrap_or_else(|| "mistral-medium-3.5".to_owned()),

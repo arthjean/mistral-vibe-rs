@@ -17,7 +17,9 @@
 //! defaults. `defaults` records the document `create_default_config` ships, and
 //! is compared against a load with no configuration file at all.
 //! `modelScenarios` records what the reference *validates* on top of its own
-//! default layer, because the model rules only run after the merge.
+//! default layer, because the model rules only run after the merge. The layer
+//! stack, write, environment, agent profile, dotenv, sign-in rewrite and
+//! encoding families of the same corpus are replayed by `layers_parity_tests`.
 //!
 //! One comparison is deliberately scoped: a key the reference schema does not
 //! declare is dropped by the reference merge and kept by this one, which FR-04
@@ -44,7 +46,7 @@ const CAPTURE_SCRIPT: &str = "scripts/parity/config_surface.py";
 const CORPUS_RELATIVE: &str = "tests/config-surface/corpus.json";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 4;
+const CORPUS_SCHEMA_VERSION: u32 = 5;
 /// The scenario floor this epic commits to.
 const MINIMUM_SCENARIOS: usize = 24;
 /// What the capture writes where the vibe home is machine-dependent.
@@ -52,39 +54,10 @@ const VIBE_HOME_PLACEHOLDER: &str = "{vibe_home}";
 
 /// Reference fields this port does not declare, each with the reason.
 ///
-/// US-004 and US-005 shortened this list to one: the three fields the
-/// GrowthBook layer writes are declared here now, each with the resolution that
-/// gives it an effect, so the only entry left is the greeting toggle, whose
-/// consumer belongs to app-server parity and which no experiment targets. The
-/// gap stays visible and the replay still fails on any *other* undeclared
-/// field.
-///
-/// The v2.25.7 re-pin added twelve: fields that releases v2.24.1 through
-/// v2.25.7 introduced and this registry does not declare. Each reason names the
-/// release and the declaration in `vibe/core/config/vibe_schema.py` at
-/// `4a96003`.
-///
-/// An entry whose field becomes declared fails the replay as stale.
-const UNDECLARED_FIELDS: &[(&str, &str)] = &[
-    (
-        "show_greeting",
-        "US-142: v2.24.0 greeting toggle, unported; narrowed to the greeting by US-005",
-    ),
-    (
-        "routed_extra_models",
-        "v2.24.5 routed extra models (vibe_schema.py:321), unported; the registry declares no \
-         such key",
-    ),
-    (
-        "allowed_models",
-        "v2.24.1 model allow list (vibe_schema.py:338), unported; the registry declares no such \
-         key",
-    ),
-    (
-        "vision_model",
-        "v2.25.7 vision model (vibe_schema.py:347), unported; the registry declares no such key",
-    ),
-];
+/// The configuration pass of 2026-10-06 declared the last four, so the list is
+/// empty and the replay fails on any field the reference adds. An entry whose
+/// field becomes declared fails the replay as stale.
+const UNDECLARED_FIELDS: &[(&str, &str)] = &[];
 
 /// The sentinel v2.24.0 ships for `active_model`, meaning "not pinned": both
 /// implementations now carry it in the document they ship and resolve it when
@@ -110,91 +83,25 @@ const WITHDRAWN_FIELDS: &[(&str, &str)] = &[];
 ///
 /// An entry fails as stale when the two strategies agree again, and fails when
 /// either side moves to a third strategy.
-const STRATEGY_DIVERGENCES: &[(&str, &str, &str, &str)] = &[
-    (
-        "compaction_model",
-        "merge",
-        "replace",
-        "v2.25.5 declares it `WithShallowMerge` (vibe_schema.py:346; schema.py:146), so a \
-         higher layer's table is merged key by key; registry.rs declares it `replace`, so the \
-         higher table replaces the lower one whole",
-    ),
-    (
-        "project_context",
-        "merge",
-        "replace",
-        "v2.25.5 declares it `WithShallowMerge` (vibe_schema.py:618; schema.py:146), so a \
-         higher layer's table is merged key by key; registry.rs declares it `replace`, so the \
-         higher table replaces the lower one whole",
-    ),
-    (
-        "session_logging",
-        "merge",
-        "replace",
-        "v2.25.5 declares it `WithShallowMerge` (vibe_schema.py:621; schema.py:146), so a \
-         higher layer's table is merged key by key; registry.rs declares it `replace`, so the \
-         higher table replaces the lower one whole",
-    ),
-    (
-        "experiments",
-        "merge",
-        "replace",
-        "v2.25.5 declares it `WithShallowMerge` (vibe_schema.py:624; schema.py:146), so a \
-         higher layer's table is merged key by key; registry.rs declares it `replace`, so the \
-         higher table replaces the lower one whole",
-    ),
-];
+const STRATEGY_DIVERGENCES: &[(&str, &str, &str, &str)] = &[];
 
 /// Strategies a reference field adopts that this port does not implement, each
 /// with the reason. An entry fails as stale when no reference field uses the
 /// strategy any more or the port implements it.
-const UNIMPLEMENTED_STRATEGIES: &[(&str, &str)] = &[(
-    "merge",
-    "v2.25.5 is the first release where a field declares `WithShallowMerge` (schema.py:146, \
-     utils/merge.py:49; five fields at vibe_schema.py:346, :347, :618, :621, :624); \
-     `MergeStrategy` in registry.rs has no shallow merge, and the fields it declares replace",
-)];
-
-/// v2.25.0 changed what an unknown `active_model` validates to.
-const ACTIVE_MODEL_FALLBACK: &str = "v2.25.0 resets an unknown `active_model` to the unpinned sentinel \"\" \
-     (vibe_schema.py:916) and still records one warning; the port pins the default alias \
-     `mistral-medium-3.5` instead, with the same warning count";
-
-/// v2.25.0 gave `ProviderConfig` an origin-rewrite flag.
-const ORIGIN_REWRITE: &str = "v2.25.0 adds `browser_auth_allow_origin_rewrite` to ProviderConfig, default \
-     false (models.py:105); the port's provider entries carry no such key";
+const UNIMPLEMENTED_STRATEGIES: &[(&str, &str)] = &[];
 
 /// Pointers at which the document this port ships diverges from the reference
 /// default document, as `(pointer, reason)`.
-const DEFAULT_DIVERGENCES: &[(&str, &str)] = &[
-    (
-        "/providers/0/browser_auth_allow_origin_rewrite",
-        ORIGIN_REWRITE,
-    ),
-    (
-        "/providers/1/browser_auth_allow_origin_rewrite",
-        ORIGIN_REWRITE,
-    ),
-];
+const DEFAULT_DIVERGENCES: &[(&str, &str)] = &[];
 
 /// Pointers at which a merge scenario diverges, as `(scenario, pointer, reason)`.
-const SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[(
-    "replace-nested-table-wholesale",
-    "/project_context/max_files",
-    "v2.25.5 declares `project_context` `WithShallowMerge` (vibe_schema.py:618), so the lower \
-     layer's `max_files` survives the higher layer's table; the port replaces the table whole, \
-     as `STRATEGY_DIVERGENCES` records",
-)];
+const SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[];
 
 /// Pointers at which a model scenario diverges, as `(scenario, pointer,
 /// reason)`. `/active_model` and `/validation_warnings` name the validated alias
 /// and the warning count; every other pointer lies under `/models` or
 /// `/compaction_model`.
-const MODEL_SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[(
-    "models-unknown-active-model-falls-back",
-    "/active_model",
-    ACTIVE_MODEL_FALLBACK,
-)];
+const MODEL_SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[];
 
 /// One divergence a replay observed: the case, the pointer, and both values
 /// rendered with sensitive values redacted.
@@ -274,6 +181,20 @@ struct Corpus {
     /// own view; named here because the corpus denies unknown fields.
     #[expect(dead_code, reason = "the MCP section is replayed by its own module")]
     mcp: JsonValue,
+    /// The layer stack, environment, agent profile, dotenv and sign-in
+    /// families, replayed by `layers_parity_tests` through its own view.
+    #[expect(dead_code, reason = "replayed by `layers_parity_tests`")]
+    stack: JsonValue,
+    #[expect(dead_code, reason = "replayed by `layers_parity_tests`")]
+    environment: JsonValue,
+    #[expect(dead_code, reason = "replayed by `layers_parity_tests`")]
+    agent_profiles: JsonValue,
+    #[expect(dead_code, reason = "replayed by `layers_parity_tests`")]
+    dotenv: JsonValue,
+    #[expect(dead_code, reason = "replayed by `layers_parity_tests`")]
+    origin_rewrite: JsonValue,
+    #[expect(dead_code, reason = "replayed by `layers_parity_tests`")]
+    encoding: JsonValue,
 }
 
 #[derive(Debug, Deserialize)]
@@ -283,18 +204,30 @@ struct Defaults {
     tool_names: Vec<String>,
 }
 
+/// What the reference validated one model stack to. Every field but the name,
+/// the layers and the verdict is absent when validation refused the stack.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ModelScenario {
     name: String,
     layers: Vec<ScenarioLayer>,
-    active_model: String,
-    models: Map<String, JsonValue>,
+    /// Whether validation refused the stack, as a vision model that cannot
+    /// read images or names an unknown provider is refused.
+    rejected: bool,
+    active_model: Option<String>,
+    models: Option<Map<String, JsonValue>>,
     /// The validated `compaction_model`, or `null` where the document declares
     /// none. It is a `ModelConfig` like every entry of `models`, so it carries
     /// the same alias rule and the same per-entry defaults.
     compaction_model: Option<JsonValue>,
-    validation_warnings: usize,
+    vision_model: Option<JsonValue>,
+    routed_extra_models: Option<Vec<JsonValue>>,
+    /// The aliases the allowlist leaves selectable, in the order the reference
+    /// lists them.
+    available_models: Option<Vec<String>>,
+    default_model_alias: Option<String>,
+    active_model_alias: Option<String>,
+    validation_warnings: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -687,9 +620,9 @@ fn resolve_vibe_home(value: &JsonValue, home: &Path) -> JsonValue {
 }
 
 /// The model rules the reference applies once the merged document is validated:
-/// sparse entries completed from the default one, the global compaction
-/// threshold reaching the entries that set none, and the `active_model`
-/// fallback with its warning.
+/// sparse entries completed from the default one, the routed and extra routed
+/// entries injected, the global and admin compaction thresholds, the allowlist,
+/// the vision model checks, and the `active_model` fallback with its warning.
 #[test]
 fn every_model_scenario_validates_to_the_document_the_reference_validates() {
     let corpus = corpus();
@@ -699,95 +632,116 @@ fn every_model_scenario_validates_to_the_document_the_reference_validates() {
     for scenario in &corpus.model_scenarios {
         let temporary = tempfile::tempdir().expect("temporary root");
         let home = temporary.path().join("home/.vibe");
+        let project = temporary.path().join("project");
         fs::create_dir_all(&home).expect("home directory");
-        let mut documents = scenario.layers.iter().map(|layer| {
-            layer.toml.parse::<Table>().unwrap_or_else(|error| {
-                panic!("{}: layer `{}`: {error}", scenario.name, layer.name)
-            })
-        });
         let mut config = LayeredConfig::new(
             ConfigPaths {
                 vibe_home: home.clone(),
-                working_directory: temporary.path().join("project"),
+                working_directory: project.clone(),
             },
             registry::default_document(),
-        );
-        if let Some(selected) = documents.next() {
-            fs::write(home.join(CONFIG_FILE), selected.to_string()).expect("selected fixture");
+        )
+        .with_project_trusted(true)
+        .with_project_file_trust(Some(true));
+        for layer in &scenario.layers {
+            let document = layer.toml.parse::<Table>().unwrap_or_else(|error| {
+                panic!("{}: layer `{}`: {error}", scenario.name, layer.name)
+            });
+            // Each layer lands where the reference stack named it.
+            match layer.name.as_str() {
+                "user" => {
+                    fs::write(home.join(CONFIG_FILE), document.to_string()).expect("user fixture")
+                }
+                "project" => {
+                    let directory = project.join(".vibe");
+                    fs::create_dir_all(&directory).expect("project directory");
+                    fs::write(directory.join(CONFIG_FILE), document.to_string())
+                        .expect("project fixture");
+                }
+                "overrides" => config.runtime = document,
+                "admin" => {
+                    config.set_admin(document);
+                }
+                other => panic!("{}: no layer is named `{other}`", scenario.name),
+            }
         }
-        if let Some(runtime) = documents.next() {
-            config.runtime = runtime;
-        }
-        assert!(
-            documents.next().is_none(),
-            "{}: a model scenario may stack at most two layers over the defaults",
-            scenario.name
-        );
 
-        let snapshot = config
-            .load()
-            .unwrap_or_else(|error| panic!("{}: {error}", scenario.name));
+        let loaded = config.load();
+        observe(
+            &scenario.name,
+            "/rejected",
+            &JsonValue::from(scenario.rejected),
+            &JsonValue::from(loaded.is_err()),
+            &mut observed,
+        );
+        let (Ok(snapshot), false) = (loaded, scenario.rejected) else {
+            continue;
+        };
+        let effective = &snapshot.effective;
         // The unpinned sentinel survives the merge on both sides: the reference
         // leaves the alias empty and resolves it on read, and so does this
         // port. Every scenario is therefore compared as it stands.
-        if scenario.active_model == UNPINNED_ACTIVE_MODEL {
+        if scenario.active_model.as_deref() == Some(UNPINNED_ACTIVE_MODEL) {
             unpinned_observed = true;
         }
-        let active = snapshot
-            .effective
-            .get("active_model")
-            .and_then(Value::as_str);
-        observe(
-            &scenario.name,
+        let text = |value: Option<&str>| value.map_or(JsonValue::Null, JsonValue::from);
+        let field = |name: &str| {
+            effective.get(name).map_or(JsonValue::Null, |value| {
+                serde_json::to_value(value).expect("a field serializes")
+            })
+        };
+        let expected = |value: &Option<JsonValue>| value.clone().unwrap_or(JsonValue::Null);
+        let mut compare = |pointer: &str, reference: JsonValue, port: JsonValue| {
+            observe(&scenario.name, pointer, &reference, &port, &mut observed);
+        };
+        compare(
             "/active_model",
-            &JsonValue::from(scenario.active_model.as_str()),
-            &active.map_or(JsonValue::Null, JsonValue::from),
-            &mut observed,
+            text(scenario.active_model.as_deref()),
+            text(effective.get("active_model").and_then(Value::as_str)),
         );
-        observe(
-            &scenario.name,
+        compare(
             "/validation_warnings",
-            &JsonValue::from(scenario.validation_warnings),
-            &JsonValue::from(snapshot.validation_warnings.len()),
-            &mut observed,
+            JsonValue::from(scenario.validation_warnings),
+            JsonValue::from(snapshot.validation_warnings.len()),
         );
-        let models = snapshot
-            .effective
-            .get("models")
-            .unwrap_or_else(|| panic!("{}: the merged document carries no model", scenario.name));
-        let models = serde_json::to_value(models).expect("models serialize");
-        observe(
-            &scenario.name,
+        compare(
             "/models",
-            &JsonValue::Object(scenario.models.clone()),
-            &models,
-            &mut observed,
+            JsonValue::Object(scenario.models.clone().unwrap_or_default()),
+            field("models"),
         );
-        let compaction = snapshot.effective.get("compaction_model");
-        match scenario.compaction_model.as_ref() {
-            None | Some(JsonValue::Null) => assert!(
-                compaction.is_none(),
-                "{}: the port composed a compaction model the reference validated to none",
-                scenario.name
-            ),
-            Some(expected) => {
-                let compaction = compaction.unwrap_or_else(|| {
-                    panic!(
-                        "{}: the merged document carries no compaction model",
-                        scenario.name
-                    )
-                });
-                let compaction =
-                    serde_json::to_value(compaction).expect("the compaction model serializes");
-                observe(
-                    &scenario.name,
-                    "/compaction_model",
-                    expected,
-                    &compaction,
-                    &mut observed,
-                );
-            }
-        }
+        compare(
+            "/compaction_model",
+            expected(&scenario.compaction_model),
+            field("compaction_model"),
+        );
+        compare(
+            "/vision_model",
+            expected(&scenario.vision_model),
+            field("vision_model"),
+        );
+        compare(
+            "/routed_extra_models",
+            JsonValue::from(scenario.routed_extra_models.clone().unwrap_or_default()),
+            match field("routed_extra_models") {
+                JsonValue::Null => JsonValue::Array(Vec::new()),
+                published => published,
+            },
+        );
+        compare(
+            "/available_models",
+            JsonValue::from(scenario.available_models.clone().unwrap_or_default()),
+            JsonValue::from(available_model_aliases(effective)),
+        );
+        compare(
+            "/default_model_alias",
+            text(scenario.default_model_alias.as_deref()),
+            text(default_model_alias(effective)),
+        );
+        compare(
+            "/active_model_alias",
+            text(scenario.active_model_alias.as_deref()),
+            text(active_model_alias(effective)),
+        );
     }
     reconcile(
         "the validated model scenarios",
@@ -817,6 +771,7 @@ fn the_port_implements_every_strategy_the_reference_reaches() {
         MergeStrategy::Replace.as_str(),
         MergeStrategy::Concat.as_str(),
         MergeStrategy::Union.as_str(),
+        MergeStrategy::Merge.as_str(),
         MergeStrategy::DeepMerge.as_str(),
     ]);
     let used = corpus
@@ -926,7 +881,16 @@ fn replay(scenario: &Scenario, observed: &mut Vec<Observed>) {
     let snapshot = config
         .load()
         .unwrap_or_else(|error| panic!("{}: {error}", scenario.name));
-    let effective = &snapshot.effective;
+    // The reference family records what `ConfigBuilder` merges, before the
+    // schema validates the result, so the layers the load assembled are merged
+    // again here without the validation pass that completes model fields and
+    // resolves the session log directory.
+    let mut effective = Table::new();
+    for layer in &snapshot.layer_values {
+        merge::merge_layer(&mut effective, &layer.values)
+            .unwrap_or_else(|error| panic!("{}: {error}", scenario.name));
+    }
+    let effective = &effective;
     let actual = serde_json::to_value(effective).expect("effective document serializes");
 
     for (key, expected) in &scenario.merged {

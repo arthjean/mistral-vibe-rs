@@ -189,7 +189,9 @@ fn writing_a_model_map_persists_the_list_form() {
         .expect("the map is written");
 
     let persisted = fs::read_to_string(home.join(CONFIG_FILE)).expect("the file is written");
-    assert!(persisted.contains("[[models]]"), "{persisted}");
+    // A short entry is written inline, as the reference's `tomli_w` writes an
+    // array of tables whose every entry fits on one line.
+    assert!(persisted.starts_with("models = [\n    { "), "{persisted}");
     let parsed = persisted.parse::<Table>().expect("the file parses");
     let entries = parsed["models"].as_array().expect("a list of models");
     assert_eq!(entries.len(), 1);
@@ -209,8 +211,13 @@ fn an_unknown_active_model_falls_back_and_publishes_a_readable_warning() {
     let snapshot = shipped("active_model = \"not-configured\"\n").expect("the fallback loads");
     assert_eq!(
         snapshot.effective["active_model"].as_str(),
+        Some(""),
+        "the unknown pin is reset to the unpinned sentinel"
+    );
+    assert_eq!(
+        snapshot.active_model_alias(),
         Some("mistral-medium-3.5"),
-        "the first configured model is selected"
+        "the sentinel resolves to the default model"
     );
     let [warning] = snapshot.validation_warnings.as_slice() else {
         panic!(
@@ -513,8 +520,9 @@ fn a_routed_definition_disagreeing_with_the_routed_alias_is_not_injected() {
     assert_eq!(snapshot.active_model_alias(), Some("mistral-medium-3.5"));
 }
 
-/// US-005: a pinned alias wins outright, and the routed definition is not even
-/// injected, because the routed alias can never be selected for that operator.
+/// A pinned alias wins outright, and the routed definition is still injected:
+/// reference `_inject_routed_model` does not read the pin, so the routed model
+/// stays selectable from the picker of a pinned installation.
 #[test]
 fn a_pinned_active_model_wins_over_the_routed_default() {
     let snapshot = routed(
@@ -525,10 +533,10 @@ fn a_pinned_active_model_wins_over_the_routed_default() {
 
     assert_eq!(snapshot.active_model_alias(), Some("local"));
     assert!(
-        !snapshot.effective["models"]
+        snapshot.effective["models"]
             .as_table()
             .expect("models")
             .contains_key("routed"),
-        "a pinned installation was given a routed definition it cannot select"
+        "a pinned installation lost the routed definition its picker offers"
     );
 }

@@ -147,3 +147,37 @@ fn a_fifo_standing_in_for_the_file_is_read() {
         Some("streamed")
     );
 }
+
+/// The cases python-dotenv 1.2.2 was probed with, as reference
+/// `load_dotenv_values` reads them through `dotenv_values`.
+#[test]
+fn the_file_is_read_as_python_dotenv_reads_it() {
+    let values = DotenvValues::parse(concat!(
+        "A=one # trailing\n",
+        "B=\"two\nlines\"\n",
+        "C=${A}-x\n",
+        "export D = spaced\n",
+        "E\n",
+        "F='lit ${A}'\n",
+        "G=\"esc \\t tab\"\n",
+        "H=${VIBE_DOTENV_UNSET_FIXTURE:-fallback}\n",
+        "I=a#not-a-comment\n",
+        "'J'=quoted key\n",
+        "A=redefined\n",
+    ));
+    let read = |name: &str| values.file_variable(name).map(str::to_owned);
+    assert_eq!(read("A").as_deref(), Some("redefined"), "a later line wins");
+    assert_eq!(read("B").as_deref(), Some("two\nlines"));
+    assert_eq!(
+        read("C").as_deref(),
+        Some("one-x"),
+        "expanded from the line above"
+    );
+    assert_eq!(read("D").as_deref(), Some("spaced"));
+    assert_eq!(read("E"), None, "a key without a value is unset");
+    assert_eq!(read("F").as_deref(), Some("lit one"));
+    assert_eq!(read("G").as_deref(), Some("esc \t tab"));
+    assert_eq!(read("H").as_deref(), Some("fallback"));
+    assert_eq!(read("I").as_deref(), Some("a#not-a-comment"));
+    assert_eq!(read("J").as_deref(), Some("quoted key"));
+}

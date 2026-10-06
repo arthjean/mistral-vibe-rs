@@ -95,9 +95,15 @@ impl ConfigSnapshot {
     }
 
     /// Reference `active_model_is_pinned`: a model is pinned when the
-    /// effective document names one and the operator's own file or the
-    /// session's overrides wrote it, rather than a default or an experiment.
+    /// effective document names one and the file an implicit write lands in or
+    /// the session's overrides wrote it, rather than a default, an experiment
+    /// or a project file the write would not reach.
     fn active_model_pinned(&self) -> bool {
+        let persisted = match self.selected_target {
+            super::ConfigTarget::User => Some(super::ConfigLayerKind::UserToml),
+            super::ConfigTarget::Project => Some(super::ConfigLayerKind::ProjectToml),
+            super::ConfigTarget::Ephemeral => None,
+        };
         let named = |values: &Table| {
             values
                 .get("active_model")
@@ -106,10 +112,8 @@ impl ConfigSnapshot {
         };
         named(&self.effective)
             && self.layer_values.iter().any(|layer| {
-                matches!(
-                    layer.kind,
-                    super::ConfigLayerKind::SelectedToml | super::ConfigLayerKind::Runtime
-                ) && named(&layer.values)
+                (Some(layer.kind) == persisted || layer.kind == super::ConfigLayerKind::Runtime)
+                    && named(&layer.values)
             })
     }
 
@@ -253,6 +257,8 @@ impl ConfigSnapshot {
             Some(Value::Table(models)) => {
                 // The merged map is keyed; reference `models` is a dictionary
                 // that keeps the order the layers declared the aliases in.
+                // Reference `available_models` narrows it to what
+                // `allowed_models` admits.
                 let order = super::effective::model_order(&self.layer_values);
                 let rank = |alias: &str| {
                     order
@@ -260,7 +266,11 @@ impl ConfigSnapshot {
                         .position(|declared| declared == alias)
                         .unwrap_or(order.len())
                 };
-                let mut entries = models.iter().collect::<Vec<_>>();
+                let available = super::effective::available_model_aliases(&self.effective);
+                let mut entries = models
+                    .iter()
+                    .filter(|(alias, _)| available.contains(&alias.as_str()))
+                    .collect::<Vec<_>>();
                 entries.sort_by_key(|(alias, _)| rank(alias));
                 JsonValue::Array(
                     entries

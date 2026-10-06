@@ -323,6 +323,20 @@ fn configured_default_agent_is_resolved_from_the_live_config_snapshot() {
     );
 }
 
+/// Reference `project_workdir`: a configured `displayed_workdir` is the
+/// directory sessions are shown as running in, and an empty one is no value.
+#[test]
+fn a_configured_displayed_workdir_replaces_the_working_directory_shown() {
+    let (temporary, service) = service();
+    assert_eq!(service.displayed_workdir(), None);
+    let user_config = temporary.path().join("home/config.toml");
+    std::fs::create_dir_all(temporary.path().join("home")).expect("home");
+    std::fs::write(&user_config, "displayed_workdir = \"\"\n").expect("empty value");
+    assert_eq!(service.displayed_workdir(), None);
+    std::fs::write(&user_config, "displayed_workdir = \"/shown/here\"\n").expect("value");
+    assert_eq!(service.displayed_workdir().as_deref(), Some("/shown/here"));
+}
+
 #[test]
 fn discovered_user_agent_remains_selectable_after_service_restart() {
     let temporary = tempdir().expect("tempdir");
@@ -539,8 +553,8 @@ fn a_write_that_cannot_land_is_reported_per_target_beside_one_that_did() {
         "the write that succeeded stands"
     );
 
-    // An operation naming no target goes to the file the selection resolves
-    // to, which is the trusted project file now that one exists.
+    // An operation naming no target goes to the user file even beside a
+    // trusted project file, as reference `default_layer_resolver` routes it.
     service
         .dispatch(
             "config/patch",
@@ -548,13 +562,15 @@ fn a_write_that_cannot_land_is_reported_per_target_beside_one_that_did() {
         )
         .expect("the unrouted patch applies");
     assert!(
-        fs::read_to_string(project.join("config.toml"))
+        !fs::read_to_string(project.join("config.toml"))
             .expect("the project file survives")
-            .contains("plan")
+            .contains("plan"),
+        "an unrouted operation reached the project file"
     );
     assert!(
-        digest(&temporary.path().join("home/config.toml")).is_none(),
-        "an unrouted operation reached the user file"
+        fs::read_to_string(temporary.path().join("home/config.toml"))
+            .expect("the user file is written")
+            .contains("plan")
     );
 }
 
@@ -677,7 +693,7 @@ fn config_fields_read_describes_the_published_surface_and_its_targets() {
     assert_eq!(
         theme["layerValues"],
         json!([
-            {"layer": "selected_toml", "value": "nord"},
+            {"layer": "user_toml", "value": "nord"},
             {"layer": "defaults", "value": "auto"},
         ]),
         "layer values run from the highest priority down to the defaults"
@@ -1396,8 +1412,8 @@ fn skill_paths_is_read_from_the_merged_document() {
     .expect("project fixture");
     assert_eq!(
         listed_skills(&service),
-        vec!["from-project", "skill-creator", "vibe"],
-        "the selected file moves to the trusted project's, and its entry is read"
+        vec!["from-project", "from-user", "skill-creator", "vibe"],
+        "the trusted project's entry is concatenated after the user's"
     );
 }
 

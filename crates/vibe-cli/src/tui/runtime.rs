@@ -453,6 +453,7 @@ pub(in crate::tui) fn interactive_test_runtime_with_trust(
                 )
                 .expect("a known style"),
                 models: Vec::new(),
+                allowed_models: Vec::new(),
                 model: "test-model".to_owned(),
                 api: vibe_core::provider::config::ApiSettings::default(),
                 system_prompt: "test".to_owned(),

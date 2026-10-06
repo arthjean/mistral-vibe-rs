@@ -63,6 +63,10 @@ pub(crate) struct SessionRuntime {
     /// opens, which `PublicSession.model` falls back to when the intent names
     /// none.
     pub(crate) active_model_alias: Option<String>,
+    /// The `displayed_workdir` the configuration sets when the session opens,
+    /// which `PublicSession.cwd` shows in place of the working directory.
+    /// Reference `project_workdir`.
+    pub(crate) displayed_workdir: Option<String>,
     /// The model the session pinned when it first took a turn, or the one
     /// its record stored. Reference `_pin_session_active_model`.
     pub(crate) pinned_model: Option<String>,
@@ -157,6 +161,7 @@ impl SessionRuntime {
             turns: Vec::new(),
             bumped_at: None,
             active_model_alias: None,
+            displayed_workdir: None,
             pinned_model: None,
             event_watermark: 0,
             stats: SessionStats::default(),

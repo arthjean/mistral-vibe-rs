@@ -169,13 +169,32 @@ fn deep_merge_recurses_and_preserves_keys_the_higher_layer_omits() {
 #[test]
 fn replace_lets_the_higher_layer_win_outright() {
     let effective = compose(&[
-        "[project_context]\nenabled = true\nmax_files = 40\n",
-        "[project_context]\nenabled = false\n",
+        "enabled_tools = [\"bash\", \"edit\"]",
+        "enabled_tools = [\"read_file\"]",
+    ])
+    .expect("layers compose");
+    assert_eq!(strings(&effective, "enabled_tools"), ["read_file"]);
+}
+
+#[test]
+fn a_shallow_merge_keeps_the_keys_the_higher_table_omits_and_replaces_the_rest_whole() {
+    let effective = compose(&[
+        "[project_context]\nenabled = true\nmax_files = 40\n\n[project_context.nested]\nkept = 1\n",
+        "[project_context]\nenabled = false\n\n[project_context.nested]\nreplaced = 2\n",
     ])
     .expect("layers compose");
     let context = effective["project_context"].as_table().expect("table");
     assert_eq!(context.get("enabled").and_then(Value::as_bool), Some(false));
-    assert!(context.get("max_files").is_none());
+    assert_eq!(
+        context.get("max_files").and_then(Value::as_integer),
+        Some(40)
+    );
+    let nested = context["nested"].as_table().expect("nested table");
+    assert!(
+        nested.get("kept").is_none(),
+        "a nested table is replaced whole"
+    );
+    assert_eq!(nested.get("replaced").and_then(Value::as_integer), Some(2));
 }
 
 #[test]
@@ -345,11 +364,47 @@ fn an_environment_override_of_the_wrong_type_fails_without_echoing_the_value() {
 }
 
 #[test]
-fn nested_environment_keys_keep_their_local_nesting_behavior() {
-    let nested = environment_table(&BTreeMap::from([(
-        "VIBE_NESTED__WINNER".to_owned(),
-        "\"environment\"".to_owned(),
-    )]))
+fn an_environment_override_reads_as_pydantic_settings_reads_it() {
+    let layer = environment_table(&BTreeMap::from([
+        ("vibe_theme".to_owned(), "nord".to_owned()),
+        ("VIBE_FUTURE_KEY".to_owned(), "1".to_owned()),
+        ("VIBE_HOME".to_owned(), "/tmp/elsewhere".to_owned()),
+        (
+            "VIBE_SESSION_LOGGING__ENABLED".to_owned(),
+            "false".to_owned(),
+        ),
+        (
+            "VIBE_SESSION_LOGGING__SESSION_PREFIX".to_owned(),
+            "123".to_owned(),
+        ),
+        ("VIBE_PROJECT_CONTEXT__MAX_FILES".to_owned(), "7".to_owned()),
+        ("VIBE_TOOLS__BASH__TIMEOUT".to_owned(), "9".to_owned()),
+        (
+            "VIBE_NESTED__WINNER".to_owned(),
+            "\"environment\"".to_owned(),
+        ),
+    ]))
     .expect("environment layer builds");
-    assert_eq!(nested["nested"]["winner"].as_str(), Some("environment"));
+    assert_eq!(
+        layer["theme"].as_str(),
+        Some("nord"),
+        "the prefix ignores case"
+    );
+    for undeclared in ["future_key", "home", "nested"] {
+        assert!(
+            layer.get(undeclared).is_none(),
+            "`{undeclared}` names no field"
+        );
+    }
+    assert_eq!(layer["session_logging"]["enabled"].as_bool(), Some(false));
+    assert_eq!(
+        layer["session_logging"]["session_prefix"].as_str(),
+        Some("123"),
+        "a string setting keeps text that spells a number"
+    );
+    assert!(
+        layer.get("project_context").is_none(),
+        "a key the nested schema does not declare is ignored"
+    );
+    assert_eq!(layer["tools"]["bash"]["timeout"].as_integer(), Some(9));
 }

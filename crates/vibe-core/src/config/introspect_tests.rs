@@ -61,7 +61,7 @@ fn each_field_carries_what_a_settings_screen_renders_it_with() {
             .collect::<Vec<_>>(),
         vec![
             (ConfigLayerKind::Runtime, JsonValue::from("dracula")),
-            (ConfigLayerKind::SelectedToml, JsonValue::from("nord")),
+            (ConfigLayerKind::UserToml, JsonValue::from("nord")),
             (ConfigLayerKind::Defaults, JsonValue::from("auto")),
         ]
     );
@@ -188,7 +188,7 @@ fn the_writable_targets_lead_with_the_selection_and_drop_an_untrusted_project() 
             .describe_fields()
             .expect("trusted surface")
             .targets,
-        vec![ConfigTarget::Project, ConfigTarget::User]
+        vec![ConfigTarget::User, ConfigTarget::Project]
     );
     assert_eq!(
         config.describe_fields().expect("untrusted surface").targets,

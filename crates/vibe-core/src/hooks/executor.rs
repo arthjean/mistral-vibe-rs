@@ -31,7 +31,9 @@ pub(crate) async fn run_hook(hook: &HookConfig, stdin: &[u8], cwd: &Path) -> Hoo
         timed_out: false,
     };
     let mut command = shell_command(&hook.command);
-    command.current_dir(cwd);
+    command
+        .current_dir(cwd)
+        .envs(crate::config::inherited_by_children());
     let (mut child, pipes) = match ChildGroup::spawn(&mut command) {
         Ok(spawned) => spawned,
         Err(error) => return failed(format!("Failed to start: {}", python_os_error(&error, cwd))),

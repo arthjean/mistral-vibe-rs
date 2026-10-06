@@ -846,6 +846,7 @@ impl AppServer {
         session.context_window = self.workspace.context_window();
         session.pricing = self.workspace.active_model_pricing();
         session.active_model_alias = self.workspace.active_model_alias();
+        session.displayed_workdir = self.workspace.displayed_workdir();
         session.compaction = self.workspace.compaction_settings();
         session.hooks = self.workspace.session_hooks(
             Path::new(&session.working_directory),

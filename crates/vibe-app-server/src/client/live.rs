@@ -69,6 +69,9 @@ pub struct LiveDriverConfig {
     /// The models the configuration declares, which a turn's model name is
     /// resolved against for its temperature, thinking level and image support.
     pub models: Vec<ModelConfig>,
+    /// The `allowed_models` patterns, which decide whether the fast utility
+    /// model may run a background completion. Reference `_fast_model_allowed`.
+    pub allowed_models: Vec<String>,
     /// The model a turn that names none runs on.
     pub model: String,
     /// The request timeout and the retry budget, with the three transport
@@ -1334,7 +1337,7 @@ fn title_selection(
         providers: vec![config.provider.clone()],
         models,
         active_alias: Some(config.model.clone()),
-        allowed_models: Vec::new(),
+        allowed_models: config.allowed_models.clone(),
         api: config.api,
     };
     utility::select(&routing, credentials).ok()

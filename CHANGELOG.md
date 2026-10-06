@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+- Compose the user and the project configuration files as two layers, as the
+  reference does: a trusted project file inherits what it leaves unset from
+  the user file, and a write that names no target lands in the user file.
+  Configuration files are written back in the reference's layout, keys in
+  document order and short model entries inline, and model lists keep the
+  order they were declared in.
+
+- Declare `show_greeting`, `allowed_models`, `routed_extra_models` and
+  `vision_model`. `allowed_models` filters the selectable models by glob or
+  `re:` pattern, extra routed models join the model list, a vision model must
+  read images and name a configured provider, and `compaction_model`,
+  `vision_model`, `project_context`, `session_logging` and `experiments`
+  merge key by key across layers.
+
+- Reset an `active_model` that names no configured model to the default with
+  a warning, inject the routed model even on a pinned installation, and
+  impose an organization's compaction threshold on every model.
+
+- Read `VIBE_*` variables as the reference does: the prefix in any case,
+  nested keys only where the schema declares them, and undeclared names
+  ignored. Parse the global `.env` file with python-dotenv's grammar, quoted
+  multi-line values and `${NAME:-default}` expansion included, and pass its
+  variables to the shells, terminals and hooks a session starts.
+
+- Honor `browser_auth_allow_origin_rewrite` on a provider: a sign-in URL from
+  another origin is rehomed onto the configured base, its path still checked.
+  An agent profile can no longer set `vibe_base_url`, `console_base_url` or
+  `vibe_code_sessions_base_url`, and a session reports `displayed_workdir` as
+  its working directory when it is set.
+
 - Load registry skills as the reference does under
   `experimental_enable_registry_skills`. A session start resolves alias pins,
   downloads missing versions and prunes the shared store against the pins

@@ -65,8 +65,16 @@ fn the_walk_finds_the_nearest_project_file_above_the_working_directory() {
         .load()
         .expect("configuration composes");
 
-    assert_eq!(snapshot.selected_target, ConfigTarget::Project);
-    assert_eq!(snapshot.selected_path, project_config(&repository));
+    // The project file composes above the user file, and an implicit write
+    // still lands in the user file, as the reference's resolver routes it.
+    assert_eq!(snapshot.selected_target, ConfigTarget::User);
+    assert_eq!(
+        store(root, &nested)
+            .with_project_trusted(true)
+            .harness_files()
+            .trusted_project_config(),
+        Some(project_config(&repository))
+    );
     assert_eq!(snapshot.effective["active_model"].as_str(), Some("root"));
 
     // A file closer to the working directory wins over the repository root.
@@ -79,8 +87,11 @@ fn the_walk_finds_the_nearest_project_file_above_the_working_directory() {
         .load()
         .expect("configuration composes");
     assert_eq!(
-        snapshot.selected_path,
-        project_config(&repository.join("a"))
+        store(root, &nested)
+            .with_project_trusted(true)
+            .harness_files()
+            .trusted_project_config(),
+        Some(project_config(&repository.join("a")))
     );
     assert_eq!(snapshot.effective["active_model"].as_str(), Some("nearest"));
 }
@@ -154,7 +165,7 @@ fn a_symlinked_working_directory_terminates_the_walk() {
         .load()
         .expect("configuration composes");
 
-    assert_eq!(snapshot.selected_target, ConfigTarget::Project);
+    assert_eq!(snapshot.selected_target, ConfigTarget::User);
     assert_eq!(snapshot.effective["active_model"].as_str(), Some("linked"));
 }
 

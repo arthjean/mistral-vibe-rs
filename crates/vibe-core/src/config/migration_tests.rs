@@ -306,7 +306,7 @@ fn composing_a_configuration_never_rewrites_a_file() {
 }
 
 #[test]
-fn a_trusted_project_file_is_migrated_and_selected() {
+fn a_trusted_project_file_is_migrated_and_composed() {
     let temporary = tempfile::tempdir().expect("temporary root");
     let root = temporary.path();
     let repository = root.join("work");
@@ -318,7 +318,7 @@ fn a_trusted_project_file_is_migrated_and_selected() {
     store.migrate_sources().expect("migrations run");
     let snapshot = store.load().expect("configuration composes");
 
-    assert_eq!(snapshot.selected_target, ConfigTarget::Project);
+    assert_eq!(snapshot.selected_target, ConfigTarget::User);
     assert_eq!(snapshot.disabled_tools(), vec!["read_file", "bash"]);
     assert!(
         fs::read_to_string(&project_path)

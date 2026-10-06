@@ -19,7 +19,7 @@ use document::{
     fingerprint_optional, hex_digest, migrate_file, patch_target_document, persist_models_as_list,
     read_table_optional, validate_table,
 };
-use effective::{finalize_effective, model_order, require_configured_model};
+use effective::{finalize_effective, require_configured_model};
 use environment::environment_table;
 use transaction::{
     ConfigFileLock, ConfigJournal, JournalState, PreparedWrite, cleanup_orphan_sidecars,
@@ -31,6 +31,7 @@ pub mod admin;
 mod document;
 pub mod dotenv;
 mod effective;
+mod encode;
 mod environment;
 pub mod events;
 pub mod experiments_layer;
@@ -45,9 +46,9 @@ pub mod registry;
 mod transaction;
 mod view;
 
-pub use dotenv::{DotenvValues, global_env_file};
+pub use dotenv::{DotenvValues, global_env_file, inherited_by_children};
 pub(crate) use effective::user_home_directory;
-pub use effective::{active_model_alias, default_model_alias};
+pub use effective::{active_model_alias, available_model_aliases, default_model_alias};
 pub use events::{ConfigChangeBus, ConfigChangeEvent, ConfigSubscription};
 pub use experiments_layer::{
     EXPERIMENTS_LAYER_NAME, ExperimentsLayer, PromptResolves, configured_fields,
@@ -63,6 +64,14 @@ const ACTIVE_MODEL_FIELD: &str = "active_model";
 const ROUTED_DEFAULT_MODEL_FIELD: &str = "routed_default_model";
 /// The definition of that alias, carried by the same experiment.
 const ROUTED_MODEL_CONFIG_FIELD: &str = "routed_model_config";
+
+/// The fields an agent profile may never override, sorted. Reference
+/// `PROTECTED_FIELDS` in `vibe/core/config/layers/agent_profile.py`.
+pub const AGENT_PROTECTED_FIELDS: [&str; 3] = [
+    "console_base_url",
+    "vibe_base_url",
+    "vibe_code_sessions_base_url",
+];
 
 const CONFIG_FILE: &str = "config.toml";
 const PROJECT_DIRECTORY: &str = ".vibe";
@@ -116,7 +125,12 @@ pub enum ConfigLayerKind {
     /// above the schema defaults, so a value written in any file an operator
     /// owns beats an assignment.
     Experiments,
-    SelectedToml,
+    /// The user file, `{vibe_home}/config.toml`. Reference `UserConfigLayer`.
+    UserToml,
+    /// The discovered project file, composed only while it is trusted and
+    /// above the user file, so a project inherits every key it leaves unset.
+    /// Reference `ProjectConfigLayer`.
+    ProjectToml,
     Environment,
     Runtime,
     Agent,
@@ -650,8 +664,21 @@ impl LayeredConfig {
         self
     }
 
+    /// Installs the active agent profile's overrides, without the fields that
+    /// route credentials.
+    ///
+    /// Reference `AgentProfileLayer._strip_protected`: the account call sends
+    /// the API key to `console_base_url` and Teleport sends it to
+    /// `vibe_code_sessions_base_url`, so a profile shipped by an untrusted
+    /// checkout could otherwise redirect the key to a host of its choosing.
     #[must_use]
-    pub fn with_agent_overlay(mut self, values: Table) -> Self {
+    ///
+    /// The reference also writes a log line naming what it dropped; this crate
+    /// keeps no log, so the fields are dropped without one.
+    pub fn with_agent_overlay(mut self, mut values: Table) -> Self {
+        for field in AGENT_PROTECTED_FIELDS {
+            values.remove(field);
+        }
         self.agent = values;
         self
     }
@@ -730,20 +757,24 @@ impl LayeredConfig {
         let harness = self.harness_files();
         let user_path = self.paths.user_config();
         let project_path = self.paths.project_config();
-        // The selection is the file the enabled sources resolve to: the
-        // discovered project file while the workspace is trusted, the user file
-        // otherwise, and the in-memory document when neither source answers.
+        let user_enabled = self.sources.contains(&ConfigSource::User);
+        let trusted_project = harness.trusted_project_config();
+        // The selection is the file an implicit write lands in. Reference
+        // `build_default_orchestrator`'s `default_layer_resolver`: the user
+        // file while that source is enabled, since a project file found by
+        // walking up is rarely the scope a write meant, then a trusted project
+        // file, then the in-memory document.
         let (selected_target, selected_path) = harness
             .config_file()
             .unwrap_or((ConfigTarget::Ephemeral, PathBuf::new()));
 
-        let user_values = if self.sources.contains(&ConfigSource::User) {
+        let user_values = if user_enabled {
             read_table_optional(&user_path)?
         } else {
             Table::new()
         };
-        let project_values = match harness.trusted_project_config() {
-            Some(trusted) => read_table_optional(&trusted)?,
+        let project_values = match &trusted_project {
+            Some(trusted) => read_table_optional(trusted)?,
             None => Table::new(),
         };
         let mut target_values = BTreeMap::from([
@@ -753,10 +784,12 @@ impl LayeredConfig {
         if selected_target == ConfigTarget::Ephemeral {
             target_values.insert(ConfigTarget::Ephemeral, self.ephemeral_document()?);
         }
-        let selected = target_values
-            .get(&selected_target)
-            .cloned()
-            .unwrap_or_default();
+        // The in-memory document is written where reference writes reach its
+        // overrides layer, so it composes with the runtime overrides.
+        let mut runtime = self.runtime.clone();
+        if let Some(ephemeral) = target_values.get(&ConfigTarget::Ephemeral) {
+            merge_layer(&mut runtime, ephemeral)?;
+        }
         let environment = environment_table(&self.environment)?;
         let (discovered, discovery_failure) = self.discovered_layer();
         let layers = vec![
@@ -782,8 +815,18 @@ impl LayeredConfig {
                     .clone(),
             },
             ConfigLayer {
-                kind: ConfigLayerKind::SelectedToml,
-                values: selected.clone(),
+                kind: ConfigLayerKind::UserToml,
+                values: target_values
+                    .get(&ConfigTarget::User)
+                    .cloned()
+                    .unwrap_or_default(),
+            },
+            ConfigLayer {
+                kind: ConfigLayerKind::ProjectToml,
+                values: target_values
+                    .get(&ConfigTarget::Project)
+                    .cloned()
+                    .unwrap_or_default(),
             },
             ConfigLayer {
                 kind: ConfigLayerKind::Environment,
@@ -791,7 +834,7 @@ impl LayeredConfig {
             },
             ConfigLayer {
                 kind: ConfigLayerKind::Runtime,
-                values: self.runtime.clone(),
+                values: runtime,
             },
             ConfigLayer {
                 kind: ConfigLayerKind::Agent,
@@ -823,10 +866,17 @@ impl LayeredConfig {
         // that the discovered layer is empty and why, not every item it failed
         // to reach.
         validation_warnings.extend(discovery_failure);
+        // Reference `validate_merged` reads the origin of the global threshold:
+        // the admin layer is the highest, so it is the origin exactly when it
+        // sets the key.
+        let admin_threshold = layers.iter().any(|layer| {
+            layer.kind == ConfigLayerKind::Admin
+                && layer.values.contains_key("auto_compact_threshold")
+        });
         validation_warnings.extend(finalize_effective(
             &mut effective,
             &self.paths.vibe_home,
-            &model_order(&layers),
+            admin_threshold,
         )?);
         if let Some(prompt_id) = effective
             .get(crate::system_prompt::SYSTEM_PROMPT_SETTING)
@@ -852,7 +902,13 @@ impl LayeredConfig {
             // still compares what the caller last saw.
             fingerprints.insert(
                 ConfigTarget::Ephemeral,
-                Some(hex_digest(selected.to_string().as_bytes())),
+                Some(hex_digest(
+                    target_values
+                        .get(&ConfigTarget::Ephemeral)
+                        .map(Table::to_string)
+                        .unwrap_or_default()
+                        .as_bytes(),
+                )),
             );
         }
         let snapshot = ConfigSnapshot {
@@ -929,7 +985,7 @@ impl LayeredConfig {
             let mut table = patch_target_document(&persisted, &write.mutations)?;
             validate_table(&table)?;
             persist_models_as_list(&mut table, &merge::persisted_model_order(&persisted));
-            let encoded = toml::to_string_pretty(&table).map_err(ConfigError::Serialize)?;
+            let encoded = encode::encode_document(&table);
             prepared.push(PreparedWrite::new(path, encoded.into_bytes())?);
         }
 
@@ -1312,6 +1368,8 @@ mod harness_tests;
 #[cfg(test)]
 mod introspect_tests;
 #[cfg(test)]
+mod layers_parity_tests;
+#[cfg(test)]
 mod mcp_parity_tests;
 #[cfg(test)]
 mod mcp_tests;
@@ -1440,6 +1498,12 @@ pub enum ConfigError {
         provider: String,
         active_provider: String,
     },
+    #[error("vision model `{alias}` must set `supports_images = true`")]
+    VisionModelCannotSee { alias: String },
+    #[error(
+        "vision model `{alias}` names provider `{provider}`, which is not configured under `[[providers]]`"
+    )]
+    VisionModelProviderMissing { alias: String, provider: String },
     #[error("`{field}` cannot be resolved to an absolute path")]
     UnresolvablePath { field: &'static str },
 }
@@ -1484,7 +1548,7 @@ winner = "defaults"
     }
 
     #[test]
-    fn precedence_selects_one_toml_and_preserves_unknown_fields() {
+    fn precedence_stacks_both_tomls_and_preserves_unknown_fields() {
         let temporary = tempfile::tempdir().expect("temporary root");
         let mut config = config(temporary.path()).with_project_trusted(true);
         fs::write(
@@ -1509,18 +1573,25 @@ winner = "defaults"
         config.agent = table("active_model = \"agent\"");
 
         let snapshot = config.load().expect("configuration composes");
-        assert_eq!(snapshot.selected_target, ConfigTarget::Project);
+        assert_eq!(snapshot.selected_target, ConfigTarget::User);
         assert_eq!(snapshot.effective["active_model"].as_str(), Some("agent"));
         assert_eq!(snapshot.effective["thinking"].as_str(), Some("low"));
+        // An undeclared name is ignored by the environment layer, as
+        // pydantic-settings ignores it, so the defaults keep the key.
         assert_eq!(
             snapshot.effective["nested"]["winner"].as_str(),
-            Some("environment")
+            Some("defaults")
         );
         assert_eq!(
             snapshot.effective["future"]["unknown"].as_str(),
             Some("kept")
         );
-        assert!(snapshot.effective.get("user_unknown").is_none());
+        // The trusted project composes above the user file, so the user's own
+        // keys survive beneath it.
+        assert_eq!(
+            snapshot.effective["user_unknown"]["future"].as_integer(),
+            Some(1)
+        );
     }
 
     #[test]
@@ -1764,7 +1835,7 @@ disabled_tools = ["selected-search"]
     }
 
     #[test]
-    fn public_views_redact_secrets_and_trust_revocation_switches_persistence() {
+    fn public_views_redact_secrets_and_trust_revocation_drops_the_project_layer() {
         let temporary = tempfile::tempdir().expect("temporary root");
         let config = config(temporary.path()).with_project_trusted(true);
         fs::write(
@@ -1773,7 +1844,7 @@ disabled_tools = ["selected-search"]
         )
         .expect("project fixture");
         let trusted = config.load().expect("trusted project loads");
-        assert_eq!(trusted.selected_target, ConfigTarget::Project);
+        assert_eq!(trusted.selected_target, ConfigTarget::User);
         assert_eq!(trusted.public_view()["config"]["api_key"], "[redacted]");
         assert_eq!(trusted.public_view()["config"]["privateKey"], "[redacted]");
         assert_eq!(trusted.public_view()["config"]["proxy"], "[redacted]");

@@ -566,7 +566,7 @@ fn overlays_preserve_typed_actions_and_render_at_fixed_widths() {
                     "config": {"active_model": "codestral"},
                     "selectedTarget": "user",
                     "layerValues": [{
-                        "layer": "selected_toml",
+                        "layer": "user_toml",
                         "values": {"active_model": "codestral"}
                     }]
                 }),

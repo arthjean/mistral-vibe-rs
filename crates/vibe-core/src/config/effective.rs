@@ -20,13 +20,28 @@ use super::{
     ACTIVE_MODEL_FIELD, ConfigError, ConfigLayer, ROUTED_DEFAULT_MODEL_FIELD,
     ROUTED_MODEL_CONFIG_FIELD, merge, registry,
 };
+use crate::matching::NameFilter;
+
+/// The models an experiment adds to the picker without changing the default.
+const ROUTED_EXTRA_MODELS_FIELD: &str = "routed_extra_models";
+/// The patterns narrowing which configured models may be selected.
+const ALLOWED_MODELS_FIELD: &str = "allowed_models";
+/// The image-capable model that describes images for a blind active model.
+const VISION_MODEL_FIELD: &str = "vision_model";
+/// The model conversations are compacted with.
+const COMPACTION_MODEL_FIELD: &str = "compaction_model";
 
 /// The rules the reference applies once the merged document is validated, in
-/// the order its validators run: the routed model definition is coerced and
+/// the order its validators run: the routed definitions are coerced and
 /// injected, the session log directory is resolved, an emptied model set is
 /// rejected, the global compaction threshold reaches the models that set none,
-/// the routed definition takes the shipped one instead, and an `active_model`
-/// naming nothing configured falls back to the first model.
+/// the routed definitions keep the shipped one instead, an `active_model`
+/// naming nothing configured is unpinned, an `allowed_models` pattern matching
+/// nothing is reported, and the compaction and vision models are checked.
+///
+/// `admin_threshold` says the global compaction threshold came from the
+/// organization's managed layer, which reference `validate_merged` then imposes
+/// on every model, a threshold the model declares itself included.
 ///
 /// Every rule is skipped when the key it governs is absent. A stack composed
 /// without the shipped defaults, which is what a fixture builds, therefore
@@ -35,25 +50,122 @@ use super::{
 pub(super) fn finalize_effective(
     effective: &mut Table,
     vibe_home: &Path,
-    model_order: &[String],
+    admin_threshold: bool,
 ) -> Result<Vec<String>, ConfigError> {
     resolve_session_log_dir(effective, vibe_home, user_home_directory())?;
-    // The reference coerces `routed_model_config` in a `BeforeValidator`, so
-    // the definition is already typed by the time `_inject_routed_model` reads
-    // it, and both run before the model entries are completed.
+    // The reference coerces both routed fields in a `BeforeValidator`, so the
+    // definitions are already typed by the time the injections read them, and
+    // both run before the model entries are completed.
     let mut warnings: Vec<String> = coerce_routed_model_config(effective).into_iter().collect();
-    inject_routed_model(effective);
+    let extra_models = coerce_routed_extra_models(effective);
     require_configured_model(effective)?;
+    inject_routed_model(effective);
+    inject_routed_extra_models(effective, extra_models.as_deref().unwrap_or_default());
     complete_model_entries(effective);
-    complete_compaction_model(effective);
+    complete_model_field(effective, COMPACTION_MODEL_FIELD);
+    complete_model_field(effective, VISION_MODEL_FIELD);
     propagate_auto_compact_threshold(effective);
     complete_routed_threshold(effective);
-    warnings.extend(apply_active_model_fallback(effective, model_order));
+    publish_routed_extra_models(effective, extra_models);
+    warnings.extend(apply_active_model_fallback(effective));
+    warnings.extend(unmatched_allowed_models(effective));
     // The active-model fallback runs first so the provider comparison reads the
     // model the session will actually use, which is the order the reference's
     // validators run in.
     check_compaction_model_provider(effective)?;
+    check_vision_model(effective)?;
+    if admin_threshold {
+        impose_global_threshold(effective);
+    }
     Ok(warnings)
+}
+
+/// Reference `_coerce_routed_extra_models`: the experiments layer carries the
+/// extra models as the JSON text of a list, a file carries them as a list, and
+/// an entry that is not a model is dropped rather than failing the load, so a
+/// malformed rollout payload never stops a session from starting.
+///
+/// The entries come back as written, without the per-entry defaults: they are
+/// injected into `models` first, where the completion every entry goes through
+/// fills them, and published on the field afterwards by
+/// [`publish_routed_extra_models`]. `None` where no layer set the field.
+fn coerce_routed_extra_models(effective: &mut Table) -> Option<Vec<Table>> {
+    let raw = effective.remove(ROUTED_EXTRA_MODELS_FIELD)?;
+    let items = match raw {
+        Value::String(text) => serde_json::from_str::<JsonValue>(&text)
+            .ok()
+            .and_then(|value| value.as_array().cloned())
+            .unwrap_or_default(),
+        Value::Array(entries) => entries
+            .into_iter()
+            .filter_map(|entry| serde_json::to_value(entry).ok())
+            .collect(),
+        _ => Vec::new(),
+    };
+    Some(items.iter().filter_map(validate_model_definition).collect())
+}
+
+/// Publishes the coerced extra models on their own field, each completed as the
+/// reference `ModelConfig` completes it: the field defaults and the shipped
+/// compaction threshold, which the global one never reaches because the field
+/// is not an entry of `models`. A field no layer set stays absent.
+fn publish_routed_extra_models(effective: &mut Table, models: Option<Vec<Table>>) {
+    let Some(models) = models else {
+        return;
+    };
+    let published = models
+        .into_iter()
+        .map(|mut entry| {
+            complete_model_definition(&mut entry);
+            entry
+                .entry("auto_compact_threshold".to_owned())
+                .or_insert(Value::Integer(registry::DEFAULT_AUTO_COMPACT_THRESHOLD));
+            Value::Table(entry)
+        })
+        .collect();
+    effective.insert(
+        ROUTED_EXTRA_MODELS_FIELD.to_owned(),
+        Value::Array(published),
+    );
+}
+
+/// Reference `_inject_routed_extra_models`: each extra model joins `models`
+/// under its alias without touching the resolved default. An entry without an
+/// alias is skipped, since the empty alias is the unpinned sentinel and would
+/// otherwise hijack the default, and an entry the operator already defines
+/// keeps every key the operator wrote.
+fn inject_routed_extra_models(effective: &mut Table, extra: &[Table]) {
+    let Some(models) = effective
+        .get_mut(merge::MODELS_FIELD)
+        .and_then(Value::as_table_mut)
+    else {
+        return;
+    };
+    for entry in extra {
+        let Some(alias) = entry
+            .get("alias")
+            .and_then(Value::as_str)
+            .filter(|alias| !alias.is_empty())
+            .map(ToOwned::to_owned)
+        else {
+            continue;
+        };
+        let injected = overridden_by(entry, models.get(&alias).and_then(Value::as_table));
+        models.insert(alias, Value::Table(injected));
+    }
+}
+
+/// A routed definition with the keys an operator wrote for the same alias laid
+/// over it, which is how the reference copies a `ModelConfig` with the fields
+/// the operator's entry set.
+fn overridden_by(routed: &Table, existing: Option<&Table>) -> Table {
+    let mut injected = routed.clone();
+    if let Some(existing) = existing {
+        for (key, value) in existing {
+            injected.insert(key.clone(), value.clone());
+        }
+    }
+    injected
 }
 
 /// Reference `_coerce_routed_model_config`: the experiments layer carries the
@@ -252,20 +364,12 @@ fn as_flag(value: &JsonValue) -> Option<bool> {
     }
 }
 
-/// Reference `_inject_routed_model`: an unpinned installation whose experiment
-/// routed it onto an alias the configuration does not declare gets the
-/// definition the same experiment supplied.
-///
-/// A pinned `active_model` skips the injection outright, because the routed
-/// alias can never be selected for that installation.
+/// Reference `_inject_routed_model`: the alias an experiment routed the
+/// installation onto joins `models` with the definition the same experiment
+/// supplied, and an entry the operator already defines for that alias keeps
+/// every key the operator wrote. A pinned installation gets the entry too: it
+/// stays selectable from the picker even though it is not the default.
 fn inject_routed_model(effective: &mut Table) {
-    if effective
-        .get(ACTIVE_MODEL_FIELD)
-        .and_then(Value::as_str)
-        .is_some_and(|alias| alias != registry::UNPINNED_ACTIVE_MODEL)
-    {
-        return;
-    }
     let Some(alias) = effective
         .get(ROUTED_DEFAULT_MODEL_FIELD)
         .and_then(Value::as_str)
@@ -288,44 +392,93 @@ fn inject_routed_model(effective: &mut Table) {
     else {
         return;
     };
-    if models.contains_key(&alias) {
-        return;
-    }
-    models.insert(alias, Value::Table(entry));
+    let injected = overridden_by(&entry, models.get(&alias).and_then(Value::as_table));
+    models.insert(alias, Value::Table(injected));
 }
 
-/// Reference `resolve_default_model_alias`: the routed alias when it names a
-/// configured model, the shipped default alias when that one is configured, and
-/// the first configured model otherwise.
+/// Reference `available_models`: the configured models `allowed_models`
+/// admits, in the order they are configured. An empty list admits every model,
+/// and so does a list that admits none, which the load reports as a warning
+/// rather than leaving no model to select.
+#[must_use]
+pub fn available_model_aliases(effective: &Table) -> Vec<&str> {
+    let Some(models) = effective.get(merge::MODELS_FIELD).and_then(Value::as_table) else {
+        return Vec::new();
+    };
+    let every = models.keys().map(String::as_str).collect::<Vec<_>>();
+    let patterns = allowed_model_patterns(effective);
+    if patterns.is_empty() {
+        return every;
+    }
+    let filter = NameFilter::new(&patterns);
+    let allowed = every
+        .iter()
+        .copied()
+        .filter(|alias| filter.matches(alias))
+        .collect::<Vec<_>>();
+    if allowed.is_empty() { every } else { allowed }
+}
+
+/// The `allowed_models` entries, blank ones included: the filter skips them.
+fn allowed_model_patterns(effective: &Table) -> Vec<String> {
+    effective
+        .get(ALLOWED_MODELS_FIELD)
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .map(str::to_owned)
+        .collect()
+}
+
+/// Reference `resolve_default_model_alias`: the routed alias when it names an
+/// available model, the shipped default alias when that one is available or
+/// nothing is, and the first available model otherwise.
 #[must_use]
 pub fn default_model_alias(effective: &Table) -> Option<&str> {
     let models = effective.get(merge::MODELS_FIELD)?.as_table()?;
+    let available = available_model_aliases(effective);
     let routed = effective
         .get(ROUTED_DEFAULT_MODEL_FIELD)
         .and_then(Value::as_str)
-        .filter(|alias| !alias.is_empty() && models.contains_key(*alias));
+        .filter(|alias| !alias.is_empty() && available.contains(alias));
     routed
         .or_else(|| {
-            models
-                .contains_key(registry::DEFAULT_ACTIVE_MODEL_ALIAS)
+            (available.contains(&registry::DEFAULT_ACTIVE_MODEL_ALIAS) || available.is_empty())
                 .then_some(registry::DEFAULT_ACTIVE_MODEL_ALIAS)
+                .filter(|alias| models.contains_key(*alias))
         })
-        .or_else(|| models.keys().next().map(String::as_str))
+        .or_else(|| available.first().copied())
 }
 
-/// Reference `get_active_model`'s alias step: the pinned alias, or the resolved
-/// default when the operator pinned nothing.
+/// Reference `get_active_model`'s alias step: the pinned alias while
+/// `allowed_models` admits it, or the resolved default when the operator
+/// pinned nothing or pinned a model the list excludes. A pin naming no
+/// configured model resolves to nothing, where the reference raises; the load
+/// unpins such a pin, so only a table built by hand reaches that branch.
 ///
 /// Every reader of the active model goes through this rather than through
 /// `active_model` itself, because the merged document carries the reference's
 /// unpinned sentinel where an installation was never pinned.
 #[must_use]
 pub fn active_model_alias(effective: &Table) -> Option<&str> {
-    effective
+    let pinned = effective
         .get(ACTIVE_MODEL_FIELD)
         .and_then(Value::as_str)
-        .filter(|alias| *alias != registry::UNPINNED_ACTIVE_MODEL)
-        .or_else(|| default_model_alias(effective))
+        .filter(|alias| *alias != registry::UNPINNED_ACTIVE_MODEL);
+    if let Some(alias) = pinned {
+        let configured = effective
+            .get(merge::MODELS_FIELD)
+            .and_then(Value::as_table)
+            .is_some_and(|models| models.contains_key(alias));
+        if !configured {
+            return None;
+        }
+        if available_model_aliases(effective).contains(&alias) {
+            return Some(alias);
+        }
+    }
+    default_model_alias(effective)
 }
 
 /// Reference `_check_compaction_model_provider`: a configured compaction model
@@ -431,14 +584,16 @@ fn complete_model_entries(effective: &mut Table) {
     }
 }
 
-/// Fills the compaction model the same way, and borrows its alias from its name
-/// where it declares none.
+/// Fills a model field the same way, and borrows its alias from its name where
+/// it declares none.
 ///
 /// Reference `_default_alias_to_name`, bound to `ModelConfig`, which is what
-/// `compaction_model` is typed as: a `[compaction_model]` table carrying a name
-/// and a provider is published with an alias, the `ModelConfig` field defaults
-/// and the global compaction threshold, exactly as an entry of `models` is.
-fn complete_compaction_model(effective: &mut Table) {
+/// `compaction_model` and `vision_model` are typed as: a table carrying a name
+/// and a provider is published with an alias and the `ModelConfig` field
+/// defaults. The global compaction threshold stays out: the reference
+/// propagates it to the entries of `models` only, so a model field keeps the
+/// `ModelConfig` default it was declared with.
+fn complete_model_field(effective: &mut Table, field: &str) {
     // Unreachable in a passing suite: `registry_tests` parses the literal.
     let Some(defaults) = serde_json::from_str::<JsonValue>(registry::MODEL_DEFAULTS)
         .ok()
@@ -447,13 +602,7 @@ fn complete_compaction_model(effective: &mut Table) {
     else {
         return;
     };
-    let global = effective
-        .get("auto_compact_threshold")
-        .and_then(Value::as_integer);
-    let Some(compaction) = effective
-        .get_mut("compaction_model")
-        .and_then(Value::as_table_mut)
-    else {
+    let Some(compaction) = effective.get_mut(field).and_then(Value::as_table_mut) else {
         return;
     };
     if !compaction.contains_key("alias")
@@ -467,11 +616,9 @@ fn complete_compaction_model(effective: &mut Table) {
             .entry(key.clone())
             .or_insert_with(|| value.clone());
     }
-    if let Some(global) = global {
-        compaction
-            .entry("auto_compact_threshold".to_owned())
-            .or_insert(Value::Integer(global));
-    }
+    compaction
+        .entry("auto_compact_threshold".to_owned())
+        .or_insert(Value::Integer(registry::DEFAULT_AUTO_COMPACT_THRESHOLD));
 }
 
 /// Reference `SessionLoggingConfig`: an unset directory falls back to the vibe
@@ -589,19 +736,17 @@ fn propagate_auto_compact_threshold(effective: &mut Table) {
 }
 
 /// Reference `_apply_active_model_fallback`: an `active_model` naming nothing
-/// configured selects the first configured model and records a warning instead
-/// of failing the load.
+/// configured is unpinned and a warning names the model the installation now
+/// resolves to, instead of failing the load.
 ///
-/// The unpinned sentinel names nothing on purpose and is left alone, exactly as
-/// the reference guard leaves it: it is resolved by [`active_model_alias`] when
-/// the alias is read, never by rewriting the document.
-fn apply_active_model_fallback(effective: &mut Table, model_order: &[String]) -> Option<String> {
+/// The document is rewritten to the unpinned sentinel rather than to that
+/// model, so a routed default still selects the model on read and the view
+/// reports the installation as unpinned. The sentinel itself names nothing on
+/// purpose and is left alone.
+fn apply_active_model_fallback(effective: &mut Table) -> Option<String> {
     let models = effective
         .get(merge::MODELS_FIELD)
         .and_then(Value::as_table)?;
-    if models.is_empty() {
-        return None;
-    }
     let active = effective
         .get(ACTIVE_MODEL_FIELD)
         .and_then(Value::as_str)
@@ -610,15 +755,84 @@ fn apply_active_model_fallback(effective: &mut Table, model_order: &[String]) ->
         return None;
     }
     let unknown = active.to_owned();
-    let fallback = model_order
-        .iter()
-        .find(|alias| models.contains_key(alias.as_str()))
-        .cloned()
-        .or_else(|| models.keys().next().cloned())?;
-    effective.insert("active_model".to_owned(), Value::String(fallback.clone()));
+    let fallback = default_model_alias(effective)
+        .unwrap_or(registry::DEFAULT_ACTIVE_MODEL_ALIAS)
+        .to_owned();
+    effective.insert(
+        ACTIVE_MODEL_FIELD.to_owned(),
+        Value::String(registry::UNPINNED_ACTIVE_MODEL.to_owned()),
+    );
     Some(format!(
-        "Active model `{unknown}` is not configured; falling back to `{fallback}`."
+        "Active model `{unknown}` is not configured; using the default model `{fallback}`."
     ))
+}
+
+/// Reference `_warn_unmatched_allowed_models`: one warning per non-blank
+/// `allowed_models` pattern that admits no configured model, in list order.
+fn unmatched_allowed_models(effective: &Table) -> Vec<String> {
+    let Some(models) = effective.get(merge::MODELS_FIELD).and_then(Value::as_table) else {
+        return Vec::new();
+    };
+    allowed_model_patterns(effective)
+        .into_iter()
+        .filter(|pattern| !pattern.trim().is_empty())
+        .filter(|pattern| {
+            let filter = NameFilter::new(std::slice::from_ref(pattern));
+            !models.keys().any(|alias| filter.matches(alias))
+        })
+        .map(|pattern| format!("Allowed model `{pattern}` matches no configured model."))
+        .collect()
+}
+
+/// Reference `_check_vision_model`: a configured vision model must be able to
+/// see images and must name a provider the configuration declares. Unlike the
+/// compaction model it may cross providers, since describing an image is a
+/// completion of its own.
+fn check_vision_model(effective: &Table) -> Result<(), ConfigError> {
+    let Some(vision) = effective.get(VISION_MODEL_FIELD).and_then(Value::as_table) else {
+        return Ok(());
+    };
+    let alias = vision
+        .get("alias")
+        .or_else(|| vision.get("name"))
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    if vision.get("supports_images").and_then(Value::as_bool) != Some(true) {
+        return Err(ConfigError::VisionModelCannotSee { alias });
+    }
+    let provider = vision
+        .get("provider")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    if !declares_provider(effective, &provider) {
+        return Err(ConfigError::VisionModelProviderMissing { alias, provider });
+    }
+    Ok(())
+}
+
+/// Reference `VibeConfigSchema.validate_merged`: a compaction threshold the
+/// organization's managed layer sets is imposed on every model, overriding the
+/// threshold a model declares for itself.
+fn impose_global_threshold(effective: &mut Table) {
+    let Some(global) = effective
+        .get("auto_compact_threshold")
+        .and_then(Value::as_integer)
+    else {
+        return;
+    };
+    let Some(models) = effective
+        .get_mut(merge::MODELS_FIELD)
+        .and_then(Value::as_table_mut)
+    else {
+        return;
+    };
+    for (_, entry) in models.iter_mut() {
+        if let Some(model) = entry.as_table_mut() {
+            model.insert("auto_compact_threshold".to_owned(), Value::Integer(global));
+        }
+    }
 }
 
 /// The aliases in the order the layers declare them, lowest layer first.

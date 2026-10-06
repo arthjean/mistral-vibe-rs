@@ -34,6 +34,7 @@ pub(super) fn merge_layer(target: &mut Table, overlay: &Table) -> Result<(), Con
             }
             MergeStrategy::Concat => merge_concat(target, key, value)?,
             MergeStrategy::Union => merge_union(target, key, value)?,
+            MergeStrategy::Merge => merge_shallow(target, key, value)?,
             MergeStrategy::DeepMerge => merge_deep(target, key, value)?,
         }
     }
@@ -283,6 +284,27 @@ fn union_identity(field: &str, entry: &Value) -> Result<String, ConfigError> {
             field: field.to_owned(),
             merge_key: merge_key.to_owned(),
         })
+}
+
+/// Reference `MergeStrategy._merge`: the higher table's keys win whole, nested
+/// tables and lists included, and the keys it omits survive from below.
+fn merge_shallow(target: &mut Table, key: &str, value: &Value) -> Result<(), ConfigError> {
+    match (target.get_mut(key), value) {
+        (Some(Value::Table(existing)), Value::Table(overlay)) => {
+            for (name, entry) in overlay {
+                existing.insert(name.clone(), entry.clone());
+            }
+            Ok(())
+        }
+        (Some(_), _) => Err(ConfigError::MergeType {
+            field: key.to_owned(),
+            strategy: MergeStrategy::Merge.as_str(),
+        }),
+        (None, _) => {
+            target.insert(key.to_owned(), value.clone());
+            Ok(())
+        }
+    }
 }
 
 fn merge_deep(target: &mut Table, key: &str, value: &Value) -> Result<(), ConfigError> {

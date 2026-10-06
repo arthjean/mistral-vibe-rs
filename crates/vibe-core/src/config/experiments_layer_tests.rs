@@ -331,8 +331,8 @@ fn a_routing_assignment_selects_the_model_only_for_an_unpinned_operator() {
     assert_eq!(pinned.active_model_alias(), Some("mistral-medium-3.5"));
     assert_eq!(
         default_model_alias(&pinned.effective),
-        Some("mistral-medium-3.5"),
-        "the routed alias is still resolvable, it is simply not selected"
+        Some("routed"),
+        "the routed alias is still the default, it is simply not selected"
     );
 }
 

@@ -125,7 +125,7 @@ pub(super) fn migrate_file(path: &Path) -> Result<Option<String>, ConfigError> {
         return Ok(None);
     }
     persist_models_as_list(&mut document, &merge::persisted_model_order(&persisted));
-    let encoded = toml::to_string_pretty(&document).map_err(ConfigError::Serialize)?;
+    let encoded = super::encode::encode_document(&document);
     match write_atomically(path, "config", encoded.as_bytes()) {
         Ok(()) => Ok(None),
         // The original file is untouched: the encoded document never replaced

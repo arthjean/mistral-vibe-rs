@@ -40,13 +40,18 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 DEFAULT_OUTPUT = Path("crates/vibe-core/tests/config-surface/corpus.json")
 #: The strategies the reference vocabulary declares but no field adopts. The
 #: census asserts this stays true. v2.25.5 gave four fields ``WithShallowMerge``
 #: (``merge``) and v2.25.7 a fifth, so only ``conflict`` is left
 #: (``vibe/core/config/vibe_schema.py:346``, ``:347``, ``:618``, ``:621``,
 #: ``:624``).
+#:
+#: Schema version 5 adds the shallow-merge, allowlist, routed and vision
+#: scenarios, the layer stack and its writes, the environment layer, the agent
+#: profile layer, the global dotenv file and the browser sign-in origin
+#: rewrite.
 UNREACHABLE_STRATEGIES = ("conflict",)
 INTERPRETER_VARIABLE = "VIBE_PARITY_PYTHON"
 #: Stands in for the machine-dependent vibe home in the captured default
@@ -420,6 +425,64 @@ disabled_tools = []
             ("user", 'disabled_tools = ["bash"]\n'),
             ("also-empty", ""),
             ("project", 'disabled_tools = ["edit"]\n'),
+        ],
+    },
+    {
+        "name": "merge-session-logging-keeps-the-keys-a-higher-table-omits",
+        "layers": [
+            ("user", '[session_logging]\nenabled = false\nsession_prefix = "lower"\n'),
+            ("project", '[session_logging]\nsession_prefix = "higher"\n'),
+        ],
+    },
+    {
+        "name": "merge-compaction-model-key-by-key",
+        "layers": [
+            ("defaults", '[[providers]]\nname = "mistral"\napi_base = "https://api.example.test/v1"\n'),
+            (
+                "user",
+                '[compaction_model]\nname = "devstral-small-latest"\nprovider = "mistral"\ntemperature = 0.3\n',
+            ),
+            ("project", "[compaction_model]\ntemperature = 0.9\n"),
+        ],
+    },
+    {
+        "name": "merge-vision-model-key-by-key",
+        "layers": [
+            ("defaults", '[[providers]]\nname = "mistral"\napi_base = "https://api.example.test/v1"\n'),
+            (
+                "user",
+                '[vision_model]\nname = "pixtral-large-latest"\nprovider = "mistral"\nsupports_images = true\n',
+            ),
+            ("project", '[vision_model]\nalias = "seer"\n'),
+        ],
+    },
+    {
+        "name": "merge-experiments-key-by-key",
+        "layers": [
+            ("defaults", '[experiments]\nenable = true\napi_host = "https://lower.example.test/"\n'),
+            ("user", "[experiments]\nenable = false\n"),
+        ],
+    },
+    {
+        "name": "merge-replaces-a-nested-value-whole",
+        "layers": [
+            ("user", '[experiments]\nenable = true\nclient_key = "lower"\n'),
+            ("project", '[experiments]\nclient_key = "higher"\n'),
+            ("overrides", "[experiments]\nenable = false\n"),
+        ],
+    },
+    {
+        "name": "replace-allowed-models",
+        "layers": [
+            ("user", 'allowed_models = ["mistral-*", "local"]\n'),
+            ("project", 'allowed_models = ["re:^devstral.*"]\n'),
+        ],
+    },
+    {
+        "name": "replace-show-greeting",
+        "layers": [
+            ("defaults", "show_greeting = true\n"),
+            ("user", "show_greeting = false\n"),
         ],
     },
     {
@@ -894,6 +957,418 @@ def capture_mcp(reference: Path) -> dict[str, Any]:
 
 
 # --------------------------------------------------------------------------
+# Layer stack scenarios
+# --------------------------------------------------------------------------
+
+#: Stands in for the per-scenario temporary root in recorded values.
+ROOT_PLACEHOLDER = "{root}"
+
+#: Whole homes and checkouts composed through the reference's own
+#: `build_default_orchestrator`: the user file under the vibe home, project
+#: files under directories of the root, the folders the trust store trusts, the
+#: working directory, and implicit writes made afterwards. Every document is
+#: authored for this corpus.
+STACK_SCENARIOS: list[dict[str, Any]] = [
+    {
+        "name": "stack-user-file-alone",
+        "user": 'theme = "nord"\ndisabled_tools = ["bash"]\n',
+        "projects": {},
+        "trusted": [],
+        "cwd": "work",
+    },
+    {
+        "name": "stack-trusted-project-inherits-the-user-file",
+        "user": 'theme = "nord"\ndefault_agent = "plan"\ndisabled_tools = ["bash"]\n\n[session_logging]\nenabled = false\nsession_prefix = "user"\n',
+        "projects": {
+            "work": 'theme = "dracula"\ndisabled_tools = ["edit"]\n\n[session_logging]\nsession_prefix = "project"\n'
+        },
+        "trusted": ["work"],
+        "cwd": "work",
+    },
+    {
+        "name": "stack-untrusted-project-is-ignored",
+        "user": 'theme = "nord"\n',
+        "projects": {"work": 'theme = "dracula"\n'},
+        "trusted": [],
+        "cwd": "work",
+    },
+    {
+        "name": "stack-project-found-above-the-working-directory",
+        "user": 'theme = "nord"\n',
+        "projects": {"work": 'theme = "gruvbox"\n'},
+        "trusted": ["work"],
+        "cwd": "work/a/b",
+    },
+    {
+        "name": "stack-nearest-project-file-wins",
+        "user": 'theme = "nord"\n',
+        "projects": {"work": 'theme = "gruvbox"\n', "work/a": 'theme = "monokai"\n'},
+        "trusted": ["work"],
+        "cwd": "work/a/b",
+    },
+    {
+        "name": "stack-project-without-a-user-file",
+        "user": None,
+        "projects": {"work": 'theme = "dracula"\ndisabled_tools = ["edit"]\n'},
+        "trusted": ["work"],
+        "cwd": "work",
+    },
+]
+
+#: Implicit writes made through the reference orchestrator after the stack
+#: loads, each recording every file afterwards. A trusted project file sits
+#: beside the user file, so the routing is observable.
+WRITE_SCENARIOS: list[dict[str, Any]] = [
+    {
+        "name": "write-implicit-goes-to-the-user-file",
+        "user": 'theme = "nord"\n',
+        "projects": {"work": 'theme = "dracula"\n'},
+        "trusted": ["work"],
+        "cwd": "work",
+        "writes": [{"path": "default_agent", "value": "plan"}],
+    },
+    {
+        "name": "write-creates-the-user-file",
+        "user": None,
+        "projects": {"work": 'theme = "dracula"\n'},
+        "trusted": ["work"],
+        "cwd": "work",
+        "writes": [{"path": "theme", "value": "nord"}],
+    },
+    {
+        "name": "write-keeps-the-file-order-and-appends-new-keys",
+        "user": 'theme = "nord"\nauto_compact_threshold = 90000\ndisabled_tools = ["bash", "edit"]\n\n[session_logging]\nenabled = false\n\n[tools.bash]\ntimeout = 30\n',
+        "projects": {},
+        "trusted": [],
+        "cwd": "work",
+        "writes": [
+            {"path": "active_model", "value": "local"},
+            {"path": "theme", "value": "dracula"},
+        ],
+    },
+]
+
+
+def _stack_root_layout(root: Path, scenario: dict[str, Any]) -> tuple[Path, Path]:
+    home = root / ".vibe"
+    home.mkdir(parents=True)
+    if scenario["user"] is not None:
+        (home / "config.toml").write_text(scenario["user"], encoding="utf-8")
+    for directory, document in scenario["projects"].items():
+        target = root / directory / ".vibe"
+        target.mkdir(parents=True, exist_ok=True)
+        (target / "config.toml").write_text(document, encoding="utf-8")
+    cwd = root / scenario["cwd"]
+    cwd.mkdir(parents=True, exist_ok=True)
+    return home, cwd
+
+
+def _files_under(root: Path) -> dict[str, str]:
+    files: dict[str, str] = {}
+    for path in sorted(root.rglob("config.toml")):
+        files[path.relative_to(root).as_posix()] = path.read_text(encoding="utf-8")
+    return files
+
+
+def _placeholder_root(value: Any, root: Path) -> Any:
+    if isinstance(value, str):
+        return value.replace(str(root), ROOT_PLACEHOLDER)
+    if isinstance(value, dict):
+        return {key: _placeholder_root(entry, root) for key, entry in value.items()}
+    if isinstance(value, list):
+        return [_placeholder_root(entry, root) for entry in value]
+    return value
+
+
+async def _stack_capture(scenario: dict[str, Any]) -> dict[str, Any]:
+    import tempfile
+
+    from vibe.core.config.default_orchestrator import build_default_orchestrator
+    from vibe.core.config.harness_files import HarnessFilesManager
+    from vibe.core.trusted_folders import TrustedFoldersManager
+
+    saved = dict(os.environ)
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory).resolve()
+        try:
+            home, cwd = _stack_root_layout(root, scenario)
+            os.environ.clear()
+            os.environ.update(_scrubbed_environment_from(saved))
+            os.environ["VIBE_HOME"] = str(home)
+            store = TrustedFoldersManager()
+            for trusted in scenario["trusted"]:
+                store.add_trusted(root / trusted)
+            manager = HarnessFilesManager(
+                sources=("user", "project"), cwd=cwd, trust_store=store
+            )
+            orchestrator = await build_default_orchestrator(harness_files=manager)
+            keys = sorted({
+                key
+                for document in [scenario["user"], *scenario["projects"].values()]
+                if document
+                for key in tomllib.loads(document)
+            } | {write["path"] for write in scenario.get("writes", [])})
+            dumped = orchestrator.config.model_dump(mode="json")
+            captured: dict[str, Any] = {
+                "effective": {key: dumped.get(key) for key in keys},
+                "writableLayer": orchestrator.writable_layer_name,
+            }
+            for write in scenario.get("writes", []):
+                failures = await orchestrator.set_field("/" + write["path"], write["value"])
+                if failures:
+                    raise OracleError(f"{scenario['name']}: a write failed")
+            if "writes" in scenario:
+                captured["files"] = _files_under(root)
+                dumped = orchestrator.config.model_dump(mode="json")
+                captured["afterWrites"] = {key: dumped.get(key) for key in keys}
+            return _placeholder_root(captured, root)
+        finally:
+            os.environ.clear()
+            os.environ.update(saved)
+
+
+def _scrubbed_environment_from(environment: dict[str, str]) -> dict[str, str]:
+    """`environment` without any `VIBE_` variable, so a variable the capturing
+    shell exported cannot reach the environment layer."""
+    return {
+        key: value
+        for key, value in environment.items()
+        if not key.upper().startswith("VIBE_")
+    }
+
+
+def capture_stack(reference: Path) -> dict[str, list[dict[str, Any]]]:
+    sys.path.insert(0, str(reference))
+
+    async def run(scenarios: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        captured = []
+        for scenario in scenarios:
+            captured.append({**scenario, **(await _stack_capture(scenario))})
+        return captured
+
+    return {
+        "stacks": asyncio.run(run(STACK_SCENARIOS)),
+        "writes": asyncio.run(run(WRITE_SCENARIOS)),
+    }
+
+
+# --------------------------------------------------------------------------
+# Environment, agent profile, dotenv and sign-in rewrite scenarios
+# --------------------------------------------------------------------------
+
+#: `VIBE_*` variables read by the reference's own `EnvironmentLayer`, one set
+#: per case. Every name and value is authored for this corpus.
+ENVIRONMENT_SCENARIOS: list[dict[str, Any]] = [
+    {"name": "env-typed-scalars", "variables": {
+        "VIBE_ENABLE_TELEMETRY": "false",
+        "VIBE_THEME": "1",
+        "VIBE_AUTO_COMPACT_THRESHOLD": "90000",
+        "VIBE_API_TIMEOUT": "12.5",
+        "VIBE_DISPLAYED_WORKDIR": "",
+    }},
+    {"name": "env-json-list", "variables": {"VIBE_DISABLED_TOOLS": '["bash", "edit"]'}},
+    {"name": "env-prefix-ignores-case", "variables": {
+        "vibe_theme": "nord",
+        "Vibe_Default_Agent": "plan",
+    }},
+    {"name": "env-undeclared-names-are-ignored", "variables": {
+        "VIBE_FUTURE_KEY": "1",
+        "VIBE_HOME_ELSEWHERE": "/nowhere",
+        "VIBE_NESTED__WINNER": "environment",
+    }},
+    {"name": "env-nested-declared-keys", "variables": {
+        "VIBE_SESSION_LOGGING__ENABLED": "false",
+        "VIBE_SESSION_LOGGING__SESSION_PREFIX": "123",
+        "VIBE_TOOLS__BASH__TIMEOUT": "9",
+    }},
+    {"name": "env-nested-undeclared-key-is-dropped", "variables": {
+        "VIBE_PROJECT_CONTEXT__MAX_FILES": "7",
+    }},
+    {"name": "env-boolean-vocabulary", "variables": {
+        "VIBE_ENABLE_OTEL": "yes",
+        "VIBE_ENABLE_NOTIFICATIONS": "0",
+        "VIBE_AUTOCOPY_TO_CLIPBOARD": "Off",
+    }},
+]
+
+#: Overrides an agent profile carries, read by the reference's own
+#: `AgentProfileLayer`.
+AGENT_PROFILE_SCENARIOS: list[dict[str, Any]] = [
+    {"name": "profile-plain-overrides", "overrides": {"active_model": "local", "disabled_tools": ["bash"]}},
+    {"name": "profile-protected-fields-are-stripped", "overrides": {
+        "theme": "nord",
+        "vibe_base_url": "https://attacker.example.test",
+        "console_base_url": "https://attacker.example.test",
+        "vibe_code_sessions_base_url": "https://attacker.example.test",
+    }},
+]
+
+#: Global dotenv files read by the reference's own `load_dotenv_values` into a
+#: seeded environment. Names are unique to this corpus so the capturing
+#: process environment cannot answer an expansion.
+DOTENV_SCENARIOS: list[dict[str, Any]] = [
+    {
+        "name": "dotenv-python-dotenv-grammar",
+        "file": (
+            "# a comment\n"
+            "VIBE_PARITY_DOTENV_A=one # trailing\n"
+            'VIBE_PARITY_DOTENV_B="two\nlines"\n'
+            "VIBE_PARITY_DOTENV_C=${VIBE_PARITY_DOTENV_A}-x\n"
+            "export VIBE_PARITY_DOTENV_D = spaced\n"
+            "VIBE_PARITY_DOTENV_E\n"
+            "VIBE_PARITY_DOTENV_F='lit ${VIBE_PARITY_DOTENV_A}'\n"
+            'VIBE_PARITY_DOTENV_G="esc \\t tab \\" quote"\n'
+            "VIBE_PARITY_DOTENV_H=${VIBE_PARITY_DOTENV_UNSET:-fallback}\n"
+            "VIBE_PARITY_DOTENV_I=a#not-a-comment\n"
+            "'VIBE_PARITY_DOTENV_J'=quoted key\n"
+            "malformed line without a separator\n"
+            "VIBE_PARITY_DOTENV_K=\n"
+            "VIBE_PARITY_DOTENV_A=redefined\n"
+        ),
+        "environ": {},
+    },
+    {
+        "name": "dotenv-a-non-empty-process-value-wins",
+        "file": (
+            "VIBE_PARITY_DOTENV_SET=from-file\n"
+            "VIBE_PARITY_DOTENV_EMPTY=from-file\n"
+            "VIBE_PARITY_DOTENV_NEW=from-file\n"
+        ),
+        "environ": {"VIBE_PARITY_DOTENV_SET": "from-process", "VIBE_PARITY_DOTENV_EMPTY": ""},
+    },
+]
+
+#: Server-supplied URLs checked against a configured base with the origin
+#: rewrite on, as `browser_auth_allow_origin_rewrite` asks.
+ORIGIN_REWRITE_CASES: list[tuple[str, str]] = [
+    ("https://console.example/api/vibe/sign-in/1?state=x#frag", "https://connector.internal:8443/api"),
+    ("https://connector.internal:8443/api/poll", "https://connector.internal:8443/api"),
+    ("http://console.example:9000/api/poll", "https://connector.internal/api"),
+    ("https://console.example/elsewhere", "https://connector.internal:8443/api"),
+    ("https://console.example/api/../elsewhere", "https://connector.internal/api"),
+    ("https://user:secret@console.example/api/x", "https://connector.internal/api"),
+    ("not a url", "https://connector.internal/api"),
+]
+
+
+#: Documents the reference writes back through `tomli_w`, as
+#: `_write_toml_snapshot` does with its default options. Each is authored for
+#: this corpus to reach one layout rule.
+ENCODING_CASES: list[str] = [
+    "",
+    'theme = "nord"\nauto_compact_threshold = 90000\nenable_telemetry = false\n',
+    'disabled_tools = ["bash", "edit"]\nenabled_tools = []\n',
+    "[session_logging]\nenabled = false\n",
+    "[tools.bash]\ntimeout = 30\n\n[tools.edit]\nmax = 2\n",
+    "[project_context]\n",
+    'nested = [[1, 2], ["a"]]\n',
+    'mixed = [1, "two", { three = 3 }]\n',
+    '[[models]]\nname = "local"\nprovider = "llamacpp"\nalias = "local"\n\n[[models]]\nname = "other"\nprovider = "mistral"\n',
+    '[[models]]\nname = "a-model-with-a-name-long-enough"\nprovider = "a-provider-long-enough"\nalias = "an-alias-long-enough-to-overflow"\n',
+    '[[mcp_servers]]\nname = "server"\ntransport = "stdio"\nargs = ["--flag"]\n',
+    'empty_table = {}\nlist_of_empty = [{}]\n',
+    '"key with space" = 1\n"dotted.key" = 2\n"" = 3\n"é" = 4\n',
+    'text = "quote \\" backslash \\\\ tab \\t newline \\n bell \\u0007 del \\u007f é"\n',
+    "floats = [0.7, 1.0, 200000.0, 1e16, 1.5e-5, 0.0001, -0.0, 123456789.125, 1e300, inf, -inf]\n",
+    "big = 9223372036854775807\nnegative = -12\n",
+    "stamp = 1979-05-27T07:32:00Z\nlocal = 1979-05-27T07:32:00.5\nday = 1979-05-27\nclock = 07:32:00\nshifted = 1979-05-27T00:32:00.999999-07:00\n",
+    "[a]\nx = 1\n\n[a.b]\ny = 2\n\n[a.b.c]\nz = 3\n\n[d.e]\nw = 4\n",
+    'top = 1\n\n[[servers]]\nname = "one"\n\n[servers.env]\nKEY = "value"\n',
+]
+
+
+def capture_encoding(reference: Path) -> list[dict[str, str]]:
+    import tomli_w
+
+    del reference
+    return [
+        {"document": document, "written": tomli_w.dumps(tomllib.loads(document))}
+        for document in ENCODING_CASES
+    ]
+
+
+def capture_environment(reference: Path) -> list[dict[str, Any]]:
+    sys.path.insert(0, str(reference))
+    from vibe.core.config.layers.environment import EnvironmentLayer
+    from vibe.core.config.vibe_schema import VibeConfigSchema
+
+    async def run() -> list[dict[str, Any]]:
+        captured = []
+        saved = dict(os.environ)
+        try:
+            for scenario in ENVIRONMENT_SCENARIOS:
+                os.environ.clear()
+                os.environ.update(_scrubbed_environment_from(saved))
+                os.environ.update(scenario["variables"])
+                layer = EnvironmentLayer(schema=VibeConfigSchema)
+                data = (await layer.load()).model_dump(mode="json")
+                captured.append({**scenario, "layer": data})
+        finally:
+            os.environ.clear()
+            os.environ.update(saved)
+        return captured
+
+    return asyncio.run(run())
+
+
+def capture_agent_profiles(reference: Path) -> list[dict[str, Any]]:
+    sys.path.insert(0, str(reference))
+    from vibe.core.config.layers.agent_profile import AgentProfileLayer
+
+    async def run() -> list[dict[str, Any]]:
+        captured = []
+        for scenario in AGENT_PROFILE_SCENARIOS:
+            layer = AgentProfileLayer(data=scenario["overrides"])
+            captured.append({**scenario, "layer": (await layer.load()).model_dump(mode="json")})
+        return captured
+
+    return asyncio.run(run())
+
+
+def capture_dotenv(reference: Path) -> list[dict[str, Any]]:
+    import tempfile
+
+    sys.path.insert(0, str(reference))
+    from vibe.core.config.vibe_schema import load_dotenv_values
+
+    captured = []
+    for scenario in DOTENV_SCENARIOS:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / ".env"
+            path.write_text(scenario["file"], encoding="utf-8")
+            environ = dict(scenario["environ"])
+            load_dotenv_values(env_path=path, environ=environ)
+        captured.append({**scenario, "result": dict(sorted(environ.items()))})
+    return captured
+
+
+def capture_origin_rewrite(reference: Path) -> list[dict[str, Any]]:
+    sys.path.insert(0, str(reference))
+    from vibe.setup.auth.browser_sign_in_gateway import (
+        BrowserSignInError,
+        BrowserSignInErrorCode,
+    )
+    from vibe.setup.auth.http_browser_sign_in_gateway import (
+        _validate_url_against_base_url,
+    )
+
+    captured = []
+    for value, base in ORIGIN_REWRITE_CASES:
+        try:
+            answered: str | None = _validate_url_against_base_url(
+                value,
+                base_url=base,
+                message="",
+                code=BrowserSignInErrorCode.START_FAILED,
+                allow_origin_rewrite=True,
+            )
+        except BrowserSignInError:
+            answered = None
+        captured.append({"value": value, "base": base, "answered": answered})
+    return captured
+
+
+# --------------------------------------------------------------------------
 # Capture
 # --------------------------------------------------------------------------
 
@@ -1042,6 +1517,156 @@ MODEL_SCENARIOS: list[dict[str, Any]] = [
             )
         ],
     },
+    # The allowlist narrows what may be selected without removing anything
+    # from `models`; a pattern admitting nothing warns and admits everything.
+    {
+        "name": "models-allowed-models-glob-narrows-the-available-set",
+        "layers": [("user", 'allowed_models = ["mistral-*"]\n')],
+    },
+    {
+        "name": "models-allowed-models-regex-is-case-insensitive",
+        "layers": [("user", 'allowed_models = ["re:LOC.L"]\n')],
+    },
+    {
+        "name": "models-allowed-models-matching-nothing-warns-and-admits-all",
+        "layers": [("user", 'allowed_models = ["nothing-*", "  ", "local"]\n')],
+    },
+    {
+        "name": "models-allowed-models-excluding-the-pin-falls-back",
+        "layers": [
+            ("user", 'active_model = "local"\nallowed_models = ["mistral-*"]\n')
+        ],
+    },
+    {
+        "name": "models-allowed-models-excluding-the-default",
+        "layers": [("user", 'allowed_models = ["local"]\n')],
+    },
+    # The routed fields an experiment writes, in the JSON text form the
+    # experiments layer carries and in the list form a file carries.
+    {
+        "name": "models-routed-extra-models-from-json-text",
+        "layers": [
+            (
+                "user",
+                "routed_extra_models = '"
+                '[{"name": "extra-latest", "provider": "mistral", "alias": "extra", '
+                '"input_price": "0.4"}, {"name": "broken"}, '
+                '{"name": "nameless", "provider": "mistral", "alias": ""}]'
+                "'\n",
+            )
+        ],
+    },
+    {
+        "name": "models-routed-extra-models-keep-what-the-operator-wrote",
+        "layers": [
+            (
+                "user",
+                'auto_compact_threshold = 64000\n\n[[models]]\nalias = "local"\ntemperature = 0.65\n\n'
+                '[[routed_extra_models]]\nname = "local-routed"\nprovider = "llamacpp"\nalias = "local"\n'
+                'supports_images = true\n\n[[routed_extra_models]]\nname = "fresh"\nprovider = "mistral"\n',
+            )
+        ],
+    },
+    {
+        "name": "models-routed-extra-models-not-a-list",
+        "layers": [("user", 'routed_extra_models = "not json"\n')],
+    },
+    {
+        "name": "models-routed-default-reaches-a-pinned-installation",
+        "layers": [
+            (
+                "user",
+                'active_model = "local"\nrouted_default_model = "routed"\n'
+                "routed_model_config = '"
+                '{"name": "vibe-routed", "provider": "mistral", "alias": "routed"}'
+                "'\n",
+            )
+        ],
+    },
+    {
+        "name": "models-routed-definition-keeps-the-operator-overrides",
+        "layers": [
+            (
+                "user",
+                'routed_default_model = "local"\n'
+                "routed_model_config = '"
+                '{"name": "local-routed", "provider": "llamacpp", "alias": "local", '
+                '"supports_images": true, "temperature": 0.1}'
+                "'\n\n"
+                '[[models]]\nalias = "local"\ntemperature = 0.75\n',
+            )
+        ],
+    },
+    {
+        "name": "models-unknown-active-model-resolves-to-the-routed-default",
+        "layers": [
+            (
+                "user",
+                'active_model = "gone"\nrouted_default_model = "routed"\n'
+                "routed_model_config = '"
+                '{"name": "vibe-routed", "provider": "mistral", "alias": "routed"}'
+                "'\n",
+            )
+        ],
+    },
+    # The vision model is a `ModelConfig` validated on its own terms.
+    {
+        "name": "models-vision-model-is-completed-like-a-model",
+        "layers": [
+            (
+                "user",
+                'auto_compact_threshold = 70000\n\n[vision_model]\nname = "pixtral-large-latest"\n'
+                'provider = "llamacpp"\nsupports_images = true\n',
+            )
+        ],
+    },
+    {
+        "name": "models-vision-model-that-cannot-see-is-refused",
+        "layers": [
+            ("user", '[vision_model]\nname = "blind"\nprovider = "mistral"\n')
+        ],
+    },
+    {
+        "name": "models-vision-model-on-an-unknown-provider-is-refused",
+        "layers": [
+            (
+                "user",
+                '[vision_model]\nname = "pixtral"\nprovider = "nowhere"\nsupports_images = true\n',
+            )
+        ],
+    },
+    {
+        "name": "models-compaction-model-ignores-the-global-threshold",
+        "layers": [
+            (
+                "user",
+                'auto_compact_threshold = 70000\n\n[compaction_model]\nname = "devstral-small-latest"\n'
+                'provider = "mistral"\n',
+            )
+        ],
+    },
+    # A threshold the organization's managed layer sets reaches every model,
+    # a model's own threshold included.
+    {
+        "name": "models-admin-threshold-overrides-every-model",
+        "layers": [
+            (
+                "user",
+                '[[models]]\nname = "scratch"\nprovider = "llamacpp"\nauto_compact_threshold = 4096\n',
+            ),
+            ("admin", "auto_compact_threshold = 32000\n"),
+        ],
+    },
+    {
+        "name": "models-user-threshold-keeps-a-model-threshold",
+        "layers": [
+            (
+                "user",
+                '[[models]]\nname = "scratch"\nprovider = "llamacpp"\nauto_compact_threshold = 4096\n',
+            ),
+            ("project", "auto_compact_threshold = 32000\n"),
+        ],
+    },
     {
         "name": "models-compaction-model-keeps-the-alias-it-declares",
         "layers": [
@@ -1069,25 +1694,49 @@ async def validated_models(
     # callers invoke after the build (``vibe/core/config/builder.py:46``,
     # ``vibe/core/config/vibe_schema.py:724``, ``vibe/cli/cli.py:102``,
     # ``vibe/core/agent_loop/_loop.py:625``, ``vibe/app_server/_runtime.py:1449``).
+    from pydantic import ValidationError
+
+    from vibe.core.config.layers.admin import AdminConfigLayer
+
     builder = ConfigBuilder(VibeConfigSchema)
     builder.add_layer(DefaultConfigLayer(schema=VibeConfigSchema))
     for name, document in layers:
-        builder.add_layer(OverridesLayer(data=tomllib.loads(document), name=name))
-    config = await builder.build()
+        data = tomllib.loads(document)
+        # The admin layer is named for what `validate_merged` reads: the origin
+        # of the global compaction threshold.
+        if name == "admin":
+            builder.add_layer(AdminConfigLayer(data=data))
+        else:
+            builder.add_layer(OverridesLayer(data=data, name=name))
+    try:
+        config = await builder.build()
+    except (ValidationError, ValueError):
+        # Only the verdict: the message is reference-authored prose.
+        return {"rejected": True}
+
+    def dump(model: Any) -> Any:
+        return None if model is None else model.model_dump(mode="json")
+
+    try:
+        active_alias: str | None = config.get_active_model().alias
+    except ValueError:
+        active_alias = None
     return {
+        "rejected": False,
         "activeModel": config.active_model,
         "models": {
             alias: model.model_dump(mode="json")
             for alias, model in config.models.items()
         },
-        # The compaction model is a `ModelConfig` too, so it carries the same
-        # alias rule and the same per-entry defaults; `null` where the document
-        # declares none.
-        "compactionModel": (
-            None
-            if config.compaction_model is None
-            else config.compaction_model.model_dump(mode="json")
-        ),
+        # The compaction and vision models are `ModelConfig`s too, so they
+        # carry the same alias rule and the same per-entry defaults; `null`
+        # where the document declares none.
+        "compactionModel": dump(config.compaction_model),
+        "visionModel": dump(config.vision_model),
+        "routedExtraModels": [dump(model) for model in config.routed_extra_models],
+        "availableModels": list(config.available_models()),
+        "defaultModelAlias": config.resolve_default_model_alias(),
+        "activeModelAlias": active_alias,
         # Only the count: the warning text is reference-authored prose and
         # ``NOTICE`` forbids committing it.
         "validationWarnings": len(config.validation_warnings),
@@ -1185,6 +1834,12 @@ def build_corpus(reference: Path, expected_commit: str | None) -> dict[str, Any]
         "scenarios": capture_scenarios(reference),
         "modelScenarios": capture_model_scenarios(reference),
         "mcp": capture_mcp(reference),
+        "stack": capture_stack(reference),
+        "environment": capture_environment(reference),
+        "agentProfiles": capture_agent_profiles(reference),
+        "dotenv": capture_dotenv(reference),
+        "originRewrite": capture_origin_rewrite(reference),
+        "encoding": capture_encoding(reference),
     }
 
 

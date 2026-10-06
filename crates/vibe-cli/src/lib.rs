@@ -629,6 +629,13 @@ fn telemetry_credentials(
 /// runs, so a failure that happens before the app server attaches still leaves
 /// a line on disk. The degradation is reported once and the binary starts
 /// anyway: an operator who cannot write a log still gets a session.
+/// Reference `load_dotenv_values`, run at startup by `vibe/cli/entrypoint.py`:
+/// the variables `{vibe_home}/.env` declares become part of the environment
+/// every child process inherits.
+pub fn publish_dotenv(arguments: &Arguments) {
+    bootstrap::dotenv_values(arguments).publish_to_children();
+}
+
 pub fn install_file_logging(arguments: &Arguments) {
     let working_directory = arguments
         .workdir

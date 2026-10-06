@@ -509,7 +509,7 @@ fn public_server_payloads_build_searchable_config_session_and_mcp_pickers() {
             "selectedTarget": "project",
             "layerValues": [
                 {"layer": "defaults", "values": {"thinking": "off"}},
-                {"layer": "selected_toml", "values": {"active_model": "codestral", "thinking": "high"}},
+                {"layer": "project_toml", "values": {"active_model": "codestral", "thinking": "high"}},
                 {"layer": "environment", "values": {"voice_mode_enabled": true}}
             ]
         }),

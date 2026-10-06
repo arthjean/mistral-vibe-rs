@@ -177,6 +177,9 @@ fn open(spec: &PtySpec<'_>) -> Result<(PtyTerminal, PtyStreams), String> {
         builder.arg(argument);
     }
     builder.cwd(spec.working_directory);
+    for (key, value) in crate::config::inherited_by_children() {
+        builder.env(key, value);
+    }
     for key in spec.unset_environment {
         builder.env_remove(key);
     }

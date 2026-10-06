@@ -248,20 +248,21 @@ fn config_origin(snapshot: &Value, path: &str, configured: bool) -> String {
         })
         .and_then(|layer| layer.get("layer"))
         .and_then(Value::as_str)
-        .map(|layer| {
-            if layer == "selected_toml" {
-                // The reference names TOML layers `<target>-toml`; the wire keeps
-                // the selected target beside the layer.
-                format!(
-                    "{}-toml",
-                    snapshot
-                        .get("selectedTarget")
-                        .and_then(Value::as_str)
-                        .unwrap_or("selected")
-                )
-            } else {
-                layer.to_owned()
-            }
+        .map(|layer| match layer {
+            // The reference names its TOML layers `user-toml` and `project-toml`.
+            "user_toml" => "user-toml".to_owned(),
+            "project_toml" => "project-toml".to_owned(),
+            // The single file layer earlier builds published, which the
+            // runtime-parity corpus still records: it stood for the selected
+            // target, kept beside the layer on the wire.
+            "selected_toml" => format!(
+                "{}-toml",
+                snapshot
+                    .get("selectedTarget")
+                    .and_then(Value::as_str)
+                    .unwrap_or("selected")
+            ),
+            other => other.to_owned(),
         })
         .unwrap_or_else(|| if configured { "effective" } else { "defaults" }.to_owned())
 }

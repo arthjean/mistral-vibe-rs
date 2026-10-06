@@ -267,7 +267,8 @@ impl TerminalManager {
                 let mut command = Command::new(&spec.program);
                 command
                     .args(&spec.arguments)
-                    .current_dir(&spec.working_directory);
+                    .current_dir(&spec.working_directory)
+                    .envs(crate::config::inherited_by_children());
                 for key in &spec.unset_environment {
                     command.env_remove(key);
                 }

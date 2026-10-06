@@ -585,6 +585,20 @@ impl WorkspaceService {
         })
     }
 
+    /// The directory sessions are shown as running in, when the configuration
+    /// names one. Reference `project_workdir`, which shows `displayed_workdir`
+    /// in place of the working directory when it is not empty.
+    pub fn displayed_workdir(&self) -> Option<String> {
+        self.config.load().ok().and_then(|snapshot| {
+            snapshot
+                .effective
+                .get("displayed_workdir")
+                .and_then(toml::Value::as_str)
+                .filter(|workdir| !workdir.is_empty())
+                .map(ToOwned::to_owned)
+        })
+    }
+
     /// Whether the model new turns run on reads images.
     ///
     /// A configuration that will not load is read as reading them, so a broken

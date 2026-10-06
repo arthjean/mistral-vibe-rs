@@ -17,13 +17,16 @@ use crate::redaction::{REDACTED, is_sensitive_key, redact_value};
 
 /// Reference `HIDDEN_SETTINGS`: the fields a runtime fills rather than an
 /// operator, which no settings screen offers an editor for. Per-tool settings
-/// are excluded because neither side renders a per-tool editor; the other three
+/// are excluded because neither side renders a per-tool editor; the other six
 /// are written by the experiments layer and would be meaningless as manual
 /// entries.
-pub const HIDDEN_FIELDS: [&str; 4] = [
+pub const HIDDEN_FIELDS: [&str; 7] = [
     "managed_shell_tools_enabled",
     "routed_default_model",
     "routed_model_config",
+    "smart_approve_available",
+    "smart_approve_default",
+    "routed_extra_models",
     "tools",
 ];
 

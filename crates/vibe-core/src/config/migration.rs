@@ -1,11 +1,12 @@
 //! Bringing a configuration file written by an older client forward.
 //!
-//! Reference `vibe/core/config/_migration.py` runs four migrations over each
+//! Reference `vibe/core/config/_migration.py` runs six migrations over each
 //! writable TOML layer before the first merge: the bash allowlist repair, the
-//! one-shot read-only command sync recorded in `applied_migrations`, the
-//! `devstral-2` model rename, and the `read`/`search_replace` tool rename with
-//! its option transfer. They run in that order and each reports whether it
-//! changed the document, so a file that needs nothing is never rewritten.
+//! one-shot read-only command sync recorded in `applied_migrations`, the model
+//! renames, the removed `devstral-small` entry, the `read`/`search_replace`
+//! tool rename with its option transfer, and the agent renames. They run in
+//! that order and each reports whether it changed the document, so a file that
+//! needs nothing is never rewritten.
 //!
 //! Command names and migration identifiers are behavioral observations taken
 //! from the pinned reference, not authored prose.

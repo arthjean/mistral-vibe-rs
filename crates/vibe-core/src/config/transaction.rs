@@ -49,7 +49,6 @@ impl PreparedWrite {
             cleanup_on_drop: true,
         };
         file.write_all(&bytes)
-            .and_then(|()| file.write_all(b"\n"))
             .and_then(|()| file.sync_all())
             .map_err(|source| ConfigError::Io {
                 path: prepared.temporary.clone(),

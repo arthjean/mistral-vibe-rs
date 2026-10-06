@@ -361,7 +361,9 @@ fn a_model_is_patched_through_its_alias_and_written_back_as_a_list() {
     );
     let persisted = fs::read_to_string(&user_path).expect("the file was written");
     assert!(
-        persisted.contains("[[models]]"),
+        persisted
+            .parse::<Table>()
+            .is_ok_and(|parsed| parsed.get("models").is_some_and(Value::is_array)),
         "the persisted form stopped being a list: {persisted}"
     );
     assert!(persisted.contains("temperature = 0.7"), "{persisted}");

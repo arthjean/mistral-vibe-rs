@@ -205,12 +205,12 @@ pub(super) fn reset_config_value_at(
         return;
     };
     let field = path.join(".");
-    // Only the selected configuration file is published as a layer of its own,
-    // so a value that is not in it has nothing to clear in the target the write
-    // would go to.
-    if !written_in_selected_file(&surface, &field) {
+    // A value the target file does not carry has nothing to clear in the
+    // target the write would go to.
+    let target_layer = format!("{target}_toml");
+    if !written_in_layer(&surface, &field, &target_layer) {
         match top_config_origin(&surface, &field) {
-            Some(origin) if !matches!(origin, "defaults" | "selected_toml") => {
+            Some(origin) if origin != "defaults" && origin != target_layer => {
                 push_local_notice(
                     state,
                     &format!("`{field}` is pinned by {origin}; nothing to clear."),
@@ -276,16 +276,16 @@ fn field_of<'a>(surface: &'a Value, name: &str) -> Option<&'a Value> {
     fields_of(surface).find(|field| field.get("name").and_then(Value::as_str) == Some(name))
 }
 
-/// Whether the selected configuration file carries the field, which is what a
-/// reset would remove.
-fn written_in_selected_file(surface: &Value, name: &str) -> bool {
+/// Whether the configuration file behind `layer` carries the field, which is
+/// what a reset would remove.
+fn written_in_layer(surface: &Value, name: &str, layer: &str) -> bool {
     field_of(surface, name)
         .and_then(|field| field.get("layerValues"))
         .and_then(Value::as_array)
         .is_some_and(|layers| {
             layers
                 .iter()
-                .any(|layer| layer.get("layer").and_then(Value::as_str) == Some("selected_toml"))
+                .any(|entry| entry.get("layer").and_then(Value::as_str) == Some(layer))
         })
 }
 
@@ -539,7 +539,7 @@ mod tests {
                 "name": "theme",
                 "layerValues": [
                     {"layer": "environment", "value": "pinned"},
-                    {"layer": "selected_toml", "value": "light"},
+                    {"layer": "user_toml", "value": "light"},
                     {"layer": "defaults", "value": "dark"}
                 ]
             }],
@@ -547,8 +547,9 @@ mod tests {
         });
         assert_eq!(top_config_origin(&surface, "theme"), Some("environment"));
         assert_eq!(top_config_origin(&surface, "missing"), None);
-        assert!(written_in_selected_file(&surface, "theme"));
-        assert!(!written_in_selected_file(&surface, "missing"));
+        assert!(written_in_layer(&surface, "theme", "user_toml"));
+        assert!(!written_in_layer(&surface, "theme", "project_toml"));
+        assert!(!written_in_layer(&surface, "missing", "user_toml"));
     }
 
     /// US-202: `file_watcher_for_autocomplete` is read from the published

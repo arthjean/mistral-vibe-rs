@@ -66,6 +66,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // `{vibe_home}/.env` stands in for an unset process variable, which is what
     // the reference startup leaves behind after loading the file.
     let dotenv = DotenvValues::global(&vibe_home);
+    // Reference `vibe/acp/entrypoint.py` loads the file into `os.environ`,
+    // which every child process then inherits.
+    dotenv.publish_to_children();
     // The log file opens before the first session, so an editor that never sees
     // stderr still leaves a trace on disk for the operator who reads one.
     install_file_logging(&vibe_home);
@@ -94,6 +97,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         compaction_prompts: CompactionPromptResolution::default(),
         provider,
         models: routing.models.clone(),
+        allowed_models: routing.allowed_models.clone(),
         model: dotenv
             .variable("VIBE_MODEL")
             .unwrap_or_else(|| "mistral-medium-3.5".to_owned()),

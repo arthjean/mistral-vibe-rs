@@ -337,10 +337,6 @@ const DIVERGENCES: &[(&str, &str)] = &[
         ROUTED_MODELS_MAP,
     ),
     ("configMapping/data/every-experiment", ROUTED_MODELS_MAP),
-    (
-        "layerPrecedence/effective/routing-variant-loses-to-a-pinned-model",
-        PINNED_ROUTING,
-    ),
 ];
 
 const EXPERIMENT_NAMES: &str = "v2.24.5, v2.25.0 and v2.25.1 added five experiment names (vibe/core/experiments/active.py:14-27 at 4a96003): vibe_cli_extra_models, vibe_cli_registry_skills, vibe_cli_smart_approve, vibe_cli_smart_approve_default and vibe_cli_unified_harness_rollout. This build's ExperimentName::ALL still declares the three names of v2.24.0 (crates/vibe-core/src/experiments.rs:94).";
@@ -360,8 +356,6 @@ const CONFIG_VARIANTS_TYPED: &str = "v2.25.1 made config_variants typed (vibe/co
 const CONFIG_VARIANTS_EVERY_RESOLVED: &str = "Under the v2.25.1 rule (vibe/core/experiments/resolve.py:42-56 at 4a96003) every known name whose resolved value differs from its typed default reaches the layer: the routing feature's defaultValue, the text \"{}\", differs from the default object {} (vibe/core/experiments/active.py:33), so the reference passes it on. This build lets only a confirmed label or a forced value through (crates/vibe-core/src/experiments/manager.rs:125-148) and drops the unforced routing feature.";
 
 const ROUTED_MODELS_MAP: &str = "v2.25.0 made the GrowthBook layer also write a models table keyed by alias for every routed model definition that validates (vibe/core/config/layers/growthbook.py:147-153,166-183 at 4a96003). This build's ExperimentsLayer writes only the mapped fields (crates/vibe-core/src/config/experiments_layer.rs:79-99).";
-
-const PINNED_ROUTING: &str = "v2.24.1 relaxed the unpinned-only guard in _inject_routed_model to also inject when active_model equals the routed alias, and v2.24.2 removed the guard entirely (vibe/core/config/vibe_schema.py:836-855 at 4a96003, against vibe/core/config/vibe_schema.py:604-617 at b78b451), and v2.25.0 also routes the definition through the layer's models table (vibe/core/config/layers/growthbook.py:147-153), so a pinned installation declares the routed alias and resolves it as the default. This build still skips the injection when active_model is pinned (crates/vibe-core/src/config/effective.rs:255-268) and resolves mistral-medium-3.5.";
 
 /// One family's shape: which case fields the capture authored and which ones
 /// both sides answer.

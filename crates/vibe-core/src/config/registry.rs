@@ -36,11 +36,11 @@ pub const UNPINNED_ACTIVE_MODEL: &str = "";
 /// installation resolves to when no experiment routed it elsewhere.
 pub const DEFAULT_ACTIVE_MODEL_ALIAS: &str = "mistral-medium-3.5";
 
-/// How a field's values from two layers combine. These are the four strategies
-/// the reference schema actually declares; `shallow` and `conflict` exist in the
-/// reference vocabulary but no field adopts them, so they are unreachable and
-/// are not implemented here. [`super::surface_parity_tests`] fails if that ever
-/// stops being true.
+/// How a field's values from two layers combine. These are the five strategies
+/// the reference schema actually declares; `conflict` exists in the reference
+/// vocabulary but no field adopts it, so it is unreachable and is not
+/// implemented here. [`super::surface_parity_tests`] fails if that ever stops
+/// being true.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MergeStrategy {
     /// The higher layer wins outright.
@@ -50,6 +50,10 @@ pub enum MergeStrategy {
     /// Lists are keyed by [`FieldSpec::merge_key`]; the higher layer wins per
     /// key and first-seen order is preserved.
     Union,
+    /// Tables merge one level deep: each top-level key the higher layer sets
+    /// wins whole, nested tables and lists included, and the keys it omits
+    /// survive. Reference `WithShallowMerge`.
+    Merge,
     /// Tables merge recursively; keys the higher layer omits survive.
     DeepMerge,
 }
@@ -62,6 +66,7 @@ impl MergeStrategy {
             Self::Replace => "replace",
             Self::Concat => "concat",
             Self::Union => "union",
+            Self::Merge => "merge",
             Self::DeepMerge => "deep_merge",
         }
     }
@@ -250,6 +255,7 @@ impl FieldSpec {
 
 const REPLACE: MergeStrategy = MergeStrategy::Replace;
 const CONCAT: MergeStrategy = MergeStrategy::Concat;
+const SHALLOW_MERGE: MergeStrategy = MergeStrategy::Merge;
 const DEEP_MERGE: MergeStrategy = MergeStrategy::DeepMerge;
 
 pub(super) const THINKING_VALUES: &[&str] = &["off", "low", "medium", "high", "max"];
@@ -267,6 +273,7 @@ const PROVIDER_ITEMS: &str = r#"{
             "api_key_env_var": {"type": "string"},
             "browser_auth_base_url": {"type": ["string", "null"]},
             "browser_auth_api_base_url": {"type": ["string", "null"]},
+            "browser_auth_allow_origin_rewrite": {"type": "boolean"},
             "api_style": {"type": "string"},
             "backend": {"type": "string"},
             "reasoning_field_name": {"type": "string"},
@@ -337,6 +344,14 @@ const ROUTED_MODEL_CONFIG: &str = r#"{
         "supports_images": {"type": "boolean"},
         "auto_compact_threshold": {"type": "integer"}
     }
+}"#;
+
+/// `routed_extra_models` is written by the experiments layer as the JSON text
+/// of a list of model definitions and read back as the list itself, so both
+/// forms validate. Reference `_coerce_routed_extra_models` is the coercion.
+const ROUTED_EXTRA_MODELS: &str = r#"{
+    "type": ["array", "string"],
+    "items": {"type": "object"}
 }"#;
 
 const TRANSCRIBE_PROVIDER_ITEMS: &str = r#"{
@@ -447,6 +462,7 @@ const DEFAULT_PROVIDERS: &str = r#"[
         "api_key_env_var": "MISTRAL_API_KEY",
         "browser_auth_base_url": "https://console.mistral.ai",
         "browser_auth_api_base_url": "https://console.mistral.ai/api",
+        "browser_auth_allow_origin_rewrite": false,
         "api_style": "openai",
         "backend": "mistral",
         "reasoning_field_name": "reasoning_content",
@@ -459,6 +475,7 @@ const DEFAULT_PROVIDERS: &str = r#"[
         "name": "llamacpp",
         "api_base": "http://127.0.0.1:8080/v1",
         "api_key_env_var": "",
+        "browser_auth_allow_origin_rewrite": false,
         "api_style": "openai",
         "backend": "generic",
         "reasoning_field_name": "reasoning_content",
@@ -660,6 +677,11 @@ pub static FIELDS: &[FieldSpec] = &[
         "Definition of the routed alias, supplied with it by the same experiment.",
         ROUTED_MODEL_CONFIG,
     ),
+    FieldSpec::declared("routed_extra_models", FieldKind::Complex, REPLACE).published(
+        FieldDefault::Json(EMPTY_LIST),
+        "Models an experiment adds to the picker without changing the default.",
+        ROUTED_EXTRA_MODELS,
+    ),
     FieldSpec::union("providers", FieldKind::Complex, "name").published(
         FieldDefault::Json(DEFAULT_PROVIDERS),
         "API providers models are served from.",
@@ -670,9 +692,19 @@ pub static FIELDS: &[FieldSpec] = &[
         "Model definitions. Written as a list, read back keyed by alias.",
         MODEL_ITEMS,
     ),
-    FieldSpec::declared("compaction_model", FieldKind::Complex, REPLACE).published(
+    FieldSpec::declared("allowed_models", FieldKind::List, REPLACE).published(
+        FieldDefault::Strings(&[]),
+        "Model aliases, glob or `re:` patterns, that may be selected. Empty allows every model.",
+        "",
+    ),
+    FieldSpec::declared("compaction_model", FieldKind::Complex, SHALLOW_MERGE).published(
         FieldDefault::None,
         "Model conversations are compacted with. Defaults to the active model.",
+        COMPACTION_MODEL,
+    ),
+    FieldSpec::declared("vision_model", FieldKind::Complex, SHALLOW_MERGE).published(
+        FieldDefault::None,
+        "Image-capable model that describes images for an active model that cannot see them.",
         COMPACTION_MODEL,
     ),
     FieldSpec::declared("auto_compact_threshold", FieldKind::Int, REPLACE)
@@ -856,6 +888,11 @@ pub static FIELDS: &[FieldSpec] = &[
         "Draw the welcome banner without its animation.",
         "",
     ),
+    FieldSpec::declared("show_greeting", FieldKind::Bool, REPLACE).published(
+        FieldDefault::Bool(true),
+        "Greet the signed-in user under the banner, at most once a day, on Mistral providers.",
+        "",
+    ),
     FieldSpec::declared("autocopy_to_clipboard", FieldKind::Bool, REPLACE)
         .popular()
         .published(
@@ -1036,17 +1073,17 @@ pub static FIELDS: &[FieldSpec] = &[
         r#"{"type": ["string", "null"]}"#,
     ),
     // Nested configs
-    FieldSpec::declared("project_context", FieldKind::Complex, REPLACE).published(
+    FieldSpec::declared("project_context", FieldKind::Complex, SHALLOW_MERGE).published(
         FieldDefault::Json(DEFAULT_PROJECT_CONTEXT),
         "How much repository context is gathered.",
         PROJECT_CONTEXT,
     ),
-    FieldSpec::declared("session_logging", FieldKind::Complex, REPLACE).published(
+    FieldSpec::declared("session_logging", FieldKind::Complex, SHALLOW_MERGE).published(
         FieldDefault::Json(DEFAULT_SESSION_LOGGING),
         "Where session transcripts are written.",
         SESSION_LOGGING,
     ),
-    FieldSpec::declared("experiments", FieldKind::Complex, REPLACE).published(
+    FieldSpec::declared("experiments", FieldKind::Complex, SHALLOW_MERGE).published(
         FieldDefault::Json(DEFAULT_EXPERIMENTS),
         "Remote experiment service settings.",
         EXPERIMENTS,

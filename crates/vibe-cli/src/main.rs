@@ -37,6 +37,7 @@ async fn main() -> ExitCode {
             return ExitCode::from(failure.exit);
         }
     };
+    vibe_cli::publish_dotenv(&arguments);
     // The log file opens before anything else can fail, so a startup that dies
     // before the app server attaches still leaves a line behind.
     vibe_cli::install_file_logging(&arguments);

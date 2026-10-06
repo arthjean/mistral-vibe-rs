@@ -85,15 +85,50 @@ pub struct UrlRejection;
 /// boundary. Everything else, including anything that does not parse as an
 /// absolute URL, is rejected.
 pub fn validate_url_against_base(value: &str, base_url: &str) -> Result<(), UrlRejection> {
-    let value_url = url::Url::parse(value).map_err(|_| UrlRejection)?;
+    rehome_url_against_base(value, base_url, false).map(|_| ())
+}
+
+/// [`validate_url_against_base`], answering the URL to use.
+///
+/// With `allow_origin_rewrite`, the provider's `browser_auth_allow_origin_rewrite`,
+/// a URL on another origin is not rejected but re-homed onto the base's scheme,
+/// host and port, its path still held under the base path. That is what a
+/// split-horizon deployment needs, where the server only knows its own public
+/// host and the client reaches the console under another one. Reference
+/// `_validate_url_against_base`.
+pub fn rehome_url_against_base(
+    value: &str,
+    base_url: &str,
+    allow_origin_rewrite: bool,
+) -> Result<String, UrlRejection> {
+    let mut value_url = url::Url::parse(value).map_err(|_| UrlRejection)?;
     let base = url::Url::parse(base_url).map_err(|_| UrlRejection)?;
-    if normalized_origin(&value_url) != normalized_origin(&base) {
+    let origin_matches = normalized_origin(&value_url) == normalized_origin(&base);
+    if !origin_matches && !allow_origin_rewrite {
         return Err(UrlRejection);
     }
     if !is_path_under_base_path(value_url.path(), base.path()) {
         return Err(UrlRejection);
     }
-    Ok(())
+    if origin_matches {
+        return Ok(value.to_owned());
+    }
+    value_url
+        .set_scheme(base.scheme())
+        .map_err(|()| UrlRejection)?;
+    value_url
+        .set_host(base.host_str())
+        .map_err(|_| UrlRejection)?;
+    value_url.set_port(base.port()).map_err(|()| UrlRejection)?;
+    // The reference swaps the whole network location, so the returned URL
+    // carries the base's credentials, or none, never its own.
+    value_url
+        .set_username(base.username())
+        .map_err(|()| UrlRejection)?;
+    value_url
+        .set_password(base.password())
+        .map_err(|()| UrlRejection)?;
+    Ok(value_url.to_string())
 }
 
 fn normalized_origin(parsed: &url::Url) -> (String, Option<String>, Option<u16>) {
@@ -269,6 +304,9 @@ impl SignInHttpClient for ReqwestSignInClient {
 pub struct HttpSignInGateway<C> {
     browser_base_url: String,
     api_base_url: String,
+    /// Reference `browser_auth_allow_origin_rewrite`: a server-supplied URL on
+    /// another origin is re-homed onto the configured base instead of refused.
+    allow_origin_rewrite: bool,
     client: C,
 }
 
@@ -277,8 +315,17 @@ impl<C: SignInHttpClient> HttpSignInGateway<C> {
         Self {
             browser_base_url: browser_base_url.trim_end_matches('/').to_owned(),
             api_base_url: api_base_url.trim_end_matches('/').to_owned(),
+            allow_origin_rewrite: false,
             client,
         }
+    }
+
+    /// Re-homes server-supplied URLs onto the configured bases when they name
+    /// another origin, as `browser_auth_allow_origin_rewrite` asks.
+    #[must_use]
+    pub fn with_origin_rewrite(mut self, allow: bool) -> Self {
+        self.allow_origin_rewrite = allow;
+        self
     }
 
     /// Gives the client back, which is how the parity replay reads a scripted
@@ -294,11 +341,14 @@ impl HttpSignInGateway<ReqwestSignInClient> {
     /// the entry resolves no sign-in bases.
     pub fn for_provider(provider: &Table) -> Option<Self> {
         let (browser_base_url, api_base_url) = browser_sign_in_bases(provider)?;
-        Some(Self::new(
-            &browser_base_url,
-            &api_base_url,
-            ReqwestSignInClient::new(),
-        ))
+        let allow_origin_rewrite = provider
+            .get("browser_auth_allow_origin_rewrite")
+            .and_then(toml::Value::as_bool)
+            .unwrap_or(false);
+        Some(
+            Self::new(&browser_base_url, &api_base_url, ReqwestSignInClient::new())
+                .with_origin_rewrite(allow_origin_rewrite),
+        )
     }
 }
 
@@ -323,10 +373,15 @@ impl<C: SignInHttpClient + Send> SignInGateway for HttpSignInGateway<C> {
         let sign_in_url = string_field(&payload, "sign_in_url", code)?;
         let poll_url = string_field(&payload, "poll_url", code)?;
         let expires_at = string_field(&payload, "expires_at", code)?;
-        validate_url_against_base(&sign_in_url, &self.browser_base_url)
-            .map_err(|UrlRejection| SignInError::new(code))?;
-        validate_url_against_base(&poll_url, &self.api_base_url)
-            .map_err(|UrlRejection| SignInError::new(code))?;
+        let sign_in_url = rehome_url_against_base(
+            &sign_in_url,
+            &self.browser_base_url,
+            self.allow_origin_rewrite,
+        )
+        .map_err(|UrlRejection| SignInError::new(code))?;
+        let poll_url =
+            rehome_url_against_base(&poll_url, &self.api_base_url, self.allow_origin_rewrite)
+                .map_err(|UrlRejection| SignInError::new(code))?;
         let expires_at =
             UtcTimestamp::parse_iso8601(&expires_at).ok_or_else(|| SignInError::new(code))?;
         Ok(SignInProcess {
@@ -339,11 +394,12 @@ impl<C: SignInHttpClient + Send> SignInGateway for HttpSignInGateway<C> {
 
     async fn poll(&mut self, poll_url: &str) -> Result<SignInPoll, SignInError> {
         let code = SignInErrorCode::PollFailed;
-        validate_url_against_base(poll_url, &self.api_base_url)
-            .map_err(|UrlRejection| SignInError::new(code))?;
+        let poll_url =
+            rehome_url_against_base(poll_url, &self.api_base_url, self.allow_origin_rewrite)
+                .map_err(|UrlRejection| SignInError::new(code))?;
         let response = self
             .client
-            .get(poll_url)
+            .get(&poll_url)
             .await
             .map_err(|SignInTransportError| SignInError::new(code))?;
         if response.status == HTTP_GONE {

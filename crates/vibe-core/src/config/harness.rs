@@ -114,20 +114,19 @@ impl HarnessFiles {
     /// The file backing the selected layer, or `None` when no enabled source
     /// resolves to one and the selection is ephemeral.
     ///
-    /// A trusted project file wins and the user file is the fallback. Where the
-    /// reference would still select the project layer for a file it never
-    /// discovered, this port resolves to the ephemeral layer instead: a write
-    /// with no discovered file and no user source stays in memory rather than
-    /// creating a project file the operator never had.
+    /// Reference `default_layer_resolver` in `build_default_orchestrator`: the
+    /// user file while that source is enabled, then a trusted project file.
+    /// Where the reference would still select the project layer for a file it
+    /// never discovered, this port resolves to the ephemeral layer instead: a
+    /// write with no discovered file and no user source stays in memory rather
+    /// than creating a project file the operator never had.
     #[must_use]
     pub fn config_file(&self) -> Option<(ConfigTarget, PathBuf)> {
-        if let Some(path) = self.trusted_project_config() {
-            return Some((ConfigTarget::Project, path));
-        }
         if self.sources.contains(&ConfigSource::User) {
             return Some((ConfigTarget::User, self.user_config_file()));
         }
-        None
+        self.trusted_project_config()
+            .map(|path| (ConfigTarget::Project, path))
     }
 
     /// The discovered project file, once the source is enabled and the trust

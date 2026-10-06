@@ -254,3 +254,34 @@ fn poll_rejects_an_off_base_url_with_the_poll_code() {
         .expect_err("an off-base poll URL is refused");
     assert_eq!(error.code, SignInErrorCode::PollFailed);
 }
+
+/// Reference `_validate_url_against_base` with `allow_origin_rewrite`: a URL on
+/// another origin is re-homed onto the base's scheme, host and port, its path,
+/// query and fragment kept, and its path still held under the base path.
+#[test]
+fn an_origin_rewrite_rehomes_a_foreign_url_and_still_checks_its_path() {
+    use super::sign_in_http::rehome_url_against_base;
+
+    let base = "https://connector.internal:8443/api";
+    assert_eq!(
+        rehome_url_against_base(
+            "https://console.example/api/vibe/sign-in/1?state=x",
+            base,
+            true
+        ),
+        Ok("https://connector.internal:8443/api/vibe/sign-in/1?state=x".to_owned())
+    );
+    assert!(
+        rehome_url_against_base("https://console.example/api/vibe/sign-in/1", base, false).is_err(),
+        "without the flag a foreign origin is refused"
+    );
+    assert!(
+        rehome_url_against_base("https://console.example/elsewhere", base, true).is_err(),
+        "a rewritten URL still has to sit under the base path"
+    );
+    assert_eq!(
+        rehome_url_against_base("https://connector.internal:8443/api/poll", base, true),
+        Ok("https://connector.internal:8443/api/poll".to_owned()),
+        "a URL already on the base origin is kept as sent"
+    );
+}
