@@ -4,23 +4,27 @@
 //! harness, or the Unified Harness, a native core selected by
 //! `--experimental-harness`, by `--smart-approve`, or by the
 //! `vibe_cli_unified_harness_rollout` experiment
-//! (`vibe/_experimental_harness.py:96-121`). This port is the legacy harness
-//! only. It still resolves the selection the way the reference does, because
-//! the answer is observable: `config/read` publishes where the choice came
-//! from, and a request for the Unified Harness that cannot be honored lands on
-//! the legacy one with a startup issue the terminal client shows
-//! (`vibe/app_server/_runtime.py:1135-1167`).
+//! (`vibe/_experimental_harness.py:96-121`). This port selects the same way.
+//! Its unified mode is the legacy runtime with the parts of the Unified
+//! Harness ported so far switched on: plugin resolution (row 35) and the
+//! `runtime.experimentalHarness` flag clients gate on. The rest of that
+//! backend (its native core, todos, smart approve, child sessions) belongs to
+//! row 36.
 
-use serde::Serialize;
+use std::path::Path;
+
 use serde_json::{Value, json};
+use vibe_core::experiments::{EvalCache, ExperimentName};
 
 /// Where the harness choice came from, spelled as `harnessSelectionSource`
-/// publishes it. The reference's fourth source, `rollout`, only ever selects
-/// an installed Unified Harness, so it has no counterpart here.
+/// publishes it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HarnessSelectionSource {
     /// `--experimental-harness`, directly or through `--smart-approve`.
     Flag,
+    /// The `vibe_cli_unified_harness_rollout` experiment, read from the eval
+    /// cache a previous session wrote.
+    Rollout,
     Default,
     /// `--legacy-harness`, which wins over everything else.
     FlagLegacy,
@@ -31,25 +35,18 @@ impl HarnessSelectionSource {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Flag => "flag",
+            Self::Rollout => "rollout",
             Self::Default => "default",
             Self::FlagLegacy => "flag-legacy",
         }
     }
 }
 
-/// A configuration issue raised before any session exists, in the
-/// `ConfigIssue` shape: the input it concerns and what happened to it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct StartupIssue {
-    pub file: String,
-    pub message: String,
-}
-
 /// The resolved harness decision for one process.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HarnessSelection {
+    pub use_unified: bool,
     pub source: HarnessSelectionSource,
-    pub startup_issue: Option<StartupIssue>,
 }
 
 impl Default for HarnessSelection {
@@ -59,44 +56,54 @@ impl Default for HarnessSelection {
 }
 
 impl HarnessSelection {
-    /// Reference `resolve_harness_selection` followed by the fallback
-    /// `HarnessProcess` applies when the Unified Harness cannot be created.
-    ///
-    /// The precedence is the reference's: `--legacy-harness` first, then
-    /// `--experimental-harness`, then the rollout, then the default. The
-    /// rollout step needs the Unified Harness installed, which it never is
-    /// here, so it always falls through; the flag step selects it anyway and
-    /// then falls back, keeping `flag` as the source and raising the issue.
+    /// Reference `resolve_harness_selection` without a rollout cache.
     #[must_use]
     pub fn resolve(experimental_harness: bool, legacy_harness: bool) -> Self {
-        if legacy_harness {
-            return Self {
-                source: HarnessSelectionSource::FlagLegacy,
-                startup_issue: None,
-            };
-        }
-        if experimental_harness {
-            return Self {
-                source: HarnessSelectionSource::Flag,
-                startup_issue: Some(StartupIssue {
-                    file: "--experimental-harness".to_owned(),
-                    message: "This build carries no Unified Harness backend, so the session \
-                              runs on the legacy harness."
-                        .to_owned(),
-                }),
-            };
-        }
+        Self::resolve_with_rollout(experimental_harness, legacy_harness, None)
+    }
+
+    /// Reference `resolve_harness_selection`: `--legacy-harness` first, then
+    /// `--experimental-harness`, then a rollout variant of `unified`, then the
+    /// legacy default. The reference's fallback for a backend that cannot be
+    /// created never applies here, since the unified mode is always present.
+    #[must_use]
+    pub fn resolve_with_rollout(
+        experimental_harness: bool,
+        legacy_harness: bool,
+        rollout_variant: Option<&str>,
+    ) -> Self {
+        let (use_unified, source) = if legacy_harness {
+            (false, HarnessSelectionSource::FlagLegacy)
+        } else if experimental_harness {
+            (true, HarnessSelectionSource::Flag)
+        } else if rollout_variant == Some("unified") {
+            (true, HarnessSelectionSource::Rollout)
+        } else {
+            (false, HarnessSelectionSource::Default)
+        };
         Self {
-            source: HarnessSelectionSource::Default,
-            startup_issue: None,
+            use_unified,
+            source,
         }
     }
 
-    /// The two `ConfigReadResponse` fields this decision answers.
+    /// The selection a launch resolves, the rollout read from the eval cache
+    /// under `vibe_home` whatever the telemetry opt-in. Reference
+    /// `HarnessProcess.__init__` with `_load_rollout_cache`.
+    #[must_use]
+    pub fn for_launch(experimental_harness: bool, legacy_harness: bool, vibe_home: &Path) -> Self {
+        let rollout =
+            EvalCache::new(vibe_home).rollout_variant(ExperimentName::UnifiedHarnessRollout.key());
+        Self::resolve_with_rollout(experimental_harness, legacy_harness, rollout.as_deref())
+    }
+
+    /// The two `ConfigReadResponse` fields this decision answers. The
+    /// startup issue is the reference's report of a unified backend that could
+    /// not be created, which this port never lacks.
     #[must_use]
     pub fn config_read_fields(&self) -> [(&'static str, Value); 2] {
         [
-            ("startupIssue", json!(self.startup_issue)),
+            ("startupIssue", Value::Null),
             ("harnessSelectionSource", json!(self.source.as_str())),
         ]
     }

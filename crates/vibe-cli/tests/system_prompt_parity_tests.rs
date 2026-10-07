@@ -479,6 +479,7 @@ fn replay_compose(scenario: &Value) -> Value {
         model: None,
         headless: scenario["headless"] == json!(true),
         tool_names: Vec::new(),
+        skill_seed: None,
     };
     let host = PromptHost {
         home: Some(root.join("home")),

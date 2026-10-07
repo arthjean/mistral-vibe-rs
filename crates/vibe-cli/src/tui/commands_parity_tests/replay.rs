@@ -9,6 +9,7 @@
 //! is reduced to the capture's length and SHA-256, so what is compared is what
 //! an operator observes and never reference prose.
 
+use super::super::plugins::PluginCatalog;
 use std::collections::BTreeMap;
 
 use serde_json::{Map, Value, json};
@@ -463,6 +464,22 @@ impl CommandBackend for FixtureBackend<'_> {
             .get("cleared")
             .and_then(Value::as_u64)
             .unwrap_or_default())
+    }
+
+    /// A capture with no catalog ran against a backend that resolves no
+    /// plugins, which is what every captured case is.
+    fn plugin_catalog(&mut self) -> Result<Option<PluginCatalog>, String> {
+        let catalog = self.get("pluginCatalog");
+        failure(catalog)?;
+        Ok(catalog.map(PluginCatalog::from_value))
+    }
+
+    fn reload_plugins(&mut self) -> Result<(), String> {
+        failure(self.get("pluginReload"))
+    }
+
+    fn open_plugins(&mut self, _catalog: PluginCatalog) {
+        self.record(json!({"type": "panel", "name": "plugins"}));
     }
 }
 

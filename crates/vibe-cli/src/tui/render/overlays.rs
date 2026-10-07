@@ -144,7 +144,7 @@ pub(super) fn draw_overlay(
         ));
     }
     lines.push(Line::default());
-    let help = match overlay.kind {
+    let help = overlay.help.unwrap_or(match overlay.kind {
         OverlayKind::Config => "↑↓/jk Navigate  Enter Edit  Ctrl+R Reset  Esc Close",
         OverlayKind::Sessions => "↑↓/jk Navigate  Enter Resume  Delete Remove  Esc Close",
         OverlayKind::Mcp => {
@@ -157,7 +157,7 @@ pub(super) fn draw_overlay(
         // The skills list is read-only here: it has nothing to select.
         OverlayKind::Skills => "↑↓/jk Navigate  Esc Close",
         _ => "↑↓/jk Navigate  Enter Select  Esc Close",
-    };
+    });
     lines.push(Line::styled(help, theme.muted()));
     frame.render_widget(
         Paragraph::new(lines)

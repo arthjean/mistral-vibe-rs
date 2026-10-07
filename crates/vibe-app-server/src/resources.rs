@@ -168,8 +168,27 @@ pub type ResourceFuture<'a, T> =
 pub type McpCatalogFuture<'a> =
     Pin<Box<dyn Future<Output = Result<McpCatalogOutcome, McpCatalogError>> + Send + 'a>>;
 
+/// An MCP server a unified session's plugin declares, as `/mcp` lists it:
+/// its catalog name, its owner, and what discovering it answered (reference
+/// `PluginMCPSource`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginMcpSource {
+    pub name: String,
+    pub plugin_name: String,
+    pub transport: String,
+    /// `connected`, `needs_auth` or `unavailable`.
+    pub status: &'static str,
+    /// Each tool's name and description, in the order the server listed them.
+    pub tools: Vec<(String, Option<String>)>,
+}
+
 pub trait ResourceBackend: Send + Sync {
     fn open_session(&self, session: ResourceSession) -> Result<(), ResourceError>;
+
+    /// Hands a session the MCP servers its plugins declare, which it lists
+    /// after the configured ones and refuses to toggle or remove. Each call
+    /// replaces the previous set.
+    fn set_plugin_mcp(&self, _session_id: &str, _sources: Vec<PluginMcpSource>) {}
 
     fn configure_mcp<'a>(
         &'a self,
@@ -214,6 +233,7 @@ pub trait ResourceBackend: Send + Sync {
 }
 
 pub use core_backend::CoreResourceBackend;
+pub(crate) use core_backend::overlay_plugin_sources;
 
 #[derive(Debug, Clone)]
 struct McpSource {

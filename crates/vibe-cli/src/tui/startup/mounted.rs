@@ -7,9 +7,10 @@ use super::super::clipboard_images::ClipboardImageManager;
 use super::super::composer::apply_effects as apply_composer_effects;
 use super::super::controls::ControlState;
 use super::super::prompt::{PromptContext, start_prompt};
-use super::super::state::{EntryStatus, TuiState};
+use super::super::state::{EntrySource, EntryStatus, TranscriptEntry, TranscriptKind, TuiState};
 use super::super::{ActiveTurn, InteractiveRuntime, push_local_notice, start_teleport};
 use super::PostMountAction;
+use vibe_core::events::PublicNoticeLevel;
 
 pub(in crate::tui) enum MountedStartup {
     Pending(Option<PostMountAction>),
@@ -92,6 +93,12 @@ pub(in crate::tui) async fn complete_mounted_startup(
     if !record_initialization(startup, state, initialization) {
         return Ok(());
     }
+    if runtime
+        .as_ref()
+        .is_some_and(|runtime| runtime.experimental_harness)
+    {
+        push_unified_harness_notice(state);
+    }
 
     match action {
         Some(PostMountAction::Prompt(prompt)) => {
@@ -119,6 +126,22 @@ pub(in crate::tui) async fn complete_mounted_startup(
         None => {}
     }
     Ok(())
+}
+
+/// Reference `_show_unified_harness_notice`, the last of the notices the
+/// session's readiness mounts: a session on the unified mode is told how to
+/// leave it.
+pub(in crate::tui) const UNIFIED_HARNESS_NOTICE: &str = "You are using our new unified harness. If you encounter issues, restart with --legacy-harness.";
+
+fn push_unified_harness_notice(state: &mut TuiState) {
+    state.append_local(TranscriptEntry {
+        id: String::new(),
+        revision: 1,
+        kind: TranscriptKind::Notice,
+        text: UNIFIED_HARNESS_NOTICE.to_owned(),
+        status: EntryStatus::Completed,
+        source: EntrySource::notice(PublicNoticeLevel::Warning),
+    });
 }
 
 fn record_initialization(
@@ -223,5 +246,21 @@ mod tests {
             startup.into_initialization_error(),
             Some(CliError::Terminal(_))
         ));
+    }
+
+    /// Reference `_show_unified_harness_notice`: a borderless warning.
+    #[test]
+    fn the_unified_harness_notice_is_a_warning_naming_the_way_back() {
+        let mut state = TuiState::new("unified-startup");
+        push_unified_harness_notice(&mut state);
+        let entry = state.entries.last().expect("the notice is mounted");
+        assert_eq!(
+            entry.text,
+            "You are using our new unified harness. If you encounter issues, restart with --legacy-harness."
+        );
+        assert_eq!(
+            entry.source,
+            EntrySource::notice(PublicNoticeLevel::Warning)
+        );
     }
 }

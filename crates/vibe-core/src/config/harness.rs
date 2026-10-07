@@ -248,6 +248,36 @@ impl HarnessFiles {
         }
     }
 
+    /// The project plugin directories: every open root's `.vibe/plugins`
+    /// that is a directory. Reference `project_plugins_dirs`.
+    #[must_use]
+    pub fn project_plugins_dirs(&self) -> Vec<PathBuf> {
+        self.project_roots()
+            .into_iter()
+            .map(|root| {
+                crate::plugins::paths::resolve_lax(&root)
+                    .join(PROJECT_DIRECTORY)
+                    .join("plugins")
+            })
+            .filter(|directory| directory.is_dir())
+            .collect()
+    }
+
+    /// The user plugin directory, `{vibe_home}/plugins`, once the user source
+    /// is enabled and the directory exists. Reference `user_plugins_dirs`.
+    #[must_use]
+    pub fn user_plugins_dirs(&self) -> Vec<PathBuf> {
+        if !self.sources.contains(&ConfigSource::User) {
+            return Vec::new();
+        }
+        let directory = self.paths.vibe_home.join("plugins");
+        if directory.is_dir() {
+            vec![directory]
+        } else {
+            Vec::new()
+        }
+    }
+
     /// The hook files a session loads, in the order their names are claimed:
     /// every open project's `.vibe/hooks.toml`, then the user's
     /// `{vibe_home}/hooks.toml` once the user source is enabled. Reference

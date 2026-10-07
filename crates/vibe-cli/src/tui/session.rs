@@ -119,6 +119,8 @@ pub(super) fn start_runtime(
         .clone()
         .unwrap_or_else(|| "default".to_owned());
     let safety = active_agent_safety(&mut service, &session_id, &agent_name);
+    let experimental_harness =
+        super::runtime::published_experimental_harness(&mut service, &session_id);
     Ok(InteractiveRuntime {
         service,
         experiments: Some(experiments),
@@ -144,6 +146,8 @@ pub(super) fn start_runtime(
         context_window: DEFAULT_CONTEXT_WINDOW,
         auto_approve: session.intent.auto_approve,
         registry_skills_enabled: preferences.registry_skills_enabled,
+        experimental_harness,
+        plugins_panel: None,
         config_target: None,
         remote_project_overlay: None,
         remote_project_draft: None,

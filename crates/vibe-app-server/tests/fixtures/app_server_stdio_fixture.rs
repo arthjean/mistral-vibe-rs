@@ -27,6 +27,7 @@ use std::sync::Arc;
 
 use tokio::io::BufReader;
 use vibe_app_server::client::{LiveDriverConfig, LiveTurnDriver};
+use vibe_app_server::harness::HarnessSelection;
 use vibe_app_server::resources::{CoreResourceBackend, production_mcp_factory};
 use vibe_app_server::server::AppServer;
 use vibe_app_server::transport::{StdioTransport, serve_stdio};
@@ -48,6 +49,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(PathBuf::from)
         .ok_or("VIBE_HOME must name the fixture's vibe home")?;
     let working_directory = std::env::current_dir()?;
+    // Reference `vibe-app-server --experimental-harness | --legacy-harness`,
+    // resolved against the rollout the vibe home's eval cache holds.
+    let flags: Vec<String> = std::env::args().skip(1).collect();
+    let harness = HarnessSelection::for_launch(
+        flags.iter().any(|flag| flag == "--experimental-harness"),
+        flags.iter().any(|flag| flag == "--legacy-harness"),
+        &vibe_home,
+    );
     // The workspace resolves `session_logging` from the configuration, so the
     // driver writes turns where the workspace lists and resumes them.
     let workspace =
@@ -112,6 +121,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         None => AppServer::default(),
     }
     .using_workspace_service(workspace)
+    .using_harness_selection(harness)
     .using_client_telemetry(telemetry)
     .using_secondary_provider(Some(provider));
     serve_stdio(

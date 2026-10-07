@@ -32,6 +32,8 @@ pub enum OverlayKind {
     LogLevel,
     Skills,
     Todos,
+    /// Reference `PluginsApp`, which owns its keys (see `plugins.rs`).
+    Plugins,
 }
 
 /// A settings field whose new value the operator is typing into the composer.
@@ -240,6 +242,9 @@ pub struct Overlay {
     pub items: Vec<OverlayItem>,
     pub query: String,
     pub notice: Option<String>,
+    /// The help line, for a panel whose keys change with its view; `None`
+    /// shows the one its kind declares.
+    pub help: Option<&'static str>,
     selected: Option<usize>,
 }
 
@@ -253,6 +258,7 @@ impl Overlay {
             items,
             query: String::new(),
             notice: None,
+            help: None,
             selected,
         }
     }

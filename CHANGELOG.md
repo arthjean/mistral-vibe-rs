@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Load plugins as the reference does in a unified mode that
+  `--experimental-harness`, `--smart-approve` or the unified rollout selects:
+  Agent Plugins packages with the Vibe extension and Claude Code, Codex, Kimi
+  Code and OpenCode plugins resolve from `~/.vibe/plugins/`, a trusted
+  project's `.vibe/plugins/` and the shipped `vibe` plugin, are pinned
+  read-only per session, contribute skills, MCP servers (listed in `/mcp` under
+  their plugin) and library search paths, and are answered by
+  `plugin_catalog/read`, `plugins/read`, `plugin/info` and `plugin/reload`.
+  The TUI gains `/plugins`, `/reload-plugins` and the unified startup notice.
+  `--legacy-harness` still wins over every selector.
+
 - Account for a session as the reference does: steps count the operator's
   message and each completed model step, tool calls are tallied as agreed,
   succeeded, failed, rejected and denied by a hook, cached tokens and the

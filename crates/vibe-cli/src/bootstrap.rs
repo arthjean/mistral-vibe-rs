@@ -322,14 +322,16 @@ pub(crate) fn resource_server(
         .with_config(workspace.layered_config())
         .with_mcp_factory(production_mcp_factory(sampling))
         .with_mcp_authentication(production_mcp_authentication());
+    let harness = HarnessSelection::for_launch(
+        arguments.experimental_harness,
+        arguments.legacy_harness,
+        workspace.vibe_home(),
+    );
     Ok(AppServer::with_resource_backend(Arc::new(resource_backend))
         .using_workspace_service(workspace)
         .using_web_search_access(Some(web_search_access(arguments, credential)))
         .using_utility_provider(crate::tui::startup::utility_provider(arguments))
-        .using_harness_selection(HarnessSelection::resolve(
-            arguments.experimental_harness,
-            arguments.legacy_harness,
-        )))
+        .using_harness_selection(harness))
 }
 
 /// The credential and endpoint `web_search` reaches the conversations API with.

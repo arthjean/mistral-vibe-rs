@@ -756,6 +756,37 @@ async fn a_failing_command_reports_its_status_and_its_output() {
     assert!(message.contains("err"), "{message}");
 }
 
+/// The base a session's plugins publish reaches every command it runs, under
+/// a call's own overrides.
+#[tokio::test]
+async fn a_session_base_environment_reaches_its_commands() {
+    let harness = harness(ShellRollout::Legacy, ApprovalDecision::ApproveOnce).await;
+    harness.tools.set_session_environment(
+        "session-1",
+        BTreeMap::from([
+            (
+                "PYTHONPATH".to_owned(),
+                "/plugin/libraries/python".to_owned(),
+            ),
+            ("NODE_PATH".to_owned(), "/plugin/libraries/node".to_owned()),
+        ]),
+    );
+    let output = harness
+        .call(
+            "bash",
+            json!({"command": "echo \"[$PYTHONPATH $NODE_PATH]\""}),
+        )
+        .await
+        .expect("the command runs");
+    assert!(
+        output
+            .model_text
+            .contains("[/plugin/libraries/python /plugin/libraries/node]"),
+        "{}",
+        output.model_text
+    );
+}
+
 /// Output past the tool limit is cut inside the sink contract, and the cut is
 /// silent: reference `_run_command` bounds each stream and publishes no field
 /// saying it did, so the result carries the four fields it always carries.

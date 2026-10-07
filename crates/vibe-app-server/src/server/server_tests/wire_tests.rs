@@ -568,7 +568,7 @@ fn a_session_carries_the_compaction_policy_its_configuration_declares() {
 /// A launch that asked for the Unified Harness reads, on `config/read`, that
 /// it got the legacy one and why (`vibe/app_server/_runtime.py:1155-1167`).
 #[test]
-fn config_read_reports_the_harness_fallback_a_launch_resolved() {
+fn config_read_reports_the_harness_a_launch_resolved() {
     let temporary = tempfile::tempdir().expect("temporary home");
     let workspace_service = WorkspaceService::new(
         crate::workspace::WorkspacePaths {
@@ -589,11 +589,7 @@ fn config_read_reports_the_harness_fallback_a_launch_resolved() {
     // harness decision (`_read_config` in `vibe/app_server/_host.py`).
     let read = host_call(&mut connection, 10, "config/read");
     assert_eq!(read["harnessSelectionSource"], json!("flag"));
-    assert_eq!(
-        read["startupIssue"]["file"],
-        json!("--experimental-harness")
-    );
-    assert!(read["startupIssue"]["message"].is_string());
+    assert_eq!(read["startupIssue"], Value::Null);
 }
 
 /// US-091: the configuration answers carry the two views, the harness

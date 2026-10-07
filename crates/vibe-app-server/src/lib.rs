@@ -12,6 +12,7 @@ mod host;
 mod images;
 mod live_projection;
 mod params;
+pub mod plugins;
 pub mod projects;
 pub mod resources;
 pub mod server;

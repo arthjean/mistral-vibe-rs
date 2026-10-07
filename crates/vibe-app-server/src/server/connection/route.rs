@@ -66,6 +66,14 @@ pub(crate) fn is_connector_method(method: &str) -> bool {
         )
 }
 
+/// The methods a unified session's plugins answer.
+fn is_plugin_method(method: &str) -> bool {
+    matches!(
+        method,
+        "plugin_catalog/read" | "plugins/read" | "plugin/info" | "plugin/reload"
+    )
+}
+
 pub(crate) fn route(method: &str) -> Route {
     match method {
         "events/read" => Route::Events,
@@ -140,12 +148,26 @@ impl ServerConnection {
         let method = request.method.clone();
         let method = method.as_str();
         let rooted = self.root_key().is_some();
+        let unified_plugins =
+            self.server.harness_selection().use_unified && is_plugin_method(method);
+        if unified_plugins && method.starts_with("plugin/") && !rooted {
+            return Err(ProtocolFault::plain(ProtocolErrorCode::Conflict, NO_ROOT));
+        }
         match route(method) {
+            _ if unified_plugins => {}
             Route::Unserved => return Err(method_not_found(method)),
             Route::RootUnserved | Route::RootDeclined | Route::Root if !rooted => {
                 return Err(ProtocolFault::plain(ProtocolErrorCode::Conflict, NO_ROOT));
             }
             Route::RootUnserved => return Err(method_not_found(method)),
+            // Reference `_dispatch` on the legacy handler declines the whole
+            // `plugin` namespace in one sentence.
+            Route::RootDeclined if method.starts_with("plugin/") => {
+                return Err(ProtocolFault::plain(
+                    ProtocolErrorCode::NotImplemented,
+                    format!("Plugins are not supported: {method}"),
+                ));
+            }
             Route::RootDeclined => {
                 return Err(ProtocolFault::plain(
                     ProtocolErrorCode::NotImplemented,
@@ -160,6 +182,13 @@ impl ServerConnection {
             .get("sessionId")
             .and_then(Value::as_str)
             .map(ToOwned::to_owned);
+        if unified_plugins {
+            let request = ServerRequest {
+                params: object_of_value(validated),
+                ..request
+            };
+            return Ok(self.plugin_request(request));
+        }
         match route(method) {
             Route::Events => {
                 return Ok(success_batch(
@@ -171,7 +200,7 @@ impl ServerConnection {
                 self.require_named_root(named.as_deref())?;
                 return Err(ProtocolFault::plain(
                     ProtocolErrorCode::NotImplemented,
-                    "Plugins are not supported by this backend",
+                    "The selected session backend resolves no plugins",
                 ));
             }
             // A session-optional method naming a session is the root's, and

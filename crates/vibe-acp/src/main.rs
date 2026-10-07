@@ -149,6 +149,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             })
         }
     });
+    let harness = HarnessSelection::for_launch(
+        arguments.experimental_harness,
+        arguments.legacy_harness,
+        &vibe_home,
+    );
     run_stdio(
         BufReader::new(tokio::io::stdin()),
         tokio::io::stdout(),
@@ -160,10 +165,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             shared_projects: true,
             telemetry,
             experiments,
-            harness: HarnessSelection::resolve(
-                arguments.experimental_harness,
-                arguments.legacy_harness,
-            ),
+            harness,
         },
     )
     .await

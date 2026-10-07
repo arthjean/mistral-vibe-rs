@@ -1,0 +1,190 @@
+{
+ "cases": {
+  "claude": {
+   "files": {
+    "user/badname/.claude-plugin/plugin.json": "{\"name\": \"Bad_Name\"}",
+    "user/claudey/.claude-plugin/plugin.json": "{\"name\":\"claudey\",\"version\":\"1.0.0\",\"description\":\"Claude-format probe\"}",
+    "user/rich/.claude-plugin/plugin.json": "{\"name\": \"rich\", \"version\": \"1.2.3\", \"description\": \"Rich Claude fixture\", \"author\": {\"name\": \"Ann\"}, \"hooks\": {\"PreToolUse\": [{\"matcher\": \"Bash\", \"hooks\": [{\"type\": \"command\", \"command\": \"echo pre\", \"timeout\": 5}, {\"type\": \"prompt\", \"prompt\": \"x\"}]}], \"Stop\": [{\"hooks\": [{\"type\": \"command\", \"command\": \"echo stop\"}]}], \"Notification\": [{\"hooks\": [{\"type\": \"command\", \"command\": \"echo n\"}]}]}, \"mcp_servers\": {\"ignored\": {}}, \"mcpServers\": \"./extra-mcp.json\", \"foo\": 1, \"interface\": {\"x\": 1}}",
+    "user/rich/.mcp.json": "{\"mcpServers\": {\"srv\": {\"command\": \"node\", \"args\": [\"${CLAUDE_PLUGIN_ROOT}/x.js\", \"--data\", \"${CLAUDE_PLUGIN_DATA}\"], \"env\": {\"TOKEN\": \"abc\"}}, \"web\": {\"url\": \"https://example.com/mcp\", \"type\": \"streamable-http\", \"headers\": {\"X-Key\": \"k\"}}, \"bad\": {\"command\": \"../escape\"}}}",
+    "user/rich/agents/helper.md": "agent\n",
+    "user/rich/commands/args.md": "Fix issue $ARGUMENTS now.\n",
+    "user/rich/commands/dyn.md": "Status: !`git status`\n",
+    "user/rich/commands/empty.md": "---\ndescription: nothing\n---\n",
+    "user/rich/commands/nested/deep.md": "Deep command body line one.\nline two\n",
+    "user/rich/commands/review.md": "---\ndescription: Review the change\nmodel: fast\nargument-hint: none\n---\nReview everything carefully.\n",
+    "user/rich/extra-mcp.json": "{\"mcpServers\": {\"other\": {\"url\": \"https://example.com/other\"}}}",
+    "user/rich/skills/alpha/SKILL.md": "---\nname: alpha\ndescription: Alpha skill for the fixture\ntools: Read, Grep\n---\nDo alpha things.\n",
+    "user/rich/skills/beta/SKILL.md": "---\nname: beta\ndescription: Beta skill\n---\n\nBeta body.\n",
+    "user/rich/skills/broken/SKILL.md": "no frontmatter here\n"
+   }
+  },
+  "claude-more": {
+   "files": {
+    "user/dyn/.claude-plugin/plugin.json": "{\"name\": \"dyn\", \"version\": \"1.0\", \"commands\": [\"./c\"]}",
+    "user/more/.claude-plugin/plugin.json": "{\"name\": \"more\", \"skills\": [\"./extra-skills\", \"bad-path\", \"./missing\"], \"commands\": \"./cmds/one.md\", \"hooks\": [\"./hooks/hooks.json\", \"./hooks/other.json\", \"nope.json\"], \"mcpServers\": [\"./m.json\", \"./m.json\", \"./absent.json\"], \"lspServers\": {}, \"experimental\": {\"themes\": [], \"other\": 1}, \"display_name\": \"x\", \"displayName\": \"y\", \"outputStyles\": null}",
+    "user/more/cmds/one.md": "---\nname: First One!\ntools: Read Write\n---\nRun the first command.\n",
+    "user/more/cmds/two.md": "---\ndescription: second\n---\nUse $1 here.\n",
+    "user/more/extra-skills/delta/SKILL.md": "---\nname: delta\ndescription: Delta skill\ndisable-model-invocation: true\n---\nDelta.\n",
+    "user/more/extra-skills/delta/agents/openai.yaml": "policy:\n  allow_implicit_invocation: false\n",
+    "user/more/extra-skills/eps/SKILL.md": "---\nname: eps\ndescription: Eps skill\n---\nEps.\n",
+    "user/more/extra-skills/eps/agents/openai.yaml": "policy: [1]\n",
+    "user/more/extra-skills/gamma/SKILL.md": "---\nname: gamma\ndescription: Gamma skill\nallowed-tools: Bash\n---\nGamma.\n",
+    "user/more/hooks/hooks.json": "{\"description\": \"d\", \"hooks\": {\"PostToolUse\": [{\"matcher\": \"Edit|Write\", \"hooks\": [{\"type\": \"command\", \"command\": \"lint\", \"timeout\": 2.5}]}], \"PreToolUse\": [{\"matcher\": \"(?<=x)y\", \"hooks\": [{\"type\": \"command\", \"command\": \"a\"}]}, {\"matcher\": 7, \"hooks\": []}, {\"hooks\": [{\"type\": \"command\", \"command\": \"b\", \"async\": true}, {\"type\": \"command\", \"command\": \"  \"}, {\"type\": \"command\", \"command\": \"c\", \"timeout\": 0}]}]}}",
+    "user/more/hooks/other.json": "{\"Stop\": [{\"hooks\": [{\"type\": \"command\", \"command\": \"bye\", \"if\": \"x\"}]}], \"SessionStart\": \"bad\"}",
+    "user/more/m.json": "{\"one\": {\"command\": \"python3\", \"args\": \"-m srv, --flag\", \"cwd\": \"./sub\"}, \"two\": {\"command\": [\"x\"]}, \"three\": {\"url\": \"ftp://bad\"}}",
+    "user/more/settings.json": "{}",
+    "user/more/workflows/w.yml": "x",
+    "user/solo/.claude-plugin/plugin.json": "{\"name\": \"solo\", \"description\": \"\"}",
+    "user/solo/SKILL.md": "---\nname: solo-skill\ndescription: Solo\n---\nSolo body.\n"
+   }
+  },
+  "codex": {
+   "files": {
+    "user/badname/.codex-plugin/plugin.json": "{\"name\": 7}\n",
+    "user/broken/.codex-plugin/plugin.json": "{not json\n",
+    "user/full/.codex-plugin/plugin.json": "{\"name\": \"Codex Demo\", \"version\": \" 1.2 \", \"author\": {\"name\": \" Ann \"}, \"skills\": [\"./extra-skills\", \"./missing\"], \"mcpServers\": \"./servers.json\", \"interface\": {\"displayName\": \"Demo\"}, \"apps\": \"./app.json\", \"hooks\": [{\"event\": \"start\"}], \"homepage\": \"https://example.com\"}\n",
+    "user/full/.mcp.json": "{\"mcpServers\": {\"local\": {\"command\": \"./bin/server\", \"args\": [\"--port\", \"1\"], \"env\": {\"A\": \"b\"}, \"cwd\": \"./work\", \"note\": \"n\", \"startup_timeout_sec\": 5}, \"dup\": {\"command\": \"node\"}, \"badcmd\": {\"command\": \"bin/x\"}, \"reserved\": {\"command\": \"node\", \"env\": {\"PLUGIN_ROOT\": \"x\"}}}}\n",
+    "user/full/agents/readme.md": "agent notes\n",
+    "user/full/app.json": "{}\n",
+    "user/full/extra-skills/beta/SKILL.md": "---\nname: beta\ndescription: Beta skill for the probe\n---\nBeta.\n",
+    "user/full/extra-skills/beta/agents/openai.yaml": "policy:\n  allow_implicit_invocation: false\n",
+    "user/full/extra-skills/gamma/SKILL.md": "---\nname: gamma\ndescription: Gamma skill for the probe\n---\nGamma.\n",
+    "user/full/extra-skills/gamma/agents/openai.yaml": "interface:\n  display_name: Gamma\n",
+    "user/full/servers.json": "{\"mcpServers\": {\"dup\": {\"type\": \"http\", \"url\": \"https://example.com/dup\"}, \"remote\": {\"type\": \"http\", \"url\": \"https://example.com/mcp?k=v\", \"headers\": {\"X-A\": \"1\"}, \"bearer_token_env_var\": \"CODEX_PROBE_TOKEN\"}, \"oauthy\": {\"type\": \"http\", \"url\": \"https://example.com/o\", \"headers\": {\"bad header\": \"1\"}, \"oauth_resource\": \"https://example.com\"}, \"emptyurl\": {\"type\": \"http\", \"url\": \"\"}, \"sse\": {\"type\": \"sse\", \"url\": \"https://example.com/s\"}, \"badheader\": {\"type\": \"http\", \"url\": \"https://example.com/h\", \"headers\": {\"bad header\": \"1\"}}, \"!!!\": {\"command\": \"node\"}}}\n",
+    "user/full/skills/alpha/SKILL.md": "---\nname: alpha\ndescription: Alpha skill for the probe\n---\nAlpha.\n",
+    "user/full/skills/alpha/agents/openai.yml": "policy: {}\n",
+    "user/full/work/.keep": "",
+    "user/implicit/.app.json": "{}\n",
+    "user/implicit/.codex-plugin/plugin.json": "{\"name\": \"implicit\", \"description\": \"\", \"mcpServers\": {\"inline\": {\"type\": \"http\", \"url\": \"https://example.com/i\"}}}\n",
+    "user/implicit/hooks.json": "{}\n",
+    "user/implicit/skills/one/SKILL.md": "---\nname: one\ndescription: One skill for the probe\n---\nOne.\n",
+    "user/minimal/.app.json": "{}\n",
+    "user/minimal/.codex-plugin/plugin.json": "{\"skills\": 5, \"mcpServers\": 3, \"interface\": \"x\", \"hooks\": \"./hooks.json\", \"apps\": 7}\n",
+    "user/minimal/hooks.json": "{}\n"
+   }
+  },
+  "kimi": {
+   "files": {
+    "user/kimi-rich/.kimi-plugin/plugin.json": "{\"name\": \"shadow\"}",
+    "user/kimi-rich/bin/run": "#!/bin/sh\n",
+    "user/kimi-rich/cmds/greet.md": "---\nname: Greet User\n---\nSay hello politely.\n",
+    "user/kimi-rich/kimi.plugin.json": "{\"name\": \"kimi-rich\", \"version\": \"0.1.0\", \"skills\": \"./skills\", \"commands\": [\"./cmds\", \"cmds-bad\"], \"skillInstructions\": \"  Always be brief.  \", \"hooks\": [{\"event\": \"PreToolUse\", \"matcher\": \"Shell\", \"command\": \"echo hi\", \"timeout\": 5}, {\"event\": \"Bogus\", \"command\": \"x\"}, {\"event\": \"Stop\", \"command\": \"y\", \"extra\": 1}, {\"event\": \"PostToolUse\", \"command\": \"z\", \"timeout\": 5.0}, {\"event\": \"PostToolUse\", \"command\": \"w\"}], \"mcpServers\": {\"s\": {\"command\": \"./bin/run\", \"env\": {\"ROOT\": \"${KIMI_PLUGIN_ROOT}\"}}, \"u\": {\"url\": \"https://example.com/k\", \"transport\": \"sse\"}}, \"sessionStart\": {\"skill\": \"x\"}, \"interface\": {\"a\": 1}, \"unknownField\": true}",
+    "user/kimi-rich/skills/one/SKILL.md": "---\nname: one\ndescription: First kimi skill\ndisableModelInvocation: true\nwhenToUse: rarely\ntype: prompt\n---\nOne body.\n",
+    "user/kimi-rich/skills/two/SKILL.md": "---\nname: two\ndescription: Second kimi skill\ntype: flow\n---\nTwo body.\n",
+    "user/nested-kimi/.kimi-plugin/plugin.json": "{\"name\": \"nested_kimi\", \"description\": \"Nested manifest\"}",
+    "user/nested-kimi/SKILL.md": "---\nname: solo\ndescription: Solo root skill\n---\nSolo.\n"
+   }
+  },
+  "kimi-more": {
+   "files": {
+    "user/badkimi/kimi.plugin.json": "{\"name\": \"BadKimi\"}",
+    "user/km/c/sub/z.md": "---\n---\nZ body line.\n",
+    "user/km/c/x.md": "---\nname: x\n---\nStatus: !`ls`\n",
+    "user/km/kimi.plugin.json": "{\"name\": \"km\", \"skills\": [\"./s/a\", \"./s/none\"], \"commands\": \"./c\", \"hooks\": [7, {\"event\": \"PreToolUse\", \"matcher\": \"Bash(\", \"command\": \"x\"}, {\"event\": \"\", \"command\": \"x\"}, {\"event\": \"Stop\", \"command\": \"q\", \"timeout\": 601}, {\"event\": \"Stop\", \"command\": \"q\", \"timeout\": true}, {\"event\": \"PreToolUse\", \"command\": \"ok\", \"timeout\": 600}], \"mcpServers\": \"./m.json\", \"author\": \"  Kay  \", \"keywords\": [\"a\"]}",
+    "user/km/s/a/SKILL.md": "---\nname: a\ndescription: Skill a\ndisableModelInvocation: false\ndisable_model_invocation: true\nmetadata:\n  k: v\ntools: [Read]\n---\nA.\n",
+    "user/km/s/none/readme.md": "x",
+    "user/ss/kimi.plugin.json": "{\"name\": \"ss\", \"sessionStart\": {\"other\": 1}}",
+    "user/typed/kimi.plugin.json": "{\"name\": \"typed\", \"version\": 3}"
+   }
+  },
+  "native-basic": {
+   "files": {
+    "user/alpha/README.md": "Alpha readme.\n",
+    "user/alpha/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"alpha\", \"version\": \"1.2.0\", \"description\": \"Alpha plugin for the corpus\", \"author\": {\"name\": \"Ann Example\", \"email\": \"ann@example.com\"}, \"homepage\": \"https://example.com/alpha\", \"license\": \"MIT\", \"keywords\": [\"corpus\"]}\n",
+    "user/alpha/skills/guarded/SKILL.md": "---\nname: guarded\ndescription: Uses a narrow tool set\nallowed-tools: read_file grep\n---\nOnly read.\n",
+    "user/alpha/skills/hidden/SKILL.md": "---\nname: hidden\ndescription: Only the user may run this\ndisable-model-invocation: true\n---\nHidden body.\n",
+    "user/alpha/skills/internal/SKILL.md": "---\nname: internal\ndescription: Only the model may run this\nuser-invocable: false\n---\nInternal body.\n",
+    "user/alpha/skills/mismatch/SKILL.md": "---\nname: other-name\ndescription: Name differs from its folder\n---\nMismatch body.\n",
+    "user/alpha/skills/summarize/SKILL.md": "---\nname: summarize\ndescription: Summarizes a file for the corpus\n---\nRead the file and summarize it.\n",
+    "user/minimal/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"minimal\"}\n"
+   }
+  },
+  "native-errors": {
+   "files": {
+    "user/bad-json/plugin.json": "{not json\n",
+    "user/bad-name/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"Bad--Name\"}\n",
+    "user/badagent/ai.mistral.vibe/agents/thing.toml": "schema_version = 2\nagent_type = \"subagent\"\ndescription = \"wrong version\"\n",
+    "user/badagent/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"badagent\", \"extensions\": {\"ai.mistral.vibe\": {\"schemaVersion\": 1}}}\n",
+    "user/badconn/connectors.json": "{\"schemaVersion\": 1, \"connectors\": [{\"id\": \"linear\", \"tools\": []}]}\n",
+    "user/badconn/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"badconn\", \"extensions\": {\"ai.mistral.vibe\": {\"schemaVersion\": 1}}}\n",
+    "user/badhooks/ai.mistral.vibe/hooks.toml": "[[hooks]]\nname = \"x\"\ntype = \"post_tool\"\ncommand = \"true\"\nsurprise = 1\n",
+    "user/badhooks/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"badhooks\", \"extensions\": {\"ai.mistral.vibe\": {\"schemaVersion\": 1}}}\n",
+    "user/badknow/ai.mistral.vibe/knowledge/Bad_Name/KNOWLEDGE.md": "---\nname: Bad_Name\ndescription: x\n---\n",
+    "user/badknow/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"badknow\", \"extensions\": {\"ai.mistral.vibe\": {\"schemaVersion\": 1}}}\n",
+    "user/badlib/libraries.json": "{\"schemaVersion\": 1, \"python\": {\"not-an-identifier\": \"./x.py\", \"missing\": \"./nope\"}}\n",
+    "user/badlib/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"badlib\", \"extensions\": {\"ai.mistral.vibe\": {\"schemaVersion\": 1}}}\n",
+    "user/clash-a/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"clash-a\", \"extensions\": {\"ai.mistral.vibe\": {\"schemaVersion\": 1, \"toolNamespace\": \"shared\"}}}\n",
+    "user/clash-b/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"clash-b\", \"extensions\": {\"ai.mistral.vibe\": {\"schemaVersion\": 1, \"toolNamespace\": \"shared\"}}}\n",
+    "user/dup-one/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"dupe\"}\n",
+    "user/dup-two/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"dupe\"}\n",
+    "user/empty-dir/notes.txt": "Not a plugin.\n",
+    "user/reserved/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"reserved\", \"extensions\": {\"ai.mistral.vibe\": {\"schemaVersion\": 1, \"toolNamespace\": \"vibe\"}}}\n",
+    "user/typed/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"typed\", \"version\": 3}\n",
+    "user/unknown-key/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"unknown-key\", \"flavor\": \"extra\"}\n",
+    "user/wrong-schema/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/2.0.0/plugin.schema.json\", \"name\": \"wrong-schema\"}\n"
+   }
+  },
+  "native-extension": {
+   "files": {
+    "user/ext/ai.mistral.vibe/agents/plain-helper.toml": "schema_version = 1\nagent_type = \"subagent\"\ndescription = \"A helper without a display name.\"\n",
+    "user/ext/ai.mistral.vibe/agents/researcher.toml": "schema_version = 1\nagent_type = \"subagent\"\ndescription = \"Digs through notes and reports back.\"\nsafety = \"safe\"\ninstructions = \"Cite every file.\"\nenabled_tools = [\"read_file\", \"grep\"]\n",
+    "user/ext/ai.mistral.vibe/hooks.toml": "[[hooks]]\nname = \"audit\"\ntype = \"post_tool\"\ncommand = \"./bin/audit\"\nmatch = \"bash\"\ntimeout = 12\n\n[[hooks]]\nname = \"gate\"\ntype = \"pre_tool\"\ncommand = \"echo gate\"\n",
+    "user/ext/ai.mistral.vibe/knowledge/policy/KNOWLEDGE.md": "---\nname: policy\ndescription: Policy notes kept for the corpus.\ndisplay_name: Policy notes\nicon: P\n---\nPolicy body.\n",
+    "user/ext/ai.mistral.vibe/knowledge/policy/extra.md": "Extra policy file.\n",
+    "user/ext/bin/audit": "#!/bin/sh\nexit 0\n",
+    "user/ext/connectors.json": "{\"schemaVersion\": 1, \"connectors\": [{\"id\": \"linear\", \"tools\": [\"search_issues\", \"create_issue\"]}]}\n",
+    "user/ext/lib/node/helpers/index.js": "module.exports = {};\n",
+    "user/ext/lib/node/helpers/package.json": "{\"name\": \"@acme/helpers\", \"main\": \"index.js\"}\n",
+    "user/ext/lib/python/acme_tools/__init__.py": "VALUE = 1\n",
+    "user/ext/lib/python/single.py": "VALUE = 2\n",
+    "user/ext/libraries.json": "{\"schemaVersion\": 1, \"node\": {\"@acme/helpers\": \"./lib/node/helpers\"}, \"python\": {\"acme_tools\": \"./lib/python/acme_tools\", \"single\": \"./lib/python/single.py\"}}\n",
+    "user/ext/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"ext\", \"version\": \"0.3.0\", \"extensions\": {\"ai.mistral.vibe\": {\"schemaVersion\": 1, \"toolNamespace\": \"ext_tools\", \"toolOverrides\": {\"search/find\": {\"name\": \"lookup\", \"exposure\": \"direct\"}}}}}\n",
+    "user/ext/skills/use/SKILL.md": "---\nname: use\ndescription: Uses the extension namespace\n---\nExtension skill body.\n",
+    "user/noext/ai.mistral.vibe/hooks.toml": "[[hooks]]\nname = \"ignored\"\ntype = \"post_tool\"\ncommand = \"true\"\n",
+    "user/noext/libraries.json": "{\"schemaVersion\": 1, \"node\": {\"x\": \"./x\"}}\n",
+    "user/noext/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"noext\"}\n"
+   }
+  },
+  "native-mcp": {
+   "configuredMcp": [
+    "taken"
+   ],
+   "files": {
+    "user/servers/bin/server": "#!/bin/sh\nexit 0\n",
+    "user/servers/mcp.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json\", \"mcpServers\": {\"local\": {\"type\": \"stdio\", \"command\": \"./bin/server\", \"args\": [\"--data\", \"${PLUGIN_DATA}\", \"--root\", \"${PLUGIN_ROOT}\"], \"env\": {\"LOG_LEVEL\": \"info\", \"DATA\": \"${PLUGIN_DATA}/cache\"}, \"cwd\": \"${PLUGIN_DATA}\"}, \"onpath\": {\"type\": \"stdio\", \"command\": \"python3\", \"args\": [\"-V\"]}, \"docs\": {\"type\": \"streamable-http\", \"url\": \"https://docs.example.com/mcp\", \"headers\": {\"X-Client\": \"vibe\"}}, \"legacy\": {\"type\": \"sse\", \"url\": \"https://old.example.com/sse\"}, \"taken\": {\"type\": \"stdio\", \"command\": \"python3\"}, \"badenv\": {\"type\": \"stdio\", \"command\": \"python3\", \"env\": {\"PLUGIN_ROOT\": \"/elsewhere\"}}, \"escape\": {\"type\": \"stdio\", \"command\": \"./../outside\"}}}\n",
+    "user/servers/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"servers\", \"version\": \"2.0.0\"}\n",
+    "user/twin/mcp.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json\", \"mcpServers\": {\"docs\": {\"type\": \"streamable-http\", \"url\": \"https://twin.example.com/mcp\"}}}\n",
+    "user/twin/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"twin\"}\n"
+   }
+  },
+  "native-scopes": {
+   "files": {
+    "builtin/core/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"core\", \"description\": \"Builtin copy\"}\n",
+    "builtin/core/skills/tip/SKILL.md": "---\nname: tip\ndescription: Builtin tip\n---\nBuiltin body.\n",
+    "builtin/solo/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"solo\", \"description\": \"Shadowed builtin\"}\n",
+    "project/shared/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"shared\", \"version\": \"2.0.0\", \"description\": \"Project copy\"}\n",
+    "project/shared/skills/hi/SKILL.md": "---\nname: hi\ndescription: Project greeting\n---\nProject hello.\n",
+    "user/shared/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"shared\", \"version\": \"1.0.0\", \"description\": \"User copy\"}\n",
+    "user/shared/skills/hi/SKILL.md": "---\nname: hi\ndescription: User greeting\n---\nUser hello.\n",
+    "user/solo/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"solo\"}\n"
+   },
+   "trusted": true
+  },
+  "opencode": {
+   "files": {
+    "user/codeonly/.opencode/plugins/only.ts": "export const y = 2\n",
+    "user/empty-oc/opencode.json": "{}",
+    "user/oc/.opencode/plugins/plug.ts": "export const x = 1\n",
+    "user/oc/.opencode/plugins/types.d.ts": "export {}\n",
+    "user/oc/.opencode/tools/tool.js": "module.exports = {}\n",
+    "user/oc/index.ts": "export default {}\n",
+    "user/oc/opencode.jsonc": "{\n  // comment\n  \"mcp\": {\n    \"local\": {\"type\": \"local\", \"command\": [\"npx\", \"srv\"], \"environment\": {\"K\": \"v\"}, /* inline */ },\n    \"remote\": {\"type\": \"remote\", \"url\": \"https://example.com/mcp\", \"headers\": {\"X\": \"{env:TOKEN}\"}},\n    \"plain\": {\"type\": \"remote\", \"url\": \"https://example.com/plain\"},\n    \"auth\": {\"type\": \"remote\", \"url\": \"https://example.com/a\", \"oauth\": {}},\n    \"off\": {\"type\": \"local\", \"enabled\": false, \"command\": [\"a\"]},\n    \"odd\": {\"type\": \"weird\"},\n  },\n  \"agent\": {\"a\": {}},\n  \"provider\": {},\n}\n",
+    "user/oc/package.json": "{\"name\": \"@scope/OC Pkg\", \"keywords\": [\"opencode\"], \"description\": \"  OpenCode fixture  \", \"version\": \"2.0.0\", \"author\": \"Bob\", \"main\": \"./index.ts\"}",
+    "user/oc/skills/hello/SKILL.md": "---\nname: hello\ndescription: Hello from OpenCode\n---\nHello.\n",
+    "user/oc/skills/mismatch/SKILL.md": "---\nname: other\ndescription: Wrong directory\n---\nX.\n"
+   }
+  }
+ },
+ "note": "Plugin trees authored for the plugins parity corpus by scripts/parity/plugins.py; every file here is this repository's own text.",
+ "schemaVersion": 1
+}

@@ -1,6 +1,7 @@
 use super::*;
 
 mod mcp_backend;
+pub(crate) use mcp_backend::overlay_plugin_sources;
 mod shell_backend;
 
 struct BackendDenyApproval;
@@ -19,6 +20,9 @@ pub(super) struct CoreResourceSession {
     /// The servers the session was started with, which are all it knows
     /// when it has no configuration store to read them from.
     started_mcp: StdMutex<Vec<McpServerConfig>>,
+    /// The servers the session's plugins declare, listed after the
+    /// configured ones.
+    plugin_mcp: StdMutex<Vec<crate::resources::PluginMcpSource>>,
     config: Option<LayeredConfig>,
     mcp_mutation: Mutex<()>,
     terminals: TerminalManager,
@@ -26,6 +30,21 @@ pub(super) struct CoreResourceSession {
 }
 
 impl CoreResourceSession {
+    /// The plugin that owns each plugin server, by catalog name.
+    fn plugin_owners(&self) -> BTreeMap<String, String> {
+        self.plugin_sources()
+            .into_iter()
+            .map(|source| (source.name, source.plugin_name))
+            .collect()
+    }
+
+    fn plugin_sources(&self) -> Vec<crate::resources::PluginMcpSource> {
+        self.plugin_mcp
+            .lock()
+            .map(|sources| sources.clone())
+            .unwrap_or_default()
+    }
+
     fn config(&self) -> Option<LayeredConfig> {
         let trusted = matches!(
             self.policy.try_trust_decision(&self.working_directory),
@@ -142,6 +161,7 @@ impl ResourceBackend for CoreResourceBackend {
                     tools: session.tools,
                     mcp: McpRegistry::default(),
                     started_mcp: StdMutex::new(Vec::new()),
+                    plugin_mcp: StdMutex::new(Vec::new()),
                     config: scoped_config,
                     mcp_mutation: Mutex::new(()),
                     terminals: TerminalManager::default(),
@@ -150,6 +170,14 @@ impl ResourceBackend for CoreResourceBackend {
             },
         );
         Ok(())
+    }
+
+    fn set_plugin_mcp(&self, session_id: &str, sources: Vec<crate::resources::PluginMcpSource>) {
+        if let Ok(session) = self.session(session_id)
+            && let Ok(mut held) = session.plugin_mcp.lock()
+        {
+            *held = sources;
+        }
     }
 
     fn configure_mcp<'a>(

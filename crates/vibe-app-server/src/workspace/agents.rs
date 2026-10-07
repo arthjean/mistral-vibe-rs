@@ -370,7 +370,12 @@ impl WorkspaceService {
             config: view,
             active_agent: agent_summary(&active),
             agents: profiles.iter().map(agent_summary).collect(),
-            skills: catalog.skills.values().map(skill_summary).collect(),
+            skills: catalog
+                .skills
+                .values()
+                .filter(|skill| !self.plugin_claims(skill))
+                .map(skill_summary)
+                .collect(),
             issues: catalog
                 .issues
                 .iter()
@@ -557,6 +562,22 @@ impl WorkspaceService {
         Ok(canonical)
     }
 
+    /// Whether a skill a root publishes sits at a `SKILL.md` a seeded plugin
+    /// skill already configured, which the reference's unified catalogue
+    /// skips (`vibe/app_server/_skills.py`, `project_core_skills`).
+    fn plugin_claims(&self, skill: &vibe_core::extensions::SkillDefinition) -> bool {
+        let (Some(seed), Some(path)) = (&self.seeded_skills, &skill.path) else {
+            return false;
+        };
+        if skill.source == vibe_core::skills::SkillSource::Plugin {
+            return false;
+        }
+        let resolved = path.canonicalize().unwrap_or_else(|_| path.clone());
+        seed.values()
+            .filter_map(|plugin| plugin.path.as_ref())
+            .any(|claimed| claimed.canonicalize().unwrap_or_else(|_| claimed.clone()) == resolved)
+    }
+
     pub(super) fn catalog(&self) -> ExtensionCatalog {
         let builtin_agents = self
             .agents
@@ -574,8 +595,7 @@ impl WorkspaceService {
         let mut roots = self.discovery_roots.clone();
         roots.agents = self.agent_search_paths();
         roots.skills = self.skill_discovery(&self.paths.working_directory, self.project_trusted);
-        let seeded = vibe_core::skills::builtins::builtin_skills();
-        discover_extensions(&roots, builtin_agents, seeded, BTreeMap::new())
+        discover_extensions(&roots, builtin_agents, self.skill_seed(), BTreeMap::new())
     }
 
     /// Where a session looks for skills and what it publishes once it has

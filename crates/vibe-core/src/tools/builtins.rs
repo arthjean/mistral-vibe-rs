@@ -192,6 +192,15 @@ impl BuiltinTools {
         self
     }
 
+    /// The same tools with `skills` in place of every skill that has no
+    /// directory on disk, which is how a unified session's plugin skills
+    /// replace the legacy builtins.
+    #[must_use]
+    pub fn with_seeded_skills(mut self, skills: Arc<BTreeMap<String, SkillDefinition>>) -> Self {
+        self.builtin_skills = skills;
+        self
+    }
+
     /// The same tools reaching the endpoint with another credential, or none.
     ///
     /// The todo state is shared rather than reset: swapping the credential is

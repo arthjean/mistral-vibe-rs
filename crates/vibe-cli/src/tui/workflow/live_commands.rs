@@ -27,6 +27,7 @@ use super::super::commands::{CommandContext, parse_command_in};
 use super::super::controls::ControlState;
 use super::super::interaction::{IntegrationKind, Overlay, OverlayItem, OverlayKind};
 use super::super::pickers::{mcp_overlay, sessions_overlay, theme_overlay, thinking_overlay};
+use super::super::plugins::{PluginCatalog, PluginsPanel, PluginsPort};
 use super::super::remote_project_workflow::{handle_teleport_command, open_project_picker};
 use super::super::setup::ResolvedTheme;
 use super::super::state::{EntrySource, EntryStatus, TranscriptEntry, TranscriptKind, TuiState};
@@ -763,6 +764,26 @@ impl CommandBackend for LiveBackend<'_> {
             .get("count")
             .and_then(Value::as_u64)
             .unwrap_or_default())
+    }
+
+    fn plugin_catalog(&mut self) -> Result<Option<PluginCatalog>, String> {
+        self.runtime()?.read_catalog()
+    }
+
+    fn reload_plugins(&mut self) -> Result<(), String> {
+        PluginsPort::reload(self.runtime()?)
+    }
+
+    fn open_plugins(&mut self, catalog: PluginCatalog) {
+        let Some(runtime) = self.runtime.as_mut() else {
+            self.state.push_diagnostic(SETUP_REQUIRED);
+            return;
+        };
+        let home = crate::tui::render::user_home_directory()
+            .map(|home| home.to_string_lossy().into_owned());
+        let mut panel = PluginsPanel::new(catalog, home);
+        self.state.overlay = Some(panel.overlay());
+        runtime.plugins_panel = Some(panel);
     }
 }
 

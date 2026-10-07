@@ -95,8 +95,10 @@ const fn policy(kind: OverlayKind) -> OverlayPolicy {
         | OverlayKind::DataRetention
         | OverlayKind::Skills
         | OverlayKind::Todos
-        // The log-level picker owns its keys and never reaches this table.
-        | OverlayKind::LogLevel => OverlayPolicy {
+        // The log-level picker and the plugins panel own their keys and never
+        // reach this table.
+        | OverlayKind::LogLevel
+        | OverlayKind::Plugins => OverlayPolicy {
             activates: false,
             ..LIST
         },
@@ -167,6 +169,10 @@ pub(in crate::tui) async fn handle_overlay_key(
         }
         OverlayKind::LogLevel => {
             handle_log_level_key(key, runtime, state);
+            OverlayKeyResult::Handled
+        }
+        OverlayKind::Plugins => {
+            super::super::plugins::handle_plugins_key(key, runtime, state);
             OverlayKeyResult::Handled
         }
         kind => reduce_list_key(policy(kind), key, runtime, state, controls, composer, theme).await,

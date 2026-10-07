@@ -36,6 +36,7 @@ mod onboarding_parity_tests;
 mod path_normalization;
 pub mod pickers;
 mod plan_review;
+mod plugins;
 #[cfg(test)]
 mod promo_parity_tests;
 mod prompt;

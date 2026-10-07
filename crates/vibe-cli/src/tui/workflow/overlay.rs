@@ -282,7 +282,8 @@ pub(super) async fn select_overlay_item(
         | OverlayKind::DataRetention
         | OverlayKind::LogLevel
         | OverlayKind::Skills
-        | OverlayKind::Todos => {}
+        | OverlayKind::Todos
+        | OverlayKind::Plugins => {}
     }
     None
 }

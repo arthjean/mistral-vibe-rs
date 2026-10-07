@@ -680,7 +680,7 @@ impl AppServer {
             };
             (
                 reservation,
-                prompt_scope(session),
+                prompt_scope(session, self.plugin_skill_seed_of(session)),
                 session.system_prompt.clone(),
             )
         };
@@ -751,8 +751,14 @@ impl AppServer {
     }
 }
 
-/// What the session's system message is composed for.
-pub(crate) fn prompt_scope(session: &SessionRuntime) -> SessionPromptScope {
+/// What the session's system message is composed for, with the plugin skills
+/// a unified session lists in place of the builtins.
+pub(crate) fn prompt_scope(
+    session: &SessionRuntime,
+    skill_seed: Option<
+        Arc<std::collections::BTreeMap<String, vibe_core::extensions::SkillDefinition>>,
+    >,
+) -> SessionPromptScope {
     SessionPromptScope {
         working_directory: PathBuf::from(&session.working_directory),
         trusted: session.intent.trusted,
@@ -767,6 +773,7 @@ pub(crate) fn prompt_scope(session: &SessionRuntime) -> SessionPromptScope {
             .list()
             .map(|specs| specs.into_iter().map(|spec| spec.name).collect())
             .unwrap_or_default(),
+        skill_seed,
     }
 }
 

@@ -105,10 +105,9 @@ pub enum CommandGate {
 /// inputs the reference reads from elsewhere: the host platform and the
 /// excluded keys.
 ///
-/// `experimental_harness` is the reference's backend selection. This port runs
-/// one backend, the equivalent of the reference's default legacy one, so every
-/// production context answers `false` here, which is what a reference session
-/// launched without `--experimental-harness` answers too.
+/// `experimental_harness` is the reference's backend selection: true when the
+/// session runs the unified mode (`--experimental-harness`, or the unified
+/// rollout), as its `runtime/read` publishes it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommandContext {
     pub registry_skills_enabled: bool,

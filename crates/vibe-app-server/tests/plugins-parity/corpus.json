@@ -1,0 +1,2119 @@
+{
+ "reference": {
+  "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+ },
+ "scenarios": [
+  {
+   "name": "unified/user-and-project",
+   "observed": [
+    {
+     "answer": {
+      "plugins": {
+       "dropped": [],
+       "plugins": [
+        {
+         "author": null,
+         "components": [
+          {
+           "kind": "skill",
+           "name": "demo:hello",
+           "status": null
+          }
+         ],
+         "contentSha256": "a82a1ea9ab287e5fea354995c060f748719e98a6a6a16e6787c67dedf419bc1f",
+         "description": "Probe plugin",
+         "drifted": 0,
+         "installedRoot": "<vibe-home>/plugins/demo",
+         "manifestDigest": "b09cd24ef0ae8fc4fda13f852e2eaa488f7268660c5b92de3a0e25d68f1e692d",
+         "name": "demo",
+         "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/a8/a82a1ea9ab287e5fea354995c060f748719e98a6a6a16e6787c67dedf419bc1f",
+         "scope": "global",
+         "sourceFormat": "agent_plugins_1_0",
+         "version": "0.1.0"
+        },
+        {
+         "author": null,
+         "components": [
+          {
+           "kind": "skill",
+           "name": "local:review",
+           "status": null
+          }
+         ],
+         "contentSha256": "88e244a916e2e1f4b46d9c98f3e76968d88b10d0d7e24bc394783e68385ef1f8",
+         "description": "Capabilities provided by local.",
+         "drifted": 0,
+         "installedRoot": "<workspace>/.vibe/plugins/local",
+         "manifestDigest": "5622cd874effb898eb75ffe87cdaaecbb6d2b9361c3053d09b335613b4e888e3",
+         "name": "local",
+         "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/88/88e244a916e2e1f4b46d9c98f3e76968d88b10d0d7e24bc394783e68385ef1f8",
+         "scope": "project",
+         "sourceFormat": "agent_plugins_1_0",
+         "version": "0.0.1"
+        },
+        {
+         "author": "Mistral AI",
+         "components": [
+          {
+           "kind": "skill",
+           "name": "vibe:create-plugin",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:skill-creator",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:vibe",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:worktree",
+           "status": null
+          }
+         ],
+         "contentSha256": "<builtin-digest>",
+         "description": "Skills and components shipped with the Vibe CLI.",
+         "drifted": 0,
+         "installedRoot": "<builtin-root>",
+         "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
+         "name": "vibe",
+         "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
+         "scope": "builtin",
+         "sourceFormat": "agent_plugins_1_0",
+         "version": "1.0.0"
+        }
+       ]
+      }
+     },
+     "call": "plugin_catalog/read",
+     "ok": true,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "plugins": {
+       "dropped": [],
+       "plugins": [
+        {
+         "author": null,
+         "components": [
+          {
+           "kind": "skill",
+           "name": "demo:hello",
+           "status": null
+          }
+         ],
+         "contentSha256": "a82a1ea9ab287e5fea354995c060f748719e98a6a6a16e6787c67dedf419bc1f",
+         "description": "Probe plugin",
+         "drifted": 0,
+         "installedRoot": "<vibe-home>/plugins/demo",
+         "manifestDigest": "b09cd24ef0ae8fc4fda13f852e2eaa488f7268660c5b92de3a0e25d68f1e692d",
+         "name": "demo",
+         "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/a8/a82a1ea9ab287e5fea354995c060f748719e98a6a6a16e6787c67dedf419bc1f",
+         "scope": "global",
+         "sourceFormat": "agent_plugins_1_0",
+         "version": "0.1.0"
+        },
+        {
+         "author": null,
+         "components": [
+          {
+           "kind": "skill",
+           "name": "local:review",
+           "status": null
+          }
+         ],
+         "contentSha256": "88e244a916e2e1f4b46d9c98f3e76968d88b10d0d7e24bc394783e68385ef1f8",
+         "description": "Capabilities provided by local.",
+         "drifted": 0,
+         "installedRoot": "<workspace>/.vibe/plugins/local",
+         "manifestDigest": "5622cd874effb898eb75ffe87cdaaecbb6d2b9361c3053d09b335613b4e888e3",
+         "name": "local",
+         "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/88/88e244a916e2e1f4b46d9c98f3e76968d88b10d0d7e24bc394783e68385ef1f8",
+         "scope": "project",
+         "sourceFormat": "agent_plugins_1_0",
+         "version": "0.0.1"
+        },
+        {
+         "author": "Mistral AI",
+         "components": [
+          {
+           "kind": "skill",
+           "name": "vibe:create-plugin",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:skill-creator",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:vibe",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:worktree",
+           "status": null
+          }
+         ],
+         "contentSha256": "<builtin-digest>",
+         "description": "Skills and components shipped with the Vibe CLI.",
+         "drifted": 0,
+         "installedRoot": "<builtin-root>",
+         "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
+         "name": "vibe",
+         "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
+         "scope": "builtin",
+         "sourceFormat": "agent_plugins_1_0",
+         "version": "1.0.0"
+        }
+       ]
+      }
+     },
+     "call": "plugins/read",
+     "ok": true,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "info": {
+       "components": [
+        {
+         "config": {},
+         "kind": "skill",
+         "name": "demo:hello",
+         "sourcePath": "<vibe-home>/logs/session/plugins/packages/a8/a82a1ea9ab287e5fea354995c060f748719e98a6a6a16e6787c67dedf419bc1f/skills/hello/SKILL.md"
+        },
+        {
+         "config": {},
+         "kind": "skill",
+         "name": "local:review",
+         "sourcePath": "<vibe-home>/logs/session/plugins/packages/88/88e244a916e2e1f4b46d9c98f3e76968d88b10d0d7e24bc394783e68385ef1f8/skills/review/SKILL.md"
+        },
+        {
+         "config": {},
+         "kind": "skill",
+         "name": "vibe:create-plugin",
+         "sourcePath": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>/skills/create-plugin/SKILL.md"
+        },
+        {
+         "config": {},
+         "kind": "skill",
+         "name": "vibe:skill-creator",
+         "sourcePath": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>/skills/skill-creator/SKILL.md"
+        },
+        {
+         "config": {},
+         "kind": "skill",
+         "name": "vibe:vibe",
+         "sourcePath": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>/skills/vibe/SKILL.md"
+        },
+        {
+         "config": {},
+         "kind": "skill",
+         "name": "vibe:worktree",
+         "sourcePath": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>/skills/worktree/SKILL.md"
+        }
+       ],
+       "raw": {
+        "plugins": {
+         "demo": {
+          "contentSha256": "a82a1ea9ab287e5fea354995c060f748719e98a6a6a16e6787c67dedf419bc1f",
+          "manifestDigest": "b09cd24ef0ae8fc4fda13f852e2eaa488f7268660c5b92de3a0e25d68f1e692d"
+         },
+         "local": {
+          "contentSha256": "88e244a916e2e1f4b46d9c98f3e76968d88b10d0d7e24bc394783e68385ef1f8",
+          "manifestDigest": "5622cd874effb898eb75ffe87cdaaecbb6d2b9361c3053d09b335613b4e888e3"
+         },
+         "vibe": {
+          "contentSha256": "<builtin-digest>",
+          "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a"
+         }
+        },
+        "routes": {},
+        "version": 1
+       },
+       "workdir": "<workspace>"
+      }
+     },
+     "call": "plugin/info",
+     "ok": true,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "experimentalHarness": true,
+      "issues": [],
+      "mcp": {
+       "connectorError": null,
+       "discoveryErrors": {},
+       "manageConnectorsUrl": null,
+       "sources": []
+      },
+      "skills": [
+       {
+        "description": "Says hello for the probe",
+        "enabled": true,
+        "locked": false,
+        "name": "demo:hello",
+        "prompt": {
+         "len": 10,
+         "sha256": "c8e2c1437abb87b67330d0dddbd1de9a179ca6be207497f14873894c26e7d742"
+        },
+        "registry": null,
+        "scope": "global",
+        "source": "plugin",
+        "userInvocable": true
+       },
+       {
+        "description": "Reviews the project",
+        "enabled": true,
+        "locked": false,
+        "name": "local:review",
+        "prompt": {
+         "len": 10,
+         "sha256": "c905f66169fd408cbdc2c545c1d3d0077959709922f613df78a8b10b0e78a97d"
+        },
+        "registry": null,
+        "scope": "project",
+        "source": "plugin",
+        "userInvocable": true
+       },
+       {
+        "description": "<builtin-prose>",
+        "enabled": true,
+        "locked": false,
+        "name": "vibe:create-plugin",
+        "prompt": "<builtin-prose>",
+        "registry": null,
+        "scope": "builtin",
+        "source": "plugin",
+        "userInvocable": true
+       },
+       {
+        "description": "<builtin-prose>",
+        "enabled": true,
+        "locked": false,
+        "name": "vibe:skill-creator",
+        "prompt": "<builtin-prose>",
+        "registry": null,
+        "scope": "builtin",
+        "source": "plugin",
+        "userInvocable": true
+       },
+       {
+        "description": "<builtin-prose>",
+        "enabled": true,
+        "locked": false,
+        "name": "vibe:vibe",
+        "prompt": "<builtin-prose>",
+        "registry": null,
+        "scope": "builtin",
+        "source": "plugin",
+        "userInvocable": false
+       },
+       {
+        "description": "<builtin-prose>",
+        "enabled": true,
+        "locked": false,
+        "name": "vibe:worktree",
+        "prompt": "<builtin-prose>",
+        "registry": null,
+        "scope": "builtin",
+        "source": "plugin",
+        "userInvocable": true
+       }
+      ]
+     },
+     "call": "runtime/read",
+     "ok": true,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "mcp": {
+       "connectorError": null,
+       "discoveryErrors": {},
+       "manageConnectorsUrl": null,
+       "sources": []
+      }
+     },
+     "call": "mcp_catalog/read",
+     "ok": true,
+     "warnings": []
+    }
+   ],
+   "scenario": {
+    "flags": [
+     "--experimental-harness"
+    ],
+    "home": {
+     "plugins/demo/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"demo\", \"version\": \"0.1.0\", \"description\": \"Probe plugin\"}\n",
+     "plugins/demo/skills/hello/SKILL.md": "---\nname: hello\ndescription: Says hello for the probe\n---\nSay hello.\n"
+    },
+    "name": "unified/user-and-project",
+    "steps": [
+     {
+      "call": "plugin_catalog/read",
+      "params": {
+       "sessionId": "$S"
+      }
+     },
+     {
+      "call": "plugins/read",
+      "params": {
+       "sessionId": "$S"
+      }
+     },
+     {
+      "call": "plugin/info",
+      "params": {
+       "sessionId": "$S"
+      }
+     },
+     {
+      "call": "runtime/read",
+      "params": {
+       "sessionId": "$S"
+      }
+     },
+     {
+      "call": "mcp_catalog/read",
+      "params": {
+       "sessionId": "$S"
+      }
+     }
+    ],
+    "trusted": true,
+    "workspace": {
+     ".vibe/plugins/local/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"local\", \"version\": \"0.0.1\"}\n",
+     ".vibe/plugins/local/skills/review/SKILL.md": "---\nname: review\ndescription: Reviews the project\n---\nReview it.\n"
+    }
+   }
+  },
+  {
+   "name": "unified/untrusted-project",
+   "observed": [
+    {
+     "answer": {
+      "plugins": {
+       "dropped": [],
+       "plugins": [
+        {
+         "author": null,
+         "components": [
+          {
+           "kind": "skill",
+           "name": "demo:hello",
+           "status": null
+          }
+         ],
+         "contentSha256": "a82a1ea9ab287e5fea354995c060f748719e98a6a6a16e6787c67dedf419bc1f",
+         "description": "Probe plugin",
+         "drifted": 0,
+         "installedRoot": "<vibe-home>/plugins/demo",
+         "manifestDigest": "b09cd24ef0ae8fc4fda13f852e2eaa488f7268660c5b92de3a0e25d68f1e692d",
+         "name": "demo",
+         "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/a8/a82a1ea9ab287e5fea354995c060f748719e98a6a6a16e6787c67dedf419bc1f",
+         "scope": "global",
+         "sourceFormat": "agent_plugins_1_0",
+         "version": "0.1.0"
+        },
+        {
+         "author": "Mistral AI",
+         "components": [
+          {
+           "kind": "skill",
+           "name": "vibe:create-plugin",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:skill-creator",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:vibe",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:worktree",
+           "status": null
+          }
+         ],
+         "contentSha256": "<builtin-digest>",
+         "description": "Skills and components shipped with the Vibe CLI.",
+         "drifted": 0,
+         "installedRoot": "<builtin-root>",
+         "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
+         "name": "vibe",
+         "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
+         "scope": "builtin",
+         "sourceFormat": "agent_plugins_1_0",
+         "version": "1.0.0"
+        }
+       ]
+      }
+     },
+     "call": "plugin_catalog/read",
+     "ok": true,
+     "warnings": []
+    }
+   ],
+   "scenario": {
+    "flags": [
+     "--experimental-harness"
+    ],
+    "home": {
+     "plugins/demo/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"demo\", \"version\": \"0.1.0\", \"description\": \"Probe plugin\"}\n",
+     "plugins/demo/skills/hello/SKILL.md": "---\nname: hello\ndescription: Says hello for the probe\n---\nSay hello.\n"
+    },
+    "name": "unified/untrusted-project",
+    "steps": [
+     {
+      "call": "plugin_catalog/read",
+      "params": {
+       "sessionId": "$S"
+      }
+     }
+    ],
+    "trusted": false,
+    "workspace": {
+     ".vibe/plugins/local/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"local\", \"version\": \"0.0.1\"}\n",
+     ".vibe/plugins/local/skills/review/SKILL.md": "---\nname: review\ndescription: Reviews the project\n---\nReview it.\n"
+    }
+   }
+  },
+  {
+   "name": "unified/only-builtin",
+   "observed": [
+    {
+     "answer": {
+      "plugins": {
+       "dropped": [],
+       "plugins": [
+        {
+         "author": "Mistral AI",
+         "components": [
+          {
+           "kind": "skill",
+           "name": "vibe:create-plugin",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:skill-creator",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:vibe",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:worktree",
+           "status": null
+          }
+         ],
+         "contentSha256": "<builtin-digest>",
+         "description": "Skills and components shipped with the Vibe CLI.",
+         "drifted": 0,
+         "installedRoot": "<builtin-root>",
+         "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
+         "name": "vibe",
+         "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
+         "scope": "builtin",
+         "sourceFormat": "agent_plugins_1_0",
+         "version": "1.0.0"
+        }
+       ]
+      }
+     },
+     "call": "plugin_catalog/read",
+     "ok": true,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "plugins": {
+       "dropped": [],
+       "plugins": [
+        {
+         "author": "Mistral AI",
+         "components": [
+          {
+           "kind": "skill",
+           "name": "vibe:create-plugin",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:skill-creator",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:vibe",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:worktree",
+           "status": null
+          }
+         ],
+         "contentSha256": "<builtin-digest>",
+         "description": "Skills and components shipped with the Vibe CLI.",
+         "drifted": 0,
+         "installedRoot": "<builtin-root>",
+         "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
+         "name": "vibe",
+         "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
+         "scope": "builtin",
+         "sourceFormat": "agent_plugins_1_0",
+         "version": "1.0.0"
+        }
+       ]
+      }
+     },
+     "call": "plugins/read",
+     "ok": true,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "info": {
+       "components": [
+        {
+         "config": {},
+         "kind": "skill",
+         "name": "vibe:create-plugin",
+         "sourcePath": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>/skills/create-plugin/SKILL.md"
+        },
+        {
+         "config": {},
+         "kind": "skill",
+         "name": "vibe:skill-creator",
+         "sourcePath": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>/skills/skill-creator/SKILL.md"
+        },
+        {
+         "config": {},
+         "kind": "skill",
+         "name": "vibe:vibe",
+         "sourcePath": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>/skills/vibe/SKILL.md"
+        },
+        {
+         "config": {},
+         "kind": "skill",
+         "name": "vibe:worktree",
+         "sourcePath": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>/skills/worktree/SKILL.md"
+        }
+       ],
+       "raw": {
+        "plugins": {
+         "vibe": {
+          "contentSha256": "<builtin-digest>",
+          "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a"
+         }
+        },
+        "routes": {},
+        "version": 1
+       },
+       "workdir": "<workspace>"
+      }
+     },
+     "call": "plugin/info",
+     "ok": true,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "experimentalHarness": true,
+      "issues": [],
+      "mcp": {
+       "connectorError": null,
+       "discoveryErrors": {},
+       "manageConnectorsUrl": null,
+       "sources": []
+      },
+      "skills": [
+       {
+        "description": "<builtin-prose>",
+        "enabled": true,
+        "locked": false,
+        "name": "vibe:create-plugin",
+        "prompt": "<builtin-prose>",
+        "registry": null,
+        "scope": "builtin",
+        "source": "plugin",
+        "userInvocable": true
+       },
+       {
+        "description": "<builtin-prose>",
+        "enabled": true,
+        "locked": false,
+        "name": "vibe:skill-creator",
+        "prompt": "<builtin-prose>",
+        "registry": null,
+        "scope": "builtin",
+        "source": "plugin",
+        "userInvocable": true
+       },
+       {
+        "description": "<builtin-prose>",
+        "enabled": true,
+        "locked": false,
+        "name": "vibe:vibe",
+        "prompt": "<builtin-prose>",
+        "registry": null,
+        "scope": "builtin",
+        "source": "plugin",
+        "userInvocable": false
+       },
+       {
+        "description": "<builtin-prose>",
+        "enabled": true,
+        "locked": false,
+        "name": "vibe:worktree",
+        "prompt": "<builtin-prose>",
+        "registry": null,
+        "scope": "builtin",
+        "source": "plugin",
+        "userInvocable": true
+       }
+      ]
+     },
+     "call": "runtime/read",
+     "ok": true,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "mcp": {
+       "connectorError": null,
+       "discoveryErrors": {},
+       "manageConnectorsUrl": null,
+       "sources": []
+      }
+     },
+     "call": "mcp_catalog/read",
+     "ok": true,
+     "warnings": []
+    }
+   ],
+   "scenario": {
+    "flags": [
+     "--experimental-harness"
+    ],
+    "home": {},
+    "name": "unified/only-builtin",
+    "steps": [
+     {
+      "call": "plugin_catalog/read",
+      "params": {
+       "sessionId": "$S"
+      }
+     },
+     {
+      "call": "plugins/read",
+      "params": {
+       "sessionId": "$S"
+      }
+     },
+     {
+      "call": "plugin/info",
+      "params": {
+       "sessionId": "$S"
+      }
+     },
+     {
+      "call": "runtime/read",
+      "params": {
+       "sessionId": "$S"
+      }
+     },
+     {
+      "call": "mcp_catalog/read",
+      "params": {
+       "sessionId": "$S"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "unified/dropped",
+   "observed": [
+    {
+     "answer": {
+      "plugins": {
+       "dropped": [],
+       "plugins": [
+        {
+         "author": null,
+         "components": [],
+         "contentSha256": "365cfd9be4fc4b5dad11996bf7de9670c011888d768f697532720e755aa7f23b",
+         "description": "Capabilities provided by skillless.",
+         "drifted": 0,
+         "installedRoot": "<vibe-home>/plugins/skillless",
+         "manifestDigest": "efa9bc23dbaa37c178e3ee5520e2035c924cac8f5be1b45ce209c5fa5f5d4522",
+         "name": "skillless",
+         "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/36/365cfd9be4fc4b5dad11996bf7de9670c011888d768f697532720e755aa7f23b",
+         "scope": "global",
+         "sourceFormat": "agent_plugins_1_0",
+         "version": null
+        },
+        {
+         "author": "Mistral AI",
+         "components": [
+          {
+           "kind": "skill",
+           "name": "vibe:create-plugin",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:skill-creator",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:vibe",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:worktree",
+           "status": null
+          }
+         ],
+         "contentSha256": "<builtin-digest>",
+         "description": "Skills and components shipped with the Vibe CLI.",
+         "drifted": 0,
+         "installedRoot": "<builtin-root>",
+         "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
+         "name": "vibe",
+         "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
+         "scope": "builtin",
+         "sourceFormat": "agent_plugins_1_0",
+         "version": "1.0.0"
+        }
+       ]
+      }
+     },
+     "call": "plugin_catalog/read",
+     "ok": true,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "experimentalHarness": true,
+      "issues": [
+       {
+        "file": "<vibe-home>/plugins/broken/plugin.json",
+        "message": "<prose>"
+       }
+      ],
+      "mcp": {
+       "connectorError": null,
+       "discoveryErrors": {},
+       "manageConnectorsUrl": null,
+       "sources": []
+      },
+      "skills": [
+       {
+        "description": "<builtin-prose>",
+        "enabled": true,
+        "locked": false,
+        "name": "vibe:create-plugin",
+        "prompt": "<builtin-prose>",
+        "registry": null,
+        "scope": "builtin",
+        "source": "plugin",
+        "userInvocable": true
+       },
+       {
+        "description": "<builtin-prose>",
+        "enabled": true,
+        "locked": false,
+        "name": "vibe:skill-creator",
+        "prompt": "<builtin-prose>",
+        "registry": null,
+        "scope": "builtin",
+        "source": "plugin",
+        "userInvocable": true
+       },
+       {
+        "description": "<builtin-prose>",
+        "enabled": true,
+        "locked": false,
+        "name": "vibe:vibe",
+        "prompt": "<builtin-prose>",
+        "registry": null,
+        "scope": "builtin",
+        "source": "plugin",
+        "userInvocable": false
+       },
+       {
+        "description": "<builtin-prose>",
+        "enabled": true,
+        "locked": false,
+        "name": "vibe:worktree",
+        "prompt": "<builtin-prose>",
+        "registry": null,
+        "scope": "builtin",
+        "source": "plugin",
+        "userInvocable": true
+       }
+      ]
+     },
+     "call": "runtime/read",
+     "ok": true,
+     "warnings": []
+    }
+   ],
+   "scenario": {
+    "flags": [
+     "--experimental-harness"
+    ],
+    "home": {
+     "plugins/broken/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"broken\", \"flavor\": \"unknown\"}\n",
+     "plugins/skillless/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"skillless\"}\n"
+    },
+    "name": "unified/dropped",
+    "steps": [
+     {
+      "call": "plugin_catalog/read",
+      "params": {
+       "sessionId": "$S"
+      }
+     },
+     {
+      "call": "runtime/read",
+      "params": {
+       "sessionId": "$S"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "unified/mcp-servers",
+   "observed": [
+    {
+     "answer": {
+      "plugins": {
+       "dropped": [
+        {
+         "file": "<vibe-home>/logs/session/plugins/packages/95/9563d5f4dd0949e82b424a076ee3531732c9be062302dd07b8de094756c23e55/mcp.json",
+         "message": "<prose>"
+        },
+        {
+         "file": "<vibe-home>/logs/session/plugins/packages/95/9563d5f4dd0949e82b424a076ee3531732c9be062302dd07b8de094756c23e55/mcp.json",
+         "message": "<prose>"
+        }
+       ],
+       "plugins": [
+        {
+         "author": null,
+         "components": [
+          {
+           "kind": "mcp_server",
+           "name": "fixture",
+           "status": null
+          },
+          {
+           "kind": "tool",
+           "name": "plugin_servers_fixture.echo",
+           "status": null
+          }
+         ],
+         "contentSha256": "9563d5f4dd0949e82b424a076ee3531732c9be062302dd07b8de094756c23e55",
+         "description": "Capabilities provided by servers.",
+         "drifted": 0,
+         "installedRoot": "<vibe-home>/plugins/servers",
+         "manifestDigest": "fdf6f86ccd2b30ec76be1bb6078801a46fa0d5dd63100e57f74b24560edd8363",
+         "name": "servers",
+         "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/95/9563d5f4dd0949e82b424a076ee3531732c9be062302dd07b8de094756c23e55",
+         "scope": "global",
+         "sourceFormat": "agent_plugins_1_0",
+         "version": "0.2.0"
+        },
+        {
+         "author": "Mistral AI",
+         "components": [
+          {
+           "kind": "skill",
+           "name": "vibe:create-plugin",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:skill-creator",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:vibe",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:worktree",
+           "status": null
+          }
+         ],
+         "contentSha256": "<builtin-digest>",
+         "description": "Skills and components shipped with the Vibe CLI.",
+         "drifted": 0,
+         "installedRoot": "<builtin-root>",
+         "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
+         "name": "vibe",
+         "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
+         "scope": "builtin",
+         "sourceFormat": "agent_plugins_1_0",
+         "version": "1.0.0"
+        }
+       ]
+      }
+     },
+     "call": "plugin_catalog/read",
+     "ok": true,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "plugins": {
+       "dropped": [
+        {
+         "file": "<vibe-home>/logs/session/plugins/packages/95/9563d5f4dd0949e82b424a076ee3531732c9be062302dd07b8de094756c23e55/mcp.json",
+         "message": "<prose>"
+        },
+        {
+         "file": "<vibe-home>/logs/session/plugins/packages/95/9563d5f4dd0949e82b424a076ee3531732c9be062302dd07b8de094756c23e55/mcp.json",
+         "message": "<prose>"
+        }
+       ],
+       "plugins": [
+        {
+         "author": null,
+         "components": [
+          {
+           "kind": "mcp_server",
+           "name": "fixture",
+           "status": null
+          },
+          {
+           "kind": "tool",
+           "name": "plugin_servers_fixture.echo",
+           "status": null
+          }
+         ],
+         "contentSha256": "9563d5f4dd0949e82b424a076ee3531732c9be062302dd07b8de094756c23e55",
+         "description": "Capabilities provided by servers.",
+         "drifted": 0,
+         "installedRoot": "<vibe-home>/plugins/servers",
+         "manifestDigest": "fdf6f86ccd2b30ec76be1bb6078801a46fa0d5dd63100e57f74b24560edd8363",
+         "name": "servers",
+         "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/95/9563d5f4dd0949e82b424a076ee3531732c9be062302dd07b8de094756c23e55",
+         "scope": "global",
+         "sourceFormat": "agent_plugins_1_0",
+         "version": "0.2.0"
+        },
+        {
+         "author": "Mistral AI",
+         "components": [
+          {
+           "kind": "skill",
+           "name": "vibe:create-plugin",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:skill-creator",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:vibe",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:worktree",
+           "status": null
+          }
+         ],
+         "contentSha256": "<builtin-digest>",
+         "description": "Skills and components shipped with the Vibe CLI.",
+         "drifted": 0,
+         "installedRoot": "<builtin-root>",
+         "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
+         "name": "vibe",
+         "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
+         "scope": "builtin",
+         "sourceFormat": "agent_plugins_1_0",
+         "version": "1.0.0"
+        }
+       ]
+      }
+     },
+     "call": "plugins/read",
+     "ok": true,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "info": {
+       "components": [
+        {
+         "config": {
+          "argv": [
+           "vibe-mcp-stdio-fixture"
+          ],
+          "cwd": "<vibe-home>/logs/session/plugins/packages/95/9563d5f4dd0949e82b424a076ee3531732c9be062302dd07b8de094756c23e55",
+          "env": [
+           "LOG_LEVEL",
+           "PLUGIN_DATA",
+           "PLUGIN_ROOT"
+          ],
+          "transport": "stdio"
+         },
+         "kind": "mcp_server",
+         "name": "fixture",
+         "sourcePath": "<vibe-home>/logs/session/plugins/packages/95/9563d5f4dd0949e82b424a076ee3531732c9be062302dd07b8de094756c23e55/mcp.json"
+        },
+        {
+         "config": {},
+         "kind": "tool",
+         "name": "plugin_servers_fixture.echo",
+         "sourcePath": null
+        },
+        {
+         "config": {},
+         "kind": "skill",
+         "name": "vibe:create-plugin",
+         "sourcePath": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>/skills/create-plugin/SKILL.md"
+        },
+        {
+         "config": {},
+         "kind": "skill",
+         "name": "vibe:skill-creator",
+         "sourcePath": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>/skills/skill-creator/SKILL.md"
+        },
+        {
+         "config": {},
+         "kind": "skill",
+         "name": "vibe:vibe",
+         "sourcePath": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>/skills/vibe/SKILL.md"
+        },
+        {
+         "config": {},
+         "kind": "skill",
+         "name": "vibe:worktree",
+         "sourcePath": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>/skills/worktree/SKILL.md"
+        }
+       ],
+       "raw": {
+        "plugins": {
+         "servers": {
+          "contentSha256": "9563d5f4dd0949e82b424a076ee3531732c9be062302dd07b8de094756c23e55",
+          "manifestDigest": "fdf6f86ccd2b30ec76be1bb6078801a46fa0d5dd63100e57f74b24560edd8363"
+         },
+         "vibe": {
+          "contentSha256": "<builtin-digest>",
+          "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a"
+         }
+        },
+        "routes": {},
+        "version": 1
+       },
+       "workdir": "<workspace>"
+      }
+     },
+     "call": "plugin/info",
+     "ok": true,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "experimentalHarness": true,
+      "issues": [
+       {
+        "file": "<vibe-home>/plugins/servers/mcp.json",
+        "message": "<prose>"
+       }
+      ],
+      "mcp": {
+       "connectorError": null,
+       "discoveryErrors": {
+        "fixture": "authentication was rejected",
+        "missing": "authentication was rejected",
+        "script": "authentication was rejected"
+       },
+       "manageConnectorsUrl": null,
+       "sources": [
+        {
+         "displayName": "fixture",
+         "error": null,
+         "kind": "server",
+         "name": "fixture",
+         "pluginName": "servers",
+         "status": "connected",
+         "tools": [
+          {
+           "description": "Echo a bounded message",
+           "enabled": true,
+           "name": "echo"
+          }
+         ],
+         "transport": "stdio"
+        },
+        {
+         "displayName": "missing",
+         "error": null,
+         "kind": "server",
+         "name": "missing",
+         "pluginName": "servers",
+         "status": "unavailable",
+         "tools": [],
+         "transport": "stdio"
+        },
+        {
+         "displayName": "script",
+         "error": null,
+         "kind": "server",
+         "name": "script",
+         "pluginName": "servers",
+         "status": "unavailable",
+         "tools": [],
+         "transport": "stdio"
+        }
+       ]
+      },
+      "skills": [
+       {
+        "description": "<builtin-prose>",
+        "enabled": true,
+        "locked": false,
+        "name": "vibe:create-plugin",
+        "prompt": "<builtin-prose>",
+        "registry": null,
+        "scope": "builtin",
+        "source": "plugin",
+        "userInvocable": true
+       },
+       {
+        "description": "<builtin-prose>",
+        "enabled": true,
+        "locked": false,
+        "name": "vibe:skill-creator",
+        "prompt": "<builtin-prose>",
+        "registry": null,
+        "scope": "builtin",
+        "source": "plugin",
+        "userInvocable": true
+       },
+       {
+        "description": "<builtin-prose>",
+        "enabled": true,
+        "locked": false,
+        "name": "vibe:vibe",
+        "prompt": "<builtin-prose>",
+        "registry": null,
+        "scope": "builtin",
+        "source": "plugin",
+        "userInvocable": false
+       },
+       {
+        "description": "<builtin-prose>",
+        "enabled": true,
+        "locked": false,
+        "name": "vibe:worktree",
+        "prompt": "<builtin-prose>",
+        "registry": null,
+        "scope": "builtin",
+        "source": "plugin",
+        "userInvocable": true
+       }
+      ]
+     },
+     "call": "runtime/read",
+     "ok": true,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "mcp": {
+       "connectorError": null,
+       "discoveryErrors": {
+        "fixture": "authentication was rejected",
+        "missing": "authentication was rejected",
+        "script": "authentication was rejected"
+       },
+       "manageConnectorsUrl": null,
+       "sources": [
+        {
+         "displayName": "fixture",
+         "error": null,
+         "kind": "server",
+         "name": "fixture",
+         "pluginName": "servers",
+         "status": "connected",
+         "tools": [
+          {
+           "description": "Echo a bounded message",
+           "enabled": true,
+           "name": "echo"
+          }
+         ],
+         "transport": "stdio"
+        },
+        {
+         "displayName": "missing",
+         "error": null,
+         "kind": "server",
+         "name": "missing",
+         "pluginName": "servers",
+         "status": "unavailable",
+         "tools": [],
+         "transport": "stdio"
+        },
+        {
+         "displayName": "script",
+         "error": null,
+         "kind": "server",
+         "name": "script",
+         "pluginName": "servers",
+         "status": "unavailable",
+         "tools": [],
+         "transport": "stdio"
+        }
+       ]
+      }
+     },
+     "call": "mcp_catalog/read",
+     "ok": true,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "code": "invalid_params",
+      "data": {
+       "errorCount": 1,
+       "issues": [
+        {
+         "message": "<prose>",
+         "path": [
+          "source"
+         ]
+        }
+       ]
+      },
+      "message": "Invalid request parameters"
+     },
+     "call": "mcp_catalog/toggle",
+     "ok": false,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "code": "invalid_params",
+      "data": null,
+      "message": "MCP server 'fixture' is managed by the 'servers' plugin and cannot be toggled or removed from the MCP catalog."
+     },
+     "call": "mcp_catalog/remove",
+     "ok": false,
+     "warnings": []
+    },
+    {
+     "answer": {},
+     "call": "plugin/reload",
+     "ok": true,
+     "warnings": [
+      {
+       "code": "warning",
+       "details": null,
+       "message": "<prose>"
+      },
+      {
+       "code": "warning",
+       "details": null,
+       "message": "<prose>"
+      }
+     ]
+    }
+   ],
+   "scenario": {
+    "executable": [
+     "plugins/servers/bin/serve"
+    ],
+    "flags": [
+     "--experimental-harness"
+    ],
+    "home": {
+     "plugins/servers/bin/serve": "#!/bin/sh\nexec vibe-mcp-stdio-fixture\n",
+     "plugins/servers/mcp.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json\", \"mcpServers\": {\"fixture\": {\"type\": \"stdio\", \"command\": \"vibe-mcp-stdio-fixture\", \"env\": {\"LOG_LEVEL\": \"info\"}}, \"script\": {\"type\": \"stdio\", \"command\": \"./bin/serve\"}, \"missing\": {\"type\": \"stdio\", \"command\": \"./bin/missing\"}}}\n",
+     "plugins/servers/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"servers\", \"version\": \"0.2.0\"}\n"
+    },
+    "name": "unified/mcp-servers",
+    "steps": [
+     {
+      "call": "plugin_catalog/read",
+      "params": {
+       "sessionId": "$S"
+      }
+     },
+     {
+      "call": "plugins/read",
+      "params": {
+       "sessionId": "$S"
+      }
+     },
+     {
+      "call": "plugin/info",
+      "params": {
+       "sessionId": "$S"
+      }
+     },
+     {
+      "call": "runtime/read",
+      "params": {
+       "sessionId": "$S"
+      }
+     },
+     {
+      "call": "mcp_catalog/read",
+      "params": {
+       "sessionId": "$S"
+      }
+     },
+     {
+      "call": "mcp_catalog/toggle",
+      "params": {
+       "disabled": true,
+       "name": "fixture",
+       "sessionId": "$S"
+      }
+     },
+     {
+      "call": "mcp_catalog/remove",
+      "params": {
+       "name": "fixture",
+       "sessionId": "$S"
+      }
+     },
+     {
+      "call": "plugin/reload",
+      "params": {
+       "sessionId": "$S"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "unified/reload",
+   "observed": [
+    {
+     "answer": {},
+     "call": "plugin/reload",
+     "ok": true,
+     "warnings": []
+    },
+    {
+     "edit": [
+      "plugins/added/plugin.json",
+      "plugins/added/skills/new/SKILL.md",
+      "plugins/demo/skills/hello/SKILL.md"
+     ]
+    },
+    {
+     "answer": {},
+     "call": "plugin/reload",
+     "ok": true,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "plugins": {
+       "dropped": [],
+       "plugins": [
+        {
+         "author": null,
+         "components": [
+          {
+           "kind": "skill",
+           "name": "added:new",
+           "status": null
+          }
+         ],
+         "contentSha256": "447938540bcd2e8a9524be315172198e7d97390cf356f09a3c036ae907e8b0aa",
+         "description": "Capabilities provided by added.",
+         "drifted": 0,
+         "installedRoot": "<vibe-home>/plugins/added",
+         "manifestDigest": "2713a9b430ffbfcc205d435bfd5fcec2bdd75feea892267a00ee5f8d0bbbc3a0",
+         "name": "added",
+         "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/44/447938540bcd2e8a9524be315172198e7d97390cf356f09a3c036ae907e8b0aa",
+         "scope": "global",
+         "sourceFormat": "agent_plugins_1_0",
+         "version": "1.0.0"
+        },
+        {
+         "author": null,
+         "components": [
+          {
+           "kind": "skill",
+           "name": "demo:hello",
+           "status": null
+          }
+         ],
+         "contentSha256": "9d6947f6cfd36537cd9523c6862cdbf9e0e629f06561fcdc7dcaefa50689c7d3",
+         "description": "Probe plugin",
+         "drifted": 0,
+         "installedRoot": "<vibe-home>/plugins/demo",
+         "manifestDigest": "b09cd24ef0ae8fc4fda13f852e2eaa488f7268660c5b92de3a0e25d68f1e692d",
+         "name": "demo",
+         "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/9d/9d6947f6cfd36537cd9523c6862cdbf9e0e629f06561fcdc7dcaefa50689c7d3",
+         "scope": "global",
+         "sourceFormat": "agent_plugins_1_0",
+         "version": "0.1.0"
+        },
+        {
+         "author": "Mistral AI",
+         "components": [
+          {
+           "kind": "skill",
+           "name": "vibe:create-plugin",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:skill-creator",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:vibe",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:worktree",
+           "status": null
+          }
+         ],
+         "contentSha256": "<builtin-digest>",
+         "description": "Skills and components shipped with the Vibe CLI.",
+         "drifted": 0,
+         "installedRoot": "<builtin-root>",
+         "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
+         "name": "vibe",
+         "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
+         "scope": "builtin",
+         "sourceFormat": "agent_plugins_1_0",
+         "version": "1.0.0"
+        }
+       ]
+      }
+     },
+     "call": "plugin_catalog/read",
+     "ok": true,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "experimentalHarness": true,
+      "issues": [],
+      "mcp": {
+       "connectorError": null,
+       "discoveryErrors": {},
+       "manageConnectorsUrl": null,
+       "sources": []
+      },
+      "skills": [
+       {
+        "description": "Says hello for the probe",
+        "enabled": true,
+        "locked": false,
+        "name": "demo:hello",
+        "prompt": {
+         "len": 10,
+         "sha256": "c8e2c1437abb87b67330d0dddbd1de9a179ca6be207497f14873894c26e7d742"
+        },
+        "registry": null,
+        "scope": "global",
+        "source": "plugin",
+        "userInvocable": true
+       },
+       {
+        "description": "<builtin-prose>",
+        "enabled": true,
+        "locked": false,
+        "name": "vibe:create-plugin",
+        "prompt": "<builtin-prose>",
+        "registry": null,
+        "scope": "builtin",
+        "source": "plugin",
+        "userInvocable": true
+       },
+       {
+        "description": "<builtin-prose>",
+        "enabled": true,
+        "locked": false,
+        "name": "vibe:skill-creator",
+        "prompt": "<builtin-prose>",
+        "registry": null,
+        "scope": "builtin",
+        "source": "plugin",
+        "userInvocable": true
+       },
+       {
+        "description": "<builtin-prose>",
+        "enabled": true,
+        "locked": false,
+        "name": "vibe:vibe",
+        "prompt": "<builtin-prose>",
+        "registry": null,
+        "scope": "builtin",
+        "source": "plugin",
+        "userInvocable": false
+       },
+       {
+        "description": "<builtin-prose>",
+        "enabled": true,
+        "locked": false,
+        "name": "vibe:worktree",
+        "prompt": "<builtin-prose>",
+        "registry": null,
+        "scope": "builtin",
+        "source": "plugin",
+        "userInvocable": true
+       }
+      ]
+     },
+     "call": "runtime/read",
+     "ok": true,
+     "warnings": []
+    },
+    {
+     "edit": [
+      "plugins/added"
+     ]
+    },
+    {
+     "answer": {},
+     "call": "plugin/reload",
+     "ok": true,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "plugins": {
+       "dropped": [],
+       "plugins": [
+        {
+         "author": null,
+         "components": [
+          {
+           "kind": "skill",
+           "name": "demo:hello",
+           "status": null
+          }
+         ],
+         "contentSha256": "9d6947f6cfd36537cd9523c6862cdbf9e0e629f06561fcdc7dcaefa50689c7d3",
+         "description": "Probe plugin",
+         "drifted": 0,
+         "installedRoot": "<vibe-home>/plugins/demo",
+         "manifestDigest": "b09cd24ef0ae8fc4fda13f852e2eaa488f7268660c5b92de3a0e25d68f1e692d",
+         "name": "demo",
+         "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/9d/9d6947f6cfd36537cd9523c6862cdbf9e0e629f06561fcdc7dcaefa50689c7d3",
+         "scope": "global",
+         "sourceFormat": "agent_plugins_1_0",
+         "version": "0.1.0"
+        },
+        {
+         "author": "Mistral AI",
+         "components": [
+          {
+           "kind": "skill",
+           "name": "vibe:create-plugin",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:skill-creator",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:vibe",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:worktree",
+           "status": null
+          }
+         ],
+         "contentSha256": "<builtin-digest>",
+         "description": "Skills and components shipped with the Vibe CLI.",
+         "drifted": 0,
+         "installedRoot": "<builtin-root>",
+         "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
+         "name": "vibe",
+         "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
+         "scope": "builtin",
+         "sourceFormat": "agent_plugins_1_0",
+         "version": "1.0.0"
+        }
+       ]
+      }
+     },
+     "call": "plugin_catalog/read",
+     "ok": true,
+     "warnings": []
+    }
+   ],
+   "scenario": {
+    "flags": [
+     "--experimental-harness"
+    ],
+    "home": {
+     "plugins/demo/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"demo\", \"version\": \"0.1.0\", \"description\": \"Probe plugin\"}\n",
+     "plugins/demo/skills/hello/SKILL.md": "---\nname: hello\ndescription: Says hello for the probe\n---\nSay hello.\n"
+    },
+    "name": "unified/reload",
+    "steps": [
+     {
+      "call": "plugin/reload",
+      "params": {
+       "sessionId": "$S"
+      }
+     },
+     {
+      "edit": {
+       "plugins/added/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"added\", \"version\": \"1.0.0\"}\n",
+       "plugins/added/skills/new/SKILL.md": "---\nname: new\ndescription: A new skill\n---\nNew.\n",
+       "plugins/demo/skills/hello/SKILL.md": "---\nname: hello\ndescription: Says hello again\n---\nSay hello twice.\n"
+      }
+     },
+     {
+      "call": "plugin/reload",
+      "params": {
+       "sessionId": "$S"
+      }
+     },
+     {
+      "call": "plugin_catalog/read",
+      "params": {
+       "sessionId": "$S"
+      }
+     },
+     {
+      "call": "runtime/read",
+      "params": {
+       "sessionId": "$S"
+      }
+     },
+     {
+      "edit": {
+       "plugins/added": null
+      }
+     },
+     {
+      "call": "plugin/reload",
+      "params": {
+       "sessionId": "$S"
+      }
+     },
+     {
+      "call": "plugin_catalog/read",
+      "params": {
+       "sessionId": "$S"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "unified/other-session",
+   "observed": [
+    {
+     "answer": {
+      "code": "not_found",
+      "data": null,
+      "message": "Session not found: not-this-session"
+     },
+     "call": "plugin_catalog/read",
+     "ok": false,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "code": "not_found",
+      "data": null,
+      "message": "Session not found: not-this-session"
+     },
+     "call": "plugin/info",
+     "ok": false,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "code": "not_found",
+      "data": null,
+      "message": "Session not found: not-this-session"
+     },
+     "call": "plugin/reload",
+     "ok": false,
+     "warnings": []
+    }
+   ],
+   "scenario": {
+    "flags": [
+     "--experimental-harness"
+    ],
+    "home": {
+     "plugins/demo/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"demo\", \"version\": \"0.1.0\", \"description\": \"Probe plugin\"}\n",
+     "plugins/demo/skills/hello/SKILL.md": "---\nname: hello\ndescription: Says hello for the probe\n---\nSay hello.\n"
+    },
+    "name": "unified/other-session",
+    "steps": [
+     {
+      "call": "plugin_catalog/read",
+      "params": {
+       "sessionId": "not-this-session"
+      }
+     },
+     {
+      "call": "plugin/info",
+      "params": {
+       "sessionId": "not-this-session"
+      }
+     },
+     {
+      "call": "plugin/reload",
+      "params": {
+       "sessionId": "not-this-session"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "unified/no-session",
+   "observed": [
+    {
+     "answer": {
+      "code": "not_found",
+      "data": null,
+      "message": "Session not found: nobody"
+     },
+     "call": "plugin_catalog/read",
+     "ok": false,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "code": "conflict",
+      "data": null,
+      "message": "Start, resume, or continue a session before using this method"
+     },
+     "call": "plugin/info",
+     "ok": false,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "code": "conflict",
+      "data": null,
+      "message": "Start, resume, or continue a session before using this method"
+     },
+     "call": "plugin/reload",
+     "ok": false,
+     "warnings": []
+    }
+   ],
+   "scenario": {
+    "flags": [
+     "--experimental-harness"
+    ],
+    "home": {
+     "plugins/demo/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"demo\", \"version\": \"0.1.0\", \"description\": \"Probe plugin\"}\n",
+     "plugins/demo/skills/hello/SKILL.md": "---\nname: hello\ndescription: Says hello for the probe\n---\nSay hello.\n"
+    },
+    "name": "unified/no-session",
+    "start": false,
+    "steps": [
+     {
+      "call": "plugin_catalog/read",
+      "params": {
+       "sessionId": "nobody"
+      }
+     },
+     {
+      "call": "plugin/info",
+      "params": {
+       "sessionId": "nobody"
+      }
+     },
+     {
+      "call": "plugin/reload",
+      "params": {
+       "sessionId": "nobody"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "rollout/unified",
+   "observed": [
+    {
+     "answer": {
+      "plugins": {
+       "dropped": [],
+       "plugins": [
+        {
+         "author": null,
+         "components": [
+          {
+           "kind": "skill",
+           "name": "demo:hello",
+           "status": null
+          }
+         ],
+         "contentSha256": "a82a1ea9ab287e5fea354995c060f748719e98a6a6a16e6787c67dedf419bc1f",
+         "description": "Probe plugin",
+         "drifted": 0,
+         "installedRoot": "<vibe-home>/plugins/demo",
+         "manifestDigest": "b09cd24ef0ae8fc4fda13f852e2eaa488f7268660c5b92de3a0e25d68f1e692d",
+         "name": "demo",
+         "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/a8/a82a1ea9ab287e5fea354995c060f748719e98a6a6a16e6787c67dedf419bc1f",
+         "scope": "global",
+         "sourceFormat": "agent_plugins_1_0",
+         "version": "0.1.0"
+        },
+        {
+         "author": "Mistral AI",
+         "components": [
+          {
+           "kind": "skill",
+           "name": "vibe:create-plugin",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:skill-creator",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:vibe",
+           "status": null
+          },
+          {
+           "kind": "skill",
+           "name": "vibe:worktree",
+           "status": null
+          }
+         ],
+         "contentSha256": "<builtin-digest>",
+         "description": "Skills and components shipped with the Vibe CLI.",
+         "drifted": 0,
+         "installedRoot": "<builtin-root>",
+         "manifestDigest": "70952cc17e9314a23a4e135dd53a167bdb0bde2f5662e3853cb028ab6d88240a",
+         "name": "vibe",
+         "pinnedRoot": "<vibe-home>/logs/session/plugins/packages/<builtin-shard>/<builtin-digest>",
+         "scope": "builtin",
+         "sourceFormat": "agent_plugins_1_0",
+         "version": "1.0.0"
+        }
+       ]
+      }
+     },
+     "call": "plugin_catalog/read",
+     "ok": true,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "startupIssue": null
+     },
+     "call": "config/read",
+     "ok": true,
+     "warnings": []
+    }
+   ],
+   "scenario": {
+    "flags": [],
+    "home": {
+     "experiment_eval_cache.json": "{\"oracle\": {\"stored_at_timestamp\": <now>, \"payload\": {\"features\": {\"vibe_cli_unified_harness_rollout\": {\"defaultValue\": \"unified\"}}}}}",
+     "plugins/demo/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"demo\", \"version\": \"0.1.0\", \"description\": \"Probe plugin\"}\n",
+     "plugins/demo/skills/hello/SKILL.md": "---\nname: hello\ndescription: Says hello for the probe\n---\nSay hello.\n"
+    },
+    "name": "rollout/unified",
+    "steps": [
+     {
+      "call": "plugin_catalog/read",
+      "params": {
+       "sessionId": "$S"
+      }
+     },
+     {
+      "call": "config/read",
+      "params": {
+       "sessionId": "$S"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "rollout/legacy-flag-wins",
+   "observed": [
+    {
+     "answer": {
+      "code": "not_implemented",
+      "data": null,
+      "message": "The selected session backend resolves no plugins"
+     },
+     "call": "plugin_catalog/read",
+     "ok": false,
+     "warnings": []
+    }
+   ],
+   "scenario": {
+    "flags": [
+     "--legacy-harness"
+    ],
+    "home": {
+     "experiment_eval_cache.json": "{\"oracle\": {\"stored_at_timestamp\": <now>, \"payload\": {\"features\": {\"vibe_cli_unified_harness_rollout\": {\"defaultValue\": \"unified\"}}}}}",
+     "plugins/demo/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"demo\", \"version\": \"0.1.0\", \"description\": \"Probe plugin\"}\n",
+     "plugins/demo/skills/hello/SKILL.md": "---\nname: hello\ndescription: Says hello for the probe\n---\nSay hello.\n"
+    },
+    "name": "rollout/legacy-flag-wins",
+    "steps": [
+     {
+      "call": "plugin_catalog/read",
+      "params": {
+       "sessionId": "$S"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "name": "legacy/declines",
+   "observed": [
+    {
+     "answer": {
+      "code": "not_implemented",
+      "data": null,
+      "message": "The selected session backend resolves no plugins"
+     },
+     "call": "plugin_catalog/read",
+     "ok": false,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "code": "not_implemented",
+      "data": null,
+      "message": "The selected session backend resolves no plugins"
+     },
+     "call": "plugins/read",
+     "ok": false,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "code": "not_implemented",
+      "data": null,
+      "message": "Plugins are not supported: plugin/info"
+     },
+     "call": "plugin/info",
+     "ok": false,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "code": "not_implemented",
+      "data": null,
+      "message": "Plugins are not supported: plugin/reload"
+     },
+     "call": "plugin/reload",
+     "ok": false,
+     "warnings": []
+    },
+    {
+     "answer": {
+      "experimentalHarness": false,
+      "issues": [],
+      "mcp": {
+       "connectorError": null,
+       "discoveryErrors": {},
+       "manageConnectorsUrl": null,
+       "sources": []
+      },
+      "skills": []
+     },
+     "call": "runtime/read",
+     "ok": true,
+     "warnings": []
+    }
+   ],
+   "scenario": {
+    "flags": [],
+    "home": {
+     "plugins/demo/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"demo\", \"version\": \"0.1.0\", \"description\": \"Probe plugin\"}\n",
+     "plugins/demo/skills/hello/SKILL.md": "---\nname: hello\ndescription: Says hello for the probe\n---\nSay hello.\n"
+    },
+    "name": "legacy/declines",
+    "steps": [
+     {
+      "call": "plugin_catalog/read",
+      "params": {
+       "sessionId": "$S"
+      }
+     },
+     {
+      "call": "plugins/read",
+      "params": {
+       "sessionId": "$S"
+      }
+     },
+     {
+      "call": "plugin/info",
+      "params": {
+       "sessionId": "$S"
+      }
+     },
+     {
+      "call": "plugin/reload",
+      "params": {
+       "sessionId": "$S"
+      }
+     },
+     {
+      "call": "runtime/read",
+      "params": {
+       "sessionId": "$S"
+      }
+     }
+    ]
+   }
+  }
+ ],
+ "schemaVersion": 1
+}

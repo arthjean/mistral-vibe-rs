@@ -547,13 +547,15 @@ impl AppServer {
     /// The workspace as `session` sees its agents: its directory, trust and
     /// roots, and the profiles its start forced.
     pub(crate) fn agent_workspace(&self, session: &SessionRuntime) -> WorkspaceService {
-        self.workspace.scoped_to_agents(
-            PathBuf::from(&session.working_directory),
-            session.intent.trusted,
-            &session.intent.add_directories,
-            session.intent.project_file_trust,
-            &session.intent.forced_agents,
-        )
+        self.workspace
+            .scoped_to_agents(
+                PathBuf::from(&session.working_directory),
+                session.intent.trusted,
+                &session.intent.add_directories,
+                session.intent.project_file_trust,
+                &session.intent.forced_agents,
+            )
+            .with_seeded_skills(self.plugin_skill_seed_of(session))
     }
 
     /// Replaces the connector rows of `mcp` with the ones the session's
@@ -598,7 +600,7 @@ impl AppServer {
 
     pub(crate) fn runtime_snapshot(&self, session_id: &str) -> Option<Value> {
         let mut snapshot = self.resources.lock().ok()?.runtime(session_id).ok()?;
-        let (agents, active_agent, stats, context_window, pinned, hooks) =
+        let (agents, active_agent, stats, context_window, pinned, hooks, plugins) =
             match self.lock_sessions() {
                 Ok(sessions) => {
                     let session = sessions.get(session_id);
@@ -611,10 +613,22 @@ impl AppServer {
                         session
                             .map(|session| session.hooks.clone())
                             .unwrap_or_default(),
+                        session.and_then(|session| self.plugins_of(session)),
                     )
                 }
-                Err(_) => (None, None, public_stats(None), 0, false, Default::default()),
+                Err(_) => (
+                    None,
+                    None,
+                    public_stats(None),
+                    0,
+                    false,
+                    Default::default(),
+                    None,
+                ),
             };
+        if let (Some(plugins), Some(mcp)) = (&plugins, snapshot.get_mut("mcp")) {
+            crate::resources::overlay_plugin_sources(mcp, &plugins.mcp_sources);
+        }
         if let Some(counts) = self.overlay_session_connectors(session_id, snapshot.get_mut("mcp")) {
             snapshot.insert("connectors".to_owned(), counts);
         }
@@ -627,10 +641,21 @@ impl AppServer {
         // client: a file the session could not read cleanly.
         // Reference `project_diagnostics` lists the hook issues first.
         if let Some(Value::Array(issues)) = snapshot.get_mut("issues") {
-            let mut hook_issues: Vec<Value> = hooks.issues();
-            hook_issues.append(issues);
-            *issues = hook_issues;
-            issues.extend(projection.issues);
+            // A unified session lists the plugin issues first and the hook
+            // issues last (`vibe/app_server/_runtime.py`, the unified
+            // derivation's `issues`).
+            if let Some(plugins) = &plugins {
+                let mut ordered = crate::plugins::runtime_plugin_issues(plugins);
+                ordered.append(issues);
+                ordered.extend(projection.issues);
+                ordered.extend(hooks.issues());
+                *issues = ordered;
+            } else {
+                let mut hook_issues: Vec<Value> = hooks.issues();
+                hook_issues.append(issues);
+                *issues = hook_issues;
+                issues.extend(projection.issues);
+            }
         }
         let mut config = projection.config;
         // Reference `active_model_is_pinned`: a session that pinned its model
@@ -643,11 +668,17 @@ impl AppServer {
             "bypassToolPermissions".to_owned(),
             json!(projection.bypass_tool_permissions),
         );
-        // This build runs the legacy harness only.
-        snapshot.insert("experimentalHarness".to_owned(), json!(false));
+        snapshot.insert(
+            "experimentalHarness".to_owned(),
+            json!(self.harness_selection().use_unified),
+        );
         snapshot.insert("activeAgent".to_owned(), projection.active_agent);
         snapshot.insert("agents".to_owned(), Value::Array(projection.agents));
-        snapshot.insert("skills".to_owned(), Value::Array(projection.skills));
+        let skills = match &plugins {
+            Some(plugins) => crate::plugins::order_skill_rows(plugins, projection.skills),
+            None => projection.skills,
+        };
+        snapshot.insert("skills".to_owned(), Value::Array(skills));
         snapshot.insert("hooksCount".to_owned(), json!(hooks.count()));
         snapshot.insert("stats".to_owned(), stats);
         snapshot.insert("contextWindow".to_owned(), json!(context_window));
@@ -818,6 +849,17 @@ impl AppServer {
                 intent.agent_permission_rules.clone(),
             )
             .map_err(|error| ServerError::Resource(error.to_string()))?;
+        let configured_mcp = self
+            .workspace
+            .mcp_servers_for_session(Path::new(&attachment.working_directory), trusted, &[])
+            .unwrap_or_default();
+        self.open_session_plugins(
+            &attachment.id,
+            Path::new(&attachment.working_directory),
+            trusted,
+            &intent.add_directories,
+            &configured_mcp,
+        );
         let review = self.register_workspace_tools(
             &attachment.id,
             &attachment.working_directory,
@@ -866,6 +908,7 @@ impl AppServer {
             },
         )
         .map_err(|error| ServerError::Resource(error.to_string()))?;
+        self.bind_plugin_mcp(&attachment.id);
         drop(sessions);
         self.start_registry_sync(&attachment.id);
         Ok(())
@@ -929,7 +972,15 @@ impl AppServer {
             self.workspace
                 .tool_descriptions(Path::new(working_directory), intent.trusted),
         ));
-        self.builtin_tools
+        let seeded;
+        let builtin_tools = match self.plugin_skill_seed(session_id) {
+            Some(seed) => {
+                seeded = self.builtin_tools.as_ref().clone().with_seeded_skills(seed);
+                &seeded
+            }
+            None => self.builtin_tools.as_ref(),
+        };
+        builtin_tools
             .register(
                 session_id,
                 self.workspace
@@ -1164,6 +1215,7 @@ impl AppServer {
             let session = sessions
                 .get(session_id)
                 .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
+            self.rekey_session_plugins(session);
             (
                 session.working_directory.clone(),
                 session.policy.clone(),

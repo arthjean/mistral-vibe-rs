@@ -1,0 +1,3269 @@
+{
+ "cases": {
+  "claude": {
+   "agents": [],
+   "connectors": [],
+   "hooks": [
+    {
+     "config_file": "user/rich/.claude-plugin/plugin.json",
+     "cwd": null,
+     "env": [
+      "CLAUDE_PLUGIN_DATA",
+      "CLAUDE_PLUGIN_ROOT",
+      "PLUGIN_DATA",
+      "PLUGIN_ROOT"
+     ],
+     "match": "Bash",
+     "name": "rich:claude-pretooluse-0-0",
+     "order": 0,
+     "protocol": "claude_code",
+     "timeout": 5.0,
+     "type": "pre_tool"
+    },
+    {
+     "config_file": "user/rich/.claude-plugin/plugin.json",
+     "cwd": null,
+     "env": [
+      "CLAUDE_PLUGIN_DATA",
+      "CLAUDE_PLUGIN_ROOT",
+      "PLUGIN_DATA",
+      "PLUGIN_ROOT"
+     ],
+     "match": null,
+     "name": "rich:claude-stop-0-0",
+     "order": 1,
+     "protocol": "claude_code",
+     "timeout": 600.0,
+     "type": "post_agent"
+    }
+   ],
+   "issues": [
+    [
+     "plugin.compatibility.claude_code.agents_unsupported",
+     "info",
+     false,
+     "agents",
+     "user/rich/agents"
+    ],
+    [
+     "plugin.compatibility.claude_code.command_argument_hint_ui_unsupported",
+     "info",
+     false,
+     "command",
+     "user/rich/commands/review.md"
+    ],
+    [
+     "plugin.compatibility.claude_code.command_empty",
+     "warning",
+     false,
+     "command",
+     "user/rich/commands/empty.md"
+    ],
+    [
+     "plugin.compatibility.claude_code.command_invalid",
+     "error",
+     false,
+     "command",
+     "user/rich/commands/args.md"
+    ],
+    [
+     "plugin.compatibility.claude_code.command_invalid",
+     "error",
+     false,
+     "command",
+     "user/rich/commands/dyn.md"
+    ],
+    [
+     "plugin.compatibility.claude_code.command_invalid",
+     "error",
+     false,
+     "command",
+     "user/rich/commands/nested/deep.md"
+    ],
+    [
+     "plugin.compatibility.claude_code.command_metadata_partially_supported",
+     "info",
+     false,
+     "command",
+     "user/rich/commands/review.md"
+    ],
+    [
+     "plugin.compatibility.claude_code.fields_unsupported",
+     "info",
+     false,
+     "manifest",
+     "user/rich/.claude-plugin/plugin.json"
+    ],
+    [
+     "plugin.compatibility.claude_code.hooks_partially_unsupported",
+     "warning",
+     false,
+     "hook",
+     "user/rich/.claude-plugin/plugin.json"
+    ],
+    [
+     "plugin.compatibility.claude_code.hooks_partially_unsupported",
+     "warning",
+     false,
+     "hook",
+     "user/rich/.claude-plugin/plugin.json"
+    ],
+    [
+     "plugin.compatibility.claude_code.install_ui_unsupported",
+     "info",
+     false,
+     "interface",
+     "user/rich/.claude-plugin/plugin.json"
+    ],
+    [
+     "plugin.compatibility.claude_code.manifest_invalid",
+     "error",
+     true,
+     "manifest",
+     "user/badname/.claude-plugin/plugin.json"
+    ],
+    [
+     "plugin.compatibility.claude_code.mcp_server_invalid",
+     "error",
+     false,
+     "mcp_server",
+     "user/rich/.mcp.json"
+    ],
+    [
+     "plugin.compatibility.claude_code.skill_invalid",
+     "error",
+     false,
+     "skill",
+     "user/rich/skills/broken/SKILL.md"
+    ],
+    [
+     "plugin.compatibility.claude_code.skill_tools_normalized",
+     "info",
+     false,
+     "skill",
+     "user/rich/skills/alpha/SKILL.md"
+    ]
+   ],
+   "knowledge": [],
+   "libraries": [],
+   "materialized": {
+    "environment": {},
+    "issues": [
+     [
+      "plugin.compatibility.claude_code.agents_unsupported",
+      "info",
+      false,
+      "agents",
+      "user/rich/agents"
+     ],
+     [
+      "plugin.compatibility.claude_code.command_argument_hint_ui_unsupported",
+      "info",
+      false,
+      "command",
+      "user/rich/commands/review.md"
+     ],
+     [
+      "plugin.compatibility.claude_code.command_empty",
+      "warning",
+      false,
+      "command",
+      "user/rich/commands/empty.md"
+     ],
+     [
+      "plugin.compatibility.claude_code.command_invalid",
+      "error",
+      false,
+      "command",
+      "user/rich/commands/args.md"
+     ],
+     [
+      "plugin.compatibility.claude_code.command_invalid",
+      "error",
+      false,
+      "command",
+      "user/rich/commands/dyn.md"
+     ],
+     [
+      "plugin.compatibility.claude_code.command_invalid",
+      "error",
+      false,
+      "command",
+      "user/rich/commands/nested/deep.md"
+     ],
+     [
+      "plugin.compatibility.claude_code.command_metadata_partially_supported",
+      "info",
+      false,
+      "command",
+      "user/rich/commands/review.md"
+     ],
+     [
+      "plugin.compatibility.claude_code.fields_unsupported",
+      "info",
+      false,
+      "manifest",
+      "user/rich/.claude-plugin/plugin.json"
+     ],
+     [
+      "plugin.compatibility.claude_code.hooks_partially_unsupported",
+      "warning",
+      false,
+      "hook",
+      "user/rich/.claude-plugin/plugin.json"
+     ],
+     [
+      "plugin.compatibility.claude_code.hooks_partially_unsupported",
+      "warning",
+      false,
+      "hook",
+      "user/rich/.claude-plugin/plugin.json"
+     ],
+     [
+      "plugin.compatibility.claude_code.install_ui_unsupported",
+      "info",
+      false,
+      "interface",
+      "user/rich/.claude-plugin/plugin.json"
+     ],
+     [
+      "plugin.compatibility.claude_code.manifest_invalid",
+      "error",
+      true,
+      "manifest",
+      "user/badname/.claude-plugin/plugin.json"
+     ],
+     [
+      "plugin.compatibility.claude_code.mcp_server_invalid",
+      "error",
+      false,
+      "mcp_server",
+      "user/rich/.mcp.json"
+     ],
+     [
+      "plugin.compatibility.claude_code.skill_invalid",
+      "error",
+      false,
+      "skill",
+      "user/rich/skills/broken/SKILL.md"
+     ],
+     [
+      "plugin.compatibility.claude_code.skill_tools_normalized",
+      "info",
+      false,
+      "skill",
+      "user/rich/skills/alpha/SKILL.md"
+     ]
+    ],
+    "knowledge": [],
+    "libraries": [],
+    "staged": [
+     "plugin-data/rich/generated-skills/command-review/SKILL.md"
+    ]
+   },
+   "mcp": [
+    {
+     "alias": "plugin_7082d0701da54874_srv",
+     "args": [
+      "<home>/user/rich/x.js",
+      "--data",
+      "<home>/plugin-data/rich"
+     ],
+     "command": [
+      "node"
+     ],
+     "config_file": "user/rich/.mcp.json",
+     "cwd": "<home>/user/rich",
+     "env": {
+      "PLUGIN_DATA": "<home>/plugin-data/rich",
+      "PLUGIN_ROOT": "<home>/user/rich",
+      "TOKEN": "abc"
+     },
+     "plugin": "rich",
+     "source_id": "srv",
+     "transport": "stdio"
+    },
+    {
+     "alias": "plugin_08c679c921fd78e9_web",
+     "config_file": "user/rich/.mcp.json",
+     "headers": {
+      "X-Key": "k"
+     },
+     "plugin": "rich",
+     "source_id": "web",
+     "transport": "streamable-http",
+     "url": "https://example.com/mcp"
+    },
+    {
+     "alias": "plugin_75d964326cf207e7_other",
+     "config_file": "user/rich/extra-mcp.json",
+     "headers": {},
+     "plugin": "rich",
+     "source_id": "other",
+     "transport": "http",
+     "url": "https://example.com/other"
+    }
+   ],
+   "plugins": [
+    {
+     "author": null,
+     "content_digest": "aa641a18d090c9a1f755fb86c5364a13ac72759e2f96c419dd34e9dc0098a47a",
+     "data_root": "plugin-data/claudey",
+     "description": "Claude-format probe",
+     "manifest_digest": "b2139fea2788ef72a33b041b61656ec88d95c892a9466a8d980f9e7f5cd28af2",
+     "manifest_path": "user/claudey/.claude-plugin/plugin.json",
+     "name": "claudey",
+     "namespace": "claudey",
+     "root": "user/claudey",
+     "scope": "global",
+     "source_format": "claude_code",
+     "version": "1.0.0"
+    },
+    {
+     "author": "Ann",
+     "content_digest": "48d228ae0ac53a716b68e309b6f1e158ad5ad472c6376917afb03455689168d4",
+     "data_root": "plugin-data/rich",
+     "description": "Rich Claude fixture",
+     "manifest_digest": "20de83560c0765e13249d55685ed42026cf9939a27c89e28beea5220a9180282",
+     "manifest_path": "user/rich/.claude-plugin/plugin.json",
+     "name": "rich",
+     "namespace": "rich",
+     "root": "user/rich",
+     "scope": "global",
+     "source_format": "claude_code",
+     "version": "1.2.3"
+    }
+   ],
+   "skills": [
+    {
+     "alias": "rich:alpha",
+     "allowed_tools": [
+      "Read",
+      "Grep"
+     ],
+     "description": "Alpha skill for the fixture",
+     "metadata": {},
+     "model_invocable": true,
+     "path": "user/rich/skills/alpha/SKILL.md",
+     "prompt": null,
+     "user_invocable": true
+    },
+    {
+     "alias": "rich:beta",
+     "allowed_tools": [],
+     "description": "Beta skill",
+     "metadata": {},
+     "model_invocable": true,
+     "path": "user/rich/skills/beta/SKILL.md",
+     "prompt": "Beta body.",
+     "user_invocable": true
+    },
+    {
+     "alias": "rich:command-review",
+     "allowed_tools": [],
+     "description": "Review the change",
+     "metadata": {
+      "source-command": "review",
+      "unified-harness.translation": "synthetic_skill"
+     },
+     "model_invocable": true,
+     "path": "user/rich/commands/review.md",
+     "prompt": "Review everything carefully.",
+     "user_invocable": true
+    }
+   ],
+   "unsupported": [
+    [
+     "rich",
+     "hooks",
+     "claude_hook_action_unsupported",
+     "user/rich/.claude-plugin/plugin.json"
+    ],
+    [
+     "rich",
+     "hooks",
+     "claude_hook_lifecycle_unsupported",
+     "user/rich/.claude-plugin/plugin.json"
+    ],
+    [
+     "rich",
+     "agents",
+     "claude_agents_unsupported",
+     "user/rich/agents"
+    ],
+    [
+     "rich",
+     "install_ui",
+     "claude_install_ui_unsupported",
+     "user/rich/.claude-plugin/plugin.json"
+    ]
+   ]
+  },
+  "claude-more": {
+   "agents": [],
+   "connectors": [],
+   "hooks": [
+    {
+     "config_file": "user/more/hooks/hooks.json",
+     "cwd": null,
+     "env": [
+      "CLAUDE_PLUGIN_DATA",
+      "CLAUDE_PLUGIN_ROOT",
+      "PLUGIN_DATA",
+      "PLUGIN_ROOT"
+     ],
+     "match": "Edit|Write",
+     "name": "more:claude-posttooluse-0-0",
+     "order": 0,
+     "protocol": "claude_code",
+     "timeout": 2.5,
+     "type": "post_tool"
+    },
+    {
+     "config_file": "user/more/hooks/hooks.json",
+     "cwd": null,
+     "env": [
+      "CLAUDE_PLUGIN_DATA",
+      "CLAUDE_PLUGIN_ROOT",
+      "PLUGIN_DATA",
+      "PLUGIN_ROOT"
+     ],
+     "match": "(?<=x)y",
+     "name": "more:claude-pretooluse-0-0",
+     "order": 1,
+     "protocol": "claude_code",
+     "timeout": 600.0,
+     "type": "pre_tool"
+    }
+   ],
+   "issues": [
+    [
+     "plugin.compatibility.claude_code.command_tool_policy_preserved_as_guidance",
+     "info",
+     false,
+     "command",
+     "user/more/cmds/one.md"
+    ],
+    [
+     "plugin.compatibility.claude_code.fields_unsupported",
+     "info",
+     false,
+     "manifest",
+     "user/more/.claude-plugin/plugin.json"
+    ],
+    [
+     "plugin.compatibility.claude_code.hooks_invalid",
+     "error",
+     false,
+     "hook",
+     "user/more/.claude-plugin/plugin.json"
+    ],
+    [
+     "plugin.compatibility.claude_code.hooks_invalid",
+     "error",
+     false,
+     "hook",
+     "user/more/hooks/hooks.json"
+    ],
+    [
+     "plugin.compatibility.claude_code.hooks_invalid",
+     "error",
+     false,
+     "hook",
+     "user/more/hooks/hooks.json"
+    ],
+    [
+     "plugin.compatibility.claude_code.hooks_partially_unsupported",
+     "warning",
+     false,
+     "hook",
+     "user/more/hooks/hooks.json"
+    ],
+    [
+     "plugin.compatibility.claude_code.hooks_partially_unsupported",
+     "warning",
+     false,
+     "hook",
+     "user/more/hooks/hooks.json"
+    ],
+    [
+     "plugin.compatibility.claude_code.hooks_partially_unsupported",
+     "warning",
+     false,
+     "hook",
+     "user/more/hooks/other.json"
+    ],
+    [
+     "plugin.compatibility.claude_code.hooks_partially_unsupported",
+     "warning",
+     false,
+     "hook",
+     "user/more/hooks/other.json"
+    ],
+    [
+     "plugin.compatibility.claude_code.lsp_unsupported",
+     "info",
+     false,
+     "lsp",
+     "user/more/.claude-plugin/plugin.json"
+    ],
+    [
+     "plugin.compatibility.claude_code.manifest_invalid",
+     "error",
+     true,
+     "manifest",
+     "user/dyn/.claude-plugin/plugin.json"
+    ],
+    [
+     "plugin.compatibility.claude_code.mcp_config_invalid",
+     "error",
+     false,
+     "mcp",
+     "user/more/absent.json"
+    ],
+    [
+     "plugin.compatibility.claude_code.mcp_server_invalid",
+     "error",
+     false,
+     "mcp_server",
+     "user/more/m.json"
+    ],
+    [
+     "plugin.compatibility.claude_code.mcp_server_invalid",
+     "error",
+     false,
+     "mcp_server",
+     "user/more/m.json"
+    ],
+    [
+     "plugin.compatibility.claude_code.settings_unsupported",
+     "info",
+     false,
+     "settings",
+     "user/more/settings.json"
+    ],
+    [
+     "plugin.compatibility.claude_code.skill_openai_metadata_invalid",
+     "warning",
+     false,
+     "skill",
+     "user/more/extra-skills/eps/agents/openai.yaml"
+    ],
+    [
+     "plugin.compatibility.claude_code.skill_path_invalid",
+     "error",
+     false,
+     "skill",
+     "user/more/bad-path"
+    ],
+    [
+     "plugin.compatibility.claude_code.skill_path_invalid",
+     "error",
+     false,
+     "skill",
+     "user/more/missing"
+    ],
+    [
+     "plugin.compatibility.claude_code.themes_unsupported",
+     "info",
+     false,
+     "themes",
+     "user/more/.claude-plugin/plugin.json"
+    ],
+    [
+     "plugin.compatibility.claude_code.workflows_unsupported",
+     "info",
+     false,
+     "workflows",
+     "user/more/workflows"
+    ]
+   ],
+   "knowledge": [],
+   "libraries": [],
+   "materialized": {
+    "environment": {},
+    "issues": [
+     [
+      "plugin.compatibility.claude_code.command_tool_policy_preserved_as_guidance",
+      "info",
+      false,
+      "command",
+      "user/more/cmds/one.md"
+     ],
+     [
+      "plugin.compatibility.claude_code.fields_unsupported",
+      "info",
+      false,
+      "manifest",
+      "user/more/.claude-plugin/plugin.json"
+     ],
+     [
+      "plugin.compatibility.claude_code.hooks_invalid",
+      "error",
+      false,
+      "hook",
+      "user/more/.claude-plugin/plugin.json"
+     ],
+     [
+      "plugin.compatibility.claude_code.hooks_invalid",
+      "error",
+      false,
+      "hook",
+      "user/more/hooks/hooks.json"
+     ],
+     [
+      "plugin.compatibility.claude_code.hooks_invalid",
+      "error",
+      false,
+      "hook",
+      "user/more/hooks/hooks.json"
+     ],
+     [
+      "plugin.compatibility.claude_code.hooks_partially_unsupported",
+      "warning",
+      false,
+      "hook",
+      "user/more/hooks/hooks.json"
+     ],
+     [
+      "plugin.compatibility.claude_code.hooks_partially_unsupported",
+      "warning",
+      false,
+      "hook",
+      "user/more/hooks/hooks.json"
+     ],
+     [
+      "plugin.compatibility.claude_code.hooks_partially_unsupported",
+      "warning",
+      false,
+      "hook",
+      "user/more/hooks/other.json"
+     ],
+     [
+      "plugin.compatibility.claude_code.hooks_partially_unsupported",
+      "warning",
+      false,
+      "hook",
+      "user/more/hooks/other.json"
+     ],
+     [
+      "plugin.compatibility.claude_code.lsp_unsupported",
+      "info",
+      false,
+      "lsp",
+      "user/more/.claude-plugin/plugin.json"
+     ],
+     [
+      "plugin.compatibility.claude_code.manifest_invalid",
+      "error",
+      true,
+      "manifest",
+      "user/dyn/.claude-plugin/plugin.json"
+     ],
+     [
+      "plugin.compatibility.claude_code.mcp_config_invalid",
+      "error",
+      false,
+      "mcp",
+      "user/more/absent.json"
+     ],
+     [
+      "plugin.compatibility.claude_code.mcp_server_invalid",
+      "error",
+      false,
+      "mcp_server",
+      "user/more/m.json"
+     ],
+     [
+      "plugin.compatibility.claude_code.mcp_server_invalid",
+      "error",
+      false,
+      "mcp_server",
+      "user/more/m.json"
+     ],
+     [
+      "plugin.compatibility.claude_code.settings_unsupported",
+      "info",
+      false,
+      "settings",
+      "user/more/settings.json"
+     ],
+     [
+      "plugin.compatibility.claude_code.skill_openai_metadata_invalid",
+      "warning",
+      false,
+      "skill",
+      "user/more/extra-skills/eps/agents/openai.yaml"
+     ],
+     [
+      "plugin.compatibility.claude_code.skill_path_invalid",
+      "error",
+      false,
+      "skill",
+      "user/more/bad-path"
+     ],
+     [
+      "plugin.compatibility.claude_code.skill_path_invalid",
+      "error",
+      false,
+      "skill",
+      "user/more/missing"
+     ],
+     [
+      "plugin.compatibility.claude_code.themes_unsupported",
+      "info",
+      false,
+      "themes",
+      "user/more/.claude-plugin/plugin.json"
+     ],
+     [
+      "plugin.compatibility.claude_code.workflows_unsupported",
+      "info",
+      false,
+      "workflows",
+      "user/more/workflows"
+     ]
+    ],
+    "knowledge": [],
+    "libraries": [],
+    "staged": [
+     "plugin-data/more/generated-skills/command-first-one/SKILL.md"
+    ]
+   },
+   "mcp": [
+    {
+     "alias": "plugin_f95b928f619c758d_one",
+     "args": [
+      "-m",
+      "srv",
+      "--flag"
+     ],
+     "command": [
+      "python3"
+     ],
+     "config_file": "user/more/m.json",
+     "cwd": "<home>/user/more/sub",
+     "env": {
+      "PLUGIN_DATA": "<home>/plugin-data/more",
+      "PLUGIN_ROOT": "<home>/user/more"
+     },
+     "plugin": "more",
+     "source_id": "one",
+     "transport": "stdio"
+    }
+   ],
+   "plugins": [
+    {
+     "author": null,
+     "content_digest": "279e72d86557bffa892213753992e68fc74b8ade7e1db19eea26f2e036a5d657",
+     "data_root": "plugin-data/more",
+     "description": "Capabilities provided by more.",
+     "manifest_digest": "3b3f3a2b45a0c49bd1c9ec2ad1f38a8a9abecc19eb8cb88c5c0cd2d97f1f02bf",
+     "manifest_path": "user/more/.claude-plugin/plugin.json",
+     "name": "more",
+     "namespace": "more",
+     "root": "user/more",
+     "scope": "global",
+     "source_format": "claude_code",
+     "version": null
+    },
+    {
+     "author": null,
+     "content_digest": "7685b2953b43867302fff687783e7e8ae32372dcfb0efdfbf5746268c6c54d73",
+     "data_root": "plugin-data/solo",
+     "description": "Capabilities provided by solo.",
+     "manifest_digest": "7c92edab0a94fd7112f0d66912c138c80c808bb7712b7a87dddae81fce7cc116",
+     "manifest_path": "user/solo/.claude-plugin/plugin.json",
+     "name": "solo",
+     "namespace": "solo",
+     "root": "user/solo",
+     "scope": "global",
+     "source_format": "claude_code",
+     "version": null
+    }
+   ],
+   "skills": [
+    {
+     "alias": "more:delta",
+     "allowed_tools": [],
+     "description": "Delta skill",
+     "metadata": {},
+     "model_invocable": false,
+     "path": "user/more/extra-skills/delta/SKILL.md",
+     "prompt": "Delta.",
+     "user_invocable": true
+    },
+    {
+     "alias": "more:eps",
+     "allowed_tools": [],
+     "description": "Eps skill",
+     "metadata": {},
+     "model_invocable": false,
+     "path": "user/more/extra-skills/eps/SKILL.md",
+     "prompt": "Eps.",
+     "user_invocable": true
+    },
+    {
+     "alias": "more:gamma",
+     "allowed_tools": [
+      "Bash"
+     ],
+     "description": "Gamma skill",
+     "metadata": {},
+     "model_invocable": true,
+     "path": "user/more/extra-skills/gamma/SKILL.md",
+     "prompt": null,
+     "user_invocable": true
+    },
+    {
+     "alias": "more:command-first-one",
+     "allowed_tools": [
+      "Read",
+      "Write"
+     ],
+     "description": "Run the first command.",
+     "metadata": {
+      "source-command": "First One!",
+      "unified-harness.translation": "synthetic_skill"
+     },
+     "model_invocable": true,
+     "path": "user/more/cmds/one.md",
+     "prompt": null,
+     "user_invocable": true
+    },
+    {
+     "alias": "solo:solo-skill",
+     "allowed_tools": [],
+     "description": "Solo",
+     "metadata": {},
+     "model_invocable": true,
+     "path": "user/solo/SKILL.md",
+     "prompt": "Solo body.",
+     "user_invocable": true
+    }
+   ],
+   "unsupported": [
+    [
+     "more",
+     "hooks",
+     "claude_hook_matcher_unsupported",
+     "user/more/hooks/hooks.json"
+    ],
+    [
+     "more",
+     "hooks",
+     "claude_hook_action_unsupported",
+     "user/more/hooks/hooks.json"
+    ],
+    [
+     "more",
+     "hooks",
+     "claude_hook_action_unsupported",
+     "user/more/hooks/other.json"
+    ],
+    [
+     "more",
+     "hooks",
+     "claude_hook_lifecycle_unsupported",
+     "user/more/hooks/other.json"
+    ],
+    [
+     "more",
+     "lsp",
+     "claude_lsp_unsupported",
+     "user/more/.claude-plugin/plugin.json"
+    ],
+    [
+     "more",
+     "workflows",
+     "claude_workflows_unsupported",
+     "user/more/workflows"
+    ],
+    [
+     "more",
+     "settings",
+     "claude_settings_unsupported",
+     "user/more/settings.json"
+    ],
+    [
+     "more",
+     "themes",
+     "claude_themes_unsupported",
+     "user/more/.claude-plugin/plugin.json"
+    ]
+   ]
+  },
+  "codex": {
+   "agents": [],
+   "connectors": [],
+   "hooks": [],
+   "issues": [
+    [
+     "plugin.compatibility.codex.agent_metadata_unsupported",
+     "info",
+     false,
+     "agent_metadata",
+     "user/full/agents/readme.md"
+    ],
+    [
+     "plugin.compatibility.codex.agent_metadata_unsupported",
+     "info",
+     false,
+     "agent_metadata",
+     "user/full/extra-skills/gamma/agents/openai.yaml"
+    ],
+    [
+     "plugin.compatibility.codex.agent_metadata_unsupported",
+     "info",
+     false,
+     "agent_metadata",
+     "user/full/skills/alpha/agents/openai.yml"
+    ],
+    [
+     "plugin.compatibility.codex.app_invalid",
+     "warning",
+     false,
+     "app",
+     "user/minimal/.codex-plugin/plugin.json"
+    ],
+    [
+     "plugin.compatibility.codex.hooks_unsupported",
+     "warning",
+     false,
+     "hook",
+     "user/full/.codex-plugin/plugin.json"
+    ],
+    [
+     "plugin.compatibility.codex.hooks_unsupported",
+     "warning",
+     false,
+     "hook",
+     "user/implicit/hooks.json"
+    ],
+    [
+     "plugin.compatibility.codex.hooks_unsupported",
+     "warning",
+     false,
+     "hook",
+     "user/minimal/hooks.json"
+    ],
+    [
+     "plugin.compatibility.codex.interface_metadata_invalid",
+     "warning",
+     false,
+     "interface",
+     "user/minimal/.codex-plugin/plugin.json"
+    ],
+    [
+     "plugin.compatibility.codex.interface_metadata_unsupported",
+     "info",
+     false,
+     "interface",
+     "user/full/.codex-plugin/plugin.json"
+    ],
+    [
+     "plugin.compatibility.codex.interface_metadata_unsupported",
+     "info",
+     false,
+     "interface",
+     "user/minimal/.codex-plugin/plugin.json"
+    ],
+    [
+     "plugin.compatibility.codex.manifest_invalid",
+     "error",
+     true,
+     "manifest",
+     "user/badname/.codex-plugin/plugin.json"
+    ],
+    [
+     "plugin.compatibility.codex.manifest_invalid",
+     "error",
+     true,
+     "manifest",
+     "user/broken/.codex-plugin/plugin.json"
+    ],
+    [
+     "plugin.compatibility.codex.mcp_declaration_invalid",
+     "error",
+     false,
+     "mcp",
+     "user/minimal/.codex-plugin/plugin.json"
+    ],
+    [
+     "plugin.compatibility.codex.mcp_metadata_partially_supported",
+     "info",
+     false,
+     "mcp_server",
+     "user/full/.mcp.json"
+    ],
+    [
+     "plugin.compatibility.codex.mcp_metadata_partially_supported",
+     "info",
+     false,
+     "mcp_server",
+     "user/full/servers.json"
+    ],
+    [
+     "plugin.compatibility.codex.mcp_server_collision",
+     "error",
+     false,
+     "mcp_server",
+     "user/full/.mcp.json"
+    ],
+    [
+     "plugin.compatibility.codex.mcp_server_invalid",
+     "error",
+     false,
+     "mcp_server",
+     "user/full/.mcp.json"
+    ],
+    [
+     "plugin.compatibility.codex.mcp_server_invalid",
+     "error",
+     false,
+     "mcp_server",
+     "user/full/.mcp.json"
+    ],
+    [
+     "plugin.compatibility.codex.mcp_server_invalid",
+     "error",
+     false,
+     "mcp_server",
+     "user/full/servers.json"
+    ],
+    [
+     "plugin.compatibility.codex.mcp_server_invalid",
+     "error",
+     false,
+     "mcp_server",
+     "user/full/servers.json"
+    ],
+    [
+     "plugin.compatibility.codex.mcp_server_invalid",
+     "error",
+     false,
+     "mcp_server",
+     "user/full/servers.json"
+    ],
+    [
+     "plugin.compatibility.codex.mcp_server_invalid",
+     "error",
+     false,
+     "mcp_server",
+     "user/full/servers.json"
+    ],
+    [
+     "plugin.compatibility.codex.openai_app_unsupported",
+     "warning",
+     false,
+     "app",
+     "user/full/app.json"
+    ],
+    [
+     "plugin.compatibility.codex.openai_app_unsupported",
+     "warning",
+     false,
+     "app",
+     "user/implicit/.app.json"
+    ],
+    [
+     "plugin.compatibility.codex.openai_app_unsupported",
+     "warning",
+     false,
+     "app",
+     "user/minimal/.codex-plugin/plugin.json"
+    ],
+    [
+     "plugin.compatibility.codex.skills_declaration_invalid",
+     "error",
+     false,
+     "skill",
+     "user/minimal/.codex-plugin/plugin.json"
+    ],
+    [
+     "plugin.path.outside_root",
+     "error",
+     false,
+     "skill",
+     "user/full/missing"
+    ]
+   ],
+   "knowledge": [],
+   "libraries": [],
+   "materialized": {
+    "environment": {},
+    "issues": [
+     [
+      "plugin.compatibility.codex.agent_metadata_unsupported",
+      "info",
+      false,
+      "agent_metadata",
+      "user/full/agents/readme.md"
+     ],
+     [
+      "plugin.compatibility.codex.agent_metadata_unsupported",
+      "info",
+      false,
+      "agent_metadata",
+      "user/full/extra-skills/gamma/agents/openai.yaml"
+     ],
+     [
+      "plugin.compatibility.codex.agent_metadata_unsupported",
+      "info",
+      false,
+      "agent_metadata",
+      "user/full/skills/alpha/agents/openai.yml"
+     ],
+     [
+      "plugin.compatibility.codex.app_invalid",
+      "warning",
+      false,
+      "app",
+      "user/minimal/.codex-plugin/plugin.json"
+     ],
+     [
+      "plugin.compatibility.codex.hooks_unsupported",
+      "warning",
+      false,
+      "hook",
+      "user/full/.codex-plugin/plugin.json"
+     ],
+     [
+      "plugin.compatibility.codex.hooks_unsupported",
+      "warning",
+      false,
+      "hook",
+      "user/implicit/hooks.json"
+     ],
+     [
+      "plugin.compatibility.codex.hooks_unsupported",
+      "warning",
+      false,
+      "hook",
+      "user/minimal/hooks.json"
+     ],
+     [
+      "plugin.compatibility.codex.interface_metadata_invalid",
+      "warning",
+      false,
+      "interface",
+      "user/minimal/.codex-plugin/plugin.json"
+     ],
+     [
+      "plugin.compatibility.codex.interface_metadata_unsupported",
+      "info",
+      false,
+      "interface",
+      "user/full/.codex-plugin/plugin.json"
+     ],
+     [
+      "plugin.compatibility.codex.interface_metadata_unsupported",
+      "info",
+      false,
+      "interface",
+      "user/minimal/.codex-plugin/plugin.json"
+     ],
+     [
+      "plugin.compatibility.codex.manifest_invalid",
+      "error",
+      true,
+      "manifest",
+      "user/badname/.codex-plugin/plugin.json"
+     ],
+     [
+      "plugin.compatibility.codex.manifest_invalid",
+      "error",
+      true,
+      "manifest",
+      "user/broken/.codex-plugin/plugin.json"
+     ],
+     [
+      "plugin.compatibility.codex.mcp_declaration_invalid",
+      "error",
+      false,
+      "mcp",
+      "user/minimal/.codex-plugin/plugin.json"
+     ],
+     [
+      "plugin.compatibility.codex.mcp_metadata_partially_supported",
+      "info",
+      false,
+      "mcp_server",
+      "user/full/.mcp.json"
+     ],
+     [
+      "plugin.compatibility.codex.mcp_metadata_partially_supported",
+      "info",
+      false,
+      "mcp_server",
+      "user/full/servers.json"
+     ],
+     [
+      "plugin.compatibility.codex.mcp_server_collision",
+      "error",
+      false,
+      "mcp_server",
+      "user/full/.mcp.json"
+     ],
+     [
+      "plugin.compatibility.codex.mcp_server_invalid",
+      "error",
+      false,
+      "mcp_server",
+      "user/full/.mcp.json"
+     ],
+     [
+      "plugin.compatibility.codex.mcp_server_invalid",
+      "error",
+      false,
+      "mcp_server",
+      "user/full/.mcp.json"
+     ],
+     [
+      "plugin.compatibility.codex.mcp_server_invalid",
+      "error",
+      false,
+      "mcp_server",
+      "user/full/servers.json"
+     ],
+     [
+      "plugin.compatibility.codex.mcp_server_invalid",
+      "error",
+      false,
+      "mcp_server",
+      "user/full/servers.json"
+     ],
+     [
+      "plugin.compatibility.codex.mcp_server_invalid",
+      "error",
+      false,
+      "mcp_server",
+      "user/full/servers.json"
+     ],
+     [
+      "plugin.compatibility.codex.mcp_server_invalid",
+      "error",
+      false,
+      "mcp_server",
+      "user/full/servers.json"
+     ],
+     [
+      "plugin.compatibility.codex.openai_app_unsupported",
+      "warning",
+      false,
+      "app",
+      "user/full/app.json"
+     ],
+     [
+      "plugin.compatibility.codex.openai_app_unsupported",
+      "warning",
+      false,
+      "app",
+      "user/implicit/.app.json"
+     ],
+     [
+      "plugin.compatibility.codex.openai_app_unsupported",
+      "warning",
+      false,
+      "app",
+      "user/minimal/.codex-plugin/plugin.json"
+     ],
+     [
+      "plugin.compatibility.codex.skills_declaration_invalid",
+      "error",
+      false,
+      "skill",
+      "user/minimal/.codex-plugin/plugin.json"
+     ],
+     [
+      "plugin.path.outside_root",
+      "error",
+      false,
+      "skill",
+      "user/full/missing"
+     ]
+    ],
+    "knowledge": [],
+    "libraries": [],
+    "staged": []
+   },
+   "mcp": [
+    {
+     "alias": "plugin_7f486ca5253846ce_local",
+     "args": [
+      "--port",
+      "1"
+     ],
+     "command": [
+      "<home>/user/full/bin/server"
+     ],
+     "config_file": "user/full/.mcp.json",
+     "cwd": "<home>/user/full/work",
+     "env": {
+      "A": "b",
+      "PLUGIN_DATA": "<home>/plugin-data/Codex_Demo",
+      "PLUGIN_ROOT": "<home>/user/full"
+     },
+     "plugin": "Codex Demo",
+     "source_id": "local",
+     "transport": "stdio"
+    },
+    {
+     "alias": "plugin_3a82d92d79238122_oauthy",
+     "config_file": "user/full/servers.json",
+     "headers": {},
+     "plugin": "Codex Demo",
+     "source_id": "oauthy",
+     "transport": "http",
+     "url": "https://example.com/o"
+    },
+    {
+     "alias": "plugin_fc45f8776bf0959d_remote",
+     "config_file": "user/full/servers.json",
+     "headers": {
+      "X-A": "1"
+     },
+     "plugin": "Codex Demo",
+     "source_id": "remote",
+     "transport": "http",
+     "url": "https://example.com/mcp?k=v"
+    },
+    {
+     "alias": "plugin_7420faf3e530bbfc_inline",
+     "config_file": "user/implicit/.codex-plugin/plugin.json",
+     "headers": {},
+     "plugin": "implicit",
+     "source_id": "inline",
+     "transport": "http",
+     "url": "https://example.com/i"
+    }
+   ],
+   "plugins": [
+    {
+     "author": "Ann",
+     "content_digest": "af95abbfa308a276e6f9202fb01f51da404afc15ea961a6b71bcca0d4ea0d840",
+     "data_root": "plugin-data/Codex_Demo",
+     "description": "Capabilities provided by Codex Demo.",
+     "manifest_digest": "244b58336048e861d3d764f9093e5366788e4cf719a271225d75cb6178dab213",
+     "manifest_path": "user/full/.codex-plugin/plugin.json",
+     "name": "Codex Demo",
+     "namespace": "Codex_Demo",
+     "root": "user/full",
+     "scope": "global",
+     "source_format": "codex",
+     "version": "1.2"
+    },
+    {
+     "author": null,
+     "content_digest": "f4293c802b1e76327074ed1d7d83ec28753a0f174bfadf513ccb7a37189aec3c",
+     "data_root": "plugin-data/implicit",
+     "description": "Capabilities provided by implicit.",
+     "manifest_digest": "af62cede316ac3b69f093e0eb80206e69789c071df954169262be93a52ca0364",
+     "manifest_path": "user/implicit/.codex-plugin/plugin.json",
+     "name": "implicit",
+     "namespace": "implicit",
+     "root": "user/implicit",
+     "scope": "global",
+     "source_format": "codex",
+     "version": null
+    },
+    {
+     "author": null,
+     "content_digest": "14e67db0136229869c98ab9a32463c73c8f830ac19899de947c7f6f9f30a983f",
+     "data_root": "plugin-data/minimal",
+     "description": "Capabilities provided by minimal.",
+     "manifest_digest": "88fdfb3914d1eaa78ac4fa1d9e1e606cc15fcacaca7997ef15fcda97e4a45b7e",
+     "manifest_path": "user/minimal/.codex-plugin/plugin.json",
+     "name": "minimal",
+     "namespace": "minimal",
+     "root": "user/minimal",
+     "scope": "global",
+     "source_format": "codex",
+     "version": null
+    }
+   ],
+   "skills": [
+    {
+     "alias": "Codex_Demo:beta",
+     "allowed_tools": [],
+     "description": "Beta skill for the probe",
+     "metadata": {},
+     "model_invocable": false,
+     "path": "user/full/extra-skills/beta/SKILL.md",
+     "prompt": "Beta.",
+     "user_invocable": true
+    },
+    {
+     "alias": "Codex_Demo:gamma",
+     "allowed_tools": [],
+     "description": "Gamma skill for the probe",
+     "metadata": {},
+     "model_invocable": true,
+     "path": "user/full/extra-skills/gamma/SKILL.md",
+     "prompt": "Gamma.",
+     "user_invocable": true
+    },
+    {
+     "alias": "Codex_Demo:alpha",
+     "allowed_tools": [],
+     "description": "Alpha skill for the probe",
+     "metadata": {},
+     "model_invocable": true,
+     "path": "user/full/skills/alpha/SKILL.md",
+     "prompt": "Alpha.",
+     "user_invocable": true
+    },
+    {
+     "alias": "implicit:one",
+     "allowed_tools": [],
+     "description": "One skill for the probe",
+     "metadata": {},
+     "model_invocable": true,
+     "path": "user/implicit/skills/one/SKILL.md",
+     "prompt": "One.",
+     "user_invocable": true
+    }
+   ],
+   "unsupported": [
+    [
+     "Codex Demo",
+     "interface_metadata",
+     "codex_interface_metadata_runtime_private",
+     "user/full/.codex-plugin/plugin.json"
+    ],
+    [
+     "Codex Demo",
+     "openai_app",
+     "openai_apps_ui_unsupported",
+     "user/full/app.json"
+    ],
+    [
+     "Codex Demo",
+     "codex_hooks",
+     "codex_hook_semantics_unsupported",
+     "user/full/.codex-plugin/plugin.json"
+    ],
+    [
+     "Codex Demo",
+     "agent_metadata",
+     "codex_agent_metadata_unsupported",
+     "user/full/agents/readme.md"
+    ],
+    [
+     "Codex Demo",
+     "agent_metadata",
+     "codex_agent_metadata_unsupported",
+     "user/full/extra-skills/gamma/agents/openai.yaml"
+    ],
+    [
+     "Codex Demo",
+     "agent_metadata",
+     "codex_agent_metadata_unsupported",
+     "user/full/skills/alpha/agents/openai.yml"
+    ],
+    [
+     "implicit",
+     "openai_app",
+     "openai_apps_ui_unsupported",
+     "user/implicit/.app.json"
+    ],
+    [
+     "implicit",
+     "codex_hooks",
+     "codex_hook_semantics_unsupported",
+     "user/implicit/hooks.json"
+    ],
+    [
+     "minimal",
+     "interface_metadata",
+     "codex_interface_metadata_runtime_private",
+     "user/minimal/.codex-plugin/plugin.json"
+    ],
+    [
+     "minimal",
+     "openai_app",
+     "openai_apps_ui_unsupported",
+     "user/minimal/.codex-plugin/plugin.json"
+    ],
+    [
+     "minimal",
+     "codex_hooks",
+     "codex_hook_semantics_unsupported",
+     "user/minimal/hooks.json"
+    ]
+   ]
+  },
+  "kimi": {
+   "agents": [],
+   "connectors": [],
+   "hooks": [
+    {
+     "config_file": "user/kimi-rich/kimi.plugin.json",
+     "cwd": "user/kimi-rich",
+     "env": [
+      "KIMI_CODE_HOME",
+      "KIMI_PLUGIN_ROOT",
+      "PLUGIN_DATA",
+      "PLUGIN_ROOT"
+     ],
+     "match": "Shell",
+     "name": "kimi-rich:kimi-pretooluse-0",
+     "order": 0,
+     "protocol": "kimi_code",
+     "timeout": 5.0,
+     "type": "pre_tool"
+    },
+    {
+     "config_file": "user/kimi-rich/kimi.plugin.json",
+     "cwd": "user/kimi-rich",
+     "env": [
+      "KIMI_CODE_HOME",
+      "KIMI_PLUGIN_ROOT",
+      "PLUGIN_DATA",
+      "PLUGIN_ROOT"
+     ],
+     "match": "*",
+     "name": "kimi-rich:kimi-posttooluse-4",
+     "order": 1,
+     "protocol": "kimi_code",
+     "timeout": 30.0,
+     "type": "post_tool"
+    }
+   ],
+   "issues": [
+    [
+     "plugin.compatibility.kimi_code.command_path_invalid",
+     "warning",
+     false,
+     "command",
+     "user/kimi-rich/cmds-bad"
+    ],
+    [
+     "plugin.compatibility.kimi_code.fields_unsupported",
+     "info",
+     false,
+     "manifest",
+     "user/kimi-rich/kimi.plugin.json"
+    ],
+    [
+     "plugin.compatibility.kimi_code.hooks_invalid",
+     "error",
+     false,
+     "hook",
+     "user/kimi-rich/kimi.plugin.json"
+    ],
+    [
+     "plugin.compatibility.kimi_code.hooks_invalid",
+     "warning",
+     false,
+     "hook",
+     "user/kimi-rich/kimi.plugin.json"
+    ],
+    [
+     "plugin.compatibility.kimi_code.hooks_partially_unsupported",
+     "warning",
+     false,
+     "hook",
+     "user/kimi-rich/kimi.plugin.json"
+    ],
+    [
+     "plugin.compatibility.kimi_code.install_ui_unsupported",
+     "info",
+     false,
+     "interface",
+     "user/kimi-rich/kimi.plugin.json"
+    ],
+    [
+     "plugin.compatibility.kimi_code.manifest_shadowed",
+     "info",
+     false,
+     "manifest",
+     "user/kimi-rich/.kimi-plugin/plugin.json"
+    ],
+    [
+     "plugin.compatibility.kimi_code.session_start_unsupported",
+     "info",
+     false,
+     "session_start",
+     "user/kimi-rich/kimi.plugin.json"
+    ],
+    [
+     "plugin.compatibility.kimi_code.skill_invalid",
+     "error",
+     false,
+     "skill",
+     "user/kimi-rich/skills/two/SKILL.md"
+    ],
+    [
+     "plugin.compatibility.kimi_code.skill_vendor_metadata_normalized",
+     "info",
+     false,
+     "skill",
+     "user/kimi-rich/skills/one/SKILL.md"
+    ]
+   ],
+   "knowledge": [],
+   "libraries": [],
+   "materialized": {
+    "environment": {},
+    "issues": [
+     [
+      "plugin.compatibility.kimi_code.command_path_invalid",
+      "warning",
+      false,
+      "command",
+      "user/kimi-rich/cmds-bad"
+     ],
+     [
+      "plugin.compatibility.kimi_code.fields_unsupported",
+      "info",
+      false,
+      "manifest",
+      "user/kimi-rich/kimi.plugin.json"
+     ],
+     [
+      "plugin.compatibility.kimi_code.hooks_invalid",
+      "error",
+      false,
+      "hook",
+      "user/kimi-rich/kimi.plugin.json"
+     ],
+     [
+      "plugin.compatibility.kimi_code.hooks_invalid",
+      "warning",
+      false,
+      "hook",
+      "user/kimi-rich/kimi.plugin.json"
+     ],
+     [
+      "plugin.compatibility.kimi_code.hooks_partially_unsupported",
+      "warning",
+      false,
+      "hook",
+      "user/kimi-rich/kimi.plugin.json"
+     ],
+     [
+      "plugin.compatibility.kimi_code.install_ui_unsupported",
+      "info",
+      false,
+      "interface",
+      "user/kimi-rich/kimi.plugin.json"
+     ],
+     [
+      "plugin.compatibility.kimi_code.manifest_shadowed",
+      "info",
+      false,
+      "manifest",
+      "user/kimi-rich/.kimi-plugin/plugin.json"
+     ],
+     [
+      "plugin.compatibility.kimi_code.session_start_unsupported",
+      "info",
+      false,
+      "session_start",
+      "user/kimi-rich/kimi.plugin.json"
+     ],
+     [
+      "plugin.compatibility.kimi_code.skill_invalid",
+      "error",
+      false,
+      "skill",
+      "user/kimi-rich/skills/two/SKILL.md"
+     ],
+     [
+      "plugin.compatibility.kimi_code.skill_vendor_metadata_normalized",
+      "info",
+      false,
+      "skill",
+      "user/kimi-rich/skills/one/SKILL.md"
+     ]
+    ],
+    "knowledge": [],
+    "libraries": [],
+    "staged": [
+     "plugin-data/kimi_rich/generated-skills/command-greet-user/SKILL.md"
+    ]
+   },
+   "mcp": [
+    {
+     "alias": "plugin_56c842fb4c5458b8_s",
+     "args": [],
+     "command": [
+      "<home>/user/kimi-rich/bin/run"
+     ],
+     "config_file": "user/kimi-rich/kimi.plugin.json",
+     "cwd": "<home>/user/kimi-rich",
+     "env": {
+      "PLUGIN_DATA": "<home>/plugin-data/kimi_rich",
+      "PLUGIN_ROOT": "<home>/user/kimi-rich",
+      "ROOT": "<home>/user/kimi-rich"
+     },
+     "plugin": "kimi-rich",
+     "source_id": "s",
+     "transport": "stdio"
+    },
+    {
+     "alias": "plugin_5b5b854e0b8b6070_u",
+     "config_file": "user/kimi-rich/kimi.plugin.json",
+     "headers": {},
+     "plugin": "kimi-rich",
+     "source_id": "u",
+     "transport": "http",
+     "url": "https://example.com/k"
+    }
+   ],
+   "plugins": [
+    {
+     "author": null,
+     "content_digest": "9cd3274e95b491c7c9050fe5be9d601927e26512353e4476d011c38968d80c4a",
+     "data_root": "plugin-data/kimi_rich",
+     "description": "Capabilities provided by kimi-rich.",
+     "manifest_digest": "50e6e2b14b36ce977548e39fe39a6bf90ae539c609a881840ed8056defd0532a",
+     "manifest_path": "user/kimi-rich/kimi.plugin.json",
+     "name": "kimi-rich",
+     "namespace": "kimi_rich",
+     "root": "user/kimi-rich",
+     "scope": "global",
+     "source_format": "kimi_code",
+     "version": "0.1.0"
+    },
+    {
+     "author": null,
+     "content_digest": "5cf6882979f8826a15bac21cc762b74b376ff05a9069770b77b1729db80dc563",
+     "data_root": "plugin-data/nested_kimi",
+     "description": "Nested manifest",
+     "manifest_digest": "f911ba504b4eab97e3ee955b783f89344936c492260c81e0b6c4d2dca0bb4076",
+     "manifest_path": "user/nested-kimi/.kimi-plugin/plugin.json",
+     "name": "nested_kimi",
+     "namespace": "nested_kimi",
+     "root": "user/nested-kimi",
+     "scope": "global",
+     "source_format": "kimi_code",
+     "version": null
+    }
+   ],
+   "skills": [
+    {
+     "alias": "kimi_rich:one",
+     "allowed_tools": [],
+     "description": "First kimi skill",
+     "metadata": {
+      "vendor.disableModelInvocation": "true",
+      "vendor.type": "\"prompt\"",
+      "vendor.whenToUse": "\"rarely\""
+     },
+     "model_invocable": false,
+     "path": "user/kimi-rich/skills/one/SKILL.md",
+     "prompt": "Always be brief.\n\nOne body.",
+     "user_invocable": true
+    },
+    {
+     "alias": "kimi_rich:command-greet-user",
+     "allowed_tools": [],
+     "description": "Say hello politely.",
+     "metadata": {
+      "source-command": "Greet User",
+      "unified-harness.translation": "synthetic_skill"
+     },
+     "model_invocable": true,
+     "path": "user/kimi-rich/cmds/greet.md",
+     "prompt": "Say hello politely.",
+     "user_invocable": true
+    },
+    {
+     "alias": "nested_kimi:solo",
+     "allowed_tools": [],
+     "description": "Solo root skill",
+     "metadata": {},
+     "model_invocable": true,
+     "path": "user/nested-kimi/SKILL.md",
+     "prompt": "Solo.",
+     "user_invocable": true
+    }
+   ],
+   "unsupported": [
+    [
+     "kimi-rich",
+     "hooks",
+     "kimi_hook_lifecycle_unsupported",
+     "user/kimi-rich/kimi.plugin.json"
+    ],
+    [
+     "kimi-rich",
+     "hooks",
+     "kimi_hook_rule_unsupported",
+     "user/kimi-rich/kimi.plugin.json"
+    ],
+    [
+     "kimi-rich",
+     "session_start",
+     "kimi_session_start_unsupported",
+     "user/kimi-rich/kimi.plugin.json"
+    ],
+    [
+     "kimi-rich",
+     "manifest_fields",
+     "kimi_manifest_fields_unsupported",
+     "user/kimi-rich/kimi.plugin.json"
+    ]
+   ]
+  },
+  "kimi-more": {
+   "agents": [],
+   "connectors": [],
+   "hooks": [
+    {
+     "config_file": "user/km/kimi.plugin.json",
+     "cwd": "user/km",
+     "env": [
+      "KIMI_CODE_HOME",
+      "KIMI_PLUGIN_ROOT",
+      "PLUGIN_DATA",
+      "PLUGIN_ROOT"
+     ],
+     "match": "*",
+     "name": "km:kimi-pretooluse-5",
+     "order": 0,
+     "protocol": "kimi_code",
+     "timeout": 600.0,
+     "type": "pre_tool"
+    }
+   ],
+   "issues": [
+    [
+     "plugin.compatibility.kimi_code.command_dynamic_execution_unsupported",
+     "warning",
+     false,
+     "command",
+     "user/km/c/x.md"
+    ],
+    [
+     "plugin.compatibility.kimi_code.hooks_invalid",
+     "error",
+     false,
+     "hook",
+     "user/km/kimi.plugin.json"
+    ],
+    [
+     "plugin.compatibility.kimi_code.hooks_invalid",
+     "error",
+     false,
+     "hook",
+     "user/km/kimi.plugin.json"
+    ],
+    [
+     "plugin.compatibility.kimi_code.hooks_invalid",
+     "error",
+     false,
+     "hook",
+     "user/km/kimi.plugin.json"
+    ],
+    [
+     "plugin.compatibility.kimi_code.hooks_partially_unsupported",
+     "warning",
+     false,
+     "hook",
+     "user/km/kimi.plugin.json"
+    ],
+    [
+     "plugin.compatibility.kimi_code.hooks_partially_unsupported",
+     "warning",
+     false,
+     "hook",
+     "user/km/kimi.plugin.json"
+    ],
+    [
+     "plugin.compatibility.kimi_code.manifest_invalid",
+     "error",
+     true,
+     "manifest",
+     "user/badkimi/kimi.plugin.json"
+    ],
+    [
+     "plugin.compatibility.kimi_code.manifest_invalid",
+     "error",
+     true,
+     "manifest",
+     "user/ss/kimi.plugin.json"
+    ],
+    [
+     "plugin.compatibility.kimi_code.manifest_invalid",
+     "error",
+     true,
+     "manifest",
+     "user/typed/kimi.plugin.json"
+    ],
+    [
+     "plugin.compatibility.kimi_code.mcp_declaration_invalid",
+     "error",
+     false,
+     "mcp",
+     "user/km/kimi.plugin.json"
+    ],
+    [
+     "plugin.compatibility.kimi_code.skill_path_invalid",
+     "warning",
+     false,
+     "skill",
+     "user/km/s/none"
+    ],
+    [
+     "plugin.compatibility.kimi_code.skill_vendor_metadata_normalized",
+     "info",
+     false,
+     "skill",
+     "user/km/s/a/SKILL.md"
+    ]
+   ],
+   "knowledge": [],
+   "libraries": [],
+   "materialized": {
+    "environment": {},
+    "issues": [
+     [
+      "plugin.compatibility.kimi_code.command_dynamic_execution_unsupported",
+      "warning",
+      false,
+      "command",
+      "user/km/c/x.md"
+     ],
+     [
+      "plugin.compatibility.kimi_code.hooks_invalid",
+      "error",
+      false,
+      "hook",
+      "user/km/kimi.plugin.json"
+     ],
+     [
+      "plugin.compatibility.kimi_code.hooks_invalid",
+      "error",
+      false,
+      "hook",
+      "user/km/kimi.plugin.json"
+     ],
+     [
+      "plugin.compatibility.kimi_code.hooks_invalid",
+      "error",
+      false,
+      "hook",
+      "user/km/kimi.plugin.json"
+     ],
+     [
+      "plugin.compatibility.kimi_code.hooks_partially_unsupported",
+      "warning",
+      false,
+      "hook",
+      "user/km/kimi.plugin.json"
+     ],
+     [
+      "plugin.compatibility.kimi_code.hooks_partially_unsupported",
+      "warning",
+      false,
+      "hook",
+      "user/km/kimi.plugin.json"
+     ],
+     [
+      "plugin.compatibility.kimi_code.manifest_invalid",
+      "error",
+      true,
+      "manifest",
+      "user/badkimi/kimi.plugin.json"
+     ],
+     [
+      "plugin.compatibility.kimi_code.manifest_invalid",
+      "error",
+      true,
+      "manifest",
+      "user/ss/kimi.plugin.json"
+     ],
+     [
+      "plugin.compatibility.kimi_code.manifest_invalid",
+      "error",
+      true,
+      "manifest",
+      "user/typed/kimi.plugin.json"
+     ],
+     [
+      "plugin.compatibility.kimi_code.mcp_declaration_invalid",
+      "error",
+      false,
+      "mcp",
+      "user/km/kimi.plugin.json"
+     ],
+     [
+      "plugin.compatibility.kimi_code.skill_path_invalid",
+      "warning",
+      false,
+      "skill",
+      "user/km/s/none"
+     ],
+     [
+      "plugin.compatibility.kimi_code.skill_vendor_metadata_normalized",
+      "info",
+      false,
+      "skill",
+      "user/km/s/a/SKILL.md"
+     ]
+    ],
+    "knowledge": [],
+    "libraries": [],
+    "staged": [
+     "plugin-data/km/generated-skills/command-sub-z/SKILL.md"
+    ]
+   },
+   "mcp": [],
+   "plugins": [
+    {
+     "author": "Kay",
+     "content_digest": "662a6b07712b601ddcc0ae9ebc998e0b529c723eb8a795957c9dfcee87e983b6",
+     "data_root": "plugin-data/km",
+     "description": "Capabilities provided by km.",
+     "manifest_digest": "272496d0b18d0610fa1e1fca060967d4eb82b6f7f07768fe8534b221a04ed539",
+     "manifest_path": "user/km/kimi.plugin.json",
+     "name": "km",
+     "namespace": "km",
+     "root": "user/km",
+     "scope": "global",
+     "source_format": "kimi_code",
+     "version": null
+    }
+   ],
+   "skills": [
+    {
+     "alias": "km:a",
+     "allowed_tools": [
+      "Read"
+     ],
+     "description": "Skill a",
+     "metadata": {
+      "k": "v",
+      "vendor.disableModelInvocation": "false",
+      "vendor.disable_model_invocation": "true"
+     },
+     "model_invocable": false,
+     "path": "user/km/s/a/SKILL.md",
+     "prompt": null,
+     "user_invocable": true
+    },
+    {
+     "alias": "km:command-sub-z",
+     "allowed_tools": [],
+     "description": "Z body line.",
+     "metadata": {
+      "source-command": "sub/z",
+      "unified-harness.translation": "synthetic_skill"
+     },
+     "model_invocable": true,
+     "path": "user/km/c/sub/z.md",
+     "prompt": "Z body line.",
+     "user_invocable": true
+    }
+   ],
+   "unsupported": [
+    [
+     "km",
+     "hooks",
+     "kimi_hook_matcher_unsupported",
+     "user/km/kimi.plugin.json"
+    ],
+    [
+     "km",
+     "hooks",
+     "kimi_hook_lifecycle_unsupported",
+     "user/km/kimi.plugin.json"
+    ]
+   ]
+  },
+  "native-basic": {
+   "agents": [],
+   "connectors": [],
+   "hooks": [],
+   "issues": [
+    [
+     "plugin.skill.invalid",
+     "error",
+     false,
+     "skill",
+     "user/alpha/skills/mismatch/SKILL.md"
+    ]
+   ],
+   "knowledge": [],
+   "libraries": [],
+   "materialized": {
+    "environment": {},
+    "issues": [
+     [
+      "plugin.skill.invalid",
+      "error",
+      false,
+      "skill",
+      "user/alpha/skills/mismatch/SKILL.md"
+     ]
+    ],
+    "knowledge": [],
+    "libraries": [],
+    "staged": []
+   },
+   "mcp": [],
+   "plugins": [
+    {
+     "author": "Ann Example",
+     "content_digest": "7fec40ae57fdb3babfd0cede51355d2ceb0ed12aaa9b6d9c4cc855276a4e6db3",
+     "data_root": "plugin-data/alpha",
+     "description": "Alpha plugin for the corpus",
+     "manifest_digest": "a282382ccdcf90f21e3edeb54b557723e20ce567030f46dd168b5a1391c3ec36",
+     "manifest_path": "user/alpha/plugin.json",
+     "name": "alpha",
+     "namespace": "alpha",
+     "root": "user/alpha",
+     "scope": "global",
+     "source_format": "agent_plugins_1_0",
+     "version": "1.2.0"
+    },
+    {
+     "author": null,
+     "content_digest": "e8be8db3a88695e9297819881f02a3e24d9c0dd08f72cde90371709ca7ba1935",
+     "data_root": "plugin-data/minimal",
+     "description": "Capabilities provided by minimal.",
+     "manifest_digest": "6a52570e75d9781675a22c9c4460c34ceedc071d0942532a18a9d176a640e834",
+     "manifest_path": "user/minimal/plugin.json",
+     "name": "minimal",
+     "namespace": "minimal",
+     "root": "user/minimal",
+     "scope": "global",
+     "source_format": "agent_plugins_1_0",
+     "version": null
+    }
+   ],
+   "skills": [
+    {
+     "alias": "alpha:guarded",
+     "allowed_tools": [
+      "read_file",
+      "grep"
+     ],
+     "description": "Uses a narrow tool set",
+     "metadata": {},
+     "model_invocable": true,
+     "path": "user/alpha/skills/guarded/SKILL.md",
+     "prompt": null,
+     "user_invocable": true
+    },
+    {
+     "alias": "alpha:hidden",
+     "allowed_tools": [],
+     "description": "Only the user may run this",
+     "metadata": {},
+     "model_invocable": false,
+     "path": "user/alpha/skills/hidden/SKILL.md",
+     "prompt": "Hidden body.",
+     "user_invocable": true
+    },
+    {
+     "alias": "alpha:internal",
+     "allowed_tools": [],
+     "description": "Only the model may run this",
+     "metadata": {},
+     "model_invocable": true,
+     "path": "user/alpha/skills/internal/SKILL.md",
+     "prompt": "Internal body.",
+     "user_invocable": false
+    },
+    {
+     "alias": "alpha:summarize",
+     "allowed_tools": [],
+     "description": "Summarizes a file for the corpus",
+     "metadata": {},
+     "model_invocable": true,
+     "path": "user/alpha/skills/summarize/SKILL.md",
+     "prompt": "Read the file and summarize it.",
+     "user_invocable": true
+    }
+   ],
+   "unsupported": []
+  },
+  "native-errors": {
+   "agents": [],
+   "connectors": [],
+   "hooks": [],
+   "issues": [
+    [
+     "plugin.agent.invalid",
+     "error",
+     false,
+     "agent",
+     "user/badagent/ai.mistral.vibe/agents/thing.toml"
+    ],
+    [
+     "plugin.compatibility.format_unrecognized",
+     "error",
+     true,
+     "manifest",
+     "user/bad-json/plugin.json"
+    ],
+    [
+     "plugin.compatibility.format_unrecognized",
+     "error",
+     true,
+     "manifest",
+     "user/empty-dir"
+    ],
+    [
+     "plugin.connectors.invalid",
+     "error",
+     false,
+     "connector",
+     "user/badconn/connectors.json"
+    ],
+    [
+     "plugin.hooks.invalid",
+     "error",
+     false,
+     "hook",
+     "user/badhooks/ai.mistral.vibe/hooks.toml"
+    ],
+    [
+     "plugin.knowledge.invalid",
+     "error",
+     false,
+     "knowledge",
+     "user/badknow/ai.mistral.vibe/knowledge/Bad_Name/KNOWLEDGE.md"
+    ],
+    [
+     "plugin.libraries.invalid",
+     "error",
+     false,
+     "library",
+     "user/badlib/libraries.json"
+    ],
+    [
+     "plugin.schema.version_unsupported",
+     "error",
+     true,
+     "manifest",
+     "user/wrong-schema/plugin.json"
+    ],
+    [
+     null,
+     "error",
+     false,
+     null,
+     "user/bad-name/plugin.json"
+    ],
+    [
+     null,
+     "error",
+     false,
+     null,
+     "user/clash-a/plugin.json"
+    ],
+    [
+     null,
+     "error",
+     false,
+     null,
+     "user/clash-b/plugin.json"
+    ],
+    [
+     null,
+     "error",
+     false,
+     null,
+     "user/dup-one/plugin.json"
+    ],
+    [
+     null,
+     "error",
+     false,
+     null,
+     "user/dup-two/plugin.json"
+    ],
+    [
+     null,
+     "error",
+     false,
+     null,
+     "user/reserved/plugin.json"
+    ],
+    [
+     null,
+     "error",
+     false,
+     null,
+     "user/typed/plugin.json"
+    ],
+    [
+     null,
+     "error",
+     false,
+     null,
+     "user/unknown-key/plugin.json"
+    ]
+   ],
+   "knowledge": [],
+   "libraries": [],
+   "materialized": {
+    "environment": {},
+    "issues": [
+     [
+      "plugin.agent.invalid",
+      "error",
+      false,
+      "agent",
+      "user/badagent/ai.mistral.vibe/agents/thing.toml"
+     ],
+     [
+      "plugin.compatibility.format_unrecognized",
+      "error",
+      true,
+      "manifest",
+      "user/bad-json/plugin.json"
+     ],
+     [
+      "plugin.compatibility.format_unrecognized",
+      "error",
+      true,
+      "manifest",
+      "user/empty-dir"
+     ],
+     [
+      "plugin.connectors.invalid",
+      "error",
+      false,
+      "connector",
+      "user/badconn/connectors.json"
+     ],
+     [
+      "plugin.hooks.invalid",
+      "error",
+      false,
+      "hook",
+      "user/badhooks/ai.mistral.vibe/hooks.toml"
+     ],
+     [
+      "plugin.knowledge.invalid",
+      "error",
+      false,
+      "knowledge",
+      "user/badknow/ai.mistral.vibe/knowledge/Bad_Name/KNOWLEDGE.md"
+     ],
+     [
+      "plugin.libraries.invalid",
+      "error",
+      false,
+      "library",
+      "user/badlib/libraries.json"
+     ],
+     [
+      "plugin.schema.version_unsupported",
+      "error",
+      true,
+      "manifest",
+      "user/wrong-schema/plugin.json"
+     ],
+     [
+      null,
+      "error",
+      false,
+      null,
+      "user/bad-name/plugin.json"
+     ],
+     [
+      null,
+      "error",
+      false,
+      null,
+      "user/clash-a/plugin.json"
+     ],
+     [
+      null,
+      "error",
+      false,
+      null,
+      "user/clash-b/plugin.json"
+     ],
+     [
+      null,
+      "error",
+      false,
+      null,
+      "user/dup-one/plugin.json"
+     ],
+     [
+      null,
+      "error",
+      false,
+      null,
+      "user/dup-two/plugin.json"
+     ],
+     [
+      null,
+      "error",
+      false,
+      null,
+      "user/reserved/plugin.json"
+     ],
+     [
+      null,
+      "error",
+      false,
+      null,
+      "user/typed/plugin.json"
+     ],
+     [
+      null,
+      "error",
+      false,
+      null,
+      "user/unknown-key/plugin.json"
+     ]
+    ],
+    "knowledge": [],
+    "libraries": [],
+    "staged": []
+   },
+   "mcp": [],
+   "plugins": [
+    {
+     "author": null,
+     "content_digest": "053deaa0cbbe0ccdd82deed0c23dad256e1cf05ae45bafa53262a3327c902a3e",
+     "data_root": "plugin-data/badagent",
+     "description": "Capabilities provided by badagent.",
+     "manifest_digest": "bca180c09d75940463e5d301d80e3567d9d11a5c2a12bb17e91097bdfa8fe596",
+     "manifest_path": "user/badagent/plugin.json",
+     "name": "badagent",
+     "namespace": "badagent",
+     "root": "user/badagent",
+     "scope": "global",
+     "source_format": "agent_plugins_1_0",
+     "version": null
+    },
+    {
+     "author": null,
+     "content_digest": "ba2f69a01842acf754cf827e32093fd5061a7bfa59b269c8bf7803fcfa87bbc6",
+     "data_root": "plugin-data/badconn",
+     "description": "Capabilities provided by badconn.",
+     "manifest_digest": "13821da889b243e051385c56f3ba9db8b481dbe9464d1c46c4d5ef3dd9673f3f",
+     "manifest_path": "user/badconn/plugin.json",
+     "name": "badconn",
+     "namespace": "badconn",
+     "root": "user/badconn",
+     "scope": "global",
+     "source_format": "agent_plugins_1_0",
+     "version": null
+    },
+    {
+     "author": null,
+     "content_digest": "3cc885efebf166e3b1aca482a84b94b44e60ef53a3e9c559cad9e996eeda7907",
+     "data_root": "plugin-data/badhooks",
+     "description": "Capabilities provided by badhooks.",
+     "manifest_digest": "7a714e4be55e68c047ec96017e5e20cd8684f42850b4a780185654e385cb3c61",
+     "manifest_path": "user/badhooks/plugin.json",
+     "name": "badhooks",
+     "namespace": "badhooks",
+     "root": "user/badhooks",
+     "scope": "global",
+     "source_format": "agent_plugins_1_0",
+     "version": null
+    },
+    {
+     "author": null,
+     "content_digest": "b9fc31be3558fc6b3c3a8d673ae132ae56c15168efa9a6be4781fe28c2e25d2c",
+     "data_root": "plugin-data/badknow",
+     "description": "Capabilities provided by badknow.",
+     "manifest_digest": "662f124d6c24e0509f5433589c37824880f3fab31a597a315897a64dabafa8e5",
+     "manifest_path": "user/badknow/plugin.json",
+     "name": "badknow",
+     "namespace": "badknow",
+     "root": "user/badknow",
+     "scope": "global",
+     "source_format": "agent_plugins_1_0",
+     "version": null
+    },
+    {
+     "author": null,
+     "content_digest": "7be0b292f29631aafdbffed948c936067dce12424807004a7e50453aef9d085e",
+     "data_root": "plugin-data/badlib",
+     "description": "Capabilities provided by badlib.",
+     "manifest_digest": "12b9f5f86d9f678a179e38e16e7ef7cc42569b62d495e108ceab77b9c44e382c",
+     "manifest_path": "user/badlib/plugin.json",
+     "name": "badlib",
+     "namespace": "badlib",
+     "root": "user/badlib",
+     "scope": "global",
+     "source_format": "agent_plugins_1_0",
+     "version": null
+    }
+   ],
+   "skills": [],
+   "unsupported": []
+  },
+  "native-extension": {
+   "agents": [
+    {
+     "agent_type": "subagent",
+     "description": "A helper without a display name.",
+     "display_name": "Plain Helper",
+     "instructions": null,
+     "name": "ext_tools:plain-helper",
+     "overrides": {},
+     "plugin": "ext",
+     "safety": "neutral",
+     "source_file": "user/ext/ai.mistral.vibe/agents/plain-helper.toml",
+     "source_name": "plain-helper"
+    },
+    {
+     "agent_type": "subagent",
+     "description": "Digs through notes and reports back.",
+     "display_name": "Researcher",
+     "instructions": "Cite every file.",
+     "name": "ext_tools:researcher",
+     "overrides": {
+      "enabled_tools": [
+       "read_file",
+       "grep"
+      ]
+     },
+     "plugin": "ext",
+     "safety": "safe",
+     "source_file": "user/ext/ai.mistral.vibe/agents/researcher.toml",
+     "source_name": "researcher"
+    }
+   ],
+   "connectors": [
+    {
+     "config_file": "user/ext/connectors.json",
+     "plugin": "ext",
+     "source_id": "linear",
+     "tools": [
+      "search_issues",
+      "create_issue"
+     ]
+    }
+   ],
+   "hooks": [
+    {
+     "config_file": "user/ext/ai.mistral.vibe/hooks.toml",
+     "cwd": "user/ext",
+     "env": [
+      "PLUGIN_DATA",
+      "PLUGIN_ROOT"
+     ],
+     "match": "bash",
+     "name": "ext:audit",
+     "order": 0,
+     "protocol": "vibe",
+     "timeout": 12.0,
+     "type": "post_tool"
+    },
+    {
+     "config_file": "user/ext/ai.mistral.vibe/hooks.toml",
+     "cwd": "user/ext",
+     "env": [
+      "PLUGIN_DATA",
+      "PLUGIN_ROOT"
+     ],
+     "match": null,
+     "name": "ext:gate",
+     "order": 1,
+     "protocol": "vibe",
+     "timeout": 60.0,
+     "type": "pre_tool"
+    }
+   ],
+   "issues": [],
+   "knowledge": [
+    {
+     "description": "Policy notes kept for the corpus.",
+     "display_name": "Policy notes",
+     "icon": "P",
+     "name": "ext_tools:policy",
+     "plugin": "ext",
+     "runtime_entrypoint": "plugin-data/ext/knowledge/policy/KNOWLEDGE.md",
+     "runtime_root": "plugin-data/ext/knowledge/policy",
+     "source_entrypoint": "user/ext/ai.mistral.vibe/knowledge/policy/KNOWLEDGE.md",
+     "source_name": "policy",
+     "source_root": "user/ext/ai.mistral.vibe/knowledge/policy"
+    }
+   ],
+   "libraries": [
+    {
+     "alias": "@acme/helpers",
+     "config_file": "user/ext/libraries.json",
+     "language": "node",
+     "plugin": "ext",
+     "runtime_path": "plugin-data/ext/libraries/6a952b13b7b2c97dc72f141011a944a5f07381c201299b5cdc6e84cd3705e36c/node/node_modules/@acme/helpers",
+     "source_path": "user/ext/lib/node/helpers"
+    },
+    {
+     "alias": "acme_tools",
+     "config_file": "user/ext/libraries.json",
+     "language": "python",
+     "plugin": "ext",
+     "runtime_path": "plugin-data/ext/libraries/6a952b13b7b2c97dc72f141011a944a5f07381c201299b5cdc6e84cd3705e36c/python/acme_tools",
+     "source_path": "user/ext/lib/python/acme_tools"
+    },
+    {
+     "alias": "single",
+     "config_file": "user/ext/libraries.json",
+     "language": "python",
+     "plugin": "ext",
+     "runtime_path": "plugin-data/ext/libraries/6a952b13b7b2c97dc72f141011a944a5f07381c201299b5cdc6e84cd3705e36c/python/single.py",
+     "source_path": "user/ext/lib/python/single.py"
+    }
+   ],
+   "materialized": {
+    "environment": {
+     "NODE_OPTIONS": "--import=file://<home>/plugin-data/.runtime/node-loader-v1/register.mjs",
+     "NODE_PATH": "<home>/plugin-data/ext/libraries/6a952b13b7b2c97dc72f141011a944a5f07381c201299b5cdc6e84cd3705e36c/node/node_modules",
+     "PYTHONPATH": "<home>/plugin-data/ext/libraries/6a952b13b7b2c97dc72f141011a944a5f07381c201299b5cdc6e84cd3705e36c/python",
+     "UNIFIED_HARNESS_PLUGIN_NODE_PATHS": "<home>/plugin-data/ext/libraries/6a952b13b7b2c97dc72f141011a944a5f07381c201299b5cdc6e84cd3705e36c/node/node_modules"
+    },
+    "issues": [
+     [
+      "plugin.connector.runtime_unavailable",
+      "warning",
+      false,
+      "connector",
+      "user/ext/connectors.json"
+     ]
+    ],
+    "knowledge": [
+     [
+      "ext_tools:policy",
+      "plugin-data/ext/knowledge/policy",
+      "plugin-data/ext/knowledge/policy/KNOWLEDGE.md"
+     ]
+    ],
+    "libraries": [
+     [
+      "node",
+      "@acme/helpers",
+      "plugin-data/ext/libraries/6a952b13b7b2c97dc72f141011a944a5f07381c201299b5cdc6e84cd3705e36c/node/node_modules/@acme/helpers"
+     ],
+     [
+      "python",
+      "acme_tools",
+      "plugin-data/ext/libraries/6a952b13b7b2c97dc72f141011a944a5f07381c201299b5cdc6e84cd3705e36c/python/acme_tools"
+     ],
+     [
+      "python",
+      "single",
+      "plugin-data/ext/libraries/6a952b13b7b2c97dc72f141011a944a5f07381c201299b5cdc6e84cd3705e36c/python/single.py"
+     ]
+    ],
+    "staged": [
+     "plugin-data/.runtime/node-loader-v1/loader-hooks.mjs",
+     "plugin-data/.runtime/node-loader-v1/register.mjs",
+     "plugin-data/ext/knowledge/policy/KNOWLEDGE.md",
+     "plugin-data/ext/knowledge/policy/extra.md",
+     "plugin-data/ext/libraries/6a952b13b7b2c97dc72f141011a944a5f07381c201299b5cdc6e84cd3705e36c/node/node_modules/@acme/helpers/index.js",
+     "plugin-data/ext/libraries/6a952b13b7b2c97dc72f141011a944a5f07381c201299b5cdc6e84cd3705e36c/node/node_modules/@acme/helpers/package.json",
+     "plugin-data/ext/libraries/6a952b13b7b2c97dc72f141011a944a5f07381c201299b5cdc6e84cd3705e36c/python/acme_tools/__init__.py",
+     "plugin-data/ext/libraries/6a952b13b7b2c97dc72f141011a944a5f07381c201299b5cdc6e84cd3705e36c/python/single.py"
+    ]
+   },
+   "mcp": [],
+   "plugins": [
+    {
+     "author": null,
+     "content_digest": "6a952b13b7b2c97dc72f141011a944a5f07381c201299b5cdc6e84cd3705e36c",
+     "data_root": "plugin-data/ext",
+     "description": "Capabilities provided by ext.",
+     "manifest_digest": "43eddf2432b36fe9a4a2cbaf2f627dc2047dfba99dbae0b7cee60408b650fbc5",
+     "manifest_path": "user/ext/plugin.json",
+     "name": "ext",
+     "namespace": "ext_tools",
+     "root": "user/ext",
+     "scope": "global",
+     "source_format": "agent_plugins_1_0",
+     "version": "0.3.0"
+    },
+    {
+     "author": null,
+     "content_digest": "255b0f028d422e1c10a46cb6d5b74e725fc0e736776233362d25ea5445db9069",
+     "data_root": "plugin-data/noext",
+     "description": "Capabilities provided by noext.",
+     "manifest_digest": "8e3652bc3255bb4b7567e0fa6907663117285452f479047e36c5eee52b58e1a5",
+     "manifest_path": "user/noext/plugin.json",
+     "name": "noext",
+     "namespace": "noext",
+     "root": "user/noext",
+     "scope": "global",
+     "source_format": "agent_plugins_1_0",
+     "version": null
+    }
+   ],
+   "skills": [
+    {
+     "alias": "ext_tools:use",
+     "allowed_tools": [],
+     "description": "Uses the extension namespace",
+     "metadata": {},
+     "model_invocable": true,
+     "path": "user/ext/skills/use/SKILL.md",
+     "prompt": "Extension skill body.",
+     "user_invocable": true
+    }
+   ],
+   "unsupported": []
+  },
+  "native-mcp": {
+   "agents": [],
+   "connectors": [],
+   "hooks": [],
+   "issues": [
+    [
+     "plugin.mcp.server_shadowed",
+     "warning",
+     false,
+     "mcp_server",
+     "user/servers/mcp.json"
+    ],
+    [
+     null,
+     "error",
+     false,
+     null,
+     "user/servers/mcp.json"
+    ],
+    [
+     null,
+     "error",
+     false,
+     null,
+     "user/servers/mcp.json"
+    ],
+    [
+     null,
+     "error",
+     false,
+     null,
+     "user/servers/mcp.json"
+    ]
+   ],
+   "knowledge": [],
+   "libraries": [],
+   "materialized": {
+    "environment": {},
+    "issues": [
+     [
+      "plugin.mcp.server_shadowed",
+      "warning",
+      false,
+      "mcp_server",
+      "user/servers/mcp.json"
+     ],
+     [
+      null,
+      "error",
+      false,
+      null,
+      "user/servers/mcp.json"
+     ],
+     [
+      null,
+      "error",
+      false,
+      null,
+      "user/servers/mcp.json"
+     ],
+     [
+      null,
+      "error",
+      false,
+      null,
+      "user/servers/mcp.json"
+     ]
+    ],
+    "knowledge": [],
+    "libraries": [],
+    "staged": []
+   },
+   "mcp": [
+    {
+     "alias": "plugin_aa1ed4cc3a2021d6_local",
+     "args": [
+      "--data",
+      "<home>/plugin-data/servers",
+      "--root",
+      "<home>/user/servers"
+     ],
+     "command": [
+      "<home>/user/servers/bin/server"
+     ],
+     "config_file": "user/servers/mcp.json",
+     "cwd": "<home>/plugin-data/servers",
+     "env": {
+      "DATA": "<home>/plugin-data/servers/cache",
+      "LOG_LEVEL": "info",
+      "PLUGIN_DATA": "<home>/plugin-data/servers",
+      "PLUGIN_ROOT": "<home>/user/servers"
+     },
+     "plugin": "servers",
+     "source_id": "local",
+     "transport": "stdio"
+    },
+    {
+     "alias": "plugin_466735131b0a575b_onpath",
+     "args": [
+      "-V"
+     ],
+     "command": [
+      "python3"
+     ],
+     "config_file": "user/servers/mcp.json",
+     "cwd": "<home>/user/servers",
+     "env": {
+      "PLUGIN_DATA": "<home>/plugin-data/servers",
+      "PLUGIN_ROOT": "<home>/user/servers"
+     },
+     "plugin": "servers",
+     "source_id": "onpath",
+     "transport": "stdio"
+    },
+    {
+     "alias": "plugin_9d9a4ba3673e0f2d_docs",
+     "config_file": "user/servers/mcp.json",
+     "headers": {
+      "X-Client": "vibe"
+     },
+     "plugin": "servers",
+     "source_id": "docs",
+     "transport": "streamable-http",
+     "url": "https://docs.example.com/mcp"
+    },
+    {
+     "alias": "plugin_23f0837f0aa275bd_docs",
+     "config_file": "user/twin/mcp.json",
+     "headers": {},
+     "plugin": "twin",
+     "source_id": "docs",
+     "transport": "streamable-http",
+     "url": "https://twin.example.com/mcp"
+    }
+   ],
+   "plugins": [
+    {
+     "author": null,
+     "content_digest": "270bd0c81be1afb656624204a833381a4daf5678418daca4031ab81e9d0be6ce",
+     "data_root": "plugin-data/servers",
+     "description": "Capabilities provided by servers.",
+     "manifest_digest": "b2909b79cb07fdcb39b75186cff883a4a70e4677e846d850be9358bafe42d32b",
+     "manifest_path": "user/servers/plugin.json",
+     "name": "servers",
+     "namespace": "servers",
+     "root": "user/servers",
+     "scope": "global",
+     "source_format": "agent_plugins_1_0",
+     "version": "2.0.0"
+    },
+    {
+     "author": null,
+     "content_digest": "abb8d1a463b41308d5abb42b2bcb95bbe105e3b59889a16ef2b81d1d668762a4",
+     "data_root": "plugin-data/twin",
+     "description": "Capabilities provided by twin.",
+     "manifest_digest": "52f63314de4ec76ac961a45a98df0a122c9e34fa86f6867e2599d3e218a8692a",
+     "manifest_path": "user/twin/plugin.json",
+     "name": "twin",
+     "namespace": "twin",
+     "root": "user/twin",
+     "scope": "global",
+     "source_format": "agent_plugins_1_0",
+     "version": null
+    }
+   ],
+   "skills": [],
+   "unsupported": []
+  },
+  "native-scopes": {
+   "agents": [],
+   "connectors": [],
+   "hooks": [],
+   "issues": [],
+   "knowledge": [],
+   "libraries": [],
+   "materialized": {
+    "environment": {},
+    "issues": [],
+    "knowledge": [],
+    "libraries": [],
+    "staged": []
+   },
+   "mcp": [],
+   "plugins": [
+    {
+     "author": null,
+     "content_digest": "9064e8ef00af871b4784af4d06b9d68fb22dbc41ea26f8630cbb1310d4ea6834",
+     "data_root": "plugin-data/core",
+     "description": "Builtin copy",
+     "manifest_digest": "bf81645c1c41430085a1081bfc2a1d86e106ba4e8e16296f6e676878395be005",
+     "manifest_path": "builtin/core/plugin.json",
+     "name": "core",
+     "namespace": "core",
+     "root": "builtin/core",
+     "scope": "builtin",
+     "source_format": "agent_plugins_1_0",
+     "version": null
+    },
+    {
+     "author": null,
+     "content_digest": "65c7387bf81fa139248c1d69da55f9ca22a6535fd70ec19cce7b6d1be00f51ed",
+     "data_root": "plugin-data/shared",
+     "description": "Project copy",
+     "manifest_digest": "a3b4edc87978a96900f2b07771517445525eda89a4bec16da17ea8647f7bfc07",
+     "manifest_path": "project/shared/plugin.json",
+     "name": "shared",
+     "namespace": "shared",
+     "root": "project/shared",
+     "scope": "project",
+     "source_format": "agent_plugins_1_0",
+     "version": "2.0.0"
+    },
+    {
+     "author": null,
+     "content_digest": "bc5ead2728fca6cd34f2e8c2edb5031de3092c6f585ccd23dd638100d2723ecd",
+     "data_root": "plugin-data/solo",
+     "description": "Capabilities provided by solo.",
+     "manifest_digest": "6a52672a13b3b26805a2e971c96f5ea833c81720f5368de3330a3afb24521673",
+     "manifest_path": "user/solo/plugin.json",
+     "name": "solo",
+     "namespace": "solo",
+     "root": "user/solo",
+     "scope": "global",
+     "source_format": "agent_plugins_1_0",
+     "version": null
+    }
+   ],
+   "skills": [
+    {
+     "alias": "core:tip",
+     "allowed_tools": [],
+     "description": "Builtin tip",
+     "metadata": {},
+     "model_invocable": true,
+     "path": "builtin/core/skills/tip/SKILL.md",
+     "prompt": "Builtin body.",
+     "user_invocable": true
+    },
+    {
+     "alias": "shared:hi",
+     "allowed_tools": [],
+     "description": "Project greeting",
+     "metadata": {},
+     "model_invocable": true,
+     "path": "project/shared/skills/hi/SKILL.md",
+     "prompt": "Project hello.",
+     "user_invocable": true
+    }
+   ],
+   "unsupported": []
+  },
+  "opencode": {
+   "agents": [],
+   "connectors": [],
+   "hooks": [],
+   "issues": [
+    [
+     "plugin.compatibility.opencode.agent_unsupported",
+     "warning",
+     false,
+     "agent",
+     "user/oc/opencode.jsonc"
+    ],
+    [
+     "plugin.compatibility.opencode.custom_tools_unsupported",
+     "warning",
+     false,
+     "custom_tool",
+     "user/oc/.opencode/tools/tool.js"
+    ],
+    [
+     "plugin.compatibility.opencode.executable_format_unsupported",
+     "error",
+     true,
+     "executable_plugin",
+     "user/codeonly/.opencode/plugins/only.ts"
+    ],
+    [
+     "plugin.compatibility.opencode.executable_format_unsupported",
+     "warning",
+     false,
+     "executable_plugin",
+     "user/oc/.opencode/plugins/plug.ts"
+    ],
+    [
+     "plugin.compatibility.opencode.mcp_environment_reference_unsupported",
+     "warning",
+     false,
+     "mcp_server",
+     "user/oc/opencode.jsonc"
+    ],
+    [
+     "plugin.compatibility.opencode.mcp_oauth_unsupported",
+     "warning",
+     false,
+     "mcp_server",
+     "user/oc/opencode.jsonc"
+    ],
+    [
+     "plugin.compatibility.opencode.mcp_server_invalid",
+     "error",
+     false,
+     "mcp_server",
+     "user/oc/opencode.jsonc"
+    ],
+    [
+     "plugin.compatibility.opencode.mcp_server_skipped",
+     "info",
+     false,
+     "mcp_server",
+     "user/oc/opencode.jsonc"
+    ],
+    [
+     "plugin.compatibility.opencode.mcp_server_translated",
+     "info",
+     false,
+     "mcp_server",
+     "user/oc/opencode.jsonc"
+    ],
+    [
+     "plugin.compatibility.opencode.mcp_server_translated",
+     "info",
+     false,
+     "mcp_server",
+     "user/oc/opencode.jsonc"
+    ],
+    [
+     "plugin.compatibility.opencode.no_portable_capabilities",
+     "error",
+     true,
+     "package",
+     "user/empty-oc"
+    ],
+    [
+     "plugin.compatibility.opencode.skill_directory_mismatch",
+     "error",
+     false,
+     "skill",
+     "user/oc/skills/mismatch/SKILL.md"
+    ],
+    [
+     "plugin.compatibility.opencode.skill_imported",
+     "info",
+     false,
+     "skill",
+     "user/oc/skills/hello/SKILL.md"
+    ]
+   ],
+   "knowledge": [],
+   "libraries": [],
+   "materialized": {
+    "environment": {},
+    "issues": [
+     [
+      "plugin.compatibility.opencode.agent_unsupported",
+      "warning",
+      false,
+      "agent",
+      "user/oc/opencode.jsonc"
+     ],
+     [
+      "plugin.compatibility.opencode.custom_tools_unsupported",
+      "warning",
+      false,
+      "custom_tool",
+      "user/oc/.opencode/tools/tool.js"
+     ],
+     [
+      "plugin.compatibility.opencode.executable_format_unsupported",
+      "error",
+      true,
+      "executable_plugin",
+      "user/codeonly/.opencode/plugins/only.ts"
+     ],
+     [
+      "plugin.compatibility.opencode.executable_format_unsupported",
+      "warning",
+      false,
+      "executable_plugin",
+      "user/oc/.opencode/plugins/plug.ts"
+     ],
+     [
+      "plugin.compatibility.opencode.mcp_environment_reference_unsupported",
+      "warning",
+      false,
+      "mcp_server",
+      "user/oc/opencode.jsonc"
+     ],
+     [
+      "plugin.compatibility.opencode.mcp_oauth_unsupported",
+      "warning",
+      false,
+      "mcp_server",
+      "user/oc/opencode.jsonc"
+     ],
+     [
+      "plugin.compatibility.opencode.mcp_server_invalid",
+      "error",
+      false,
+      "mcp_server",
+      "user/oc/opencode.jsonc"
+     ],
+     [
+      "plugin.compatibility.opencode.mcp_server_skipped",
+      "info",
+      false,
+      "mcp_server",
+      "user/oc/opencode.jsonc"
+     ],
+     [
+      "plugin.compatibility.opencode.mcp_server_translated",
+      "info",
+      false,
+      "mcp_server",
+      "user/oc/opencode.jsonc"
+     ],
+     [
+      "plugin.compatibility.opencode.mcp_server_translated",
+      "info",
+      false,
+      "mcp_server",
+      "user/oc/opencode.jsonc"
+     ],
+     [
+      "plugin.compatibility.opencode.no_portable_capabilities",
+      "error",
+      true,
+      "package",
+      "user/empty-oc"
+     ],
+     [
+      "plugin.compatibility.opencode.skill_directory_mismatch",
+      "error",
+      false,
+      "skill",
+      "user/oc/skills/mismatch/SKILL.md"
+     ],
+     [
+      "plugin.compatibility.opencode.skill_imported",
+      "info",
+      false,
+      "skill",
+      "user/oc/skills/hello/SKILL.md"
+     ]
+    ],
+    "knowledge": [],
+    "libraries": [],
+    "staged": []
+   },
+   "mcp": [
+    {
+     "alias": "plugin_f37372a0308bfb54_local",
+     "args": [
+      "srv"
+     ],
+     "command": [
+      "npx"
+     ],
+     "config_file": "user/oc/opencode.jsonc",
+     "cwd": "<home>/user/oc",
+     "env": {
+      "K": "v",
+      "PLUGIN_DATA": "<home>/plugin-data/scope_oc_pkg",
+      "PLUGIN_ROOT": "<home>/user/oc"
+     },
+     "plugin": "scope-oc-pkg",
+     "source_id": "local",
+     "transport": "stdio"
+    },
+    {
+     "alias": "plugin_d52f2d8da491b77e_plain",
+     "config_file": "user/oc/opencode.jsonc",
+     "headers": {},
+     "plugin": "scope-oc-pkg",
+     "source_id": "plain",
+     "transport": "http",
+     "url": "https://example.com/plain"
+    }
+   ],
+   "plugins": [
+    {
+     "author": "Bob",
+     "content_digest": "1ac9c750dfa21bc232ad86aeb1add920163472019c2ad4b114e9662ddb22c892",
+     "data_root": "plugin-data/scope_oc_pkg",
+     "description": "OpenCode fixture",
+     "manifest_digest": "a9176ed7f6739bba3561f78323d5e4d90bb282414fb6ee1987963312f17ffb1f",
+     "manifest_path": "user/oc/package.json",
+     "name": "scope-oc-pkg",
+     "namespace": "scope_oc_pkg",
+     "root": "user/oc",
+     "scope": "global",
+     "source_format": "opencode",
+     "version": "2.0.0"
+    }
+   ],
+   "skills": [
+    {
+     "alias": "scope_oc_pkg:hello",
+     "allowed_tools": [],
+     "description": "Hello from OpenCode",
+     "metadata": {},
+     "model_invocable": true,
+     "path": "user/oc/skills/hello/SKILL.md",
+     "prompt": "Hello.",
+     "user_invocable": true
+    }
+   ],
+   "unsupported": [
+    [
+     "codeonly",
+     "executable_plugin",
+     "foreign_code_execution_unsupported",
+     "user/codeonly/.opencode/plugins/only.ts"
+    ],
+    [
+     "scope-oc-pkg",
+     "agent",
+     "opencode_agent_translation_unsupported",
+     "user/oc/opencode.jsonc"
+    ],
+    [
+     "scope-oc-pkg",
+     "mcp_oauth",
+     "opencode_oauth_translation_unsupported",
+     "user/oc/opencode.jsonc"
+    ],
+    [
+     "scope-oc-pkg",
+     "mcp_environment_reference",
+     "opencode_environment_interpolation_unsupported",
+     "user/oc/opencode.jsonc"
+    ],
+    [
+     "scope-oc-pkg",
+     "executable_plugin",
+     "foreign_code_execution_unsupported",
+     "user/oc/.opencode/plugins/plug.ts"
+    ],
+    [
+     "scope-oc-pkg",
+     "executable_plugin",
+     "foreign_code_execution_unsupported",
+     "user/oc/index.ts"
+    ],
+    [
+     "scope-oc-pkg",
+     "custom_tool",
+     "opencode_executable_tool_unsupported",
+     "user/oc/.opencode/tools/tool.js"
+    ]
+   ]
+  }
+ },
+ "note": "Captured from the pinned reference by scripts/parity/plugins.py over fixtures.json. Names, digests, paths and diagnostic codes are observations; diagnostic messages are not recorded.",
+ "reference": {
+  "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+ },
+ "schemaVersion": 1
+}

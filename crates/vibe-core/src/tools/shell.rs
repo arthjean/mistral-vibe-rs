@@ -114,11 +114,15 @@ const MANAGED_SELECTION_PRIORITY: i32 = 10;
 /// each turn rather than an answer frozen at registration.
 pub type HostResolver = Arc<dyn Fn() -> HostShells + Send + Sync>;
 
+/// The variables one session's commands start from, shared with its shell.
+type BaseEnvironment = Arc<StdMutex<BTreeMap<String, String>>>;
+
 #[derive(Clone)]
 pub struct ShellTools {
     vibe_home: PathBuf,
     host: HostResolver,
     sessions: Arc<StdMutex<BTreeMap<String, Arc<SessionShell>>>>,
+    environments: Arc<StdMutex<BTreeMap<String, BaseEnvironment>>>,
 }
 
 impl std::fmt::Debug for ShellTools {
@@ -153,7 +157,34 @@ impl ShellTools {
             vibe_home: vibe_home.into(),
             host,
             sessions: Arc::new(StdMutex::new(BTreeMap::new())),
+            environments: Arc::new(StdMutex::new(BTreeMap::new())),
         }
+    }
+
+    /// Sets the variables every command `session_id` runs starts from,
+    /// replacing what an earlier call set. Reference `_runtime.py` hands the
+    /// unified harness `{**os.environ, **process_environment}` as the
+    /// environment its commands run in.
+    pub fn set_session_environment(&self, session_id: &str, environment: BTreeMap<String, String>) {
+        let Ok(mut environments) = self.environments.lock() else {
+            return;
+        };
+        let held = environments.entry(session_id.to_owned()).or_default();
+        if let Ok(mut base) = held.lock() {
+            *base = environment;
+        }
+    }
+
+    fn base_environment(&self, session_id: &str) -> BaseEnvironment {
+        self.environments
+            .lock()
+            .map(|mut environments| {
+                environments
+                    .entry(session_id.to_owned())
+                    .or_default()
+                    .clone()
+            })
+            .unwrap_or_default()
     }
 
     /// Publishes this host's shell family for one session.
@@ -400,6 +431,7 @@ impl ShellTools {
                     managed: Mutex::new(BTreeMap::new()),
                     orphaned: StdMutex::new(BTreeMap::new()),
                     log_root: self.vibe_home.join(LOG_DIRECTORY),
+                    base_environment: self.base_environment(session_id),
                 });
                 // Reference `TerminalSessionManager.__init__` reads the
                 // manifests as the family is built, so the first `sessions`
@@ -604,7 +636,7 @@ async fn run_legacy_command(
     let terminal_id = shell
         .terminals
         .run(process_spec(
-            shell.family,
+            shell,
             &config,
             working_directory,
             &command,
@@ -742,7 +774,7 @@ async fn run_windows_fallback(
     let terminal_id = shell
         .terminals
         .run(process_spec(
-            shell.family,
+            shell,
             &resolved,
             &cwd,
             &command,
@@ -835,7 +867,7 @@ fn command_output_with_shell(
 }
 
 fn process_spec(
-    family: ShellFamily,
+    shell: &SessionShell,
     config: &ShellConfig,
     working_directory: &Path,
     command: &str,
@@ -864,8 +896,14 @@ fn process_spec(
     // terminal turns into signals, so it asks for one; the legacy variant runs
     // one command to completion and needs none.
     spec.terminal = managed;
-    // The family's own variables go in first: the reference merges the call's
-    // overrides over them, so a call may still ask for a pager it will read.
+    // The session's base goes in first, then the family's own variables: the
+    // reference merges the call's overrides over them, so a call may still ask
+    // for a pager it will read.
+    let family = shell.family;
+    if let Ok(base) = shell.base_environment.lock() {
+        spec.environment
+            .extend(base.iter().map(|(key, value)| (key.clone(), value.clone())));
+    }
     spec.unset_environment = family.unset_environment(managed);
     for (key, value) in family.environment(managed) {
         spec.environment.insert(key, value);

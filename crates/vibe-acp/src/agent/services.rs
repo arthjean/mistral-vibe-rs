@@ -90,7 +90,7 @@ where
         };
         let mut server = AppServer::default()
             .using_client_telemetry(Arc::clone(&self.telemetry))
-            .using_harness_selection(self.harness.clone());
+            .using_harness_selection(self.harness);
         if let Some(projects) = self.shared_projects_service()? {
             server = server.using_projects_service(projects);
         }

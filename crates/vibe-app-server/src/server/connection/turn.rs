@@ -209,7 +209,7 @@ impl ServerConnection {
         let Some(alias) = self
             .server
             .workspace
-            .session_model(&crate::server::turns::prompt_scope(session))
+            .session_model(&crate::server::turns::prompt_scope(session, None))
             .ok()
             .flatten()
             .map(|model| model.alias)

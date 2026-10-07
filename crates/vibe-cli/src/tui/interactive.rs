@@ -504,17 +504,6 @@ pub async fn run_interactive(
             &mut state,
         );
     }
-    // Reference `on_mount`: the issue the harness selection raised is shown as
-    // the TUI comes up, as a notice naming the input and what became of it
-    // (`vibe/cli/textual_ui/app.py:1223-1224` and `:1593-1599`).
-    if let Some(issue) = vibe_app_server::harness::HarnessSelection::resolve(
-        arguments.experimental_harness,
-        arguments.legacy_harness,
-    )
-    .startup_issue
-    {
-        state.push_diagnostic(format!("{}\n{}", issue.file, issue.message));
-    }
     // Reference `_schedule_update_notification`: refresh the cache for the next
     // startup without rendering anything or blocking input.
     let update_check = startup::scheduled_update_gateway(update_checks_enabled).map(|gateway| {

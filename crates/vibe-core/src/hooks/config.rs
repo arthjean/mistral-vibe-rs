@@ -26,6 +26,15 @@ use crate::mcp::render::{python_float, python_string};
 /// `load_hooks_file`.
 #[must_use]
 pub fn load_hooks_file(path: &Path) -> HookConfigResult {
+    load_hooks_file_with(path, false)
+}
+
+/// Loads one hook file, in the reference's strict mode when `strict` is set:
+/// the root and every entry then forbid keys they do not declare, and the
+/// root's `hooks` must already be a list. A plugin's `hooks.toml` is read this
+/// way. Reference `load_hooks_file(path, strict=True)`.
+#[must_use]
+pub fn load_hooks_file_with(path: &Path, strict: bool) -> HookConfigResult {
     let mut result = HookConfigResult::default();
     if !path.is_file() {
         return result;
@@ -54,6 +63,19 @@ pub fn load_hooks_file(path: &Path) -> HookConfigResult {
             return result;
         }
     };
+    if strict {
+        let extra: Vec<FieldError> = data
+            .keys()
+            .filter(|key| key.as_str() != "hooks")
+            .map(|key| (leak_location(key), EXTRA_FORBIDDEN.to_owned()))
+            .collect();
+        if !extra.is_empty() {
+            result
+                .issues
+                .push(issue(path, format_errors(&extra, "hooks file")));
+            return result;
+        }
+    }
     let entries = match data.get("hooks") {
         None => return result,
         Some(Value::Array(entries)) => entries,
@@ -66,7 +88,12 @@ pub fn load_hooks_file(path: &Path) -> HookConfigResult {
         }
     };
     for (index, entry) in entries.iter().enumerate() {
-        match validate_entry(entry) {
+        let validated = if strict {
+            validate_strict_entry(entry)
+        } else {
+            validate_entry(entry)
+        };
+        match validated {
             Ok(hook) => result.hooks.push(hook),
             Err(errors) => {
                 let label = entry_label(entry, index);
@@ -149,6 +176,45 @@ const VALID_BOOLEAN: &str = "Input should be a valid boolean";
 const UNINTERPRETABLE_BOOLEAN: &str = "Input should be a valid boolean, unable to interpret input";
 const VALID_TYPE: &str = "Input should be 'post_agent', 'pre_tool' or 'post_tool'";
 const VALID_ENTRY: &str = "Input should be a valid dictionary or instance of HookConfig";
+const EXTRA_FORBIDDEN: &str = "Extra inputs are not permitted";
+const DECLARED_FIELDS: [&str; 7] = [
+    "name",
+    "type",
+    "command",
+    "match",
+    "timeout",
+    "strict",
+    "description",
+];
+
+/// A location for an undeclared key. Locations are `'static` because the
+/// declared ones are; an undeclared key is rare enough to leak its name.
+fn leak_location(key: &str) -> &'static str {
+    Box::leak(key.to_owned().into_boxed_str())
+}
+
+/// Reference `_StrictHookConfig`: the lax entry model that also forbids keys it
+/// does not declare.
+fn validate_strict_entry(entry: &Value) -> Result<HookConfig, Vec<FieldError>> {
+    let extra: Vec<FieldError> = entry
+        .as_table()
+        .map(|table| {
+            table
+                .keys()
+                .filter(|key| !DECLARED_FIELDS.contains(&key.as_str()))
+                .map(|key| (leak_location(key), EXTRA_FORBIDDEN.to_owned()))
+                .collect()
+        })
+        .unwrap_or_default();
+    match validate_entry(entry) {
+        Ok(hook) if extra.is_empty() => Ok(hook),
+        Ok(_) => Err(extra),
+        Err(mut errors) => {
+            errors.extend(extra);
+            Err(errors)
+        }
+    }
+}
 
 /// Reference `_format_validation_error`: `loc: msg` per error, joined by
 /// ` ; `, with the root label standing in for an empty location.

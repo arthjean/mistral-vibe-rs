@@ -170,10 +170,12 @@ Trust and permissions: `--trust`, `--auto-approve`/`--yolo`,
 `--enabled-tools`, `--disabled-tools`. Budgets: `--max-turns`, `--max-tokens`,
 `--max-price`, read only by `-p` runs; a turn budget of 0 or less, or a
 token or price budget below 0, ends the run before its first request.
-Harness: `--legacy-harness` keeps the legacy harness, which is the only one
-this build runs; `--experimental-harness` asks for the Unified Harness and
-falls back to the legacy one with a startup notice; `--smart-approve` does the
-same and starts under the `smart-approve` agent unless `--agent` names another.
+Harness: `--legacy-harness` keeps the legacy harness and wins over everything
+else; `--experimental-harness`, or the unified rollout variant, selects this
+build's unified mode, which loads plugins and opens `/plugins` and
+`/reload-plugins` but still runs the legacy conversation loop; `--smart-approve`
+does the same and starts under the `smart-approve` agent unless `--agent` names
+another.
 Others: `--agent <name>`, `--setup`, `--check-upgrade`, `-v/--version`. Long
 flags can be shortened to any prefix that names only one of them, as in `--tr`
 for `--trust`. Telemetry is decided by `enable_telemetry` in the
@@ -260,11 +262,19 @@ of a turn.
 
 ## Plugins
 
-The reference CLI can load plugins, bundles of skills, MCP servers and hooks
-under `~/.vibe/plugins/` and `.vibe/plugins/`, but only on its Unified Harness.
-This build runs the legacy harness alone, so plugin directories are not read
-and `/plugins` and `/reload-plugins` are not offered; a skill a plugin would
-contribute can be installed as an ordinary skill directory instead.
+Plugins are packages of skills, MCP servers, hooks, knowledge and agents,
+installed as directories under `~/.vibe/plugins/` and, in a trusted project,
+`.vibe/plugins/`. They load only in the unified mode (`--experimental-harness`).
+Each package is an Agent Plugins manifest, optionally with a Vibe extension;
+Claude Code, Codex, Kimi Code and OpenCode plugins are read through adapters.
+A session pins every package it loads, so editing a plugin directory changes
+nothing until `/reload-plugins` (or the `plugin/reload` method) re-pins it.
+`/plugins` lists what loaded, what drifted since the pin and what was dropped,
+with a detail view per plugin. Plugin skills replace the built-in ones of the
+same name. Plugin MCP servers show in `/mcp` under their plugin and cannot be
+toggled or removed there; edit or remove the plugin instead. In the legacy
+harness plugin directories are not read; a skill a plugin would contribute can
+be installed as an ordinary skill directory instead.
 
 ## Sensitive files
 

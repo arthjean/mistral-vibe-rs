@@ -187,6 +187,9 @@ pub struct WorkspaceService {
     /// The identities `identity/read` already resolved (reference
     /// `AgentLoop.identity_cache`).
     identity_cache: Arc<vibe_core::identity::IdentityCache>,
+    /// The skills that seed discovery in place of the legacy builtins: a
+    /// unified session's plugin skills. `None` seeds the builtins.
+    seeded_skills: Option<Arc<BTreeMap<String, vibe_core::extensions::SkillDefinition>>>,
 }
 
 /// The `VIBE_*` variables the environment layer composes: the process
@@ -377,6 +380,7 @@ impl WorkspaceService {
             drafts: Arc::new(Mutex::new(BTreeMap::new())),
             session_logging,
             identity_cache: Arc::default(),
+            seeded_skills: None,
         }
     }
 
@@ -706,6 +710,61 @@ impl WorkspaceService {
             .harness_files()
             .hook_files();
         crate::session_hooks::SessionHooks::load(&files, working_directory)
+    }
+
+    /// Where a unified session opened in `working_directory` looks for
+    /// plugins, with the MCP server names its configuration already holds.
+    /// Reference `PluginResolver.from_harness_files` over the session's
+    /// harness files, rooted like [`Self::session_hooks`] so an untrusted
+    /// project contributes no plugin directory.
+    #[must_use]
+    pub fn plugin_sources(
+        &self,
+        working_directory: &Path,
+        project_trusted: bool,
+        add_directories: &[String],
+        configured_mcp_names: std::collections::BTreeSet<String>,
+    ) -> crate::plugins::PluginSources {
+        let mut roots = self
+            .allowed_roots
+            .iter()
+            .filter(|root| **root != self.paths.working_directory)
+            .cloned()
+            .collect::<Vec<_>>();
+        roots.extend(add_directories.iter().map(PathBuf::from));
+        let files = self
+            .config
+            .scoped_to_working_directory(working_directory.to_path_buf(), project_trusted)
+            .with_additional_roots(roots)
+            .harness_files();
+        crate::plugins::PluginSources {
+            project_roots: files.project_plugins_dirs(),
+            user_roots: files.user_plugins_dirs(),
+            vibe_home: self.paths.vibe_home.clone(),
+            storage_root: self.session_logging.save_dir.clone(),
+            workdir: vibe_core::plugins::paths::resolve_lax(working_directory),
+            configured_mcp_names,
+        }
+    }
+
+    /// The same service seeding skill discovery with `skills` instead of the
+    /// legacy builtins, or with the builtins again for `None`.
+    #[must_use]
+    pub fn with_seeded_skills(
+        mut self,
+        skills: Option<Arc<BTreeMap<String, vibe_core::extensions::SkillDefinition>>>,
+    ) -> Self {
+        self.seeded_skills = skills;
+        self
+    }
+
+    /// The skills discovery is seeded with ahead of the disk walk.
+    #[must_use]
+    pub fn skill_seed(&self) -> BTreeMap<String, vibe_core::extensions::SkillDefinition> {
+        self.seeded_skills
+            .as_deref()
+            .cloned()
+            .unwrap_or_else(vibe_core::skills::builtins::builtin_skills)
     }
 
     /// Opens `roots` alongside the working directory.

@@ -671,7 +671,7 @@ fn display_path(path: &Path) -> String {
     }
 }
 
-fn user_home_directory() -> Option<PathBuf> {
+pub(in crate::tui) fn user_home_directory() -> Option<PathBuf> {
     #[cfg(windows)]
     {
         std::env::var_os("USERPROFILE")

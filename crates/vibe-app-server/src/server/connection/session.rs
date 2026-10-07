@@ -233,6 +233,13 @@ impl ServerConnection {
                 )
                 .map_err(|error| ProtocolFault::invalid_params(error.to_string()))?;
         }
+        self.server.open_session_plugins(
+            &session_id,
+            Path::new(&working_directory),
+            intent.trusted,
+            &intent.add_directories,
+            &mcp_configs,
+        );
         let review = self.server.register_workspace_tools(
             &session_id,
             &working_directory,
@@ -329,6 +336,7 @@ impl ServerConnection {
             },
         )?;
         self.attached_sessions.insert(session_id.clone());
+        self.server.bind_plugin_mcp(&session_id);
         let state = sessions
             .get(&session_id)
             .map(public_session_state)
@@ -637,6 +645,7 @@ impl ServerConnection {
             session.attachments = session.attachments.saturating_sub(1);
         }
         let session_id = canonical_session_id;
+        self.server.forget_session_plugins(session);
         let resource_generation = session.resource_generation;
         let working_directory = PathBuf::from(&session.working_directory);
         // A worktree this session created and never ran a turn in is taken

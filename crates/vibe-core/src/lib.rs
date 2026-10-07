@@ -39,6 +39,7 @@ pub mod parity;
 pub mod path_mentions;
 pub mod path_resources;
 pub mod platform;
+pub mod plugins;
 pub mod policy;
 pub mod process;
 pub mod prompt;

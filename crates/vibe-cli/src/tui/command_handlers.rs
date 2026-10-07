@@ -22,6 +22,7 @@ use vibe_core::workspace::WARNING_TAG;
 
 use super::commands::{CommandContext, CommandId, ParsedCommand, command_echo, command_name};
 use super::help;
+use super::plugins::{self, PluginCatalog, PluginsPort, ReloadOutcome};
 
 pub(super) mod log_level;
 mod mcp_arguments;
@@ -251,6 +252,52 @@ pub(super) trait CommandBackend {
     -> Result<ScheduledLoop, String>;
     async fn loops_delete(&mut self, id: &str) -> Result<ScheduledLoop, String>;
     async fn loops_clear(&mut self) -> Result<u64, String>;
+    /// The plugin catalog, or `None` from a backend that resolves no plugins.
+    /// Reference `PluginCatalogResource.read`.
+    fn plugin_catalog(&mut self) -> Result<Option<PluginCatalog>, String>;
+    /// Re-pins the session's plugins. Reference `plugin/reload`.
+    fn reload_plugins(&mut self) -> Result<(), String>;
+    /// Opens the plugins panel on `catalog`.
+    fn open_plugins(&mut self, catalog: PluginCatalog);
+}
+
+/// A handler's backend as the two calls the plugin commands make.
+struct BackendPlugins<'a, B>(&'a mut B);
+
+impl<B: CommandBackend> PluginsPort for BackendPlugins<'_, B> {
+    fn read_catalog(&mut self) -> Result<Option<PluginCatalog>, String> {
+        self.0.plugin_catalog()
+    }
+
+    fn reload(&mut self) -> Result<(), String> {
+        self.0.reload_plugins()
+    }
+}
+
+/// Reference `_show_plugins`: a backend that resolves no plugins, or one
+/// with nothing installed, says so; otherwise the catalog opens.
+fn show_plugins<B: CommandBackend>(backend: &mut B) {
+    match backend.plugin_catalog() {
+        Err(error) => backend.emit(Effect::Error(error)),
+        Ok(None) => backend.emit(Effect::Message(plugins::NO_PLUGINS.to_owned())),
+        Ok(Some(catalog)) if catalog.is_empty() => {
+            backend.emit(Effect::Message(plugins::NOTHING_INSTALLED.to_owned()));
+        }
+        Ok(Some(catalog)) => {
+            backend.emit(Effect::Message(plugins::OPENED.to_owned()));
+            backend.open_plugins(catalog);
+        }
+    }
+}
+
+/// Reference `_reload_plugins`: what the re-pin moved, by digest.
+fn reload_plugins<B: CommandBackend>(backend: &mut B) {
+    let outcome = plugins::reload_plugins(&mut BackendPlugins(&mut *backend));
+    backend.emit(match outcome {
+        ReloadOutcome::NoPlugins => Effect::Message(plugins::NO_PLUGINS.to_owned()),
+        ReloadOutcome::Failed(error) => Effect::Error(plugins::reload_failure(&error)),
+        ReloadOutcome::Reloaded { report, .. } => Effect::Message(report),
+    });
 }
 
 /// Reference `_handle_command`: the event is reported under the registry key,
@@ -305,14 +352,8 @@ pub(super) async fn run<B: CommandBackend>(
         CommandId::Resume => resume(backend).await,
         CommandId::Rename => rename(arguments, backend).await,
         CommandId::Mcp => mcp(arguments, backend).await,
-        // Reference `_show_plugins` and `_reload_plugins`: a session that
-        // resolves no plugin catalog, which is every session this port runs,
-        // says so for both.
-        CommandId::Plugins | CommandId::ReloadPlugins => {
-            backend.emit(Effect::Message(
-                "This session resolves no plugins.".to_owned(),
-            ));
-        }
+        CommandId::Plugins => show_plugins(backend),
+        CommandId::ReloadPlugins => reload_plugins(backend),
         CommandId::Todo => {
             if backend.has_todos() {
                 open(backend, Panel::Todos);

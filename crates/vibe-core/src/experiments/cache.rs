@@ -134,6 +134,35 @@ impl EvalCache {
         self.write_entries(&entries);
     }
 
+    /// The variant of `feature` in the first recent entry that carries it,
+    /// whichever credential stored the entry. Reference `_load_rollout_cache`
+    /// and `_rollout_variant_from_cache`, which read the harness rollout before
+    /// any configuration exists.
+    #[must_use]
+    pub fn rollout_variant(&self, feature: &str) -> Option<String> {
+        self.rollout_variant_at(feature, now_seconds())
+    }
+
+    /// [`Self::rollout_variant`] as of `now`, in seconds since the epoch.
+    #[must_use]
+    pub fn rollout_variant_at(&self, feature: &str, now: i64) -> Option<String> {
+        let response = self.read_entries().iter().find_map(|(_, entry)| {
+            let entry = entry.as_object()?;
+            let stored_at = integer(entry.get(STORED_AT_KEY)?)?;
+            let payload = entry.get(PAYLOAD_KEY)?;
+            payload.as_object()?;
+            if i128::from(stored_at) <= i128::from(now) - i128::from(ttl_seconds()) {
+                return None;
+            }
+            let response: EvalResponse = serde_json::from_str(&payload.python_json()).ok()?;
+            response.features.get(feature).is_some().then_some(response)
+        })?;
+        match response.features.get(feature)?.resolved_value() {
+            JsonValue::String(variant) => Some(variant.clone()),
+            _ => None,
+        }
+    }
+
     /// Every entry the file holds, in the order it holds them, or none when it
     /// does not read as a JSON object.
     ///

@@ -62,6 +62,12 @@ pub(super) struct InteractiveRuntime {
     /// Read at startup and after every configuration change, the moments the
     /// reference calls `_refresh_command_registry`.
     pub(super) registry_skills_enabled: bool,
+    /// Reference `runtime.experimental_harness`: whether the session runs the
+    /// unified mode, as its `runtime/read` answered once it started. It gates
+    /// `/plugins`, `/reload-plugins` and `/todo`, and the startup notice.
+    pub(super) experimental_harness: bool,
+    /// The open `/plugins` panel.
+    pub(super) plugins_panel: Option<super::plugins::PluginsPanel>,
     pub(super) config_target: Option<interaction::ConfigLayerTarget>,
     pub(super) remote_project_overlay: Option<Overlay>,
     pub(super) remote_project_draft: Option<interaction::RemoteProjectDraft>,
@@ -389,14 +395,29 @@ impl Default for BannerMetrics {
 }
 
 /// Reference `_command_context`: the gates the registry is filtered by.
-///
-/// `experimental_harness` is always `false` because this port runs a single
-/// backend, the counterpart of the reference's default legacy one.
 pub(super) fn command_context(runtime: Option<&InteractiveRuntime>) -> CommandContext {
     CommandContext::new(
         runtime.is_some_and(|runtime| runtime.registry_skills_enabled),
-        false,
+        runtime.is_some_and(|runtime| runtime.experimental_harness),
     )
+}
+
+/// Whether the session runs the unified mode, as `runtime/read` publishes it.
+/// A session whose runtime cannot be read is taken to run the legacy one.
+pub(super) fn published_experimental_harness(
+    service: &mut HeadlessService<LiveTurnDriver>,
+    session_id: &str,
+) -> bool {
+    service
+        .public_call("runtime/read", json!({"sessionId": session_id}))
+        .ok()
+        .and_then(|result| {
+            result
+                .get("runtime")
+                .and_then(|runtime| runtime.get("experimentalHarness"))
+                .and_then(Value::as_bool)
+        })
+        .unwrap_or(false)
 }
 
 /// Reference `_refresh_command_registry` after a configuration change: the
@@ -516,6 +537,8 @@ pub(in crate::tui) fn interactive_test_runtime_with_trust(
         context_window: super::DEFAULT_CONTEXT_WINDOW,
         auto_approve: true,
         registry_skills_enabled: false,
+        experimental_harness: false,
+        plugins_panel: None,
         config_target: None,
         remote_project_overlay: None,
         remote_project_draft: None,
@@ -623,18 +646,30 @@ mod tests {
     }
 
     /// Reference `_command_context`: the registry gate follows the
-    /// configuration, the backend gate stays closed, and `/teleport` is offered
-    /// whether or not Vibe Code is configured, as the reference has offered it
-    /// since v2.25.7.
+    /// configuration, the backend gate follows the session's runtime, and
+    /// `/teleport` is offered whether or not Vibe Code is configured, as the
+    /// reference has offered it since v2.25.7.
     #[test]
-    fn the_command_context_follows_the_registry_gate_and_keeps_teleport_open() {
+    fn the_command_context_follows_the_registry_and_harness_gates_and_keeps_teleport_open() {
+        use super::super::commands::CommandId;
         let mut runtime = interactive_test_runtime("command-context-session");
         let context = command_context(Some(&runtime));
         assert!(!context.registry_skills_enabled);
         assert!(!context.experimental_harness);
-        assert!(context.is_available(super::super::commands::CommandId::Teleport));
+        assert!(!published_experimental_harness(
+            &mut runtime.service,
+            &runtime.session_id.clone()
+        ));
+        assert!(!context.is_available(CommandId::Plugins));
+        assert!(context.is_available(CommandId::Teleport));
         runtime.registry_skills_enabled = true;
         assert!(command_context(Some(&runtime)).registry_skills_enabled);
         assert!(!command_context(None).registry_skills_enabled);
+        runtime.experimental_harness = true;
+        let context = command_context(Some(&runtime));
+        assert!(context.experimental_harness);
+        assert!(context.is_available(CommandId::Plugins));
+        assert!(context.is_available(CommandId::ReloadPlugins));
+        assert!(!command_context(None).experimental_harness);
     }
 }

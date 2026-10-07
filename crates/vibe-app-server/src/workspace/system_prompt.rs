@@ -8,7 +8,8 @@
 //! catalog; [`vibe_core::system_prompt::compose`] turns them into the message.
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use serde_json::Value;
 use thiserror::Error;
@@ -41,6 +42,9 @@ pub struct SessionPromptScope {
     pub scratchpad: Option<PathBuf>,
     /// The tools the session publishes, which decide the Windows shell rules.
     pub tool_names: Vec<String>,
+    /// A unified session's plugin skills, which the prompt lists in place of
+    /// the legacy builtins.
+    pub skill_seed: Option<Arc<BTreeMap<String, vibe_core::extensions::SkillDefinition>>>,
 }
 
 /// The host facts the prompt states, which a test fixes rather than reads.
@@ -146,7 +150,7 @@ impl WorkspaceService {
             model_alias: model_alias(&snapshot.config_view(), scope.model.as_deref()),
             platform: host.platform.clone(),
             shell: host.shell.clone(),
-            skills: self.prompt_skills(&scope.working_directory, scope.trusted),
+            skills: self.prompt_skills(scope),
             subagents: agents
                 .iter()
                 .filter(|profile| profile.kind == AgentKind::Subagent)
@@ -282,10 +286,14 @@ impl WorkspaceService {
 
     /// The skills a session in `working_directory` may load, builtins
     /// included. Reference `SkillManager.available_skills`.
-    fn prompt_skills(&self, working_directory: &Path, trusted: bool) -> Vec<PromptSkill> {
-        let seeded = vibe_core::skills::builtins::builtin_skills();
+    fn prompt_skills(&self, scope: &SessionPromptScope) -> Vec<PromptSkill> {
+        let seeded = scope
+            .skill_seed
+            .as_deref()
+            .cloned()
+            .unwrap_or_else(vibe_core::skills::builtins::builtin_skills);
         let roots = DiscoveryRoots {
-            skills: self.skill_discovery(working_directory, trusted),
+            skills: self.skill_discovery(&scope.working_directory, scope.trusted),
             ..DiscoveryRoots::default()
         };
         discover_extensions(&roots, BTreeMap::new(), seeded, BTreeMap::new())

@@ -5,6 +5,7 @@
 //! server-to-client requests are still outstanding. Every routed method is
 //! answered here, against the server above.
 
+mod plugins;
 mod queue;
 mod review_request;
 mod rewind;
@@ -474,6 +475,9 @@ impl ServerConnection {
             | "session/turn/queue/replace"
             | "session/turn/queue/resume" => self.turn_queue_request(request),
             "session/context/inject" => self.context_inject(request),
+            "plugin_catalog/read" | "plugins/read" | "plugin/info" | "plugin/reload" => {
+                self.plugin_request(request)
+            }
             "callback/respond" => self.callback_respond(request),
             "workspace/trust/status"
             | "workspace/trust/decision"

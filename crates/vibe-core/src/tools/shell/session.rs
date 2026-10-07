@@ -55,6 +55,10 @@ pub(super) struct SessionShell {
     /// synchronous.
     pub(super) orphaned: StdMutex<BTreeMap<String, Value>>,
     pub(super) log_root: PathBuf,
+    /// Variables every command this session runs starts from, under the
+    /// family's own and a call's overrides: the library search paths a
+    /// unified session's plugins publish.
+    pub(super) base_environment: Arc<StdMutex<BTreeMap<String, String>>>,
 }
 
 impl SessionShell {
@@ -544,7 +548,7 @@ pub(super) async fn start_managed_session(
     let terminal_id = shell
         .terminals
         .run(process_spec(
-            shell.family,
+            shell,
             config,
             working_directory,
             command,

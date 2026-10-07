@@ -47,6 +47,7 @@ impl CoreResourceBackend {
         let configured = self.session_mcp_configs(session).unwrap_or_default();
         project_mcp(
             &configured,
+            &session.plugin_sources(),
             session.mcp.read().await,
             session.mcp.auth_status().await,
             &session.tools,
@@ -287,6 +288,7 @@ impl CoreResourceBackend {
                 tool_name,
                 ..
             } => {
+                reject_plugin_mutation(session, name)?;
                 let store = session_store(session)?;
                 store
                     .persist_mcp_toggle(name, *disabled, tool_name.as_deref())
@@ -317,6 +319,7 @@ impl CoreResourceBackend {
                 self.converge(session, session_id, &[], false).await?;
             }
             McpCatalogCall::Remove { name, .. } => {
+                reject_plugin_mutation(session, name)?;
                 let store = session_store(session)?;
                 let removed = self.remove_with_credentials(&store, name, &owner).await?;
                 result.insert("name".to_owned(), json!(removed.name));
@@ -528,6 +531,7 @@ fn session_log_dir(effective: &toml::Table) -> Option<PathBuf> {
 /// every configured server in configuration order.
 fn project_mcp(
     configured: &[McpServerConfig],
+    plugin_sources: &[crate::resources::PluginMcpSource],
     views: Vec<McpServerView>,
     auth_status: BTreeMap<String, McpAuthStatus>,
     tools: &ToolRegistry,
@@ -607,6 +611,12 @@ fn project_mcp(
             "pluginName": null,
         }));
     }
+    project_plugin_sources(
+        configured,
+        plugin_sources,
+        &mut sources,
+        &mut discovery_errors,
+    );
     json!({
         "sources": sources,
         "discoveryErrors": Value::Object(discovery_errors),
@@ -628,3 +638,137 @@ fn display_description(description: &str, source: &str) -> String {
         .trim()
         .to_owned()
 }
+
+/// Refuses to toggle or remove a server a plugin owns: no configuration entry
+/// backs it, so the write would add one shadowing the plugin's under the same
+/// name (reference `_reject_plugin_mutation`). A configured server of that
+/// name owns it outright.
+fn reject_plugin_mutation(
+    session: &CoreResourceSession,
+    name: &str,
+) -> Result<(), McpCatalogError> {
+    let configured = session.config().is_some_and(|store| {
+        store
+            .load()
+            .and_then(|snapshot| {
+                snapshot.mcp_servers(std::path::Path::new(&session.working_directory))
+            })
+            .is_ok_and(|configs| configs.iter().any(|config| config.alias == name))
+    });
+    if configured {
+        return Ok(());
+    }
+    let Some(plugin) = session.plugin_owners().remove(name) else {
+        return Ok(());
+    };
+    Err(McpCatalogError::refused(
+        vibe_protocol::ProtocolErrorCode::InvalidParams,
+        format!(
+            "MCP server '{name}' is managed by the '{plugin}' plugin and cannot be toggled or removed from the MCP catalog."
+        ),
+    ))
+}
+
+/// Appends the rows of a unified session's plugin servers after the configured
+/// ones, skipping a name the configuration holds (reference
+/// `project_mcp_sources` over `_project_plugin_source`).
+fn project_plugin_sources(
+    configured: &[McpServerConfig],
+    plugin_sources: &[crate::resources::PluginMcpSource],
+    sources: &mut Vec<Value>,
+    discovery_errors: &mut Map<String, Value>,
+) {
+    let held: Vec<&str> = configured
+        .iter()
+        .map(|server| server.alias.as_str())
+        .collect();
+    push_plugin_sources(&held, plugin_sources, sources, discovery_errors);
+}
+
+/// Adds the plugin rows an `MCPState` value does not list yet, as
+/// [`project_plugin_sources`] lists them. A state projected before the
+/// session's plugins were bound, or without a backend, gains them here.
+pub(crate) fn overlay_plugin_sources(
+    mcp: &mut Value,
+    plugin_sources: &[crate::resources::PluginMcpSource],
+) {
+    let Some(state) = mcp.as_object_mut() else {
+        return;
+    };
+    let held: Vec<String> = state
+        .get("sources")
+        .and_then(Value::as_array)
+        .map(|rows| {
+            rows.iter()
+                .filter_map(|row| {
+                    row.get("name")
+                        .and_then(Value::as_str)
+                        .map(ToOwned::to_owned)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let held: Vec<&str> = held.iter().map(String::as_str).collect();
+    let mut rows = Vec::new();
+    let mut errors = Map::new();
+    push_plugin_sources(&held, plugin_sources, &mut rows, &mut errors);
+    if let Some(Value::Array(sources)) = state.get_mut("sources") {
+        sources.extend(rows);
+    }
+    if let Some(Value::Object(discovery_errors)) = state.get_mut("discoveryErrors") {
+        for (name, error) in errors {
+            discovery_errors.entry(name).or_insert(error);
+        }
+    }
+}
+
+/// The session's harness runtime is handed the same servers and refuses every
+/// one of them, so each row carries that refusal as its discovery error,
+/// ahead of anything the plugin's own discovery recorded.
+fn push_plugin_sources(
+    held: &[&str],
+    plugin_sources: &[crate::resources::PluginMcpSource],
+    sources: &mut Vec<Value>,
+    discovery_errors: &mut Map<String, Value>,
+) {
+    for source in plugin_sources {
+        if held.contains(&source.name.as_str()) {
+            continue;
+        }
+        let tools: Vec<Value> = source
+            .tools
+            .iter()
+            .map(|(name, description)| {
+                json!({
+                    "name": name,
+                    // No alias to strip: only the first line is kept.
+                    "description": description
+                        .as_deref()
+                        .unwrap_or_default()
+                        .split('\n')
+                        .next()
+                        .unwrap_or_default()
+                        .trim(),
+                    "enabled": true,
+                })
+            })
+            .collect();
+        sources.push(json!({
+            "name": source.name,
+            "displayName": source.name,
+            "kind": McpSourceKind::Server,
+            "transport": source.transport,
+            "status": source.status,
+            "tools": tools,
+            "error": null,
+            "pluginName": source.plugin_name,
+        }));
+        discovery_errors
+            .entry(source.name.clone())
+            .or_insert_with(|| json!(PLUGIN_RUNTIME_REFUSAL));
+    }
+}
+
+/// What the reference's harness runtime answers for every plugin server it is
+/// handed (observed against the pinned reference).
+const PLUGIN_RUNTIME_REFUSAL: &str = "authentication was rejected";
