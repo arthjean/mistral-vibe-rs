@@ -1,0 +1,2 @@
+[alias]
+vibe = "run -p vibe-cli --bin vibe"
