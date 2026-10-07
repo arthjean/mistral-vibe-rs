@@ -1421,6 +1421,7 @@ fn a_compaction_publishes_one_entry_whose_details_validate_against_the_census() 
             attachments: Vec::new(),
             message_id: None,
             content: "go".to_owned(),
+            user_display_content: None,
         },
         EngineEvent::CompactionStarted {
             compaction_id: "compaction-1".to_owned(),
@@ -1443,6 +1444,7 @@ fn a_compaction_publishes_one_entry_whose_details_validate_against_the_census() 
             attachments: Vec::new(),
             message_id: None,
             content: "go".to_owned(),
+            user_display_content: None,
         },
         EngineEvent::CompactionStarted {
             compaction_id: "compaction-1".to_owned(),
@@ -1479,6 +1481,7 @@ fn a_compaction_publishes_one_entry_whose_details_validate_against_the_census() 
             attachments: Vec::new(),
             message_id: None,
             content: "go".to_owned(),
+            user_display_content: None,
         },
         EngineEvent::CompactionCompleted {
             compaction_id: "compaction-1".to_owned(),
@@ -1523,6 +1526,7 @@ async fn every_effect_kind_publishes_an_entry_that_validates_against_the_census(
                 attachments: Vec::new(),
                 message_id: None,
                 content: "go".to_owned(),
+                user_display_content: None,
             },
             EngineEvent::ToolCall {
                 call_id: "call-1".to_owned(),
@@ -1540,7 +1544,7 @@ async fn every_effect_kind_publishes_an_entry_that_validates_against_the_census(
                 is_error: false,
                 cancelled: false,
                 skipped: false,
-                approval: None,
+                approval: vibe_core::events::EffectApproval::default(),
             },
         ]);
         let entry = history
@@ -1623,12 +1627,13 @@ fn every_settled_effect_state_carries_the_display_its_variant_declares() {
         is_error,
         cancelled,
         skipped: false,
-        approval: None,
+        approval: vibe_core::events::EffectApproval::default(),
     };
     let start = EngineEvent::UserMessage {
         attachments: Vec::new(),
         message_id: None,
         content: "go".to_owned(),
+        user_display_content: None,
     };
     let mut issues = Vec::new();
     for (label, event, expects_display) in [

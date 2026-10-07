@@ -52,6 +52,9 @@ impl AppServer {
                 ));
             }
             session.status = SessionStatus::Idle;
+            // Reference `AgentLoop.compact`: the next step titles the session
+            // afresh.
+            session.title_cadence.mark_compaction();
             // The written totals carry the summarization's usage.
             let written = |key: &str| {
                 hydrated
@@ -66,6 +69,9 @@ impl AppServer {
             if let Some(completion) = written("session_completion_tokens") {
                 session.stats.session_completion_tokens = completion;
             }
+            // Reference `CompactionManager.compact`: the context is unmeasured
+            // until the next model call reports it.
+            session.stats.context_tokens = 0;
             session.persisted = Some(hydrated);
             session.updated_at = now_millis();
             // Reference `replace_idle`: the history is kept and closed by the

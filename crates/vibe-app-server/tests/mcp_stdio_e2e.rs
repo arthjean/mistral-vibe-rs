@@ -43,6 +43,7 @@ impl CompletionProvider for ModelSelectsMcp {
                         id: "call-1".to_owned(),
                         name: "fixture_echo".to_owned(),
                         arguments: r#"{"message":"rust"}"#.to_owned(),
+                        presentation: None,
                     }],
                     usage: Usage::default(),
                     refusal: None,
@@ -56,8 +57,7 @@ impl CompletionProvider for ModelSelectsMcp {
                         ModelMessage::Tool {
                             call_id,
                             content,
-                            is_error: false,
-                        } if call_id == "call-1"
+                            is_error: false, .. } if call_id == "call-1"
                             // Reference `_parse_call_result`: structured
                             // content wins over the text blocks, and the model
                             // reads the rendered `MCPToolResult`.
@@ -253,6 +253,7 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
             compaction: CompactionSettings::default(),
             intent: SessionIntent::default(),
             tools: tools.clone(),
+            pricing: (0.0, 0.0, None),
         })
         .await
         .expect("engine turn");
@@ -298,6 +299,7 @@ async fn production_stdio_server_reaches_model_registry_and_effect_lifecycle() {
                 attachments: Vec::new(),
                 message_id: None,
                 content: "use the fixture".to_owned(),
+                user_display_content: None,
             },
         })
         .expect("the turn starts");

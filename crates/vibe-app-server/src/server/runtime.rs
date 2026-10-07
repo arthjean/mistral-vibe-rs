@@ -6,6 +6,7 @@
 //! client sees of a session is composed from this.
 
 use super::*;
+use vibe_core::engine::ToolCallTally;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -116,6 +117,9 @@ pub(crate) struct SessionRuntime {
     pub(crate) title_cadence: vibe_core::session_title::TitleCadence,
     /// A title is being generated, so no other one starts.
     pub(crate) title_in_flight: bool,
+    /// The checkout a relocation granted session trust on, which the next
+    /// one gives back (reference `AgentLoop._trust_taken_by_move`).
+    pub(crate) trust_taken_by_move: Option<std::path::PathBuf>,
 }
 
 impl SessionRuntime {
@@ -180,6 +184,7 @@ impl SessionRuntime {
             auto_title: false,
             title_cadence: vibe_core::session_title::TitleCadence::default(),
             title_in_flight: false,
+            trust_taken_by_move: None,
         }
     }
 }
@@ -218,6 +223,9 @@ pub(crate) struct SessionStats {
     /// done, which is why the one in flight is held apart.
     pub(crate) steps: u64,
     pending_step: bool,
+    /// The operator's message of the turn in flight, which the reference
+    /// counts when it appends it, after the turn's opening accounting.
+    pending_user_step: bool,
     /// Whether the turn about to begin was started by the harness, whose
     /// prompt the reference appends without counting a step.
     pub(crate) injected_turn: bool,
@@ -236,13 +244,26 @@ pub(crate) struct SessionStats {
     pub(crate) tokens_per_second: f64,
     /// When the round trip being measured started.
     round_trip_started_at: u64,
+    /// How the session's tool calls settled (reference
+    /// `AgentStats.tool_calls_*`).
+    pub(crate) tool_calls: ToolCallTally,
+    /// Calls the running turn abandoned at their gate, counted once the
+    /// turn's closing accounting is published.
+    pub(crate) deferred_tool_calls: ToolCallTally,
 }
 
 impl SessionStats {
     /// Records the usage one provider round trip reported, as the running
     /// session totals.
-    pub(crate) fn observe(&mut self, context_tokens: u64, input_tokens: u64, output_tokens: u64) {
+    pub(crate) fn observe(
+        &mut self,
+        context_tokens: u64,
+        input_tokens: u64,
+        output_tokens: u64,
+        cached_tokens: u64,
+    ) {
         let _ = context_tokens;
+        self.count_user_message();
         if self.pending_step {
             self.steps = self.steps.saturating_add(1);
         }
@@ -251,7 +272,8 @@ impl SessionStats {
         self.last_turn_prompt_tokens = input_tokens.saturating_sub(self.session_prompt_tokens);
         self.last_turn_completion_tokens =
             output_tokens.saturating_sub(self.session_completion_tokens);
-        self.last_turn_cached_tokens = 0;
+        self.last_turn_cached_tokens = cached_tokens.saturating_sub(self.session_cached_tokens);
+        self.session_cached_tokens = cached_tokens;
         self.last_turn_duration_ms = now.saturating_sub(self.round_trip_started_at).max(1);
         self.round_trip_started_at = now;
         self.session_prompt_tokens = input_tokens;
@@ -265,16 +287,26 @@ impl SessionStats {
         }
     }
 
-    /// Opens a turn, whose user message is a step of its own.
+    /// Opens a turn, whose user message is a step of its own once the turn
+    /// appends it.
     pub(crate) fn begin_turn(&mut self) {
-        if !std::mem::take(&mut self.injected_turn) {
-            self.steps = self.steps.saturating_add(1);
-        }
+        self.pending_user_step = !std::mem::take(&mut self.injected_turn);
         self.round_trip_started_at = now_millis();
     }
 
-    /// Settles a turn: the round trip still in flight is counted.
-    pub(crate) fn finish_turn(&mut self) {
+    fn count_user_message(&mut self) {
+        if std::mem::take(&mut self.pending_user_step) {
+            self.steps = self.steps.saturating_add(1);
+        }
+    }
+
+    /// Settles a turn: the round trip still in flight is counted, unless the
+    /// operator interrupted it, which the reference never counts.
+    pub(crate) fn finish_turn(&mut self, interrupted: bool) {
+        self.count_user_message();
+        if interrupted {
+            self.pending_step = false;
+        }
         if self.pending_step {
             self.steps = self.steps.saturating_add(1);
             self.pending_step = false;
@@ -326,13 +358,28 @@ impl SessionStats {
                 0
             },
             tokens_per_second: real("tokens_per_second"),
+            tool_calls: ToolCallTally {
+                agreed: count("tool_calls_agreed"),
+                rejected: count("tool_calls_rejected"),
+                hook_denied: count("tool_calls_hook_denied"),
+                failed: count("tool_calls_failed"),
+                succeeded: count("tool_calls_succeeded"),
+            },
             ..Self::default()
         }
+    }
+
+    /// Counts the calls the turn abandoned at their gate.
+    pub(crate) fn count_deferred_tool_calls(&mut self) {
+        self.tool_calls = self
+            .tool_calls
+            .plus(std::mem::take(&mut self.deferred_tool_calls));
     }
 
     /// Settles a failed turn: the round trip it failed in never completed, so
     /// the reference loop (`vibe/core/agent_loop/_loop.py`) never counts it.
     pub(crate) fn abandon_turn(&mut self) {
+        self.count_user_message();
         self.pending_step = false;
     }
 }
@@ -343,31 +390,6 @@ impl SessionStats {
 /// last-turn fields, because a client renders them as numbers either way, and
 /// so does a session the registry no longer holds.
 pub(crate) fn public_stats(session: Option<&SessionRuntime>) -> Value {
-    let history = session
-        .and_then(|session| session.snapshot.as_ref())
-        .map(|snapshot| snapshot.history.as_slice())
-        .unwrap_or_default();
-    let mut succeeded = 0_u64;
-    let mut failed = 0_u64;
-    let mut agreed = 0_u64;
-    let mut rejected = 0_u64;
-    for entry in history {
-        match entry {
-            PublicHistoryEntry::Effect { state, .. } => match state {
-                PublicEffectState::Completed { .. } => succeeded = succeeded.saturating_add(1),
-                PublicEffectState::Failed { .. } => failed = failed.saturating_add(1),
-                _ => {}
-            },
-            PublicHistoryEntry::Callback { state, .. } => match state {
-                PublicCallbackState::Answered { .. } => agreed = agreed.saturating_add(1),
-                PublicCallbackState::Cancelled { .. } | PublicCallbackState::Expired { .. } => {
-                    rejected = rejected.saturating_add(1);
-                }
-                PublicCallbackState::Open => {}
-            },
-            _ => {}
-        }
-    }
     let owned;
     let stats = match session {
         Some(session) => &session.stats,
@@ -386,10 +408,10 @@ pub(crate) fn public_stats(session: Option<&SessionRuntime>) -> Value {
         "inputPricePerMillion": 0.0,
         "outputPricePerMillion": 0.0,
         "cachedInputPricePerMillion": null,
-        "toolCallsAgreed": agreed,
-        "toolCallsRejected": rejected,
-        "toolCallsFailed": failed,
-        "toolCallsSucceeded": succeeded,
+        "toolCallsAgreed": stats.tool_calls.agreed,
+        "toolCallsRejected": stats.tool_calls.rejected,
+        "toolCallsFailed": stats.tool_calls.failed,
+        "toolCallsSucceeded": stats.tool_calls.succeeded,
         "contextTokens": stats.context_tokens,
         "lastTurnPromptTokens": stats.last_turn_prompt_tokens,
         "lastTurnCompletionTokens": stats.last_turn_completion_tokens,

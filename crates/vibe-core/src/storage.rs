@@ -39,6 +39,7 @@ pub mod index;
 pub mod lease;
 mod migration;
 pub mod permissions;
+mod record;
 pub(crate) mod time;
 
 use canonical_json::python_canonical_json;
@@ -1748,20 +1749,21 @@ where
 
 /// The record a message is written to the log as.
 fn message_record(message: &ModelMessage) -> Result<Value, StorageError> {
-    serde_json::to_value(message).map_err(StorageError::Json)
+    record::to_value(message).map_err(StorageError::Json)
 }
 
 fn encode_message(message: &ModelMessage) -> Result<Vec<u8>, StorageError> {
-    serde_json::to_vec(&message_record(message)?).map_err(StorageError::Json)
+    record::to_line(message).map_err(StorageError::Json)
 }
 
 fn decode_message(line: &str) -> Result<ModelMessage, String> {
-    serde_json::from_str(line).map_err(|error| error.to_string())
+    record::from_line(line)
 }
 
 /// What `meta.json` records as the system prompt.
+#[allow(clippy::unnecessary_wraps)]
 fn system_prompt_record(message: &ModelMessage) -> Result<Value, StorageError> {
-    message_record(message)
+    Ok(record::system_prompt(message))
 }
 
 /// Reference `getpass.getuser`: the first of `LOGNAME`, `USER`, `LNAME` and

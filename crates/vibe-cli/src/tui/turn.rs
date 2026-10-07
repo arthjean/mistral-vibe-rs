@@ -4,6 +4,7 @@
 //! Everything that owns an [`ActiveTurn`] lives here, so the rules about which
 //! cancellation phase may still accept a driver result are stated once.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use serde_json::Value;
@@ -15,6 +16,7 @@ use vibe_app_server::client::{
     PublicNoticeLevel, PublicTurnOutcome, TurnDriver, TurnErrorCode, TurnReservation,
     turn_error_code,
 };
+use vibe_core::engine::{CompositeEventObserver, EventObserver};
 
 use super::callback::{
     cancel_open_callback_notices, fail_open_callback_notices, sync_active_callbacks,
@@ -107,6 +109,10 @@ pub(super) fn start_active_turn(
             return Err(Box::new((reservation, error.into())));
         }
     };
+    let observer: Arc<dyn EventObserver> = Arc::new(CompositeEventObserver::new(
+        observer,
+        service.title_scheduler(),
+    ));
     let driver = service.driver();
     let turn_id = reservation.turn_id.clone();
     let task = tokio::spawn(async move {

@@ -14,8 +14,9 @@ use tokio::sync::{Notify, mpsc};
 
 use crate::compaction::{CompactionFailure, CompactionFailureReason, CompactionStatus};
 use crate::events::{
-    EngineEvent, EventEnvelope, LifecycleState, ModelMessage, ModelToolCall, ProjectionError,
-    ProjectionSnapshot, PublicContentBlock, SessionHandoffCause,
+    EffectApproval, EffectDetail, EngineEvent, EventEnvelope, LifecycleState, ModelMessage,
+    ModelToolCall, PersistedToolResult, ProjectionError, ProjectionSnapshot, PublicContentBlock,
+    SessionHandoffCause,
 };
 use crate::hooks::{HookInvocation, HookSessionContext, HookYield, HooksManager, ToolStatus};
 use crate::middleware::{
@@ -27,7 +28,7 @@ use crate::provider::{
     ProviderStream, Usage, aggregate_provider_chunks,
 };
 use crate::text::bounded_utf8;
-use crate::tools::{MAX_TOOL_ERROR_BYTES, ToolExecutionOutput};
+use crate::tools::{MAX_TOOL_ERROR_BYTES, ToolExecutionOutput, ToolVerdict};
 use crate::tracing::{
     AgentSpan, BackendFailure, ModelCallSpan, ToolSpan, TracedError, agent_span, model_call_span,
     set_model_call_response_metadata, set_model_call_usage, set_tool_result, tool_span,
@@ -201,7 +202,11 @@ pub type PersistenceFuture<'a> = Pin<Box<dyn Future<Output = Result<(), String>>
 /// Buffered tool output chunks awaiting projection.
 const TOOL_STREAM_CAPACITY: usize = 256;
 /// Stands in for a tool result the turn was cancelled before receiving.
-const INTERRUPTED_TOOL_RESULT: &str = "Tool execution interrupted";
+/// What a call the interrupt cut short answers. Reference
+/// `get_user_cancellation_message(TOOL_INTERRUPTED)`: the cancellation tag is
+/// reproduced, the sentence inside it is this port's own.
+const INTERRUPTED_TOOL_RESULT: &str =
+    "<user_cancellation>Tool execution interrupted</user_cancellation>";
 /// The profile a turn runs under when its caller names none. Reference
 /// `BuiltinAgentName.DEFAULT`.
 pub const DEFAULT_AGENT_PROFILE: &str = "default";
@@ -214,6 +219,7 @@ pub struct SessionStats {
     /// The last model call's own usage and duration, which the reference
     /// keeps as `last_turn_*` on `AgentStats` and restores with a session.
     pub last_call: Option<ModelCallStats>,
+    pub tool_calls: ToolCallTally,
 }
 
 /// What one model call spent, and how long it took.
@@ -221,7 +227,103 @@ pub struct SessionStats {
 pub struct ModelCallStats {
     pub prompt_tokens: u64,
     pub completion_tokens: u64,
+    pub cached_tokens: u64,
     pub duration_ms: u64,
+}
+
+/// How the session's tool calls settled: reference `AgentStats.tool_calls_*`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ToolCallTally {
+    /// Calls whose body started.
+    pub agreed: u64,
+    /// Calls the permission gate or the operator declined.
+    pub rejected: u64,
+    /// Calls a pre-tool hook denied.
+    pub hook_denied: u64,
+    /// Calls that never resolved, raised, or were interrupted.
+    pub failed: u64,
+    /// Calls whose body returned.
+    pub succeeded: u64,
+}
+
+impl ToolCallTally {
+    /// Counts the call `event` settles, as reference `AgentLoop` counts it
+    /// where the answer is decided (`vibe/core/agent_loop/_loop.py`,
+    /// `vibe/core/agent_loop_hooks.py`). Every other event is ignored.
+    pub fn observe(&mut self, event: &EngineEvent) {
+        let (before, after) = Self::settled_by(event);
+        *self = self
+            .plus(before)
+            .plus(after)
+            .plus(Self::abandoned_by(event));
+    }
+
+    /// The call `event` abandoned at its gate when the turn ended, which the
+    /// reference fails once the turn's closing accounting is published.
+    #[must_use]
+    pub fn abandoned_by(event: &EngineEvent) -> Self {
+        Self {
+            failed: u64::from(matches!(event, EngineEvent::ToolCallAbandoned { .. })),
+            ..Self::default()
+        }
+    }
+
+    /// What `event` settles, split by when the reference counts it: before it
+    /// yields the result event, or once its consumer has read it. A client
+    /// reading the accounting while the event is published sees only the
+    /// first part. A call that never resolved and a call that returned are
+    /// counted after their result event; a refusal, a denial, a failure and an
+    /// interruption before it.
+    #[must_use]
+    pub fn settled_by(event: &EngineEvent) -> (Self, Self) {
+        let mut before = Self::default();
+        let mut after = Self::default();
+        let EngineEvent::ToolResult {
+            is_error,
+            skipped,
+            approval,
+            ..
+        } = event
+        else {
+            return (before, after);
+        };
+        if *skipped {
+            // A pre-tool hook denies before any gate answers; the gate's own
+            // refusal carries its decision.
+            if approval.is_unset() {
+                before.hook_denied = 1;
+            } else {
+                before.rejected = 1;
+            }
+        } else if !*is_error {
+            before.agreed = 1;
+            after.succeeded = 1;
+        } else if approval.is_unset() {
+            // Reference `_emit_failed_tool_events`: a call that failed to
+            // resolve never reached its gate.
+            after.failed = 1;
+        } else {
+            // A call granted at its gate started its body before it failed or
+            // was interrupted.
+            if approval.decision == Some(ToolVerdict::Execute) {
+                before.agreed = 1;
+            }
+            before.failed = 1;
+        }
+        (before, after)
+    }
+
+    /// `self` with `other` counted on top.
+    #[must_use]
+    pub fn plus(self, other: Self) -> Self {
+        Self {
+            agreed: self.agreed.saturating_add(other.agreed),
+            rejected: self.rejected.saturating_add(other.rejected),
+            hook_denied: self.hook_denied.saturating_add(other.hook_denied),
+            failed: self.failed.saturating_add(other.failed),
+            succeeded: self.succeeded.saturating_add(other.succeeded),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -304,11 +406,16 @@ enum ControlOutcome {
     /// session rotated, which the caller checkpoints before the next request.
     Continue(bool),
     Stop(TurnStopReason),
+    /// A steer's mention read failed the turn with this message.
+    Failed(String),
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct TurnControlHandle {
     queue: Arc<Mutex<VecDeque<TurnControl>>>,
+    /// Wakes a turn that is waiting on its model or its tools, which takes a
+    /// steer the moment it arrives.
+    arrived: Arc<Notify>,
 }
 
 impl TurnControlHandle {
@@ -317,7 +424,33 @@ impl TurnControlHandle {
             .lock()
             .map_err(|_| EngineError::ControlStatePoisoned)?
             .push_back(control);
+        self.arrived.notify_one();
         Ok(())
+    }
+
+    async fn arrived(&self) {
+        self.arrived.notified().await;
+    }
+
+    /// Takes the queued steers, leaving every other control for the next
+    /// cycle boundary.
+    fn take_steers(&self) -> Result<Vec<(String, bool)>, EngineError> {
+        let mut queue = self
+            .queue
+            .lock()
+            .map_err(|_| EngineError::ControlStatePoisoned)?;
+        let mut steers = Vec::new();
+        queue.retain(|control| match control {
+            TurnControl::Steer {
+                content,
+                inject_invoked_skill,
+            } => {
+                steers.push((content.clone(), *inject_invoked_skill));
+                false
+            }
+            _ => true,
+        });
+        Ok(steers)
     }
 
     fn drain(&self) -> Result<Vec<TurnControl>, EngineError> {
@@ -425,6 +558,10 @@ struct TurnSettings {
     /// and its stored message take. Reference `client_message_id`.
     user_message_id: Option<String>,
     user_attachments: Vec<PublicContentBlock>,
+    /// The words the operator typed, when the prompt folds attached resources
+    /// in, and what the client asked the message to be shown as.
+    user_input_text: Option<String>,
+    user_display_content: Option<Value>,
     /// The agent profile this turn runs under, which every request and tool
     /// event reports. Reference `self.agent_profile.name`, whose default
     /// profile is named `default`.
@@ -474,6 +611,8 @@ impl Default for TurnSettings {
             injected_prompt: false,
             user_message_id: None,
             user_attachments: Vec::new(),
+            user_input_text: None,
+            user_display_content: None,
             agent_profile: DEFAULT_AGENT_PROFILE.to_owned(),
             working_directory: None,
             hooks: None,
@@ -579,6 +718,20 @@ impl<P, T, C, S> ConversationEngine<P, T, C, S> {
     #[must_use]
     pub fn with_user_attachments(mut self, attachments: Vec<PublicContentBlock>) -> Self {
         self.settings.user_attachments = attachments;
+        self
+    }
+
+    /// Records what the operator typed, when the prompt folds attached
+    /// resources in, and how the client asked the message to be shown.
+    /// Reference `_open_user_turn`'s `input_text` and `user_display_content`.
+    #[must_use]
+    pub fn with_user_input(
+        mut self,
+        input_text: Option<String>,
+        user_display_content: Option<Value>,
+    ) -> Self {
+        self.settings.user_input_text = input_text;
+        self.settings.user_display_content = user_display_content;
         self
     }
 
@@ -700,6 +853,9 @@ where
             self.settings.working_directory.clone(),
         );
         let mut messages = input.messages.clone();
+        // Reference `act` cleans the history before a turn opens: a call an
+        // earlier interrupt left unanswered is answered as interrupted.
+        crate::events::fill_missing_tool_responses(&mut messages);
         let mut ledger = TurnLedger::new(&self.settings.baseline, &self.settings.limits);
         let mut checkpoints = 0_u32;
         // Reference `_reactive_recovery_used`, reset at the top of every run:
@@ -728,12 +884,28 @@ where
                 state: LifecycleState::Running,
                 message: None,
             })?;
-            messages.push(ModelMessage::injected_user(prompt.clone()));
+            // Reference `_open_user_turn` keeps what was attached to an
+            // injected turn as it does for the operator's.
+            messages.push(ModelMessage::User {
+                content: prompt.clone(),
+                injected: true,
+                message_id: None,
+                attachments: self.settings.user_attachments.clone(),
+                user_display_content: self.settings.user_display_content.clone(),
+                input_text: self.settings.user_input_text.clone(),
+                manual_shell: None,
+                compaction_boundary: false,
+            });
         } else {
             recorder.emit(EngineEvent::UserMessage {
-                content: prompt.clone(),
+                content: self
+                    .settings
+                    .user_input_text
+                    .clone()
+                    .unwrap_or_else(|| prompt.clone()),
                 message_id: self.settings.user_message_id.clone(),
                 attachments: self.settings.user_attachments.clone(),
+                user_display_content: self.settings.user_display_content.clone(),
             })?;
         }
         // Reference `_current_user_message_id`: every request and tool event of
@@ -758,7 +930,10 @@ where
                 injected: false,
                 message_id: message_id.clone(),
                 attachments: self.settings.user_attachments.clone(),
+                user_display_content: self.settings.user_display_content.clone(),
+                input_text: self.settings.user_input_text.clone(),
                 manual_shell: None,
+                compaction_boundary: false,
             });
             // Reference `prepare_prompt_from_context` leaves the title unset:
             // a turn names its session only through a generated or supplied
@@ -772,7 +947,7 @@ where
                     state: LifecycleState::Failed,
                     message: Some(message.clone()),
                 })?;
-                persist(&self.sink, &messages, recorder.state()).await?;
+                persist(&self.sink, &mut messages, recorder.state()).await?;
                 return Err(EngineError::ToolFailure(message));
             }
         }
@@ -781,7 +956,7 @@ where
         if let Some(hooks) = &self.settings.hooks {
             hooks.manager.reset_retry_count();
         }
-        persist(&self.sink, &messages, recorder.state()).await?;
+        persist(&self.sink, &mut messages, recorder.state()).await?;
         checkpoints = checkpoints.saturating_add(1);
 
         let stop_reason = loop {
@@ -790,20 +965,37 @@ where
             if cancellation.is_cancelled() {
                 break TurnStopReason::Cancelled;
             }
-            match self.apply_controls(&mut recorder, &mut messages, &mut input, &controls)? {
+            match self
+                .apply_controls(
+                    &mut recorder,
+                    &mut messages,
+                    &mut input,
+                    &controls,
+                    &cancellation,
+                )
+                .await?
+            {
                 ControlOutcome::Stop(reason) => break reason,
+                ControlOutcome::Failed(message) => {
+                    recorder.emit(EngineEvent::Lifecycle {
+                        state: LifecycleState::Failed,
+                        message: Some(message.clone()),
+                    })?;
+                    persist(&self.sink, &mut messages, recorder.state()).await?;
+                    return Err(EngineError::ToolFailure(message));
+                }
                 // A rotated session is only durable once the transcript lands
                 // under its new identifier, so it checkpoints before the next
                 // request rather than at the end of the cycle.
                 ControlOutcome::Continue(true) => {
-                    persist(&self.sink, &messages, recorder.state()).await?;
+                    persist(&self.sink, &mut messages, recorder.state()).await?;
                     checkpoints = checkpoints.saturating_add(1);
                 }
                 ControlOutcome::Continue(false) => {}
             }
             let policy = pipeline.before_turn(&ConversationContext {
                 messages: &messages,
-                stats: &ledger.session_stats(),
+                stats: &ledger.session_stats(recorder.tool_calls()),
                 price_micros: ledger.price_micros,
                 compaction: &self.settings.compaction,
             });
@@ -839,7 +1031,7 @@ where
                         // compaction: the policy that asked for it would read
                         // the same context size and ask again.
                         Some(()) => {
-                            persist(&self.sink, &messages, recorder.state()).await?;
+                            persist(&self.sink, &mut messages, recorder.state()).await?;
                             checkpoints = checkpoints.saturating_add(1);
                         }
                         None => break TurnStopReason::Cancelled,
@@ -873,10 +1065,26 @@ where
             self.record_request(&mut recorder, &input, message_id.clone(), call_type)?;
             let call_started = Instant::now();
             let completion = match self
-                .stream_completion(&mut recorder, &input, &cancellation)
+                .stream_completion(
+                    &mut recorder,
+                    &input,
+                    &cancellation,
+                    Some(Steering {
+                        controls: &controls,
+                        messages: &mut messages,
+                    }),
+                )
                 .await?
             {
                 StreamOutcome::Cancelled => break TurnStopReason::Cancelled,
+                StreamOutcome::SteerFailed(message) => {
+                    recorder.emit(EngineEvent::Lifecycle {
+                        state: LifecycleState::Failed,
+                        message: Some(message.clone()),
+                    })?;
+                    persist(&self.sink, &mut messages, recorder.state()).await?;
+                    return Err(EngineError::ToolFailure(message));
+                }
                 StreamOutcome::Completed(Ok(completion)) => *completion,
                 StreamOutcome::Completed(Err(error)) if error.is_context_overflow() => {
                     // Reference `_should_self_heal`: one recovery per turn, and
@@ -889,7 +1097,7 @@ where
                             state: LifecycleState::Failed,
                             message: Some(error.to_string()),
                         })?;
-                        persist(&self.sink, &messages, recorder.state()).await?;
+                        persist(&self.sink, &mut messages, recorder.state()).await?;
                         return Err(EngineError::Provider(error));
                     }
                     reactive_recovery_used = true;
@@ -905,7 +1113,7 @@ where
                         .await?
                     {
                         Some(()) => {
-                            persist(&self.sink, &messages, recorder.state()).await?;
+                            persist(&self.sink, &mut messages, recorder.state()).await?;
                             checkpoints = checkpoints.saturating_add(1);
                             continue;
                         }
@@ -927,6 +1135,7 @@ where
                                 context_tokens: ledger.context_tokens,
                                 input_tokens: ledger.usage.input_tokens,
                                 output_tokens: ledger.usage.output_tokens,
+                                cached_tokens: ledger.usage.cached_tokens,
                             })?;
                         }
                         let (assistant_id, reasoning_id) = recorder.model_call_entries();
@@ -937,13 +1146,14 @@ where
                             reasoning: appended.reasoning.clone(),
                             reasoning_payloads: appended.reasoning_payloads.clone(),
                             tool_calls: appended.tool_calls.clone(),
+                            keeps_empty_content: false,
                         });
                     }
                     recorder.emit(EngineEvent::Lifecycle {
                         state: LifecycleState::Failed,
                         message: Some(error.to_string()),
                     })?;
-                    persist(&self.sink, &messages, recorder.state()).await?;
+                    persist(&self.sink, &mut messages, recorder.state()).await?;
                     return Err(EngineError::Provider(error));
                 }
             };
@@ -953,6 +1163,7 @@ where
             ledger.last_call = Some(ModelCallStats {
                 prompt_tokens: completion.usage.input_tokens,
                 completion_tokens: completion.usage.output_tokens,
+                cached_tokens: completion.usage.cached_tokens,
                 duration_ms: u64::try_from(call_started.elapsed().as_millis())
                     .unwrap_or(u64::MAX)
                     .max(1),
@@ -961,6 +1172,7 @@ where
                 context_tokens: ledger.context_tokens,
                 input_tokens: ledger.usage.input_tokens,
                 output_tokens: ledger.usage.output_tokens,
+                cached_tokens: ledger.usage.cached_tokens,
             })?;
             let (assistant_id, reasoning_id) = recorder.model_call_entries();
             let assistant_message = ModelMessage::Assistant {
@@ -970,16 +1182,15 @@ where
                 reasoning: completion.reasoning.clone(),
                 reasoning_payloads: completion.reasoning_payloads.clone(),
                 tool_calls: completion.tool_calls.clone(),
+                keeps_empty_content: false,
             };
             // The budgets answer at the top of the next cycle only, as
             // reference `_conversation_loop` asks them: a reply's tool calls
             // run before a limit it reached stops the turn. A cancellation
-            // still keeps a tool-free reply and drops one whose calls would be
-            // left unanswered.
+            // keeps the reply as `_chat_streaming` appended it; calls it left
+            // unanswered are answered when the next turn opens.
             if cancellation.is_cancelled() {
-                if completion.tool_calls.is_empty() {
-                    messages.push(assistant_message);
-                }
+                messages.push(assistant_message);
                 break TurnStopReason::Cancelled;
             }
             if completion.text.len() > self.settings.limits.max_response_bytes {
@@ -987,51 +1198,73 @@ where
             }
             messages.push(assistant_message);
             if completion.tool_calls.is_empty() {
+                ledger.count_step();
+                persist(&self.sink, &mut messages, recorder.state()).await?;
+                recorder.emit(EngineEvent::StepCompleted {
+                    turn_completing: true,
+                })?;
                 // Reference `_conversation_loop`: a turn about to end runs the
                 // post-agent hooks, and one that denies sends the model back
                 // with its reason as an injected user message.
                 if let Some(retry) = self.run_post_agent_hooks(&mut recorder).await? {
                     messages.push(ModelMessage::injected_user(retry));
-                    persist(&self.sink, &messages, recorder.state()).await?;
+                    persist(&self.sink, &mut messages, recorder.state()).await?;
                     checkpoints = checkpoints.saturating_add(1);
                     continue;
                 }
                 break TurnStopReason::Complete;
             }
 
-            let (results, user_cancelled) = match self
-                .execute_tool_calls(&mut recorder, &completion.tool_calls, &cancellation, true)
+            let (answers, user_cancelled, steered, injections) = match self
+                .execute_tool_calls(
+                    &mut recorder,
+                    &completion.tool_calls,
+                    &cancellation,
+                    true,
+                    Some(Steering {
+                        controls: &controls,
+                        messages: &mut messages,
+                    }),
+                )
                 .await?
             {
                 ToolRound::Settled {
-                    results,
+                    answers,
                     patched,
+                    presentations,
                     user_cancelled,
+                    steered,
+                    injections,
                 } => {
                     patch_tool_call_arguments(&mut messages, &completion.tool_calls, &patched);
-                    (results, user_cancelled)
+                    record_tool_call_presentations(
+                        &mut messages,
+                        &completion.tool_calls,
+                        presentations,
+                    );
+                    (answers, user_cancelled, steered, injections)
                 }
                 ToolRound::Failed(message) => {
                     recorder.emit(EngineEvent::Lifecycle {
                         state: LifecycleState::Failed,
                         message: Some(message.clone()),
                     })?;
-                    persist(&self.sink, &messages, recorder.state()).await?;
+                    persist(&self.sink, &mut messages, recorder.state()).await?;
                     return Err(EngineError::ToolFailure(message));
                 }
             };
-            for (call, (content, is_error)) in completion.tool_calls.into_iter().zip(results) {
-                messages.push(ModelMessage::Tool {
-                    call_id: call.id,
-                    content,
-                    is_error,
-                });
-            }
-            persist(&self.sink, &messages, recorder.state()).await?;
+            push_answers_around(&mut messages, &completion.tool_calls, answers, steered);
+            persist(&self.sink, &mut messages, recorder.state()).await?;
             checkpoints = checkpoints.saturating_add(1);
             if cancellation.is_cancelled() {
                 break TurnStopReason::Cancelled;
             }
+            ledger.count_step();
+            recorder.emit(EngineEvent::StepCompleted {
+                turn_completing: !matches!(messages.last(), Some(ModelMessage::Tool { .. })),
+            })?;
+            // Reference `_drain_pending_injections`, at the end of the step.
+            messages.extend(injections.into_iter().map(ModelMessage::injected_user));
             if user_cancelled {
                 break TurnStopReason::Complete;
             }
@@ -1041,8 +1274,8 @@ where
             state: lifecycle_for(&stop_reason),
             message: Some(stop_message(&stop_reason).to_owned()),
         })?;
-        persist(&self.sink, &messages, recorder.state()).await?;
-        persist_stats(&self.sink, &ledger.session_stats()).await?;
+        persist(&self.sink, &mut messages, recorder.state()).await?;
+        persist_stats(&self.sink, &ledger.session_stats(recorder.tool_calls())).await?;
         let (events, snapshot) = recorder.finish();
         Ok(TurnOutcome {
             session_id: snapshot.session_id.clone(),
@@ -1071,6 +1304,52 @@ where
             .or_else(|| self.provider.model().map(ToOwned::to_owned))
     }
 
+    /// Reference `inject_user_context(as_message=True)`, which `turn/steer`
+    /// calls: the message joins the transcript the moment it arrives, a tool
+    /// round in flight included, and with `inject_implicit` the skill it
+    /// invokes and the files it mentions are injected right behind it. The
+    /// answer is the message of a mention read that failed the turn.
+    ///
+    /// Boxed: the mentions run through a tool round, which is where a steer
+    /// can arrive from.
+    fn apply_steer<'a>(
+        &'a self,
+        recorder: &'a mut TurnRecorder<'_>,
+        messages: &'a mut Vec<ModelMessage>,
+        content: String,
+        inject_implicit: bool,
+        cancellation: &'a CancellationToken,
+    ) -> Pin<Box<dyn Future<Output = Result<Option<String>, EngineError>> + Send + 'a>> {
+        Box::pin(async move {
+            let message_id = crate::session_id::uuid_v4();
+            recorder.emit(EngineEvent::UserSteer {
+                content: content.clone(),
+                message_id: Some(message_id.clone()),
+            })?;
+            messages.push(ModelMessage::User {
+                content: content.clone(),
+                injected: false,
+                message_id: Some(message_id),
+                attachments: Vec::new(),
+                manual_shell: None,
+                compaction_boundary: false,
+                input_text: None,
+                user_display_content: None,
+            });
+            if inject_implicit {
+                self.inject_invoked_skill(recorder, messages, &content)?;
+                if let Some(failure) = self
+                    .inject_mentioned_files(recorder, messages, &content, cancellation)
+                    .await?
+                {
+                    return Ok(Some(failure));
+                }
+            }
+            recorder.emit(EngineEvent::SteerApplied)?;
+            Ok(None)
+        })
+    }
+
     /// Appends the synthetic `skill` call pair when the message is a slash
     /// invocation, reproducing reference `_inject_invoked_skill`: the model
     /// reads the same conversation whether the operator or one of its own tool
@@ -1089,6 +1368,36 @@ where
             return Ok(());
         };
         let appended = crate::skills::append_invoked_skill(messages, &invoked);
+        // Reference `_inject_invoked_skill`: the pair records the call's
+        // presentation and the result it answered with.
+        let working_directory = self.settings.working_directory.as_deref();
+        let detail =
+            EffectDetail::for_encoded_call_at("skill", &appended.arguments, working_directory);
+        let typed = &appended.output.typed_result;
+        let display = detail.completed_display(typed, &appended.output.display, working_directory);
+        let presentation = crate::events::detail::result_presentation(
+            detail.kind,
+            &display,
+            &appended.output.projected_result,
+        );
+        for message in messages.iter_mut().rev().take(2) {
+            match message {
+                ModelMessage::Assistant { tool_calls, .. } => {
+                    for call in tool_calls.iter_mut() {
+                        call.presentation = Some(detail.presentation());
+                    }
+                }
+                ModelMessage::Tool { result, .. } if typed.is_object() => {
+                    *result = Some(Box::new(PersistedToolResult {
+                        output: typed.clone(),
+                        duration: None,
+                        cancelled: false,
+                        presentation: Some(presentation.clone()),
+                    }));
+                }
+                _ => {}
+            }
+        }
         recorder.emit(EngineEvent::ToolCall {
             call_id: appended.call_id.clone(),
             name: "skill".to_owned(),
@@ -1105,7 +1414,7 @@ where
             is_error: false,
             cancelled: false,
             skipped: false,
-            approval: None,
+            approval: EffectApproval::default(),
         })?;
         Ok(())
     }
@@ -1151,6 +1460,7 @@ where
                     "{{\"file_path\": {}}}",
                     Value::String(resource.path.to_string_lossy().into_owned())
                 ),
+                presentation: None,
             };
             messages.push(ModelMessage::Assistant {
                 message_id: None,
@@ -1159,23 +1469,22 @@ where
                 reasoning: None,
                 reasoning_payloads: Vec::new(),
                 tool_calls: vec![call.clone()],
+                keeps_empty_content: true,
             });
             let calls = [call];
             match self
-                .execute_tool_calls(recorder, &calls, cancellation, false)
+                .execute_tool_calls(recorder, &calls, cancellation, false, None)
                 .await?
             {
                 ToolRound::Settled {
-                    results, patched, ..
+                    answers,
+                    patched,
+                    presentations,
+                    ..
                 } => {
                     patch_tool_call_arguments(messages, &calls, &patched);
-                    for (call, (content, is_error)) in calls.into_iter().zip(results) {
-                        messages.push(ModelMessage::Tool {
-                            call_id: call.id,
-                            content,
-                            is_error,
-                        });
-                    }
+                    record_tool_call_presentations(messages, &calls, presentations);
+                    push_answers(messages, &calls, answers);
                 }
                 ToolRound::Failed(message) => return Ok(Some(message)),
             }
@@ -1185,12 +1494,13 @@ where
 
     /// Drains queued steering, context injection, callback resolutions and
     /// context clearings.
-    fn apply_controls(
+    async fn apply_controls(
         &self,
         recorder: &mut TurnRecorder<'_>,
         messages: &mut Vec<ModelMessage>,
         input: &mut ProviderInput,
         controls: &TurnControlHandle,
+        cancellation: &CancellationToken,
     ) -> Result<ControlOutcome, EngineError> {
         let mut cleared = false;
         for control in controls.drain()? {
@@ -1199,12 +1509,17 @@ where
                     content,
                     inject_invoked_skill,
                 } => {
-                    recorder.emit(EngineEvent::UserSteer {
-                        content: content.clone(),
-                    })?;
-                    messages.push(ModelMessage::user(content.clone()));
-                    if inject_invoked_skill {
-                        self.inject_invoked_skill(recorder, messages, &content)?;
+                    if let Some(message) = self
+                        .apply_steer(
+                            recorder,
+                            messages,
+                            content,
+                            inject_invoked_skill,
+                            cancellation,
+                        )
+                        .await?
+                    {
+                        return Ok(ControlOutcome::Failed(message));
                     }
                 }
                 TurnControl::InjectContext {
@@ -1335,6 +1650,7 @@ where
         recorder: &mut TurnRecorder<'_>,
         input: &ProviderInput,
         cancellation: &CancellationToken,
+        steering: Option<Steering<'_>>,
     ) -> Result<StreamOutcome, EngineError> {
         let descriptor = self
             .provider
@@ -1363,7 +1679,7 @@ where
         };
         let call = async {
             match self
-                .stream_traced_completion(recorder, input, cancellation, &model)
+                .stream_traced_completion(recorder, input, cancellation, &model, steering)
                 .await
             {
                 // A backend that refused is a failing span and an answered
@@ -1392,6 +1708,7 @@ where
         input: &ProviderInput,
         cancellation: &CancellationToken,
         model: &str,
+        mut steering: Option<Steering<'_>>,
     ) -> Result<StreamOutcome, EngineError> {
         // Retries are reported while the request is still waiting: a client
         // renders the wait, so learning about it once the backend gave up would
@@ -1422,6 +1739,22 @@ where
         loop {
             let next = tokio::select! {
                 next = stream.chunks.next() => next,
+                // Reference `inject_user_context`: a steer joins the transcript
+                // as it arrives, ahead of the reply still streaming.
+                () = steer_arrived(steering.as_ref()) => {
+                    let Some(steering) = steering.as_mut() else {
+                        continue;
+                    };
+                    for (content, inject_implicit) in steering.controls.take_steers()? {
+                        if let Some(message) = self
+                            .apply_steer(recorder, steering.messages, content, inject_implicit, cancellation)
+                            .await?
+                        {
+                            return Ok(StreamOutcome::SteerFailed(message));
+                        }
+                    }
+                    continue;
+                }
                 () = cancellation.cancelled() => return Ok(StreamOutcome::Cancelled),
             };
             let Some(chunk) = next else {
@@ -1585,19 +1918,22 @@ where
         Ok(Some(()))
     }
 
-    /// Runs every declared tool call concurrently, in declaration order.
+    /// Runs every declared tool call concurrently.
     ///
     /// Events follow completion order so observers see progress as it happens,
-    /// while the returned results follow declaration order so the transcript
-    /// always answers the model's calls in the order it made them. Cancellation
-    /// still yields one result per call: an unanswered call would leave the
-    /// transcript malformed for the next request.
+    /// and so does the transcript: reference `_handle_tool_response` appends
+    /// each answer as its call settles, after the calls that failed to resolve,
+    /// which settle first. A cancelled call that had passed its pre-tool hooks
+    /// is answered as interrupted; one cancelled before leaves its call
+    /// unanswered, which the next turn fills in
+    /// ([`fill_missing_tool_responses`]).
     async fn execute_tool_calls(
         &self,
         recorder: &mut TurnRecorder<'_>,
         tool_calls: &[ModelToolCall],
         cancellation: &CancellationToken,
         announce: bool,
+        mut steering: Option<Steering<'_>>,
     ) -> Result<ToolRound, EngineError> {
         // Reference `_build_tool_call_events`: each call is announced by name
         // while the response streams, before its arguments are validated.
@@ -1605,35 +1941,60 @@ where
             .iter()
             .map(|call| self.tools.publishes(&call.name))
             .collect::<Vec<_>>();
-        for (call, _) in tool_calls
-            .iter()
-            .zip(&resolved)
-            .filter(|(_, resolved)| announce && **resolved)
-        {
-            recorder.emit(EngineEvent::ToolCallAnnounced {
-                call_id: call.id.clone(),
-                name: call.name.clone(),
-                remote: self.tools.remote_origin(&call.name),
-            })?;
-        }
-        // Reference `_emit_failed_tool_events`: a call naming no available
-        // tool settles first, as an error the model reads, and never runs.
-        let mut results = vec![None; tool_calls.len()];
-        let mut patched = vec![None; tool_calls.len()];
+        let announced = |index: usize| announce && resolved[index];
         for (index, call) in tool_calls.iter().enumerate() {
-            if resolved[index] {
-                continue;
+            if announced(index) {
+                recorder.emit(EngineEvent::ToolCallAnnounced {
+                    call_id: call.id.clone(),
+                    name: call.name.clone(),
+                    remote: self.tools.remote_origin(&call.name),
+                })?;
             }
-            // Reference `APIToolFormatHandler.resolve_tool_calls` fails the call
-            // as `Unknown tool '<name>'`.
-            let error = format!(
-                "<tool_error>{}: Unknown tool '{}'</tool_error>",
-                call.name, call.name
-            );
-            recorder.emit(EngineEvent::ToolCallUnresolved {
-                call_id: call.id.clone(),
-                name: call.name.clone(),
-            })?;
+        }
+        // Reference `resolve_tool_calls` reads arguments that are not JSON as
+        // an empty object.
+        let arguments = tool_calls
+            .iter()
+            .map(|call| {
+                if serde_json::from_str::<Value>(&call.arguments).is_ok() {
+                    call.arguments.clone()
+                } else {
+                    "{}".to_owned()
+                }
+            })
+            .collect::<Vec<_>>();
+        // Reference `_emit_failed_tool_events`: a call naming no available
+        // tool, or whose arguments do not validate, settles first, as an error
+        // the model reads, and never runs.
+        let mut results: Vec<Option<Answer>> = vec![None; tool_calls.len()];
+        let mut order = Vec::with_capacity(tool_calls.len());
+        let mut patched = vec![None; tool_calls.len()];
+        let mut presentations = vec![None; tool_calls.len()];
+        let mut runnable = vec![false; tool_calls.len()];
+        for (index, call) in tool_calls.iter().enumerate() {
+            let failure = if resolved[index] {
+                match self.tools.prepare_arguments(&call.name, &arguments[index]) {
+                    Ok(_) => None,
+                    // Reference `resolve_tool_calls` fails the call as
+                    // `Invalid arguments: <validation error>`.
+                    Err(error) => Some(format!("Invalid arguments: {error}")),
+                }
+            } else {
+                // Reference `resolve_tool_calls` fails the call as
+                // `Unknown tool '<name>'`.
+                Some(format!("Unknown tool '{}'", call.name))
+            };
+            let Some(failure) = failure else {
+                runnable[index] = true;
+                continue;
+            };
+            let error = format!("<tool_error>{}: {failure}</tool_error>", call.name);
+            if !announced(index) {
+                recorder.emit(EngineEvent::ToolCallUnresolved {
+                    call_id: call.id.clone(),
+                    name: call.name.clone(),
+                })?;
+            }
             recorder.emit(EngineEvent::ToolResult {
                 call_id: call.id.clone(),
                 content: error.clone(),
@@ -1644,23 +2005,37 @@ where
                 is_error: true,
                 cancelled: false,
                 skipped: false,
-                approval: None,
+                approval: EffectApproval::default(),
             })?;
-            results[index] = Some((error, true));
+            results[index] = Some(Answer::text(error, true));
+            order.push(index);
         }
-        for (call, _) in tool_calls
-            .iter()
-            .zip(&resolved)
-            .filter(|(_, resolved)| **resolved)
-        {
+        for (index, call) in tool_calls.iter().enumerate() {
+            if !runnable[index] {
+                continue;
+            }
+            let remote = self.tools.remote_origin(&call.name);
+            // Reference `_record_tool_call_presentation`: the call keeps the
+            // presentation its event carried.
+            let detail = match &remote {
+                Some(remote) => {
+                    EffectDetail::for_proxied_call(&call.name, &arguments[index], remote)
+                }
+                None => EffectDetail::for_encoded_call_at(
+                    &call.name,
+                    &arguments[index],
+                    self.settings.working_directory.as_deref(),
+                ),
+            };
+            presentations[index] = Some(detail.presentation());
             recorder.emit(EngineEvent::ToolCall {
                 call_id: call.id.clone(),
                 name: call.name.clone(),
-                arguments: call.arguments.clone(),
+                arguments: arguments[index].clone(),
                 // The registry is asked once, here, so the projection presents
                 // the call without reaching back into a catalog it does not
                 // hold.
-                remote: self.tools.remote_origin(&call.name),
+                remote,
             })?;
         }
         let session_id = recorder.state().session_id.clone();
@@ -1669,13 +2044,17 @@ where
         // What a call reports before it settles: its hook events and its
         // result event, in the order it produced them.
         let (signal_tx, mut signal_rx) = mpsc::unbounded_channel::<CallSignal>();
-        let started_flags = tool_calls
+        let progress = tool_calls
+            .iter()
+            .map(|_| Arc::new(crate::tools::CallProgress::default()))
+            .collect::<Vec<_>>();
+        let past_pre_tool = tool_calls
             .iter()
             .map(|_| Arc::new(AtomicBool::new(false)))
             .collect::<Vec<_>>();
         let mut prepared_inputs: Vec<Option<Value>> = vec![None; tool_calls.len()];
         for (index, call) in tool_calls.iter().enumerate() {
-            if !resolved[index] {
+            if !runnable[index] {
                 continue;
             }
             let sender = stream_tx.clone();
@@ -1685,12 +2064,25 @@ where
                     .map_err(|error| format!("tool output backpressure: {error}"))
             });
             let signals = signal_tx.clone();
-            let started = Arc::clone(&started_flags[index]);
+            let call_progress = Arc::clone(&progress[index]);
+            let passed = Arc::clone(&past_pre_tool[index]);
             let session_id = session_id.clone();
+            let arguments = arguments[index].clone();
             pending.push(
                 async move {
                     let settled = self
-                        .run_tool_call(index, call, output, &signals, started, &session_id)
+                        .run_tool_call(
+                            index,
+                            call,
+                            arguments,
+                            output,
+                            &signals,
+                            CallStages {
+                                progress: call_progress,
+                                past_pre_tool: passed,
+                            },
+                            &session_id,
+                        )
                         .await;
                     (index, settled)
                 }
@@ -1704,8 +2096,31 @@ where
         // without a reason ends the turn once this round settles.
         let mut user_cancelled = false;
         let mut failure = None;
+        // Each steer taken while the calls run, with how many answers had
+        // settled before it and how many messages it appended.
+        let mut steered = Vec::new();
+        let mut injections = Vec::new();
         while !pending.is_empty() {
             tokio::select! {
+                () = steer_arrived(steering.as_ref()) => {
+                    let Some(steering) = steering.as_mut() else {
+                        continue;
+                    };
+                    for (content, inject_implicit) in steering.controls.take_steers()? {
+                        let before = steering.messages.len();
+                        if let Some(message) = self
+                            .apply_steer(recorder, steering.messages, content, inject_implicit, cancellation)
+                            .await?
+                        {
+                            failure = Some(message);
+                            break;
+                        }
+                        steered.push((order.len(), steering.messages.len() - before));
+                    }
+                    if failure.is_some() {
+                        break;
+                    }
+                }
                 streamed = stream_rx.recv() => {
                     if let Some((index, item)) = streamed {
                         recorder.emit(stream_event(&tool_calls[index].id, item))?;
@@ -1731,13 +2146,15 @@ where
                             break;
                         }
                         CallSettled::Answered {
-                            content,
-                            is_error,
+                            answer,
                             user_cancelled: cancelled,
                             arguments,
+                            injection,
                         } => {
+                            injections.extend(injection);
                             user_cancelled |= cancelled;
-                            results[index] = Some((content, is_error));
+                            results[index] = Some(answer);
+                            order.push(index);
                             patched[index] = arguments;
                         }
                     }
@@ -1754,10 +2171,36 @@ where
             return Ok(ToolRound::Failed(message));
         }
 
+        // A call whose result was published but whose post-tool hooks were
+        // cut short keeps the answer it published.
+        for (index, answer) in results.iter().enumerate() {
+            if answer.is_some() && !order.contains(&index) {
+                order.push(index);
+            }
+        }
         for index in 0..results.len() {
-            if results[index].is_some() {
+            if results[index].is_some() || !runnable[index] {
                 continue;
             }
+            // Reference `_execute_tool_call`: a call cancelled inside its
+            // pre-tool pipeline raises before any answer is written.
+            if !past_pre_tool[index].load(Ordering::SeqCst) {
+                continue;
+            }
+            if progress[index].awaiting_approval() {
+                let content = self
+                    .abandon_tool_call(
+                        recorder,
+                        &tool_calls[index],
+                        prepared_inputs[index].take(),
+                        &session_id,
+                    )
+                    .await?;
+                results[index] = Some(Answer::text(content, true));
+                order.push(index);
+                continue;
+            }
+            let decision = progress[index].approval();
             recorder.emit(EngineEvent::ToolResult {
                 call_id: tool_calls[index].id.clone(),
                 content: INTERRUPTED_TOOL_RESULT.to_owned(),
@@ -1768,7 +2211,15 @@ where
                 is_error: true,
                 cancelled: true,
                 skipped: false,
-                approval: None,
+                // Reference `_execute_tool_call`: the decision the gate reached,
+                // or `skip` when the call was cancelled before it decided.
+                approval: EffectApproval {
+                    decision: Some(
+                        decision.map_or(ToolVerdict::Skip, |approval| approval.decision),
+                    ),
+                    approval_type: decision.map(|approval| approval.approval_type),
+                    approval_source: decision.map(|approval| approval.approval_source),
+                },
             })?;
             let mut content = INTERRUPTED_TOOL_RESULT.to_owned();
             // Reference `_finalize_cancelled_tool`: a call whose body started
@@ -1778,7 +2229,7 @@ where
                 self.settings.hooks.as_ref(),
                 prepared_inputs[index]
                     .take()
-                    .filter(|_| started_flags[index].load(Ordering::SeqCst)),
+                    .filter(|_| progress[index].started()),
             ) {
                 let call = &tool_calls[index];
                 // Only the text survives: the reference yields the chain's
@@ -1807,16 +2258,64 @@ where
                     )
                     .await;
             }
-            results[index] = Some((content, true));
+            results[index] = Some(Answer::text(content, true));
+            order.push(index);
         }
         Ok(ToolRound::Settled {
-            results: results
+            answers: order
                 .into_iter()
-                .map(|result| result.unwrap_or_else(|| (INTERRUPTED_TOOL_RESULT.to_owned(), true)))
+                .filter_map(|index| results[index].take().map(|answer| (index, answer)))
                 .collect(),
             patched,
+            presentations,
             user_cancelled,
+            steered,
+            injections,
         })
+    }
+
+    /// A call still waiting on its approval when the turn ended. Reference
+    /// `_finalize_turn` rejects the pending request with `CallbackRejectedError`
+    /// ("Turn ended"), which `_execute_tool_call` answers as a failure of the
+    /// tool and shows to the post-tool hooks.
+    async fn abandon_tool_call(
+        &self,
+        recorder: &mut TurnRecorder<'_>,
+        call: &ModelToolCall,
+        tool_input: Option<Value>,
+        session_id: &str,
+    ) -> Result<String, EngineError> {
+        const REJECTION: &str = "Turn ended";
+        recorder.emit(EngineEvent::ToolCallAbandoned {
+            call_id: call.id.clone(),
+        })?;
+        let mut content = format!("<tool_error>{} failed: {REJECTION}</tool_error>", call.name);
+        if let (Some(hooks), Some(tool_input)) = (self.settings.hooks.as_ref(), tool_input) {
+            // Only the text survives, as for an interrupted call.
+            hooks
+                .manager
+                .run(
+                    HookInvocation::PostTool {
+                        context: hooks.context(session_id),
+                        tool_name: call.name.clone(),
+                        tool_call_id: call.id.clone(),
+                        tool_input,
+                        tool_status: ToolStatus::Failure,
+                        tool_output: None,
+                        tool_output_text: content.clone(),
+                        tool_error: Some(REJECTION.to_owned()),
+                        duration_ms: 0.0,
+                    },
+                    |item| {
+                        if let HookYield::TextReplacement(text) = item {
+                            content = text;
+                        }
+                        std::ops::ControlFlow::Continue(())
+                    },
+                )
+                .await;
+        }
+        Ok(content)
     }
 
     /// One call, from its pre-tool hooks to its post-tool hooks. Reference
@@ -1825,30 +2324,28 @@ where
     /// Everything the call reports before it settles travels through
     /// `signals`, so its hook events and its result event reach the transcript
     /// in the order the call produced them while other calls run beside it.
+    #[allow(clippy::too_many_arguments)]
     async fn run_tool_call(
         &self,
         index: usize,
         call: &ModelToolCall,
+        mut arguments: String,
         output: ToolStreamSink,
         signals: &mpsc::UnboundedSender<CallSignal>,
-        started: Arc<AtomicBool>,
+        stages: CallStages,
         session_id: &str,
     ) -> CallSettled {
         let emit = |event: EngineEvent| {
             let _ = signals.send(CallSignal::Event(event));
         };
         let hooks = self.settings.hooks.as_ref();
-        let mut arguments = call.arguments.clone();
         let mut rewritten = None;
         // Reference `_serialize_tool_input`: the validated arguments, with
         // every default filled in. A call whose arguments do not validate
         // fails before any hook sees it, as the reference fails it while
         // resolving the call.
-        let mut tool_input = hooks.and_then(|_| {
-            self.tools
-                .prepare_arguments(&call.name, &call.arguments)
-                .ok()
-        });
+        let mut tool_input =
+            hooks.and_then(|_| self.tools.prepare_arguments(&call.name, &arguments).ok());
         if let (Some(hooks), Some(validated)) = (hooks, tool_input.clone()) {
             let pipeline = self
                 .run_pre_tool_hooks(hooks, call, validated, session_id)
@@ -1873,18 +2370,17 @@ where
                     is_error: false,
                     cancelled: false,
                     skipped: true,
-                    approval: None,
+                    approval: EffectApproval::default(),
                 });
                 let _ = signals.send(CallSignal::Settled {
                     index,
-                    content: denial.clone(),
-                    is_error: false,
+                    answer: Answer::text(denial.clone(), false),
                 });
                 return CallSettled::Answered {
-                    content: denial,
-                    is_error: false,
+                    answer: Answer::text(denial, false),
                     user_cancelled: false,
                     arguments: None,
+                    injection: None,
                 };
             }
             if pipeline.rewritten {
@@ -1899,9 +2395,10 @@ where
                 tool_input: tool_input.clone(),
             });
         }
+        stages.past_pre_tool.store(true, Ordering::SeqCst);
         let started_at = Instant::now();
         let result = crate::tools::track_call_start(
-            Arc::clone(&started),
+            Arc::clone(&stages.progress),
             // Reference `_loop.py` opens `tool_span` around the execution
             // itself, so a tool that streams for a minute is one span rather
             // than a point in the parent's timeline.
@@ -1925,7 +2422,6 @@ where
         )
         .await;
         let elapsed = started_at.elapsed();
-        let duration_ms = u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX);
         // What the post-tool hooks are shown, when the call ran: reference
         // `_invoke_tool` and the failure branch of `_execute_tool_call`.
         let mut ran = None;
@@ -1970,6 +2466,47 @@ where
             ),
         };
         let user_cancelled = output.skip.is_some_and(|skip| skip.cancelled);
+        let injection = output.pending_injection.clone();
+        // Reference `_run_post_tool_and_finalize`: an answer the tool returned
+        // is persisted with its typed result, how long it ran and how it was
+        // presented.
+        let persisted = match &ran {
+            Some((status, Some(typed), None)) => {
+                let detail = match self.tools.remote_origin(&call.name) {
+                    Some(remote) => EffectDetail::for_proxied_call(&call.name, &arguments, &remote),
+                    None => EffectDetail::for_encoded_call_at(
+                        &call.name,
+                        &arguments,
+                        self.settings.working_directory.as_deref(),
+                    ),
+                };
+                let display = detail.completed_display(
+                    typed,
+                    &output.display,
+                    self.settings.working_directory.as_deref(),
+                );
+                Some(Box::new(PersistedToolResult {
+                    output: typed.clone(),
+                    duration: serde_json::Number::from_f64(elapsed.as_secs_f64()),
+                    cancelled: *status == ToolStatus::Cancelled,
+                    presentation: Some(crate::events::detail::result_presentation(
+                        detail.kind,
+                        &display,
+                        &output.projected_result,
+                    )),
+                }))
+            }
+            _ => None,
+        };
+        // Reference `ToolResultEvent.duration` keeps fractions of a
+        // millisecond, so a call that answered never reports taking none.
+        // A call that failed or never ran reports none, as the reference's
+        // failure and skip events carry no duration.
+        let duration_ms = if ran.is_some() && !is_error {
+            u64::try_from(elapsed.as_micros().div_ceil(1_000)).unwrap_or(u64::MAX)
+        } else {
+            0
+        };
         emit(EngineEvent::ToolResult {
             call_id: call.id.clone(),
             content: output.model_text.clone(),
@@ -1980,13 +2517,16 @@ where
             is_error,
             cancelled: user_cancelled,
             skipped: output.skip.is_some(),
-            approval: output.approval,
+            approval: output.approval.into(),
         });
         let mut content = output.model_text;
         let _ = signals.send(CallSignal::Settled {
             index,
-            content: content.clone(),
-            is_error,
+            answer: Answer {
+                content: content.clone(),
+                is_error,
+                result: persisted.clone(),
+            },
         });
         if let (Some(hooks), Some(tool_input), Some((tool_status, tool_output, tool_error))) =
             (hooks, tool_input, ran)
@@ -2004,8 +2544,14 @@ where
                         tool_status,
                         tool_output,
                         tool_output_text: content.clone(),
+                        // Reference `PostToolFinalization.duration_ms` is
+                        // left at zero for a call that raised.
+                        duration_ms: if tool_status == ToolStatus::Failure {
+                            0.0
+                        } else {
+                            elapsed.as_secs_f64() * 1000.0
+                        },
                         tool_error,
-                        duration_ms: elapsed.as_secs_f64() * 1000.0,
                     },
                     |item| {
                         match item {
@@ -2019,10 +2565,14 @@ where
                 .await;
         }
         CallSettled::Answered {
-            content,
-            is_error,
+            answer: Answer {
+                content,
+                is_error,
+                result: persisted,
+            },
             user_cancelled,
             arguments: rewritten,
+            injection,
         }
     }
 
@@ -2150,20 +2700,46 @@ enum CallSignal {
     /// is cancelled while its post-tool hooks run.
     Settled {
         index: usize,
-        content: String,
-        is_error: bool,
+        answer: Answer,
     },
+}
+
+/// What one call left behind to track it as it runs.
+struct CallStages {
+    /// What the call reached at its permission gate.
+    progress: Arc<crate::tools::CallProgress>,
+    /// Whether the call is past its pre-tool hooks.
+    past_pre_tool: Arc<AtomicBool>,
+}
+
+/// One call's answer as the transcript records it.
+#[derive(Debug, Clone)]
+struct Answer {
+    content: String,
+    is_error: bool,
+    result: Option<Box<PersistedToolResult>>,
+}
+
+impl Answer {
+    fn text(content: String, is_error: bool) -> Self {
+        Self {
+            content,
+            is_error,
+            result: None,
+        }
+    }
 }
 
 /// How one call settled.
 enum CallSettled {
     Answered {
-        content: String,
-        is_error: bool,
+        answer: Answer,
         user_cancelled: bool,
         /// The arguments a hook rewrote the call to, as the assistant message
         /// is patched to carry them.
         arguments: Option<String>,
+        /// The message the call left for the end of the step.
+        injection: Option<String>,
     },
     /// The call's answer failed the turn.
     TurnFailure(String),
@@ -2172,7 +2748,7 @@ enum CallSettled {
 fn apply_signal(
     recorder: &mut TurnRecorder<'_>,
     signal: CallSignal,
-    results: &mut [Option<(String, bool)>],
+    results: &mut [Option<Answer>],
     prepared: &mut [Option<Value>],
 ) -> Result<(), EngineError> {
     match signal {
@@ -2183,13 +2759,9 @@ fn apply_signal(
             }
             Ok(())
         }
-        CallSignal::Settled {
-            index,
-            content,
-            is_error,
-        } => {
+        CallSignal::Settled { index, answer } => {
             if let Some(slot) = results.get_mut(index) {
-                *slot = Some((content, is_error));
+                *slot = Some(answer);
             }
             Ok(())
         }
@@ -2198,16 +2770,107 @@ fn apply_signal(
 
 /// How one round of tool calls ended.
 enum ToolRound {
-    /// Every call answered, in call order, with the arguments a hook rewrote
-    /// each call to and whether the user's decline of one of them ends the
-    /// turn.
+    /// The calls answered, each with its index, in the order the transcript
+    /// records them; with the arguments a hook rewrote each call to, the
+    /// presentation each call that ran was given, and whether the user's
+    /// decline of one of them ends the turn.
     Settled {
-        results: Vec<(String, bool)>,
+        answers: Vec<(usize, Answer)>,
         patched: Vec<Option<String>>,
+        presentations: Vec<Option<Value>>,
         user_cancelled: bool,
+        /// The steers taken while the calls ran, already appended to the
+        /// transcript: how many answers settled before each, and how many
+        /// messages it appended.
+        steered: Vec<(usize, usize)>,
+        /// What the calls left for the end of the step, in the order they
+        /// settled.
+        injections: Vec<String>,
     },
     /// A call's answer failed the turn.
     Failed(String),
+}
+
+/// Appends each call's answer as a tool message, in the order given.
+fn push_answers(
+    messages: &mut Vec<ModelMessage>,
+    calls: &[ModelToolCall],
+    answers: Vec<(usize, Answer)>,
+) {
+    push_answers_around(messages, calls, answers, Vec::new());
+}
+
+/// Appends each call's answer as a tool message, in the order given, around
+/// the steers the round took: the reference appends a steer when it arrives
+/// and an answer when its call settles, so a steer sits after the answers
+/// that settled before it. The steers are the last messages of `messages`.
+fn push_answers_around(
+    messages: &mut Vec<ModelMessage>,
+    calls: &[ModelToolCall],
+    answers: Vec<(usize, Answer)>,
+    steered: Vec<(usize, usize)>,
+) {
+    let appended = steered.iter().map(|(_, count)| count).sum::<usize>();
+    let mut tail = messages
+        .split_off(messages.len().saturating_sub(appended))
+        .into_iter();
+    let mut steers = steered
+        .into_iter()
+        .map(|(settled, count)| (settled, tail.by_ref().take(count).collect::<Vec<_>>()))
+        .collect::<VecDeque<_>>();
+    for (position, (index, answer)) in answers.into_iter().enumerate() {
+        while steers
+            .front()
+            .is_some_and(|(settled, _)| *settled <= position)
+        {
+            if let Some((_, steer)) = steers.pop_front() {
+                messages.extend(steer);
+            }
+        }
+        let Some(call) = calls.get(index) else {
+            continue;
+        };
+        messages.push(ModelMessage::Tool {
+            call_id: call.id.clone(),
+            content: answer.content,
+            is_error: answer.is_error,
+            name: call.name.clone(),
+            result: answer.result,
+        });
+    }
+    for (_, steer) in steers {
+        messages.extend(steer);
+    }
+}
+
+/// What a tool round needs to take a steer while its calls run.
+struct Steering<'a> {
+    controls: &'a TurnControlHandle,
+    messages: &'a mut Vec<ModelMessage>,
+}
+
+/// Reference `_record_tool_call_presentation`: the assistant message that
+/// asked for a call keeps the presentation the call ran under.
+fn record_tool_call_presentations(
+    messages: &mut [ModelMessage],
+    calls: &[ModelToolCall],
+    presentations: Vec<Option<Value>>,
+) {
+    for (call, presentation) in calls.iter().zip(presentations) {
+        let Some(presentation) = presentation else {
+            continue;
+        };
+        for message in messages.iter_mut().rev() {
+            if let ModelMessage::Assistant { tool_calls, .. } = message
+                && let Some(recorded) = tool_calls
+                    .iter_mut()
+                    .find(|recorded| recorded.id == call.id)
+            {
+                recorded.presentation = Some(presentation);
+                break;
+            }
+        }
+    }
 }
 
 /// Reference `_patch_assistant_tool_call_args`: the assistant message that
@@ -2269,6 +2932,17 @@ enum StreamOutcome {
     /// The assistant message is boxed: it dwarfs the cancelled variant.
     Completed(Result<Box<AssistantMessage>, ProviderError>),
     Cancelled,
+    /// A steer taken while the reply streamed failed the turn reading a file
+    /// it mentioned.
+    SteerFailed(String),
+}
+
+/// Resolves when a steer may have arrived, and never without a handle.
+async fn steer_arrived(steering: Option<&Steering<'_>>) {
+    match steering {
+        Some(steering) => steering.controls.arrived().await,
+        None => std::future::pending().await,
+    }
 }
 
 #[derive(Debug, Error)]
@@ -2484,6 +3158,7 @@ mod tests {
                     usage: Usage {
                         input_tokens: 30,
                         output_tokens: 5,
+                        cached_tokens: 0,
                     },
                     failure: None,
                 })
@@ -2631,6 +3306,7 @@ mod tests {
                     id: "call-1".to_owned(),
                     name: "read".to_owned(),
                     arguments: "{}".to_owned(),
+                    presentation: None,
                 }],
             )),
             Ok(completion("done", Vec::new())),
@@ -2797,6 +3473,7 @@ mod tests {
             usage: Usage {
                 input_tokens: 2,
                 output_tokens: 3,
+                cached_tokens: 0,
             },
             refusal: None,
             stop_reason: "stop".to_owned(),
@@ -2813,6 +3490,7 @@ mod tests {
                     id: "call-1".to_owned(),
                     name: "read".to_owned(),
                     arguments: "{}".to_owned(),
+                    presentation: None,
                 }],
             )),
             Ok(completion("done", Vec::new())),
@@ -2862,6 +3540,7 @@ mod tests {
                     id: "call-1".to_owned(),
                     name: "first".to_owned(),
                     arguments: "{}".to_owned(),
+                    presentation: None,
                 }],
             )),
             Ok(completion("done", Vec::new())),
@@ -2922,7 +3601,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn parallel_tool_events_follow_arrival_but_transcript_follows_declaration() {
+    async fn parallel_tool_events_and_transcript_follow_arrival() {
         let provider = ScriptedProvider::new([
             Ok(completion(
                 "",
@@ -2931,11 +3610,13 @@ mod tests {
                         id: "call-1".to_owned(),
                         name: "first".to_owned(),
                         arguments: "{}".to_owned(),
+                        presentation: None,
                     },
                     ModelToolCall {
                         id: "call-2".to_owned(),
                         name: "second".to_owned(),
                         arguments: "{}".to_owned(),
+                        presentation: None,
                     },
                 ],
             )),
@@ -2993,9 +3674,11 @@ mod tests {
                 _ => None,
             })
             .collect::<Vec<_>>();
+        // Reference `_handle_tool_response` appends each answer as its call
+        // settles, so the transcript keeps arrival order too.
         assert_eq!(
             tool_messages,
-            vec![("call-1", "first-result"), ("call-2", "second-result")]
+            vec![("call-2", "second-result"), ("call-1", "first-result")]
         );
         let events = recorded.events.lock().expect("observer lock");
         let second_stream = events.iter().position(|event| {
@@ -3073,6 +3756,7 @@ mod tests {
             Usage {
                 input_tokens: 32,
                 output_tokens: 8,
+                cached_tokens: 0,
             },
             "the summarization is part of what the turn spent"
         );
@@ -3121,6 +3805,7 @@ mod tests {
                     id: "call-1".to_owned(),
                     name: "exit_plan_mode".to_owned(),
                     arguments: "{}".to_owned(),
+                    presentation: None,
                 }],
             )),
             Ok(completion("implementing", Vec::new())),
@@ -3151,6 +3836,14 @@ mod tests {
                 "the reply keeps its entry identity"
             );
         }
+        // The continuation is persisted before the step closes, which mints
+        // its identity as well.
+        if let Some(ModelMessage::User { message_id, .. }) = messages.get_mut(1) {
+            assert!(
+                message_id.take().is_some(),
+                "the continuation keeps its entry identity"
+            );
+        }
         assert_eq!(
             messages,
             vec![
@@ -3165,6 +3858,7 @@ mod tests {
                     reasoning: None,
                     reasoning_payloads: Vec::new(),
                     tool_calls: Vec::new(),
+                    keeps_empty_content: false,
                 },
             ],
             "clearing keeps the harness and the continuation, and nothing that was said"
@@ -3226,6 +3920,7 @@ mod tests {
                     id: "call-1".to_owned(),
                     name: "exit_plan_mode".to_owned(),
                     arguments: "{}".to_owned(),
+                    presentation: None,
                 }],
             )),
             Ok(completion("unreachable", Vec::new())),
@@ -3260,6 +3955,7 @@ mod tests {
                 id: "call-1".to_owned(),
                 name: "read".to_owned(),
                 arguments: "{}".to_owned(),
+                presentation: None,
             }],
         ))]);
         let outcome = ConversationEngine::new(provider)
@@ -3303,6 +3999,7 @@ mod tests {
                 id: "call-1".to_owned(),
                 name: "read".to_owned(),
                 arguments: "{}".to_owned(),
+                presentation: None,
             }],
         ))]))
         .with_tools(FakeTools)
@@ -3371,9 +4068,11 @@ mod tests {
                 usage: Usage {
                     input_tokens: 3,
                     output_tokens: 2,
+                    cached_tokens: 0,
                 },
                 context_tokens: 5,
                 steps: 1,
+                tool_calls: ToolCallTally::default(),
             })
             .run_turn(
                 "session-1",
@@ -3452,11 +4151,13 @@ mod tests {
                     id: "call-1".to_owned(),
                     name: "first".to_owned(),
                     arguments: "{}".to_owned(),
+                    presentation: None,
                 },
                 ModelToolCall {
                     id: "call-2".to_owned(),
                     name: "second".to_owned(),
                     arguments: "{}".to_owned(),
+                    presentation: None,
                 },
             ],
         ))]);
@@ -3665,6 +4366,7 @@ mod tests {
                     id: "call-1".to_owned(),
                     name: "exit_plan_mode".to_owned(),
                     arguments: "{}".to_owned(),
+                    presentation: None,
                 }],
             )),
             Ok(completion("restarted", Vec::new())),
@@ -4043,6 +4745,7 @@ mod tests {
                     id: "call-1".to_owned(),
                     name: "read".to_owned(),
                     arguments: "{}".to_owned(),
+                    presentation: None,
                 }],
             )),
             Ok(completion("done", Vec::new())),
@@ -4410,6 +5113,9 @@ mod tests {
                 message_id: Some("entry-1".to_owned()),
                 attachments: Vec::new(),
                 manual_shell: None,
+                compaction_boundary: false,
+                input_text: None,
+                user_display_content: None,
             },
             "the trailing text stays the operator's message, under its entry's identity"
         );
@@ -4439,6 +5145,7 @@ mod tests {
             call_id,
             content,
             is_error,
+            ..
         } = &messages[3]
         else {
             panic!("the call is answered by a tool message: {messages:?}");
@@ -4491,12 +5198,16 @@ mod tests {
                     id: "earlier-call".to_owned(),
                     name: "skill".to_owned(),
                     arguments: "{\"name\": \"probe\"}".to_owned(),
+                    presentation: None,
                 }],
+                keeps_empty_content: false,
             },
             ModelMessage::Tool {
                 call_id: "earlier-call".to_owned(),
                 content: format!("name: probe\ncontent: {marker}\nDo the probing."),
                 is_error: false,
+                name: String::new(),
+                result: None,
             },
         ]);
         let provider = ScriptedProvider::new([Ok(completion("done", Vec::new()))]);
@@ -4542,12 +5253,16 @@ mod tests {
                     id: "read-call".to_owned(),
                     name: "read".to_owned(),
                     arguments: "{}".to_owned(),
+                    presentation: None,
                 }],
+                keeps_empty_content: false,
             },
             ModelMessage::Tool {
                 call_id: "read-call".to_owned(),
                 content: crate::skills::skill_content_marker("probe"),
                 is_error: false,
+                name: String::new(),
+                result: None,
             },
         ]);
         let provider = ScriptedProvider::new([Ok(completion("done", Vec::new()))]);

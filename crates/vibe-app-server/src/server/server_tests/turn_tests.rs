@@ -272,6 +272,7 @@ fn closing_an_active_session_retains_ownership_until_terminal_cleanup() {
                 attachments: Vec::new(),
                 message_id: None,
                 content: "hello".to_owned(),
+                user_display_content: None,
             },
         },
         vibe_core::events::EventEnvelope {
@@ -356,6 +357,7 @@ fn conversation_limits_complete_with_the_public_limit_reason() {
                 attachments: Vec::new(),
                 message_id: None,
                 content: "bounded".to_owned(),
+                user_display_content: None,
             },
         },
         vibe_core::events::EventEnvelope {
@@ -415,6 +417,7 @@ fn provider_terminal_failures_preserve_their_public_error() {
                 attachments: Vec::new(),
                 message_id: None,
                 content: "bounded".to_owned(),
+                user_display_content: None,
             },
         },
         vibe_core::events::EventEnvelope {
@@ -482,6 +485,7 @@ fn a_handoff_onto_the_same_session_is_refused() {
                 attachments: Vec::new(),
                 message_id: None,
                 content: "clear".to_owned(),
+                user_display_content: None,
             },
         })
         .expect("the prompt projects");
@@ -580,6 +584,7 @@ fn handoff_atomically_migrates_the_runtime_to_the_projected_id() {
                 attachments: Vec::new(),
                 message_id: None,
                 content: "compact".to_owned(),
+                user_display_content: None,
             },
         },
         vibe_core::events::EventEnvelope {

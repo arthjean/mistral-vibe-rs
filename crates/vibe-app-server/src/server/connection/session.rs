@@ -467,6 +467,8 @@ impl ServerConnection {
             disabled_tools,
             requested_enabled_tools: Vec::new(),
             requested_disabled_tools: Vec::new(),
+            client_enabled_tools: params.enabled_tools.clone(),
+            client_disabled_tools: params.disabled_tools.clone(),
             agent_permission_rules: Vec::new(),
             mcp_servers: params.mcp_servers.clone(),
             model: params.model.clone(),

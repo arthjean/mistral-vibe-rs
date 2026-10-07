@@ -3,7 +3,7 @@
 use super::*;
 use crate::workspace::{history_entry_id, reference_message_index};
 use vibe_core::compaction::context::is_compaction_context_message;
-use vibe_core::events::EffectApproval;
+use vibe_core::events::detail::persisted_effect_state;
 
 /// The session's status as the wire union publishes it.
 ///
@@ -61,6 +61,21 @@ pub(super) fn session_preview(session: &SessionRuntime, history: &[PublicHistory
             |entry| matches!(entry, PublicHistoryEntry::Checkpoint { kind, .. } if kind == "clear"),
         )
         .map_or(0, |index| index + 1);
+    let persisted = || {
+        session
+            .persisted
+            .as_ref()?
+            .messages
+            .iter()
+            .find_map(|message| match message {
+                vibe_core::events::ModelMessage::User {
+                    content,
+                    injected: false,
+                    ..
+                } if !content.is_empty() => Some(content.clone()),
+                _ => None,
+            })
+    };
     history
         .get(since_clear..)
         .unwrap_or_default()
@@ -78,25 +93,19 @@ pub(super) fn session_preview(session: &SessionRuntime, history: &[PublicHistory
                     .as_deref()
                     .is_none_or(|turn_id| turn_id.starts_with("injection:")) =>
             {
-                Some(content_text(content)).filter(|text| !text.is_empty())
+                // A replayed entry shows the words typed, while the reference
+                // previews the message the model read, attached resources
+                // included.
+                let replayed =
+                    metadata.turn_id.is_none() && *source == Some(PublicMessageSource::Harness);
+                replayed
+                    .then(persisted)
+                    .flatten()
+                    .or_else(|| Some(content_text(content)).filter(|text| !text.is_empty()))
             }
             _ => None,
         })
-        .or_else(|| {
-            session
-                .persisted
-                .as_ref()?
-                .messages
-                .iter()
-                .find_map(|message| match message {
-                    vibe_core::events::ModelMessage::User {
-                        content,
-                        injected: false,
-                        ..
-                    } if !content.is_empty() => Some(content.clone()),
-                    _ => None,
-                })
-        })
+        .or_else(persisted)
         .map(|text| text.chars().take(160).collect::<String>())
         .unwrap_or_default()
 }
@@ -173,9 +182,9 @@ pub(super) fn public_session_state(session: &SessionRuntime) -> Value {
             // The legacy harness answers every session here (row 36).
             "harness": null,
         },
-        // No background work runs beside a turn in this port, so a session is
-        // always quiescent.
-        "isQuiescent": true,
+        // Reference `RootSession.is_quiescent`: a title running in the
+        // background is the only work that runs beside a turn.
+        "isQuiescent": !session.title_in_flight,
         "history": history.get(retained_from..).unwrap_or_default(),
         "historyBeforeCursor": history_before_cursor,
         "turns": turns,
@@ -242,10 +251,10 @@ pub(super) fn persisted_projection(
     // moment it was read back plus its position, so the replay orders before
     // anything the reopened session goes on to add.
     let base_timestamp = crate::host::now_millis();
-    // The call's name and arguments are what the effect detail is rebuilt from,
-    // so a resumed transcript renders through the same typed path a live turn
-    // publishes rather than through a generic fallback.
-    let mut tool_calls_by_id = BTreeMap::<String, (String, String, usize)>::new();
+    // Reference `project_message_history`: a call is replayed where its
+    // assistant message made it, and its answer, wherever it lands, settles
+    // that entry.
+    let mut effect_indices = BTreeMap::<String, usize>::new();
     let mut history = Vec::new();
     // A message stored with the identity its live entry had keeps it, which
     // is what lets a client that saw the turn live address it after a reload
@@ -309,19 +318,24 @@ pub(super) fn persisted_projection(
                 content,
                 message_id,
                 attachments,
+                user_display_content,
+                input_text,
                 ..
             } => history.push(PublicHistoryEntry::Message {
                 metadata: metadata(index, "user", message_id.as_ref()),
                 role: PublicMessageRole::User,
-                content: std::iter::once(PublicContentBlock::Text {
-                    text: content.clone(),
-                })
-                .chain(attachments.iter().cloned())
-                .collect(),
+                // Reference `project_message_content`: the words typed when
+                // resources were folded in, and no text block when empty.
+                content: Some(input_text.as_ref().unwrap_or(content))
+                    .filter(|text| !text.is_empty())
+                    .map(|text| PublicContentBlock::Text { text: text.clone() })
+                    .into_iter()
+                    .chain(attachments.iter().cloned())
+                    .collect(),
                 // Reference `_history_user_message`: a replayed message is the
                 // harness's, whoever typed it first.
                 source: Some(PublicMessageSource::Harness),
-                user_display_content: None,
+                user_display_content: user_display_content.clone(),
             }),
             ModelMessage::Assistant {
                 content,
@@ -350,77 +364,61 @@ pub(super) fn persisted_projection(
                     });
                 }
                 for tool_call in tool_calls {
-                    tool_calls_by_id.insert(
-                        tool_call.id.clone(),
-                        (tool_call.name.clone(), tool_call.arguments.clone(), index),
-                    );
+                    // Reference `_history_effect`: a call that recorded how it
+                    // was presented renders through its typed detail, and one
+                    // that never resolved through the generic one.
+                    let detail = if tool_call.presentation.is_some() {
+                        EffectDetail::for_encoded_call_at(
+                            &tool_call.name,
+                            &tool_call.arguments,
+                            working_directory,
+                        )
+                    } else {
+                        EffectDetail::generic(&tool_call.name, Some(&tool_call.arguments))
+                    };
+                    effect_indices.insert(tool_call.id.clone(), history.len());
+                    history.push(PublicHistoryEntry::Effect {
+                        metadata: metadata(index, "effect", effect_id(&tool_call.id)),
+                        title: tool_call.name.clone(),
+                        state: persisted_effect_state(&detail, None),
+                        detail: Box::new(detail),
+                        tool_call_id: tool_call.id.clone(),
+                    });
                 }
             }
             ModelMessage::Tool {
                 call_id,
                 content,
-                is_error,
+                name,
+                result,
+                ..
             } => {
-                let (title, arguments, call_index) = tool_calls_by_id
-                    .remove(call_id)
-                    .unwrap_or_else(|| ("Tool".to_owned(), String::new(), index));
-                let detail =
-                    EffectDetail::for_encoded_call_at(&title, &arguments, working_directory);
-                let state = if *is_error {
-                    PublicEffectState::Failed {
-                        error: PublicError {
-                            message: content.clone(),
-                            code: Some("persisted_tool_error".to_owned()),
-                            details: Value::Null,
-                        },
-                        output: Value::Null,
-                        output_text: content.clone(),
-                        duration_ms: 0,
-                        display: EffectResultDisplay::failed(&detail.display),
-                        approval: EffectApproval::default(),
+                let answer = Some((content.as_str(), result.as_deref()));
+                if let Some(&position) = effect_indices.get(call_id) {
+                    if let Some(PublicHistoryEntry::Effect { detail, state, .. }) =
+                        history.get_mut(position)
+                    {
+                        *state = persisted_effect_state(detail, answer);
                     }
+                    continue;
+                }
+                // Reference `_apply_tool_history`: an answer whose call is not
+                // in the transcript replays as an effect of its own.
+                let title = if name.is_empty() {
+                    "tool"
                 } else {
-                    let output = json!(content);
-                    PublicEffectState::Completed {
-                        display: EffectResultDisplay::completed_at(
-                            detail.kind,
-                            &detail.display,
-                            &output,
-                            &Value::Null,
-                            working_directory,
-                        ),
-                        output,
-                        output_text: content.clone(),
-                        duration_ms: 0,
-                        approval: EffectApproval::default(),
-                    }
+                    name.as_str()
                 };
+                let detail = EffectDetail::generic(title, None);
                 history.push(PublicHistoryEntry::Effect {
-                    metadata: metadata(call_index, "effect", effect_id(call_id)),
-                    title,
+                    metadata: metadata(index, "effect", effect_id(call_id)),
+                    title: title.to_owned(),
+                    state: persisted_effect_state(&detail, answer),
                     detail: Box::new(detail),
-                    state,
                     tool_call_id: call_id.clone(),
                 });
             }
         }
-    }
-    for (call_id, (title, arguments, index)) in tool_calls_by_id {
-        history.push(PublicHistoryEntry::Effect {
-            metadata: metadata(index, "effect", effect_id(&call_id)),
-            detail: Box::new(EffectDetail::for_encoded_call_at(
-                &title,
-                &arguments,
-                working_directory,
-            )),
-            state: PublicEffectState::Skipped {
-                reason: "Persisted tool call has no recorded result".to_owned(),
-                display: EffectResultDisplay::skipped(&title),
-                approval: EffectApproval::default(),
-            },
-            title,
-            tool_call_id: call_id,
-        });
     }
     history.sort_by_key(|entry| entry.metadata().created_at);
     let retained_from = history.len().saturating_sub(usize::from(history_limit));

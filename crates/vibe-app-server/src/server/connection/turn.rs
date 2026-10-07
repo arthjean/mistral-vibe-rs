@@ -237,32 +237,7 @@ impl ServerConnection {
         session: &mut SessionRuntime,
         now: u64,
     ) -> Result<Option<Vec<u8>>, ProtocolFault> {
-        let bumped_at = session.bumped_at.map_or(now, |current| current.max(now));
-        session.bumped_at = Some(bumped_at);
-        if !self.server.workspace.persists_runtime_sessions() {
-            return Ok(None);
-        }
-        // The accepted turn is recorded with the session, written or not, so
-        // a listing orders by it after a restart.
-        let store = self.server.workspace.session_store();
-        if let Ok(mut hydrated) = store.open(&session.id) {
-            store
-                .persist_bumped_at(&mut hydrated.metadata, bumped_at)
-                .map_err(|error| ProtocolFault::internal(error.to_string()))?;
-        }
-        let event_id = next_event_id(session);
-        Ok(Some(encode_notification(
-            "session/updated",
-            result_map([
-                ("eventId", json!(event_id)),
-                ("sessionId", json!(session.id)),
-                (
-                    "patch",
-                    json!([{"op": "replace", "path": "/bumpedAt", "value": bumped_at}]),
-                ),
-                ("emittedAt", json!(now_millis())),
-            ]),
-        )))
+        bump_session(&self.server.workspace, session, now).map_err(ProtocolFault::internal)
     }
 
     /// The frames an accepted turn publishes after its answer: the runtime a
@@ -287,7 +262,7 @@ impl ServerConnection {
         };
         let session_id = params.session_id.clone();
         let turn_id = params.expected_turn_id.clone();
-        let content = content_text(&params.input);
+        let content = decoded_prompt(&params.input);
         let inject_invoked_skill = params.inject_invoked_skill;
         let expected_turn_id = params.expected_turn_id.clone();
         let lookup_turn_id = expected_turn_id.clone();
@@ -322,7 +297,7 @@ impl ServerConnection {
         if let Some(batch) = self.attachment_error(request.id.clone(), &params.session_id) {
             return Ok(batch);
         }
-        let content = content_text(&params.input);
+        let content = decoded_prompt(&params.input);
         let mut sessions = self.server.lock_sessions()?;
         let session = sessions
             .get_mut(&params.session_id)
@@ -856,4 +831,40 @@ impl ServerConnection {
             close_after_flush: false,
         })
     }
+}
+
+/// Reference `_persist_accepted_user_activity_metadata`: the session's
+/// `bumped_at` moves forward to `now`, is recorded with the session, and is
+/// published as `session/updated` when the session records itself.
+pub(crate) fn bump_session(
+    workspace: &crate::workspace::WorkspaceService,
+    session: &mut SessionRuntime,
+    now: u64,
+) -> Result<Option<Vec<u8>>, String> {
+    let bumped_at = session.bumped_at.map_or(now, |current| current.max(now));
+    session.bumped_at = Some(bumped_at);
+    if !workspace.persists_runtime_sessions() {
+        return Ok(None);
+    }
+    // The accepted turn is recorded with the session, written or not, so
+    // a listing orders by it after a restart.
+    let store = workspace.session_store();
+    if let Ok(mut hydrated) = store.open(&session.id) {
+        store
+            .persist_bumped_at(&mut hydrated.metadata, bumped_at)
+            .map_err(|error| error.to_string())?;
+    }
+    let event_id = next_event_id(session);
+    Ok(Some(encode_notification(
+        "session/updated",
+        result_map([
+            ("eventId", json!(event_id)),
+            ("sessionId", json!(session.id)),
+            (
+                "patch",
+                json!([{"op": "replace", "path": "/bumpedAt", "value": bumped_at}]),
+            ),
+            ("emittedAt", json!(now_millis())),
+        ]),
+    )))
 }

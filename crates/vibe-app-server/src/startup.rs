@@ -500,6 +500,7 @@ mod tests {
                     reasoning: None,
                     reasoning_payloads: Vec::new(),
                     tool_calls: Vec::new(),
+                    keeps_empty_content: false,
                 },
                 2,
             )

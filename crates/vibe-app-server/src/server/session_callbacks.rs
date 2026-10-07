@@ -142,10 +142,10 @@ impl AppServer {
                     created_at: timestamp,
                     updated_at: timestamp,
                     generation_status: PublicEntryGenerationStatus::Completed,
-                    related_entry_id: Some(format!("callback:{callback_id}")),
+                    related_entry_id: None,
                 },
                 level: vibe_core::events::PublicNoticeLevel::Info,
-                message: "The plan awaits review".to_owned(),
+                message: "Plan ready for review".to_owned(),
                 detail: NoticeDetail::PlanReviewStarted { file_path },
             };
             snapshot.history.push(entry.clone());
@@ -386,11 +386,7 @@ pub(super) fn finalize_turn_entries(
     turn_id: &str,
     cancelled: bool,
 ) -> Vec<Vec<u8>> {
-    let reason = if cancelled {
-        "The turn was stopped before this call finished"
-    } else {
-        "The turn closed before this call finished"
-    };
+    let reason = vibe_core::events::unfinished_effect_reason(cancelled);
     let timestamp = now_millis();
     let mut closed = Vec::new();
     if let Some(snapshot) = session.snapshot.as_mut() {

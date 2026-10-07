@@ -54,9 +54,17 @@ pub enum EngineEvent {
         /// shows after the text. Reference `project_message_content`.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         attachments: Vec<PublicContentBlock>,
+        /// What the client asked the entry to be shown as. Reference
+        /// `UserMessageEvent.user_display_content`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        user_display_content: Option<Value>,
     },
     UserSteer {
         content: String,
+        /// The identity the steered message is saved under, which its entry
+        /// takes as well.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        message_id: Option<String>,
     },
     ContextInjected {
         content: String,
@@ -105,6 +113,25 @@ pub enum EngineEvent {
         call_id: String,
         chunk: String,
     },
+    /// A steer the turn took has joined the transcript, the skill and files
+    /// it named injected behind it. Reference `turn/steer` answers here and
+    /// then bumps the session, as for any accepted user activity.
+    SteerApplied,
+    /// A model step ran to completion, its calls answered and the transcript
+    /// saved. Reference `_conversation_loop` schedules the background title
+    /// here; `turn_completing` is whether the step ended on the model's
+    /// answer rather than on a tool result.
+    StepCompleted {
+        turn_completing: bool,
+    },
+    /// A call still waiting on its permission gate when its turn ended. The
+    /// reference rejects the pending request once the turn's closing
+    /// accounting is published (`_finalize_turn` in
+    /// `vibe/app_server/_turns.py`), so the call fails after it and no client
+    /// reads its result: the turn's finalization closes the effect.
+    ToolCallAbandoned {
+        call_id: String,
+    },
     /// The session a running delegation opened, named on its call's effect.
     ToolChildSession {
         call_id: String,
@@ -131,9 +158,10 @@ pub enum EngineEvent {
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         skipped: bool,
         /// How the permission gate settled the call. Reference
-        /// `ToolResultEvent.decision`, `approval_type` and `approval_source`.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        approval: Option<crate::tools::ToolApproval>,
+        /// `ToolResultEvent.decision`, `approval_type` and `approval_source`,
+        /// each absent when the gate did not reach it.
+        #[serde(default, skip_serializing_if = "EffectApproval::is_unset")]
+        approval: EffectApproval,
     },
     CallbackRequested {
         callback_id: String,
@@ -225,6 +253,9 @@ pub enum EngineEvent {
         context_tokens: u64,
         input_tokens: u64,
         output_tokens: u64,
+        /// The part of `input_tokens` served from the provider's cache.
+        #[serde(default)]
+        cached_tokens: u64,
     },
     /// A provider request the backend is retrying. Like [`EngineEvent::Stats`]
     /// it carries no history: a client renders it as a transient state, not as
@@ -376,6 +407,84 @@ pub enum PublicContentBlock {
     Resource { resource: Value },
 }
 
+/// Reference `UserResource` as pydantic dumps it back: every field its kind
+/// declares, in declaration order, an absent one as `null`. A value naming no
+/// kind the reference reads is kept as sent.
+#[must_use]
+pub fn canonical_user_resource(resource: &Value) -> Value {
+    let Some(object) = resource.as_object() else {
+        return resource.clone();
+    };
+    let declared: &[&str] = match object.get("kind").and_then(Value::as_str) {
+        Some("text") => &["text"],
+        Some("blob") => &["blob"],
+        Some("link") => &["name", "title", "description", "size"],
+        _ => return resource.clone(),
+    };
+    let mut canonical = serde_json::Map::new();
+    for key in ["uri", "mediaType", "kind"].iter().chain(declared) {
+        let value = object
+            .get(*key)
+            .or_else(|| {
+                (*key == "mediaType")
+                    .then(|| object.get("media_type"))
+                    .flatten()
+            })
+            .cloned()
+            .unwrap_or(Value::Null);
+        canonical.insert((*key).to_owned(), value);
+    }
+    Value::Object(canonical)
+}
+
+/// The text a message carrying `resources` sends the model: what the operator
+/// typed, then each resource. Reference `decode_content_blocks` and
+/// `render_user_resources` (`vibe/app_server/_utils.py`, `vibe/user_content.py`).
+#[must_use]
+pub fn prompt_with_resources(input_text: &str, resources: &[&Value]) -> String {
+    let rendered = resources
+        .iter()
+        .map(|resource| render_user_resource(resource))
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    [input_text, rendered.as_str()]
+        .into_iter()
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+fn render_user_resource(resource: &Value) -> String {
+    let field = |key: &str| resource.get(key).filter(|value| !value.is_null());
+    let text = |value: &Value| match value {
+        Value::String(text) => text.clone(),
+        other => other.to_string(),
+    };
+    let uri = field("uri").map(text).unwrap_or_default();
+    match resource.get("kind").and_then(Value::as_str) {
+        Some("text") => format!(
+            "path: {uri}\ncontent: {}",
+            field("text").map(text).unwrap_or_default()
+        ),
+        Some("blob") => format!(
+            "path: {uri}\ncontent (base64): {}",
+            field("blob").map(text).unwrap_or_default()
+        ),
+        _ => [
+            ("uri", "uri"),
+            ("name", "name"),
+            ("title", "title"),
+            ("description", "description"),
+            ("mime_type", "mediaType"),
+            ("size", "size"),
+        ]
+        .into_iter()
+        .filter_map(|(label, key)| field(key).map(|value| format!("{label}: {}", text(value))))
+        .collect::<Vec<_>>()
+        .join("\n"),
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(
     tag = "status",
@@ -451,6 +560,24 @@ pub struct EffectApproval {
     pub approval_type: Option<crate::tools::ToolApprovalType>,
     #[serde(default)]
     pub approval_source: Option<crate::tools::ToolApprovalSource>,
+}
+
+impl EffectApproval {
+    /// Whether no gate answered the call.
+    #[must_use]
+    pub fn is_unset(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// The gate's whole answer, when it reached one.
+    #[must_use]
+    pub fn complete(&self) -> Option<crate::tools::ToolApproval> {
+        Some(crate::tools::ToolApproval {
+            decision: self.decision?,
+            approval_type: self.approval_type?,
+            approval_source: self.approval_source?,
+        })
+    }
 }
 
 impl From<Option<crate::tools::ToolApproval>> for EffectApproval {
@@ -703,11 +830,24 @@ pub enum ModelMessage {
         /// shows them. Reference `LLMMessage.images` and `resources`.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         attachments: Vec<PublicContentBlock>,
+        /// What the client asked the message to be shown as. Reference
+        /// `LLMMessage.user_display_content`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        user_display_content: Option<Value>,
+        /// The words the operator typed, when attached resources were folded
+        /// into `content`; a reload shows these instead. Reference
+        /// `LLMMessage.input_text`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        input_text: Option<String>,
         /// The command an injected turn reports, when the user ran one with
         /// `!`: what a reload rebuilds its shell effect from. Reference
         /// `LLMMessage.manual_shell`.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         manual_shell: Option<Box<ManualShellRecord>>,
+        /// Whether this is the envelope a compaction appended. Reference
+        /// `LLMMessage.context_boundary == "compaction"`.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        compaction_boundary: bool,
     },
     Assistant {
         /// Reference `LLMMessage.message_id`.
@@ -728,12 +868,52 @@ pub enum ModelMessage {
         reasoning_payloads: Vec<serde_json::Map<String, Value>>,
         #[serde(default)]
         tool_calls: Vec<ModelToolCall>,
+        /// Whether an empty `content` is still written, as the reference
+        /// writes it for the call pairs it injects itself (a skill load, a
+        /// mentioned file) while a model reply without text writes none.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        keeps_empty_content: bool,
     },
     Tool {
         call_id: String,
         content: String,
         is_error: bool,
+        /// The tool the call named. Reference `LLMMessage.name`.
+        #[serde(default)]
+        name: String,
+        /// What a call that ran to an answer returned. Reference
+        /// `LLMMessage.tool_result`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        result: Option<Box<PersistedToolResult>>,
     },
+}
+
+/// The status label reference `EventProjector.finalize` closes an effect
+/// with when its turn ends before the call answers: `Turn interrupted` when
+/// the operator stopped the turn, `Turn ended` otherwise.
+#[must_use]
+pub const fn unfinished_effect_reason(cancelled: bool) -> &'static str {
+    if cancelled {
+        "Turn interrupted"
+    } else {
+        "Turn ended"
+    }
+}
+
+/// Reference `PersistedToolResult`: what a call that ran answered, kept so a
+/// reload settles its effect as it settled live.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PersistedToolResult {
+    /// The tool's typed result.
+    pub output: Value,
+    /// Seconds the call ran.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration: Option<serde_json::Number>,
+    #[serde(default)]
+    pub cancelled: bool,
+    /// Reference `ToolResultPresentation`, camelCase.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub presentation: Option<Value>,
 }
 
 impl ModelMessage {
@@ -746,6 +926,9 @@ impl ModelMessage {
             message_id: None,
             attachments: Vec::new(),
             manual_shell: None,
+            compaction_boundary: false,
+            input_text: None,
+            user_display_content: None,
         }
     }
 
@@ -759,6 +942,54 @@ impl ModelMessage {
             message_id: None,
             attachments: Vec::new(),
             manual_shell: None,
+            compaction_boundary: false,
+            input_text: None,
+            user_display_content: None,
+        }
+    }
+
+    /// The envelope a compaction appends. Reference `CompactionManager.compact`.
+    #[must_use]
+    pub fn compaction_envelope(content: impl Into<String>) -> Self {
+        Self::User {
+            content: content.into(),
+            injected: true,
+            message_id: None,
+            attachments: Vec::new(),
+            manual_shell: None,
+            compaction_boundary: true,
+            input_text: None,
+            user_display_content: None,
+        }
+    }
+
+    /// A call's answer. Reference `create_tool_response_message`.
+    #[must_use]
+    pub fn tool(
+        call_id: impl Into<String>,
+        name: impl Into<String>,
+        content: impl Into<String>,
+        is_error: bool,
+    ) -> Self {
+        Self::Tool {
+            call_id: call_id.into(),
+            content: content.into(),
+            is_error,
+            name: name.into(),
+            result: None,
+        }
+    }
+
+    /// Gives every user and assistant message an identity, as reference
+    /// `LLMMessage` mints one for each message that is not a tool answer.
+    pub fn ensure_identity(&mut self) {
+        match self {
+            Self::User { message_id, .. } | Self::Assistant { message_id, .. }
+                if message_id.is_none() =>
+            {
+                *message_id = Some(crate::session_id::uuid_v4());
+            }
+            _ => {}
         }
     }
 
@@ -788,12 +1019,75 @@ impl ModelMessage {
     }
 }
 
+/// What a call left without an answer reads once the next turn fills it in.
+/// Reference `get_user_cancellation_message(TOOL_NO_RESPONSE)`: the
+/// cancellation tag is reproduced, the sentence inside it is this port's own.
+pub const NO_RESPONSE_TOOL_RESULT: &str =
+    "<user_cancellation>The tool call was interrupted before it answered</user_cancellation>";
+
+/// Reference `AgentLoop._fill_missing_tool_responses`: every call an assistant
+/// message asked for and no tool message answered gets an answer saying so,
+/// after the answers it has, so the next request is well formed.
+pub fn fill_missing_tool_responses(messages: &mut Vec<ModelMessage>) {
+    if messages.len() < 2 {
+        return;
+    }
+    let mut index = 0;
+    while index < messages.len() {
+        let calls = match &messages[index] {
+            ModelMessage::Assistant { tool_calls, .. } if !tool_calls.is_empty() => {
+                tool_calls.clone()
+            }
+            _ => {
+                index += 1;
+                continue;
+            }
+        };
+        let mut answered = std::collections::BTreeSet::new();
+        let mut next = index + 1;
+        while let Some(ModelMessage::Tool { call_id, .. }) = messages.get(next) {
+            answered.insert(call_id.clone());
+            next += 1;
+        }
+        if answered.len() < calls.len() {
+            let missing = calls.iter().filter(|call| !answered.contains(&call.id));
+            for (insertion, call) in (next..).zip(missing) {
+                messages.insert(
+                    insertion,
+                    ModelMessage::tool(&call.id, &call.name, NO_RESPONSE_TOOL_RESULT, true),
+                );
+            }
+        }
+        index += 1 + calls.len();
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelToolCall {
     pub id: String,
     pub name: String,
     pub arguments: String,
+    /// How the call was presented when it ran. Reference
+    /// `ToolCall.presentation`, a `ToolCallPresentation` in camelCase.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub presentation: Option<Value>,
+}
+
+impl ModelToolCall {
+    #[must_use]
+    pub fn new(
+        id: impl Into<String>,
+        name: impl Into<String>,
+        arguments: impl Into<String>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            name: name.into(),
+            arguments: arguments.into(),
+            presentation: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -984,6 +1278,7 @@ mod tests {
         for refused in [
             EngineEvent::UserSteer {
                 content: "steering a turn that never started".to_owned(),
+                message_id: None,
             },
             EngineEvent::ModelText {
                 message_id: None,
@@ -1007,6 +1302,7 @@ mod tests {
                 attachments: Vec::new(),
                 message_id: None,
                 content: "start".to_owned(),
+                user_display_content: None,
             },
         )
         .expect("the turn starts");
@@ -1050,7 +1346,7 @@ mod tests {
                 is_error: false,
                 cancelled: false,
                 skipped: false,
-                approval: None,
+                approval: crate::events::EffectApproval::default(),
             },
         )
         .expect_err("a result without its call is refused");
@@ -1138,6 +1434,7 @@ mod tests {
                         attachments: Vec::new(),
                         message_id: None,
                         content: "hello".to_owned(),
+                        user_display_content: None,
                     },
                 ))
                 .expect("first event applies"),
@@ -1235,6 +1532,7 @@ mod tests {
                     attachments: Vec::new(),
                     message_id: None,
                     content: "ship it".to_owned(),
+                    user_display_content: None,
                 },
             ),
             event(
@@ -1296,6 +1594,7 @@ mod tests {
                     attachments: Vec::new(),
                     message_id: None,
                     content: "compact".to_owned(),
+                    user_display_content: None,
                 },
             ),
             event(
@@ -1369,6 +1668,7 @@ mod tests {
                     attachments: Vec::new(),
                     message_id: None,
                     content: "compact".to_owned(),
+                    user_display_content: None,
                 },
             ),
             event(
@@ -1408,6 +1708,7 @@ mod tests {
                     attachments: Vec::new(),
                     message_id: None,
                     content: "compact".to_owned(),
+                    user_display_content: None,
                 },
             ))
             .expect("the prompt applies");
@@ -1446,6 +1747,7 @@ mod tests {
                     attachments: Vec::new(),
                     message_id: None,
                     content: "clear it".to_owned(),
+                    user_display_content: None,
                 },
             ),
             handoff(2, "session-1", "session-2", SessionHandoffCause::Compaction),
@@ -1495,6 +1797,7 @@ mod tests {
                     attachments: Vec::new(),
                     message_id: None,
                     content: "delegate".to_owned(),
+                    user_display_content: None,
                 },
             ),
             event(
@@ -1533,7 +1836,7 @@ mod tests {
                     is_error: false,
                     cancelled: false,
                     skipped: false,
-                    approval: None,
+                    approval: crate::events::EffectApproval::default(),
                 },
             ),
         ] {
@@ -1561,6 +1864,7 @@ mod tests {
                     attachments: Vec::new(),
                     message_id: None,
                     content: "go".to_owned(),
+                    user_display_content: None,
                 },
             ),
             (
@@ -1592,15 +1896,16 @@ mod tests {
             reducer.apply(&event(id, emitted)).expect("valid event");
         }
 
-        // Only the newest entry may still be generating: sealing walks back from
-        // the tail and must not leave an earlier entry in progress.
+        // Sealing walks back from the tail and seals the streamed text, but a
+        // call still running stays open until its own result settles it
+        // (reference `_complete_streamed_text`).
         let statuses = reducer
             .state()
             .history
             .iter()
             .map(PublicHistoryEntry::is_completed)
             .collect::<Vec<_>>();
-        assert_eq!(statuses, vec![true, true, true, false]);
+        assert_eq!(statuses, vec![true, true, false, false]);
     }
 
     #[test]
@@ -1617,6 +1922,7 @@ mod tests {
                     .unwrap_or_default(),
             ],
             tool_calls: Vec::new(),
+            keeps_empty_content: false,
         };
         let encoded_private = serde_json::to_string(&private).expect("private message serializes");
         assert!(encoded_private.contains("provider-signature"));
@@ -1629,6 +1935,7 @@ mod tests {
                     attachments: Vec::new(),
                     message_id: None,
                     content: "question".to_owned(),
+                    user_display_content: None,
                 },
             ))
             .expect("turn starts");
@@ -1664,6 +1971,7 @@ mod tests {
                     attachments: Vec::new(),
                     message_id: None,
                     content: "go".to_owned(),
+                    user_display_content: None,
                 },
             ))
             .expect("the turn starts");
@@ -1704,7 +2012,7 @@ mod tests {
             is_error,
             cancelled: false,
             skipped: false,
-            approval: None,
+            approval: crate::events::EffectApproval::default(),
         }
     }
 
@@ -1755,6 +2063,7 @@ mod tests {
                     attachments: Vec::new(),
                     message_id: None,
                     content: "go".to_owned(),
+                    user_display_content: None,
                 },
             ))
             .expect("the turn starts");

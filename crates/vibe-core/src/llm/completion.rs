@@ -327,6 +327,7 @@ fn model_tool_calls(message: &Message) -> Vec<ModelToolCall> {
             id: call.id.clone().unwrap_or_default(),
             name: call.name.clone().unwrap_or_default(),
             arguments: call.arguments.clone().unwrap_or_default(),
+            presentation: None,
         })
         .collect()
 }
@@ -335,6 +336,7 @@ const fn engine_usage(usage: super::types::Usage) -> Usage {
     Usage {
         input_tokens: usage.prompt_tokens,
         output_tokens: usage.completion_tokens,
+        cached_tokens: usage.cached_tokens,
     }
 }
 
@@ -390,6 +392,7 @@ fn closing(answered: &Answered) -> Vec<ProviderChunk> {
     chunks.push(ProviderChunk::Usage {
         input_tokens: answered.usage.prompt_tokens,
         output_tokens: answered.usage.completion_tokens,
+        cached_tokens: answered.usage.cached_tokens,
     });
     chunks.push(ProviderChunk::Stop {
         reason: answered

@@ -96,6 +96,7 @@ fn a_cleared_context_publishes_session_context_cleared() {
                 attachments: Vec::new(),
                 message_id: None,
                 content: "plan".to_owned(),
+                user_display_content: None,
             },
         },
         EventEnvelope {
@@ -225,6 +226,7 @@ fn compaction_rebinds_history_and_resets_the_new_session_watermark() {
                 attachments: Vec::new(),
                 message_id: None,
                 content: "compact".to_owned(),
+                user_display_content: None,
             },
         },
         EventEnvelope {

@@ -752,6 +752,9 @@ impl AppServer {
                     message_id: message_id.map(ToOwned::to_owned),
                     attachments: Vec::new(),
                     manual_shell: manual_shell.map(Box::new),
+                    compaction_boundary: false,
+                    input_text: None,
+                    user_display_content: None,
                 },
                 now,
             )

@@ -96,6 +96,13 @@ pub struct SessionIntent {
     pub requested_enabled_tools: Vec<String>,
     #[serde(skip)]
     pub requested_disabled_tools: Vec<String>,
+    /// The allowlist the client sent, which replaces the configured one, and
+    /// the names it disabled, which add to the configured ones. Kept apart so
+    /// a relocation recomposes them against the destination's configuration.
+    #[serde(skip)]
+    pub client_enabled_tools: Option<Vec<String>>,
+    #[serde(skip)]
+    pub client_disabled_tools: Vec<String>,
     #[serde(skip)]
     pub agent_permission_rules: Vec<PermissionRule>,
     pub mcp_servers: Vec<Value>,
@@ -419,6 +426,8 @@ pub(crate) struct CallbackResponseParams {
     pub(crate) output: Value,
 }
 
+/// What the operator typed: the text blocks joined by newlines. Reference
+/// `decode_content_blocks`'s `input_text` (`vibe/app_server/_utils.py`).
 pub(crate) fn content_text(input: &[PublicContentBlock]) -> String {
     input
         .iter()
@@ -427,7 +436,20 @@ pub(crate) fn content_text(input: &[PublicContentBlock]) -> String {
             PublicContentBlock::Image { .. } | PublicContentBlock::Resource { .. } => None,
         })
         .collect::<Vec<_>>()
-        .join("\n\n")
+        .join("\n")
+}
+
+/// What the model reads for `input`: the typed text, then each attached
+/// resource. Reference `decode_content_blocks`'s `prompt`.
+pub(crate) fn decoded_prompt(input: &[PublicContentBlock]) -> String {
+    let resources = input
+        .iter()
+        .filter_map(|block| match block {
+            PublicContentBlock::Resource { resource } => Some(resource),
+            PublicContentBlock::Text { .. } | PublicContentBlock::Image { .. } => None,
+        })
+        .collect::<Vec<_>>();
+    vibe_core::events::prompt_with_resources(&content_text(input), &resources)
 }
 
 pub(crate) const fn default_true() -> bool {

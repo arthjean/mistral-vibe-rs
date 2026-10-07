@@ -57,7 +57,10 @@ pub(super) fn web_search_handler(
 ) -> Arc<dyn ToolHandler> {
     Arc::new(
         move |invocation: &ToolInvocation, _output: ToolOutputSink| -> OwnedToolHandlerFuture {
-            let access = access.clone();
+            let mut access = access.clone();
+            if let Some(server_url) = config.mistral_server_url() {
+                access.endpoint = server_url;
+            }
             let settings: WebSearchConfig = config.view("web_search");
             let query = invocation.arguments["query"]
                 .as_str()

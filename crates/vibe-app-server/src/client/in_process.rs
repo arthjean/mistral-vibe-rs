@@ -70,6 +70,7 @@ pub(super) fn forward_stats(
         context_tokens,
         input_tokens,
         output_tokens,
+        ..
     } = event.event
     else {
         return Ok(());
@@ -131,10 +132,22 @@ impl EventObserver for ServerProjectionObserver {
         };
         // The session's accounting is kept by the server, as the transport's
         // live projection keeps it, before the observer hears of the usage.
+        if matches!(
+            event.event,
+            vibe_core::events::EngineEvent::ToolResult { .. }
+                | vibe_core::events::EngineEvent::ToolCallAbandoned { .. }
+        ) {
+            let mut settled = vibe_core::engine::ToolCallTally::default();
+            settled.observe(&event.event);
+            self.server
+                .record_turn_tool_calls(&self.session_id, &self.turn_id, settled, false)
+                .map_err(|error| error.to_string())?;
+        }
         if let vibe_core::events::EngineEvent::Stats {
             context_tokens,
             input_tokens,
             output_tokens,
+            cached_tokens,
         } = event.event
         {
             self.server
@@ -144,6 +157,7 @@ impl EventObserver for ServerProjectionObserver {
                     context_tokens,
                     input_tokens,
                     output_tokens,
+                    cached_tokens,
                 )
                 .map_err(|error| error.to_string())?;
             let published = self

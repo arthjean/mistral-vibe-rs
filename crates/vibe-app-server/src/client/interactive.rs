@@ -656,6 +656,7 @@ pub(super) fn question_tool_output(
             display: json!({"kind": "user_question"}),
             projected_result: serde_json::Value::Null,
             chunks: Vec::new(),
+            pending_injection: None,
         });
     }
     if answers.len() != questions.len() {
@@ -705,6 +706,7 @@ pub(super) fn question_tool_output(
         display: json!({"kind": "user_question"}),
         projected_result: serde_json::Value::Null,
         chunks: Vec::new(),
+        pending_injection: None,
     })
 }
 
@@ -798,6 +800,9 @@ pub(super) async fn run_interactive_plan_review(
     plan_path: PathBuf,
 ) -> Result<ToolExecutionOutput, ToolError> {
     const QUESTION: &str = "Plan is complete. Switch to code mode and start implementing?";
+    // Reference `PlanSession.snapshot_content_hash`, taken when the call
+    // starts: what the plan read before the user was asked about it.
+    let reviewed = read_plan(&plan_path).await;
     // Reference `ExitPlanMode.run` refuses outside the plan profile before it
     // asks anything, so a profile that enables the tool cannot leave a mode it
     // is not in.
@@ -908,6 +913,17 @@ pub(super) async fn run_interactive_plan_review(
         request_context_clearing(sender, session_id, continuation, plan_file_path).await?;
     }
     let switched = target.is_some();
+    // Reference `_handle_plan_review_ended`: a plan the user edited while it
+    // was under review reaches the model, as the version to implement, once
+    // the step settles.
+    let pending_injection = match read_plan(&plan_path).await {
+        Some(plan) if Some(&plan) != reviewed.as_ref() => Some(format!(
+            "<{tag}>The plan file was edited by hand while it was under review. \
+             Implement the edited version below; it supersedes the one you wrote.\n\n{plan}</{tag}>",
+            tag = vibe_core::workspace::WARNING_TAG
+        )),
+        _ => None,
+    };
     // Reference `ExitPlanModeResult`
     // (`vibe/core/tools/builtins/exit_plan_mode.py:34`) declares `switched` then
     // `message`, and the agent loop renders one field per line, so the decision
@@ -941,7 +957,17 @@ pub(super) async fn run_interactive_plan_review(
         }),
         projected_result: serde_json::Value::Null,
         chunks: Vec::new(),
+        pending_injection,
     })
+}
+
+/// Reference `PlanSession.read`: the plan's text, or nothing when the file
+/// is absent.
+async fn read_plan(plan_path: &Path) -> Option<String> {
+    tokio::fs::read(plan_path)
+        .await
+        .ok()
+        .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
 }
 
 /// Where a session's plan lives: reference `PlanSession.plan_file_path`, a

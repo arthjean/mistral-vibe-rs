@@ -104,6 +104,7 @@ pub fn chunks_of(message: AssistantMessage) -> ProviderStream<'static> {
     chunks.push(ProviderChunk::Usage {
         input_tokens: message.usage.input_tokens,
         output_tokens: message.usage.output_tokens,
+        cached_tokens: message.usage.cached_tokens,
     });
     if let Some(message) = message.refusal {
         chunks.push(ProviderChunk::Refusal { message });
@@ -365,6 +366,8 @@ impl<S: TranscriptSink> TranscriptSink for Option<S> {
 pub struct SessionTranscriptSink {
     store: SessionStore,
     metadata: Mutex<SessionMetadata>,
+    /// Input, output and cached-input prices per million tokens.
+    pricing: (f64, f64, Option<f64>),
 }
 
 impl SessionTranscriptSink {
@@ -373,8 +376,71 @@ impl SessionTranscriptSink {
         Self {
             store,
             metadata: Mutex::new(metadata),
+            pricing: (0.0, 0.0, None),
         }
     }
+
+    /// The prices the saved accounting records, and costs the session at.
+    #[must_use]
+    pub const fn with_pricing(mut self, pricing: (f64, f64, Option<f64>)) -> Self {
+        self.pricing = pricing;
+        self
+    }
+}
+
+/// Reference `AgentStats.model_dump()`: every counter, the prices, and the
+/// three computed totals, as `meta.json` saves them.
+#[allow(clippy::cast_precision_loss)]
+fn stats_record(
+    stats: &SessionStats,
+    (input_price, output_price, cached_price): (f64, f64, Option<f64>),
+) -> Vec<(&'static str, serde_json::Value)> {
+    use serde_json::json;
+    let call = stats.last_call.clone().unwrap_or_default();
+    let seconds = call.duration_ms as f64 / 1_000.0;
+    let tokens_per_second = if seconds > 0.0 && call.completion_tokens > 0 {
+        call.completion_tokens as f64 / seconds
+    } else {
+        0.0
+    };
+    let usage = &stats.usage;
+    // Reference `session_token_cost`: cached tokens are billed at the cached
+    // rate when the model names one, and never beyond the prompt.
+    let cached = usage.cached_tokens.min(usage.input_tokens);
+    let cost = ((usage.input_tokens - cached) as f64 * input_price
+        + cached as f64 * cached_price.unwrap_or(input_price)
+        + usage.output_tokens as f64 * output_price)
+        / 1_000_000.0;
+    let tools = stats.tool_calls;
+    vec![
+        ("steps", json!(stats.steps)),
+        ("session_prompt_tokens", json!(usage.input_tokens)),
+        ("session_completion_tokens", json!(usage.output_tokens)),
+        ("session_cached_tokens", json!(usage.cached_tokens)),
+        ("tool_calls_agreed", json!(tools.agreed)),
+        ("tool_calls_rejected", json!(tools.rejected)),
+        ("tool_calls_hook_denied", json!(tools.hook_denied)),
+        ("tool_calls_failed", json!(tools.failed)),
+        ("tool_calls_succeeded", json!(tools.succeeded)),
+        ("context_tokens", json!(stats.context_tokens)),
+        ("last_turn_prompt_tokens", json!(call.prompt_tokens)),
+        ("last_turn_completion_tokens", json!(call.completion_tokens)),
+        ("last_turn_cached_tokens", json!(call.cached_tokens)),
+        ("last_turn_duration", json!(seconds)),
+        ("tokens_per_second", json!(tokens_per_second)),
+        ("input_price_per_million", json!(input_price)),
+        ("output_price_per_million", json!(output_price)),
+        ("cached_input_price_per_million", json!(cached_price)),
+        (
+            "session_total_llm_tokens",
+            json!(usage.input_tokens.saturating_add(usage.output_tokens)),
+        ),
+        (
+            "last_turn_total_tokens",
+            json!(call.prompt_tokens.saturating_add(call.completion_tokens)),
+        ),
+        ("session_cost", json!(cost)),
+    ]
 }
 
 impl TranscriptSink for SessionTranscriptSink {
@@ -453,43 +519,8 @@ impl TranscriptSink for SessionTranscriptSink {
                 .metadata
                 .lock()
                 .map_err(|_| "session metadata lock poisoned".to_owned())?;
-            metadata.statistics.insert(
-                "session_prompt_tokens".to_owned(),
-                serde_json::Value::from(stats.usage.input_tokens),
-            );
-            metadata.statistics.insert(
-                "session_completion_tokens".to_owned(),
-                serde_json::Value::from(stats.usage.output_tokens),
-            );
-            metadata.statistics.insert(
-                "context_tokens".to_owned(),
-                serde_json::Value::from(stats.context_tokens),
-            );
-            metadata
-                .statistics
-                .insert("steps".to_owned(), serde_json::Value::from(stats.steps));
-            // Reference `AgentStats.last_turn_*` and `tokens_per_second`: the
-            // last model call, which a reopened session reports until its
-            // next call replaces it.
-            if let Some(call) = &stats.last_call {
-                #[allow(clippy::cast_precision_loss)]
-                let seconds = call.duration_ms as f64 / 1_000.0;
-                #[allow(clippy::cast_precision_loss)]
-                let tokens_per_second = call.completion_tokens as f64 / seconds;
-                for (key, value) in [
-                    (
-                        "last_turn_prompt_tokens",
-                        serde_json::json!(call.prompt_tokens),
-                    ),
-                    (
-                        "last_turn_completion_tokens",
-                        serde_json::json!(call.completion_tokens),
-                    ),
-                    ("last_turn_duration", serde_json::json!(seconds)),
-                    ("tokens_per_second", serde_json::json!(tokens_per_second)),
-                ] {
-                    metadata.statistics.insert(key.to_owned(), value);
-                }
+            for (key, value) in stats_record(stats, self.pricing) {
+                metadata.statistics.insert(key.to_owned(), value);
             }
             self.store
                 .update_metadata(&metadata)

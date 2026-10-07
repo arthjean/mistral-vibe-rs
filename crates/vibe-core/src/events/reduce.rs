@@ -80,6 +80,7 @@ pub(super) fn reduce_event(
             content,
             message_id,
             attachments,
+            user_display_content,
         } => {
             require_lifecycle(
                 state,
@@ -95,21 +96,33 @@ pub(super) fn reduce_event(
                 PublicMessageSource::TurnStart,
             );
             claim_identity(state, &mut entry, message_id.as_deref());
-            if let PublicHistoryEntry::Message { content, .. } = &mut entry {
+            if let PublicHistoryEntry::Message {
+                content,
+                user_display_content: shown,
+                ..
+            } = &mut entry
+            {
                 content.extend(attachments.iter().cloned());
+                shown.clone_from(user_display_content);
             }
             state.history.push(entry);
         }
-        EngineEvent::UserSteer { content } => {
+        EngineEvent::UserSteer {
+            content,
+            message_id,
+        } => {
             require_lifecycle(state, &[LifecycleState::Running], "user_steer")?;
-            complete_streaming_entries(state, emitted_at);
-            state.history.push(user_message(
+            // Reference `_project_user_message` leaves a reply still streaming
+            // open: its text keeps landing on its own entry.
+            let mut entry = user_message(
                 state,
                 event_id,
                 emitted_at,
                 content,
                 PublicMessageSource::TurnSteer,
-            ));
+            );
+            claim_identity(state, &mut entry, message_id.as_deref());
+            state.history.push(entry);
         }
         EngineEvent::ContextInjected {
             content,
@@ -142,7 +155,17 @@ pub(super) fn reduce_event(
         }
         EngineEvent::ModelText { text, message_id } => {
             require_active(state, "model_text")?;
-            let appended = match state.history.last_mut() {
+            // Reference `_project_assistant` keys the reply on its identity, so
+            // a steer published while it streams does not split it.
+            let streaming = match message_id {
+                Some(id) => state.history.iter_mut().rev().find(|entry| {
+                    let metadata = entry.metadata();
+                    &metadata.id == id
+                        && metadata.generation_status == PublicEntryGenerationStatus::InProgress
+                }),
+                None => state.history.last_mut(),
+            };
+            let appended = match streaming {
                 Some(PublicHistoryEntry::Message {
                     metadata,
                     role: PublicMessageRole::Assistant,
@@ -176,7 +199,15 @@ pub(super) fn reduce_event(
         }
         EngineEvent::ModelReasoning { text, message_id } => {
             require_active(state, "model_reasoning")?;
-            let appended = match state.history.last_mut() {
+            let streaming = match message_id {
+                Some(id) => state.history.iter_mut().rev().find(|entry| {
+                    let metadata = entry.metadata();
+                    &metadata.id == id
+                        && metadata.generation_status == PublicEntryGenerationStatus::InProgress
+                }),
+                None => state.history.last_mut(),
+            };
+            let appended = match streaming {
                 Some(PublicHistoryEntry::Reasoning {
                     metadata,
                     text: current,
@@ -305,7 +336,14 @@ pub(super) fn reduce_event(
             approval,
         } => {
             require_active(state, "tool_result")?;
-            let approval = EffectApproval::from(*approval);
+            // Reference `_execute_tool_call` yields an interrupted call's
+            // result from a generator its consumer has already left, so no
+            // client reads it: the effect stays open until the turn's
+            // finalization closes it. The transcript still records the answer.
+            if *cancelled && *is_error && !*skipped {
+                return Ok(());
+            }
+            let approval = *approval;
             let entry = effect_entry(state, call_id, "tool_result_without_call")?;
             if let PublicHistoryEntry::Effect {
                 metadata,
@@ -445,7 +483,7 @@ pub(super) fn reduce_event(
                             PublicEntryGenerationStatus::Completed,
                         ),
                         level: PublicNoticeLevel::Info,
-                        message: "Plan review closed".to_owned(),
+                        message: "Plan review ended".to_owned(),
                         detail: NoticeDetail::PlanReviewEnded,
                     });
                 }
@@ -461,7 +499,7 @@ pub(super) fn reduce_event(
                     PublicEntryGenerationStatus::Completed,
                 ),
                 level: PublicNoticeLevel::Info,
-                message: format!("Now running the {agent_name} agent"),
+                message: format!("Agent changed to {agent_name}"),
                 detail: NoticeDetail::AgentChanged {
                     agent_name: agent_name.clone(),
                 },
@@ -687,7 +725,7 @@ pub(super) fn reduce_event(
                         PublicEntryGenerationStatus::Completed,
                     ),
                     level: PublicNoticeLevel::Info,
-                    message: "Session context cleared".to_owned(),
+                    message: "Context cleared".to_owned(),
                     detail: NoticeDetail::ContextCleared {
                         plan_file_path: plan_file_path.clone(),
                     },
@@ -695,6 +733,9 @@ pub(super) fn reduce_event(
             }
         }
         EngineEvent::Stats { .. }
+        | EngineEvent::ToolCallAbandoned { .. }
+        | EngineEvent::SteerApplied
+        | EngineEvent::StepCompleted { .. }
         | EngineEvent::Retrying { .. }
         | EngineEvent::RequestSent { .. }
         | EngineEvent::TurnOpened { .. }
@@ -764,13 +805,9 @@ fn failure_display(error: &str) -> EffectResultDisplay {
 }
 
 /// Reference `EventProjector.finalize`: an effect the turn ended under fails,
-/// or is cancelled when the turn was, each with a reason of this port's own.
+/// or is cancelled when the turn was, with the reference's status label.
 fn settle_unfinished_effects(state: &mut ProjectionSnapshot, cancelled: bool, emitted_at: u64) {
-    let reason = if cancelled {
-        "The turn was stopped before this call finished"
-    } else {
-        "The turn closed before this call finished"
-    };
+    let reason = super::unfinished_effect_reason(cancelled);
     for entry in &mut state.history {
         let PublicHistoryEntry::Effect {
             metadata,
@@ -1070,9 +1107,14 @@ fn effect_metadata(
 /// Seals every entry still streaming.
 ///
 /// Entries complete in order, so the scan stops at the first completed entry
-/// walking backward instead of sweeping the whole history each time.
+/// walking backward instead of sweeping the whole history each time. A call
+/// still running is not streamed text: reference `_complete_streamed_text`
+/// leaves it open until its own result settles it, so the scan steps over it.
 fn complete_streaming_entries(state: &mut ProjectionSnapshot, emitted_at: u64) {
     for entry in state.history.iter_mut().rev() {
+        if matches!(entry, PublicHistoryEntry::Effect { .. }) {
+            continue;
+        }
         let metadata = entry.metadata_mut();
         if metadata.generation_status == PublicEntryGenerationStatus::Completed {
             break;

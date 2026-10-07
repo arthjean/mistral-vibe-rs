@@ -28,6 +28,7 @@ fn assistant(content: &str) -> ModelMessage {
         reasoning: None,
         reasoning_payloads: Vec::new(),
         tool_calls: Vec::new(),
+        keeps_empty_content: false,
     }
 }
 
@@ -36,6 +37,8 @@ fn tool(content: &str) -> ModelMessage {
         call_id: "call-1".to_owned(),
         content: content.to_owned(),
         is_error: false,
+        name: String::new(),
+        result: None,
     }
 }
 

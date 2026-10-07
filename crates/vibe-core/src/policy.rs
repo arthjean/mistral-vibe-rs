@@ -30,9 +30,11 @@ pub type ApprovalFuture<'a> =
 /// Where a permanent approval writes the patterns it grants.
 ///
 /// Reference `approve_always(save_permanently=True)` extends
-/// `tools.<name>.allowlist` through the configuration orchestrator. The store
-/// lives one layer below the configuration writer, so the session hands it this
-/// instead of reaching up.
+/// `tools.<name>.allowlist` through the configuration orchestrator, or, for an
+/// approval that carried no pattern, sets `tools.<name>.permission` to
+/// `always`: this hook is called with no pattern then. The store lives one
+/// layer below the configuration writer, so the session hands it this instead
+/// of reaching up.
 pub type AllowlistPersistence = Arc<dyn Fn(&str, &[String]) -> Result<(), String> + Send + Sync>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -545,7 +547,7 @@ impl ToolHandler for PolicyGuardedTool {
             lease
                 .revalidate_locked(&state)
                 .map_err(|error| ToolError::Execution(error.to_string()))?;
-            crate::tools::mark_call_started();
+            crate::tools::mark_call_started(lease.approval);
             match inner.invoke(&invocation, output).await {
                 Ok(mut result) => {
                     result.approval.get_or_insert(lease.approval);
@@ -919,6 +921,7 @@ impl PermissionStore {
                 // operator already granted is not asked again, which is what
                 // reference `_resolve_tool_decision` filters before prompting.
                 let uncovered = resolution.required_permissions;
+                crate::tools::mark_awaiting_approval(true);
                 let decision = approval
                     .request(ApprovalRequest {
                         tool: tool.to_owned(),
@@ -927,7 +930,9 @@ impl PermissionStore {
                         rationale: resolution.rationale,
                         call_id: context.call_id.clone(),
                     })
-                    .await?;
+                    .await;
+                crate::tools::mark_awaiting_approval(false);
+                let decision = decision?;
                 // An agent that approves without asking answers as what it
                 // stands for; one that asked answers as the operator.
                 let answered = ToolApproval {
@@ -962,6 +967,10 @@ impl PermissionStore {
                         // permission for exactly that case.
                         if uncovered.is_empty() {
                             self.set_tool_permission(tool, PermissionMode::Always);
+                            // Reference `set_tool_permission(save_permanently)`.
+                            if permanent {
+                                self.persist_allowlist(tool, &[]);
+                            }
                         } else if permanent {
                             // Reference `approve_always(save_permanently=True)`
                             // extends the tool's configured allowlist, which is

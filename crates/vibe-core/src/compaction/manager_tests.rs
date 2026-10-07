@@ -57,6 +57,7 @@ impl ScriptedAnswer {
         self.usage = Usage {
             input_tokens,
             output_tokens,
+            cached_tokens: 0,
         };
         self
     }
@@ -145,6 +146,7 @@ impl CompletionProvider for ScriptedProvider {
                         id: format!("call-{index}"),
                         name: "read_file".to_owned(),
                         arguments: "{}".to_owned(),
+                        presentation: None,
                     })
                     .collect(),
                 usage: step.usage,
@@ -188,6 +190,7 @@ pub(crate) fn conversation() -> Vec<ModelMessage> {
             reasoning: None,
             reasoning_payloads: Vec::new(),
             tool_calls: Vec::new(),
+            keeps_empty_content: false,
         },
         ModelMessage::user("second"),
         ModelMessage::Assistant {
@@ -197,6 +200,7 @@ pub(crate) fn conversation() -> Vec<ModelMessage> {
             reasoning: None,
             reasoning_payloads: Vec::new(),
             tool_calls: Vec::new(),
+            keeps_empty_content: false,
         },
     ]
 }
@@ -434,6 +438,7 @@ async fn the_overflow_ladder_sheds_the_oldest_round_and_stops_after_three_retrie
             reasoning: None,
             reasoning_payloads: Vec::new(),
             tool_calls: Vec::new(),
+            keeps_empty_content: false,
         });
     }
     let provider = ScriptedProvider::new(std::iter::repeat_n(ScriptedAnswer::overflow(), 5));
@@ -469,6 +474,7 @@ async fn an_overflow_with_nothing_to_drop_propagates_at_once() {
             reasoning: None,
             reasoning_payloads: Vec::new(),
             tool_calls: Vec::new(),
+            keeps_empty_content: false,
         },
     ];
     let provider = ScriptedProvider::new([ScriptedAnswer::overflow()]);
@@ -494,6 +500,7 @@ async fn the_fallback_renders_the_history_the_ladder_ended_on() {
             reasoning: None,
             reasoning_payloads: Vec::new(),
             tool_calls: Vec::new(),
+            keeps_empty_content: false,
         });
     }
     let provider = ScriptedProvider::new([
@@ -542,7 +549,8 @@ async fn every_call_is_accounted_on_both_paths() {
         compacted.usage,
         Usage {
             input_tokens: 140,
-            output_tokens: 15
+            output_tokens: 15,
+            cached_tokens: 0,
         }
     );
 
@@ -558,7 +566,8 @@ async fn every_call_is_accounted_on_both_paths() {
         failure.usage,
         Usage {
             input_tokens: 70,
-            output_tokens: 7
+            output_tokens: 7,
+            cached_tokens: 0,
         },
         "a failed compaction still spent what it spent"
     );
@@ -583,12 +592,16 @@ fn the_rendered_transcript_keeps_actions_and_drops_reasoning() {
                 id: "call-0".to_owned(),
                 name: "read_file".to_owned(),
                 arguments: "{\"path\":\"a.rs\"}".to_owned(),
+                presentation: None,
             }],
+            keeps_empty_content: false,
         },
         ModelMessage::Tool {
             call_id: "call-0".to_owned(),
             content: "contents".to_owned(),
             is_error: false,
+            name: String::new(),
+            result: None,
         },
         ModelMessage::Assistant {
             message_id: None,
@@ -597,6 +610,7 @@ fn the_rendered_transcript_keeps_actions_and_drops_reasoning() {
             reasoning: Some("more thinking".to_owned()),
             reasoning_payloads: Vec::new(),
             tool_calls: Vec::new(),
+            keeps_empty_content: false,
         },
     ];
     assert_eq!(

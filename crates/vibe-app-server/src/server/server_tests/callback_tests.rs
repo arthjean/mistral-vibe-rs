@@ -659,7 +659,7 @@ fn a_plan_review_becomes_a_notice_and_leaves_the_callback_detail_conformant() {
         Err(ServerError::InvalidCallbackDetail(_))
     ));
 
-    let (callback_id, _) = connection
+    let _ = connection
         .request_callback_with_detail(
             "session-1",
             "turn-1",
@@ -692,10 +692,9 @@ fn a_plan_review_becomes_a_notice_and_leaves_the_callback_detail_conformant() {
             file_path: "/workspace/plan.md".to_owned()
         }
     );
-    assert_eq!(
-        notice.0.related_entry_id.as_deref(),
-        Some(format!("callback:{callback_id}").as_str())
-    );
+    // Reference `_project_plan_review_started` relates the notice to nothing,
+    // as the agent loop corpus records.
+    assert_eq!(notice.0.related_entry_id, None);
 
     let detail = history
         .iter()

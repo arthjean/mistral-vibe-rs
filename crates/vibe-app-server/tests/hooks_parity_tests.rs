@@ -170,14 +170,6 @@ const LEDGER: &[Divergence] = &[
         row: "34",
         reason: "the same sentence, as persisted",
     },
-    Divergence {
-        scenario: "cancel/interrupted-hook",
-        pointer: "/steps/1/persisted/0/2",
-        row: "34",
-        reason: "a call interrupted before it ran gets the interruption sentence as its result \
-                 here, where the reference leaves the call unanswered until its next request \
-                 fills it in",
-    },
 ];
 
 fn repository() -> PathBuf {

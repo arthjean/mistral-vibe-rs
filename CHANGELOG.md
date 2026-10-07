@@ -2,6 +2,38 @@
 
 ## Unreleased
 
+- Account for a session as the reference does: steps count the operator's
+  message and each completed model step, tool calls are tallied as agreed,
+  succeeded, failed, rejected and denied by a hook, cached tokens and the
+  session cost are saved in `meta.json`, and `session/statsUpdated` is sent
+  where the reference sends it.
+
+- Answer an interrupted tool call, one left without an answer and one still
+  waiting on its approval when the turn ends as the reference does, and keep
+  the approval each call settled under when the session is reloaded.
+
+- Let a steer join the running step, with the skill and `@` mentions it
+  names, and hand the model a plan the user edited while it was under review.
+  A permanent approval with nothing left to cover now persists the tool's
+  `permission = "always"`.
+
+- Generate the background title after the model step that makes it due rather
+  than once per turn, beside the rest of the turn, and publish the
+  `isQuiescent` snapshots that bracket it. A compaction forces the next title
+  and a cleared session starts its cadence over.
+
+- Rebind a relocated session to the destination's project configuration,
+  tool filters and trust, move the session lease when a turn clears its
+  context, and delete a subagent session its parent could not link.
+
+- Fold resources attached to a turn into the prompt the model reads, join
+  text blocks with a single newline, and keep the words typed and the
+  client's display content in the saved message so a reload shows them.
+
+- Reach `web_search` through the server the Mistral provider's `api_base`
+  names, summarize `session/compact` with the session's tool surface, and
+  reset the context size after a manual compaction.
+
 - Resolve the five rollouts the reference added (smart approve and its
   default, extra models, registry skills and the Unified Harness rollout)
   with typed values: a flag can be a boolean or `"on"`, extra models join the

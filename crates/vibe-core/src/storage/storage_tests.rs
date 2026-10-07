@@ -29,6 +29,7 @@ fn assistant(content: &str) -> ModelMessage {
         reasoning: None,
         reasoning_payloads: Vec::new(),
         tool_calls: Vec::new(),
+        keeps_empty_content: false,
     }
 }
 
@@ -108,7 +109,9 @@ fn the_invoked_skill_pair_round_trips_through_the_store() {
                 id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee".to_owned(),
                 name: "skill".to_owned(),
                 arguments: "{\"name\":\"probe\"}".to_owned(),
+                presentation: None,
             }],
+            keeps_empty_content: false,
         },
         ModelMessage::Tool {
             call_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee".to_owned(),
@@ -117,6 +120,8 @@ fn the_invoked_skill_pair_round_trips_through_the_store() {
                 crate::skills::skill_content_marker("probe")
             ),
             is_error: false,
+            name: String::new(),
+            result: None,
         },
     ];
     store
@@ -230,7 +235,7 @@ fn a_session_holding_only_a_system_message_is_not_written() {
     assert_eq!(metadata.message_count, 0);
     assert_eq!(
         metadata.system_prompt,
-        Some(json!({"role": "system", "content": "the prompt"}))
+        Some(record::system_prompt(&system("the prompt")))
     );
 
     store
@@ -239,7 +244,7 @@ fn a_session_holding_only_a_system_message_is_not_written() {
     let meta = read_meta(&store, &metadata);
     assert_eq!(
         meta["system_prompt"],
-        json!({"role": "system", "content": "the prompt"})
+        record::system_prompt(&system("the prompt"))
     );
     assert_eq!(meta["total_messages"], 1);
     let log =
@@ -797,7 +802,7 @@ fn lifecycle_operations_are_durable_and_parent_linked() {
     assert_eq!(loaded_child.metadata.title, None);
     assert_eq!(
         loaded_child.metadata.system_prompt,
-        Some(json!({"role": "system", "content": "current prompt"}))
+        Some(record::system_prompt(&system("current prompt")))
     );
 
     let rewind = store
@@ -1120,7 +1125,7 @@ fn handoff_publishes_complete_hydration_before_the_pointer_switch() {
     );
     assert_eq!(
         hydrated.metadata.system_prompt,
-        Some(json!({"role": "system", "content": "system"}))
+        Some(record::system_prompt(&system("system")))
     );
     assert_eq!(store.pointer().as_deref(), Some("child"));
     assert!(

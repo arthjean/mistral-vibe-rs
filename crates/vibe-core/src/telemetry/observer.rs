@@ -359,7 +359,7 @@ where
                 // crossed the boundary as a message alone is a permission set
                 // to `never`, which is the only one the gate denies without
                 // asking; a skip it did not attribute is the operator's.
-                let decision = approval.map(tool_decision).or_else(|| {
+                let decision = approval.complete().map(tool_decision).or_else(|| {
                     let (approval_type, approval_source) = if *skipped {
                         (
                             records::TelemetryApprovalType::Ask,

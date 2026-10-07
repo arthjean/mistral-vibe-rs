@@ -242,7 +242,7 @@ impl SubagentManager {
         // Reference `run`: the child's session is written empty, then linked
         // into its parent's record, before its turn starts.
         child_store.persist_empty(&mut metadata, now_ms)?;
-        self.store.record_child_session(
+        if let Err(error) = self.store.record_child_session(
             &request.parent_session_id,
             json!({
                 "session_id": child_session_id,
@@ -250,7 +250,12 @@ impl SubagentManager {
                 "agent": request.agent.name,
                 "relative_path": format!("{CHILD_SESSIONS_DIRECTORY}/{}", metadata.directory),
             }),
-        )?;
+        ) {
+            // Reference `run`: a child its parent could not link is deleted
+            // rather than left behind unreachable.
+            let _ = child_store.delete(&child_session_id);
+            return Err(error.into());
+        }
         let cancellation = CancellationToken::default();
         self.active.lock().await.insert(
             child_session_id.clone(),

@@ -498,11 +498,14 @@ fn build(entry: &MessageEntry, envelopes: &BTreeMap<String, String>) -> ModelMes
             reasoning: None,
             reasoning_payloads: Vec::new(),
             tool_calls: Vec::new(),
+            keeps_empty_content: false,
         },
         "tool" => ModelMessage::Tool {
             call_id: entry.tool_call_id.clone().unwrap_or_default(),
             content,
             is_error: false,
+            name: String::new(),
+            result: None,
         },
         other => panic!("the corpus names an unknown role `{other}`"),
     }

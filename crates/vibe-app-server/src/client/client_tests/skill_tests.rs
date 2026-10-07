@@ -56,6 +56,7 @@ impl vibe_core::skills::InvokedSkillResolver for ProbeSkillResolver {
                 display: json!({"kind": "skill", "name": "probe"}),
                 projected_result: serde_json::Value::Null,
                 chunks: Vec::new(),
+                pending_injection: None,
             },
             already_loaded: ToolExecutionOutput {
                 skip: None,
@@ -67,6 +68,7 @@ impl vibe_core::skills::InvokedSkillResolver for ProbeSkillResolver {
                 display: json!({"kind": "skill", "name": "probe"}),
                 projected_result: serde_json::Value::Null,
                 chunks: Vec::new(),
+                pending_injection: None,
             },
         })
     }
@@ -92,6 +94,7 @@ fn probe_reservation(prompt: &str, tools: ToolRegistry) -> TurnReservation {
         compaction: CompactionSettings::default(),
         intent: SessionIntent::default(),
         tools,
+        pricing: (0.0, 0.0, None),
     }
 }
 
@@ -261,6 +264,7 @@ impl CompletionProvider for TaskProbeProvider {
                             name: "task".to_owned(),
                             arguments: json!({"task": "inspect deeper", "agent": self.agent})
                                 .to_string(),
+                            presentation: None,
                         }],
                         stop_reason: "tool_calls".to_owned(),
                         ..finished
@@ -274,6 +278,7 @@ impl CompletionProvider for TaskProbeProvider {
                             call_id,
                             content,
                             is_error: true,
+                            ..
                         } if call_id == "delegate-2" => Some(content.clone()),
                         _ => None,
                     });
@@ -292,6 +297,7 @@ impl CompletionProvider for TaskProbeProvider {
                             id: "delegate-1".to_owned(),
                             name: "task".to_owned(),
                             arguments: json!({"task": "inspect", "agent": self.agent}).to_string(),
+                            presentation: None,
                         }],
                         stop_reason: "tool_calls".to_owned(),
                         ..finished
@@ -304,6 +310,7 @@ impl CompletionProvider for TaskProbeProvider {
                         call_id,
                         content,
                         is_error: true,
+                        ..
                     } if call_id == "delegate-1" => Some(content.clone()),
                     _ => None,
                 });
@@ -410,6 +417,7 @@ async fn run_task_probe_offering(
                 ..SessionIntent::default()
             },
             tools,
+            pricing: (0.0, 0.0, None),
         })
         .await
         .expect("the turn completes");
@@ -737,6 +745,7 @@ async fn live_task_tool_runs_a_durable_child_session_through_the_provider() {
                 ..SessionIntent::default()
             },
             tools,
+            pricing: (0.0, 0.0, None),
         })
         .await
         .expect("root and child complete");

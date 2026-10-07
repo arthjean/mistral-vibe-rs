@@ -130,6 +130,10 @@ pub struct LiveTurnDriver {
     /// The tool surface each session's running turn publishes, which an agent
     /// switch retargets in place.
     turn_tools: Mutex<HashMap<String, SessionToolExecutor>>,
+    /// The compactor each session's latest turn summarized under, which a
+    /// manual compaction reuses: reference `CompactionManager._primary` sends
+    /// the live tool surface whichever path asked for the summary.
+    session_compactors: Mutex<HashMap<String, ProviderSessionCompactor>>,
     event_observer: Arc<dyn EventObserver>,
     /// What every request reports as its `metadata`. Reference
     /// `_build_backend_metadata`, read off the same census the session's
@@ -456,6 +460,7 @@ impl LiveTurnDriver {
             context_warnings: Mutex::new(HashMap::new()),
             plan_agents: Mutex::new(HashMap::new()),
             turn_tools: Mutex::new(HashMap::new()),
+            session_compactors: Mutex::new(HashMap::new()),
             event_observer: Arc::new(NoopEventObserver),
             request_census: None,
             titles: None,
@@ -529,6 +534,7 @@ impl LiveTurnDriver {
             context_warnings: Mutex::new(HashMap::new()),
             plan_agents: Mutex::new(HashMap::new()),
             turn_tools: Mutex::new(HashMap::new()),
+            session_compactors: Mutex::new(HashMap::new()),
             event_observer: Arc::new(NoopEventObserver),
             request_census: None,
             titles,
@@ -637,11 +643,6 @@ impl LiveTurnDriver {
                 vibe_core::skills::append_invoked_skill(&mut messages, &invoked);
             }
         }
-        messages.extend(
-            resource_contexts(reservation)
-                .into_iter()
-                .map(ModelMessage::user),
-        );
         let session_dir = self
             .session_root
             .as_deref()
@@ -690,10 +691,10 @@ impl LiveTurnDriver {
         };
         let (sink, baseline, engine_session_id) = match transcript {
             Some(transcript) => (
-                Some(SessionTranscriptSink::new(
-                    transcript.store,
-                    transcript.metadata.clone(),
-                )),
+                Some(
+                    SessionTranscriptSink::new(transcript.store, transcript.metadata.clone())
+                        .with_pricing(reservation.pricing),
+                ),
                 session_stats(&transcript.metadata),
                 transcript.session_id,
             ),
@@ -703,14 +704,19 @@ impl LiveTurnDriver {
                 reservation.session_id.clone(),
             ),
         };
+        let compactor = self.compactor.with_plan(self.compactor.session_plan(
+            &reservation.compaction,
+            input.tools.clone(),
+            input.tool_choice.clone(),
+            input.thinking,
+        ));
+        self.session_compactors
+            .lock()
+            .map_err(|_| DriverError::StatePoisoned)?
+            .insert(reservation.session_id.clone(), compactor.clone());
         let mut engine = ConversationEngine::new(Arc::clone(&self.provider))
             .with_tools(session_tools)
-            .with_compactor(self.compactor.with_plan(self.compactor.session_plan(
-                &reservation.compaction,
-                input.tools.clone(),
-                input.tool_choice.clone(),
-                input.thinking,
-            )))
+            .with_compactor(compactor)
             .with_sink(sink)
             .with_limits(limits)
             .with_baseline(baseline)
@@ -746,7 +752,27 @@ impl LiveTurnDriver {
                 .clone()
                 .unwrap_or_else(vibe_core::session_id::uuid_v4),
         );
-        engine = engine.with_user_attachments(user_attachments);
+        // Reference `decode_content_blocks`: attached resources are folded
+        // into what the model reads, and the words typed are kept apart for
+        // the entry a reload shows.
+        let resources = user_attachments
+            .iter()
+            .filter_map(|block| match block {
+                PublicContentBlock::Resource { resource } => Some(resource),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let (prompt, input_text) = if resources.is_empty() {
+            (reservation.prompt.clone(), None)
+        } else {
+            (
+                vibe_core::events::prompt_with_resources(&reservation.prompt, &resources),
+                Some(reservation.prompt.clone()),
+            )
+        };
+        engine = engine
+            .with_user_input(input_text, reservation.user_display_content.clone())
+            .with_user_attachments(user_attachments);
         // Reference `_hook_session_context`: the transcript is the session's
         // resolved `messages.jsonl` when it is logged, and empty otherwise.
         let transcript_path = session_dir
@@ -761,13 +787,7 @@ impl LiveTurnDriver {
             engine = engine.with_hooks(hooks);
         }
         engine
-            .run_turn_controlled(
-                engine_session_id,
-                input,
-                &reservation.prompt,
-                cancellation,
-                controls,
-            )
+            .run_turn_controlled(engine_session_id, input, &prompt, cancellation, controls)
             .await
             .map_err(DriverError::Engine)
     }
@@ -879,39 +899,6 @@ impl LiveTurnDriver {
             }
         }
     }
-}
-
-/// The client-supplied identifiers a provider request carries alongside the
-/// conversation, each present only when the client sent it.
-fn resource_contexts(reservation: &TurnReservation) -> Vec<String> {
-    reservation
-        .input
-        .iter()
-        .filter_map(|block| {
-            let PublicContentBlock::Resource { resource } = block else {
-                return None;
-            };
-            let embedded = resource.get("resource").unwrap_or(resource);
-            let uri = embedded
-                .get("uri")
-                .or_else(|| resource.get("uri"))
-                .and_then(Value::as_str)
-                .unwrap_or("attached resource");
-            let name = embedded
-                .get("name")
-                .or_else(|| resource.get("name"))
-                .and_then(Value::as_str)
-                .unwrap_or(uri);
-            let text = embedded
-                .get("text")
-                .or_else(|| resource.get("text"))
-                .and_then(Value::as_str);
-            Some(text.map_or_else(
-                || format!("Attached resource `{name}` is available at {uri}."),
-                |text| format!("Attached resource `{name}` ({uri}):\n{text}"),
-            ))
-        })
-        .collect()
 }
 
 impl TurnDriver for LiveTurnDriver {
@@ -1038,8 +1025,14 @@ impl TurnDriver for LiveTurnDriver {
                 String::new(),
                 self.provider.model().map(ToOwned::to_owned),
             ));
-            let compaction = self
-                .compactor
+            let compactor = self
+                .session_compactors
+                .lock()
+                .map_err(|_| DriverError::StatePoisoned)?
+                .get(session_id)
+                .cloned()
+                .unwrap_or_else(|| self.compactor.clone());
+            let compaction = compactor
                 .compact_with_instructions(
                     &hydrated.metadata.id,
                     &hydrated.messages,

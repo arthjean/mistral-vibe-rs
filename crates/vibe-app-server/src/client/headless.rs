@@ -287,6 +287,19 @@ where
         ))
     }
 
+    /// Reference `_schedule_title_generation_events`: an observer that starts
+    /// the background title each completed model step makes due. A client
+    /// running a turn on its own composes it with the observer it reads.
+    pub fn title_scheduler(&self) -> Arc<dyn EventObserver>
+    where
+        D: 'static,
+    {
+        Arc::new(TitleScheduler {
+            server: self.client.server.clone(),
+            driver: Arc::clone(&self.driver),
+        })
+    }
+
     pub fn request_callback_with_detail(
         &mut self,
         session_id: &str,
@@ -765,10 +778,14 @@ where
         &mut self,
         session_id: &str,
         prompt: &str,
-    ) -> Result<ProgrammaticTurn, ClientError> {
+    ) -> Result<ProgrammaticTurn, ClientError>
+    where
+        D: 'static,
+    {
         self.client.configure_pending_mcp(session_id).await?;
         let reservation = self.client.reserve_turn(session_id, prompt)?;
-        match self.driver.run(&reservation).await {
+        let observer = self.title_scheduler();
+        match self.driver.run_observed(&reservation, observer).await {
             Ok(outcome) => self.finish_reserved(&reservation, outcome),
             Err(error) => {
                 self.fail_reserved_with(&reservation, public_driver_error(&error))?;
@@ -782,9 +799,16 @@ where
         session_id: &str,
         prompt: &str,
         observer: Arc<dyn EventObserver>,
-    ) -> Result<ProgrammaticTurn, ClientError> {
+    ) -> Result<ProgrammaticTurn, ClientError>
+    where
+        D: 'static,
+    {
         self.client.configure_pending_mcp(session_id).await?;
         let reservation = self.client.reserve_turn(session_id, prompt)?;
+        let observer = Arc::new(vibe_core::engine::CompositeEventObserver::new(
+            observer,
+            self.title_scheduler(),
+        ));
         match self.driver.run_observed(&reservation, observer).await {
             Ok(outcome) => self.finish_reserved(&reservation, outcome),
             Err(error) => {
@@ -866,9 +890,6 @@ where
         outcome: TurnOutcome,
     ) -> Result<ProgrammaticTurn, ClientError> {
         let result = self.client.finish_turn(reservation, outcome);
-        if result.is_ok() {
-            self.spawn_title(&reservation.session_id);
-        }
         self.fail_interactive_callbacks(
             Some(&reservation.session_id),
             Some(&reservation.turn_id),
@@ -876,29 +897,45 @@ where
         );
         result
     }
+}
 
-    /// Names the session in the background when the turn that just settled
-    /// made a title due (reference `_generate_title_task`). The title lands in
-    /// the store and the session's state; a process with no runtime to run it
-    /// on makes the next turn due instead.
-    fn spawn_title(&self, session_id: &str) {
-        let Some(periodic) = self.driver.title_model_is_fast() else {
-            return;
+/// Starts the background title a completed model step makes due, beside the
+/// rest of the turn. The title lands in the store and the session's state; a
+/// process with no runtime to run it on makes the next step due instead.
+struct TitleScheduler<D> {
+    server: AppServer,
+    driver: Arc<D>,
+}
+
+impl<D> EventObserver for TitleScheduler<D>
+where
+    D: TurnDriver + 'static,
+{
+    fn observe(&self, event: &vibe_core::events::EventEnvelope) -> Result<(), String> {
+        let vibe_core::events::EngineEvent::StepCompleted { turn_completing } = event.event else {
+            return Ok(());
         };
-        let server = self.client.server.clone();
-        let Some(job) = server.title_job(session_id, periodic) else {
-            return;
+        let Some(periodic) = self.driver.title_model_is_fast() else {
+            return Ok(());
+        };
+        let Some((job, _)) = self
+            .server
+            .title_job(&event.session_id, periodic, turn_completing)
+        else {
+            return Ok(());
         };
         let Ok(runtime) = tokio::runtime::Handle::try_current() else {
-            server.land_title(job, None);
-            return;
+            self.server.land_title(job, None);
+            return Ok(());
         };
         let title = self
             .driver
             .generate_title(job.messages.clone(), job.previous_title.clone());
+        let server = self.server.clone();
         runtime.spawn(async move {
             let title = title.await;
             server.land_title(job, title);
         });
+        Ok(())
     }
 }

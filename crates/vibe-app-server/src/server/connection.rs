@@ -13,6 +13,7 @@ mod saved;
 mod session;
 mod trust;
 mod turn;
+pub(crate) use turn::bump_session;
 
 use super::*;
 use crate::params::object_of;

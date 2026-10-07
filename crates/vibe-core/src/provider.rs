@@ -126,6 +126,9 @@ pub enum ProviderChunk {
     Usage {
         input_tokens: u64,
         output_tokens: u64,
+        /// The part of `input_tokens` the provider served from its cache.
+        #[serde(default, skip_serializing_if = "is_zero")]
+        cached_tokens: u64,
     },
     Refusal {
         message: String,
@@ -140,6 +143,16 @@ pub enum ProviderChunk {
 pub struct Usage {
     pub input_tokens: u64,
     pub output_tokens: u64,
+    /// The part of `input_tokens` the provider served from its cache, which
+    /// reference `LLMUsage.cached_tokens` reads from
+    /// `prompt_tokens_details.cached_tokens`.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub cached_tokens: u64,
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)]
+const fn is_zero(value: &u64) -> bool {
+    *value == 0
 }
 
 /// What a backend reports about the request it makes, which is what a model
@@ -302,12 +315,14 @@ pub(crate) fn aggregate_provider_chunks(
                         id,
                         name,
                         arguments,
+                        presentation: None,
                     });
                 }
             }
             ProviderChunk::Usage {
                 input_tokens,
                 output_tokens,
+                cached_tokens,
             } => match &mut usage {
                 Some(usage) => {
                     if input_tokens > 0 {
@@ -316,11 +331,15 @@ pub(crate) fn aggregate_provider_chunks(
                     if output_tokens > 0 {
                         usage.output_tokens = output_tokens;
                     }
+                    if cached_tokens > 0 {
+                        usage.cached_tokens = cached_tokens;
+                    }
                 }
                 None => {
                     usage = Some(Usage {
                         input_tokens,
                         output_tokens,
+                        cached_tokens,
                     });
                 }
             },

@@ -203,6 +203,12 @@ pub struct ToolExecutionOutput {
     /// gate's answer still reaches the settled effect.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub failure: Option<String>,
+    /// A message the turn appends unseen once the step that ran the call has
+    /// settled, before its next request. Reference
+    /// `AgentLoop._pending_injected_messages`, which `_drain_pending_injections`
+    /// appends at the end of the step.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pending_injection: Option<String>,
 }
 
 /// How a call's permission was settled. Reference `ToolResultEvent.decision`,
@@ -284,6 +290,7 @@ impl ToolExecutionOutput {
             turn_failure: None,
             approval: None,
             failure: None,
+            pending_injection: None,
         }
     }
 
@@ -305,6 +312,7 @@ impl ToolExecutionOutput {
             turn_failure: None,
             approval: None,
             failure: None,
+            pending_injection: None,
         }
     }
 
@@ -335,26 +343,74 @@ impl ToolExecutionOutput {
 }
 
 tokio::task_local! {
-    /// Set once the call being polled passed its permission gate and its body
-    /// started. Reference `tool_started` in `_execute_tool_call`, which decides
-    /// whether a cancelled call is shown to the post-tool hooks.
-    static CALL_STARTED: Arc<std::sync::atomic::AtomicBool>;
+    /// What the call being polled reached: whether it passed its permission
+    /// gate and its body started, and the decision that let it. Reference
+    /// `tool_started` and `decision` in `_execute_tool_call`, which decide
+    /// whether a cancelled call is shown to the post-tool hooks and what
+    /// provenance its interrupted answer carries.
+    static CALL_PROGRESS: Arc<CallProgress>;
 }
 
-/// Records that the call being polled started running. A call polled outside
-/// [`track_call_start`] records nothing.
-pub fn mark_call_started() {
-    let _ = CALL_STARTED.try_with(|started| {
-        started.store(true, std::sync::atomic::Ordering::SeqCst);
+/// How far one call got before it settled or was cancelled.
+#[derive(Debug, Default)]
+pub struct CallProgress {
+    started: std::sync::atomic::AtomicBool,
+    approval: std::sync::Mutex<Option<ToolApproval>>,
+    awaiting_approval: std::sync::atomic::AtomicBool,
+}
+
+impl CallProgress {
+    /// Whether the call's body started.
+    #[must_use]
+    pub fn started(&self) -> bool {
+        self.started.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// The decision the permission gate reached, once it reached one.
+    #[must_use]
+    pub fn approval(&self) -> Option<ToolApproval> {
+        self.approval.lock().ok().and_then(|approval| *approval)
+    }
+
+    /// Whether the call is waiting on the operator's answer to its approval
+    /// request.
+    #[must_use]
+    pub fn awaiting_approval(&self) -> bool {
+        self.awaiting_approval
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+/// Records whether the call being polled is waiting on its approval request.
+/// A call cancelled while waiting keeps the mark.
+pub fn mark_awaiting_approval(waiting: bool) {
+    let _ = CALL_PROGRESS.try_with(|progress| {
+        progress
+            .awaiting_approval
+            .store(waiting, std::sync::atomic::Ordering::SeqCst);
     });
 }
 
-/// Polls `future` with `started` as the flag [`mark_call_started`] sets.
+/// Records that the call being polled passed its gate under `approval` and
+/// started running. A call polled outside [`track_call_start`] records
+/// nothing.
+pub fn mark_call_started(approval: ToolApproval) {
+    let _ = CALL_PROGRESS.try_with(|progress| {
+        if let Ok(mut slot) = progress.approval.lock() {
+            *slot = Some(approval);
+        }
+        progress
+            .started
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    });
+}
+
+/// Polls `future` with `progress` as what [`mark_call_started`] records into.
 pub async fn track_call_start<F: std::future::Future>(
-    started: Arc<std::sync::atomic::AtomicBool>,
+    progress: Arc<CallProgress>,
     future: F,
 ) -> F::Output {
-    CALL_STARTED.scope(started, future).await
+    CALL_PROGRESS.scope(progress, future).await
 }
 
 pub trait ToolHandler: Send + Sync {
@@ -1245,6 +1301,7 @@ mod tests {
                         display: json!({"kind": "read"}),
                         projected_result: serde_json::Value::Null,
                         chunks: vec![content.to_owned()],
+                        pending_injection: None,
                     })
                 })
             },

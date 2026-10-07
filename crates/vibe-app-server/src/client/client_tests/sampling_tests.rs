@@ -32,6 +32,7 @@ async fn a_sampling_request_reaches_the_provider_as_a_completion() {
                     usage: Usage {
                         input_tokens: 1,
                         output_tokens: 1,
+                        cached_tokens: 0,
                     },
                     refusal: None,
                     stop_reason: "stop".to_owned(),
@@ -92,6 +93,7 @@ async fn a_sampling_request_reaches_the_provider_as_a_completion() {
                 reasoning: None,
                 reasoning_payloads: Vec::new(),
                 tool_calls: Vec::new(),
+                keeps_empty_content: false,
             },
         ]
     );
@@ -179,6 +181,7 @@ async fn plan_mode_states_its_directive_on_every_cycle_of_a_persisted_session() 
             ..SessionIntent::default()
         },
         tools: guarded_registry("", ApprovalDecision::ApproveOnce).0,
+        pricing: (0.0, 0.0, None),
     };
     let states_plan_mode = |label: &str| {
         let seen = seen.lock().expect("seen messages");

@@ -305,3 +305,24 @@ fn the_published_defaults_carry_every_declared_tool() {
          enumerates declarations rather than the surface"
     );
 }
+
+#[test]
+fn the_mistral_server_is_what_precedes_the_last_version_segment_of_its_base() {
+    for (api_base, expected) in [
+        ("https://api.mistral.ai/v1", Some("https://api.mistral.ai")),
+        ("http://127.0.0.1:8080/v1", Some("http://127.0.0.1:8080")),
+        (
+            "https://proxy.example/v1/mistral/v2",
+            Some("https://proxy.example/v1/mistral"),
+        ),
+        ("https://api.mistral.ai", None),
+        ("ftp://api.mistral.ai/v1", None),
+        ("https:///v1", None),
+    ] {
+        assert_eq!(
+            server_url_from_api_base(api_base).as_deref(),
+            expected,
+            "{api_base}"
+        );
+    }
+}

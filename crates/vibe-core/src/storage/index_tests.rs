@@ -301,6 +301,7 @@ fn first_user_message_labels_every_case() {
         reasoning: None,
         reasoning_payloads: Vec::new(),
         tool_calls: Vec::new(),
+        keeps_empty_content: false,
     };
 
     assert_eq!(

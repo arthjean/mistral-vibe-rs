@@ -28,7 +28,7 @@ impl AppServer {
     /// Takes the lease on `session_id` for this process, or reports who holds
     /// it (reference `_acquire_session_lease`). Nothing is leased while session
     /// logging is off, and a session this process holds already stays held.
-    pub(super) fn acquire_lease(&self, session_id: &str) -> Result<(), ProtocolFault> {
+    pub(in crate::server) fn acquire_lease(&self, session_id: &str) -> Result<(), ProtocolFault> {
         if !self.workspace.session_logging().enabled {
             return Ok(());
         }
@@ -50,7 +50,7 @@ impl AppServer {
     }
 
     /// Lets `session_id` go, so another process may open it.
-    pub(super) fn release_lease(&self, session_id: &str) {
+    pub(in crate::server) fn release_lease(&self, session_id: &str) {
         let lease = self
             .leases
             .lock()
@@ -60,7 +60,11 @@ impl AppServer {
     }
 
     /// Moves the lease a session holds onto the identifier it continues under.
-    pub(super) fn transfer_lease(&self, from: &str, to: &str) -> Result<(), ProtocolFault> {
+    pub(in crate::server) fn transfer_lease(
+        &self,
+        from: &str,
+        to: &str,
+    ) -> Result<(), ProtocolFault> {
         self.acquire_lease(to)?;
         self.release_lease(from);
         Ok(())
@@ -665,10 +669,12 @@ impl ServerConnection {
             let session = sessions
                 .get(session_id)
                 .ok_or_else(|| not_found(session_id))?;
+            // Reference `SessionExecution.reserve`, which words the conflict
+            // as `begin` does rather than as `require_idle`.
             if let Some(turn_id) = &session.active_turn {
                 return Err(ProtocolFault::plain(
                     ProtocolErrorCode::Conflict,
-                    format!("Session is busy running turn {turn_id}"),
+                    format!("Session is already running turn {turn_id}"),
                 ));
             }
             session.working_directory.clone()
@@ -712,7 +718,8 @@ impl ServerConnection {
         // the destination's hooks are the ones that run.
         if moved {
             self.server
-                .reload_session_hooks(session_id)
+                .rebind_session_workspace(session_id)
+                .and_then(|()| self.server.reload_session_hooks(session_id))
                 .map_err(|error| ProtocolFault::internal(error.to_string()))?;
         }
         let mut batch = success_batch(request.id.clone(), result_map([("state", state)]));
@@ -1077,6 +1084,10 @@ impl ServerConnection {
         session.bumped_at = None;
         session.event_watermark = 0;
         session.stats = crate::server::runtime::SessionStats::default();
+        // Reference `_reset_title_state`: a title still running names the
+        // session left behind, and the cadence starts over.
+        session.title_cadence = vibe_core::session_title::TitleCadence::default();
+        session.title_in_flight = false;
         let mut kept = session
             .snapshot
             .as_ref()

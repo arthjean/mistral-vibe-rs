@@ -228,7 +228,7 @@ pub struct SessionOptions {
     pub continue_session: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TurnReservation {
     pub session_id: String,
     pub turn_id: String,
@@ -255,6 +255,9 @@ pub struct TurnReservation {
     /// The system message the server composed for the session, which the
     /// driver's configured prompt stands in for when absent.
     pub system_prompt: Option<SessionSystemPrompt>,
+    /// The active model's input, output and cached-input prices per million
+    /// tokens, which the session's saved accounting records with its cost.
+    pub pricing: (f64, f64, Option<f64>),
 }
 
 /// Composes the system message of a subagent a session starts, for the agent
@@ -604,6 +607,7 @@ impl TurnDriver for EchoTurnDriver {
                     attachments: Vec::new(),
                     message_id: None,
                     content: reservation.prompt.clone(),
+                    user_display_content: None,
                 },
                 vibe_core::events::EngineEvent::ModelText {
                     message_id: None,
@@ -644,11 +648,13 @@ impl TurnDriver for EchoTurnDriver {
                         reasoning: None,
                         reasoning_payloads: Vec::new(),
                         tool_calls: Vec::new(),
+                        keeps_empty_content: false,
                     },
                 ],
                 usage: vibe_core::provider::Usage {
                     input_tokens: 1,
                     output_tokens: 1,
+                    cached_tokens: 0,
                 },
                 context_tokens: 2,
                 price_micros: 0,
@@ -763,6 +769,8 @@ fn request_bytes(id: RequestId, method: &str, params: Value) -> Result<Vec<u8>, 
     .map_err(ClientError::Json)
 }
 
+/// The accounting a saved session resumes with: reference
+/// `_apply_stored_stats` restores the `AgentStats` its metadata saved.
 fn session_stats(metadata: &vibe_core::storage::SessionMetadata) -> SessionStats {
     let value = |key: &str| {
         metadata
@@ -771,14 +779,41 @@ fn session_stats(metadata: &vibe_core::storage::SessionMetadata) -> SessionStats
             .and_then(Value::as_u64)
             .unwrap_or_default()
     };
+    let seconds = metadata
+        .statistics
+        .get("last_turn_duration")
+        .and_then(Value::as_f64)
+        .unwrap_or_default();
+    let last_call = metadata
+        .statistics
+        .contains_key("last_turn_prompt_tokens")
+        .then(|| vibe_core::engine::ModelCallStats {
+            prompt_tokens: value("last_turn_prompt_tokens"),
+            completion_tokens: value("last_turn_completion_tokens"),
+            cached_tokens: value("last_turn_cached_tokens"),
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            duration_ms: if seconds.is_finite() && seconds > 0.0 {
+                (seconds * 1_000.0).round() as u64
+            } else {
+                0
+            },
+        });
     SessionStats {
-        last_call: None,
+        last_call,
         usage: Usage {
             input_tokens: value("session_prompt_tokens"),
             output_tokens: value("session_completion_tokens"),
+            cached_tokens: value("session_cached_tokens"),
         },
         context_tokens: value("context_tokens"),
         steps: u32::try_from(value("steps")).unwrap_or(u32::MAX),
+        tool_calls: vibe_core::engine::ToolCallTally {
+            agreed: value("tool_calls_agreed"),
+            rejected: value("tool_calls_rejected"),
+            hook_denied: value("tool_calls_hook_denied"),
+            failed: value("tool_calls_failed"),
+            succeeded: value("tool_calls_succeeded"),
+        },
     }
 }
 

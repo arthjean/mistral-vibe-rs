@@ -18,8 +18,8 @@ use crate::events::{
 use crate::provider::Usage;
 
 use super::{
-    EngineError, EngineLimits, EventObserver, ModelCallStats, SessionStats, TranscriptSink,
-    TurnStopReason,
+    EngineError, EngineLimits, EventObserver, ModelCallStats, SessionStats, ToolCallTally,
+    TranscriptSink, TurnStopReason,
 };
 
 /// Accumulates everything a turn spends against [`EngineLimits`].
@@ -29,6 +29,8 @@ pub(super) struct TurnLedger {
     pub(super) price_micros: u64,
     pub(super) steps: u32,
     pub(super) last_call: Option<ModelCallStats>,
+    /// How the session's calls settled before this turn opened.
+    tool_calls: ToolCallTally,
 }
 
 impl TurnLedger {
@@ -39,16 +41,19 @@ impl TurnLedger {
             context_tokens: baseline.context_tokens,
             steps: baseline.steps,
             last_call: baseline.last_call.clone(),
+            tool_calls: baseline.tool_calls,
         }
     }
 
-    /// The stats a conversation policy reads, and the stats a turn persists.
-    pub(super) fn session_stats(&self) -> SessionStats {
+    /// The stats a conversation policy reads, and the stats a turn persists,
+    /// with the calls this turn settled so far.
+    pub(super) fn session_stats(&self, turn_calls: ToolCallTally) -> SessionStats {
         SessionStats {
             usage: self.usage.clone(),
             context_tokens: self.context_tokens,
             steps: self.steps,
             last_call: self.last_call.clone(),
+            tool_calls: self.tool_calls.plus(turn_calls),
         }
     }
 
@@ -58,11 +63,18 @@ impl TurnLedger {
         self.steps = self.steps.saturating_add(1);
     }
 
-    pub(super) fn record_completion(&mut self, usage: &Usage, limits: &EngineLimits) {
+    /// Counts a model step that ran to its end, its tool calls answered.
+    /// Reference `_conversation_loop` counts it there rather than when the
+    /// reply lands, so a step the operator interrupts is never counted.
+    pub(super) fn count_step(&mut self) {
         self.steps = self.steps.saturating_add(1);
+    }
+
+    pub(super) fn record_completion(&mut self, usage: &Usage, limits: &EngineLimits) {
         self.context_tokens = usage.input_tokens.saturating_add(usage.output_tokens);
         self.usage.input_tokens = self.usage.input_tokens.saturating_add(usage.input_tokens);
         self.usage.output_tokens = self.usage.output_tokens.saturating_add(usage.output_tokens);
+        self.usage.cached_tokens = self.usage.cached_tokens.saturating_add(usage.cached_tokens);
         self.price_micros = total_price_micros(&self.usage, limits);
     }
 
@@ -82,6 +94,7 @@ impl TurnLedger {
     ) {
         self.usage.input_tokens = self.usage.input_tokens.saturating_add(usage.input_tokens);
         self.usage.output_tokens = self.usage.output_tokens.saturating_add(usage.output_tokens);
+        self.usage.cached_tokens = self.usage.cached_tokens.saturating_add(usage.cached_tokens);
         self.price_micros = total_price_micros(&self.usage, limits);
         if replaced {
             self.context_tokens = 0;
@@ -104,6 +117,8 @@ pub(super) struct TurnRecorder<'a> {
     /// The identities the model call in flight gives its text and its
     /// reasoning, minted when the call opens.
     model_call_ids: (String, String),
+    /// How the calls this turn settled so far.
+    tool_calls: ToolCallTally,
 }
 
 impl<'a> TurnRecorder<'a> {
@@ -124,6 +139,7 @@ impl<'a> TurnRecorder<'a> {
             next_event_id: 1,
             working_directory,
             model_call_ids: (String::new(), String::new()),
+            tool_calls: ToolCallTally::default(),
         }
     }
 
@@ -197,12 +213,17 @@ impl<'a> TurnRecorder<'a> {
             event,
         };
         self.reducer.apply(&envelope)?;
+        self.tool_calls.observe(&envelope.event);
         self.observer
             .observe(&envelope)
             .map_err(EngineError::Observation)?;
         self.events.push(envelope);
         self.next_event_id = self.next_event_id.saturating_add(1);
         Ok(())
+    }
+
+    pub(super) const fn tool_calls(&self) -> ToolCallTally {
+        self.tool_calls
     }
 
     pub(super) fn finish(self) -> (Vec<EventEnvelope>, ProjectionSnapshot) {
@@ -212,9 +233,15 @@ impl<'a> TurnRecorder<'a> {
 
 pub(super) async fn persist(
     sink: &impl TranscriptSink,
-    messages: &[ModelMessage],
+    messages: &mut [ModelMessage],
     snapshot: &ProjectionSnapshot,
 ) -> Result<(), EngineError> {
+    // Reference `LLMMessage` mints an identity for every message that is not a
+    // tool answer when it is built; here it is given before the first write,
+    // so the log and every later save agree on it.
+    for message in messages.iter_mut() {
+        message.ensure_identity();
+    }
     sink.persist(messages, snapshot)
         .await
         .map_err(EngineError::Persistence)

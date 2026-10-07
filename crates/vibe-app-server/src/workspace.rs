@@ -430,11 +430,26 @@ impl WorkspaceService {
     /// Reference `approve_always(save_permanently=True)` merges them into
     /// `tools.<name>.allowlist` through the configuration orchestrator, which is
     /// the same table the tool reads back on the next session; the merge is a
-    /// sorted union so a repeated approval writes nothing new.
+    /// sorted union so a repeated approval writes nothing new. An approval with
+    /// no pattern grants the tool itself, which reference `set_tool_permission`
+    /// writes as `tools.<name>.permission = "always"`.
     #[must_use]
     pub fn allowlist_persistence(&self) -> AllowlistPersistence {
         let config = self.config.clone();
         Arc::new(move |tool: &str, patterns: &[String]| {
+            if patterns.is_empty() {
+                let operation = ConfigPatchOp {
+                    mutation: ConfigMutation::set(
+                        ["tools", tool, "permission"],
+                        toml::Value::String("always".to_owned()),
+                    ),
+                    target: None,
+                };
+                return config
+                    .apply_patch(&[operation], "permanent tool approval")
+                    .map(|_| ())
+                    .map_err(|error| error.to_string());
+            }
             let snapshot = config.load().map_err(|error| error.to_string())?;
             let mut merged = snapshot
                 .effective

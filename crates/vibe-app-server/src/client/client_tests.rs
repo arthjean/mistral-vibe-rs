@@ -151,6 +151,7 @@ impl CompletionProvider for RecordingProvider {
                 usage: Usage {
                     input_tokens: 3,
                     output_tokens: 2,
+                    cached_tokens: 0,
                 },
                 refusal: None,
                 stop_reason: "stop".to_owned(),
@@ -204,11 +205,13 @@ impl CompletionProvider for SubagentSelectingProvider {
                                 id: "child-edit".to_owned(),
                                 name: "edit".to_owned(),
                                 arguments: "{}".to_owned(),
+                                presentation: None,
                             },
                             ModelToolCall {
                                 id: "child-shell".to_owned(),
                                 name: "shell".to_owned(),
                                 arguments: "{}".to_owned(),
+                                presentation: None,
                             },
                         ],
                         usage: Usage::default(),
@@ -265,6 +268,7 @@ impl CompletionProvider for SubagentSelectingProvider {
                         // `agent` is omitted so the reference default has
                         // to reach the handler for the delegation to run.
                         arguments: r#"{"task":"inspect"}"#.to_owned(),
+                        presentation: None,
                     }],
                     usage: Usage::default(),
                     refusal: None,
@@ -278,6 +282,7 @@ impl CompletionProvider for SubagentSelectingProvider {
                         call_id,
                         content,
                         is_error: false,
+                        ..
                     // Reference `TaskResult` reaches the parent as one field
                     // per line, so the delegation's answer is a line of the
                     // tool message rather than the whole of it. The child
@@ -326,6 +331,7 @@ impl CompletionProvider for ToolSelectingProvider {
                         id: "call-1".to_owned(),
                         name: "mcp_fixture_echo".to_owned(),
                         arguments: r#"{"message":"rust"}"#.to_owned(),
+                        presentation: None,
                     }],
                     usage: Usage::default(),
                     refusal: None,
@@ -339,8 +345,7 @@ impl CompletionProvider for ToolSelectingProvider {
                         ModelMessage::Tool {
                             call_id,
                             content,
-                            is_error: false,
-                        } if call_id == "call-1" && content == "hello rust"
+                            is_error: false, .. } if call_id == "call-1" && content == "hello rust"
                     )
                 });
                 if !returned {

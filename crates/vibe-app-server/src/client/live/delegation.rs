@@ -66,6 +66,8 @@ pub(super) struct ProviderSubagentRunner {
     tools: ToolRegistry,
     input_price_per_million_micros: u64,
     output_price_per_million_micros: u64,
+    /// The prices the child's saved accounting records, the parent's own.
+    pricing: (f64, f64, Option<f64>),
     parent_intent: SessionIntent,
     /// The parent's hooks, which a child loads as its own (reference
     /// `hook_config_result` handed to the child loop).
@@ -114,6 +116,7 @@ impl LiveTurnDriver {
             tools: reservation.tools.clone(),
             input_price_per_million_micros: self.input_price_per_million_micros,
             output_price_per_million_micros: self.output_price_per_million_micros,
+            pricing: reservation.pricing,
             parent_intent: reservation.intent.clone(),
             hooks: reservation.hooks.clone(),
         });
@@ -279,6 +282,7 @@ pub(crate) fn task_handler(
                     display: json!({"kind": "subagent", "effect": effect}),
                     projected_result: serde_json::Value::Null,
                     chunks: Vec::new(),
+                    pending_injection: None,
                 })
             })
         },
@@ -470,7 +474,10 @@ impl SubagentRunner for ProviderSubagentRunner {
             let mut engine = ConversationEngine::new(self.provider.clone())
                 .with_tools(executor)
                 .with_working_directory(context.working_directory)
-                .with_sink(SessionTranscriptSink::new(context.store.clone(), metadata))
+                .with_sink(
+                    SessionTranscriptSink::new(context.store.clone(), metadata)
+                        .with_pricing(self.pricing),
+                )
                 .with_observer(progress.clone())
                 .with_limits(EngineLimits {
                     input_price_per_million_micros: self.input_price_per_million_micros,
@@ -561,6 +568,7 @@ impl SamplingHandler for ProviderSamplingHandler {
                             reasoning: None,
                             reasoning_payloads: Vec::new(),
                             tool_calls: Vec::new(),
+                            keeps_empty_content: false,
                         },
                     })
                     .collect(),

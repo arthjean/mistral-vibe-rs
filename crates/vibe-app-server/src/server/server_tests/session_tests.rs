@@ -478,6 +478,7 @@ fn rewind_read_and_restore_use_live_target_specific_checkpoints() {
                 reasoning: None,
                 reasoning_payloads: Vec::new(),
                 tool_calls: Vec::new(),
+                keeps_empty_content: false,
             },
             6,
         )

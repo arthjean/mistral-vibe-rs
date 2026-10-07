@@ -129,7 +129,7 @@ impl StdioCallbacks {
                     let detail =
                         approval_callback_detail(&approval, Some(&directory), remote.as_ref());
                     (
-                        format!("Approve {}?", approval.tool),
+                        format!("Allow {}?", approval.tool),
                         detail,
                         (
                             EngineCallbackKind::Approval,
@@ -137,13 +137,12 @@ impl StdioCallbacks {
                         ),
                     )
                 }
+                // Reference `_request_user_input` titles every question it
+                // asks the same way, whichever tool asks it.
                 InteractiveCallbackRequest::Tool {
-                    title,
-                    detail,
-                    response,
-                    ..
+                    detail, response, ..
                 } => (
-                    title,
+                    "User input required".to_owned(),
                     detail,
                     (
                         EngineCallbackKind::UserInput,

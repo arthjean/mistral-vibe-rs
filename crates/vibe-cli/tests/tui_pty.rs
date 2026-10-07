@@ -625,6 +625,7 @@ fn seed_session(vibe_home: &Path, workspace: &Path, id: &str, marker: &str, time
                 reasoning: None,
                 reasoning_payloads: Vec::new(),
                 tool_calls: Vec::new(),
+                keeps_empty_content: false,
             },
             timestamp + 2,
         )

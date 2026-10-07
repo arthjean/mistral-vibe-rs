@@ -552,12 +552,16 @@ pub fn append_invoked_skill(
             id: call_id.clone(),
             name: "skill".to_owned(),
             arguments: arguments.clone(),
+            presentation: None,
         }],
+        keeps_empty_content: true,
     });
     messages.push(ModelMessage::Tool {
         call_id: call_id.clone(),
         content: output.model_text.clone(),
         is_error: false,
+        name: "skill".to_owned(),
+        result: None,
     });
     AppendedSkillCall {
         call_id,

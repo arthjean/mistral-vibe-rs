@@ -142,7 +142,7 @@ impl ToolHandler for ShellPolicyGuard {
             match analysis.mode {
                 PermissionMode::Always => {
                     let approval = self.guarded.allowed_outright();
-                    crate::tools::mark_call_started();
+                    crate::tools::mark_call_started(approval);
                     match self.inner.invoke(invocation, output).await {
                         Ok(mut result) => {
                             result.approval.get_or_insert(approval);

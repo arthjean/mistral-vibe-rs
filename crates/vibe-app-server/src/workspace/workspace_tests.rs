@@ -969,6 +969,7 @@ fn rewind_resolves_an_entry_identity_and_forks_before_the_selected_message() {
             reasoning: None,
             reasoning_payloads: Vec::new(),
             tool_calls: Vec::new(),
+            keeps_empty_content: false,
         },
         ModelMessage::user("edit this question".to_owned()),
         ModelMessage::Assistant {
@@ -978,6 +979,7 @@ fn rewind_resolves_an_entry_identity_and_forks_before_the_selected_message() {
             reasoning: None,
             reasoning_payloads: Vec::new(),
             tool_calls: Vec::new(),
+            keeps_empty_content: false,
         },
     ]
     .iter()

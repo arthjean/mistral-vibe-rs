@@ -437,6 +437,23 @@ pub const DECLARATIONS: [ToolConfigDeclaration; 26] = [
 /// table rather than from a composition. The shell lists follow the host the
 /// binary runs on, which is the branch the reference composes there too.
 #[must_use]
+/// Reference `get_server_url_from_api_base`: what precedes the last
+/// `/v<digit>` segment of an `http` or `https` base, or `None` when the base
+/// has no such segment.
+fn server_url_from_api_base(api_base: &str) -> Option<String> {
+    let scheme = ["https://", "http://"]
+        .into_iter()
+        .find(|scheme| api_base.starts_with(scheme))?;
+    let bytes = api_base.as_bytes();
+    (scheme.len() + 1..bytes.len().saturating_sub(2))
+        .rev()
+        .find(|&index| {
+            bytes[index] == b'/' && bytes[index + 1] == b'v' && bytes[index + 2].is_ascii_digit()
+        })
+        .filter(|_| !api_base.contains('\n'))
+        .map(|index| api_base[..index].to_owned())
+}
+
 pub fn declared_document(tool: &str) -> JsonValue {
     serde_json::to_value(ToolConfigResolver::new().view_document(tool)).unwrap_or(JsonValue::Null)
 }
@@ -927,6 +944,8 @@ pub struct ToolConfigResolver {
     /// The shell rollout the merged configuration resolved, shared with every
     /// clone so a narrowed resolver still answers what the configuration says.
     managed_shell: Arc<AtomicBool>,
+    /// The server the Mistral provider's `api_base` names, shared the same way.
+    mistral_server_url: Arc<RwLock<Option<String>>>,
     session_permissions: Option<SessionPermissions>,
     posix_shell: bool,
 }
@@ -956,6 +975,7 @@ impl ToolConfigResolver {
             settings: Arc::new(RwLock::new(Table::new())),
             diagnostics: Arc::new(Mutex::new(Vec::new())),
             managed_shell: Arc::new(AtomicBool::new(false)),
+            mistral_server_url: Arc::new(RwLock::new(None)),
             session_permissions: None,
             posix_shell: !cfg!(windows),
         }
@@ -1051,7 +1071,25 @@ impl ToolConfigResolver {
                 .and_then(Value::as_bool)
                 .unwrap_or(false),
         );
+        *write_through_poison(&self.mistral_server_url) =
+            crate::telemetry::mistral_provider(&snapshot.effective).and_then(|provider| {
+                provider
+                    .get("api_base")
+                    .and_then(Value::as_str)
+                    .and_then(server_url_from_api_base)
+            });
         self.update(tools);
+    }
+
+    /// The server a tool reaching the Mistral API directly addresses: the one
+    /// the configured Mistral provider's `api_base` names, or `None` for the
+    /// SDK's default. Reference `WebSearch._resolve_server_url`.
+    #[must_use]
+    pub fn mistral_server_url(&self) -> Option<String> {
+        self.mistral_server_url
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
     /// Whether the managed shell family is published in place of the one-shot

@@ -1066,6 +1066,70 @@ impl AppServer {
         Ok((profile, session.intent.clone(), session.tools.clone()))
     }
 
+    /// Reference `AgentLoop._bind_workspace` after a relocation: the
+    /// destination's checkout is trusted for the session, its project
+    /// configuration resolves the tool filters again, and the tools are
+    /// registered against the new working directory. The grant an earlier
+    /// move took is given back.
+    pub(crate) fn rebind_session_workspace(&self, session_id: &str) -> Result<(), ServerError> {
+        let (working_directory, persisted, released) = {
+            let sessions = self.lock_sessions()?;
+            let session = sessions
+                .get(session_id)
+                .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
+            (
+                session.working_directory.clone(),
+                session.persisted.clone(),
+                session.trust_taken_by_move.clone(),
+            )
+        };
+        let target = Path::new(&working_directory);
+        let checkout = vibe_core::worktree::WorktreeRepository::open(
+            target,
+            &self.workspace.managed_worktrees(),
+        )
+        .and_then(|repository| repository.worktree_root())
+        .unwrap_or_else(|_| target.to_path_buf());
+        let (trusted, project_file_trust) = self.session_trust(&checkout, true);
+        if let Some(released) = released {
+            vibe_core::trust::TrustStore::for_vibe_home(self.workspace.vibe_home())
+                .revoke_session_trust(&released);
+        }
+        let (enabled_tools, mut disabled_tools) = self
+            .workspace
+            .tool_filters_for_session(target, trusted)
+            .map_err(|error| ServerError::Resource(error.to_string()))?;
+        {
+            let mut sessions = self.lock_sessions()?;
+            let session = sessions
+                .get_mut(session_id)
+                .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
+            session.trust_taken_by_move = Some(checkout);
+            let intent = &mut session.intent;
+            intent.trusted = trusted;
+            intent.project_file_trust = project_file_trust;
+            intent.requested_enabled_tools =
+                intent.client_enabled_tools.clone().unwrap_or(enabled_tools);
+            disabled_tools.extend(intent.client_disabled_tools.iter().cloned());
+            disabled_tools.sort();
+            disabled_tools.dedup();
+            intent.requested_disabled_tools = disabled_tools;
+            if persisted.is_none() {
+                intent
+                    .enabled_tools
+                    .clone_from(&intent.requested_enabled_tools);
+                intent
+                    .disabled_tools
+                    .clone_from(&intent.requested_disabled_tools);
+            }
+        }
+        match persisted {
+            Some(hydrated) => self
+                .refresh_workspace_runtime(&crate::workspace::runtime_attachment(&hydrated), None),
+            None => self.refresh_session_workspace_tools(session_id),
+        }
+    }
+
     /// Reads the session's hook files again. Reference
     /// `reload_with_initial_messages(reload_hooks=True)`.
     pub(crate) fn reload_session_hooks(&self, session_id: &str) -> Result<(), ServerError> {

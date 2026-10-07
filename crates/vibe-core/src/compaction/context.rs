@@ -157,13 +157,24 @@ pub fn parse_previous_user_messages(content: &str) -> Vec<String> {
     found
 }
 
-/// Whether this message is an envelope a previous compaction wrote.
+/// Whether this message is an envelope a previous compaction wrote: one it
+/// marked as its boundary, or, in a log written before the mark existed, an
+/// injected turn carrying the four markers.
 ///
 /// All four markers are required: a real user turn quoting one of them is still
 /// a real user turn, and treating it as an envelope would replace the operator's
 /// words with whatever the quote happened to contain.
 #[must_use]
 pub fn is_compaction_context_message(message: &ModelMessage) -> bool {
+    if matches!(
+        message,
+        ModelMessage::User {
+            compaction_boundary: true,
+            ..
+        }
+    ) {
+        return true;
+    }
     let content = message.content();
     message.is_injected()
         && content.contains(PREVIOUS_USER_MESSAGES_OPEN)

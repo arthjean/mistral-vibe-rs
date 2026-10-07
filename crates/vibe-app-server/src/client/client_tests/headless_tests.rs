@@ -87,6 +87,7 @@ async fn the_withheld_tools_stay_withheld_when_the_allowlist_names_one() {
                     usage: Usage {
                         input_tokens: 1,
                         output_tokens: 1,
+                        cached_tokens: 0,
                     },
                     refusal: None,
                     stop_reason: "stop".to_owned(),

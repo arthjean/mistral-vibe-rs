@@ -89,6 +89,7 @@ async fn live_driver_hydrates_and_extends_a_durable_resume() {
                 ..SessionIntent::default()
             },
             tools: guarded_registry("", ApprovalDecision::ApproveOnce).0,
+            pricing: (0.0, 0.0, None),
         })
         .await
         .expect("resumed turn completes");
@@ -158,6 +159,7 @@ async fn the_context_warning_reaches_the_model_once_per_session() {
                     usage: Usage {
                         input_tokens: 150,
                         output_tokens: 10,
+                        cached_tokens: 0,
                     },
                     refusal: None,
                     stop_reason: "stop".to_owned(),
@@ -213,6 +215,7 @@ async fn the_context_warning_reaches_the_model_once_per_session() {
                     compaction: compaction.clone(),
                     intent: SessionIntent::default(),
                     tools: guarded_registry("", ApprovalDecision::ApproveOnce).0,
+                    pricing: (0.0, 0.0, None),
                 })
                 .await
                 .expect("the turn completes");
@@ -401,6 +404,7 @@ async fn manual_compaction_uses_provider_summary_and_appends_a_boundary() {
                     usage: Usage {
                         input_tokens: 3,
                         output_tokens: 2,
+                        cached_tokens: 0,
                     },
                     refusal: None,
                     stop_reason: "stop".to_owned(),
@@ -504,6 +508,7 @@ async fn compacting_twice_keeps_the_identity_and_appends_two_boundaries() {
                     usage: Usage {
                         input_tokens: 3,
                         output_tokens: 2,
+                        cached_tokens: 0,
                     },
                     refusal: None,
                     stop_reason: "stop".to_owned(),
@@ -596,6 +601,7 @@ async fn live_driver_exposes_and_executes_the_session_tool_registry() {
                             display: Value::Null,
                             projected_result: serde_json::Value::Null,
                             chunks: Vec::new(),
+                            pending_injection: None,
                         })
                     })
                 },
@@ -630,6 +636,7 @@ async fn live_driver_exposes_and_executes_the_session_tool_registry() {
             compaction: CompactionSettings::default(),
             intent: SessionIntent::default(),
             tools,
+            pricing: (0.0, 0.0, None),
         })
         .await
         .expect("live turn completes");

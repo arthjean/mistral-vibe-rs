@@ -321,8 +321,9 @@ impl AppServer {
         finalize_turn_entries(session, turn_id, cancelled);
         session.record_turn(turn.clone());
         session.updated_at = completed_at;
-        session.stats.finish_turn();
+        session.stats.finish_turn(cancelled);
         frames.push(stats_updated_frame(session));
+        session.stats.count_deferred_tool_calls();
         frames.push(session_updated_frame(session));
         let event_id = next_event_id(session);
         frames.push(encode_notification(
@@ -434,6 +435,7 @@ impl AppServer {
         context_tokens: u64,
         input_tokens: u64,
         output_tokens: u64,
+        cached_tokens: u64,
     ) -> Result<(), ServerError> {
         let mut sessions = self.lock_sessions()?;
         let session = sessions
@@ -444,7 +446,45 @@ impl AppServer {
         }
         session
             .stats
-            .observe(context_tokens, input_tokens, output_tokens);
+            .observe(context_tokens, input_tokens, output_tokens, cached_tokens);
+        Ok(())
+    }
+
+    /// Reference `turn/steer` bumps the session once the steer joined the
+    /// transcript, as it does for any accepted user activity.
+    pub(crate) fn record_steer_activity(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<Vec<u8>>, ServerError> {
+        let mut sessions = self.lock_sessions()?;
+        let session = sessions
+            .get_mut(session_id)
+            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
+        super::connection::bump_session(&self.workspace, session, now_millis())
+            .map_err(ServerError::Resource)
+    }
+
+    /// Counts the tool calls the running turn settled, without a frame: the
+    /// reference reports them with its next accounting.
+    pub(crate) fn record_turn_tool_calls(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+        settled: vibe_core::engine::ToolCallTally,
+        after_turn: bool,
+    ) -> Result<(), ServerError> {
+        let mut sessions = self.lock_sessions()?;
+        let session = sessions
+            .get_mut(session_id)
+            .ok_or_else(|| ServerError::SessionNotFound(session_id.to_owned()))?;
+        if session.active_turn.as_deref() != Some(turn_id) {
+            return Err(ServerError::StaleTurn(turn_id.to_owned()));
+        }
+        if after_turn {
+            session.stats.deferred_tool_calls = session.stats.deferred_tool_calls.plus(settled);
+        } else {
+            session.stats.tool_calls = session.stats.tool_calls.plus(settled);
+        }
         Ok(())
     }
 
@@ -510,6 +550,16 @@ impl AppServer {
         if old_session_id == new_session_id {
             return Err(ServerError::SessionConflict(new_session_id.to_owned()));
         }
+        // Reference `AgentLoop._reset_session`: the identifier the session
+        // continues under is leased before the one it leaves is let go.
+        self.transfer_lease(old_session_id, new_session_id)
+            .map_err(|fault| {
+                ServerError::Resource(match fault {
+                    ProtocolFault::InvalidParams(_) => "the session lease was refused".to_owned(),
+                    ProtocolFault::Other { message, .. }
+                    | ProtocolFault::WithData { message, .. } => message,
+                })
+            })?;
         let mut sessions = self.lock_sessions()?;
         let source_key = sessions
             .key(old_session_id)
@@ -542,6 +592,15 @@ impl AppServer {
         session.rebind_turns(new_session_id);
         if let Some(callback) = session.pending_callback.as_mut() {
             callback.entry.rebind_session(new_session_id);
+        }
+        // Reference `AgentLoop.compact` makes the next step title the session
+        // afresh; a clearing resets the cadence (`_reset_title_state`).
+        match notice {
+            HandoffNotice::Compacted { .. } => session.title_cadence.mark_compaction(),
+            HandoffNotice::ContextCleared { .. } => {
+                session.title_cadence = vibe_core::session_title::TitleCadence::default();
+                session.title_in_flight = false;
+            }
         }
         let event_id = next_event_id(session);
         let state = public_session_state(session);
@@ -607,6 +666,7 @@ impl AppServer {
                 tools: session.tools.clone(),
                 hooks: session.hooks.clone(),
                 system_prompt: None,
+                pricing: session.pricing,
                 session_id,
                 turn_id,
                 prompt,

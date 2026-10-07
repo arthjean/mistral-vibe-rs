@@ -60,6 +60,24 @@ pub(crate) enum AppServerUpdate {
         context_tokens: u64,
         input_tokens: u64,
         output_tokens: u64,
+        cached_tokens: u64,
+    },
+    /// A steer joined the transcript, which bumps the session.
+    SteerApplied { session_id: String },
+    /// A model step ran to completion, which may make a background title
+    /// due. The transport that runs the turn schedules it; no frame follows
+    /// from the update itself.
+    StepCompleted {
+        session_id: String,
+        turn_completing: bool,
+    },
+    /// Tool calls the turn settled, counted without a frame. Calls settled
+    /// `after_turn` are counted once the turn's closing accounting is out.
+    ToolCalls {
+        session_id: String,
+        turn_id: String,
+        settled: vibe_core::engine::ToolCallTally,
+        after_turn: bool,
     },
     /// The point where the reference looks at the context size again: after
     /// the first event its loop yields once a round trip's usage landed
@@ -151,10 +169,56 @@ impl EventObserver for AppServerEventObserver {
                 .map_err(|_| "app-server update receiver is closed".to_owned())?;
             return Ok(());
         }
+        // A settled call is counted in two parts, around the accounting the
+        // reference may publish while its result event is read.
+        let (settled, counted_after) = vibe_core::engine::ToolCallTally::settled_by(&event.event);
+        let count_calls = |settled: vibe_core::engine::ToolCallTally,
+                           after_turn: bool,
+                           state: &ProjectionSnapshot|
+         -> Result<(), String> {
+            let Some(turn_id) = state.turn_id.clone() else {
+                return Ok(());
+            };
+            if settled == vibe_core::engine::ToolCallTally::default() {
+                return Ok(());
+            }
+            self.sender
+                .send(AppServerUpdate::ToolCalls {
+                    session_id: state.session_id.clone(),
+                    turn_id,
+                    settled,
+                    after_turn,
+                })
+                .map_err(|_| "app-server update receiver is closed".to_owned())
+        };
+        count_calls(settled, false, projection.reducer.state())?;
+        count_calls(
+            vibe_core::engine::ToolCallTally::abandoned_by(&event.event),
+            true,
+            projection.reducer.state(),
+        )?;
+        if let EngineEvent::StepCompleted { turn_completing } = event.event {
+            self.sender
+                .send(AppServerUpdate::StepCompleted {
+                    session_id: projection.reducer.state().session_id.clone(),
+                    turn_completing,
+                })
+                .map_err(|_| "app-server update receiver is closed".to_owned())?;
+            return Ok(());
+        }
+        if matches!(event.event, EngineEvent::SteerApplied) {
+            self.sender
+                .send(AppServerUpdate::SteerApplied {
+                    session_id: projection.reducer.state().session_id.clone(),
+                })
+                .map_err(|_| "app-server update receiver is closed".to_owned())?;
+            return Ok(());
+        }
         if let EngineEvent::Stats {
             context_tokens,
             input_tokens,
             output_tokens,
+            cached_tokens,
         } = event.event
         {
             let state = projection.reducer.state();
@@ -168,6 +232,7 @@ impl EventObserver for AppServerEventObserver {
                     context_tokens,
                     input_tokens,
                     output_tokens,
+                    cached_tokens,
                 })
                 .map_err(|_| "app-server update receiver is closed".to_owned())?;
             projection.stats_pending = true;
@@ -296,6 +361,7 @@ impl EventObserver for AppServerEventObserver {
                 })
                 .map_err(|_| "app-server update receiver is closed".to_owned())?;
         }
+        count_calls(counted_after, false, &snapshot)?;
         projection.entries = snapshot
             .history
             .into_iter()
@@ -529,6 +595,7 @@ pub(crate) fn app_server_notification(
             context_tokens,
             input_tokens,
             output_tokens,
+            cached_tokens,
         } => {
             server.record_turn_stats(
                 &session_id,
@@ -536,7 +603,21 @@ pub(crate) fn app_server_notification(
                 context_tokens,
                 input_tokens,
                 output_tokens,
+                cached_tokens,
             )?;
+            return Ok(None);
+        }
+        AppServerUpdate::StepCompleted { .. } => return Ok(None),
+        AppServerUpdate::SteerApplied { session_id } => {
+            return server.record_steer_activity(&session_id);
+        }
+        AppServerUpdate::ToolCalls {
+            session_id,
+            turn_id,
+            settled,
+            after_turn,
+        } => {
+            server.record_turn_tool_calls(&session_id, &turn_id, settled, after_turn)?;
             return Ok(None);
         }
         AppServerUpdate::StatsCheck {

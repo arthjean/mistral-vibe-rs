@@ -524,6 +524,76 @@ pub struct EffectDetail {
     pub remote: Option<RemoteToolOrigin>,
 }
 
+/// A presentation as the reference persists it: `exclude_none`, so a field
+/// left empty is not written.
+fn without_nulls(value: Value) -> Value {
+    match value {
+        Value::Object(map) => Value::Object(
+            map.into_iter()
+                .filter(|(_, item)| !item.is_null())
+                .collect(),
+        ),
+        other => other,
+    }
+}
+
+impl EffectDetail {
+    /// Reference `ToolCallPresentation`, which a persisted call records under
+    /// `presentation`.
+    #[must_use]
+    pub fn presentation(&self) -> Value {
+        json!({
+            "kind": self.kind,
+            "display": without_nulls(serde_json::to_value(&self.display).unwrap_or(Value::Null)),
+        })
+    }
+
+    /// The header a call that ran to an answer settles with: the one the
+    /// projection publishes for a completed call.
+    #[must_use]
+    pub fn completed_display(
+        &self,
+        answered: &Value,
+        emitted: &Value,
+        working_directory: Option<&Path>,
+    ) -> EffectResultDisplay {
+        match &self.remote {
+            Some(remote) => EffectResultDisplay::for_remote(
+                remote,
+                &self.display,
+                &RemoteSettlement::answered(answered),
+            ),
+            None => EffectResultDisplay::completed_at(
+                self.kind,
+                &self.display,
+                answered,
+                emitted,
+                working_directory,
+            ),
+        }
+    }
+}
+
+/// Reference `ToolResultPresentation`, which a persisted answer records under
+/// `tool_result.presentation`.
+#[must_use]
+pub fn result_presentation(
+    kind: ToolEffectKind,
+    display: &EffectResultDisplay,
+    projected: &Value,
+) -> Value {
+    let mut presentation = json!({
+        "kind": kind,
+        "display": without_nulls(serde_json::to_value(display).unwrap_or(Value::Null)),
+    });
+    if !projected.is_null()
+        && let Some(object) = presentation.as_object_mut()
+    {
+        object.insert("projectedOutput".to_owned(), projected.clone());
+    }
+    presentation
+}
+
 impl Serialize for EffectDetail {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeMap;
@@ -2018,3 +2088,198 @@ fn grouped_thousands(value: usize) -> String {
 mod detail_presentation_parity_tests;
 #[cfg(test)]
 mod detail_tests;
+
+/// The tags reference `TaggedText` recognizes (`vibe/core/utils/tags.py`).
+const KNOWN_TAGS: [&str; 4] = [
+    "user_cancellation",
+    "tool_error",
+    "vibe_stop_event",
+    "vibe_warning",
+];
+
+/// Reference `TaggedText.from_string`: every known tag pair, scanned left to
+/// right, is replaced by its content, and the first one found names the text.
+/// Text that carries no pair is returned whole with no tag.
+#[must_use]
+pub fn tagged_text(text: &str) -> (Option<&'static str>, String) {
+    let mut found = None;
+    let mut result = String::with_capacity(text.len());
+    let mut rest = text;
+    'scan: while let Some(start) = rest.find('<') {
+        for tag in KNOWN_TAGS {
+            let open = format!("<{tag}>");
+            let close = format!("</{tag}>");
+            if !rest[start..].starts_with(&open) {
+                continue;
+            }
+            let body = &rest[start + open.len()..];
+            if let Some(end) = body.find(&close) {
+                result.push_str(&rest[..start]);
+                result.push_str(&body[..end]);
+                found.get_or_insert(tag);
+                rest = &body[end + close.len()..];
+                continue 'scan;
+            }
+        }
+        result.push_str(&rest[..=start]);
+        rest = &rest[start + 1..];
+    }
+    result.push_str(rest);
+    match found {
+        Some(tag) => (Some(tag), result),
+        None => (None, text.to_owned()),
+    }
+}
+
+impl EffectDetail {
+    /// Reference `_history_effect` without a recorded presentation: a generic
+    /// effect whose header names the tool and its first three arguments, and
+    /// whose input is the arguments as recorded (the raw text when it is not
+    /// JSON).
+    #[must_use]
+    pub fn generic(tool_name: &str, arguments: Option<&str>) -> Self {
+        let input = arguments.map_or(Value::Null, |raw| {
+            serde_json::from_str(raw).unwrap_or_else(|_| Value::String(raw.to_owned()))
+        });
+        let summary = if input.is_object() {
+            generic_call_summary(
+                tool_name,
+                &input,
+                &arguments.map(wire_key_order).unwrap_or_default(),
+            )
+        } else {
+            tool_name.to_owned()
+        };
+        Self {
+            kind: ToolEffectKind::Tool,
+            tool_name: tool_name.to_owned(),
+            display: EffectCallDisplay {
+                summary: summary.clone(),
+                verb: "Running".to_owned(),
+                message: Some(summary.clone()),
+                settled_verb: "Ran".to_owned(),
+                settled_message: Some(summary),
+                status_text: format!("Running {tool_name}"),
+                ..EffectCallDisplay::default()
+            },
+            input,
+            child_session_id: None,
+            remote: None,
+        }
+    }
+}
+
+/// Reference `_persisted_effect_state` (`vibe/app_server/_projection.py`):
+/// how a replayed call settled, read from the answer its transcript holds.
+/// A call with no answer was cut off by the session's end; a tagged answer is
+/// a cancellation or a failure; an answer with a recorded result settles as
+/// that result presented.
+#[must_use]
+pub fn persisted_effect_state(
+    detail: &EffectDetail,
+    answer: Option<(&str, Option<&super::PersistedToolResult>)>,
+) -> super::PublicEffectState {
+    use super::{EffectApproval, PublicEffectState, PublicError};
+    let Some((content, persisted)) = answer else {
+        let reason = "Tool did not complete before the session ended";
+        return PublicEffectState::Cancelled {
+            reason: reason.to_owned(),
+            output_text: String::new(),
+            duration_ms: 0,
+            display: Some(EffectResultDisplay {
+                success: false,
+                message: reason.to_owned(),
+                ..EffectResultDisplay::default()
+            }),
+            approval: EffectApproval::default(),
+        };
+    };
+    let (tag, message) = tagged_text(content);
+    let display_message = if message.is_empty() {
+        format!("{} completed", detail.tool_name)
+    } else {
+        message.clone()
+    };
+    let plain = |message: &str, success: bool| EffectResultDisplay {
+        success,
+        message: message.to_owned(),
+        ..EffectResultDisplay::default()
+    };
+    match tag {
+        Some("user_cancellation") => {
+            return PublicEffectState::Cancelled {
+                display: Some(plain(&display_message, false)),
+                reason: display_message,
+                output_text: message,
+                duration_ms: 0,
+                approval: EffectApproval::default(),
+            };
+        }
+        Some("tool_error") => {
+            return PublicEffectState::Failed {
+                error: PublicError {
+                    message: display_message.clone(),
+                    code: None,
+                    details: Value::Null,
+                },
+                output: Value::Null,
+                output_text: message,
+                duration_ms: 0,
+                display: plain(&display_message, false),
+                approval: EffectApproval::default(),
+            };
+        }
+        _ => {}
+    }
+    let Some(persisted) = persisted else {
+        return PublicEffectState::Completed {
+            output: Value::Null,
+            output_text: message,
+            duration_ms: 0,
+            display: plain(&display_message, true),
+            approval: EffectApproval::default(),
+        };
+    };
+    let presentation = persisted.presentation.as_ref();
+    let display = presentation
+        .and_then(|presentation| presentation.get("display"))
+        .and_then(|display| serde_json::from_value(display.clone()).ok())
+        .unwrap_or_else(|| plain(&display_message, true));
+    // The reference keeps fractional milliseconds; a call that ran is never
+    // reported as taking none.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let duration_ms = persisted
+        .duration
+        .as_ref()
+        .and_then(serde_json::Number::as_f64)
+        .filter(|seconds| seconds.is_finite() && *seconds > 0.0)
+        .map_or(0, |seconds| (seconds * 1_000.0).ceil() as u64);
+    if persisted.cancelled {
+        return PublicEffectState::Cancelled {
+            reason: display.message.clone(),
+            output_text: message,
+            duration_ms,
+            display: Some(display),
+            approval: EffectApproval::default(),
+        };
+    }
+    let kind = presentation
+        .and_then(|presentation| presentation.get("kind"))
+        .and_then(|kind| serde_json::from_value(kind.clone()).ok())
+        .unwrap_or(detail.kind);
+    let output = presentation
+        .and_then(|presentation| presentation.get("projectedOutput"))
+        .filter(|projected| !projected.is_null())
+        .unwrap_or(&persisted.output);
+    PublicEffectState::Completed {
+        output: if has_output_model(kind) {
+            project_output(kind, output)
+        } else {
+            output.clone()
+        },
+        output_text: message,
+        duration_ms,
+        display,
+        approval: EffectApproval::default(),
+    }
+}

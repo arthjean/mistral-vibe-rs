@@ -13,7 +13,9 @@ use crate::client::interactive::{
 use crate::client::{
     DriverError, TurnDriver, TurnReservation, public_driver_error, public_turn_error,
 };
-use crate::live_projection::{app_server_notification, app_server_update_channel_for_turn};
+use crate::live_projection::{
+    AppServerUpdate, app_server_notification, app_server_update_channel_for_turn,
+};
 use crate::server::{AppServer, DeferredWork, ServerError, server_error_frame};
 
 mod callbacks;
@@ -657,6 +659,34 @@ async fn run_turn<D>(
     if let Ok(mut routes) = routes.lock() {
         routes.insert(reservation.session_id.clone(), questions);
     }
+    // Reference `_schedule_title_generation_events`: a completed model step
+    // may make a title due, which runs beside the rest of the turn and lands
+    // whenever the utility model answers.
+    let schedule_title = |update: &AppServerUpdate| {
+        let AppServerUpdate::StepCompleted {
+            session_id,
+            turn_completing,
+        } = update
+        else {
+            return;
+        };
+        let Some(periodic) = driver.title_model_is_fast() else {
+            return;
+        };
+        let Some((job, started)) = server.title_job(session_id, periodic, *turn_completing) else {
+            return;
+        };
+        let _ = events.send(ServeEvent::Frame(started));
+        let title = driver.generate_title(job.messages.clone(), job.previous_title.clone());
+        let server = server.clone();
+        let events = events.clone();
+        tokio::spawn(async move {
+            let title = title.await;
+            for frame in server.land_title(job, title) {
+                let _ = events.send(ServeEvent::Frame(frame));
+            }
+        });
+    };
     let mut turn = Box::pin(driver.run_observed(&reservation, observer));
     let outcome = loop {
         tokio::select! {
@@ -664,6 +694,7 @@ async fn run_turn<D>(
             question = asked.recv() => {
                 let Some(question) = question else { continue };
                 while let Ok(update) = updates.try_recv() {
+                    schedule_title(&update);
                     match app_server_notification(&server, update) {
                         Ok(Some(bytes)) => {
                             let _ = events.send(ServeEvent::Frame(bytes));
@@ -679,6 +710,7 @@ async fn run_turn<D>(
             }
             update = updates.recv() => {
                 let Some(update) = update else { continue };
+                schedule_title(&update);
                 match app_server_notification(&server, update) {
                     Ok(bytes) => {
                         if let Some(bytes) = bytes {
@@ -694,6 +726,7 @@ async fn run_turn<D>(
         }
     };
     while let Ok(update) = updates.try_recv() {
+        schedule_title(&update);
         match app_server_notification(&server, update) {
             Ok(Some(bytes)) => {
                 let _ = events.send(ServeEvent::Frame(bytes));
@@ -708,7 +741,6 @@ async fn run_turn<D>(
     if let Ok(mut routes) = routes.lock() {
         routes.remove(&reservation.session_id);
     }
-    let settled = outcome.is_ok();
     let notification = match outcome {
         Ok(outcome) => {
             let stop_reason = matches!(
@@ -733,21 +765,7 @@ async fn run_turn<D>(
             public_driver_error(&error),
         ),
     };
-    let title = (settled && notification.is_ok())
-        .then(|| driver.title_model_is_fast())
-        .flatten()
-        .and_then(|periodic| server.title_job(&reservation.session_id, periodic));
     let _ = events.send(settle(notification));
-    // The title is generated after the turn is settled, so the client never
-    // waits on it (reference `_generate_title_task`).
-    if let Some(job) = title {
-        let title = driver
-            .generate_title(job.messages.clone(), job.previous_title.clone())
-            .await;
-        for frame in server.land_title(job, title) {
-            let _ = events.send(ServeEvent::Frame(frame));
-        }
-    }
 }
 
 /// Something the serve loop must act on once background work reports back.

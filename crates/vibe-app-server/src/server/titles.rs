@@ -3,10 +3,13 @@
 //! Reference `AgentLoop._maybe_schedule_title_generation`,
 //! `_generate_title_task` and `LegacySessionRuntime._notify_title`
 //! (`vibe/core/agent_loop/_loop.py`, `vibe/app_server/_legacy_session_runtime.py`):
-//! once a turn answers, a session a terminal or desktop client opened with
-//! `session_logging.generate_titles` on asks the utility model to name it,
-//! records the title as generated, and tells the client. A manual title is
-//! never replaced, and a title that does not land makes the next turn due.
+//! after a model step the cadence makes due, a session a terminal or desktop
+//! client opened with `session_logging.generate_titles` on asks the utility
+//! model to name it beside the running turn, records the title as generated,
+//! and tells the client. A manual title is never replaced, and a title that
+//! does not land makes the next step due. While the title runs the session is
+//! not quiescent, which a snapshot announces on either side
+//! (`LegacySessionRuntime._handle_background_work`).
 
 use super::*;
 use vibe_core::events::{NoticeDetail, PublicEntryMetadata, PublicHistoryEntry, PublicNoticeLevel};
@@ -22,9 +25,16 @@ pub(crate) struct TitleJob {
 }
 
 impl AppServer {
-    /// The title the turn that just settled on `session_id` makes due, if
-    /// any. `periodic` is whether the fast utility model serves titles.
-    pub(crate) fn title_job(&self, session_id: &str, periodic: bool) -> Option<TitleJob> {
+    /// The title the model step that just completed on `session_id` makes
+    /// due, if any, with the snapshot that announces the work. `periodic` is
+    /// whether the fast utility model serves titles, and `turn_completing`
+    /// whether the step ended on the model's answer.
+    pub(crate) fn title_job(
+        &self,
+        session_id: &str,
+        periodic: bool,
+        turn_completing: bool,
+    ) -> Option<(TitleJob, Vec<u8>)> {
         if std::env::var(DISABLE_ENVIRONMENT).is_ok_and(|value| value == "1")
             || !self.workspace.session_logging().enabled
         {
@@ -40,19 +50,26 @@ impl AppServer {
         if hydrated.metadata.title_source == "manual" {
             return None;
         }
-        let ticket = session.title_cadence.begin_if_due(periodic, true)?;
+        let ticket = session
+            .title_cadence
+            .begin_if_due(periodic, turn_completing)?;
         session.title_in_flight = true;
-        Some(TitleJob {
-            session_id: session.id.clone(),
-            messages: hydrated.messages,
-            previous_title: hydrated.metadata.title,
-            ticket,
-        })
+        let started = background_snapshot(session);
+        Some((
+            TitleJob {
+                session_id: session.id.clone(),
+                messages: hydrated.messages,
+                previous_title: hydrated.metadata.title,
+                ticket,
+            },
+            started,
+        ))
     }
 
     /// Records the title `job` produced and answers the notifications that
-    /// announce it. A session that moved on to another identifier meanwhile
-    /// keeps its own title.
+    /// announce it, closed by the snapshot that makes the session quiescent
+    /// again. A session that moved on to another identifier meanwhile keeps
+    /// its own title and hears nothing.
     pub(crate) fn land_title(&self, job: TitleJob, title: Option<String>) -> Vec<Vec<u8>> {
         let Ok(mut sessions) = self.lock_sessions() else {
             return Vec::new();
@@ -60,10 +77,21 @@ impl AppServer {
         let Some(session) = sessions.get_mut(&job.session_id) else {
             return Vec::new();
         };
-        session.title_in_flight = false;
-        if session.id != job.session_id {
+        if session.id != job.session_id || !session.title_in_flight {
             return Vec::new();
         }
+        session.title_in_flight = false;
+        let mut frames = self.title_frames(session, job, title);
+        frames.push(background_snapshot(session));
+        frames
+    }
+
+    fn title_frames(
+        &self,
+        session: &mut SessionRuntime,
+        job: TitleJob,
+        title: Option<String>,
+    ) -> Vec<Vec<u8>> {
         let Some(title) = title else {
             session.title_cadence.restore(job.ticket);
             return Vec::new();
@@ -97,7 +125,7 @@ impl AppServer {
                 related_entry_id: None,
             },
             level: PublicNoticeLevel::Info,
-            message: "Session title changed".to_owned(),
+            message: "Session title updated".to_owned(),
             detail: NoticeDetail::SessionTitleUpdated {
                 title: title.clone(),
             },
@@ -129,4 +157,23 @@ impl AppServer {
             ),
         ]
     }
+}
+
+/// Reference `emit_snapshot(include_history=False, include_turns=False)`: the
+/// session's state without its history or turns, sequenced like any snapshot.
+fn background_snapshot(session: &mut SessionRuntime) -> Vec<u8> {
+    let event_id = next_event_id(session);
+    let mut state = public_session_state(session);
+    for key in ["history", "historyBeforeCursor", "turns"] {
+        state[key] = Value::Null;
+    }
+    encode_notification(
+        "session/snapshot",
+        result_map([
+            ("eventId", json!(event_id)),
+            ("sessionId", json!(session.id)),
+            ("state", state),
+            ("emittedAt", json!(now_millis())),
+        ]),
+    )
 }

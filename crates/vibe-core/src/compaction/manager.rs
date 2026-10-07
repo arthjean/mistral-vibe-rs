@@ -264,6 +264,11 @@ pub async fn compact(
     extra_instructions: &str,
 ) -> Result<SummarizedCompaction, CompactionFailure> {
     let prompts = plan.prompts()?;
+    // Reference `AgentLoop.compact` cleans the history first, so a call an
+    // interrupt left unanswered is answered before it is summarized and kept.
+    let mut cleaned = messages.to_vec();
+    crate::events::fill_missing_tool_responses(&mut cleaned);
+    let messages = cleaned.as_slice();
     // Only what the model still reads is summarized: an earlier envelope
     // already stands for everything before it.
     let snapshot = select_model_context(messages);
@@ -285,9 +290,9 @@ pub async fn compact(
     };
 
     let mut compacted = messages.to_vec();
-    compacted.push(ModelMessage::injected_user(render_compaction_context(
-        &preserved, &summary,
-    )));
+    compacted.push(ModelMessage::compaction_envelope(
+        render_compaction_context(&preserved, &summary),
+    ));
     Ok(SummarizedCompaction {
         summary,
         messages: compacted,

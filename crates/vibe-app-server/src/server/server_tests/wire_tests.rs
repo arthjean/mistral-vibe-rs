@@ -283,7 +283,7 @@ fn stats_updated_carries_the_whole_snapshot_and_the_session_token_usage() {
         .turn_started("session-1", "turn-1")
         .expect("the turn starts");
     server
-        .record_turn_stats("session-1", "turn-1", 1_200, 900, 300)
+        .record_turn_stats("session-1", "turn-1", 1_200, 900, 300, 0)
         .expect("the usage is recorded");
     let frame = server
         .check_turn_stats("session-1", "turn-1")

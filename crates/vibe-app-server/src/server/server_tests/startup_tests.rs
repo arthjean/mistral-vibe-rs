@@ -390,6 +390,7 @@ fn session_start_hydrates_bounded_public_resume_history() {
                 reasoning: None,
                 reasoning_payloads: Vec::new(),
                 tool_calls: Vec::new(),
+                keeps_empty_content: false,
             },
         ),
         (14, ModelMessage::user("latest question".to_owned())),
@@ -402,6 +403,7 @@ fn session_start_hydrates_bounded_public_resume_history() {
                 reasoning: None,
                 reasoning_payloads: Vec::new(),
                 tool_calls: Vec::new(),
+                keeps_empty_content: false,
             },
         ),
     ] {

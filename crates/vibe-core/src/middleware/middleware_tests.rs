@@ -54,9 +54,11 @@ fn stats(steps: u32, input_tokens: u64, output_tokens: u64, context_tokens: u64)
         usage: Usage {
             input_tokens,
             output_tokens,
+            cached_tokens: 0,
         },
         context_tokens,
         steps,
+        tool_calls: crate::engine::ToolCallTally::default(),
     }
 }
 

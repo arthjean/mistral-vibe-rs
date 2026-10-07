@@ -70,12 +70,6 @@ const PLAN_REVIEWS: &[&str] = &[
     "switch/exit-plan-stay",
 ];
 
-const SWITCHES: &[&str] = &[
-    "switch/exit-plan-auto",
-    "switch/exit-plan-manual",
-    "switch/exit-plan-clear",
-];
-
 const TASK_REFUSALS: &[&str] = &[
     "delegation/unknown-agent",
     "delegation/primary-agent",
@@ -204,30 +198,6 @@ const LEDGER: &[Divergence] = &[
         pointer: "/steps/1/turn/10/patch/0/value/output/message",
         row: "3",
         reason: "the plan-review outcome, as the settled effect's output",
-    },
-    Divergence {
-        scenarios: PLAN_REVIEWS,
-        pointer: "/steps/1/turn/5/message",
-        row: "17",
-        reason: "the `plan_review_started` notice carries this port's own message",
-    },
-    Divergence {
-        scenarios: PLAN_REVIEWS,
-        pointer: "/steps/1/turn/11/message",
-        row: "17",
-        reason: "the `plan_review_ended` notice carries this port's own message",
-    },
-    Divergence {
-        scenarios: SWITCHES,
-        pointer: "/steps/1/turn/12/message",
-        row: "17",
-        reason: "the `agent_changed` notice carries this port's own message",
-    },
-    Divergence {
-        scenarios: &["switch/exit-plan-clear"],
-        pointer: "/steps/1/turn/13/message",
-        row: "17",
-        reason: "the `context_cleared` notice carries this port's own message",
     },
 ];
 

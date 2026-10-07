@@ -151,7 +151,13 @@ pub(crate) async fn snapshot_attachments(
                     attachment: snapshot.unwrap_or_else(|| attachment.clone()),
                 });
             }
-            PublicContentBlock::Resource { .. } => attachments.push(block.clone()),
+            // Reference `ResourceContentBlock` reads the resource through its
+            // model, so the entry shows every field the kind declares.
+            PublicContentBlock::Resource { resource } => {
+                attachments.push(PublicContentBlock::Resource {
+                    resource: vibe_core::events::canonical_user_resource(resource),
+                });
+            }
         }
     }
     Ok(attachments)
