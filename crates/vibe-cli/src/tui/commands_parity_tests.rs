@@ -44,11 +44,11 @@ const CORPUS_RELATIVE: &str = "crates/vibe-cli/tests/commands/corpus.json";
 const CAPTURE_SCRIPT: &str = "scripts/parity/commands.py";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the capture
 /// script.
-const CORPUS_SCHEMA_VERSION: u32 = 3;
+const CORPUS_SCHEMA_VERSION: u32 = 4;
 /// The comparison floor this replay commits to, read off the first real capture
 /// rather than estimated, so a regeneration that captured almost nothing fails
 /// instead of reporting a clean but empty run.
-const MINIMUM_COMPARISONS: usize = 733;
+const MINIMUM_COMPARISONS: usize = 780;
 
 /// Keys the corpus carries that are not families: the pin, the layout and the
 /// prose-free note.
@@ -105,7 +105,7 @@ const FAMILIES: &[Family] = &[
     Family {
         name: "traits",
         inputs: &[],
-        answers: &["sideChannel", "exits"],
+        answers: &["sideChannel", "exits", "forwardsToModel"],
     },
     Family {
         name: "dispatch",
@@ -129,6 +129,10 @@ const FAMILIES: &[Family] = &[
     },
 ];
 
+/// Why `/loop` differs under the experimental harness: the reference forwards
+/// it to a unified core this port does not run.
+const UNIFIED_LOOP: &str = "ACCEPTED: under the experimental harness reference v2.26.0 describes `/loop` as a natural-language schedule and forwards the line to the model as a prompt, queued like any prompt, whose unified core interprets it with its `cron` tool and fires the schedule itself (vibe/cli/commands.py:232-242, vibe/cli/textual_ui/widgets/chat_input/input_kinds.py:52, vibe/app_server/_loop_prompt.py, vibe/app_server/_cron.py @376f6a3); this port's unified mode runs no unified core (docs/parity.md row 36), so `/loop` keeps the client scheduler, its routing as a command and the description of what it runs (crates/vibe-cli/src/tui/commands.rs:382)";
+
 /// Cases where this build answers something other than the reference, each with
 /// the reason it is permanent or the reference change it has not followed.
 ///
@@ -140,15 +144,17 @@ const FAMILIES: &[Family] = &[
 /// `/help` message differ, and the continuation `/retry` submits is a prompt the
 /// model reads, which `NOTICE` names first.
 ///
-/// `OPEN` entries record what the re-pin to 2.26.0 measured and this port has
-/// not followed: the rewritten `/status` description, the second `/loop`
-/// description the experimental harness selects, and the lean install handlers
-/// that confirm instead of reloading. Everything else a handler, the dispatcher
-/// or the log-level panel does conforms, so a new difference fails the replay.
+/// One `ACCEPTED` family is not prose: the `/loop` the reference forwards to
+/// the model under the experimental harness, which only a unified core can
+/// interpret (row 36). It shows in the trait, in the help line and in what
+/// dispatch does with the line, except under a running shell, where both sides
+/// refuse it before asking what it is. Everything else a handler, the
+/// dispatcher or the log-level panel does conforms, so a new difference fails
+/// the replay.
 const DIVERGENCES: &[(&str, &str)] = &[
     (
         "handlers/effects/help",
-        "ACCEPTED: the `/help` message carries the thirteen authored lines helpProse ledgers, so its digest differs while every effect around it conforms; since 376f6a3 it also carries the two OPEN command lines below",
+        "ACCEPTED: the `/help` message carries the thirteen authored lines helpProse ledgers, so its digest differs while every effect around it conforms; since 376f6a3 it also carries the `/loop` line the unified core describes, ledgered below",
     ),
     (
         "handlers/effects/retry",
@@ -158,30 +164,13 @@ const DIVERGENCES: &[(&str, &str)] = &[
         "handlers/effects/retry-instructions",
         "ACCEPTED: the continuation `/retry` submits is a prompt `NOTICE` forbids reproducing (vibe/utils/retry_prompt.py @376f6a3), so this port submits its own words around the operator's instructions",
     ),
-    (
-        "handlers/effects/leanstall",
-        "OPEN: reference v2.26.0 confirms a lean install with its own message and no longer reloads the configuration after the write (vibe/cli/textual_ui/app.py:4853-4865 @376f6a3); this port still reloads and reports the reload status (crates/vibe-cli/src/tui/command_handlers.rs:847)",
-    ),
-    (
-        "handlers/effects/unleanstall",
-        "OPEN: reference v2.26.0 confirms a lean uninstall with its own message and no longer reloads the configuration after the write (vibe/cli/textual_ui/app.py:4867-4881 @376f6a3); this port still reloads and reports the reload status (crates/vibe-cli/src/tui/command_handlers.rs:847)",
-    ),
-    (
-        "helpProse/length/line-30",
-        "OPEN: reference v2.26.0 gives `/loop` a second description under the experimental harness, which the full help context enables and where the command forwards its line to the model (vibe/cli/commands.py:232-242 @376f6a3); this port keeps the one legacy description (crates/vibe-cli/src/tui/commands.rs:382)",
-    ),
-    (
-        "helpProse/digest/line-30",
-        "OPEN: reference v2.26.0 gives `/loop` a second description under the experimental harness, which the full help context enables and where the command forwards its line to the model (vibe/cli/commands.py:232-242 @376f6a3); this port keeps the one legacy description (crates/vibe-cli/src/tui/commands.rs:382)",
-    ),
-    (
-        "helpProse/length/line-44",
-        "OPEN: reference v2.26.0 rewrote the `/status` description to cover the model and provider section (vibe/cli/commands.py:131 @376f6a3); this port keeps the 2.25.7 description (crates/vibe-cli/src/tui/commands.rs:274)",
-    ),
-    (
-        "helpProse/digest/line-44",
-        "OPEN: reference v2.26.0 rewrote the `/status` description to cover the model and provider section (vibe/cli/commands.py:131 @376f6a3); this port keeps the 2.25.7 description (crates/vibe-cli/src/tui/commands.rs:274)",
-    ),
+    ("traits/forwardsToModel/loop", UNIFIED_LOOP),
+    ("dispatch/effects/idle/forwarded", UNIFIED_LOOP),
+    ("dispatch/effects/busy/forwarded", UNIFIED_LOOP),
+    ("dispatch/effects/paused/forwarded", UNIFIED_LOOP),
+    ("dispatch/effects/pausedBusy/forwarded", UNIFIED_LOOP),
+    ("helpProse/length/line-30", UNIFIED_LOOP),
+    ("helpProse/digest/line-30", UNIFIED_LOOP),
     (
         "helpProse/length/line-00",
         "ACCEPTED: the first heading is authored prose, so this port writes its own",
@@ -449,8 +438,8 @@ fn settle(report: &Report, family: &str) -> (usize, Vec<String>) {
 /// rather than prose: the aliases come from the registry and the descriptions
 /// are byte-identical to the reference's, which the `commands-*` popup traces
 /// assert. Measured against the corpus captured at 2.26.0, every line rebuilt
-/// from `COMMANDS` hashes to a digest `helpProse` records, save the `/loop` and
-/// `/status` lines the `OPEN` entries of [`DIVERGENCES`] name. Routing them through this
+/// from `COMMANDS` hashes to a digest `helpProse` records, save the `/loop` line
+/// [`DIVERGENCES`] ledgers to the unified core. Routing them through this
 /// function would make US-231 unsatisfiable: it would forbid the very lines its
 /// own criteria require. `helpCommands` is what compares them, on their order
 /// and their alias list, which is the part a port can get wrong.

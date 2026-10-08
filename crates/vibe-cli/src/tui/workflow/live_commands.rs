@@ -21,7 +21,7 @@ use super::super::clipboard::copy_text_verified;
 use super::super::command_handlers::log_level::{self, Badge, LogLevelBackend, Picker};
 use super::super::command_handlers::{
     CommandBackend, Effect, Identity, McpAddArguments, McpLogin, McpSourceKind, McpState, Panel,
-    Reloaded, ScheduledLoop, SessionLog, Stats, session_cost,
+    ProviderAuth, Reloaded, ScheduledLoop, SessionLog, Stats, session_cost,
 };
 use super::super::commands::{CommandContext, parse_command_in};
 use super::super::controls::ControlState;
@@ -669,6 +669,25 @@ impl CommandBackend for LiveBackend<'_> {
         tokio::spawn(async move {
             drop(super::mcp::open_auth_url(url).await);
         });
+    }
+
+    fn experimental_harness(&self) -> bool {
+        self.runtime
+            .as_ref()
+            .is_some_and(|runtime| runtime.experimental_harness)
+    }
+
+    async fn provider_auth(&mut self) -> Result<ProviderAuth, String> {
+        let result = self.call("providerAuth/read", json!({}))?;
+        let auth = result
+            .get("auth")
+            .ok_or_else(|| "providerAuth/read answered no view".to_owned())?;
+        let text = |key: &str| auth.get(key).and_then(Value::as_str).map(str::to_owned);
+        Ok(ProviderAuth {
+            model_display_name: text("modelDisplayName").unwrap_or_default(),
+            provider_name: text("providerName").unwrap_or_default(),
+            api_base: text("apiBase"),
+        })
     }
 
     fn has_todos(&self) -> bool {

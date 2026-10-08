@@ -68,7 +68,7 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, EXPECTED_VERSION, RESTORE_COMMAND
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 DEFAULT_OUTPUT = Path("crates/vibe-cli/tests/commands/corpus.json")
 DEFAULT_CACHE = Path(".parity")
 INTERPRETER_VARIABLE = "VIBE_PARITY_PYTHON"
@@ -621,11 +621,17 @@ def capture_help(module: Any, registry: Any) -> dict[str, list[dict[str, Any]]]:
 
 def capture_traits(registry: Any) -> list[dict[str, Any]]:
     """What each command declares about how it runs: whether it runs on the side
-    channel while a job holds the composer, and whether running it ends the
-    session."""
+    channel while a job holds the composer, whether running it ends the session,
+    and whether its line is sent to the model as a prompt instead of running a
+    handler (``Command.forwards_to_model``, since v2.26.0)."""
 
     return [
-        {"id": name, "sideChannel": command.side_channel, "exits": command.exits}
+        {
+            "id": name,
+            "sideChannel": command.side_channel,
+            "exits": command.exits,
+            "forwardsToModel": command.forwards_to_model,
+        }
         for name, command in sorted(registry.commands.items())
     ]
 
@@ -1014,6 +1020,12 @@ class _FakeResources:
         )
         self.vibe_code = _ns(open_projects=lambda: answer("openProjects"))
 
+        async def read_provider_auth() -> Any:
+            app.capture.add(type="providerAuthRead")
+            return await answer("providerAuth")
+
+        self.provider_auth = _ns(read=read_provider_auth)
+
 
 class _FakeRuntime:
     def __init__(self, fixture: dict[str, Any]) -> None:
@@ -1034,7 +1046,10 @@ class _FakeRuntime:
             persisted=log.get("persisted", True),
             path=log.get("path", "/home/operator/.vibe/logs/session/0123456789abcdef-session"),
         )
-        self.experimental_harness = False
+        # Since v2.26.0 `/status` appends the provider section only when the
+        # session runs the Unified Harness, read here rather than from the
+        # registry context, as `_provider_auth_section` reads it.
+        self.experimental_harness = bool(fixture.get("experimentalHarness", False))
 
     async def wait_until_ready(self) -> None:
         return None
@@ -1327,6 +1342,13 @@ HANDLER_SCENARIOS: tuple[tuple[str, str, dict[str, Any], dict[str, Any]], ...] =
     ("status", "/status", {}, {}),
     ("status-cached", "/status", {}, {"stats": {"steps": 7, "sessionPromptTokens": 12345, "sessionCachedTokens": 1000, "sessionCompletionTokens": 2345, "sessionTotalLlmTokens": 14690, "lastTurnTotalTokens": 3210, "lastTurnCachedTokens": 512, "sessionCost": 0.12345}}),
     ("status-uncached", "/status", {}, {"stats": {"steps": 1234567, "sessionPromptTokens": 9876543, "sessionCompletionTokens": 1, "sessionTotalLlmTokens": 9876544, "lastTurnTotalTokens": 42, "sessionCost": 1234.5}}),
+    ("status-unified", "/status", {}, {"experimentalHarness": True, "providerAuth": {"model_display_name": "Devstral 2", "provider_name": "mistral", "api_base": "https://api.mistral.ai/v1"}}),
+    ("status-unified-cached", "/status", {}, {"experimentalHarness": True, "stats": {"steps": 3, "sessionPromptTokens": 2048, "sessionCachedTokens": 512, "sessionCompletionTokens": 64, "sessionTotalLlmTokens": 2112, "lastTurnTotalTokens": 700, "lastTurnCachedTokens": 128, "sessionCost": 0.5}, "providerAuth": {"model_display_name": "local-model", "provider_name": "llamacpp", "api_base": "http://127.0.0.1:8080/v1"}}),
+    ("status-unified-invalid-base", "/status", {}, {"experimentalHarness": True, "providerAuth": {"model_display_name": "Devstral 2", "provider_name": "mistral", "api_base": None}}),
+    ("status-unified-markup", "/status", {}, {"experimentalHarness": True, "providerAuth": {"model_display_name": "[bold]*x*_y_ `c` <a> & #h !b", "provider_name": "a\\b~c~~d~ ~~e", "api_base": "https://host.example:8443/v1.2/x_y"}}),
+    ("status-unified-control", "/status", {}, {"experimentalHarness": True, "providerAuth": {"model_display_name": "line\nbreak\ttab\x7fdel\x85next", "provider_name": "~\x00~", "api_base": "https://h.example/p"}}),
+    ("status-unified-failure", "/status", {}, {"experimentalHarness": True, "providerAuth": {"raise": "the provider view is unavailable"}}),
+    ("status-unified-response-error", "/status", {}, {"experimentalHarness": True, "providerAuth": {"error": "Provider auth is not supported"}}),
     ("whoami-no-identity", "/whoami", {}, {}),
     ("whoami", "/whoami", {}, {"identity": {"name": "Ada Lovelace", "email": "ada@example.test", "workspace": {"id": "w", "name": "Analytical"}, "organization": {"id": "o", "name": "Engines"}}, "account": {"plan": {"title": "Pro"}}}),
     ("whoami-name-is-email", "/whoami", {}, {"identity": {"name": "ada@example.test", "email": "ada@example.test", "workspace": None, "organization": None}, "account": {"plan": None}}),
@@ -1449,7 +1471,9 @@ def capture_handlers(module: Any) -> list[dict[str, Any]]:
 DISPATCH_STATES = ("idle", "busy", "shell", "paused", "pausedBusy", "pausedShell")
 
 #: One line of every kind ``classify`` tells apart, plus the side-channel and
-#: exiting commands and a slash line that names nothing.
+#: exiting commands, a slash line that names nothing, and the command the
+#: registry forwards to the model under the Unified Harness every dispatch
+#: registry opens (``/loop``, ``vibe/cli/commands.py:232-242``).
 DISPATCH_INPUTS = (
     ("side-channel", "/status"),
     ("side-channel-exit", "exit"),
@@ -1460,6 +1484,7 @@ DISPATCH_INPUTS = (
     ("empty-shell", "!"),
     ("teleport", "&ship it"),
     ("unknown-slash", "/nothing"),
+    ("forwarded", "/loop 5m check the build"),
 )
 
 

@@ -10,7 +10,7 @@
 /// The lifecycle frames (`initialize` and the `initialized` notification) are
 /// deliberately absent: they are handled before method dispatch and are not
 /// part of the negotiated surface.
-pub const SERVER_METHODS: [&str; 136] = [
+pub const SERVER_METHODS: [&str; 137] = [
     "account/read",
     "agents/install",
     "agents/list",
@@ -68,6 +68,7 @@ pub const SERVER_METHODS: [&str; 136] = [
     "projectLinks/resolveRoot",
     "projectLinks/save",
     "projectLinks/unlink",
+    "providerAuth/read",
     "review/approve",
     "review/baseline",
     "review/hunks",

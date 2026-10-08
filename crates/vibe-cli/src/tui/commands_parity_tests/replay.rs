@@ -20,7 +20,7 @@ use vibe_core::telemetry::TelemetryRecord;
 use super::super::command_handlers::log_level::{self, Applied, Badge, LogLevelBackend, Picker};
 use super::super::command_handlers::{
     self, CommandBackend, Effect, Identity, McpAddArguments, McpLogin, McpSourceKind, McpState,
-    NotifySeverity, Panel, Reloaded, ScheduledLoop, SessionLog, Stats,
+    NotifySeverity, Panel, ProviderAuth, Reloaded, ScheduledLoop, SessionLog, Stats,
 };
 use super::super::commands::{COMMANDS, CommandContext, parse_command_in};
 use super::super::runtime::{InteractiveRuntime, RuntimeSkill, interactive_test_runtime};
@@ -263,6 +263,22 @@ impl CommandBackend for FixtureBackend<'_> {
                 .and_then(Value::as_f64)
                 .unwrap_or_default(),
         }
+    }
+
+    fn experimental_harness(&self) -> bool {
+        self.flag("experimentalHarness").unwrap_or(false)
+    }
+
+    async fn provider_auth(&mut self) -> Result<ProviderAuth, String> {
+        self.record(json!({"type": "providerAuthRead"}));
+        let view = self.get("providerAuth");
+        failure(view)?;
+        let field = |key: &str| text(view.and_then(|view| view.get(key)));
+        Ok(ProviderAuth {
+            model_display_name: field("model_display_name").unwrap_or_default(),
+            provider_name: field("provider_name").unwrap_or_default(),
+            api_base: field("api_base"),
+        })
     }
 
     async fn identity(&mut self) -> Result<Option<Identity>, String> {
@@ -518,6 +534,10 @@ pub(super) fn traits(case: &Map<String, Value>, field: &str) -> Option<Value> {
     match field {
         "sideChannel" => Some(Value::Bool(command.side_channel)),
         "exits" => Some(Value::Bool(command.exits)),
+        // Reference `Command.forwards_to_model`: this port forwards no command
+        // line to the model, since the one the reference forwards needs the
+        // unified core to interpret it (`DIVERGENCES`, `traits/forwardsToModel/loop`).
+        "forwardsToModel" => Some(Value::Bool(false)),
         _ => None,
     }
 }

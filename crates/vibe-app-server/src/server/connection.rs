@@ -488,6 +488,7 @@ impl ServerConnection {
             method if review::is_review_method(method) => self.review_request(request),
             method if is_connector_method(method) => self.connector_request(request),
             "narration/summarize" => self.narration_request(request),
+            "providerAuth/read" => self.provider_auth_request(request),
             method if RESOURCE_METHODS.contains(&method) => self.resource_request(request),
             method if WORKSPACE_METHODS.contains(&method) => self.workspace_request(request),
             method if PROJECTS_METHODS.contains(&method) => self.projects_request(request),
@@ -998,6 +999,41 @@ impl ServerConnection {
             )],
             deferred: Vec::new(),
             close_after_flush: false,
+        }
+    }
+
+    /// `providerAuth/read`, which only a unified session serves: the legacy
+    /// backend declines the whole namespace (reference `_dispatch` in
+    /// `vibe/app_server/_handler.py`), and the unified one answers the
+    /// redacted view of the provider the session's active model is sent to
+    /// (`_dispatch_session_reads` in
+    /// `vibe/app_server/_unified_harness_backend_adapter.py`).
+    fn provider_auth_request(&self, request: ServerRequest) -> DispatchBatch {
+        if !self.server.harness_selection().use_unified {
+            return error_batch(
+                request.id,
+                ProtocolErrorCode::NotImplemented,
+                &format!("Provider auth is not supported: {}", request.method),
+            );
+        }
+        let Some(session_id) = request
+            .params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .filter(|session_id| !session_id.is_empty())
+        else {
+            return error_batch(
+                request.id,
+                ProtocolErrorCode::InvalidParams,
+                "sessionId must be a non-empty string",
+            );
+        };
+        if let Some(batch) = self.attachment_error(request.id.clone(), session_id) {
+            return batch;
+        }
+        match self.server.workspace.provider_auth() {
+            Ok(view) => success_batch(request.id, result_map([("auth", view)])),
+            Err(message) => ProtocolFault::internal(message).into_batch(request.id),
         }
     }
 

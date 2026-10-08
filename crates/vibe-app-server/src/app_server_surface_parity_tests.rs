@@ -74,10 +74,6 @@ const UNROUTED_METHODS: &[(&str, &str)] = &[];
 /// A method declared while listed here fails the replay as a stale entry.
 const UNDECLARED_METHODS: &[(&str, &str)] = &[
     (
-        "providerAuth/read",
-        "v2.26.0 declares it at vibe/app_server/protocol.py:158 and serves it from the unified backend (vibe/app_server/_unified_harness_backend_adapter.py:4347 at 376f6a3), while the legacy backend refuses it as not implemented (vibe/app_server/_handler.py:317); SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
         "session/archive",
         "v2.26.0 declares it at vibe/app_server/protocol.py:189 and routes it to the session backend host (vibe/app_server/server.py:922 and 973 at 376f6a3); SERVER_METHODS does not declare it and nothing here routes it",
     ),

@@ -408,6 +408,22 @@
     {
       "effects": [
         {
+          "injected": false,
+          "text": {
+            "digest": "141eeff3b90a30fae6291751a668d54a4dc18f568e9e81803765530fb9ea66fc",
+            "length": 24
+          },
+          "type": "submit"
+        }
+      ],
+      "id": "idle/forwarded",
+      "input": "/loop 5m check the build",
+      "sideChannelFree": true,
+      "state": "idle"
+    },
+    {
+      "effects": [
+        {
           "command": "status",
           "type": "run"
         }
@@ -528,6 +544,18 @@
       ],
       "id": "busy/unknown-slash",
       "input": "/nothing",
+      "sideChannelFree": true,
+      "state": "busy"
+    },
+    {
+      "effects": [
+        {
+          "kind": "prompt",
+          "type": "queued"
+        }
+      ],
+      "id": "busy/forwarded",
+      "input": "/loop 5m check the build",
       "sideChannelFree": true,
       "state": "busy"
     },
@@ -670,6 +698,22 @@
     {
       "effects": [
         {
+          "hint": "busy",
+          "reason": "shellRunning",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "shell/forwarded",
+      "input": "/loop 5m check the build",
+      "sideChannelFree": true,
+      "state": "shell"
+    },
+    {
+      "effects": [
+        {
           "command": "status",
           "type": "run"
         }
@@ -799,6 +843,21 @@
       ],
       "id": "paused/unknown-slash",
       "input": "/nothing",
+      "sideChannelFree": true,
+      "state": "paused"
+    },
+    {
+      "effects": [
+        {
+          "kind": "prompt",
+          "type": "queued"
+        },
+        {
+          "type": "queueResumed"
+        }
+      ],
+      "id": "paused/forwarded",
+      "input": "/loop 5m check the build",
       "sideChannelFree": true,
       "state": "paused"
     },
@@ -940,6 +999,21 @@
     {
       "effects": [
         {
+          "kind": "prompt",
+          "type": "queued"
+        },
+        {
+          "type": "queueResumed"
+        }
+      ],
+      "id": "pausedBusy/forwarded",
+      "input": "/loop 5m check the build",
+      "sideChannelFree": true,
+      "state": "pausedBusy"
+    },
+    {
+      "effects": [
+        {
           "command": "status",
           "type": "run"
         }
@@ -1070,6 +1144,22 @@
       ],
       "id": "pausedShell/unknown-slash",
       "input": "/nothing",
+      "sideChannelFree": true,
+      "state": "pausedShell"
+    },
+    {
+      "effects": [
+        {
+          "hint": "paused",
+          "reason": "shellRunning",
+          "type": "refused"
+        },
+        {
+          "type": "restored"
+        }
+      ],
+      "id": "pausedShell/forwarded",
+      "input": "/loop 5m check the build",
       "sideChannelFree": true,
       "state": "pausedShell"
     },
@@ -2413,6 +2503,292 @@
         }
       },
       "id": "status-uncached",
+      "line": "/status"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "status",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "073c1634c496cdb649d1afe0a312bbb4b7e1741b271542e4a436c3b8824b1761",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "type": "providerAuthRead"
+        },
+        {
+          "text": {
+            "digest": "71d1e92ac2ec397c09385abca8f4f3d87c833a7adfcc672846621bc686be8e8e",
+            "length": 296
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "experimentalHarness": true,
+        "providerAuth": {
+          "api_base": "https://api.mistral.ai/v1",
+          "model_display_name": "Devstral 2",
+          "provider_name": "mistral"
+        }
+      },
+      "id": "status-unified",
+      "line": "/status"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "status",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "073c1634c496cdb649d1afe0a312bbb4b7e1741b271542e4a436c3b8824b1761",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "type": "providerAuthRead"
+        },
+        {
+          "text": {
+            "digest": "f94e5ebbf4bdc7bd86e32e54cfaad873aeee552760f2d32d509fd1b6efcdd6a2",
+            "length": 360
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "experimentalHarness": true,
+        "providerAuth": {
+          "api_base": "http://127.0.0.1:8080/v1",
+          "model_display_name": "local-model",
+          "provider_name": "llamacpp"
+        },
+        "stats": {
+          "lastTurnCachedTokens": 128,
+          "lastTurnTotalTokens": 700,
+          "sessionCachedTokens": 512,
+          "sessionCompletionTokens": 64,
+          "sessionCost": 0.5,
+          "sessionPromptTokens": 2048,
+          "sessionTotalLlmTokens": 2112,
+          "steps": 3
+        }
+      },
+      "id": "status-unified-cached",
+      "line": "/status"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "status",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "073c1634c496cdb649d1afe0a312bbb4b7e1741b271542e4a436c3b8824b1761",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "type": "providerAuthRead"
+        },
+        {
+          "text": {
+            "digest": "804074f785e58a9c7f7dfe896b136bac5f2cc5c80101bbb4cad567335434e13a",
+            "length": 283
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "experimentalHarness": true,
+        "providerAuth": {
+          "api_base": null,
+          "model_display_name": "Devstral 2",
+          "provider_name": "mistral"
+        }
+      },
+      "id": "status-unified-invalid-base",
+      "line": "/status"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "status",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "073c1634c496cdb649d1afe0a312bbb4b7e1741b271542e4a436c3b8824b1761",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "type": "providerAuthRead"
+        },
+        {
+          "text": {
+            "digest": "1cfa715e2d249701ee719b76cc1689887e247aa1241adc7018842ed257128429",
+            "length": 349
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "experimentalHarness": true,
+        "providerAuth": {
+          "api_base": "https://host.example:8443/v1.2/x_y",
+          "model_display_name": "[bold]*x*_y_ `c` <a> & #h !b",
+          "provider_name": "a\\b~c~~d~ ~~e"
+        }
+      },
+      "id": "status-unified-markup",
+      "line": "/status"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "status",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "073c1634c496cdb649d1afe0a312bbb4b7e1741b271542e4a436c3b8824b1761",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "type": "providerAuthRead"
+        },
+        {
+          "text": {
+            "digest": "d8eae3f3427b24134ff458bca57d160c56568c37b39d32b15e0449cedad11203",
+            "length": 298
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "experimentalHarness": true,
+        "providerAuth": {
+          "api_base": "https://h.example/p",
+          "model_display_name": "line\nbreak\ttab\u007fdel\u0085next",
+          "provider_name": "~\u0000~"
+        }
+      },
+      "id": "status-unified-control",
+      "line": "/status"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "status",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "073c1634c496cdb649d1afe0a312bbb4b7e1741b271542e4a436c3b8824b1761",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "type": "providerAuthRead"
+        },
+        {
+          "text": {
+            "digest": "56f2a214d83f1e09f08a1beb37cd121a78891e06da227dc01c3734749d03f07c",
+            "length": 182
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "experimentalHarness": true,
+        "providerAuth": {
+          "raise": "the provider view is unavailable"
+        }
+      },
+      "id": "status-unified-failure",
+      "line": "/status"
+    },
+    {
+      "context": {},
+      "effects": [
+        {
+          "event": "vibe.slash_command_used",
+          "properties": {
+            "command": "status",
+            "command_type": "builtin"
+          },
+          "type": "telemetry"
+        },
+        {
+          "text": {
+            "digest": "073c1634c496cdb649d1afe0a312bbb4b7e1741b271542e4a436c3b8824b1761",
+            "length": 6
+          },
+          "type": "echo"
+        },
+        {
+          "type": "providerAuthRead"
+        },
+        {
+          "text": {
+            "digest": "56f2a214d83f1e09f08a1beb37cd121a78891e06da227dc01c3734749d03f07c",
+            "length": 182
+          },
+          "type": "message"
+        }
+      ],
+      "fixture": {
+        "experimentalHarness": true,
+        "providerAuth": {
+          "error": "Provider auth is not supported"
+        }
+      },
+      "id": "status-unified-response-error",
       "line": "/status"
     },
     {
@@ -7218,175 +7594,209 @@
     "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
     "version": "2.26.0"
   },
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "traits": [
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "branch",
       "sideChannel": false
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "clear",
       "sideChannel": false
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "compact",
       "sideChannel": false
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "config",
       "sideChannel": false
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "copy",
       "sideChannel": true
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "data-retention",
       "sideChannel": true
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "debug",
       "sideChannel": true
     },
     {
       "exits": true,
+      "forwardsToModel": false,
       "id": "exit",
       "sideChannel": true
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "help",
       "sideChannel": true
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "leanstall",
       "sideChannel": false
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "log",
       "sideChannel": true
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "log-level",
       "sideChannel": false
     },
     {
       "exits": false,
+      "forwardsToModel": true,
       "id": "loop",
       "sideChannel": false
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "mcp",
       "sideChannel": false
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "model",
       "sideChannel": false
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "paste-image",
       "sideChannel": true
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "plugins",
       "sideChannel": false
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "proxy-setup",
       "sideChannel": false
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "reload",
       "sideChannel": false
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "reload-plugins",
       "sideChannel": false
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "remote-project",
       "sideChannel": false
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "rename",
       "sideChannel": true
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "resume",
       "sideChannel": false
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "retry",
       "sideChannel": false
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "rewind",
       "sideChannel": false
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "skills",
       "sideChannel": false
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "status",
       "sideChannel": true
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "teleport",
       "sideChannel": false
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "theme",
       "sideChannel": false
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "thinking",
       "sideChannel": false
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "todo",
       "sideChannel": false
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "unleanstall",
       "sideChannel": false
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "voice",
       "sideChannel": false
     },
     {
       "exits": false,
+      "forwardsToModel": false,
       "id": "whoami",
       "sideChannel": true
     }

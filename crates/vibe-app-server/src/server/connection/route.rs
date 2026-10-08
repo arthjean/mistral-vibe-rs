@@ -99,7 +99,9 @@ pub(crate) fn route(method: &str) -> Route {
         | "session/continue" => Route::Host,
         "agents/list" | "config/read" | "workspace/trust/decision" => Route::SessionOptional,
         "shell/run" | "shell/interrupt" | "session/title/update" => Route::RootUnserved,
-        "plugin/info" | "plugin/reload" | "session/turn/queue/steer" => Route::RootDeclined,
+        "plugin/info" | "plugin/reload" | "providerAuth/read" | "session/turn/queue/steer" => {
+            Route::RootDeclined
+        }
         "session/pin" => Route::Unserved,
         method if method.starts_with("projectLinks/") => Route::Host,
         method
@@ -148,10 +150,28 @@ impl ServerConnection {
         let method = request.method.clone();
         let method = method.as_str();
         let rooted = self.root_key().is_some();
-        let unified_plugins =
-            self.server.harness_selection().use_unified && is_plugin_method(method);
+        let unified = self.server.harness_selection().use_unified;
+        let unified_plugins = unified && is_plugin_method(method);
         if unified_plugins && method.starts_with("plugin/") && !rooted {
             return Err(ProtocolFault::plain(ProtocolErrorCode::Conflict, NO_ROOT));
+        }
+        // A unified session serves the provider view its legacy counterpart
+        // declines below; it is addressed to the root like any root method.
+        if unified && method == "providerAuth/read" {
+            if !rooted {
+                return Err(ProtocolFault::plain(ProtocolErrorCode::Conflict, NO_ROOT));
+            }
+            let validated = wire_validation::validate_method(method, params)
+                .map_err(|issues| self.rejected(method, &issues))?;
+            let named = validated
+                .get("sessionId")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned);
+            self.require_named_root(named.as_deref())?;
+            return Ok(self.provider_auth_request(ServerRequest {
+                params: object_of_value(validated),
+                ..request
+            }));
         }
         match route(method) {
             _ if unified_plugins => {}
@@ -166,6 +186,14 @@ impl ServerConnection {
                 return Err(ProtocolFault::plain(
                     ProtocolErrorCode::NotImplemented,
                     format!("Plugins are not supported: {method}"),
+                ));
+            }
+            // So does it decline the `providerAuth` namespace, which only a
+            // unified session projects.
+            Route::RootDeclined if method.starts_with("providerAuth/") => {
+                return Err(ProtocolFault::plain(
+                    ProtocolErrorCode::NotImplemented,
+                    format!("Provider auth is not supported: {method}"),
                 ));
             }
             Route::RootDeclined => {

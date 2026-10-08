@@ -169,15 +169,6 @@ const LEDGER: &[Divergence] = &[
                  not carry the field",
     },
     Divergence {
-        scenario: "probe/providerAuth/read/*",
-        suffix: "/error/code",
-        reason: "v2.26.0 declares `providerAuth/read` (`vibe/app_server/protocol.py:158` at \
-                 `376f6a3`): with no session the reference asks for one first \
-                 (`vibe/app_server/server.py:1333`), and the legacy backend refuses it as not \
-                 implemented (`vibe/app_server/_handler.py:317`); this port does not declare it \
-                 and answers that the method is unknown",
-    },
-    Divergence {
         scenario: "probe/session/backgroundProcess/output/bare",
         suffix: "/error/code",
         reason: "v2.26.0 declares `session/backgroundProcess/output` \

@@ -365,3 +365,80 @@ fn a_picked_session_names_itself_and_a_refused_one_says_it_failed_to_load() {
         "Resumed session `01234567`"
     );
 }
+
+/// A runtime over a server whose configuration serves the active model from
+/// a provider whose base carries its own credential, under the harness asked
+/// for.
+fn status_runtime(temporary: &Path, unified: bool) -> InteractiveRuntime {
+    let vibe_home = temporary.join("vibe-home");
+    std::fs::create_dir_all(&vibe_home).expect("the vibe home is created");
+    std::fs::write(
+        vibe_home.join("config.toml"),
+        "active_model = \"lab\"\n\n[[providers]]\nname = \"lab-provider\"\n\
+         api_base = \"https://LAB.example:8443/v1/key-token\"\n\
+         api_key_env_var = \"VIBE_STATUS_SECTION_TEST_KEY\"\nbackend = \"generic\"\n\n\
+         [[models]]\nname = \"lab-model\"\nprovider = \"lab-provider\"\nalias = \"lab\"\n\
+         display_name = \"Lab_Model\"\n",
+    )
+    .expect("the configuration is written");
+    std::fs::write(
+        vibe_core::config::global_env_file(&vibe_home),
+        "VIBE_STATUS_SECTION_TEST_KEY=key-token\n",
+    )
+    .expect("the dotenv file is written");
+    let workspace = vibe_app_server::workspace::WorkspaceService::new(
+        vibe_app_server::workspace::WorkspacePaths {
+            session_root: vibe_home.join("sessions"),
+            working_directory: temporary.join("workspace"),
+            vibe_home,
+        },
+        true,
+    )
+    .expect("the workspace service builds");
+    let server = vibe_app_server::server::AppServer::with_workspace_service(workspace)
+        .using_harness_selection(vibe_app_server::harness::HarnessSelection::resolve(
+            unified, false,
+        ));
+    let mut runtime = interactive_test_runtime_with_server("status-section", server);
+    runtime.experimental_harness = unified;
+    runtime
+}
+
+fn status_message(dispatched: &Dispatch) -> &str {
+    dispatched
+        .state
+        .entries
+        .iter()
+        .map(|entry| entry.text.as_str())
+        .find(|text| text.starts_with("## Agent Statistics"))
+        .expect("the statistics are shown")
+}
+
+/// Reference `_show_status` with `_provider_auth_section`: a unified session
+/// reads `providerAuth/read` and appends the redacted provider section, its
+/// values escaped for the Markdown they render through; a legacy one, whose
+/// backend declines that read, shows the statistics alone.
+#[tokio::test(flavor = "multi_thread")]
+async fn status_appends_the_provider_section_on_the_unified_mode_only() {
+    let temporary = tempfile::tempdir().expect("a temporary vibe home");
+
+    let mut unified = Some(status_runtime(&temporary.path().join("unified"), true));
+    let shown = dispatch("/status", &mut unified).await;
+    let section = status_message(&shown)
+        .split_once("\n## Model & Provider\n\n")
+        .map(|(_, section)| section)
+        .expect("the provider section follows the statistics");
+    assert_eq!(
+        section,
+        "- **Model**: Lab\\_Model\n- **Provider**: lab-provider\n\
+         - **API base**: https\\://lab\\.example\\:8443/v1/\\[redacted\\]"
+    );
+
+    let mut legacy = Some(status_runtime(&temporary.path().join("legacy"), false));
+    let shown = dispatch("/status", &mut legacy).await;
+    assert!(
+        !status_message(&shown).contains("Model & Provider"),
+        "{}",
+        status_message(&shown)
+    );
+}

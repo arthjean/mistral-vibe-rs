@@ -269,6 +269,7 @@ const IMPLEMENTED_METHODS: &[&str] = &[
     "mcp_catalog/remove",
     "mcp_catalog/toggle",
     "narration/summarize",
+    "providerAuth/read",
     "review/approve",
     "review/baseline",
     "review/hunks",

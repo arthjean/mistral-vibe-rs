@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Describe `/status` as the reference does since v2.26.0 and, on a unified
+  session, append its "Model & Provider" section: the active model, its
+  provider and the provider's API base, rebuilt without user information,
+  query or fragment and with the provider credential redacted. The section
+  comes from the newly declared `providerAuth/read`, which the legacy backend
+  declines as the reference's does. `/leanstall` and `/unleanstall` now
+  confirm the change instead of reloading the configuration.
+
 - Load plugins as the reference does in a unified mode that
   `--experimental-harness`, `--smart-approve` or the unified rollout selects:
   Agent Plugins packages with the Vibe extension and Claude Code, Codex, Kimi

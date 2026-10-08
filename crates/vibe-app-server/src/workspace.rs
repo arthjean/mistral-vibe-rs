@@ -20,6 +20,7 @@ pub use account::AccountLookup;
 mod agents;
 mod config;
 mod internal;
+mod provider_auth;
 mod sessions;
 mod skills;
 mod system_prompt;

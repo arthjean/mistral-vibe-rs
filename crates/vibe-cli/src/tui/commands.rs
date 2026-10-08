@@ -271,7 +271,7 @@ pub const COMMANDS: &[CommandDefinition] = &[
         CommandId::Status,
         "status",
         &["/status"],
-        "Display agent statistics",
+        "Display agent statistics and model and provider details",
     )
     .side_channel(),
     command(

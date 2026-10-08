@@ -163,6 +163,17 @@ pub(super) struct Stats {
     pub session_cost: f64,
 }
 
+/// The active model's provider as `/status` shows it. Reference
+/// `ProviderAuthView`: already redacted by the server, so it carries no
+/// credential.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub(super) struct ProviderAuth {
+    pub model_display_name: String,
+    pub provider_name: String,
+    /// The sanitized API base, or `None` when it cannot be shown safely.
+    pub api_base: Option<String>,
+}
+
 /// The signed-in caller. Reference `IdentityView`.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(super) struct Identity {
@@ -227,6 +238,12 @@ pub(super) trait CommandBackend {
     fn history_is_empty(&self) -> bool;
     async fn compact(&mut self, instructions: &str) -> Result<(), String>;
     fn stats(&mut self) -> Stats;
+    /// Whether the session runs the unified mode. Reference
+    /// `runtime.experimental_harness`, which `/status` reads apart from the
+    /// registry's context.
+    fn experimental_harness(&self) -> bool;
+    /// Reference `ProviderAuthResource.read`, `providerAuth/read`.
+    async fn provider_auth(&mut self) -> Result<ProviderAuth, String>;
     async fn identity(&mut self) -> Result<Option<Identity>, String>;
     async fn account_plan(&mut self) -> Result<Option<String>, String>;
     async fn open_projects(&mut self) -> Result<(), String>;
@@ -333,10 +350,7 @@ pub(super) async fn run<B: CommandBackend>(
         CommandId::Debug => open(backend, Panel::DebugConsole),
         CommandId::Compact => compact(arguments, backend).await,
         CommandId::Exit => backend.emit(Effect::Exit),
-        CommandId::Status => {
-            let stats = backend.stats();
-            backend.emit(Effect::Message(status_document(&stats)));
-        }
+        CommandId::Status => status(backend).await,
         CommandId::Whoami => whoami(backend).await,
         // Reference `_teleport_command` ignores its arguments: a teleport with
         // a prompt is typed as `&prompt`, which dispatch routes itself.
@@ -594,6 +608,76 @@ pub(super) fn status_document(stats: &Stats) -> String {
     )
 }
 
+/// Reference `_show_status`: the statistics, then the provider section when the
+/// session runs the unified mode. The section is read-only and optional, so a
+/// failed read leaves the statistics alone rather than adding an error.
+async fn status<B: CommandBackend>(backend: &mut B) {
+    let mut document = status_document(&backend.stats());
+    if backend.experimental_harness() {
+        match backend.provider_auth().await {
+            Ok(view) => {
+                document.push('\n');
+                document.push_str(&provider_auth_section(&view));
+            }
+            // The reference logs the failure's type alone, never its text,
+            // which could carry what the redaction was meant to keep out.
+            Err(_) => vibe_core::observability::log(
+                vibe_core::observability::LogLevel::Warning,
+                "Provider auth status read failed",
+            ),
+        }
+    }
+    backend.emit(Effect::Message(document));
+}
+
+/// Reference `render_provider_auth_section`
+/// (`vibe/cli/textual_ui/provider_auth_status.py`): the "Model & Provider"
+/// section, every dynamic value escaped so the Markdown it renders through
+/// shows it literally.
+fn provider_auth_section(view: &ProviderAuth) -> String {
+    let api_base = view
+        .api_base
+        .as_deref()
+        .map_or_else(|| "Invalid API URL".to_owned(), markdown_literal);
+    format!(
+        "## Model & Provider\n\n- **Model**: {}\n- **Provider**: {}\n- **API base**: {api_base}",
+        markdown_literal(&view.model_display_name),
+        markdown_literal(&view.provider_name),
+    )
+}
+
+/// A one-line value as Markdown that renders it character for character.
+///
+/// A control character (Unicode category `Cc`, which is what
+/// [`char::is_control`] tests) has no literal form on one line, so it becomes a
+/// space. Every character that starts inline syntax, `.` and `:` included
+/// because linkification reads them, is backslash-escaped; a tilde only next to
+/// another tilde, since strikethrough needs a pair and a lone one is literal.
+fn markdown_literal(value: &str) -> String {
+    const INLINE: &str = "\\`*_.:<>&!#[]";
+    let cleaned = value
+        .chars()
+        .map(|character| {
+            if character.is_control() {
+                ' '
+            } else {
+                character
+            }
+        })
+        .collect::<Vec<_>>();
+    let mut literal = String::with_capacity(value.len());
+    for (index, &character) in cleaned.iter().enumerate() {
+        let paired_tilde = character == '~'
+            && (index.checked_sub(1).and_then(|before| cleaned.get(before)) == Some(&'~')
+                || cleaned.get(index + 1) == Some(&'~'));
+        if paired_tilde || INLINE.contains(character) {
+            literal.push('\\');
+        }
+        literal.push(character);
+    }
+    literal
+}
+
 /// Reference `_show_whoami`: a failed read is the same answer as no identity.
 async fn whoami<B: CommandBackend>(backend: &mut B) {
     let identity = backend.identity().await.ok().flatten();
@@ -844,7 +928,14 @@ async fn set_lean<B: CommandBackend>(backend: &mut B, install: bool) {
         backend.emit(Effect::Error(error));
         return;
     }
-    reload(backend).await;
+    backend.emit(Effect::Message(
+        if install {
+            "Lean agent installed."
+        } else {
+            "Lean agent uninstalled."
+        }
+        .to_owned(),
+    ));
 }
 
 /// Reference `_branch_session`.
