@@ -215,11 +215,184 @@ const FAMILIES: &[Family] = &[
     },
 ];
 
+/// v2.26.0 added an experiment this build does not declare.
+const RUST_TUI_ROLLOUT: &str = "v2.26.0 declares `vibe_cli_rust_tui_rollout`, default `python`, eligible on every \
+     surface (vibe/core/experiments/active.py:29, :41, :64); it picks which terminal client \
+     the reference's launcher execs (vibe/cli/_rust.py:17), a choice this single binary does \
+     not have, so `ExperimentName` declares no such name and every variant map omits it";
+
+/// v2.26.0 withdrew every exposure surface from the harness rollout.
+const UNIFIED_HARNESS_SURFACES: &str = "v2.26.0 gives `vibe_cli_unified_harness_rollout` an empty surface set \
+     (vibe/core/experiments/active.py:63): the variant still resolves, but no surface reports \
+     an exposure for it; `ExperimentName::surfaces` still lists both surfaces";
+
+/// v2.26.0 changed what a validated model entry carries.
+const ROUTED_MODEL_CONFIG: &str = "v2.26.0 gives every model entry the unset compaction threshold sentinel -1 \
+     and the per-model `thinking_levels` set (vibe/core/config/models.py:485, :492); the \
+     routed model config this port composes carries its 200000 default and no level set, as \
+     the configuration replay records";
+
 /// Cases where this build answers something other than the reference, each
 /// with the reason: the reference behavior, where it lives at the pin, and what
 /// this build does instead. One entry per case and field, so a row goes stale
-/// on its own the moment this build answers it. Empty: every family conforms.
-const DIVERGENCES: &[(&str, &str)] = &[];
+/// on its own the moment this build answers it. Every entry dates from the
+/// v2.26.0 re-pin (`376f6a3`).
+const DIVERGENCES: &[(&str, &str)] = &[
+    ("constants/value/experimentNames", RUST_TUI_ROLLOUT),
+    ("constants/value/defaultVariants", RUST_TUI_ROLLOUT),
+    ("evalFailures/variants/connection-error", RUST_TUI_ROLLOUT),
+    ("evalFailures/variants/timeout", RUST_TUI_ROLLOUT),
+    ("evalFailures/variants/status-400", RUST_TUI_ROLLOUT),
+    ("evalFailures/variants/status-404", RUST_TUI_ROLLOUT),
+    ("evalFailures/variants/status-500", RUST_TUI_ROLLOUT),
+    ("evalFailures/variants/status-503", RUST_TUI_ROLLOUT),
+    ("evalFailures/variants/non-json-body", RUST_TUI_ROLLOUT),
+    (
+        "evalFailures/variants/body-fails-validation",
+        RUST_TUI_ROLLOUT,
+    ),
+    ("evalFailures/variants/url-unset", RUST_TUI_ROLLOUT),
+    ("variantResolution/variants/uninitialized", RUST_TUI_ROLLOUT),
+    (
+        "variantResolution/variantsOrNone/uninitialized",
+        RUST_TUI_ROLLOUT,
+    ),
+    (
+        "variantResolution/variants/empty-features",
+        RUST_TUI_ROLLOUT,
+    ),
+    (
+        "variantResolution/variantsOrNone/empty-features",
+        RUST_TUI_ROLLOUT,
+    ),
+    ("variantResolution/variants/string-value", RUST_TUI_ROLLOUT),
+    (
+        "variantResolution/variantsOrNone/string-value",
+        RUST_TUI_ROLLOUT,
+    ),
+    ("variantResolution/variants/object-value", RUST_TUI_ROLLOUT),
+    (
+        "variantResolution/variantsOrNone/object-value",
+        RUST_TUI_ROLLOUT,
+    ),
+    ("variantResolution/variants/array-value", RUST_TUI_ROLLOUT),
+    (
+        "variantResolution/variantsOrNone/array-value",
+        RUST_TUI_ROLLOUT,
+    ),
+    ("variantResolution/variants/numeric-value", RUST_TUI_ROLLOUT),
+    (
+        "variantResolution/variantsOrNone/numeric-value",
+        RUST_TUI_ROLLOUT,
+    ),
+    ("variantResolution/variants/boolean-value", RUST_TUI_ROLLOUT),
+    (
+        "variantResolution/variantsOrNone/boolean-value",
+        RUST_TUI_ROLLOUT,
+    ),
+    ("variantResolution/variants/resolved-null", RUST_TUI_ROLLOUT),
+    (
+        "variantResolution/variantsOrNone/resolved-null",
+        RUST_TUI_ROLLOUT,
+    ),
+    (
+        "variantResolution/variants/default-value-without-a-force",
+        RUST_TUI_ROLLOUT,
+    ),
+    (
+        "variantResolution/variantsOrNone/default-value-without-a-force",
+        RUST_TUI_ROLLOUT,
+    ),
+    (
+        "variantResolution/variants/unknown-feature-key",
+        RUST_TUI_ROLLOUT,
+    ),
+    (
+        "variantResolution/variantsOrNone/unknown-feature-key",
+        RUST_TUI_ROLLOUT,
+    ),
+    (
+        "variantResolution/variants/every-known-feature",
+        RUST_TUI_ROLLOUT,
+    ),
+    (
+        "variantResolution/variantsOrNone/every-known-feature",
+        RUST_TUI_ROLLOUT,
+    ),
+    (
+        "layerPrecedence/effective/routing-variant-for-an-unpinned-user",
+        ROUTED_MODEL_CONFIG,
+    ),
+    (
+        "surfaces/surfaces/vibe_cli_unified_harness_rollout",
+        UNIFIED_HARNESS_SURFACES,
+    ),
+    (
+        "surfaces/eligible/vibe_cli_unified_harness_rollout",
+        UNIFIED_HARNESS_SURFACES,
+    ),
+    (
+        "surfaces/surfaces/vibe_cli_rust_tui_rollout",
+        RUST_TUI_ROLLOUT,
+    ),
+    (
+        "surfaces/eligible/vibe_cli_rust_tui_rollout",
+        RUST_TUI_ROLLOUT,
+    ),
+    (
+        "typedVariants/variants/every-name-at-its-typed-default",
+        RUST_TUI_ROLLOUT,
+    ),
+    (
+        "typedVariants/variantsOrNone/every-name-at-its-typed-default",
+        RUST_TUI_ROLLOUT,
+    ),
+    (
+        "typedVariants/variants/every-name-forced-off-its-default",
+        RUST_TUI_ROLLOUT,
+    ),
+    (
+        "typedVariants/variantsOrNone/every-name-forced-off-its-default",
+        RUST_TUI_ROLLOUT,
+    ),
+    (
+        "typedVariants/variants/python-numeric-equality",
+        RUST_TUI_ROLLOUT,
+    ),
+    (
+        "typedVariants/variantsOrNone/python-numeric-equality",
+        RUST_TUI_ROLLOUT,
+    ),
+    ("typedVariants/variants/empty-collections", RUST_TUI_ROLLOUT),
+    (
+        "typedVariants/variantsOrNone/empty-collections",
+        RUST_TUI_ROLLOUT,
+    ),
+    (
+        "typedVariants/variants/booleans-spelled-as-strings",
+        RUST_TUI_ROLLOUT,
+    ),
+    (
+        "typedVariants/variantsOrNone/booleans-spelled-as-strings",
+        RUST_TUI_ROLLOUT,
+    ),
+    (
+        "typedVariants/variants/default-value-off-its-baseline",
+        RUST_TUI_ROLLOUT,
+    ),
+    (
+        "typedVariants/variantsOrNone/default-value-off-its-baseline",
+        RUST_TUI_ROLLOUT,
+    ),
+    (
+        "typedVariants/variants/exposure-labels-of-typed-values",
+        RUST_TUI_ROLLOUT,
+    ),
+    (
+        "typedVariants/variantsOrNone/exposure-labels-of-typed-values",
+        RUST_TUI_ROLLOUT,
+    ),
+];
 
 /// One family's shape: which case fields the capture authored and which ones
 /// both sides answer.

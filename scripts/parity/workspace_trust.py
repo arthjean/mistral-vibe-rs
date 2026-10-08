@@ -53,7 +53,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import acp  # noqa: E402
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/workspace-trust/corpus.json"
@@ -682,7 +682,7 @@ def main() -> int:
     arguments = parse_arguments()
     try:
         if arguments.server is not None:
-            command = [str(arguments.server.resolve())]
+            command = [str(arguments.server.resolve()), *HARNESS_FLAGS]
             reference = {"commit": "server-override"}
             dialect = "port"
         else:
@@ -690,7 +690,7 @@ def main() -> int:
             binary = arguments.reference / ".venv/bin/vibe-app-server"
             if not binary.is_file():
                 raise OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
-            command = [str(binary)]
+            command = [str(binary), *HARNESS_FLAGS]
             dialect = "reference"
         selected = [s for s in scenarios() if not arguments.only or any(name in s["name"] for name in arguments.only)]
         captured = []

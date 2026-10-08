@@ -4029,6 +4029,6 @@
   ],
   "note": "Managed shell session corpus: what the pinned reference's five shell handlers return for each scripted case, with the manifest and the session info each case leaves behind. A captured string is committed as it stands only when it is a value these arguments supplied, a normalized path, a shape marker, or an identifier; everything else, including every error message, is committed as a {described, length} pair, so no reference prose ships while any change still fails the replay. Regenerate with scripts/parity/shell_session.py --corpus when the pinned reference moves.",
   "platform": "linux",
-  "referenceCommit": "4a96003186b166d55b9f06895c45bb136eef61cd",
+  "referenceCommit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
   "schemaVersion": 1
 }

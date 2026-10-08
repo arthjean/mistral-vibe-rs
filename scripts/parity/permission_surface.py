@@ -42,7 +42,7 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 DEFAULT_OUTPUT = Path("crates/vibe-core/tests/permission-surface/vocabulary.json")
 INTERPRETER_VARIABLE = "VIBE_PARITY_PYTHON"
 
@@ -287,9 +287,11 @@ def capture_file_tool_labels(reference: Path) -> dict[str, str]:
     as reference prose: each is a fixed word joined to a value the call itself
     carries, which is an observation of the shape and not of any authored text.
     The sensitive requirement names the resolved file and its ``glob.escape``
-    form (``vibe/core/tools/utils.py:203-216`` at the pin), so the temporary
-    working directory is recorded as ``<workdir>``, the way the outside glob is
-    recorded as ``<glob>``.
+    form (``vibe/core/tools/utils.py:217-227`` at the pin), so the temporary
+    working directory is recorded as ``<workdir>``. The outside requirement names
+    the resolved file itself since v2.25.8 (``vibe/core/tools/utils.py:230-242``
+    at the pin) rather than a glob over its parent, so the temporary outside
+    directory is recorded as ``<outside>`` whatever the requirement builds on it.
     """
     sys.path.insert(0, str(reference))
     import glob
@@ -326,7 +328,7 @@ def capture_file_tool_labels(reference: Path) -> dict[str, str]:
                 raise OracleError("the reference file-tool chain produced no context")
             sensitive_required = sensitive.required_permissions[0]
             escaping_required = escaping.required_permissions[0]
-            outside_glob = str(Path(outside).resolve() / "*")
+            outside_root = str(Path(outside).resolve())
             return {
                 "sensitiveScope": str(sensitive_required.scope.value),
                 "sensitiveInvocationPattern": sensitive_required.invocation_pattern.replace(
@@ -340,12 +342,14 @@ def capture_file_tool_labels(reference: Path) -> dict[str, str]:
                 ),
                 "outsideScope": str(escaping_required.scope.value),
                 "outsideInvocationPattern": escaping_required.invocation_pattern.replace(
-                    outside_glob, "<glob>"
+                    outside_root, "<outside>"
                 ),
                 "outsideSessionPattern": escaping_required.session_pattern.replace(
-                    outside_glob, "<glob>"
+                    outside_root, "<outside>"
                 ),
-                "outsideLabel": escaping_required.label.replace(outside_glob, "<glob>"),
+                "outsideLabel": escaping_required.label.replace(
+                    outside_root, "<outside>"
+                ),
                 "permission": str(sensitive.permission.value),
             }
 

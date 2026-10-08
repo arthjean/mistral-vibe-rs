@@ -1312,6 +1312,12 @@ def fake_loop(backend: Any, provider: Any, model_config: Any, call_entry: dict[s
     fake.messages = messages
     fake._record_interrupted_assistant = lambda chunk: AgentLoop._record_interrupted_assistant(fake, chunk)
     fake._complete = lambda **kwargs: AgentLoop._complete(fake, **kwargs)
+    # Since v2.26.0 a completion renames a tool call id the session already
+    # holds (`AgentLoop._unique_tool_call_ids`).
+    fake._seen_tool_call_ids = set()
+    fake._unique_tool_call_ids = lambda message, renamed: AgentLoop._unique_tool_call_ids(
+        fake, message, renamed
+    )
     return fake
 
 

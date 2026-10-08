@@ -66,6 +66,68 @@ const FIELDS: [&str; 5] = [
 /// instead of reporting a clean but empty run.
 const MINIMUM_COMPARISONS: usize = 180;
 
+/// v2.26.0 deletes the eval cache when a session opts out.
+const OPT_OUT_CLEARS_THE_CACHE: &str = "v2.26.0 deletes the whole eval cache file when telemetry or experiments are off, \
+     before the lookup is skipped (vibe/core/experiments/session.py:118, cache.py:63), because \
+     the reference's launcher reads that cache without the configuration; this port skips the \
+     lookup and leaves the seeded entry in place";
+
+/// Comparisons where this build answers something other than the reference,
+/// keyed `startup/{field}/{case}` as a divergence prints, each with the
+/// reason. A divergence no entry names fails the replay, and so does an entry
+/// whose divergence stopped reproducing. Every entry dates from the v2.26.0
+/// re-pin (`376f6a3`).
+const DIVERGENCES: &[(&str, &str)] = &[
+    (
+        "startup/cachedAfterLookup/telemetry-disabled/cached/new",
+        OPT_OUT_CLEARS_THE_CACHE,
+    ),
+    (
+        "startup/cachedAfterLookup/telemetry-disabled/cached/resumed",
+        OPT_OUT_CLEARS_THE_CACHE,
+    ),
+    (
+        "startup/cachedAfterLookup/telemetry-disabled/cached-past-the-bound/new",
+        OPT_OUT_CLEARS_THE_CACHE,
+    ),
+    (
+        "startup/cachedAfterLookup/telemetry-disabled/cached-past-the-bound/resumed",
+        OPT_OUT_CLEARS_THE_CACHE,
+    ),
+    (
+        "startup/cachedAfterLookup/telemetry-disabled/cached-at-the-baseline/new",
+        OPT_OUT_CLEARS_THE_CACHE,
+    ),
+    (
+        "startup/cachedAfterLookup/telemetry-disabled/cached-at-the-baseline/resumed",
+        OPT_OUT_CLEARS_THE_CACHE,
+    ),
+    (
+        "startup/cachedAfterLookup/experiments-disabled/cached/new",
+        OPT_OUT_CLEARS_THE_CACHE,
+    ),
+    (
+        "startup/cachedAfterLookup/experiments-disabled/cached/resumed",
+        OPT_OUT_CLEARS_THE_CACHE,
+    ),
+    (
+        "startup/cachedAfterLookup/experiments-disabled/cached-past-the-bound/new",
+        OPT_OUT_CLEARS_THE_CACHE,
+    ),
+    (
+        "startup/cachedAfterLookup/experiments-disabled/cached-past-the-bound/resumed",
+        OPT_OUT_CLEARS_THE_CACHE,
+    ),
+    (
+        "startup/cachedAfterLookup/experiments-disabled/cached-at-the-baseline/new",
+        OPT_OUT_CLEARS_THE_CACHE,
+    ),
+    (
+        "startup/cachedAfterLookup/experiments-disabled/cached-at-the-baseline/resumed",
+        OPT_OUT_CLEARS_THE_CACHE,
+    ),
+];
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
@@ -301,6 +363,7 @@ async fn the_committed_corpus_replays_against_this_port() {
         .expect("the startup family is a list");
     let mut comparisons = 0;
     let mut divergences = Vec::new();
+    let mut observed = Vec::new();
     for case in cases {
         let case = case.as_object().expect("a case is an object");
         let identifier = case.get("id").and_then(Value::as_str).unwrap_or_default();
@@ -322,22 +385,34 @@ async fn the_committed_corpus_replays_against_this_port() {
             comparisons += 1;
             let actual = answers.get(field).unwrap_or(&Value::Null);
             if actual != expected {
-                divergences.push(format!(
-                    "startup/{field}/{identifier}: reference {expected}, port {actual}"
-                ));
+                let key = format!("startup/{field}/{identifier}");
+                if !DIVERGENCES.iter().any(|(entry, _)| *entry == key) {
+                    divergences.push(format!("{key}: reference {expected}, port {actual}"));
+                }
+                observed.push(key);
             }
         }
     }
     println!(
-        "experiments startup: {}/{comparisons} conform across {} cases at {}",
-        comparisons - divergences.len(),
+        "experiments startup: {}/{comparisons} conform across {} cases ({} ledgered) at {}",
+        comparisons - observed.len(),
         cases.len(),
+        observed.len() - divergences.len(),
         &REFERENCE_COMMIT[..12],
     );
     assert!(
         divergences.is_empty(),
-        "the startup family diverges from the reference:\n{}",
+        "the startup family diverges from the reference where no ledger entry records it:\n{}",
         divergences.join("\n")
+    );
+    let stale = DIVERGENCES
+        .iter()
+        .map(|(entry, _)| *entry)
+        .filter(|entry| !observed.iter().any(|key| key == entry))
+        .collect::<Vec<_>>();
+    assert!(
+        stale.is_empty(),
+        "these startup entries conform now and their ledger entry is stale: {stale:?}"
     );
     assert!(
         comparisons >= MINIMUM_COMPARISONS,

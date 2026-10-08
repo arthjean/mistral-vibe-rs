@@ -25,9 +25,10 @@
 //! reviewed plan with, the plan-mode reminder and the checkpoints a reload
 //! closes on.
 //!
-//! Every difference the replay finds has to fall under a `LEDGER` entry, and
-//! every entry has to still reproduce, so row 34 of `docs/parity.md` is a
-//! reading of the summary this file prints.
+//! Every difference the replay finds has to fall under a `LEDGER` entry, or a
+//! `FIELDS` entry for a field that differs wherever it appears, and every
+//! entry has to still reproduce, so row 34 of `docs/parity.md` is a reading
+//! of the summary this file prints.
 
 #![cfg(feature = "test-fixtures")]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -70,6 +71,13 @@ struct Divergence {
 }
 
 const PLAN_REVIEWS: &[&str] = &["plan/edited-during-review", "plan/unchanged-during-review"];
+
+const MODEL_PROBE: &str = "since v2.26.0 a root session opened with titles on first asks the \
+     provider whether it serves a fast model, with a one-token completion that offers no tools \
+     (`vibe/app_server/_runtime.py:1956`, `vibe/core/llm/model_probe.py:189-211` at 376f6a3), \
+     so the reference sends one more utility request than this port, which sends no probe. \
+     The stand-in answers the probe apart, so every title still reads the reply its scenario \
+     scripted";
 
 const LEDGER: &[Divergence] = &[
     // ---------------------------------------------------------- row 3
@@ -181,6 +189,31 @@ const LEDGER: &[Divergence] = &[
         row: "3",
         reason: "the plan-review outcome, as the saved tool message, its result and its display",
     },
+    // --------------------------------------------------------- row 10
+    Divergence {
+        scenarios: &["titles/first-answer"],
+        pointer: "/requests/2",
+        row: "10",
+        reason: MODEL_PROBE,
+    },
+    Divergence {
+        scenarios: &["titles/manual-title-wins"],
+        pointer: "/requests/1",
+        row: "10",
+        reason: MODEL_PROBE,
+    },
+    Divergence {
+        scenarios: &["titles/after-compaction"],
+        pointer: "/requests/5",
+        row: "10",
+        reason: MODEL_PROBE,
+    },
+    Divergence {
+        scenarios: &["titles/tool-heavy-turn"],
+        pointer: "/requests/11",
+        row: "10",
+        reason: MODEL_PROBE,
+    },
     // --------------------------------------------------------- row 13
     Divergence {
         scenarios: &["persist/denied"],
@@ -291,6 +324,81 @@ const LEDGER: &[Divergence] = &[
     },
 ];
 
+/// A field this port answers differently wherever it appears, in any scenario,
+/// and the row of `docs/parity.md` that answers for it.
+struct FieldDivergence {
+    /// Every difference whose JSON pointer ends with this suffix is covered.
+    suffix: &'static str,
+    row: &'static str,
+    reason: &'static str,
+}
+
+const SESSION_ARCHIVE: &str = "v2.26.0 publishes each session's `archivedAt` and `isUnseen` \
+     (`vibe/app_server/models.py:1185-1186` at 376f6a3), the state `session/archive` and \
+     `session/markAsSeen` keep; this port routes neither method and omits both fields, which \
+     read null and false in every scenario";
+
+const PATH_SCOPE: &str = "v2.26.0 approvals carry a path grant scope: `pathScopeChoices` on the \
+     request, `pathScope` on the decision (`vibe/app_server/models.py:312,322` at 376f6a3) and \
+     `pathScopeRoot` on each required permission (`vibe/permissions.py:60`), empty or null for \
+     every call these scenarios approve; this port's payloads carry none of them";
+
+const FIELDS: &[FieldDivergence] = &[
+    FieldDivergence {
+        suffix: "/inputEntryId",
+        row: "17",
+        reason: "v2.26.0 gives every public history entry and turn an `inputEntryId` \
+                 (`vibe/app_server/models.py:949,1236` at 376f6a3), null on the legacy \
+                 backend; this port's entries and turns do not carry the field",
+    },
+    FieldDivergence {
+        suffix: "/archivedAt",
+        row: "17",
+        reason: SESSION_ARCHIVE,
+    },
+    FieldDivergence {
+        suffix: "/isUnseen",
+        row: "17",
+        reason: SESSION_ARCHIVE,
+    },
+    FieldDivergence {
+        suffix: "/worktree",
+        row: "17",
+        reason: "v2.26.0 publishes the managed worktree a session runs in \
+                 (`vibe/app_server/models.py:1191` at 376f6a3), null outside one; this port \
+                 omits the field",
+    },
+    FieldDivergence {
+        suffix: "/backgroundProcesses",
+        row: "17",
+        reason: "v2.26.0 session state lists the Unified Harness's background processes \
+                 (`vibe/app_server/models.py:1263` at 376f6a3), empty on the legacy backend; \
+                 this port omits the field",
+    },
+    FieldDivergence {
+        suffix: "/agentName",
+        row: "17",
+        reason: "v2.26.0 names the agent a subagent call runs on its detail \
+                 (`vibe/app_server/_effect_models.py:295` at 376f6a3), null until the call is \
+                 known; this port omits the field",
+    },
+    FieldDivergence {
+        suffix: "/pathScopeChoices",
+        row: "17",
+        reason: PATH_SCOPE,
+    },
+    FieldDivergence {
+        suffix: "/pathScope",
+        row: "17",
+        reason: PATH_SCOPE,
+    },
+    FieldDivergence {
+        suffix: "/pathScopeRoot",
+        row: "17",
+        reason: PATH_SCOPE,
+    },
+];
+
 fn repository() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
@@ -391,6 +499,7 @@ fn the_port_runs_every_loop_scenario_as_the_corpus_records_or_as_the_ledger_name
     // One count per entry and scenario it names, so an entry that stopped
     // reproducing in one of its scenarios is reported for that one.
     let mut reproduced = BTreeMap::<(usize, &str), usize>::new();
+    let mut fields = vec![0_usize; FIELDS.len()];
     let mut conformant = 0;
     for (name, reference) in &recorded {
         let port = replayed[name];
@@ -416,7 +525,13 @@ fn the_port_runs_every_loop_scenario_as_the_corpus_records_or_as_the_ledger_name
                         .expect("the entry names the scenario it matched");
                     *reproduced.entry((index, scenario)).or_default() += 1;
                 }
-                None => unexplained.push(format!("{name} {pointer}")),
+                None => match FIELDS
+                    .iter()
+                    .position(|field| pointer.ends_with(field.suffix))
+                {
+                    Some(index) => fields[index] += 1,
+                    None => unexplained.push(format!("{name} {pointer}")),
+                },
             }
         }
     }
@@ -428,12 +543,17 @@ fn the_port_runs_every_loop_scenario_as_the_corpus_records_or_as_the_ledger_name
             }
         }
     }
+    for (field, count) in FIELDS.iter().zip(&fields) {
+        if *count == 0 {
+            stale.push(field.suffix.to_owned());
+        }
+    }
     println!(
         "agent loop parity: {conformant}/{} scenarios conformant, {} ledgered differences \
          across {} entries",
         recorded.len(),
-        reproduced.values().sum::<usize>(),
-        LEDGER.len()
+        reproduced.values().chain(&fields).sum::<usize>(),
+        LEDGER.len() + FIELDS.len()
     );
     assert!(
         unexplained.is_empty(),
@@ -482,6 +602,20 @@ fn every_ledger_entry_names_a_scorecard_row_that_answers_for_it() {
                 && !entry.reason.is_empty(),
             "the ledger entry for {} needs recorded scenarios, a pointer prefix and a reason",
             entry.pointer
+        );
+    }
+    for field in FIELDS {
+        assert!(
+            rows.contains(field.row) && field.row != "34",
+            "the field entry for {} names row {}, which is not another row docs/parity.md \
+             carries",
+            field.suffix,
+            field.row
+        );
+        assert!(
+            field.suffix.starts_with('/') && !field.reason.is_empty(),
+            "the field entry for {} needs a pointer suffix and a reason",
+            field.suffix
         );
     }
 }

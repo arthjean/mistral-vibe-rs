@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "reference": {
-    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
   },
   "note": "Experiments corpus: what the pinned reference's remote eval client, experiment manager, GrowthBook configuration layer and session helpers answer for each scripted input. The eval request is intercepted one call before the connection and a socket guard fails the run on any connection attempt, so no scenario depends on a live rollout: in remote evaluation mode the proxy resolves the bucketing and the client only applies the answer. A credential is recorded as the environment variable it came from and never as a value, and the only key derivative committed is the 32-character API-key digest. Regenerate with scripts/parity/experiments.py --corpus when the pinned reference moves.",
   "constants": [
@@ -15,7 +15,8 @@
         "vibe_cli_smart_approve_default",
         "vibe_cli_extra_models",
         "vibe_cli_registry_skills",
-        "vibe_cli_unified_harness_rollout"
+        "vibe_cli_unified_harness_rollout",
+        "vibe_cli_rust_tui_rollout"
       ]
     },
     {
@@ -28,7 +29,8 @@
         "vibe_cli_smart_approve_default": false,
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": false,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       }
     },
     {
@@ -388,7 +390,8 @@
         "vibe_cli_smart_approve_default": false,
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": false,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsAreDefaults": true,
       "assignments": [],
@@ -412,7 +415,8 @@
         "vibe_cli_smart_approve_default": false,
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": false,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsAreDefaults": true,
       "assignments": [],
@@ -436,7 +440,8 @@
         "vibe_cli_smart_approve_default": false,
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": false,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsAreDefaults": true,
       "assignments": [],
@@ -460,7 +465,8 @@
         "vibe_cli_smart_approve_default": false,
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": false,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsAreDefaults": true,
       "assignments": [],
@@ -484,7 +490,8 @@
         "vibe_cli_smart_approve_default": false,
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": false,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsAreDefaults": true,
       "assignments": [],
@@ -508,7 +515,8 @@
         "vibe_cli_smart_approve_default": false,
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": false,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsAreDefaults": true,
       "assignments": [],
@@ -532,7 +540,8 @@
         "vibe_cli_smart_approve_default": false,
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": false,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsAreDefaults": true,
       "assignments": [],
@@ -556,7 +565,8 @@
         "vibe_cli_smart_approve_default": false,
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": false,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsAreDefaults": true,
       "assignments": [],
@@ -580,7 +590,8 @@
         "vibe_cli_smart_approve_default": false,
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": false,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsAreDefaults": true,
       "assignments": [],
@@ -783,7 +794,8 @@
         "vibe_cli_smart_approve_default": false,
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": false,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsOrNone": {
         "vibe_cli_system_prompt": null,
@@ -793,7 +805,8 @@
         "vibe_cli_smart_approve_default": null,
         "vibe_cli_extra_models": null,
         "vibe_cli_registry_skills": null,
-        "vibe_cli_unified_harness_rollout": null
+        "vibe_cli_unified_harness_rollout": null,
+        "vibe_cli_rust_tui_rollout": null
       }
     },
     {
@@ -810,7 +823,8 @@
         "vibe_cli_smart_approve_default": false,
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": false,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsOrNone": {
         "vibe_cli_system_prompt": null,
@@ -820,7 +834,8 @@
         "vibe_cli_smart_approve_default": null,
         "vibe_cli_extra_models": null,
         "vibe_cli_registry_skills": null,
-        "vibe_cli_unified_harness_rollout": null
+        "vibe_cli_unified_harness_rollout": null,
+        "vibe_cli_rust_tui_rollout": null
       }
     },
     {
@@ -848,7 +863,8 @@
         "vibe_cli_smart_approve_default": false,
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": false,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsOrNone": {
         "vibe_cli_system_prompt": "tests",
@@ -858,7 +874,8 @@
         "vibe_cli_smart_approve_default": null,
         "vibe_cli_extra_models": null,
         "vibe_cli_registry_skills": null,
-        "vibe_cli_unified_harness_rollout": null
+        "vibe_cli_unified_harness_rollout": null,
+        "vibe_cli_rust_tui_rollout": null
       }
     },
     {
@@ -906,7 +923,8 @@
         "vibe_cli_smart_approve_default": false,
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": false,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsOrNone": {
         "vibe_cli_system_prompt": null,
@@ -926,7 +944,8 @@
         "vibe_cli_smart_approve_default": null,
         "vibe_cli_extra_models": null,
         "vibe_cli_registry_skills": null,
-        "vibe_cli_unified_harness_rollout": null
+        "vibe_cli_unified_harness_rollout": null,
+        "vibe_cli_rust_tui_rollout": null
       }
     },
     {
@@ -960,7 +979,8 @@
         "vibe_cli_smart_approve_default": false,
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": false,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsOrNone": {
         "vibe_cli_system_prompt": [
@@ -973,7 +993,8 @@
         "vibe_cli_smart_approve_default": null,
         "vibe_cli_extra_models": null,
         "vibe_cli_registry_skills": null,
-        "vibe_cli_unified_harness_rollout": null
+        "vibe_cli_unified_harness_rollout": null,
+        "vibe_cli_rust_tui_rollout": null
       }
     },
     {
@@ -1001,7 +1022,8 @@
         "vibe_cli_smart_approve_default": false,
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": false,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsOrNone": {
         "vibe_cli_system_prompt": 7,
@@ -1011,7 +1033,8 @@
         "vibe_cli_smart_approve_default": null,
         "vibe_cli_extra_models": null,
         "vibe_cli_registry_skills": null,
-        "vibe_cli_unified_harness_rollout": null
+        "vibe_cli_unified_harness_rollout": null,
+        "vibe_cli_rust_tui_rollout": null
       }
     },
     {
@@ -1039,7 +1062,8 @@
         "vibe_cli_smart_approve_default": false,
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": false,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsOrNone": {
         "vibe_cli_system_prompt": null,
@@ -1049,7 +1073,8 @@
         "vibe_cli_smart_approve_default": null,
         "vibe_cli_extra_models": null,
         "vibe_cli_registry_skills": null,
-        "vibe_cli_unified_harness_rollout": null
+        "vibe_cli_unified_harness_rollout": null,
+        "vibe_cli_rust_tui_rollout": null
       }
     },
     {
@@ -1077,7 +1102,8 @@
         "vibe_cli_smart_approve_default": false,
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": false,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsOrNone": {
         "vibe_cli_system_prompt": null,
@@ -1087,7 +1113,8 @@
         "vibe_cli_smart_approve_default": null,
         "vibe_cli_extra_models": null,
         "vibe_cli_registry_skills": null,
-        "vibe_cli_unified_harness_rollout": null
+        "vibe_cli_unified_harness_rollout": null,
+        "vibe_cli_rust_tui_rollout": null
       }
     },
     {
@@ -1111,7 +1138,8 @@
         "vibe_cli_smart_approve_default": false,
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": false,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsOrNone": {
         "vibe_cli_system_prompt": "lean",
@@ -1121,7 +1149,8 @@
         "vibe_cli_smart_approve_default": null,
         "vibe_cli_extra_models": null,
         "vibe_cli_registry_skills": null,
-        "vibe_cli_unified_harness_rollout": null
+        "vibe_cli_unified_harness_rollout": null,
+        "vibe_cli_rust_tui_rollout": null
       }
     },
     {
@@ -1157,7 +1186,8 @@
         "vibe_cli_smart_approve_default": false,
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": false,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsOrNone": {
         "vibe_cli_system_prompt": "tests",
@@ -1167,7 +1197,8 @@
         "vibe_cli_smart_approve_default": null,
         "vibe_cli_extra_models": null,
         "vibe_cli_registry_skills": null,
-        "vibe_cli_unified_harness_rollout": null
+        "vibe_cli_unified_harness_rollout": null,
+        "vibe_cli_rust_tui_rollout": null
       }
     },
     {
@@ -1233,7 +1264,8 @@
         "vibe_cli_smart_approve_default": false,
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": false,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsOrNone": {
         "vibe_cli_system_prompt": "lean",
@@ -1253,7 +1285,8 @@
         "vibe_cli_smart_approve_default": null,
         "vibe_cli_extra_models": null,
         "vibe_cli_registry_skills": null,
-        "vibe_cli_unified_harness_rollout": null
+        "vibe_cli_unified_harness_rollout": null,
+        "vibe_cli_rust_tui_rollout": null
       }
     }
   ],
@@ -2252,8 +2285,16 @@
           "output_price": 0.0,
           "cached_input_price": null,
           "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ],
           "supports_images": false,
-          "auto_compact_threshold": 200000
+          "max_context_length": null,
+          "auto_compact_threshold": -1
         },
         "resolvedDefaultAlias": "oracle-routed-alias",
         "activeModelAlias": "oracle-routed-alias"
@@ -3081,6 +3122,14 @@
     },
     {
       "id": "vibe_cli_unified_harness_rollout",
+      "surfaces": [],
+      "eligible": {
+        "legacy": false,
+        "unified": false
+      }
+    },
+    {
+      "id": "vibe_cli_rust_tui_rollout",
       "surfaces": [
         "legacy",
         "unified"
@@ -3138,7 +3187,8 @@
         "vibe_cli_smart_approve_default": false,
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": false,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsOrNone": {
         "vibe_cli_system_prompt": "cli",
@@ -3148,7 +3198,8 @@
         "vibe_cli_smart_approve_default": false,
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": false,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": null
       },
       "configVariants": {},
       "assignments": []
@@ -3308,7 +3359,8 @@
           }
         ],
         "vibe_cli_registry_skills": "on",
-        "vibe_cli_unified_harness_rollout": "unified"
+        "vibe_cli_unified_harness_rollout": "unified",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsOrNone": {
         "vibe_cli_system_prompt": "lean",
@@ -3328,7 +3380,8 @@
           }
         ],
         "vibe_cli_registry_skills": "on",
-        "vibe_cli_unified_harness_rollout": "unified"
+        "vibe_cli_unified_harness_rollout": "unified",
+        "vibe_cli_rust_tui_rollout": null
       },
       "configVariants": {
         "vibe_cli_system_prompt": "lean",
@@ -3439,7 +3492,8 @@
         "vibe_cli_smart_approve_default": 0.0,
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": 1,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsOrNone": {
         "vibe_cli_system_prompt": null,
@@ -3449,7 +3503,8 @@
         "vibe_cli_smart_approve_default": 0.0,
         "vibe_cli_extra_models": null,
         "vibe_cli_registry_skills": 1,
-        "vibe_cli_unified_harness_rollout": null
+        "vibe_cli_unified_harness_rollout": null,
+        "vibe_cli_rust_tui_rollout": null
       },
       "configVariants": {
         "vibe_cli_managed_shell_tools": 1,
@@ -3491,7 +3546,8 @@
         "vibe_cli_smart_approve_default": false,
         "vibe_cli_extra_models": [],
         "vibe_cli_registry_skills": false,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsOrNone": {
         "vibe_cli_system_prompt": "",
@@ -3501,7 +3557,8 @@
         "vibe_cli_smart_approve_default": null,
         "vibe_cli_extra_models": [],
         "vibe_cli_registry_skills": null,
-        "vibe_cli_unified_harness_rollout": null
+        "vibe_cli_unified_harness_rollout": null,
+        "vibe_cli_rust_tui_rollout": null
       },
       "configVariants": {
         "vibe_cli_system_prompt": "",
@@ -3539,7 +3596,8 @@
         "vibe_cli_smart_approve_default": "true",
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": "False",
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsOrNone": {
         "vibe_cli_system_prompt": null,
@@ -3549,7 +3607,8 @@
         "vibe_cli_smart_approve_default": "true",
         "vibe_cli_extra_models": null,
         "vibe_cli_registry_skills": "False",
-        "vibe_cli_unified_harness_rollout": null
+        "vibe_cli_unified_harness_rollout": null,
+        "vibe_cli_rust_tui_rollout": null
       },
       "configVariants": {
         "vibe_cli_smart_approve": "false",
@@ -3604,7 +3663,8 @@
           ]
         },
         "vibe_cli_registry_skills": false,
-        "vibe_cli_unified_harness_rollout": "unified"
+        "vibe_cli_unified_harness_rollout": "unified",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsOrNone": {
         "vibe_cli_system_prompt": "lean",
@@ -3624,7 +3684,8 @@
           ]
         },
         "vibe_cli_registry_skills": null,
-        "vibe_cli_unified_harness_rollout": "unified"
+        "vibe_cli_unified_harness_rollout": "unified",
+        "vibe_cli_rust_tui_rollout": null
       },
       "configVariants": {
         "vibe_cli_system_prompt": "lean",
@@ -3762,7 +3823,8 @@
         "vibe_cli_smart_approve_default": 0.5,
         "vibe_cli_extra_models": {},
         "vibe_cli_registry_skills": true,
-        "vibe_cli_unified_harness_rollout": "legacy"
+        "vibe_cli_unified_harness_rollout": "legacy",
+        "vibe_cli_rust_tui_rollout": "python"
       },
       "variantsOrNone": {
         "vibe_cli_system_prompt": null,
@@ -3779,7 +3841,8 @@
         "vibe_cli_smart_approve_default": 0.5,
         "vibe_cli_extra_models": null,
         "vibe_cli_registry_skills": true,
-        "vibe_cli_unified_harness_rollout": null
+        "vibe_cli_unified_harness_rollout": null,
+        "vibe_cli_rust_tui_rollout": null
       },
       "configVariants": {
         "vibe_cli_default_routing_model": {

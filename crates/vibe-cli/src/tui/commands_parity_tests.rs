@@ -130,28 +130,57 @@ const FAMILIES: &[Family] = &[
 ];
 
 /// Cases where this build answers something other than the reference, each with
-/// the reason it is permanent.
+/// the reason it is permanent or the reference change it has not followed.
 ///
-/// Every entry is `ACCEPTED`: `NOTICE` forbids reproducing the reference's
-/// authored text, so this port writes its own and differs in length and digest
-/// wherever that text is observed. The three headings, the eight shortcut lines
-/// and the two prefix lines of `/help` are prose; the command lines are not and
-/// carry no entry. The same prose makes the whole `/help` message differ, and
-/// the continuation `/retry` submits is a prompt the model reads, which
-/// `NOTICE` names first. Everything else a handler, the dispatcher or the
-/// log-level panel does conforms, so a new difference fails the replay.
+/// `ACCEPTED` entries are permanent: `NOTICE` forbids reproducing the
+/// reference's authored text, so this port writes its own and differs in length
+/// and digest wherever that text is observed. The three headings, the eight
+/// shortcut lines and the two prefix lines of `/help` are prose; the command
+/// lines are not and carry no `ACCEPTED` entry. The same prose makes the whole
+/// `/help` message differ, and the continuation `/retry` submits is a prompt the
+/// model reads, which `NOTICE` names first.
+///
+/// `OPEN` entries record what the re-pin to 2.26.0 measured and this port has
+/// not followed: the rewritten `/status` description, the second `/loop`
+/// description the experimental harness selects, and the lean install handlers
+/// that confirm instead of reloading. Everything else a handler, the dispatcher
+/// or the log-level panel does conforms, so a new difference fails the replay.
 const DIVERGENCES: &[(&str, &str)] = &[
     (
         "handlers/effects/help",
-        "ACCEPTED: the `/help` message carries the thirteen authored lines helpProse ledgers, so its digest differs while every effect around it conforms",
+        "ACCEPTED: the `/help` message carries the thirteen authored lines helpProse ledgers, so its digest differs while every effect around it conforms; since 376f6a3 it also carries the two OPEN command lines below",
     ),
     (
         "handlers/effects/retry",
-        "ACCEPTED: the continuation `/retry` submits is a prompt `NOTICE` forbids reproducing (vibe/utils/retry_prompt.py @4a960031), so this port submits its own words, injected like the reference's",
+        "ACCEPTED: the continuation `/retry` submits is a prompt `NOTICE` forbids reproducing (vibe/utils/retry_prompt.py @376f6a3), so this port submits its own words, injected like the reference's",
     ),
     (
         "handlers/effects/retry-instructions",
-        "ACCEPTED: the continuation `/retry` submits is a prompt `NOTICE` forbids reproducing (vibe/utils/retry_prompt.py @4a960031), so this port submits its own words around the operator's instructions",
+        "ACCEPTED: the continuation `/retry` submits is a prompt `NOTICE` forbids reproducing (vibe/utils/retry_prompt.py @376f6a3), so this port submits its own words around the operator's instructions",
+    ),
+    (
+        "handlers/effects/leanstall",
+        "OPEN: reference v2.26.0 confirms a lean install with its own message and no longer reloads the configuration after the write (vibe/cli/textual_ui/app.py:4853-4865 @376f6a3); this port still reloads and reports the reload status (crates/vibe-cli/src/tui/command_handlers.rs:847)",
+    ),
+    (
+        "handlers/effects/unleanstall",
+        "OPEN: reference v2.26.0 confirms a lean uninstall with its own message and no longer reloads the configuration after the write (vibe/cli/textual_ui/app.py:4867-4881 @376f6a3); this port still reloads and reports the reload status (crates/vibe-cli/src/tui/command_handlers.rs:847)",
+    ),
+    (
+        "helpProse/length/line-30",
+        "OPEN: reference v2.26.0 gives `/loop` a second description under the experimental harness, which the full help context enables and where the command forwards its line to the model (vibe/cli/commands.py:232-242 @376f6a3); this port keeps the one legacy description (crates/vibe-cli/src/tui/commands.rs:382)",
+    ),
+    (
+        "helpProse/digest/line-30",
+        "OPEN: reference v2.26.0 gives `/loop` a second description under the experimental harness, which the full help context enables and where the command forwards its line to the model (vibe/cli/commands.py:232-242 @376f6a3); this port keeps the one legacy description (crates/vibe-cli/src/tui/commands.rs:382)",
+    ),
+    (
+        "helpProse/length/line-44",
+        "OPEN: reference v2.26.0 rewrote the `/status` description to cover the model and provider section (vibe/cli/commands.py:131 @376f6a3); this port keeps the 2.25.7 description (crates/vibe-cli/src/tui/commands.rs:274)",
+    ),
+    (
+        "helpProse/digest/line-44",
+        "OPEN: reference v2.26.0 rewrote the `/status` description to cover the model and provider section (vibe/cli/commands.py:131 @376f6a3); this port keeps the 2.25.7 description (crates/vibe-cli/src/tui/commands.rs:274)",
     ),
     (
         "helpProse/length/line-00",
@@ -419,8 +448,9 @@ fn settle(report: &Report, family: &str) -> (usize, Vec<String>) {
 /// `- <aliases>: <description>`, and both halves are the observable contract
 /// rather than prose: the aliases come from the registry and the descriptions
 /// are byte-identical to the reference's, which the `commands-*` popup traces
-/// assert. Measured against the corpus captured at 2.25.7, every line rebuilt
-/// from `COMMANDS` hashes to a digest `helpProse` records. Routing them through this
+/// assert. Measured against the corpus captured at 2.26.0, every line rebuilt
+/// from `COMMANDS` hashes to a digest `helpProse` records, save the `/loop` and
+/// `/status` lines the `OPEN` entries of [`DIVERGENCES`] name. Routing them through this
 /// function would make US-231 unsatisfiable: it would forbid the very lines its
 /// own criteria require. `helpCommands` is what compares them, on their order
 /// and their alias list, which is the part a port can get wrong.

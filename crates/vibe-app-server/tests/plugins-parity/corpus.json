@@ -1,6 +1,6 @@
 {
  "reference": {
-  "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+  "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
  },
  "scenarios": [
   {
@@ -251,7 +251,7 @@
       "experimentalHarness": true,
       "issues": [],
       "mcp": {
-       "connectorError": null,
+       "connectorError": "Failed to load connectors (HTTP 401).",
        "discoveryErrors": {},
        "manageConnectorsUrl": null,
        "sources": []
@@ -338,7 +338,7 @@
     {
      "answer": {
       "mcp": {
-       "connectorError": null,
+       "connectorError": "Failed to load connectors (HTTP 401).",
        "discoveryErrors": {},
        "manageConnectorsUrl": null,
        "sources": []
@@ -640,7 +640,7 @@
       "experimentalHarness": true,
       "issues": [],
       "mcp": {
-       "connectorError": null,
+       "connectorError": "Failed to load connectors (HTTP 401).",
        "discoveryErrors": {},
        "manageConnectorsUrl": null,
        "sources": []
@@ -699,7 +699,7 @@
     {
      "answer": {
       "mcp": {
-       "connectorError": null,
+       "connectorError": "Failed to load connectors (HTTP 401).",
        "discoveryErrors": {},
        "manageConnectorsUrl": null,
        "sources": []
@@ -824,7 +824,7 @@
        }
       ],
       "mcp": {
-       "connectorError": null,
+       "connectorError": "Failed to load connectors (HTTP 401).",
        "discoveryErrors": {},
        "manageConnectorsUrl": null,
        "sources": []
@@ -916,10 +916,6 @@
         {
          "file": "<vibe-home>/logs/session/plugins/packages/95/9563d5f4dd0949e82b424a076ee3531732c9be062302dd07b8de094756c23e55/mcp.json",
          "message": "<prose>"
-        },
-        {
-         "file": "<vibe-home>/logs/session/plugins/packages/95/9563d5f4dd0949e82b424a076ee3531732c9be062302dd07b8de094756c23e55/mcp.json",
-         "message": "<prose>"
         }
        ],
        "plugins": [
@@ -932,8 +928,18 @@
            "status": null
           },
           {
+           "kind": "mcp_server",
+           "name": "script",
+           "status": null
+          },
+          {
            "kind": "tool",
            "name": "plugin_servers_fixture.echo",
+           "status": null
+          },
+          {
+           "kind": "tool",
+           "name": "plugin_servers_script.echo",
            "status": null
           }
          ],
@@ -997,10 +1003,6 @@
         {
          "file": "<vibe-home>/logs/session/plugins/packages/95/9563d5f4dd0949e82b424a076ee3531732c9be062302dd07b8de094756c23e55/mcp.json",
          "message": "<prose>"
-        },
-        {
-         "file": "<vibe-home>/logs/session/plugins/packages/95/9563d5f4dd0949e82b424a076ee3531732c9be062302dd07b8de094756c23e55/mcp.json",
-         "message": "<prose>"
         }
        ],
        "plugins": [
@@ -1013,8 +1015,18 @@
            "status": null
           },
           {
+           "kind": "mcp_server",
+           "name": "script",
+           "status": null
+          },
+          {
            "kind": "tool",
            "name": "plugin_servers_fixture.echo",
+           "status": null
+          },
+          {
+           "kind": "tool",
+           "name": "plugin_servers_script.echo",
            "status": null
           }
          ],
@@ -1093,9 +1105,31 @@
          "sourcePath": "<vibe-home>/logs/session/plugins/packages/95/9563d5f4dd0949e82b424a076ee3531732c9be062302dd07b8de094756c23e55/mcp.json"
         },
         {
+         "config": {
+          "argv": [
+           "<vibe-home>/logs/session/plugins/packages/95/9563d5f4dd0949e82b424a076ee3531732c9be062302dd07b8de094756c23e55/bin/serve"
+          ],
+          "cwd": "<vibe-home>/logs/session/plugins/packages/95/9563d5f4dd0949e82b424a076ee3531732c9be062302dd07b8de094756c23e55",
+          "env": [
+           "PLUGIN_DATA",
+           "PLUGIN_ROOT"
+          ],
+          "transport": "stdio"
+         },
+         "kind": "mcp_server",
+         "name": "script",
+         "sourcePath": "<vibe-home>/logs/session/plugins/packages/95/9563d5f4dd0949e82b424a076ee3531732c9be062302dd07b8de094756c23e55/mcp.json"
+        },
+        {
          "config": {},
          "kind": "tool",
          "name": "plugin_servers_fixture.echo",
+         "sourcePath": null
+        },
+        {
+         "config": {},
+         "kind": "tool",
+         "name": "plugin_servers_script.echo",
          "sourcePath": null
         },
         {
@@ -1154,11 +1188,9 @@
        }
       ],
       "mcp": {
-       "connectorError": null,
+       "connectorError": "Failed to load connectors (HTTP 401).",
        "discoveryErrors": {
-        "fixture": "authentication was rejected",
-        "missing": "authentication was rejected",
-        "script": "authentication was rejected"
+        "missing": "mcp_transport_failed"
        },
        "manageConnectorsUrl": null,
        "sources": [
@@ -1168,12 +1200,17 @@
          "kind": "server",
          "name": "fixture",
          "pluginName": "servers",
-         "status": "connected",
+         "status": "enabled",
          "tools": [
           {
            "description": "Echo a bounded message",
            "enabled": true,
            "name": "echo"
+          },
+          {
+           "description": "",
+           "enabled": true,
+           "name": "status"
           }
          ],
          "transport": "stdio"
@@ -1194,8 +1231,19 @@
          "kind": "server",
          "name": "script",
          "pluginName": "servers",
-         "status": "unavailable",
-         "tools": [],
+         "status": "enabled",
+         "tools": [
+          {
+           "description": "Echo a bounded message",
+           "enabled": true,
+           "name": "echo"
+          },
+          {
+           "description": "",
+           "enabled": true,
+           "name": "status"
+          }
+         ],
          "transport": "stdio"
         }
        ]
@@ -1254,11 +1302,9 @@
     {
      "answer": {
       "mcp": {
-       "connectorError": null,
+       "connectorError": "Failed to load connectors (HTTP 401).",
        "discoveryErrors": {
-        "fixture": "authentication was rejected",
-        "missing": "authentication was rejected",
-        "script": "authentication was rejected"
+        "missing": "mcp_transport_failed"
        },
        "manageConnectorsUrl": null,
        "sources": [
@@ -1268,12 +1314,17 @@
          "kind": "server",
          "name": "fixture",
          "pluginName": "servers",
-         "status": "connected",
+         "status": "enabled",
          "tools": [
           {
            "description": "Echo a bounded message",
            "enabled": true,
            "name": "echo"
+          },
+          {
+           "description": "",
+           "enabled": true,
+           "name": "status"
           }
          ],
          "transport": "stdio"
@@ -1294,8 +1345,19 @@
          "kind": "server",
          "name": "script",
          "pluginName": "servers",
-         "status": "unavailable",
-         "tools": [],
+         "status": "enabled",
+         "tools": [
+          {
+           "description": "Echo a bounded message",
+           "enabled": true,
+           "name": "echo"
+          },
+          {
+           "description": "",
+           "enabled": true,
+           "name": "status"
+          }
+         ],
          "transport": "stdio"
         }
        ]
@@ -1340,11 +1402,6 @@
      "call": "plugin/reload",
      "ok": true,
      "warnings": [
-      {
-       "code": "warning",
-       "details": null,
-       "message": "<prose>"
-      },
       {
        "code": "warning",
        "details": null,
@@ -1535,7 +1592,7 @@
       "experimentalHarness": true,
       "issues": [],
       "mcp": {
-       "connectorError": null,
+       "connectorError": "Failed to load connectors (HTTP 401).",
        "discoveryErrors": {},
        "manageConnectorsUrl": null,
        "sources": []
@@ -1877,7 +1934,7 @@
    }
   },
   {
-   "name": "rollout/unified",
+   "name": "default/unified",
    "observed": [
     {
      "answer": {
@@ -1962,7 +2019,7 @@
      "plugins/demo/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"demo\", \"version\": \"0.1.0\", \"description\": \"Probe plugin\"}\n",
      "plugins/demo/skills/hello/SKILL.md": "---\nname: hello\ndescription: Says hello for the probe\n---\nSay hello.\n"
     },
-    "name": "rollout/unified",
+    "name": "default/unified",
     "steps": [
      {
       "call": "plugin_catalog/read",
@@ -2074,7 +2131,9 @@
     }
    ],
    "scenario": {
-    "flags": [],
+    "flags": [
+     "--legacy-harness"
+    ],
     "home": {
      "plugins/demo/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"demo\", \"version\": \"0.1.0\", \"description\": \"Probe plugin\"}\n",
      "plugins/demo/skills/hello/SKILL.md": "---\nname: hello\ndescription: Says hello for the probe\n---\nSay hello.\n"

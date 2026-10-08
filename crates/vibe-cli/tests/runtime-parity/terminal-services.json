@@ -1,6 +1,6 @@
 {
   "oracle": {
-    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd",
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
     "deterministicRuns": 10,
     "engine": "python-reference-capture"
   },
@@ -69,7 +69,7 @@
     "script": "terminal-services-oracle.py"
   },
   "reference": {
-    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd",
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
     "sourceFiles": [
       "vibe/cli/cli.py",
       "vibe/cli/narrator_manager/narrator_manager.py",
@@ -87,7 +87,7 @@
       "vibe/setup/update_prompt/update_prompt_dialog.py",
       "vibe/utils/cache_store.py"
     ],
-    "version": "2.25.7"
+    "version": "2.26.0"
   },
   "schemaVersion": 1,
   "traces": [

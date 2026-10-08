@@ -57,7 +57,58 @@ struct Divergence {
     reason: &'static str,
 }
 
-const LEDGER: &[Divergence] = &[];
+const SESSION_ARCHIVE: &str = "v2.26.0 publishes each session's `archivedAt` and `isUnseen` \
+     (`vibe/app_server/models.py:1185-1186` at 376f6a3), the state `session/archive` and \
+     `session/markAsSeen` keep; this port routes neither method and omits both fields, which \
+     read null and false in every scenario";
+
+const WRITE_PREVIOUS: &str = "v2.26.0 adds `fileExisted` and `previousContent` to a \
+     `write_file` effect's output (`vibe/app_server/_effect_models.py:158-159` at 376f6a3), \
+     which the legacy builtin leaves at false and null; this port omits both";
+
+const LEDGER: &[Divergence] = &[
+    Divergence {
+        suffix: "/inputEntryId",
+        row: "17",
+        reason: "v2.26.0 gives every public history entry an `inputEntryId` \
+                 (`vibe/app_server/models.py:949` at 376f6a3), null on the legacy backend; \
+                 this port's entries do not carry the field",
+    },
+    Divergence {
+        suffix: "/archivedAt",
+        row: "17",
+        reason: SESSION_ARCHIVE,
+    },
+    Divergence {
+        suffix: "/isUnseen",
+        row: "17",
+        reason: SESSION_ARCHIVE,
+    },
+    Divergence {
+        suffix: "/worktree",
+        row: "17",
+        reason: "v2.26.0 publishes the managed worktree a session runs in \
+                 (`vibe/app_server/models.py:1191` at 376f6a3), null outside one; this port \
+                 omits the field",
+    },
+    Divergence {
+        suffix: "/backgroundProcesses",
+        row: "17",
+        reason: "v2.26.0 session state lists the Unified Harness's background processes \
+                 (`vibe/app_server/models.py:1263` at 376f6a3), empty on the legacy backend; \
+                 this port omits the field",
+    },
+    Divergence {
+        suffix: "/fileExisted",
+        row: "17",
+        reason: WRITE_PREVIOUS,
+    },
+    Divergence {
+        suffix: "/previousContent",
+        row: "17",
+        reason: WRITE_PREVIOUS,
+    },
+];
 
 fn repository() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

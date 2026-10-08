@@ -4245,6 +4245,6 @@
   ],
   "note": "Tool presentation corpus: what the pinned reference's ToolUIDataAdapter publishes for each tool and case, from get_call_presentation and get_result_presentation. A presentation string is committed as it stands only when it is a value this capture supplied, a path or an identifier-shaped token; everything else is committed as a {described, length} marker carrying a SHA-256 digest, so no reference prose ships while any change still fails the replay. Regenerate with scripts/parity/tool_presentation.py --corpus when the pinned reference moves.",
   "platform": "linux",
-  "referenceCommit": "4a96003186b166d55b9f06895c45bb136eef61cd",
+  "referenceCommit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
   "schemaVersion": 2
 }

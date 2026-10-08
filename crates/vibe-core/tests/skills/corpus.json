@@ -25,8 +25,8 @@
         "hasPath": false,
         "name": "vibe",
         "prompt": {
-          "digest": "c5de2ffaca06255d20dd0c050f969e4d09141503fd77ef47e54458dde136eeb6",
-          "length": 59337
+          "digest": "9afcc3acaf039b91a84f6623699249f9b55a05754655d114b64d2fc1f679032a",
+          "length": 64427
         },
         "scope": "global",
         "source": "builtin",
@@ -6031,7 +6031,7 @@
     }
   ],
   "reference": {
-    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
   },
   "schemaVersion": 1,
   "service": [

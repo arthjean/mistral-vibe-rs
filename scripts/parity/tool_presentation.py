@@ -297,6 +297,11 @@ REMOTE_SCHEMA: dict[str, Any] = {
 #: the socket guard were removed.
 REMOTE_URL = "https://mcp.invalid/mcp"
 
+#: The one credential the capture carries: the connector stub's key, and the
+#: Mistral key ``main`` exports so ``web_search`` is published whatever the
+#: ambient environment holds.
+CAPTURE_API_KEY = "the-capture-authored-this-key"
+
 #: The arguments and the result both remote stubs are driven with.
 REMOTE_ARGUMENTS: dict[str, Any] = {"owner": "acme", "repo": "api"}
 REMOTE_RESULT: dict[str, Any] = {
@@ -528,7 +533,7 @@ def capture(tree: Path) -> list[dict[str, Any]]:
             connector_alias=REMOTE_ALIAS,
             connector_id="the-stub-connector",
             remote=remote,
-            api_key="the-capture-authored-this-key",
+            api_key=CAPTURE_API_KEY,
         ),
     }
 
@@ -802,6 +807,11 @@ def main() -> int:
     # No capture may read this machine's stored credentials: the only key any
     # stub here carries is the fixture one this script authors.
     os.environ.setdefault("VIBE_TEST_DISABLE_KEYRING", "1")
+    # `web_search` is published only when a Mistral key resolves
+    # (`WebSearch.is_available`, `vibe/core/tools/builtins/web_search.py:66-75`),
+    # so an ambient key would decide whether the corpus covers it. The fixture
+    # key pins it in for every run, the Rust recapture probe included.
+    os.environ["MISTRAL_API_KEY"] = CAPTURE_API_KEY
     try:
         reference = resolve_reference(arguments.reference, arguments.expected_commit)
         pinned = extract_pinned_tree(

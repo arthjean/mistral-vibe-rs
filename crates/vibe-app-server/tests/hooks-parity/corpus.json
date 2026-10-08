@@ -1,7 +1,7 @@
 {
-  "quietSeconds": 1.0,
+  "quietSeconds": 0.5,
   "reference": {
-    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
   },
   "scenarios": [
     {
@@ -72,6 +72,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -93,6 +94,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -131,6 +133,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -204,6 +207,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -235,6 +239,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 18,
@@ -269,6 +274,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 18,
@@ -342,6 +348,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -383,6 +390,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -611,6 +619,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -632,6 +641,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -670,6 +680,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -743,6 +754,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -774,6 +786,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -805,6 +818,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 21,
@@ -836,6 +850,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 18,
@@ -867,6 +882,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": "Checked by noted",
                     "relatedEntryId": null,
@@ -895,6 +911,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 21,
@@ -926,6 +943,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-11>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 23,
@@ -957,6 +975,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-12>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -1037,6 +1056,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-13>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -1078,6 +1098,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -1269,6 +1290,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -1290,6 +1312,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -1328,6 +1351,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -1401,6 +1425,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -1432,6 +1457,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 21,
@@ -1466,6 +1492,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 29,
@@ -1497,6 +1524,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -1528,6 +1556,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": "Second rewrite",
                     "relatedEntryId": null,
@@ -1556,6 +1585,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 18,
@@ -1587,6 +1617,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-11>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 20,
@@ -1618,6 +1649,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-12>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -1698,6 +1730,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-13>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -1739,6 +1772,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -1902,6 +1936,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -1923,6 +1958,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -1961,6 +1997,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -2036,6 +2073,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -2067,6 +2105,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 21,
@@ -2101,6 +2140,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 34,
@@ -2132,6 +2172,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -2216,6 +2257,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -2257,6 +2299,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -2417,6 +2460,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -2438,6 +2482,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -2476,6 +2521,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -2549,6 +2595,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -2580,6 +2627,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 21,
@@ -2614,6 +2662,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 29,
@@ -2687,6 +2736,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -2728,6 +2778,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -2885,6 +2936,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -2906,6 +2958,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -2944,6 +2997,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -3017,6 +3071,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -3048,6 +3103,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 21,
@@ -3082,6 +3138,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 29,
@@ -3113,6 +3170,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -3193,6 +3251,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -3234,6 +3293,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -3391,6 +3451,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -3412,6 +3473,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -3450,6 +3512,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -3523,6 +3586,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -3554,6 +3618,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -3588,6 +3653,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 27,
@@ -3661,6 +3727,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -3702,6 +3769,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -3905,6 +3973,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -3926,6 +3995,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -3964,6 +4034,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -4037,6 +4108,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -4068,6 +4140,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -4102,6 +4175,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -4133,6 +4207,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -4167,6 +4242,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 11,
@@ -4198,6 +4274,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 17,
@@ -4232,6 +4309,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-11>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 18,
@@ -4263,6 +4341,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-12>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 17,
@@ -4294,6 +4373,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-13>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": "deny on stderr",
                     "relatedEntryId": null,
@@ -4322,6 +4402,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-14>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -4402,6 +4483,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-15>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -4443,6 +4525,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -4650,6 +4733,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -4671,6 +4755,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -4709,6 +4794,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -4782,6 +4868,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -4813,6 +4900,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 17,
@@ -4847,6 +4935,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 20,
@@ -4878,6 +4967,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 21,
@@ -4912,6 +5002,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 20,
@@ -4943,6 +5034,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 24,
@@ -4977,6 +5069,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-11>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 27,
@@ -5050,6 +5143,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-12>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -5091,6 +5185,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -5485,6 +5580,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -5506,6 +5602,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -5544,6 +5641,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -5617,6 +5715,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -5648,6 +5747,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 17,
@@ -5682,6 +5782,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 76,
@@ -5713,6 +5814,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 18,
@@ -5747,6 +5849,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 60,
@@ -5778,6 +5881,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -5812,6 +5916,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-11>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 59,
@@ -5843,6 +5948,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-12>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -5877,6 +5983,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-13>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 61,
@@ -5908,6 +6015,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-14>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 17,
@@ -5942,6 +6050,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-15>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 64,
@@ -5973,6 +6082,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-16>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 21,
@@ -6007,6 +6117,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-17>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 218,
@@ -6038,6 +6149,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-18>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -6072,6 +6184,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-19>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 205,
@@ -6103,6 +6216,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-20>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 21,
@@ -6137,6 +6251,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-21>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 264,
@@ -6168,6 +6283,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-22>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 26,
@@ -6202,6 +6318,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-23>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 264,
@@ -6233,6 +6350,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-24>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 23,
@@ -6267,6 +6385,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-25>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 237,
@@ -6298,6 +6417,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-26>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 17,
@@ -6332,6 +6452,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-27>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 528,
@@ -6363,6 +6484,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-28>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 17,
@@ -6397,6 +6519,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-29>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 263,
@@ -6428,6 +6551,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-30>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 21,
@@ -6462,6 +6586,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-31>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 72,
@@ -6493,6 +6618,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-32>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 25,
@@ -6527,6 +6653,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-33>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 93,
@@ -6558,6 +6685,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-34>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 16,
@@ -6592,6 +6720,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-35>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 61,
@@ -6623,6 +6752,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-36>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 16,
@@ -6654,6 +6784,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-37>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 18,
@@ -6685,6 +6816,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-38>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -6765,6 +6897,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-39>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -6806,6 +6939,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -7098,6 +7232,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -7119,6 +7254,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -7157,6 +7293,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -7230,6 +7367,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -7261,6 +7399,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 16,
@@ -7292,6 +7431,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 18,
@@ -7323,6 +7463,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 17,
@@ -7354,6 +7495,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -7385,6 +7527,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 18,
@@ -7416,6 +7559,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-11>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 20,
@@ -7447,6 +7591,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-12>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 17,
@@ -7478,6 +7623,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-13>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -7509,6 +7655,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-14>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 18,
@@ -7540,6 +7687,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-15>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 20,
@@ -7571,6 +7719,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-16>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -7651,6 +7800,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-17>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -7692,6 +7842,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -7842,6 +7993,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -7863,6 +8015,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -7901,6 +8054,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -7974,6 +8128,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -8005,6 +8160,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 18,
@@ -8039,6 +8195,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 18,
@@ -8112,6 +8269,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -8153,6 +8311,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -8355,6 +8514,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -8376,6 +8536,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -8414,6 +8575,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -8539,6 +8701,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -8570,6 +8733,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -8604,6 +8768,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 31,
@@ -8635,6 +8800,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 18,
@@ -8666,6 +8832,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 20,
@@ -8697,6 +8864,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -8725,6 +8893,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-11>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -8766,6 +8935,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -8938,6 +9108,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -8959,6 +9130,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -8997,6 +9169,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -9122,6 +9295,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -9153,6 +9327,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -9187,6 +9362,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 31,
@@ -9218,6 +9394,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -9246,6 +9423,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -9287,6 +9465,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -9459,6 +9638,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -9480,6 +9660,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -9518,6 +9699,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -9643,6 +9825,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -9674,6 +9857,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -9708,6 +9892,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 30,
@@ -9739,6 +9924,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -9767,6 +9953,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -9808,6 +9995,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -10013,6 +10201,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -10034,6 +10223,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -10072,6 +10262,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -10197,6 +10388,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -10228,6 +10420,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 21,
@@ -10262,6 +10455,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 32,
@@ -10293,6 +10487,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 18,
@@ -10324,6 +10519,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": "Second note",
                     "relatedEntryId": null,
@@ -10352,6 +10548,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -10380,6 +10577,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-11>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -10421,6 +10619,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -10598,6 +10797,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -10619,6 +10819,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -10657,6 +10858,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -10782,6 +10984,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -10813,6 +11016,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -10847,6 +11051,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 28,
@@ -10878,6 +11083,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -10906,6 +11112,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -10947,6 +11154,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -11153,6 +11361,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -11174,6 +11383,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -11212,6 +11422,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -11337,6 +11548,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -11368,6 +11580,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -11399,6 +11612,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": "scanner crashed",
                     "relatedEntryId": null,
@@ -11427,6 +11641,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 18,
@@ -11461,6 +11676,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 20,
@@ -11492,6 +11708,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -11520,6 +11737,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-11>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -11561,6 +11779,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -11737,6 +11956,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -11758,6 +11978,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -11796,6 +12017,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -11923,6 +12145,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -11954,6 +12177,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 20,
@@ -11985,6 +12209,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 22,
@@ -12016,6 +12241,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -12044,6 +12270,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -12085,6 +12312,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -12272,6 +12500,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -12293,6 +12522,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -12331,6 +12561,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -12406,6 +12637,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -12437,6 +12669,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 21,
@@ -12471,6 +12704,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 34,
@@ -12502,6 +12736,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -12589,6 +12824,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -12620,6 +12856,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 20,
@@ -12651,6 +12888,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-11>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 22,
@@ -12682,6 +12920,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-12>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -12710,6 +12949,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-13>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -12751,6 +12991,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -12911,6 +13152,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -12932,6 +13174,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -12970,6 +13213,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -13043,6 +13287,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -13074,6 +13319,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 18,
@@ -13108,6 +13354,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 18,
@@ -13181,6 +13428,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -13222,6 +13470,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -13375,6 +13624,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -13396,6 +13646,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -13422,6 +13673,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -13451,6 +13703,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -13482,6 +13735,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -13516,6 +13770,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 38,
@@ -13547,6 +13802,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -13575,6 +13831,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -13604,6 +13861,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -13635,6 +13893,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-11>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -13666,6 +13925,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-12>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 21,
@@ -13697,6 +13957,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-13>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 18,
@@ -13728,6 +13989,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-14>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 20,
@@ -13759,6 +14021,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-15>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -13822,6 +14085,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -14110,6 +14374,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -14131,6 +14396,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -14157,6 +14423,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -14186,6 +14453,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -14217,6 +14485,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -14251,6 +14520,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 38,
@@ -14282,6 +14552,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -14310,6 +14581,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -14339,6 +14611,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -14370,6 +14643,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-11>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -14404,6 +14678,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-12>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 38,
@@ -14435,6 +14710,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-13>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -14463,6 +14739,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-14>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -14492,6 +14769,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-15>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -14523,6 +14801,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-16>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -14557,6 +14836,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-17>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 36,
@@ -14588,6 +14868,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-18>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -14616,6 +14897,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-19>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -14645,6 +14927,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-20>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -14676,6 +14959,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-21>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -14710,6 +14994,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-22>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 31,
@@ -14741,6 +15026,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-23>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -14844,6 +15130,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -14864,6 +15151,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-24>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -14885,6 +15173,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-25>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -14911,6 +15200,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-26>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -14940,6 +15230,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-27>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -14971,6 +15262,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-28>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -15005,6 +15297,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-29>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 38,
@@ -15036,6 +15329,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-30>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -15064,6 +15358,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-31>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -15093,6 +15388,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-32>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -15124,6 +15420,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-33>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -15155,6 +15452,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-34>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 21,
@@ -15186,6 +15484,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-35>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -15249,6 +15548,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-24>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -15435,6 +15735,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -15456,6 +15757,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -15482,6 +15784,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -15511,6 +15814,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -15542,6 +15846,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -15576,6 +15881,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 38,
@@ -15607,6 +15913,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -15635,6 +15942,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -15664,6 +15972,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -15695,6 +16004,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-11>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -15726,6 +16036,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-12>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 21,
@@ -15757,6 +16068,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-13>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -15820,6 +16132,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -15906,6 +16219,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -15927,6 +16241,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -15953,6 +16268,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -15982,6 +16298,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -16013,6 +16330,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -16044,6 +16362,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": "linter missing",
                     "relatedEntryId": null,
@@ -16072,6 +16391,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 18,
@@ -16103,6 +16423,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 20,
@@ -16134,6 +16455,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -16177,6 +16499,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -16317,6 +16640,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -16338,6 +16662,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -16376,6 +16701,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -16501,6 +16827,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -16532,6 +16859,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 20,
@@ -16563,6 +16891,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 22,
@@ -16594,6 +16923,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -16622,6 +16952,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -16651,6 +16982,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -16682,6 +17014,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-11>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -16713,6 +17046,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-12>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": "Reviewed",
                     "relatedEntryId": null,
@@ -16741,6 +17075,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-13>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -16784,6 +17119,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -17050,6 +17386,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -17071,6 +17408,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -17109,6 +17447,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -17182,6 +17521,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -17213,6 +17553,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 18,
@@ -17244,6 +17585,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 20,
@@ -17275,6 +17617,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 22,
@@ -17306,6 +17649,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 24,
@@ -17337,6 +17681,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -17420,6 +17765,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-11>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -17451,6 +17797,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-12>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 18,
@@ -17482,6 +17829,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-13>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 20,
@@ -17513,6 +17861,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-14>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -17541,6 +17890,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-15>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -17582,6 +17932,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -18272,6 +18623,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -18293,6 +18645,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -18331,6 +18684,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -18404,6 +18758,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -18435,6 +18790,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 23,
@@ -18466,6 +18822,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 25,
@@ -18497,6 +18854,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -18577,6 +18935,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -18618,6 +18977,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -18665,6 +19025,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -18686,6 +19047,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-11>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -18724,6 +19086,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-12>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -18797,6 +19160,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-13>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -18828,6 +19192,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-14>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 26,
@@ -18859,6 +19224,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-15>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 28,
@@ -18890,6 +19256,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-16>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 23,
@@ -18921,6 +19288,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-17>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 25,
@@ -18952,6 +19320,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-18>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -19032,6 +19401,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-19>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -19073,6 +19443,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -19292,6 +19663,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -19313,6 +19685,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -19351,6 +19724,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -19424,6 +19798,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -19455,6 +19830,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 26,
@@ -19486,6 +19862,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 28,
@@ -19517,6 +19894,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 24,
@@ -19548,6 +19926,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 26,
@@ -19579,6 +19958,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -19659,6 +20039,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-11>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -19700,6 +20081,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -19844,6 +20226,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -19865,6 +20248,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -19903,6 +20287,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -19976,6 +20361,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -20007,6 +20393,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 20,
@@ -20038,6 +20425,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 22,
@@ -20069,6 +20457,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -20149,6 +20538,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -20178,6 +20568,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -20209,6 +20600,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-11>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -20240,6 +20632,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-12>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 21,
@@ -20271,6 +20664,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-13>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -20314,6 +20708,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -20565,6 +20960,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -20586,6 +20982,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -20624,6 +21021,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -20746,6 +21144,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -20787,6 +21186,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -20890,6 +21290,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -20911,6 +21312,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -20949,6 +21351,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -21022,6 +21425,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -21053,6 +21457,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 17,
@@ -21084,6 +21489,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-11>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -21115,6 +21521,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-12>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -21195,6 +21602,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-13>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -21236,6 +21644,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -21818,6 +22227,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -21839,6 +22249,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -21877,6 +22288,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -21950,6 +22362,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -21981,6 +22394,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 18,
@@ -22012,6 +22426,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 20,
@@ -22043,6 +22458,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -22123,6 +22539,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -22164,6 +22581,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -22215,6 +22633,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -22236,6 +22655,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-11>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -22274,6 +22694,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-12>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -22396,6 +22817,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-13>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -22437,6 +22859,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -23058,6 +23481,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -23089,6 +23513,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 20,
@@ -23120,6 +23545,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 22,
@@ -23151,6 +23577,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -23182,6 +23609,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -23213,6 +23641,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 18,
@@ -23244,6 +23673,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 20,
@@ -23275,6 +23705,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-11>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,
@@ -23306,6 +23737,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-12>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -23337,6 +23769,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-13>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 19,
@@ -23368,6 +23801,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-14>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 21,
@@ -23399,6 +23833,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-15>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 15,

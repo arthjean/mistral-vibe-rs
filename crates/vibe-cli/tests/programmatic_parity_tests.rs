@@ -44,12 +44,57 @@ struct Divergence {
     /// The scenario it applies to, or `*` for every one.
     scenario: &'static str,
     /// A JSON pointer inside the scenario's observation, where a `*` segment
-    /// matches any one segment.
+    /// matches any one segment and a final `**` one or more.
     pointer: &'static str,
     reason: &'static str,
 }
 
-const LEDGER: &[Divergence] = &[];
+const INPUT_ENTRY: &str = "row 17: since v2.26.0 every public history entry declares the user \
+     entry its turn answers, right after `turnId` (`vibe/app_server/models.py:949` at `376f6a3`), \
+     null in every entry these runs print; this port's entries do not carry the field";
+
+/// The recorded key order is compared position by position.
+const KEY_ORDER: &str = "row 17: the missing `inputEntryId`, and in one denial the missing \
+     approval fields below, shift every later key of the recorded key order in each history \
+     entry the json and streaming formats print";
+
+const LEDGER: &[Divergence] = &[
+    Divergence {
+        scenario: "*",
+        pointer: "/*/stdout/json/*/inputEntryId",
+        reason: INPUT_ENTRY,
+    },
+    Divergence {
+        scenario: "*",
+        pointer: "/*/stdout/lines/*/json/inputEntryId",
+        reason: INPUT_ENTRY,
+    },
+    Divergence {
+        scenario: "*",
+        pointer: "/*/stdout/layout/**",
+        reason: KEY_ORDER,
+    },
+    Divergence {
+        scenario: "*",
+        pointer: "/*/stdout/lines/*/layout/**",
+        reason: KEY_ORDER,
+    },
+    Divergence {
+        scenario: "approval/denied",
+        pointer: "/*/stdout/lines/*/json/detail/pathScopeChoices",
+        reason: "row 17: since v2.26.0 an approval callback lists the path grant scopes it \
+                 offers (`vibe/app_server/models.py:322`, filled by \
+                 `vibe/app_server/_turns.py:863` at `376f6a3`), empty here; this port's \
+                 callback does not carry the field",
+    },
+    Divergence {
+        scenario: "approval/denied",
+        pointer: "/*/stdout/lines/*/json/state/output/decision/pathScope",
+        reason: "row 17: since v2.26.0 the approval decision an effect records holds the path \
+                 grant scope it chose (`vibe/app_server/models.py:312` at `376f6a3`), null for a \
+                 denial; this port's decision does not carry the field",
+    },
+];
 
 fn repository() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -112,13 +157,18 @@ fn differences(reference: &Value, port: &Value, pointer: &str, found: &mut Vec<S
 }
 
 fn pointer_matches(pattern: &str, pointer: &str) -> bool {
-    let pattern = pattern.split('/').collect::<Vec<_>>();
-    let pointer = pointer.split('/').collect::<Vec<_>>();
-    pattern.len() == pointer.len()
-        && pattern
-            .iter()
-            .zip(&pointer)
-            .all(|(pattern, segment)| *pattern == "*" || pattern == segment)
+    let mut pattern = pattern.split('/').peekable();
+    let mut pointer = pointer.split('/');
+    while let Some(expected) = pattern.next() {
+        if expected == "**" && pattern.peek().is_none() {
+            return pointer.next().is_some();
+        }
+        match pointer.next() {
+            Some(segment) if expected == "*" || expected == segment => {}
+            _ => return false,
+        }
+    }
+    pointer.next().is_none()
 }
 
 fn capture(arguments: &[&std::ffi::OsStr]) -> std::process::Output {

@@ -73,6 +73,23 @@ const LEDGER: &[Divergence] = &[
         reason: "`_config/schema` relays the app server's `config/schema`, whose content is \
                  the configuration model",
     },
+    Divergence {
+        scenario: "prompt/write-file",
+        pointer: "/2/stream/5/message/params/update/rawOutput/fileExisted",
+        row: "17",
+        reason: "since v2.26.0 a file write's effect output states whether the file existed \
+                 (`vibe/app_server/_effect_models.py:158` at `376f6a3`), false by default on the \
+                 legacy backend, and the agent relays it as the raw output; this port's effect \
+                 output does not carry the field",
+    },
+    Divergence {
+        scenario: "prompt/write-file",
+        pointer: "/2/stream/5/message/params/update/rawOutput/previousContent",
+        row: "17",
+        reason: "the same effect output holds the overwritten text \
+                 (`vibe/app_server/_effect_models.py:159` at `376f6a3`), null for a new file; \
+                 this port's does not carry the field",
+    },
 ];
 
 fn repository() -> PathBuf {

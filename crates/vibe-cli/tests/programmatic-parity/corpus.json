@@ -1,7 +1,7 @@
 {
   "note": "Captured by scripts/parity/programmatic.py from the pinned reference's `vibe` entry point. Scenario inputs, paths and identities as placeholders, JSON documents with their key order and rendering; every other string the program authored is a length and a SHA-256.",
   "reference": {
-    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
   },
   "scenarios": [
     {
@@ -101,6 +101,7 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-1>",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "role": "user",
                 "sessionId": "<id-2>",
@@ -120,6 +121,7 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-4>",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "role": "assistant",
                 "sessionId": "<id-2>",
@@ -142,6 +144,10 @@
                 ],
                 [
                   "turnId",
+                  null
+                ],
+                [
+                  "inputEntryId",
                   null
                 ],
                 [
@@ -203,6 +209,10 @@
                 ],
                 [
                   "turnId",
+                  null
+                ],
+                [
+                  "inputEntryId",
                   null
                 ],
                 [
@@ -322,6 +332,7 @@
                   "createdAt": "<time>",
                   "generationStatus": "completed",
                   "id": "<id-1>",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "role": "user",
                   "sessionId": "<id-2>",
@@ -342,6 +353,10 @@
                   ],
                   [
                     "turnId",
+                    null
+                  ],
+                  [
+                    "inputEntryId",
                     null
                   ],
                   [
@@ -405,6 +420,7 @@
                   "createdAt": "<time>",
                   "generationStatus": "completed",
                   "id": "<id-4>",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "role": "assistant",
                   "sessionId": "<id-2>",
@@ -425,6 +441,10 @@
                   ],
                   [
                     "turnId",
+                    null
+                  ],
+                  [
+                    "inputEntryId",
                     null
                   ],
                   [
@@ -598,6 +618,7 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-1>",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "role": "user",
                 "sessionId": "<id-2>",
@@ -617,6 +638,7 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-4>",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "role": "assistant",
                 "sessionId": "<id-2>",
@@ -639,6 +661,10 @@
                 ],
                 [
                   "turnId",
+                  null
+                ],
+                [
+                  "inputEntryId",
                   null
                 ],
                 [
@@ -700,6 +726,10 @@
                 ],
                 [
                   "turnId",
+                  null
+                ],
+                [
+                  "inputEntryId",
                   null
                 ],
                 [
@@ -891,6 +921,7 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-1>",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "role": "user",
                 "sessionId": "<id-2>",
@@ -929,6 +960,7 @@
                 },
                 "generationStatus": "completed",
                 "id": "call_read",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "sessionId": "<id-2>",
                 "state": {
@@ -978,6 +1010,7 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-4>",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "role": "assistant",
                 "sessionId": "<id-2>",
@@ -1000,6 +1033,10 @@
                 ],
                 [
                   "turnId",
+                  null
+                ],
+                [
+                  "inputEntryId",
                   null
                 ],
                 [
@@ -1061,6 +1098,10 @@
                 ],
                 [
                   "turnId",
+                  null
+                ],
+                [
+                  "inputEntryId",
                   null
                 ],
                 [
@@ -1264,6 +1305,10 @@
                   null
                 ],
                 [
+                  "inputEntryId",
+                  null
+                ],
+                [
                   "createdAt",
                   null
                 ],
@@ -1416,6 +1461,7 @@
                   "createdAt": "<time>",
                   "generationStatus": "completed",
                   "id": "<id-1>",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "role": "user",
                   "sessionId": "<id-2>",
@@ -1436,6 +1482,10 @@
                   ],
                   [
                     "turnId",
+                    null
+                  ],
+                  [
+                    "inputEntryId",
                     null
                   ],
                   [
@@ -1518,6 +1568,7 @@
                   },
                   "generationStatus": "completed",
                   "id": "call_read",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "sessionId": "<id-2>",
                   "state": {
@@ -1568,6 +1619,10 @@
                   ],
                   [
                     "turnId",
+                    null
+                  ],
+                  [
+                    "inputEntryId",
                     null
                   ],
                   [
@@ -1770,6 +1825,7 @@
                   "createdAt": "<time>",
                   "generationStatus": "completed",
                   "id": "<id-4>",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "role": "assistant",
                   "sessionId": "<id-2>",
@@ -1790,6 +1846,10 @@
                   ],
                   [
                     "turnId",
+                    null
+                  ],
+                  [
+                    "inputEntryId",
                     null
                   ],
                   [
@@ -2316,6 +2376,7 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-1>",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "role": "user",
                 "sessionId": "<id-2>",
@@ -2335,6 +2396,7 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-3>",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "role": "assistant",
                 "sessionId": "<id-2>",
@@ -2349,6 +2411,7 @@
                 "details": null,
                 "generationStatus": "completed",
                 "id": "<id-4>",
+                "inputEntryId": null,
                 "kind": "resume",
                 "message": {
                   "prose": 15,
@@ -2370,6 +2433,7 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-5>",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "role": "user",
                 "sessionId": "<id-2>",
@@ -2389,6 +2453,7 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-7>",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "role": "assistant",
                 "sessionId": "<id-2>",
@@ -2414,64 +2479,7 @@
                   null
                 ],
                 [
-                  "createdAt",
-                  null
-                ],
-                [
-                  "updatedAt",
-                  null
-                ],
-                [
-                  "generationStatus",
-                  null
-                ],
-                [
-                  "relatedEntryId",
-                  null
-                ],
-                [
-                  "type",
-                  null
-                ],
-                [
-                  "role",
-                  null
-                ],
-                [
-                  "content",
-                  [
-                    [
-                      [
-                        "type",
-                        null
-                      ],
-                      [
-                        "text",
-                        null
-                      ]
-                    ]
-                  ]
-                ],
-                [
-                  "source",
-                  null
-                ],
-                [
-                  "userDisplayContent",
-                  null
-                ]
-              ],
-              [
-                [
-                  "id",
-                  null
-                ],
-                [
-                  "sessionId",
-                  null
-                ],
-                [
-                  "turnId",
+                  "inputEntryId",
                   null
                 ],
                 [
@@ -2533,6 +2541,75 @@
                 ],
                 [
                   "turnId",
+                  null
+                ],
+                [
+                  "inputEntryId",
+                  null
+                ],
+                [
+                  "createdAt",
+                  null
+                ],
+                [
+                  "updatedAt",
+                  null
+                ],
+                [
+                  "generationStatus",
+                  null
+                ],
+                [
+                  "relatedEntryId",
+                  null
+                ],
+                [
+                  "type",
+                  null
+                ],
+                [
+                  "role",
+                  null
+                ],
+                [
+                  "content",
+                  [
+                    [
+                      [
+                        "type",
+                        null
+                      ],
+                      [
+                        "text",
+                        null
+                      ]
+                    ]
+                  ]
+                ],
+                [
+                  "source",
+                  null
+                ],
+                [
+                  "userDisplayContent",
+                  null
+                ]
+              ],
+              [
+                [
+                  "id",
+                  null
+                ],
+                [
+                  "sessionId",
+                  null
+                ],
+                [
+                  "turnId",
+                  null
+                ],
+                [
+                  "inputEntryId",
                   null
                 ],
                 [
@@ -2582,6 +2659,10 @@
                   null
                 ],
                 [
+                  "inputEntryId",
+                  null
+                ],
+                [
                   "createdAt",
                   null
                 ],
@@ -2640,6 +2721,10 @@
                 ],
                 [
                   "turnId",
+                  null
+                ],
+                [
+                  "inputEntryId",
                   null
                 ],
                 [
@@ -2806,6 +2891,7 @@
                   "createdAt": "<time>",
                   "generationStatus": "completed",
                   "id": "<id-1>",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "role": "user",
                   "sessionId": "<id-2>",
@@ -2826,6 +2912,10 @@
                   ],
                   [
                     "turnId",
+                    null
+                  ],
+                  [
+                    "inputEntryId",
                     null
                   ],
                   [
@@ -2889,6 +2979,7 @@
                   "createdAt": "<time>",
                   "generationStatus": "completed",
                   "id": "<id-3>",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "role": "assistant",
                   "sessionId": "<id-2>",
@@ -2909,6 +3000,10 @@
                   ],
                   [
                     "turnId",
+                    null
+                  ],
+                  [
+                    "inputEntryId",
                     null
                   ],
                   [
@@ -2967,6 +3062,7 @@
                   "details": null,
                   "generationStatus": "completed",
                   "id": "<id-4>",
+                  "inputEntryId": null,
                   "kind": "resume",
                   "message": {
                     "prose": 15,
@@ -2989,6 +3085,10 @@
                   ],
                   [
                     "turnId",
+                    null
+                  ],
+                  [
+                    "inputEntryId",
                     null
                   ],
                   [
@@ -3037,6 +3137,7 @@
                   "createdAt": "<time>",
                   "generationStatus": "completed",
                   "id": "<id-5>",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "role": "user",
                   "sessionId": "<id-2>",
@@ -3057,6 +3158,10 @@
                   ],
                   [
                     "turnId",
+                    null
+                  ],
+                  [
+                    "inputEntryId",
                     null
                   ],
                   [
@@ -3120,6 +3225,7 @@
                   "createdAt": "<time>",
                   "generationStatus": "completed",
                   "id": "<id-7>",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "role": "assistant",
                   "sessionId": "<id-2>",
@@ -3140,6 +3246,10 @@
                   ],
                   [
                     "turnId",
+                    null
+                  ],
+                  [
+                    "inputEntryId",
                     null
                   ],
                   [
@@ -3372,6 +3482,7 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-1>",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "role": "user",
                 "sessionId": "<id-2>",
@@ -3391,6 +3502,7 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-4>",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "role": "assistant",
                 "sessionId": "<id-2>",
@@ -3413,6 +3525,10 @@
                 ],
                 [
                   "turnId",
+                  null
+                ],
+                [
+                  "inputEntryId",
                   null
                 ],
                 [
@@ -3474,6 +3590,10 @@
                 ],
                 [
                   "turnId",
+                  null
+                ],
+                [
+                  "inputEntryId",
                   null
                 ],
                 [
@@ -4892,6 +5012,7 @@
                   "createdAt": "<time>",
                   "generationStatus": "completed",
                   "id": "<id-1>",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "role": "user",
                   "sessionId": "<id-2>",
@@ -4912,6 +5033,10 @@
                   ],
                   [
                     "turnId",
+                    null
+                  ],
+                  [
+                    "inputEntryId",
                     null
                   ],
                   [
@@ -4994,6 +5119,7 @@
                   },
                   "generationStatus": "completed",
                   "id": "call_read",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "sessionId": "<id-2>",
                   "state": {
@@ -5044,6 +5170,10 @@
                   ],
                   [
                     "turnId",
+                    null
+                  ],
+                  [
+                    "inputEntryId",
                     null
                   ],
                   [
@@ -5251,6 +5381,7 @@
                   "createdAt": "<time>",
                   "generationStatus": "completed",
                   "id": "<id-4>",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "role": "assistant",
                   "sessionId": "<id-2>",
@@ -5271,6 +5402,10 @@
                   ],
                   [
                     "turnId",
+                    null
+                  ],
+                  [
+                    "inputEntryId",
                     null
                   ],
                   [
@@ -5860,6 +5995,7 @@
                   "createdAt": "<time>",
                   "generationStatus": "completed",
                   "id": "<id-1>",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "role": "user",
                   "sessionId": "<id-2>",
@@ -5880,6 +6016,10 @@
                   ],
                   [
                     "turnId",
+                    null
+                  ],
+                  [
+                    "inputEntryId",
                     null
                   ],
                   [
@@ -5969,17 +6109,20 @@
                       "toolName": "write_file"
                     },
                     "kind": "approval",
+                    "pathScopeChoices": [],
                     "reason": null,
                     "relatedEntryId": "call_write",
                     "requiredPermissions": []
                   },
                   "generationStatus": "completed",
                   "id": "<id-4>",
+                  "inputEntryId": null,
                   "relatedEntryId": "call_write",
                   "sessionId": "<id-2>",
                   "state": {
                     "output": {
                       "decision": {
+                        "pathScope": null,
                         "type": "deny"
                       },
                       "feedback": null,
@@ -6006,6 +6149,10 @@
                   ],
                   [
                     "turnId",
+                    null
+                  ],
+                  [
+                    "inputEntryId",
                     null
                   ],
                   [
@@ -6121,6 +6268,10 @@
                         ]
                       ],
                       [
+                        "pathScopeChoices",
+                        []
+                      ],
+                      [
                         "relatedEntryId",
                         null
                       ],
@@ -6149,6 +6300,10 @@
                             [
                               [
                                 "type",
+                                null
+                              ],
+                              [
+                                "pathScope",
                                 null
                               ]
                             ]
@@ -6193,6 +6348,7 @@
                   },
                   "generationStatus": "completed",
                   "id": "call_write",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "sessionId": "<id-2>",
                   "state": {
@@ -6231,6 +6387,10 @@
                   ],
                   [
                     "turnId",
+                    null
+                  ],
+                  [
+                    "inputEntryId",
                     null
                   ],
                   [
@@ -6580,6 +6740,7 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-1>",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "role": "user",
                 "sessionId": "<id-2>",
@@ -6616,6 +6777,7 @@
                 },
                 "generationStatus": "completed",
                 "id": "call_shell",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "sessionId": "<id-2>",
                 "state": {
@@ -6655,6 +6817,7 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-4>",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "role": "assistant",
                 "sessionId": "<id-2>",
@@ -6677,6 +6840,10 @@
                 ],
                 [
                   "turnId",
+                  null
+                ],
+                [
+                  "inputEntryId",
                   null
                 ],
                 [
@@ -6738,6 +6905,10 @@
                 ],
                 [
                   "turnId",
+                  null
+                ],
+                [
+                  "inputEntryId",
                   null
                 ],
                 [
@@ -6914,6 +7085,10 @@
                 ],
                 [
                   "turnId",
+                  null
+                ],
+                [
+                  "inputEntryId",
                   null
                 ],
                 [
@@ -7068,6 +7243,7 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-1>",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "role": "user",
                 "sessionId": "<id-2>",
@@ -7104,6 +7280,7 @@
                 },
                 "generationStatus": "completed",
                 "id": "call_shell",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "sessionId": "<id-2>",
                 "state": {
@@ -7143,6 +7320,7 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-4>",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "role": "assistant",
                 "sessionId": "<id-2>",
@@ -7165,6 +7343,10 @@
                 ],
                 [
                   "turnId",
+                  null
+                ],
+                [
+                  "inputEntryId",
                   null
                 ],
                 [
@@ -7226,6 +7408,10 @@
                 ],
                 [
                   "turnId",
+                  null
+                ],
+                [
+                  "inputEntryId",
                   null
                 ],
                 [
@@ -7402,6 +7588,10 @@
                 ],
                 [
                   "turnId",
+                  null
+                ],
+                [
+                  "inputEntryId",
                   null
                 ],
                 [
@@ -7658,6 +7848,7 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-1>",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "role": "user",
                 "sessionId": "<id-2>",
@@ -7700,6 +7891,7 @@
                 },
                 "generationStatus": "completed",
                 "id": "call_edit",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "sessionId": "<id-2>",
                 "state": {
@@ -7745,6 +7937,7 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-4>",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "role": "assistant",
                 "sessionId": "<id-2>",
@@ -7767,6 +7960,10 @@
                 ],
                 [
                   "turnId",
+                  null
+                ],
+                [
+                  "inputEntryId",
                   null
                 ],
                 [
@@ -7828,6 +8025,10 @@
                 ],
                 [
                   "turnId",
+                  null
+                ],
+                [
+                  "inputEntryId",
                   null
                 ],
                 [
@@ -8034,6 +8235,10 @@
                   null
                 ],
                 [
+                  "inputEntryId",
+                  null
+                ],
+                [
                   "createdAt",
                   null
                 ],
@@ -8187,6 +8392,7 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-1>",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "role": "user",
                 "sessionId": "<id-2>",
@@ -8225,6 +8431,7 @@
                 },
                 "generationStatus": "completed",
                 "id": "call_read",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "sessionId": "<id-2>",
                 "state": {
@@ -8270,6 +8477,7 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-4>",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "role": "assistant",
                 "sessionId": "<id-2>",
@@ -8292,6 +8500,10 @@
                 ],
                 [
                   "turnId",
+                  null
+                ],
+                [
+                  "inputEntryId",
                   null
                 ],
                 [
@@ -8353,6 +8565,10 @@
                 ],
                 [
                   "turnId",
+                  null
+                ],
+                [
+                  "inputEntryId",
                   null
                 ],
                 [
@@ -8540,6 +8756,10 @@
                   null
                 ],
                 [
+                  "inputEntryId",
+                  null
+                ],
+                [
                   "createdAt",
                   null
                 ],
@@ -8688,6 +8908,7 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-1>",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "role": "user",
                 "sessionId": "<id-2>",
@@ -8719,6 +8940,7 @@
                 },
                 "generationStatus": "completed",
                 "id": "call_ask",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "sessionId": "<id-2>",
                 "state": {
@@ -8764,6 +8986,7 @@
                 "createdAt": "<time>",
                 "generationStatus": "completed",
                 "id": "<id-4>",
+                "inputEntryId": null,
                 "relatedEntryId": null,
                 "role": "assistant",
                 "sessionId": "<id-2>",
@@ -8786,6 +9009,10 @@
                 ],
                 [
                   "turnId",
+                  null
+                ],
+                [
+                  "inputEntryId",
                   null
                 ],
                 [
@@ -8847,6 +9074,10 @@
                 ],
                 [
                   "turnId",
+                  null
+                ],
+                [
+                  "inputEntryId",
                   null
                 ],
                 [
@@ -9021,6 +9252,10 @@
                   null
                 ],
                 [
+                  "inputEntryId",
+                  null
+                ],
+                [
                   "createdAt",
                   null
                 ],
@@ -9175,6 +9410,7 @@
                   "createdAt": "<time>",
                   "generationStatus": "completed",
                   "id": "<id-1>",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "role": "user",
                   "sessionId": "<id-2>",
@@ -9195,6 +9431,10 @@
                   ],
                   [
                     "turnId",
+                    null
+                  ],
+                  [
+                    "inputEntryId",
                     null
                   ],
                   [
@@ -9289,6 +9529,7 @@
                   },
                   "generationStatus": "completed",
                   "id": "call_todo",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "sessionId": "<id-2>",
                   "state": {
@@ -9336,6 +9577,10 @@
                   ],
                   [
                     "turnId",
+                    null
+                  ],
+                  [
+                    "inputEntryId",
                     null
                   ],
                   [
@@ -9544,6 +9789,7 @@
                   "createdAt": "<time>",
                   "generationStatus": "completed",
                   "id": "<id-4>",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "role": "assistant",
                   "sessionId": "<id-2>",
@@ -9564,6 +9810,10 @@
                   ],
                   [
                     "turnId",
+                    null
+                  ],
+                  [
+                    "inputEntryId",
                     null
                   ],
                   [
@@ -9801,6 +10051,7 @@
                   "createdAt": "<time>",
                   "generationStatus": "completed",
                   "id": "<id-1>",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "role": "user",
                   "sessionId": "<id-2>",
@@ -9821,6 +10072,10 @@
                   ],
                   [
                     "turnId",
+                    null
+                  ],
+                  [
+                    "inputEntryId",
                     null
                   ],
                   [
@@ -10383,6 +10638,7 @@
                   "createdAt": "<time>",
                   "generationStatus": "completed",
                   "id": "<id-1>",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "role": "user",
                   "sessionId": "<id-2>",
@@ -10403,6 +10659,10 @@
                   ],
                   [
                     "turnId",
+                    null
+                  ],
+                  [
+                    "inputEntryId",
                     null
                   ],
                   [

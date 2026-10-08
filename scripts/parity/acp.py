@@ -45,7 +45,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-acp/tests/acp-parity/corpus.json"
@@ -1672,7 +1672,7 @@ def main() -> int:
         ]
         def capture(scenario: dict[str, Any]) -> dict[str, Any]:
             started = time.monotonic()
-            run = run_scenario(scenario, command, arguments.quiet)
+            run = run_scenario(scenario, [*command, *HARNESS_FLAGS], arguments.quiet)
             entry = {
                 "name": scenario["name"],
                 "scenario": scenario,

@@ -31,8 +31,8 @@
       "exit": 0,
       "stderr": "",
       "stdout": {
-        "prose": 575,
-        "sha256": "2778910897ffa51b3f0146caa015f7ce3396d87683ddfd239970b065ac9687e2"
+        "prose": 695,
+        "sha256": "853fac0b55d06c942151d8149441dc0a8b97d6b30c56a95f5dc0ba987a51bad5"
       }
     },
     {
@@ -42,8 +42,8 @@
       "exit": 0,
       "stderr": "",
       "stdout": {
-        "prose": 575,
-        "sha256": "2778910897ffa51b3f0146caa015f7ce3396d87683ddfd239970b065ac9687e2"
+        "prose": 695,
+        "sha256": "853fac0b55d06c942151d8149441dc0a8b97d6b30c56a95f5dc0ba987a51bad5"
       }
     },
     {
@@ -53,8 +53,8 @@
       "exit": 0,
       "stderr": "",
       "stdout": {
-        "prose": 575,
-        "sha256": "2778910897ffa51b3f0146caa015f7ce3396d87683ddfd239970b065ac9687e2"
+        "prose": 695,
+        "sha256": "853fac0b55d06c942151d8149441dc0a8b97d6b30c56a95f5dc0ba987a51bad5"
       }
     },
     {
@@ -64,8 +64,8 @@
       "exit": 0,
       "stderr": "",
       "stdout": {
-        "prose": 575,
-        "sha256": "2778910897ffa51b3f0146caa015f7ce3396d87683ddfd239970b065ac9687e2"
+        "prose": 695,
+        "sha256": "853fac0b55d06c942151d8149441dc0a8b97d6b30c56a95f5dc0ba987a51bad5"
       }
     },
     {
@@ -100,8 +100,8 @@
       "exit": 0,
       "stderr": "",
       "stdout": {
-        "prose": 575,
-        "sha256": "2778910897ffa51b3f0146caa015f7ce3396d87683ddfd239970b065ac9687e2"
+        "prose": 695,
+        "sha256": "853fac0b55d06c942151d8149441dc0a8b97d6b30c56a95f5dc0ba987a51bad5"
       }
     },
     {
@@ -112,8 +112,8 @@
       "exit": 0,
       "stderr": "",
       "stdout": {
-        "prose": 575,
-        "sha256": "2778910897ffa51b3f0146caa015f7ce3396d87683ddfd239970b065ac9687e2"
+        "prose": 695,
+        "sha256": "853fac0b55d06c942151d8149441dc0a8b97d6b30c56a95f5dc0ba987a51bad5"
       }
     },
     {
@@ -211,7 +211,7 @@
   ],
   "quietSeconds": 0.6,
   "reference": {
-    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
   },
   "scenarios": [
     {
@@ -17998,7 +17998,9 @@
                     ],
                     "rawOutput": {
                       "content": "written\n",
-                      "filePath": "<ws>/out.txt"
+                      "fileExisted": false,
+                      "filePath": "<ws>/out.txt",
+                      "previousContent": null
                     },
                     "sessionUpdate": "tool_call_update",
                     "status": "completed",
@@ -38407,7 +38409,7 @@
                         "type": "string"
                       },
                       "auto_compact_threshold": {
-                        "default": 200000,
+                        "default": -1,
                         "title": {
                           "prose": 22,
                           "sha256": "10a120172e5a2717f591dbe8fdba089c692cefde314f7c69a0232dc956bddd74"
@@ -38452,6 +38454,22 @@
                         },
                         "type": "number"
                       },
+                      "max_context_length": {
+                        "anyOf": [
+                          {
+                            "minimum": 1,
+                            "type": "integer"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "default": null,
+                        "title": {
+                          "prose": 18,
+                          "sha256": "38f9592b23d4349b2a7e65c1a2f2bf18753d80c5ac3473414252ce8b1367574e"
+                        }
+                      },
                       "name": {
                         "title": "Name",
                         "type": "string"
@@ -38484,6 +38502,16 @@
                       "thinking": {
                         "$ref": "#/$defs/ThinkingLevel",
                         "default": "off"
+                      },
+                      "thinking_levels": {
+                        "items": {
+                          "$ref": "#/$defs/ThinkingLevel"
+                        },
+                        "title": {
+                          "prose": 15,
+                          "sha256": "447bbfc81c959307d64ae70cbbea4b0939a0f0670b51e9d89443fe26c0df2868"
+                        },
+                        "type": "array"
                       }
                     },
                     "required": [
@@ -38651,7 +38679,7 @@
                         "type": "boolean"
                       },
                       "generate_titles": {
-                        "default": false,
+                        "default": true,
                         "title": {
                           "prose": 15,
                           "sha256": "7fa3d0909f242b809b1750aa2f92d716928d999529f5754ca5f6918a9745df57"
@@ -38861,6 +38889,29 @@
                   "TranscriptionEncoding": {
                     "const": "pcm_s16le",
                     "type": "string"
+                  },
+                  "UtilityModelsConfig": {
+                    "description": {
+                      "prose": 59,
+                      "sha256": "3bd4649907d2567513b020ac0be6c0cd092bf4a207bd662b3ad8eb0075cb0ee2"
+                    },
+                    "properties": {
+                      "smart_approve": {
+                        "default": "",
+                        "title": {
+                          "prose": 13,
+                          "sha256": "aab0daf32843265d790ee2d258ca6434ce9f051d357aa3913c814d5dc77dbccc"
+                        },
+                        "type": "string"
+                      },
+                      "title": {
+                        "default": "",
+                        "title": "Title",
+                        "type": "string"
+                      }
+                    },
+                    "title": "UtilityModelsConfig",
+                    "type": "object"
                   }
                 },
                 "properties": {
@@ -38905,8 +38956,8 @@
                   },
                   "allowed_models": {
                     "description": {
-                      "prose": 210,
-                      "sha256": "196109f57db60f7fd70b47b788ed3c351457730b06dd8e09c51a3fd623660ab2"
+                      "prose": 208,
+                      "sha256": "57a21ce1413b88a0d8bed22092bfa1ec45f3579b95a2a7d651c6d3f02e6ccdef"
                     },
                     "items": {
                       "type": "string"
@@ -38976,10 +39027,9 @@
                     "type": "boolean"
                   },
                   "auto_compact_threshold": {
-                    "default": 200000,
                     "description": {
-                      "prose": 99,
-                      "sha256": "a700305ad6561c8e34821e4e6402b9c0728d2e031a9a27df44d3d8ae17427a1a"
+                      "prose": 164,
+                      "sha256": "fce6d02bc9cd58bb4d04b4ff001deaef36ad529cee942ebc7fdfeb4636671dc4"
                     },
                     "title": {
                       "prose": 22,
@@ -39052,8 +39102,8 @@
                   "default_agent": {
                     "default": "accept-edits",
                     "description": {
-                      "prose": 165,
-                      "sha256": "a5bdf417b77e7df7dc3f49b597ce0dea42265c490b54f7065258b3bad42517e3"
+                      "prose": 180,
+                      "sha256": "cc0c420ac00077b1c6e0d147bb8f0dcbac6698d27ef025443d97b3acadb2fc7f"
                     },
                     "title": {
                       "prose": 13,
@@ -39585,6 +39635,13 @@
                     },
                     "type": "array"
                   },
+                  "utility_models": {
+                    "$ref": "#/$defs/UtilityModelsConfig",
+                    "description": {
+                      "prose": 229,
+                      "sha256": "2c6f5705b4c0048a8521f3e1074e952e497660e89c2bb863f9a5a74802939177"
+                    }
+                  },
                   "vibe_base_url": {
                     "default": "https://chat.mistral.ai",
                     "title": {
@@ -39612,8 +39669,8 @@
                     ],
                     "default": null,
                     "description": {
-                      "prose": 273,
-                      "sha256": "68cf6816dbf0f35e2085ebd3a1d2c7526da8e8d9a6da56ec60131c67a743fdde"
+                      "prose": 240,
+                      "sha256": "04d5f61927deacc7607d914a3ea8670ba18b9b32885202fab0bb80917c9b334b"
                     }
                   },
                   "voice_mode_enabled": {
@@ -39642,7 +39699,7 @@
                 "title": "VibeConfigSchema",
                 "type": "object"
               },
-              "version": "sha256:1a141653f8e6db2fd82083a9201fcdf2f5e2cd545da00e7529c9aa9c02f7ae72"
+              "version": "sha256:83e0cf3c183de9dfb52331f60ddb31856fc1b4ec2ff410157ff4e1859b55e299"
             }
           },
           "stream": []

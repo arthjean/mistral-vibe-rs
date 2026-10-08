@@ -168,6 +168,14 @@ const DIVERGENCES: &[(&str, &str)] = &[
         "logPagination/cursor/file-shrank-between-polls",
         "ACCEPTED: as above",
     ),
+    // -- The v2.26.0 re-pin (376f6a3) ---------------------------------------
+    (
+        "constants/callTypes/declared",
+        "OPEN: v2.26.0 adds `smart_approve`, `title_generation` and `worktree_title` to \
+         `TelemetryCallType` (vibe/core/telemetry/types.py:50) so utility completions stay out of \
+         model-turn counts; `TelemetryCallType` here declares `main_call` and `secondary_call` \
+         alone, so no completion of this port is tagged with any of the three",
+    ),
 ];
 
 // --------------------------------------------------------------------------

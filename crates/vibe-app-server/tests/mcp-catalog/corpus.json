@@ -1,7 +1,7 @@
 {
   "note": "Captured by scripts/parity/mcp_catalog.py from the pinned reference's vibe-app-server against vibe-oauth-script-fixture. Scenario inputs, names and digests only: every string the server authored is a length and a SHA-256.",
   "reference": {
-    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
   },
   "scenarios": [
     {
@@ -1451,10 +1451,54 @@
       "name": "sessionless/login-publishes-nothing",
       "observed": [
         {
+          "browser": [
+            {
+              "status": 200
+            }
+          ],
           "method": "mcp_catalog/login",
-          "notifications": [],
+          "notifications": [
+            {
+              "method": "mcp_catalog/authUrl",
+              "params": {
+                "name": "secure",
+                "url": {
+                  "authorize": "http://<server:secure>/authorize",
+                  "parameters": {
+                    "client_id": "client-1",
+                    "code_challenge": "<code_challenge>",
+                    "code_challenge_method": "S256",
+                    "redirect_uri": "http://127.0.0.1:<redirect:secure>/callback",
+                    "resource": "http://<server:secure>/mcp",
+                    "response_type": "code",
+                    "state": "<state>"
+                  }
+                }
+              }
+            },
+            {
+              "method": "mcp/authUrl",
+              "params": {
+                "name": "secure",
+                "url": {
+                  "authorize": "http://<server:secure>/authorize",
+                  "parameters": {
+                    "client_id": "client-1",
+                    "code_challenge": "<code_challenge>",
+                    "code_challenge_method": "S256",
+                    "redirect_uri": "http://127.0.0.1:<redirect:secure>/callback",
+                    "resource": "http://<server:secure>/mcp",
+                    "response_type": "code",
+                    "state": "<state>"
+                  }
+                }
+              }
+            }
+          ],
           "response": {
-            "pending": true
+            "result": {
+              "runtime": null
+            }
           }
         },
         {
@@ -1483,6 +1527,18 @@
                 "/register",
                 null,
                 false
+              ],
+              [
+                "POST",
+                "/token",
+                null,
+                false
+              ],
+              [
+                "POST",
+                "/mcp",
+                "initialize",
+                true
               ]
             ]
           }
@@ -1530,6 +1586,19 @@
               "software_version": null,
               "token_endpoint_auth_method": "none",
               "tos_uri": null
+            },
+            "mcp-oauth:secure:fingerprint": {
+              "client_marker": "<dcr>",
+              "scopes_sorted": [],
+              "url": "http://<server:secure>/mcp"
+            },
+            "mcp-oauth:secure:tokens": {
+              "access_token": "at-1",
+              "expires_at": "<time>",
+              "expires_in": 3600,
+              "refresh_token": "rt-1",
+              "scope": null,
+              "token_type": "Bearer"
             }
           }
         }

@@ -65,6 +65,56 @@ const PROBE_SESSION: &str = "session-parity-probe";
 /// has to earn an entry here before the replay accepts it.
 const UNROUTED_METHODS: &[(&str, &str)] = &[];
 
+/// Reference methods `SERVER_METHODS` does not declare, each with the reference
+/// declaration and dispatcher it was measured from.
+///
+/// The v2.26.0 re-pin grew the reference inventory from 136 to 146 names
+/// (`vibe/app_server/protocol.py:108-255` at 376f6a3). An undeclared method is
+/// unrouted too, so these entries also account for it in the unrouted backlog.
+/// A method declared while listed here fails the replay as a stale entry.
+const UNDECLARED_METHODS: &[(&str, &str)] = &[
+    (
+        "providerAuth/read",
+        "v2.26.0 declares it at vibe/app_server/protocol.py:158 and serves it from the unified backend (vibe/app_server/_unified_harness_backend_adapter.py:4347 at 376f6a3), while the legacy backend refuses it as not implemented (vibe/app_server/_handler.py:317); SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "session/archive",
+        "v2.26.0 declares it at vibe/app_server/protocol.py:189 and routes it to the session backend host (vibe/app_server/server.py:922 and 973 at 376f6a3); SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "session/backgroundProcess/output",
+        "v2.26.0 declares it at vibe/app_server/protocol.py:176 and serves it from the unified backend (vibe/app_server/_unified_harness_backend_adapter.py:4370 at 376f6a3); SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "session/backgroundProcess/stop",
+        "v2.26.0 declares it at vibe/app_server/protocol.py:177 and serves it from the unified backend (vibe/app_server/_unified_harness_backend_adapter.py:4372 at 376f6a3); SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "session/markAsSeen",
+        "v2.26.0 declares it at vibe/app_server/protocol.py:187 and routes it to the session backend host (vibe/app_server/server.py:922 and 978 at 376f6a3); SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "setup/status",
+        "v2.26.0 declares it at vibe/app_server/protocol.py:204 and answers it without a session (vibe/app_server/server.py:753, vibe/app_server/_setup.py:63 at 376f6a3); SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "setup/store-credential",
+        "v2.26.0 declares it at vibe/app_server/protocol.py:205 and answers it without a session (vibe/app_server/server.py:754, vibe/app_server/_setup.py:66 at 376f6a3); SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "setup/submit-choices",
+        "v2.26.0 declares it at vibe/app_server/protocol.py:206 and answers it without a session (vibe/app_server/server.py:755, vibe/app_server/_setup.py:69 at 376f6a3); SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "workspace/git/worktrees/reap",
+        "v2.26.0 declares it at vibe/app_server/protocol.py:248 and routes it to the host (vibe/app_server/server.py:760, vibe/app_server/_host.py:516 at 376f6a3); SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+    (
+        "workspace/git/worktrees/reap/cancel",
+        "v2.26.0 declares it at vibe/app_server/protocol.py:249 and routes it to the host (vibe/app_server/server.py:761, vibe/app_server/_host.py:524 at 376f6a3); SERVER_METHODS does not declare it and nothing here routes it",
+    ),
+];
+
 /// Reference notifications this build does not emit yet.
 ///
 /// US-085 emptied the list; the v2.25.7 re-pin added seven notifications; the one
@@ -72,7 +122,7 @@ const UNROUTED_METHODS: &[(&str, &str)] = &[];
 /// emitted has to earn an entry here before the replay accepts it.
 const UNEMITTED_NOTIFICATIONS: &[(&str, &str)] = &[(
     "session/childSessionUpdated",
-    "v2.25.7 sequences it (vibe/app_server/events.py:662) and emits it for child sessions (vibe/app_server/_unified_harness_backend_adapter.py:6496); this port emits nothing under this name",
+    "v2.25.7 sequences it (vibe/app_server/events.py:662) and emits it for child sessions (vibe/app_server/_unified_harness_backend_adapter.py:8011 at 376f6a3); this port emits nothing under this name",
 )];
 
 /// Notification names this build emits that the reference does not declare.
@@ -82,12 +132,19 @@ const UNEMITTED_NOTIFICATIONS: &[(&str, &str)] = &[(
 const LOCAL_NOTIFICATIONS: &[(&str, &str)] = &[];
 
 /// Enum vocabularies the reference declares that this port does not model yet.
-const UNMODELED_ENUMS: &[(&str, &str)] = &[];
+const UNMODELED_ENUMS: &[(&str, &str)] = &[(
+    "PathGrantScope",
+    "v2.26.0 declares it (vibe/permissions.py:26 at 376f6a3) as the scope a path grant takes, offered by ApprovalCallbackDetail.path_scope_choices and chosen in ApprovalDecision.path_scope (vibe/app_server/models.py:322 and 312); this port models no path grant scope",
+)];
 
 /// Values a vocabulary this port declares is missing, each with the reference
 /// declaration that added it. The comparison below still fails on any other
 /// difference, on order, and on an entry whose value this port now spells.
-const DIVERGENT_ENUM_VALUES: &[(&str, &str, &str)] = &[];
+const DIVERGENT_ENUM_VALUES: &[(&str, &str, &str)] = &[(
+    "ToolEffectKind",
+    "scratchpad",
+    "v2.26.0 adds it after process (vibe/utils/tool_presentation.py:53 at 376f6a3) with ScratchpadEffectDetail (vibe/app_server/_effect_models.py:331); vibe_core::events::ToolEffectKind has no such kind",
+)];
 
 /// Protocol error codes the reference declares that this port does not speak.
 const UNSPOKEN_ERROR_CODES: &[(&str, &str)] = &[];
@@ -339,8 +396,13 @@ fn the_inventory_is_exactly_the_reference_inventory() {
         .iter()
         .map(|entry| entry.name.as_str())
         .collect::<BTreeSet<_>>();
+    let backlog = ledger(UNDECLARED_METHODS);
+    let undeclared = reference.difference(&declared).copied().collect::<Vec<_>>();
     assert_eq!(
-        reference.difference(&declared).collect::<Vec<_>>(),
+        undeclared
+            .iter()
+            .filter(|method| !backlog.contains_key(**method))
+            .collect::<Vec<_>>(),
         Vec::<&&str>::new(),
         "the reference declares these methods and SERVER_METHODS does not"
     );
@@ -349,10 +411,19 @@ fn the_inventory_is_exactly_the_reference_inventory() {
         Vec::<&&str>::new(),
         "SERVER_METHODS invents these methods"
     );
+    let stale = backlog
+        .keys()
+        .filter(|method| !undeclared.contains(&method.as_str()))
+        .collect::<Vec<_>>();
+    assert!(
+        stale.is_empty(),
+        "these methods are declared now and their inventory entry is stale: {stale:?}"
+    );
     eprintln!(
-        "app-server surface: methods {}/{} declared",
-        declared.len(),
-        reference.len()
+        "app-server surface: methods {}/{} declared, {} undeclared awaiting a story",
+        reference.len() - undeclared.len(),
+        reference.len(),
+        undeclared.len()
     );
 }
 
@@ -380,6 +451,9 @@ fn the_unrouted_reference_methods_are_exactly_the_recorded_backlog() {
     let corpus = corpus();
     let routed = stdio_routed_methods();
     let backlog = ledger(UNROUTED_METHODS);
+    // An undeclared method is unrouted for the same reason, and its entry there
+    // goes stale on its own once the method is declared.
+    let undeclared = ledger(UNDECLARED_METHODS);
     let unrouted = corpus
         .methods
         .iter()
@@ -388,7 +462,7 @@ fn the_unrouted_reference_methods_are_exactly_the_recorded_backlog() {
         .collect::<BTreeSet<_>>();
     let missing = unrouted
         .iter()
-        .filter(|method| !backlog.contains_key(*method))
+        .filter(|method| !backlog.contains_key(*method) && !undeclared.contains_key(*method))
         .collect::<Vec<_>>();
     assert!(
         missing.is_empty(),
@@ -1017,6 +1091,14 @@ fn every_model_the_census_references_has_an_entry() {
             }
         }
     }
+    // A method may answer a discriminated union rather than one model, as
+    // `session/backgroundProcess/output` does since v2.26.0. Its name resolves
+    // through the corpus union, whose variants the union loop below checks.
+    let unions = corpus
+        .unions
+        .iter()
+        .map(|union| union.name.as_str())
+        .collect::<BTreeSet<_>>();
     for entry in corpus
         .methods
         .iter()
@@ -1024,7 +1106,9 @@ fn every_model_the_census_references_has_an_entry() {
         .chain(&corpus.server_requests)
     {
         for referenced in [&entry.params, &entry.response].into_iter().flatten() {
-            if !census.models.contains_key(referenced.as_str()) {
+            if !census.models.contains_key(referenced.as_str())
+                && !unions.contains(referenced.as_str())
+            {
                 missing.insert(format!("{}: {referenced}", entry.name));
             }
         }

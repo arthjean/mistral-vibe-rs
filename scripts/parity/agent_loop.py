@@ -56,7 +56,7 @@ import acp  # noqa: E402
 import agents  # noqa: E402
 import hooks  # noqa: E402
 import rewind  # noqa: E402
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-app-server/tests/agent-loop-parity/corpus.json"
@@ -72,6 +72,17 @@ GIT = ["git", "-c", "user.name=Oracle", "-c", "user.email=oracle@example.invalid
 # --------------------------------------------------------------------------
 
 
+#: What the stand-in answers a fast-model probe with. Since v2.26.0 a root
+#: session opened with titles on first asks the provider whether it serves a
+#: fast model, with a one-token completion that offers no tools (reference
+#: ``vibe/core/llm/model_probe.py:189-211``).
+PROBE_ANSWER = {"text": "Available."}
+
+
+def is_model_probe(body: dict[str, Any]) -> bool:
+    return body.get("max_tokens") == 1 and not body.get("tools")
+
+
 class Backend:
     """Serves scripted completions, keeping every request it was sent.
 
@@ -79,7 +90,9 @@ class Backend:
     the next entry of ``responses``; one that offers none is a utility call
     (a title, a summary) and takes the next entry of ``utility``, so a title
     generated in the background never consumes the answer the next step was
-    scripted with. An entry may carry ``text`` (a string or its chunks),
+    scripted with. A fast-model probe is recorded as a utility call but takes
+    :data:`PROBE_ANSWER`, so the probe never consumes the title a scenario
+    scripted either. An entry may carry ``text`` (a string or its chunks),
     ``reasoning``, ``toolCalls``, ``promptTokens``, ``completionTokens``,
     ``cachedTokens``, a ``finish`` reason, a ``delay`` in seconds, or a
     ``status`` and ``body`` to fail with.
@@ -115,9 +128,12 @@ class Backend:
                 with backend.lock:
                     backend.bodies.append({"utility": utility, "body": body})
                     queue = backend.utility if utility else backend.responses
-                    response = queue.pop(0) if queue else (
-                        {"text": "Oracle title"} if utility else {"text": "Done."}
-                    )
+                    if is_model_probe(body):
+                        response = PROBE_ANSWER
+                    else:
+                        response = queue.pop(0) if queue else (
+                            {"text": "Oracle title"} if utility else {"text": "Done."}
+                        )
                 if response.get("delay"):
                     time.sleep(float(response["delay"]))
                 if response.get("status"):
@@ -1138,14 +1154,14 @@ def main() -> int:
     arguments = parse_arguments()
     try:
         if arguments.server is not None:
-            command = [str(arguments.server.resolve())]
+            command = [str(arguments.server.resolve()), *HARNESS_FLAGS]
             reference = {"commit": "server-override"}
         else:
             reference = acp.resolve_reference(arguments.reference, arguments.expected_commit)
             binary = arguments.reference / ".venv/bin/vibe-app-server"
             if not binary.is_file():
                 raise rewind.OracleError(f"no reference binary at {binary}; run `uv sync --frozen`")
-            command = [str(binary)]
+            command = [str(binary), *HARNESS_FLAGS]
         selected = [
             scenario
             for scenario in scenarios()

@@ -1,7 +1,7 @@
 {
   "quietSeconds": 0.5,
   "reference": {
-    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
   },
   "scenarios": [
     {
@@ -56,6 +56,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -124,6 +125,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -163,6 +165,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -250,6 +253,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -445,6 +449,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -513,6 +518,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -564,6 +570,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_b1",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -712,6 +719,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -799,6 +807,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -1051,6 +1060,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -1119,6 +1129,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -1152,6 +1163,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "summary": [],
@@ -1177,6 +1189,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -1284,6 +1297,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -1500,6 +1514,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -1568,6 +1583,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -1619,6 +1635,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_r1",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -1659,6 +1676,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_r2",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -1901,6 +1919,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -1988,6 +2007,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -2372,6 +2392,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -2440,6 +2461,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -2491,6 +2513,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_r1",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -2641,6 +2664,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -2728,6 +2752,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -2995,6 +3020,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -3063,6 +3089,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -3114,6 +3141,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_u1",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -3220,6 +3248,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -3307,6 +3336,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -3570,6 +3600,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -3638,6 +3669,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -3689,6 +3721,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_r1",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -3729,6 +3762,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_r2",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -3935,6 +3969,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -4022,6 +4057,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -4288,6 +4324,7 @@
                   "prose": 7,
                   "sha256": "ef8ca47c4f84a2e7f8cd1be95a2ffb509b8ff8b806eb8f3016aa901ba92bfc2c"
                 },
+                "pathScopeRoot": null,
                 "scope": "command_pattern",
                 "sessionPattern": {
                   "prose": 7,
@@ -4345,6 +4382,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -4413,6 +4451,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -4464,6 +4503,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_t1",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -4585,6 +4625,7 @@
                         "toolName": "bash"
                       },
                       "kind": "approval",
+                      "pathScopeChoices": [],
                       "reason": null,
                       "relatedEntryId": "call_t1",
                       "requiredPermissions": [
@@ -4594,6 +4635,7 @@
                             "prose": 7,
                             "sha256": "ef8ca47c4f84a2e7f8cd1be95a2ffb509b8ff8b806eb8f3016aa901ba92bfc2c"
                           },
+                          "pathScopeRoot": null,
                           "scope": "command_pattern",
                           "sessionPattern": {
                             "prose": 7,
@@ -4604,6 +4646,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "relatedEntryId": "call_t1",
                     "sessionId": "<id-1>",
                     "state": {
@@ -4679,6 +4722,7 @@
                       "value": {
                         "output": {
                           "decision": {
+                            "pathScope": null,
                             "type": "deny"
                           },
                           "feedback": null,
@@ -4844,6 +4888,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -5107,6 +5152,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -5175,6 +5221,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -5226,6 +5273,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_b1",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -5325,6 +5373,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 13,
@@ -5356,6 +5405,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 18,
@@ -5390,6 +5440,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 18,
@@ -5463,6 +5514,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -5550,6 +5602,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -5868,6 +5921,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -5936,6 +5990,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -5975,6 +6030,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -6062,6 +6118,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -6095,6 +6152,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -6163,6 +6221,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -6201,6 +6260,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_b1",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -6323,6 +6383,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -6410,6 +6471,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -6740,6 +6802,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -6808,6 +6871,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -6859,6 +6923,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_b1",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -7007,6 +7072,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -7094,6 +7160,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -7449,6 +7516,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -7517,6 +7585,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -7556,6 +7625,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -7614,6 +7684,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_r1",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -7654,6 +7725,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_r2",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -7892,6 +7964,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -7979,6 +8052,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -7998,6 +8072,7 @@
                 "lastEventId": 0,
                 "state": {
                   "activeCallbacks": [],
+                  "backgroundProcesses": [],
                   "childSessions": [],
                   "eventId": 0,
                   "format": "vibe.public-session-state/v1",
@@ -8012,6 +8087,7 @@
                       "createdAt": "<time>",
                       "generationStatus": "completed",
                       "id": "<id-3>",
+                      "inputEntryId": null,
                       "relatedEntryId": null,
                       "role": "user",
                       "sessionId": "<id-1>",
@@ -8031,6 +8107,7 @@
                       "createdAt": "<time>",
                       "generationStatus": "completed",
                       "id": "<id-4>",
+                      "inputEntryId": null,
                       "relatedEntryId": null,
                       "role": "assistant",
                       "sessionId": "<id-1>",
@@ -8067,6 +8144,7 @@
                       },
                       "generationStatus": "completed",
                       "id": "call_r1",
+                      "inputEntryId": null,
                       "relatedEntryId": null,
                       "sessionId": "<id-1>",
                       "state": {
@@ -8128,6 +8206,7 @@
                       },
                       "generationStatus": "completed",
                       "id": "call_r2",
+                      "inputEntryId": null,
                       "relatedEntryId": null,
                       "sessionId": "<id-1>",
                       "state": {
@@ -8176,6 +8255,7 @@
                       "createdAt": "<time>",
                       "generationStatus": "completed",
                       "id": "<id-7>",
+                      "inputEntryId": null,
                       "relatedEntryId": null,
                       "role": "assistant",
                       "sessionId": "<id-1>",
@@ -8190,6 +8270,7 @@
                       "details": null,
                       "generationStatus": "completed",
                       "id": "<id-8>",
+                      "inputEntryId": null,
                       "kind": "resume",
                       "message": {
                         "prose": 15,
@@ -8219,12 +8300,14 @@
                       "name": "accept-edits",
                       "safety": "destructive"
                     },
+                    "archivedAt": null,
                     "bumpedAt": "<time>",
                     "contextUsage": null,
                     "createdAt": "<time>",
                     "cwd": "<ws>",
                     "harness": null,
                     "id": "<id-1>",
+                    "isUnseen": false,
                     "model": "mistral-medium-3.5",
                     "parentSessionId": null,
                     "pinnedAt": null,
@@ -8243,7 +8326,8 @@
                     "updatedAt": "<time>",
                     "workspaceRoots": [
                       "<ws>"
-                    ]
+                    ],
+                    "worktree": null
                   },
                   "turnQueue": {
                     "items": [],
@@ -8272,6 +8356,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -8291,6 +8376,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -8327,6 +8413,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "call_r1",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -8388,6 +8475,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "call_r2",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -8436,6 +8524,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -8564,6 +8653,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -8641,6 +8731,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -8689,6 +8780,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -8776,6 +8868,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -8886,6 +8979,7 @@
                 "lastEventId": 0,
                 "state": {
                   "activeCallbacks": [],
+                  "backgroundProcesses": [],
                   "childSessions": [],
                   "eventId": 0,
                   "format": "vibe.public-session-state/v1",
@@ -8909,6 +9003,7 @@
                       "createdAt": "<time>",
                       "generationStatus": "completed",
                       "id": "<id-3>",
+                      "inputEntryId": null,
                       "relatedEntryId": null,
                       "role": "user",
                       "sessionId": "<id-1>",
@@ -8937,6 +9032,7 @@
                       "createdAt": "<time>",
                       "generationStatus": "completed",
                       "id": "<id-4>",
+                      "inputEntryId": null,
                       "relatedEntryId": null,
                       "role": "assistant",
                       "sessionId": "<id-1>",
@@ -8951,6 +9047,7 @@
                       "details": null,
                       "generationStatus": "completed",
                       "id": "<id-5>",
+                      "inputEntryId": null,
                       "kind": "resume",
                       "message": {
                         "prose": 15,
@@ -8980,12 +9077,14 @@
                       "name": "accept-edits",
                       "safety": "destructive"
                     },
+                    "archivedAt": null,
                     "bumpedAt": "<time>",
                     "contextUsage": null,
                     "createdAt": "<time>",
                     "cwd": "<ws>",
                     "harness": null,
                     "id": "<id-1>",
+                    "isUnseen": false,
                     "model": "mistral-medium-3.5",
                     "parentSessionId": null,
                     "pinnedAt": null,
@@ -9007,7 +9106,8 @@
                     "updatedAt": "<time>",
                     "workspaceRoots": [
                       "<ws>"
-                    ]
+                    ],
+                    "worktree": null
                   },
                   "turnQueue": {
                     "items": [],
@@ -9178,6 +9278,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -9246,6 +9347,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -9297,6 +9399,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_s1",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -9481,6 +9584,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -9631,6 +9735,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -9699,6 +9804,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -9725,6 +9831,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -9812,6 +9919,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -10111,6 +10219,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -10179,6 +10288,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -10230,6 +10340,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_b1",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -10414,6 +10525,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -10548,6 +10660,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -10616,6 +10729,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -10642,6 +10756,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -10729,6 +10844,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -10962,6 +11078,7 @@
                   "prose": 7,
                   "sha256": "ef8ca47c4f84a2e7f8cd1be95a2ffb509b8ff8b806eb8f3016aa901ba92bfc2c"
                 },
+                "pathScopeRoot": null,
                 "scope": "command_pattern",
                 "sessionPattern": {
                   "prose": 7,
@@ -11019,6 +11136,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -11087,6 +11205,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -11138,6 +11257,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_t1",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -11259,6 +11379,7 @@
                         "toolName": "bash"
                       },
                       "kind": "approval",
+                      "pathScopeChoices": [],
                       "reason": null,
                       "relatedEntryId": "call_t1",
                       "requiredPermissions": [
@@ -11268,6 +11389,7 @@
                             "prose": 7,
                             "sha256": "ef8ca47c4f84a2e7f8cd1be95a2ffb509b8ff8b806eb8f3016aa901ba92bfc2c"
                           },
+                          "pathScopeRoot": null,
                           "scope": "command_pattern",
                           "sessionPattern": {
                             "prose": 7,
@@ -11278,6 +11400,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "relatedEntryId": "call_t1",
                     "sessionId": "<id-1>",
                     "state": {
@@ -11474,6 +11597,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -11754,6 +11878,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -11822,6 +11947,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -11873,6 +11999,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_w1",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -12006,12 +12133,14 @@
                         "toolName": "web_search"
                       },
                       "kind": "approval",
+                      "pathScopeChoices": [],
                       "reason": null,
                       "relatedEntryId": "call_w1",
                       "requiredPermissions": []
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "relatedEntryId": "call_w1",
                     "sessionId": "<id-1>",
                     "state": {
@@ -12087,6 +12216,7 @@
                       "value": {
                         "output": {
                           "decision": {
+                            "pathScope": null,
                             "type": "approve_permanently"
                           },
                           "feedback": null,
@@ -12219,6 +12349,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -12306,6 +12437,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -12384,6 +12516,7 @@
                   "prose": 7,
                   "sha256": "ef8ca47c4f84a2e7f8cd1be95a2ffb509b8ff8b806eb8f3016aa901ba92bfc2c"
                 },
+                "pathScopeRoot": null,
                 "scope": "command_pattern",
                 "sessionPattern": {
                   "prose": 7,
@@ -12611,6 +12744,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -12679,6 +12813,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -12730,6 +12865,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_t1",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -12851,6 +12987,7 @@
                         "toolName": "bash"
                       },
                       "kind": "approval",
+                      "pathScopeChoices": [],
                       "reason": null,
                       "relatedEntryId": "call_t1",
                       "requiredPermissions": [
@@ -12860,6 +12997,7 @@
                             "prose": 7,
                             "sha256": "ef8ca47c4f84a2e7f8cd1be95a2ffb509b8ff8b806eb8f3016aa901ba92bfc2c"
                           },
+                          "pathScopeRoot": null,
                           "scope": "command_pattern",
                           "sessionPattern": {
                             "prose": 7,
@@ -12870,6 +13008,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "relatedEntryId": "call_t1",
                     "sessionId": "<id-1>",
                     "state": {
@@ -12945,6 +13084,7 @@
                       "value": {
                         "output": {
                           "decision": {
+                            "pathScope": null,
                             "type": "approve_for_session"
                           },
                           "feedback": null,
@@ -13071,6 +13211,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -13158,6 +13299,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -13191,6 +13333,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -13259,6 +13402,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -13297,6 +13441,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_t2",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -13413,6 +13558,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-11>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -13500,6 +13646,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -13963,6 +14110,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -14031,6 +14179,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -14082,6 +14231,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_s1",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -14178,6 +14328,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -14223,6 +14374,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -14372,6 +14524,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -14459,6 +14612,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -14848,6 +15002,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -14916,6 +15071,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -14955,6 +15111,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -15042,6 +15199,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -15277,6 +15435,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -15345,6 +15504,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -15384,6 +15544,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -15442,6 +15603,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_x1",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -15540,6 +15702,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 21,
@@ -15626,6 +15789,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "relatedEntryId": "call_x1",
                     "sessionId": "<id-1>",
                     "state": {
@@ -15837,6 +16001,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 17,
@@ -15865,6 +16030,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -15952,6 +16118,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -16312,6 +16479,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -16380,6 +16548,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -16419,6 +16588,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -16477,6 +16647,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_x1",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -16575,6 +16746,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 21,
@@ -16661,6 +16833,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "relatedEntryId": "call_x1",
                     "sessionId": "<id-1>",
                     "state": {
@@ -16872,6 +17045,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 17,
@@ -16900,6 +17074,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -16987,6 +17162,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -17248,6 +17424,14 @@
               }
             ],
             "utility": true
+          },
+          {
+            "conversation": [
+              {
+                "role": "user"
+              }
+            ],
+            "utility": true
           }
         ],
         "steps": [
@@ -17274,6 +17458,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -17342,6 +17527,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -17381,6 +17567,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -17400,6 +17587,7 @@
                   "sessionId": "<id-1>",
                   "state": {
                     "activeCallbacks": [],
+                    "backgroundProcesses": [],
                     "childSessions": [],
                     "eventId": "<nonzero>",
                     "format": "vibe.public-session-state/v1",
@@ -17421,12 +17609,14 @@
                         "name": "auto-approve",
                         "safety": "yolo"
                       },
+                      "archivedAt": null,
                       "bumpedAt": "<time>",
                       "contextUsage": null,
                       "createdAt": "<time>",
                       "cwd": "<ws>",
                       "harness": null,
                       "id": "<id-1>",
+                      "isUnseen": false,
                       "model": "mistral-medium-3.5",
                       "parentSessionId": null,
                       "pinnedAt": null,
@@ -17446,7 +17636,8 @@
                       "updatedAt": "<time>",
                       "workspaceRoots": [
                         "<ws>"
-                      ]
+                      ],
+                      "worktree": null
                     },
                     "turnQueue": {
                       "items": [],
@@ -17531,6 +17722,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -17563,6 +17755,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 21,
@@ -18698,6 +18891,14 @@
               }
             ],
             "utility": true
+          },
+          {
+            "conversation": [
+              {
+                "role": "user"
+              }
+            ],
+            "utility": true
           }
         ],
         "steps": [
@@ -18724,6 +18925,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -18792,6 +18994,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -18843,6 +19046,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_s1",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -19003,6 +19207,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_s2",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -19137,6 +19342,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_s3",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -19252,6 +19458,7 @@
                   "sessionId": "<id-1>",
                   "state": {
                     "activeCallbacks": [],
+                    "backgroundProcesses": [],
                     "childSessions": [],
                     "eventId": "<nonzero>",
                     "format": "vibe.public-session-state/v1",
@@ -19273,12 +19480,14 @@
                         "name": "auto-approve",
                         "safety": "yolo"
                       },
+                      "archivedAt": null,
                       "bumpedAt": "<time>",
                       "contextUsage": null,
                       "createdAt": "<time>",
                       "cwd": "<ws>",
                       "harness": null,
                       "id": "<id-1>",
+                      "isUnseen": false,
                       "model": "mistral-medium-3.5",
                       "parentSessionId": null,
                       "pinnedAt": null,
@@ -19298,7 +19507,8 @@
                       "updatedAt": "<time>",
                       "workspaceRoots": [
                         "<ws>"
-                      ]
+                      ],
+                      "worktree": null
                     },
                     "turnQueue": {
                       "items": [],
@@ -19334,6 +19544,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_s4",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -19468,6 +19679,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_s5",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -19602,6 +19814,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_s6",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -19736,6 +19949,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_s7",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -19870,6 +20084,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_s8",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -19992,6 +20207,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-12>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -20011,6 +20227,7 @@
                   "sessionId": "<id-1>",
                   "state": {
                     "activeCallbacks": [],
+                    "backgroundProcesses": [],
                     "childSessions": [],
                     "eventId": "<nonzero>",
                     "format": "vibe.public-session-state/v1",
@@ -20032,12 +20249,14 @@
                         "name": "auto-approve",
                         "safety": "yolo"
                       },
+                      "archivedAt": null,
                       "bumpedAt": "<time>",
                       "contextUsage": null,
                       "createdAt": "<time>",
                       "cwd": "<ws>",
                       "harness": null,
                       "id": "<id-1>",
+                      "isUnseen": false,
                       "model": "mistral-medium-3.5",
                       "parentSessionId": null,
                       "pinnedAt": null,
@@ -20057,7 +20276,8 @@
                       "updatedAt": "<time>",
                       "workspaceRoots": [
                         "<ws>"
-                      ]
+                      ],
+                      "worktree": null
                     },
                     "turnQueue": {
                       "items": [],
@@ -20142,6 +20362,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -20174,6 +20395,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-13>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 21,
@@ -20220,6 +20442,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-14>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 21,
@@ -21261,6 +21484,14 @@
               }
             ],
             "utility": true
+          },
+          {
+            "conversation": [
+              {
+                "role": "user"
+              }
+            ],
+            "utility": true
           }
         ],
         "steps": [
@@ -21287,6 +21518,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -21355,6 +21587,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -21394,6 +21627,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -21413,6 +21647,7 @@
                   "sessionId": "<id-1>",
                   "state": {
                     "activeCallbacks": [],
+                    "backgroundProcesses": [],
                     "childSessions": [],
                     "eventId": "<nonzero>",
                     "format": "vibe.public-session-state/v1",
@@ -21434,12 +21669,14 @@
                         "name": "auto-approve",
                         "safety": "yolo"
                       },
+                      "archivedAt": null,
                       "bumpedAt": "<time>",
                       "contextUsage": null,
                       "createdAt": "<time>",
                       "cwd": "<ws>",
                       "harness": null,
                       "id": "<id-1>",
+                      "isUnseen": false,
                       "model": "mistral-medium-3.5",
                       "parentSessionId": null,
                       "pinnedAt": null,
@@ -21459,7 +21696,8 @@
                       "updatedAt": "<time>",
                       "workspaceRoots": [
                         "<ws>"
-                      ]
+                      ],
+                      "worktree": null
                     },
                     "turnQueue": {
                       "items": [],
@@ -21544,6 +21782,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -21576,6 +21815,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 21,
@@ -21616,6 +21856,7 @@
                 },
                 "state": {
                   "activeCallbacks": [],
+                  "backgroundProcesses": [],
                   "childSessions": [],
                   "eventId": "<nonzero>",
                   "format": "vibe.public-session-state/v1",
@@ -21630,6 +21871,7 @@
                       "createdAt": "<time>",
                       "generationStatus": "completed",
                       "id": "<id-3>",
+                      "inputEntryId": null,
                       "relatedEntryId": null,
                       "role": "user",
                       "sessionId": "<id-1>",
@@ -21649,6 +21891,7 @@
                       "createdAt": "<time>",
                       "generationStatus": "completed",
                       "id": "<id-4>",
+                      "inputEntryId": null,
                       "relatedEntryId": null,
                       "role": "assistant",
                       "sessionId": "<id-1>",
@@ -21665,6 +21908,7 @@
                       },
                       "generationStatus": "completed",
                       "id": "<id-6>",
+                      "inputEntryId": null,
                       "kind": "compaction",
                       "message": {
                         "prose": 17,
@@ -21694,12 +21938,14 @@
                       "name": "auto-approve",
                       "safety": "yolo"
                     },
+                    "archivedAt": null,
                     "bumpedAt": "<time>",
                     "contextUsage": null,
                     "createdAt": "<time>",
                     "cwd": "<ws>",
                     "harness": null,
                     "id": "<id-1>",
+                    "isUnseen": false,
                     "model": "mistral-medium-3.5",
                     "parentSessionId": null,
                     "pinnedAt": null,
@@ -21718,7 +21964,8 @@
                     "updatedAt": "<time>",
                     "workspaceRoots": [
                       "<ws>"
-                    ]
+                    ],
+                    "worktree": null
                   },
                   "turnQueue": {
                     "items": [],
@@ -21757,6 +22004,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -21825,6 +22073,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -21851,6 +22100,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -21870,6 +22120,7 @@
                   "sessionId": "<id-1>",
                   "state": {
                     "activeCallbacks": [],
+                    "backgroundProcesses": [],
                     "childSessions": [],
                     "eventId": "<nonzero>",
                     "format": "vibe.public-session-state/v1",
@@ -21891,12 +22142,14 @@
                         "name": "auto-approve",
                         "safety": "yolo"
                       },
+                      "archivedAt": null,
                       "bumpedAt": "<time>",
                       "contextUsage": null,
                       "createdAt": "<time>",
                       "cwd": "<ws>",
                       "harness": null,
                       "id": "<id-1>",
+                      "isUnseen": false,
                       "model": "mistral-medium-3.5",
                       "parentSessionId": null,
                       "pinnedAt": null,
@@ -21916,7 +22169,8 @@
                       "updatedAt": "<time>",
                       "workspaceRoots": [
                         "<ws>"
-                      ]
+                      ],
+                      "worktree": null
                     },
                     "turnQueue": {
                       "items": [],
@@ -22001,6 +22255,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -22033,6 +22288,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-10>",
+                    "inputEntryId": null,
                     "level": "info",
                     "message": {
                       "prose": 21,
@@ -22253,6 +22509,14 @@
               "write_file"
             ],
             "utility": false
+          },
+          {
+            "conversation": [
+              {
+                "role": "user"
+              }
+            ],
+            "utility": true
           }
         ],
         "steps": [
@@ -22291,6 +22555,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -22359,6 +22624,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -22398,6 +22664,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -22485,6 +22752,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -22681,6 +22949,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -22749,6 +23018,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -22788,6 +23058,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -22875,6 +23146,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -22893,6 +23165,7 @@
               "result": {
                 "state": {
                   "activeCallbacks": [],
+                  "backgroundProcesses": [],
                   "childSessions": [],
                   "eventId": "<nonzero>",
                   "format": "vibe.public-session-state/v1",
@@ -22907,6 +23180,7 @@
                       "createdAt": "<time>",
                       "generationStatus": "completed",
                       "id": "<id-3>",
+                      "inputEntryId": null,
                       "relatedEntryId": null,
                       "role": "user",
                       "sessionId": "<id-1>",
@@ -22926,6 +23200,7 @@
                       "createdAt": "<time>",
                       "generationStatus": "completed",
                       "id": "<id-4>",
+                      "inputEntryId": null,
                       "relatedEntryId": null,
                       "role": "assistant",
                       "sessionId": "<id-1>",
@@ -22943,6 +23218,7 @@
                       },
                       "generationStatus": "completed",
                       "id": "<id-5>",
+                      "inputEntryId": null,
                       "kind": "relocation",
                       "message": {
                         "prose": 24,
@@ -22972,12 +23248,14 @@
                       "name": "auto-approve",
                       "safety": "yolo"
                     },
+                    "archivedAt": null,
                     "bumpedAt": "<time>",
                     "contextUsage": null,
                     "createdAt": "<time>",
                     "cwd": "<root>/checkout",
                     "harness": null,
                     "id": "<id-1>",
+                    "isUnseen": false,
                     "model": "mistral-medium-3.5",
                     "parentSessionId": null,
                     "pinnedAt": null,
@@ -22996,7 +23274,8 @@
                     "updatedAt": "<time>",
                     "workspaceRoots": [
                       "<root>/checkout"
-                    ]
+                    ],
+                    "worktree": null
                   },
                   "turnQueue": {
                     "items": [],
@@ -23031,6 +23310,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -23099,6 +23379,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -23125,6 +23406,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -23212,6 +23494,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -23526,6 +23809,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -23594,6 +23878,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -23645,6 +23930,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_s1",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -23793,6 +24079,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -23880,6 +24167,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -24141,6 +24429,7 @@
                     "completedAt": null,
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",
@@ -24209,6 +24498,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -24241,6 +24531,7 @@
                   "entry": {
                     "createdAt": "<time>",
                     "detail": {
+                      "agentName": null,
                       "childSessionId": null,
                       "display": {
                         "content": null,
@@ -24264,6 +24555,7 @@
                     },
                     "generationStatus": "in_progress",
                     "id": "call_t1",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -24288,6 +24580,7 @@
                       "op": "replace",
                       "path": "/detail",
                       "value": {
+                        "agentName": null,
                         "childSessionId": null,
                         "display": {
                           "content": null,
@@ -24465,6 +24758,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "in_progress",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -24552,6 +24846,7 @@
                     "completedAt": "<time>",
                     "error": null,
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "queueItemId": null,
                     "sessionId": "<id-1>",
                     "startedAt": "<time>",

@@ -3,8 +3,8 @@
 //! `scripts/parity/plugins.py --family server` captured the corpus from the
 //! pinned reference's own `vibe-app-server`: every scenario serves it over
 //! stdio in a fresh home, selecting the unified harness with
-//! `--experimental-harness`, with the rollout in the eval cache, or not at all,
-//! and records what `plugin_catalog/read`, `plugins/read`, `plugin/info`,
+//! `--experimental-harness` or with no flag over the rollout in the eval cache,
+//! or the legacy one with `--legacy-harness`, and records what `plugin_catalog/read`, `plugins/read`, `plugin/info`,
 //! `plugin/reload`, the plugin parts of `runtime/read` and `mcp_catalog/read`,
 //! and the MCP mutations a plugin server refuses answer around a session start
 //! and a reload. One scenario's plugin declares MCP servers: the
@@ -45,7 +45,119 @@ struct Divergence {
     reason: &'static str,
 }
 
-const LEDGER: &[Divergence] = &[];
+/// Row 35: the unified session's MCP view.
+const CONNECTOR_ERROR: &str = "since v2.26.0 a unified session's MCP view reports why its \
+     connectors failed to load (`vibe/app_server/_unified_harness_backend_adapter.py:3444`, set \
+     at `:3975-3980`, at `376f6a3`), here the bootstrap's HTTP 401, where it reported null; this \
+     port's unified view still reports null";
+
+/// Row 35: the unified session's plugin packages.
+const BUNDLED_SERVER: &str = "since v2.26.0 the unified package store checks out a file the \
+     plugin's own `mcp.json` launches with a `./` command as executable \
+     (`harness/runtimes/python/python/mistralai_vibe_local_harness/vibe/plugins/_store.py:285-289,353-391` \
+     at `376f6a3`), so the plugin's `script` server is kept with the tool it serves where it was \
+     dropped, and the reload warns about one dropped server fewer; this port still drops it";
+
+/// Row 35: the plugin servers `/mcp` lists.
+const SESSION_CONNECTION: &str = "since v2.26.0 `/mcp` lists a plugin MCP server through the \
+     session's own connection to it, with that connection's status and tools, and keeps a \
+     discovery error only for a server the session holds no connection to \
+     (`vibe/app_server/mcp_catalog.py:1020-1022,1034-1048` at `376f6a3`); this port lists the \
+     discovery pass's status, tools and error for every plugin server, and the kept `script` \
+     server answers there too";
+
+const LEDGER: &[Divergence] = &[
+    Divergence {
+        scenario: "unified/dropped",
+        pointer: "/1/answer/mcp/connectorError",
+        reason: CONNECTOR_ERROR,
+    },
+    Divergence {
+        scenario: "unified/mcp-servers",
+        pointer: "/3/answer/mcp/connectorError",
+        reason: CONNECTOR_ERROR,
+    },
+    Divergence {
+        scenario: "unified/mcp-servers",
+        pointer: "/4/answer/mcp/connectorError",
+        reason: CONNECTOR_ERROR,
+    },
+    Divergence {
+        scenario: "unified/only-builtin",
+        pointer: "/3/answer/mcp/connectorError",
+        reason: CONNECTOR_ERROR,
+    },
+    Divergence {
+        scenario: "unified/only-builtin",
+        pointer: "/4/answer/mcp/connectorError",
+        reason: CONNECTOR_ERROR,
+    },
+    Divergence {
+        scenario: "unified/reload",
+        pointer: "/4/answer/mcp/connectorError",
+        reason: CONNECTOR_ERROR,
+    },
+    Divergence {
+        scenario: "unified/user-and-project",
+        pointer: "/3/answer/mcp/connectorError",
+        reason: CONNECTOR_ERROR,
+    },
+    Divergence {
+        scenario: "unified/user-and-project",
+        pointer: "/4/answer/mcp/connectorError",
+        reason: CONNECTOR_ERROR,
+    },
+    Divergence {
+        scenario: "unified/mcp-servers",
+        pointer: "/0/answer/plugins/dropped",
+        reason: BUNDLED_SERVER,
+    },
+    Divergence {
+        scenario: "unified/mcp-servers",
+        pointer: "/0/answer/plugins/plugins/0/components",
+        reason: BUNDLED_SERVER,
+    },
+    Divergence {
+        scenario: "unified/mcp-servers",
+        pointer: "/1/answer/plugins/dropped",
+        reason: BUNDLED_SERVER,
+    },
+    Divergence {
+        scenario: "unified/mcp-servers",
+        pointer: "/1/answer/plugins/plugins/0/components",
+        reason: BUNDLED_SERVER,
+    },
+    Divergence {
+        scenario: "unified/mcp-servers",
+        pointer: "/2/answer/info/components",
+        reason: BUNDLED_SERVER,
+    },
+    Divergence {
+        scenario: "unified/mcp-servers",
+        pointer: "/7/warnings",
+        reason: BUNDLED_SERVER,
+    },
+    Divergence {
+        scenario: "unified/mcp-servers",
+        pointer: "/3/answer/mcp/discoveryErrors",
+        reason: SESSION_CONNECTION,
+    },
+    Divergence {
+        scenario: "unified/mcp-servers",
+        pointer: "/3/answer/mcp/sources",
+        reason: SESSION_CONNECTION,
+    },
+    Divergence {
+        scenario: "unified/mcp-servers",
+        pointer: "/4/answer/mcp/discoveryErrors",
+        reason: SESSION_CONNECTION,
+    },
+    Divergence {
+        scenario: "unified/mcp-servers",
+        pointer: "/4/answer/mcp/sources",
+        reason: SESSION_CONNECTION,
+    },
+];
 
 fn repository() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

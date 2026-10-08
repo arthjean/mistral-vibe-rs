@@ -42,7 +42,6 @@
       "api_write_timeout": 30.0,
       "applied_migrations": [],
       "ask_confirmation_on_exit": true,
-      "auto_compact_threshold": 200000,
       "autocopy_to_clipboard": true,
       "bypass_tool_permissions": false,
       "compaction_prompt_id": "compact",
@@ -83,7 +82,6 @@
       "models": [
         {
           "alias": "mistral-medium-3.5",
-          "auto_compact_threshold": 200000,
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
@@ -92,11 +90,17 @@
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         {
           "alias": "local",
-          "auto_compact_threshold": 200000,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
           "name": "devstral",
@@ -104,7 +108,14 @@
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       ],
       "narrator_enabled": false,
@@ -149,7 +160,7 @@
       "routed_extra_models": [],
       "session_logging": {
         "enabled": true,
-        "generate_titles": false,
+        "generate_titles": true,
         "save_dir": "{vibe_home}/logs/session",
         "session_prefix": "session"
       },
@@ -198,6 +209,10 @@
           "name": "mistral"
         }
       ],
+      "utility_models": {
+        "smart_approve": "",
+        "title": ""
+      },
       "vibe_base_url": "https://chat.mistral.ai",
       "vibe_code_sessions_base_url": "https://chat.mistral.ai",
       "voice_mode_enabled": false,
@@ -502,6 +517,14 @@
       "kind": "complex",
       "mergeKey": null,
       "name": "vision_model",
+      "popular": false,
+      "strategy": "merge"
+    },
+    {
+      "choices": [],
+      "kind": "complex",
+      "mergeKey": null,
+      "name": "utility_models",
       "popular": false,
       "strategy": "merge"
     },
@@ -1636,12 +1659,20 @@
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
@@ -1649,12 +1680,20 @@
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-defaults-only",
@@ -1685,12 +1724,20 @@
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.9,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
@@ -1698,12 +1745,20 @@
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-sparse-override-of-a-default-model",
@@ -1734,12 +1789,20 @@
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.55,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
@@ -1747,12 +1810,20 @@
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-alias-map-form",
@@ -1780,29 +1851,45 @@
       "models": {
         "local": {
           "alias": "local",
-          "auto_compact_threshold": 200000,
+          "auto_compact_threshold": 50000,
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
-          "auto_compact_threshold": 200000,
+          "auto_compact_threshold": 50000,
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "scratch": {
           "alias": "scratch",
@@ -1810,12 +1897,20 @@
           "cached_input_price": null,
           "display_name": null,
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "scratch",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-added-entry-inherits-the-global-threshold",
@@ -1843,29 +1938,45 @@
       "models": {
         "local": {
           "alias": "local",
-          "auto_compact_threshold": 200000,
+          "auto_compact_threshold": 50000,
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
-          "auto_compact_threshold": 200000,
+          "auto_compact_threshold": 50000,
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "scratch": {
           "alias": "scratch",
@@ -1873,12 +1984,20 @@
           "cached_input_price": null,
           "display_name": null,
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "scratch",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-entry-keeps-its-own-threshold",
@@ -1909,12 +2028,20 @@
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
@@ -1922,12 +2049,20 @@
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-unknown-active-model-falls-back",
@@ -1959,12 +2094,20 @@
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
@@ -1972,12 +2115,20 @@
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "scratch": {
           "alias": "scratch",
@@ -1985,12 +2136,20 @@
           "cached_input_price": null,
           "display_name": null,
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "scratch-latest",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": true,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-active-model-selects-an-added-entry",
@@ -2025,12 +2184,20 @@
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.8,
-          "thinking": "low"
+          "thinking": "low",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
@@ -2038,12 +2205,20 @@
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-two-layers-deep-merge-one-entry",
@@ -2075,12 +2250,20 @@
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
@@ -2088,12 +2271,20 @@
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "scratch": {
           "alias": "scratch",
@@ -2101,12 +2292,20 @@
           "cached_input_price": null,
           "display_name": null,
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "scratch",
           "output_price": 0.0,
           "provider": "mistral",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-entry-without-an-alias-borrows-its-name",
@@ -2124,16 +2323,24 @@
       ],
       "compactionModel": {
         "alias": "devstral-small-latest",
-        "auto_compact_threshold": 200000,
+        "auto_compact_threshold": -1,
         "cached_input_price": null,
         "display_name": null,
         "input_price": 0.0,
+        "max_context_length": null,
         "name": "devstral-small-latest",
         "output_price": 0.0,
         "provider": "mistral",
         "supports_images": false,
         "temperature": 0.2,
-        "thinking": "off"
+        "thinking": "off",
+        "thinking_levels": [
+          "off",
+          "low",
+          "medium",
+          "high",
+          "max"
+        ]
       },
       "defaultModelAlias": "mistral-medium-3.5",
       "layers": [
@@ -2149,12 +2356,20 @@
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
@@ -2162,12 +2377,20 @@
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-compaction-model-without-an-alias-borrows-its-name",
@@ -2197,12 +2420,20 @@
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
@@ -2210,12 +2441,20 @@
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-allowed-models-glob-narrows-the-available-set",
@@ -2226,12 +2465,13 @@
     },
     {
       "activeModel": "",
-      "activeModelAlias": "local",
+      "activeModelAlias": "mistral-medium-3.5",
       "availableModels": [
+        "mistral-medium-3.5",
         "local"
       ],
       "compactionModel": null,
-      "defaultModelAlias": "local",
+      "defaultModelAlias": "mistral-medium-3.5",
       "layers": [
         {
           "name": "user",
@@ -2245,12 +2485,20 @@
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
@@ -2258,28 +2506,37 @@
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-allowed-models-regex-is-case-insensitive",
       "rejected": false,
       "routedExtraModels": [],
-      "validationWarnings": 0,
+      "validationWarnings": 1,
       "visionModel": null
     },
     {
       "activeModel": "",
-      "activeModelAlias": "local",
+      "activeModelAlias": "mistral-medium-3.5",
       "availableModels": [
+        "mistral-medium-3.5",
         "local"
       ],
       "compactionModel": null,
-      "defaultModelAlias": "local",
+      "defaultModelAlias": "mistral-medium-3.5",
       "layers": [
         {
           "name": "user",
@@ -2293,12 +2550,20 @@
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
@@ -2306,18 +2571,26 @@
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-allowed-models-matching-nothing-warns-and-admits-all",
       "rejected": false,
       "routedExtraModels": [],
-      "validationWarnings": 1,
+      "validationWarnings": 2,
       "visionModel": null
     },
     {
@@ -2341,12 +2614,20 @@
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
@@ -2354,28 +2635,37 @@
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-allowed-models-excluding-the-pin-falls-back",
       "rejected": false,
       "routedExtraModels": [],
-      "validationWarnings": 0,
+      "validationWarnings": 1,
       "visionModel": null
     },
     {
       "activeModel": "",
-      "activeModelAlias": "local",
+      "activeModelAlias": "mistral-medium-3.5",
       "availableModels": [
+        "mistral-medium-3.5",
         "local"
       ],
       "compactionModel": null,
-      "defaultModelAlias": "local",
+      "defaultModelAlias": "mistral-medium-3.5",
       "layers": [
         {
           "name": "user",
@@ -2389,12 +2679,20 @@
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
@@ -2402,18 +2700,26 @@
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-allowed-models-excluding-the-default",
       "rejected": false,
       "routedExtraModels": [],
-      "validationWarnings": 0,
+      "validationWarnings": 1,
       "visionModel": null
     },
     {
@@ -2439,12 +2745,20 @@
           "cached_input_price": null,
           "display_name": null,
           "input_price": 0.4,
+          "max_context_length": null,
           "name": "extra-latest",
           "output_price": 0.0,
           "provider": "mistral",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "local": {
           "alias": "local",
@@ -2452,12 +2766,20 @@
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
@@ -2465,12 +2787,20 @@
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-routed-extra-models-from-json-text",
@@ -2478,29 +2808,45 @@
       "routedExtraModels": [
         {
           "alias": "extra",
-          "auto_compact_threshold": 200000,
+          "auto_compact_threshold": -1,
           "cached_input_price": null,
           "display_name": null,
           "input_price": 0.4,
+          "max_context_length": null,
           "name": "extra-latest",
           "output_price": 0.0,
           "provider": "mistral",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         {
           "alias": "",
-          "auto_compact_threshold": 200000,
+          "auto_compact_threshold": -1,
           "cached_input_price": null,
           "display_name": null,
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "nameless",
           "output_price": 0.0,
           "provider": "mistral",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       ],
       "validationWarnings": 0,
@@ -2529,38 +2875,62 @@
           "cached_input_price": null,
           "display_name": null,
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "fresh",
           "output_price": 0.0,
           "provider": "mistral",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "local": {
           "alias": "local",
-          "auto_compact_threshold": 200000,
+          "auto_compact_threshold": 64000,
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.65,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
-          "auto_compact_threshold": 200000,
+          "auto_compact_threshold": 64000,
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-routed-extra-models-keep-what-the-operator-wrote",
@@ -2568,29 +2938,45 @@
       "routedExtraModels": [
         {
           "alias": "local",
-          "auto_compact_threshold": 200000,
+          "auto_compact_threshold": -1,
           "cached_input_price": null,
           "display_name": null,
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "local-routed",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": true,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         {
           "alias": "fresh",
-          "auto_compact_threshold": 200000,
+          "auto_compact_threshold": -1,
           "cached_input_price": null,
           "display_name": null,
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "fresh",
           "output_price": 0.0,
           "provider": "mistral",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       ],
       "validationWarnings": 0,
@@ -2618,12 +3004,20 @@
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
@@ -2631,12 +3025,20 @@
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-routed-extra-models-not-a-list",
@@ -2668,12 +3070,20 @@
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
@@ -2681,12 +3091,20 @@
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "routed": {
           "alias": "routed",
@@ -2694,12 +3112,20 @@
           "cached_input_price": null,
           "display_name": null,
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "vibe-routed",
           "output_price": 0.0,
           "provider": "mistral",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-routed-default-reaches-a-pinned-installation",
@@ -2730,12 +3156,20 @@
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.75,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
@@ -2743,12 +3177,20 @@
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-routed-definition-keeps-the-operator-overrides",
@@ -2780,12 +3222,20 @@
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
@@ -2793,12 +3243,20 @@
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "routed": {
           "alias": "routed",
@@ -2806,12 +3264,20 @@
           "cached_input_price": null,
           "display_name": null,
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "vibe-routed",
           "output_price": 0.0,
           "provider": "mistral",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-unknown-active-model-resolves-to-the-routed-default",
@@ -2838,29 +3304,45 @@
       "models": {
         "local": {
           "alias": "local",
-          "auto_compact_threshold": 200000,
+          "auto_compact_threshold": 70000,
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
-          "auto_compact_threshold": 200000,
+          "auto_compact_threshold": 70000,
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-vision-model-is-completed-like-a-model",
@@ -2869,16 +3351,24 @@
       "validationWarnings": 0,
       "visionModel": {
         "alias": "pixtral-large-latest",
-        "auto_compact_threshold": 200000,
+        "auto_compact_threshold": -1,
         "cached_input_price": null,
         "display_name": null,
         "input_price": 0.0,
+        "max_context_length": null,
         "name": "pixtral-large-latest",
         "output_price": 0.0,
         "provider": "llamacpp",
         "supports_images": true,
         "temperature": 0.2,
-        "thinking": "off"
+        "thinking": "off",
+        "thinking_levels": [
+          "off",
+          "low",
+          "medium",
+          "high",
+          "max"
+        ]
       }
     },
     {
@@ -2910,16 +3400,24 @@
       ],
       "compactionModel": {
         "alias": "devstral-small-latest",
-        "auto_compact_threshold": 200000,
+        "auto_compact_threshold": -1,
         "cached_input_price": null,
         "display_name": null,
         "input_price": 0.0,
+        "max_context_length": null,
         "name": "devstral-small-latest",
         "output_price": 0.0,
         "provider": "mistral",
         "supports_images": false,
         "temperature": 0.2,
-        "thinking": "off"
+        "thinking": "off",
+        "thinking_levels": [
+          "off",
+          "low",
+          "medium",
+          "high",
+          "max"
+        ]
       },
       "defaultModelAlias": "mistral-medium-3.5",
       "layers": [
@@ -2931,29 +3429,45 @@
       "models": {
         "local": {
           "alias": "local",
-          "auto_compact_threshold": 200000,
+          "auto_compact_threshold": 70000,
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
-          "auto_compact_threshold": 200000,
+          "auto_compact_threshold": 70000,
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-compaction-model-ignores-the-global-threshold",
@@ -2989,12 +3503,20 @@
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
@@ -3002,12 +3524,20 @@
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "scratch": {
           "alias": "scratch",
@@ -3015,12 +3545,20 @@
           "cached_input_price": null,
           "display_name": null,
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "scratch",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-admin-threshold-overrides-every-model",
@@ -3052,29 +3590,45 @@
       "models": {
         "local": {
           "alias": "local",
-          "auto_compact_threshold": 200000,
+          "auto_compact_threshold": 32000,
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
-          "auto_compact_threshold": 200000,
+          "auto_compact_threshold": 32000,
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "scratch": {
           "alias": "scratch",
@@ -3082,12 +3636,20 @@
           "cached_input_price": null,
           "display_name": null,
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "scratch",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-user-threshold-keeps-a-model-threshold",
@@ -3105,16 +3667,24 @@
       ],
       "compactionModel": {
         "alias": "compactor",
-        "auto_compact_threshold": 200000,
+        "auto_compact_threshold": -1,
         "cached_input_price": null,
         "display_name": null,
         "input_price": 0.0,
+        "max_context_length": null,
         "name": "devstral-small-latest",
         "output_price": 0.0,
         "provider": "mistral",
         "supports_images": false,
         "temperature": 0.7,
-        "thinking": "off"
+        "thinking": "off",
+        "thinking_levels": [
+          "off",
+          "low",
+          "medium",
+          "high",
+          "max"
+        ]
       },
       "defaultModelAlias": "mistral-medium-3.5",
       "layers": [
@@ -3130,12 +3700,20 @@
           "cached_input_price": null,
           "display_name": "Devstral (local)",
           "input_price": 0.0,
+          "max_context_length": null,
           "name": "devstral",
           "output_price": 0.0,
           "provider": "llamacpp",
           "supports_images": false,
           "temperature": 0.2,
-          "thinking": "off"
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         },
         "mistral-medium-3.5": {
           "alias": "mistral-medium-3.5",
@@ -3143,12 +3721,20 @@
           "cached_input_price": 0.15,
           "display_name": "Mistral Medium 3.5",
           "input_price": 1.5,
+          "max_context_length": null,
           "name": "mistral-vibe-cli-latest",
           "output_price": 7.5,
           "provider": "mistral",
           "supports_images": true,
           "temperature": 1.0,
-          "thinking": "high"
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
         }
       },
       "name": "models-compaction-model-keeps-the-alias-it-declares",
@@ -3197,7 +3783,7 @@
     }
   ],
   "reference": {
-    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
   },
   "scenarios": [
     {
@@ -4115,7 +4701,7 @@
           ],
           "session_logging": {
             "enabled": false,
-            "generate_titles": false,
+            "generate_titles": true,
             "save_dir": "{root}/.vibe/logs/session",
             "session_prefix": "project"
           },
@@ -4263,7 +4849,7 @@
           ],
           "session_logging": {
             "enabled": false,
-            "generate_titles": false,
+            "generate_titles": true,
             "save_dir": "{root}/.vibe/logs/session",
             "session_prefix": "session"
           },
@@ -4284,7 +4870,7 @@
           ],
           "session_logging": {
             "enabled": false,
-            "generate_titles": false,
+            "generate_titles": true,
             "save_dir": "{root}/.vibe/logs/session",
             "session_prefix": "session"
           },

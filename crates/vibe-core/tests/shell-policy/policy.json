@@ -471,13 +471,13 @@
       "permission": "ask",
       "requirements": [
         {
-          "invocationPattern": "<outside>/*",
+          "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
-            "length": 29
+            "described": "sha256:f7f953559eeb444deea225026c02fb78",
+            "length": 27
           },
           "scope": "outside_directory",
-          "sessionPattern": "<outside>/*"
+          "sessionPattern": "vibe-path:exact:<outside>"
         }
       ],
       "shell": null
@@ -508,13 +508,13 @@
       "permission": "ask",
       "requirements": [
         {
-          "invocationPattern": "<outside>/*",
+          "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
-            "length": 29
+            "described": "sha256:f7f953559eeb444deea225026c02fb78",
+            "length": 27
           },
           "scope": "outside_directory",
-          "sessionPattern": "<outside>/*"
+          "sessionPattern": "vibe-path:exact:<outside>"
         }
       ],
       "shell": null
@@ -527,22 +527,22 @@
       "permission": "ask",
       "requirements": [
         {
-          "invocationPattern": "<outside>/*",
+          "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
-            "length": 29
+            "described": "sha256:f7f953559eeb444deea225026c02fb78",
+            "length": 27
           },
           "scope": "outside_directory",
-          "sessionPattern": "<outside>/*"
+          "sessionPattern": "vibe-path:exact:<outside>"
         },
         {
-          "invocationPattern": "<outside>/nested/*",
+          "invocationPattern": "<outside>/nested/secret.txt",
           "label": {
-            "described": "sha256:8951ef6976f4e3c20179926384889fe6",
-            "length": 36
+            "described": "sha256:d5bdfee721ae61766ccbcc1da921afda",
+            "length": 45
           },
           "scope": "outside_directory",
-          "sessionPattern": "<outside>/nested/*"
+          "sessionPattern": "vibe-path:exact:<outside>/nested/secret.txt"
         }
       ],
       "shell": null
@@ -555,13 +555,13 @@
       "permission": "ask",
       "requirements": [
         {
-          "invocationPattern": "<outside>/*",
+          "invocationPattern": "<outside>/secret.txt",
           "label": {
-            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
-            "length": 29
+            "described": "sha256:9d4dcea7f76ce0169504db13046d2bf9",
+            "length": 38
           },
           "scope": "outside_directory",
-          "sessionPattern": "<outside>/*"
+          "sessionPattern": "vibe-path:exact:<outside>/secret.txt"
         }
       ],
       "shell": null
@@ -676,13 +676,13 @@
       "permission": "ask",
       "requirements": [
         {
-          "invocationPattern": "<outside>/*",
+          "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
-            "length": 29
+            "described": "sha256:f7f953559eeb444deea225026c02fb78",
+            "length": 27
           },
           "scope": "outside_directory",
-          "sessionPattern": "<outside>/*"
+          "sessionPattern": "vibe-path:exact:<outside>"
         }
       ],
       "shell": null
@@ -728,13 +728,13 @@
           "sessionPattern": "sudo ls"
         },
         {
-          "invocationPattern": "<outside>/*",
+          "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
-            "length": 29
+            "described": "sha256:f7f953559eeb444deea225026c02fb78",
+            "length": 27
           },
           "scope": "outside_directory",
-          "sessionPattern": "<outside>/*"
+          "sessionPattern": "vibe-path:exact:<outside>"
         },
         {
           "invocationPattern": "env override: A",
@@ -879,7 +879,7 @@
     }
   ],
   "reference": {
-    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
   },
   "repositoryResolutions": [
     {
@@ -917,13 +917,13 @@
       "permission": "ask",
       "requirements": [
         {
-          "invocationPattern": "<outside>/*",
+          "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
-            "length": 29
+            "described": "sha256:f7f953559eeb444deea225026c02fb78",
+            "length": 27
           },
           "scope": "outside_directory",
-          "sessionPattern": "<outside>/*"
+          "sessionPattern": "vibe-path:exact:<outside>"
         }
       ]
     },
@@ -1002,13 +1002,13 @@
       "permission": "ask",
       "requirements": [
         {
-          "invocationPattern": "<outside>/*",
+          "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
-            "length": 29
+            "described": "sha256:f7f953559eeb444deea225026c02fb78",
+            "length": 27
           },
           "scope": "outside_directory",
-          "sessionPattern": "<outside>/*"
+          "sessionPattern": "vibe-path:exact:<outside>"
         },
         {
           "invocationPattern": "git status [git repositories: <workdir>/.git | directory:<outside>]",
@@ -1056,13 +1056,13 @@
       "permission": "ask",
       "requirements": [
         {
-          "invocationPattern": "<outside>/*",
+          "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
-            "length": 29
+            "described": "sha256:f7f953559eeb444deea225026c02fb78",
+            "length": 27
           },
           "scope": "outside_directory",
-          "sessionPattern": "<outside>/*"
+          "sessionPattern": "vibe-path:exact:<outside>"
         }
       ]
     },
@@ -1141,13 +1141,13 @@
       "permission": "ask",
       "requirements": [
         {
-          "invocationPattern": "<outside>/*",
+          "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
-            "length": 29
+            "described": "sha256:f7f953559eeb444deea225026c02fb78",
+            "length": 27
           },
           "scope": "outside_directory",
-          "sessionPattern": "<outside>/*"
+          "sessionPattern": "vibe-path:exact:<outside>"
         },
         {
           "invocationPattern": "git status [git repositories: <workdir>/.git | directory:<outside>]",
@@ -1215,13 +1215,13 @@
       "permission": "ask",
       "requirements": [
         {
-          "invocationPattern": "<outside>/*",
+          "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
-            "length": 29
+            "described": "sha256:f7f953559eeb444deea225026c02fb78",
+            "length": 27
           },
           "scope": "outside_directory",
-          "sessionPattern": "<outside>/*"
+          "sessionPattern": "vibe-path:exact:<outside>"
         }
       ]
     },
@@ -1280,13 +1280,13 @@
       "permission": "ask",
       "requirements": [
         {
-          "invocationPattern": "<outside>/*",
+          "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
-            "length": 29
+            "described": "sha256:f7f953559eeb444deea225026c02fb78",
+            "length": 27
           },
           "scope": "outside_directory",
-          "sessionPattern": "<outside>/*"
+          "sessionPattern": "vibe-path:exact:<outside>"
         },
         {
           "invocationPattern": "git status [git repositories: <workdir>/.git | directory:<outside>]",
@@ -1374,13 +1374,13 @@
       "permission": "ask",
       "requirements": [
         {
-          "invocationPattern": "<outside>/*",
+          "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
-            "length": 29
+            "described": "sha256:f7f953559eeb444deea225026c02fb78",
+            "length": 27
           },
           "scope": "outside_directory",
-          "sessionPattern": "<outside>/*"
+          "sessionPattern": "vibe-path:exact:<outside>"
         },
         {
           "invocationPattern": "git status [git repositories: <workdir>/.git | directory:<outside>]",
@@ -1448,13 +1448,13 @@
       "permission": "ask",
       "requirements": [
         {
-          "invocationPattern": "<outside>/*",
+          "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
-            "length": 29
+            "described": "sha256:f7f953559eeb444deea225026c02fb78",
+            "length": 27
           },
           "scope": "outside_directory",
-          "sessionPattern": "<outside>/*"
+          "sessionPattern": "vibe-path:exact:<outside>"
         }
       ]
     }
@@ -2054,22 +2054,22 @@
       "permission": "ask",
       "requirements": [
         {
-          "invocationPattern": "/dev/*",
+          "invocationPattern": "/dev/null",
           "label": {
-            "described": "sha256:65045be59e3055f4b55830d2f45fb46b",
-            "length": 24
+            "described": "sha256:ca2f16ba5ac31d77430c03705ef6da8e",
+            "length": 27
           },
           "scope": "outside_directory",
-          "sessionPattern": "/dev/*"
+          "sessionPattern": "vibe-path:exact:/dev/null"
         },
         {
-          "invocationPattern": "/etc/*",
+          "invocationPattern": "/etc/passwd",
           "label": {
-            "described": "sha256:f9089c4d60dfd86485a4c664bb4a8a07",
-            "length": 24
+            "described": "sha256:4c3c8efba9982bcb5d0ac3e8117620b6",
+            "length": 29
           },
           "scope": "outside_directory",
-          "sessionPattern": "/etc/*"
+          "sessionPattern": "vibe-path:exact:/etc/passwd"
         }
       ]
     },
@@ -2137,13 +2137,13 @@
       "permission": "ask",
       "requirements": [
         {
-          "invocationPattern": "/etc/*",
+          "invocationPattern": "/etc/hosts",
           "label": {
-            "described": "sha256:f9089c4d60dfd86485a4c664bb4a8a07",
-            "length": 24
+            "described": "sha256:638870963f1af55d63ebd7c3aa964b2f",
+            "length": 28
           },
           "scope": "outside_directory",
-          "sessionPattern": "/etc/*"
+          "sessionPattern": "vibe-path:exact:/etc/hosts"
         }
       ]
     },
@@ -2325,13 +2325,13 @@
       "permission": "ask",
       "requirements": [
         {
-          "invocationPattern": "/etc/*",
+          "invocationPattern": "/etc/hosts",
           "label": {
-            "described": "sha256:f9089c4d60dfd86485a4c664bb4a8a07",
-            "length": 24
+            "described": "sha256:638870963f1af55d63ebd7c3aa964b2f",
+            "length": 28
           },
           "scope": "outside_directory",
-          "sessionPattern": "/etc/*"
+          "sessionPattern": "vibe-path:exact:/etc/hosts"
         }
       ]
     },
@@ -2341,13 +2341,13 @@
       "permission": "ask",
       "requirements": [
         {
-          "invocationPattern": "/etc/*",
+          "invocationPattern": "/etc/hosts",
           "label": {
-            "described": "sha256:f9089c4d60dfd86485a4c664bb4a8a07",
-            "length": 24
+            "described": "sha256:638870963f1af55d63ebd7c3aa964b2f",
+            "length": 28
           },
           "scope": "outside_directory",
-          "sessionPattern": "/etc/*"
+          "sessionPattern": "vibe-path:exact:/etc/hosts"
         }
       ]
     },
@@ -2579,13 +2579,13 @@
       "permission": "ask",
       "requirements": [
         {
-          "invocationPattern": "<outside>/*",
+          "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
-            "length": 29
+            "described": "sha256:f7f953559eeb444deea225026c02fb78",
+            "length": 27
           },
           "scope": "outside_directory",
-          "sessionPattern": "<outside>/*"
+          "sessionPattern": "vibe-path:exact:<outside>"
         }
       ]
     },
@@ -2664,13 +2664,13 @@
       "permission": "ask",
       "requirements": [
         {
-          "invocationPattern": "<outside>/*",
+          "invocationPattern": "<outside>",
           "label": {
-            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
-            "length": 29
+            "described": "sha256:f7f953559eeb444deea225026c02fb78",
+            "length": 27
           },
           "scope": "outside_directory",
-          "sessionPattern": "<outside>/*"
+          "sessionPattern": "vibe-path:exact:<outside>"
         },
         {
           "invocationPattern": "git status [git repositories: directory:<workdir> | dynamic-directory]",
@@ -3048,13 +3048,13 @@
           "sessionPattern": "cat *"
         },
         {
-          "invocationPattern": "<outside>/*",
+          "invocationPattern": "<outside>/secret.txt",
           "label": {
-            "described": "sha256:43726c74ba58cbf9dfb2e30208ec7f3a",
-            "length": 29
+            "described": "sha256:9d4dcea7f76ce0169504db13046d2bf9",
+            "length": 38
           },
           "scope": "outside_directory",
-          "sessionPattern": "<outside>/*"
+          "sessionPattern": "vibe-path:exact:<outside>/secret.txt"
         }
       ]
     }

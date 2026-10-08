@@ -220,7 +220,22 @@ fn allow() -> bool {
 #[derive(Debug, Deserialize)]
 struct Field {
     alias: String,
+    /// The keys an `AliasChoices` field reads, in the order it tries them;
+    /// empty when the field reads `alias` alone.
+    #[serde(default)]
+    aliases: Vec<String>,
     schema: Node,
+}
+
+impl Field {
+    /// The keys this field reads its value from, first match wins.
+    fn keys(&self) -> &[String] {
+        if self.aliases.is_empty() {
+            std::slice::from_ref(&self.alias)
+        } else {
+            &self.aliases
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -249,6 +264,10 @@ enum Node {
         schema: Box<Node>,
     },
     FunctionAfter {
+        function: String,
+        schema: Box<Node>,
+    },
+    FunctionBefore {
         function: String,
         schema: Box<Node>,
     },
@@ -436,10 +455,19 @@ impl Walk {
         let before = self.issues.len();
         self.finite.push(!model.allow_inf_nan);
         let mut output = serde_json::Map::new();
+        // A key no field consumed is extra: with `AliasChoices`, the second of
+        // two spellings given together is one.
+        let mut consumed = Vec::new();
         for field in &model.fields {
-            path.push(PathSegment::Field(field.alias.clone()));
-            match input.get(&field.alias) {
-                Some(value) => {
+            let found = field
+                .keys()
+                .iter()
+                .find_map(|key| input.get(key).map(|value| (key, value)));
+            let key = found.map_or(&field.alias, |(key, _)| key);
+            path.push(PathSegment::Field(key.clone()));
+            match found {
+                Some((key, value)) => {
+                    consumed.push(key);
                     if let Some(validated) = self.node(&field.schema, value, path) {
                         output.insert(field.alias.clone(), validated);
                     }
@@ -450,7 +478,7 @@ impl Walk {
             path.pop();
         }
         for (key, value) in entries {
-            if model.fields.iter().any(|field| field.alias == *key) {
+            if consumed.contains(&key) {
                 continue;
             }
             match model.extra {
@@ -490,6 +518,10 @@ impl Walk {
                 Json::Null => Some(Value::Null),
                 _ => self.node(schema, input, path),
             },
+            Node::FunctionBefore { function, schema } => {
+                let prepared = custom::before(function, input);
+                self.node(schema, &prepared, path)
+            }
             Node::FunctionAfter { function, schema } => {
                 let value = self.node(schema, input, path)?;
                 match custom::run(function, value) {
@@ -1039,6 +1071,8 @@ fn python_repr_bare(value: &Json) -> String {
 mod custom {
     use serde_json::Value;
 
+    use super::Json;
+
     pub(super) fn run(function: &str, value: Value) -> Result<Value, String> {
         match function {
             // Reference `AgentConfig._reject_empty_cwd`.
@@ -1112,6 +1146,24 @@ mod custom {
                     Ok(value)
                 }
             }
+            // Reference `WorkspaceWorktreeReapParams.validate_request_identity`.
+            "WorkspaceWorktreeReapParams.validate_request_identity" => {
+                let present = |key: &str| value.get(key).is_some_and(|value| !value.is_null());
+                if present("requesterId") == present("requestId") {
+                    Ok(value)
+                } else {
+                    Err("name both the requester and the request, or neither".to_owned())
+                }
+            }
+            // Reference `WorkspaceWorktreeReapCancelParams.validate_request_identity`.
+            "WorkspaceWorktreeReapCancelParams.validate_request_identity" => {
+                let present = |key: &str| value.get(key).is_some_and(|value| !value.is_null());
+                if present("requestId") && !present("requesterId") {
+                    Err("a request cannot be named without its requester".to_owned())
+                } else {
+                    Ok(value)
+                }
+            }
             // Reference `SessionEmbeddedResourceContentBlock.validate_content`.
             "SessionEmbeddedResourceContentBlock.validate_content" => {
                 let present = |key: &str| value.get(key).is_some_and(|value| !value.is_null());
@@ -1125,6 +1177,29 @@ mod custom {
         }
     }
 
+    /// Each `function-before` validator: it takes the raw input and answers
+    /// what the schema under it validates.
+    pub(super) fn before(function: &str, input: &Json) -> Json {
+        match (function, input) {
+            // Reference `_infer_resource_kind` (`vibe/user_content.py`): a
+            // resource stored without its `kind` tag takes the variant its
+            // payload names, `text` before `blob`.
+            ("_infer_resource_kind", Json::Object(entries)) if input.get("kind").is_none() => {
+                let kind = if input.get("text").is_some() {
+                    "text"
+                } else if input.get("blob").is_some() {
+                    "blob"
+                } else {
+                    return input.clone();
+                };
+                let mut entries = entries.clone();
+                entries.push(("kind".to_owned(), Json::String(kind.to_owned())));
+                Json::Object(entries)
+            }
+            _ => input.clone(),
+        }
+    }
+
     /// The validator names this module implements, which the schema has to
     /// stay within.
     #[cfg(test)]
@@ -1134,7 +1209,10 @@ mod custom {
         "SessionSettingsUpdateParams.require_update",
         "SessionShellCommandParams.validate_action",
         "UserDisplayContent.strip_nonempty",
+        "WorkspaceWorktreeReapCancelParams.validate_request_identity",
+        "WorkspaceWorktreeReapParams.validate_request_identity",
         "_TurnQueueInputParams.validate_entries",
+        "_infer_resource_kind",
     ];
 }
 

@@ -36,7 +36,7 @@ const CAPTURE_SCRIPT: &str = "scripts/parity/permission_surface.py";
 const CORPUS_RELATIVE: &str = "tests/permission-surface/vocabulary.json";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 3;
+const CORPUS_SCHEMA_VERSION: u32 = 4;
 
 /// One observed difference from the reference, scoped to the corpus pointer
 /// it contradicts.
@@ -44,8 +44,9 @@ struct Divergence {
     /// The JSON pointer into the corpus whose reference answer this port does
     /// not give.
     pointer: &'static str,
-    /// What this port answers instead, with `<workdir>` standing for the
-    /// canonical temporary workspace the way the corpus records it.
+    /// What this port answers instead, with `<workdir>` and `<outside>`
+    /// standing for the canonical temporary directories the way the corpus
+    /// records them.
     port: &'static str,
     /// The reference change and its evidence, and what this port does instead.
     reason: &'static str,
@@ -53,7 +54,47 @@ struct Divergence {
 
 /// Every difference the replay admits, measured at the pin in
 /// `crate::parity::REFERENCE_COMMIT`.
-const DIVERGENCES: &[Divergence] = &[];
+const DIVERGENCES: &[Divergence] = &[
+    Divergence {
+        pointer: "/requirement/fields/5",
+        port: "undeclared",
+        reason: PATH_SCOPE_ROOT,
+    },
+    Divergence {
+        pointer: "/fileToolChain/outsideInvocationPattern",
+        port: "<outside>/*",
+        reason: OUTSIDE_EXACT_FILE,
+    },
+    Divergence {
+        pointer: "/fileToolChain/outsideSessionPattern",
+        port: "<outside>/*",
+        reason: OUTSIDE_EXACT_FILE,
+    },
+    Divergence {
+        pointer: "/fileToolChain/outsideLabel",
+        port: "outside workdir (<outside>/*)",
+        reason: OUTSIDE_EXACT_FILE,
+    },
+];
+
+/// Why the requirement model carries one field fewer here.
+const PATH_SCOPE_ROOT: &str = "since v2.25.8 the reference requirement declares an optional \
+     `path_scope_root` that crosses the wire as `pathScopeRoot` (`vibe/permissions.py:60` at \
+     376f6a33413a): the directory an approval may widen to when the operator picks the \
+     recursive grant, filled by `shell_path_scope_root` (`vibe/core/tools/utils.py:86-94`) and \
+     read by `scope_required_permissions` (`vibe/permissions.py:140-160`). This port has neither \
+     the field nor the exact versus recursive grant choice, so its requirement serializes four \
+     keys and refuses a payload that carries the fifth";
+
+/// Why an outside-workdir file requirement still names a directory glob here.
+const OUTSIDE_EXACT_FILE: &str = "since v2.25.8 the shared file-tool chain asks about the \
+     resolved file itself (`vibe/core/tools/utils.py:230-242` at 376f6a33413a): the invocation \
+     pattern and the label name the file, and the session pattern is the exact-path grant \
+     encoding `path_grant_pattern` builds (`vibe/permissions.py:73-75`), which \
+     `PermissionStore.covers` matches by path rather than as a glob \
+     (`vibe/core/tools/permissions.py:41-42`). This port still asks about the parent directory \
+     through `outside_glob` (`crates/vibe-core/src/policy.rs`), so one approval covers every \
+     sibling of the file";
 
 /// Whether the port's `answer` at `pointer` is the reference `expected` one or
 /// the divergence [`DIVERGENCES`] records there, failing on anything else and
@@ -299,27 +340,45 @@ fn the_requirement_model_is_the_reference_one() {
     let wire = serde_json::to_value(&requirement).expect("serialize");
     let object = wire.as_object().expect("a requirement is an object");
 
-    // The serialized object is key-sorted, so the declared aliases are compared
-    // in the same order rather than in the reference's declaration order. A
-    // field the reference excludes from serialization never crosses the wire.
-    let mut declared = corpus
-        .requirement
-        .fields
-        .iter()
-        .filter(|field| !field.excluded)
-        .map(|field| field.alias.clone())
+    // A field the reference excludes from serialization never crosses the
+    // wire. Every other field it declares is spoken here and refused when
+    // missing exactly when the reference requires it, or the ledger admits the
+    // difference; the serialized object may carry no key the reference lacks.
+    for (index, field) in corpus.requirement.fields.iter().enumerate() {
+        if field.excluded {
+            continue;
+        }
+        let answer = if object.contains_key(&field.alias) {
+            let mut missing = object.clone();
+            missing.remove(&field.alias);
+            let refused = serde_json::from_value::<PermissionRequirement>(missing.into()).is_err();
+            if refused { "required" } else { "optional" }
+        } else {
+            "undeclared"
+        };
+        check_against_ledger(
+            &format!("/requirement/fields/{index}"),
+            if field.required {
+                "required"
+            } else {
+                "optional"
+            },
+            answer,
+        );
+    }
+    let invented = object
+        .keys()
+        .filter(|key| {
+            !corpus
+                .requirement
+                .fields
+                .iter()
+                .any(|field| !field.excluded && &field.alias == *key)
+        })
         .collect::<Vec<_>>();
-    declared.sort();
-    let spoken = object.keys().cloned().collect::<Vec<_>>();
-    assert_eq!(spoken, declared, "the requirement wire field set diverged");
     assert!(
-        corpus
-            .requirement
-            .fields
-            .iter()
-            .filter(|field| !field.excluded)
-            .all(|field| field.required),
-        "the reference declares every wire requirement field as required"
+        invented.is_empty(),
+        "the requirement wire field set diverged: {invented:?} is spoken only here"
     );
 
     // An excluded field is still declared, so the reference reads it on input.
@@ -497,25 +556,33 @@ fn the_file_tool_chain_produces_the_reference_requirements() {
         Some(chain.permission.as_str())
     );
 
-    let glob = format!(
-        "{}/*",
-        workspace
-            .path()
-            .canonicalize()
-            .expect("canonical")
-            .display()
+    // The outside case resolves a file that does not exist under a canonical
+    // temporary directory, which the corpus records as `<outside>`. The port's
+    // answer is what `resolve_locked` builds for that path.
+    let outside = tempfile::tempdir().expect("outside directory");
+    let canonical_outside = outside.path().canonicalize().expect("canonical");
+    let outside_root = canonical_outside.display().to_string();
+    let escaping = PermissionRequirement::outside_directory(&outside_glob(
+        &canonical_outside.join("secret.txt"),
+    ));
+    assert_eq!(wire_scope(escaping.scope), chain.outside_scope);
+    check_against_ledger(
+        "/fileToolChain/outsideInvocationPattern",
+        &chain.outside_invocation_pattern,
+        &escaping
+            .invocation_pattern
+            .replace(&outside_root, "<outside>"),
     );
-    let outside = PermissionRequirement::outside_directory(&glob);
-    assert_eq!(wire_scope(outside.scope), chain.outside_scope);
-    assert_eq!(
-        outside.invocation_pattern,
-        chain.outside_invocation_pattern.replace("<glob>", &glob)
+    check_against_ledger(
+        "/fileToolChain/outsideSessionPattern",
+        &chain.outside_session_pattern,
+        &escaping.session_pattern.replace(&outside_root, "<outside>"),
     );
-    assert_eq!(
-        outside.session_pattern,
-        chain.outside_session_pattern.replace("<glob>", &glob)
+    check_against_ledger(
+        "/fileToolChain/outsideLabel",
+        &chain.outside_label,
+        &escaping.label.replace(&outside_root, "<outside>"),
     );
-    assert_eq!(outside.label, chain.outside_label.replace("<glob>", &glob));
 }
 
 /// The settings a sensitive-pattern case is measured under: one pattern, no

@@ -1,6 +1,6 @@
 {
  "reference": {
-  "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+  "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
  },
  "retryDelays": [
   {
@@ -82048,13 +82048,13 @@
     "name": "big",
     "provider": "openai"
    },
-   "alias": "mistral-small",
+   "alias": "big",
    "allowedModels": [],
    "env": [],
-   "fast": true,
-   "model": "mistral-vibe-cli-fast",
+   "fast": false,
+   "model": "big",
    "name": "keyless-mistral",
-   "provider": "mistral",
+   "provider": "openai",
    "providers": [
     {
      "apiBase": "https://api.openai.com/v1",

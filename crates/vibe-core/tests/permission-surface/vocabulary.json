@@ -148,10 +148,10 @@
     "wildcardCases": 19
   },
   "fileToolChain": {
-    "outsideInvocationPattern": "<glob>",
-    "outsideLabel": "outside workdir (<glob>)",
+    "outsideInvocationPattern": "<outside>/secret.txt",
+    "outsideLabel": "outside workdir (<outside>/secret.txt)",
     "outsideScope": "outside_directory",
-    "outsideSessionPattern": "<glob>",
+    "outsideSessionPattern": "vibe-path:exact:<outside>/secret.txt",
     "permission": "ask",
     "sensitiveInvocationPattern": "<workdir>/.env",
     "sensitiveLabel": "accessing sensitive files (<tool>)",
@@ -160,7 +160,7 @@
   },
   "note": "Captured from the pinned reference by scripts/parity/permission_surface.py. Scope values, requirement field names, command names, arities and the answers to cases this repository authored are observations; no reference-authored description text is recorded here.",
   "reference": {
-    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
   },
   "requirement": {
     "fields": [
@@ -193,11 +193,17 @@
         "excluded": true,
         "name": "literal",
         "required": false
+      },
+      {
+        "alias": "pathScopeRoot",
+        "excluded": false,
+        "name": "path_scope_root",
+        "required": false
       }
     ],
     "forbidsExtra": true
   },
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "scopes": [
     "command_pattern",
     "outside_directory",

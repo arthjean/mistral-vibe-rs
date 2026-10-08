@@ -58,6 +58,44 @@ struct Divergence {
 
 const LEDGER: &[Divergence] = &[];
 
+/// v2.26.0 stopped assuming the fast model off the public Mistral API.
+const UNPROBED_DEPLOYMENT: &str = "v2.26.0 assumes the fast model only on the public Mistral API origin and \
+     otherwise waits for the availability probe to report the deployment serves it \
+     (vibe/core/llm/utility_completion.py:218, :234, :245; vibe/core/llm/model_probe.py:103), \
+     so an unprobed keyless self-hosted provider falls back to the active model; \
+     `utility::select` has no probe and still picks `mistral-vibe-cli-fast` there";
+
+/// The utility selections this port answers differently, matched as
+/// `LEDGER` is: `scenario` prefixes `utilitySelections/<case>` and `suffix`
+/// names the answered field. Every entry dates from the v2.26.0 re-pin
+/// (`376f6a3`).
+const UTILITY_LEDGER: &[Divergence] = &[
+    Divergence {
+        scenario: "utilitySelections/keyless-mistral",
+        suffix: "/model",
+        row: "10",
+        reason: UNPROBED_DEPLOYMENT,
+    },
+    Divergence {
+        scenario: "utilitySelections/keyless-mistral",
+        suffix: "/alias",
+        row: "10",
+        reason: UNPROBED_DEPLOYMENT,
+    },
+    Divergence {
+        scenario: "utilitySelections/keyless-mistral",
+        suffix: "/provider",
+        row: "10",
+        reason: UNPROBED_DEPLOYMENT,
+    },
+    Divergence {
+        scenario: "utilitySelections/keyless-mistral",
+        suffix: "/fast",
+        row: "10",
+        reason: UNPROBED_DEPLOYMENT,
+    },
+];
+
 // --------------------------------------------------------------------------
 // The scripted stand-in
 // --------------------------------------------------------------------------
@@ -1084,6 +1122,8 @@ fn the_generic_backoff_matches_every_recorded_delay() {
 #[test]
 fn the_utility_model_is_selected_as_the_corpus_records() {
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
+    let mut unexplained = Vec::new();
+    let mut reproduced = vec![0_usize; UTILITY_LEDGER.len()];
     for case in corpus["utilitySelections"]
         .as_array()
         .expect("the corpus holds selections")
@@ -1141,10 +1181,41 @@ fn the_utility_model_is_selected_as_the_corpus_records() {
             "fast": selected.is_fast(),
             "temperature": selected.model.temperature,
         });
+        let name = format!(
+            "utilitySelections/{}",
+            case["name"].as_str().expect("a case name")
+        );
         for key in ["model", "alias", "provider", "fast", "temperature"] {
-            assert_eq!(case[key], port[key], "{}: {key}", case["name"]);
+            if case[key] == port[key] {
+                continue;
+            }
+            let pointer = format!("/{key}");
+            match UTILITY_LEDGER.iter().position(|entry| {
+                name.starts_with(entry.scenario) && pointer.ends_with(entry.suffix)
+            }) {
+                Some(index) => reproduced[index] += 1,
+                None => unexplained.push(format!(
+                    "{name} {pointer}: reference {}, port {}",
+                    case[key], port[key]
+                )),
+            }
         }
     }
+    assert!(
+        unexplained.is_empty(),
+        "utility selections no ledger entry names:\n{}",
+        unexplained.join("\n")
+    );
+    let stale: Vec<String> = UTILITY_LEDGER
+        .iter()
+        .zip(&reproduced)
+        .filter(|(_, count)| **count == 0)
+        .map(|(entry, _)| format!("{} {}", entry.scenario, entry.suffix))
+        .collect();
+    assert!(
+        stale.is_empty(),
+        "these utility ledger entries no longer reproduce and should be removed: {stale:?}"
+    );
 }
 
 #[test]
@@ -1171,7 +1242,7 @@ fn every_ledger_entry_names_another_scorecard_row() {
         .map(|(number, _)| number.trim())
         .filter(|number| number.parse::<u32>().is_ok())
         .collect();
-    for entry in LEDGER {
+    for entry in LEDGER.iter().chain(UTILITY_LEDGER) {
         assert!(
             rows.contains(entry.row),
             "{} {} names row {}, which docs/parity.md does not carry",

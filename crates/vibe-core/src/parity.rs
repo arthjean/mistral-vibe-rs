@@ -25,11 +25,11 @@ use std::process::Command;
 /// Re-pinning means changing this constant, the same value in
 /// `scripts/parity/pin.py`, and regenerating every committed corpus in the same
 /// change.
-pub const REFERENCE_COMMIT: &str = "4a96003186b166d55b9f06895c45bb136eef61cd";
+pub const REFERENCE_COMMIT: &str = "376f6a33413a3eec9b3795b0c0e004066c47b5c1";
 
 /// The package version [`REFERENCE_COMMIT`] publishes, recorded so a reader can
 /// match the pin against an upstream release without resolving the hash.
-pub const REFERENCE_VERSION: &str = "2.25.7";
+pub const REFERENCE_VERSION: &str = "2.26.0";
 
 /// Where the read-only reference checkout lives by default. Machine-dependent:
 /// [`REFERENCE_VARIABLE`] overrides it.
@@ -43,7 +43,7 @@ pub const REFERENCE_VARIABLE: &str = "VIBE_REFERENCE";
 /// `docs/parity.md` and by the skip message below, so an operator whose probe
 /// went quiet reads the fix where the problem is reported.
 pub const RESTORE_COMMAND: &str =
-    "git -C /home/arthur/dev/mistral-vibe checkout 4a96003186b166d55b9f06895c45bb136eef61cd";
+    "git -C /home/arthur/dev/mistral-vibe checkout 376f6a33413a3eec9b3795b0c0e004066c47b5c1";
 
 /// The checkout root this run should use: [`REFERENCE_VARIABLE`] when set,
 /// otherwise [`REFERENCE_ROOT`].

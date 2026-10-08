@@ -214,9 +214,20 @@ class Reducer:
         fields = []
         for field_name, field in inner["fields"].items():
             alias = field.get("validation_alias", field_name)
+            choices = None
+            # `AliasChoices` of plain keys reads as a list of one-key paths; the
+            # first is the spelling the field serializes under.
+            if isinstance(alias, list) and all(
+                isinstance(path, list) and len(path) == 1 and isinstance(path[0], str) for path in alias
+            ):
+                choices = [path[0] for path in alias]
+                alias = choices[0]
             if not isinstance(alias, str):
                 raise OracleError(f"{name}.{field_name} has a path alias")
-            fields.append({"name": field_name, "alias": alias, "schema": self.node(field["schema"])})
+            reduced_field = {"name": field_name, "alias": alias, "schema": self.node(field["schema"])}
+            if choices is not None and len(choices) > 1:
+                reduced_field["aliases"] = choices
+            fields.append(reduced_field)
         reduced: dict[str, Any] = {
             "type": "model",
             "name": name,

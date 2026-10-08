@@ -1,7 +1,7 @@
 {
   "quietSeconds": 0.5,
   "reference": {
-    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
   },
   "scenarios": [
     {
@@ -4215,9 +4215,18 @@
                   "activeModel": {
                     "alias": "tuned",
                     "displayName": "tuned",
+                    "imageDelivery": null,
+                    "maxContextLength": null,
                     "name": "tuned-model-1",
                     "supportsImages": false,
-                    "thinking": "off"
+                    "thinking": "off",
+                    "thinkingLevels": [
+                      "off",
+                      "low",
+                      "medium",
+                      "high",
+                      "max"
+                    ]
                   },
                   "agents": [
                     {
@@ -5661,6 +5670,7 @@
               },
               {
                 "detail": {
+                  "agentName": null,
                   "childSessionId": null,
                   "display": {
                     "content": null,
@@ -5699,6 +5709,7 @@
                     "op": "replace",
                     "path": "/detail",
                     "value": {
+                      "agentName": null,
                       "childSessionId": null,
                       "display": {
                         "content": null,
@@ -6171,6 +6182,7 @@
               },
               {
                 "detail": {
+                  "agentName": null,
                   "childSessionId": null,
                   "display": {
                     "content": null,
@@ -6209,6 +6221,7 @@
                     "op": "replace",
                     "path": "/detail",
                     "value": {
+                      "agentName": null,
                       "childSessionId": null,
                       "display": {
                         "content": null,
@@ -6582,6 +6595,7 @@
               },
               {
                 "detail": {
+                  "agentName": null,
                   "childSessionId": null,
                   "display": {
                     "content": null,
@@ -6620,6 +6634,7 @@
                     "op": "replace",
                     "path": "/detail",
                     "value": {
+                      "agentName": null,
                       "childSessionId": null,
                       "display": {
                         "content": null,
@@ -6904,6 +6919,7 @@
               },
               {
                 "detail": {
+                  "agentName": null,
                   "childSessionId": null,
                   "display": {
                     "content": null,
@@ -6942,6 +6958,7 @@
                     "op": "replace",
                     "path": "/detail",
                     "value": {
+                      "agentName": null,
                       "childSessionId": null,
                       "display": {
                         "content": null,
@@ -7242,6 +7259,7 @@
               },
               {
                 "detail": {
+                  "agentName": null,
                   "childSessionId": null,
                   "display": {
                     "content": null,
@@ -7280,6 +7298,7 @@
                     "op": "replace",
                     "path": "/detail",
                     "value": {
+                      "agentName": null,
                       "childSessionId": null,
                       "display": {
                         "content": null,
@@ -7661,6 +7680,7 @@
               },
               {
                 "detail": {
+                  "agentName": null,
                   "childSessionId": null,
                   "display": {
                     "content": null,
@@ -7699,6 +7719,7 @@
                     "op": "replace",
                     "path": "/detail",
                     "value": {
+                      "agentName": null,
                       "childSessionId": null,
                       "display": {
                         "content": null,
@@ -7742,6 +7763,7 @@
                     "cancel_turn"
                   ],
                   "effect": {
+                    "agentName": null,
                     "childSessionId": null,
                     "display": {
                       "content": null,
@@ -7773,6 +7795,7 @@
                     "toolName": "task"
                   },
                   "kind": "approval",
+                  "pathScopeChoices": [],
                   "reason": null,
                   "relatedEntryId": "<id-4>",
                   "requiredPermissions": []
@@ -7810,6 +7833,7 @@
                     "value": {
                       "output": {
                         "decision": {
+                          "pathScope": null,
                           "type": "approve"
                         },
                         "feedback": null,
@@ -8279,6 +8303,7 @@
               },
               {
                 "detail": {
+                  "agentName": null,
                   "childSessionId": null,
                   "display": {
                     "content": null,
@@ -8317,6 +8342,7 @@
                     "op": "replace",
                     "path": "/detail",
                     "value": {
+                      "agentName": null,
                       "childSessionId": null,
                       "display": {
                         "content": null,
@@ -8360,6 +8386,7 @@
                     "cancel_turn"
                   ],
                   "effect": {
+                    "agentName": null,
                     "childSessionId": null,
                     "display": {
                       "content": null,
@@ -8391,6 +8418,7 @@
                     "toolName": "task"
                   },
                   "kind": "approval",
+                  "pathScopeChoices": [],
                   "reason": null,
                   "relatedEntryId": "<id-4>",
                   "requiredPermissions": []
@@ -8428,6 +8456,7 @@
                     "value": {
                       "output": {
                         "decision": {
+                          "pathScope": null,
                           "type": "approve"
                         },
                         "feedback": null,
@@ -8850,6 +8879,7 @@
               },
               {
                 "detail": {
+                  "agentName": null,
                   "childSessionId": null,
                   "display": {
                     "content": null,
@@ -8888,6 +8918,7 @@
                     "op": "replace",
                     "path": "/detail",
                     "value": {
+                      "agentName": null,
                       "childSessionId": null,
                       "display": {
                         "content": null,
@@ -9244,6 +9275,7 @@
               },
               {
                 "detail": {
+                  "agentName": null,
                   "childSessionId": null,
                   "display": {
                     "content": null,
@@ -9282,6 +9314,7 @@
                     "op": "replace",
                     "path": "/detail",
                     "value": {
+                      "agentName": null,
                       "childSessionId": null,
                       "display": {
                         "content": null,

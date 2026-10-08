@@ -20,9 +20,10 @@
 //! notices, denials and retry messages a hook run produces are the contract
 //! this part measures, and this port writes them as the reference does.
 //!
-//! Every difference the replay finds has to fall under a `LEDGER` entry, and
-//! every entry has to still reproduce, so row 18 of `docs/parity.md` is a
-//! reading of the summary this file prints.
+//! Every difference the replay finds has to fall under a `LEDGER` entry, or a
+//! `FIELDS` entry for a field that differs wherever it appears, and every
+//! entry has to still reproduce, so row 18 of `docs/parity.md` is a reading
+//! of the summary this file prints.
 
 #![cfg(feature = "test-fixtures")]
 #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -172,6 +173,23 @@ const LEDGER: &[Divergence] = &[
     },
 ];
 
+/// A field this port answers differently wherever it appears, in any scenario,
+/// and the row of `docs/parity.md` that answers for it.
+struct FieldDivergence {
+    /// Every difference whose JSON pointer ends with this suffix is covered.
+    suffix: &'static str,
+    row: &'static str,
+    reason: &'static str,
+}
+
+const FIELDS: &[FieldDivergence] = &[FieldDivergence {
+    suffix: "/inputEntryId",
+    row: "17",
+    reason: "v2.26.0 gives every public history entry and turn an `inputEntryId` \
+             (`vibe/app_server/models.py:949,1236` at 376f6a3), null on the legacy backend; \
+             this port's entries and turns do not carry the field",
+}];
+
 fn repository() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
@@ -270,6 +288,7 @@ fn the_port_runs_every_hook_scenario_as_the_corpus_records_or_as_the_ledger_name
 
     let mut unexplained = Vec::new();
     let mut reproduced = vec![0_usize; LEDGER.len()];
+    let mut fields = vec![0_usize; FIELDS.len()];
     let mut conformant = 0;
     for (name, reference) in &recorded {
         let port = replayed[name];
@@ -284,12 +303,18 @@ fn the_port_runs_every_hook_scenario_as_the_corpus_records_or_as_the_ledger_name
             conformant += 1;
         }
         for pointer in found {
-            match LEDGER
+            if let Some(index) = LEDGER
                 .iter()
                 .position(|entry| entry.scenario == name && pointer.starts_with(entry.pointer))
             {
-                Some(index) => reproduced[index] += 1,
-                None => unexplained.push(format!("{name} {pointer}")),
+                reproduced[index] += 1;
+            } else if let Some(index) = FIELDS
+                .iter()
+                .position(|field| pointer.ends_with(field.suffix))
+            {
+                fields[index] += 1;
+            } else {
+                unexplained.push(format!("{name} {pointer}"));
             }
         }
     }
@@ -298,13 +323,20 @@ fn the_port_runs_every_hook_scenario_as_the_corpus_records_or_as_the_ledger_name
         .zip(&reproduced)
         .filter(|(_, count)| **count == 0)
         .map(|(entry, _)| format!("{} {}", entry.scenario, entry.pointer))
+        .chain(
+            FIELDS
+                .iter()
+                .zip(&fields)
+                .filter(|(_, count)| **count == 0)
+                .map(|(field, _)| field.suffix.to_owned()),
+        )
         .collect();
     println!(
         "hooks parity: {conformant}/{} scenarios conformant, {} ledgered differences across \
          {} entries",
         recorded.len(),
-        reproduced.iter().sum::<usize>(),
-        LEDGER.len()
+        reproduced.iter().chain(&fields).sum::<usize>(),
+        LEDGER.len() + FIELDS.len()
     );
     assert!(
         unexplained.is_empty(),
@@ -349,6 +381,20 @@ fn every_ledger_entry_names_another_scorecard_row() {
             "the ledger entry for {} {} needs a recorded scenario, a pointer prefix and a reason",
             entry.scenario,
             entry.pointer
+        );
+    }
+    for field in FIELDS {
+        assert!(
+            rows.contains(field.row) && field.row != "18",
+            "the field entry for {} names row {}, which is not another row docs/parity.md \
+             carries",
+            field.suffix,
+            field.row
+        );
+        assert!(
+            field.suffix.starts_with('/') && !field.reason.is_empty(),
+            "the field entry for {} needs a pointer suffix and a reason",
+            field.suffix
         );
     }
 }

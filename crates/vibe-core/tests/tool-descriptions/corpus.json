@@ -266,7 +266,7 @@
   ],
   "note": "Captured from the pinned reference by scripts/parity/tool_descriptions.py. Every description file and every path label is authored by this repository; the reference contributes the resolution order, the winning file and the count of builtin tools it describes from its own package directory.",
   "reference": {
-    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
   },
   "schemaVersion": 1,
   "tree": {

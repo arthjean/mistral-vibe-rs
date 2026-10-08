@@ -2576,7 +2576,7 @@ def capture_eval_cache(scratch: Path) -> list[dict[str, Any]]:
     from vibe.core.experiments.models import EvalResponse
 
     key = hash_api_key(SENTINELS["ORACLE_MISTRAL_KEY"])
-    ttl = cache_module._EVAL_CACHE_TTL_SECONDS  # noqa: SLF001 - the bound is the subject
+    ttl = cache_module.EVAL_CACHE_TTL_SECONDS  # the bound is the subject
     gates = {configuration["id"]: configuration["toml"] for configuration in GATE_CONFIGURATIONS}
 
     def text(document: Any) -> str:

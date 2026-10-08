@@ -1,6 +1,6 @@
 {
   "oracle": {
-    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd",
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
     "deterministicRuns": 10,
     "engine": "python-textual-capture"
   },
@@ -20,7 +20,7 @@
     "script": "semantic-transcript-oracle.py"
   },
   "reference": {
-    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd",
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
     "sourceFiles": [
       "vibe/cli/textual_ui/handlers/event_handler.py",
       "vibe/cli/textual_ui/widgets/tools.py",
@@ -775,14 +775,6 @@
     {
       "dimension": "syntax highlighting inside file and command output",
       "reason": "The reference wraps read, write, and shell output in a Markdown code fence whose highlighting is produced by Rich at paint time; the oracle can pin the fenced content but not the per-token colors."
-    },
-    {
-      "dimension": "tool result expansion by mouse click",
-      "reason": "The reference expands a collapsible result through a Textual click handler on a mounted section; the terminal port exposes the same content through its keyboard collapse toggle instead."
-    },
-    {
-      "dimension": "tool stream delta",
-      "reason": "The reference streams the JSON-patch delta appended to `state.outputText`; the port has no patch channel and shows the newest output line instead, so the two cannot be compared token for token."
     }
   ]
 }

@@ -65,7 +65,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import acp  # noqa: E402
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-cli/tests/telemetry-session/corpus.json"
@@ -1091,6 +1091,7 @@ def main() -> int:
             for command in commands.values():
                 if not Path(command[0]).is_file():
                     raise OracleError(f"no reference entry point at {command[0]}; run `uv sync --frozen`")
+        commands = {name: [*command, *HARNESS_FLAGS] if command else [] for name, command in commands.items()}
         surfaces = arguments.surface or [name for name, command in commands.items() if command]
         selected = [
             scenario

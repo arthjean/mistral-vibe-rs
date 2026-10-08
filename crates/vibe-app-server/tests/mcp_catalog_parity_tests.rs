@@ -49,7 +49,47 @@ struct Divergence {
     reason: &'static str,
 }
 
-const LEDGER: &[Divergence] = &[];
+/// Since v2.25.8 the reference delivers `mcp_catalog/authUrl` and
+/// `mcp/authUrl` to a connection with no session attached
+/// (`vibe/app_server/server.py:1436-1441` at `376f6a3`), so a sessionless
+/// login reaches the browser and completes. This port still withholds those
+/// notifications until a session attaches, so its login waits on a browser
+/// that never opens; the entries below are that one gap, as each step of the
+/// completed login shows it.
+const SESSIONLESS_LOGIN: &str = "sessionless/login-publishes-nothing";
+
+const LEDGER: &[Divergence] = &[
+    Divergence {
+        scenario: SESSIONLESS_LOGIN,
+        pointer: "/0/notifications/*",
+        reason: "the reference publishes the authorization URL on both notification names to \
+                 the sessionless connection; this port publishes nothing",
+    },
+    Divergence {
+        scenario: SESSIONLESS_LOGIN,
+        pointer: "/0/browser",
+        reason: "the simulated browser follows the published URL, so only the reference's \
+                 login is answered",
+    },
+    Divergence {
+        scenario: SESSIONLESS_LOGIN,
+        pointer: "/0/response/*",
+        reason: "the reference's login resolves with no runtime to report; this port's is \
+                 still pending when the step ends",
+    },
+    Divergence {
+        scenario: SESSIONLESS_LOGIN,
+        pointer: "/1/wire/secure/*",
+        reason: "the completed login exchanges the code for a token and initializes the \
+                 server with it",
+    },
+    Divergence {
+        scenario: SESSIONLESS_LOGIN,
+        pointer: "/3/keyring/*",
+        reason: "the completed login stores the tokens and the fingerprint they were issued \
+                 for",
+    },
+];
 
 fn repository() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

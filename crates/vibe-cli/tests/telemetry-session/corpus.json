@@ -1,7 +1,7 @@
 {
   "note": "Captured by scripts/parity/telemetry_session.py from the pinned reference's entry points behind a scripted Mistral platform. Identities, versions, platform readings, durations and the system prompt's size as placeholders; each run's events sorted, since deliveries are fire-and-forget.",
   "reference": {
-    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
   },
   "scenarios": [
     {
@@ -12271,8 +12271,18 @@
       "observed": [
         {
           "accountRequests": true,
-          "chatMetadata": [],
-          "chatRequests": 0,
+          "chatMetadata": [
+            {
+              "arch": "<arch>",
+              "call_source": "vibe_code",
+              "call_type": "secondary_call",
+              "host_kind": "local",
+              "os": "<os>",
+              "os_version": "<os-version>",
+              "version": "<version>"
+            }
+          ],
+          "chatRequests": 1,
           "evaluations": [
             {
               "agent_version": "<version>",
@@ -12565,7 +12575,7 @@
                 },
                 "first_frame_duration_ms": "<ms>",
                 "harness_backend": "legacy",
-                "harness_selection_source": "default",
+                "harness_selection_source": "flag-legacy",
                 "has_initial_prompt": false,
                 "is_cold_start": false,
                 "is_resuming_session": false,
@@ -12594,8 +12604,18 @@
       "observed": [
         {
           "accountRequests": true,
-          "chatMetadata": [],
-          "chatRequests": 0,
+          "chatMetadata": [
+            {
+              "arch": "<arch>",
+              "call_source": "vibe_code",
+              "call_type": "secondary_call",
+              "host_kind": "local",
+              "os": "<os>",
+              "os_version": "<os-version>",
+              "version": "<version>"
+            }
+          ],
+          "chatRequests": 1,
           "evaluations": [
             {
               "agent_version": "<version>",
@@ -13064,7 +13084,7 @@
                 },
                 "first_frame_duration_ms": "<ms>",
                 "harness_backend": "legacy",
-                "harness_selection_source": "default",
+                "harness_selection_source": "flag-legacy",
                 "has_initial_prompt": false,
                 "is_cold_start": false,
                 "is_resuming_session": false,
@@ -13095,6 +13115,15 @@
           "accountRequests": true,
           "chatMetadata": [
             {
+              "arch": "<arch>",
+              "call_source": "vibe_code",
+              "call_type": "secondary_call",
+              "host_kind": "local",
+              "os": "<os>",
+              "os_version": "<os-version>",
+              "version": "<version>"
+            },
+            {
               "agent_entrypoint": "cli",
               "agent_version": "<version>",
               "arch": "<arch>",
@@ -13110,9 +13139,24 @@
               "terminal_emulator": "unknown",
               "user_plan": "Free API",
               "version": "<version>"
+            },
+            {
+              "agent_entrypoint": "cli",
+              "agent_version": "<version>",
+              "arch": "<arch>",
+              "call_source": "vibe_code",
+              "call_type": "title_generation",
+              "client_name": "vibe_tui",
+              "client_version": "<version>",
+              "host_kind": "local",
+              "os": "<os>",
+              "os_version": "<os-version>",
+              "session_id": "<id-2>",
+              "terminal_emulator": "unknown",
+              "version": "<version>"
             }
           ],
-          "chatRequests": 1,
+          "chatRequests": 3,
           "evaluations": [
             {
               "agent_version": "<version>",
@@ -13318,6 +13362,64 @@
               }
             },
             {
+              "event": "vibe.request_sent",
+              "properties": {
+                "agent_entrypoint": "cli",
+                "agent_version": "<version>",
+                "arch": "<arch>",
+                "attachment_counts": {},
+                "call_source": "vibe_code",
+                "call_type": "title_generation",
+                "client_name": "vibe_tui",
+                "client_version": "<version>",
+                "experiment_assignments": [
+                  {
+                    "experiment_id": "vibe_cli_system_prompt",
+                    "experiment_name": "oracle-prompt-experiment",
+                    "feature_id": "oracle-feature",
+                    "hash_attribute": "userId",
+                    "hash_value": "oracle-user",
+                    "in_experiment": true,
+                    "variation_id": 1,
+                    "variation_name": "cli"
+                  }
+                ],
+                "experiment_attributes": {
+                  "agent_version": "<version>",
+                  "arch": "<arch>",
+                  "client_name": "vibe_tui",
+                  "client_version": "<version>",
+                  "custom_system_prompt": false,
+                  "customerId": "oracle-customer",
+                  "entrypoint": "cli",
+                  "harness": "legacy",
+                  "organizationId": "oracle-organization",
+                  "organizationKind": "personal",
+                  "os": "<os>",
+                  "planName": "FREE_TRIAL",
+                  "planType": "api",
+                  "terminal_emulator": "unknown",
+                  "userId": "oracle-user",
+                  "workspaceId": "oracle-workspace"
+                },
+                "experiments": {
+                  "vibe_cli_system_prompt": "cli"
+                },
+                "harness_backend": "legacy",
+                "message_id": null,
+                "model": "mistral-small",
+                "nb_context_chars": "<chars>",
+                "nb_context_messages": 2,
+                "nb_prompt_chars": 27,
+                "os": "<os>",
+                "os_version": "<os-version>",
+                "session_id": "<id-2>",
+                "terminal_emulator": "unknown",
+                "user_plan": "Free API",
+                "version": "<version>"
+              }
+            },
+            {
               "event": "vibe.session_closed",
               "properties": {
                 "agent_entrypoint": "cli",
@@ -13463,7 +13565,7 @@
                 },
                 "first_frame_duration_ms": "<ms>",
                 "harness_backend": "legacy",
-                "harness_selection_source": "default",
+                "harness_selection_source": "flag-legacy",
                 "has_initial_prompt": false,
                 "is_cold_start": false,
                 "is_resuming_session": false,
@@ -13494,6 +13596,15 @@
           "accountRequests": true,
           "chatMetadata": [
             {
+              "arch": "<arch>",
+              "call_source": "vibe_code",
+              "call_type": "secondary_call",
+              "host_kind": "local",
+              "os": "<os>",
+              "os_version": "<os-version>",
+              "version": "<version>"
+            },
+            {
               "agent_entrypoint": "cli",
               "agent_version": "<version>",
               "arch": "<arch>",
@@ -13511,7 +13622,7 @@
               "version": "<version>"
             }
           ],
-          "chatRequests": 1,
+          "chatRequests": 2,
           "evaluations": [
             {
               "agent_version": "<version>",
@@ -13862,7 +13973,7 @@
                 },
                 "first_frame_duration_ms": "<ms>",
                 "harness_backend": "legacy",
-                "harness_selection_source": "default",
+                "harness_selection_source": "flag-legacy",
                 "has_initial_prompt": false,
                 "is_cold_start": false,
                 "is_resuming_session": false,
@@ -13944,6 +14055,15 @@
           "accountRequests": true,
           "chatMetadata": [
             {
+              "arch": "<arch>",
+              "call_source": "vibe_code",
+              "call_type": "secondary_call",
+              "host_kind": "local",
+              "os": "<os>",
+              "os_version": "<os-version>",
+              "version": "<version>"
+            },
+            {
               "agent_entrypoint": "cli",
               "agent_version": "<version>",
               "arch": "<arch>",
@@ -13959,9 +14079,24 @@
               "terminal_emulator": "unknown",
               "user_plan": "Free API",
               "version": "<version>"
+            },
+            {
+              "agent_entrypoint": "cli",
+              "agent_version": "<version>",
+              "arch": "<arch>",
+              "call_source": "vibe_code",
+              "call_type": "title_generation",
+              "client_name": "vibe_tui",
+              "client_version": "<version>",
+              "host_kind": "local",
+              "os": "<os>",
+              "os_version": "<os-version>",
+              "session_id": "<id-2>",
+              "terminal_emulator": "unknown",
+              "version": "<version>"
             }
           ],
-          "chatRequests": 1,
+          "chatRequests": 3,
           "evaluations": [
             {
               "agent_version": "<version>",
@@ -14241,6 +14376,64 @@
               }
             },
             {
+              "event": "vibe.request_sent",
+              "properties": {
+                "agent_entrypoint": "cli",
+                "agent_version": "<version>",
+                "arch": "<arch>",
+                "attachment_counts": {},
+                "call_source": "vibe_code",
+                "call_type": "title_generation",
+                "client_name": "vibe_tui",
+                "client_version": "<version>",
+                "experiment_assignments": [
+                  {
+                    "experiment_id": "vibe_cli_system_prompt",
+                    "experiment_name": "oracle-prompt-experiment",
+                    "feature_id": "oracle-feature",
+                    "hash_attribute": "userId",
+                    "hash_value": "oracle-user",
+                    "in_experiment": true,
+                    "variation_id": 1,
+                    "variation_name": "cli"
+                  }
+                ],
+                "experiment_attributes": {
+                  "agent_version": "<version>",
+                  "arch": "<arch>",
+                  "client_name": "vibe_tui",
+                  "client_version": "<version>",
+                  "custom_system_prompt": false,
+                  "customerId": "oracle-customer",
+                  "entrypoint": "cli",
+                  "harness": "legacy",
+                  "organizationId": "oracle-organization",
+                  "organizationKind": "personal",
+                  "os": "<os>",
+                  "planName": "FREE_TRIAL",
+                  "planType": "api",
+                  "terminal_emulator": "unknown",
+                  "userId": "oracle-user",
+                  "workspaceId": "oracle-workspace"
+                },
+                "experiments": {
+                  "vibe_cli_system_prompt": "cli"
+                },
+                "harness_backend": "legacy",
+                "message_id": null,
+                "model": "mistral-small",
+                "nb_context_chars": "<chars>",
+                "nb_context_messages": 2,
+                "nb_prompt_chars": 27,
+                "os": "<os>",
+                "os_version": "<os-version>",
+                "session_id": "<id-2>",
+                "terminal_emulator": "unknown",
+                "user_plan": "Free API",
+                "version": "<version>"
+              }
+            },
+            {
               "event": "vibe.session_closed",
               "properties": {
                 "agent_entrypoint": "cli",
@@ -14488,7 +14681,7 @@
                 },
                 "first_frame_duration_ms": "<ms>",
                 "harness_backend": "legacy",
-                "harness_selection_source": "default",
+                "harness_selection_source": "flag-legacy",
                 "has_initial_prompt": false,
                 "is_cold_start": false,
                 "is_resuming_session": false,

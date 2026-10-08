@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "reference": {
-    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
   },
   "note": "Captured by scripts/parity/app_server_surface.py from the pinned reference. Names, aliases, required flags, type kinds, enum values and discriminator values only: no reference-authored prose.",
   "methods": [
@@ -251,6 +251,11 @@
       "response": "PluginCatalogReadResponse"
     },
     {
+      "name": "providerAuth/read",
+      "params": "ProviderAuthReadParams",
+      "response": "ProviderAuthReadResponse"
+    },
+    {
       "name": "projectLinks/create",
       "params": "ProjectLinksCreateParams",
       "response": "ProjectLinkMutationResponse"
@@ -336,6 +341,16 @@
       "response": "RuntimeMutationResponse"
     },
     {
+      "name": "session/backgroundProcess/output",
+      "params": "BackgroundProcessOutputParams",
+      "response": "BackgroundProcessOutputResponse"
+    },
+    {
+      "name": "session/backgroundProcess/stop",
+      "params": "BackgroundProcessStopParams",
+      "response": "BackgroundProcessStopResponse"
+    },
+    {
       "name": "session/compact",
       "params": "SessionCompactParams",
       "response": "SessionCompactResponse"
@@ -381,9 +396,19 @@
       "response": "SessionLogReadResponse"
     },
     {
+      "name": "session/markAsSeen",
+      "params": "SessionMarkAsSeenParams",
+      "response": "EmptyResponse"
+    },
+    {
       "name": "session/pin",
       "params": "SessionPinParams",
       "response": "SessionPinResponse"
+    },
+    {
+      "name": "session/archive",
+      "params": "SessionArchiveParams",
+      "response": "SessionArchiveResponse"
     },
     {
       "name": "session/read",
@@ -454,6 +479,21 @@
       "name": "session/turns/list",
       "params": "SessionTurnsListParams",
       "response": "SessionTurnsListResponse"
+    },
+    {
+      "name": "setup/status",
+      "params": "SetupStatusParams",
+      "response": "SetupStatusResponse"
+    },
+    {
+      "name": "setup/store-credential",
+      "params": "SetupStoreCredentialParams",
+      "response": "SetupStoreCredentialResponse"
+    },
+    {
+      "name": "setup/submit-choices",
+      "params": "SetupSubmitChoicesParams",
+      "response": "SetupSubmitChoicesResponse"
     },
     {
       "name": "shell/interrupt",
@@ -661,8 +701,18 @@
       "response": "WorkspaceWorktreePruneResponse"
     },
     {
+      "name": "workspace/git/worktrees/reap",
+      "params": "WorkspaceWorktreeReapParams",
+      "response": "WorkspaceWorktreeReapResponse"
+    },
+    {
+      "name": "workspace/git/worktrees/reap/cancel",
+      "params": "WorkspaceWorktreeReapCancelParams",
+      "response": "EmptyResponse"
+    },
+    {
       "name": "workspace/git/worktrees/remove",
-      "params": "WorkspaceWorktreeRemoveParams",
+      "params": "WorkspaceWorktreeRemoveConfirmParams",
       "response": "WorkspaceWorktreeRemoveResponse"
     },
     {
@@ -958,6 +1008,13 @@
       ]
     },
     {
+      "name": "PathGrantScope",
+      "values": [
+        "exact",
+        "directory_recursive"
+      ]
+    },
+    {
       "name": "PermissionScope",
       "values": [
         "command_pattern",
@@ -1083,7 +1140,8 @@
         "skill",
         "subagent",
         "worktree",
-        "process"
+        "process",
+        "scratchpad"
       ]
     },
     {
@@ -1165,6 +1223,10 @@
         {
           "model": "ProcessEffectDetail",
           "value": "process"
+        },
+        {
+          "model": "ScratchpadEffectDetail",
+          "value": "scratchpad"
         }
       ]
     },
@@ -1383,6 +1445,20 @@
         {
           "model": "SessionMCPStdioServer",
           "value": "stdio"
+        }
+      ]
+    },
+    {
+      "name": "BackgroundProcessOutputResponse",
+      "discriminator": "availability",
+      "variants": [
+        {
+          "model": "BackgroundProcessOutputAvailableResponse",
+          "value": "available"
+        },
+        {
+          "model": "BackgroundProcessOutputUnavailableResponse",
+          "value": "unavailable"
         }
       ]
     }
@@ -2180,6 +2256,7 @@
             "FileWriteEffectDetail",
             "GenericEffectDetail",
             "ProcessEffectDetail",
+            "ScratchpadEffectDetail",
             "ShellEffectDetail",
             "SkillEffectDetail",
             "SubagentEffectDetail",
@@ -2203,6 +2280,18 @@
           "literals": [
             "approval"
           ]
+        },
+        {
+          "name": "path_scope_choices",
+          "alias": "pathScopeChoices",
+          "required": false,
+          "kind": "list",
+          "optional": false,
+          "models": [],
+          "enums": [
+            "PathGrantScope"
+          ],
+          "literals": []
         },
         {
           "name": "reason",
@@ -2278,6 +2367,18 @@
     {
       "name": "ApprovalDecision",
       "fields": [
+        {
+          "name": "path_scope",
+          "alias": "pathScope",
+          "required": false,
+          "kind": "enum",
+          "optional": true,
+          "models": [],
+          "enums": [
+            "PathGrantScope"
+          ],
+          "literals": []
+        },
         {
           "name": "type",
           "alias": "type",
@@ -2370,6 +2471,261 @@
           "models": [],
           "enums": [],
           "literals": []
+        }
+      ]
+    },
+    {
+      "name": "BackgroundProcessOutputAvailableResponse",
+      "fields": [
+        {
+          "name": "availability",
+          "alias": "availability",
+          "required": false,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "available"
+          ]
+        },
+        {
+          "name": "bytes_available",
+          "alias": "bytesAvailable",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "has_more",
+          "alias": "hasMore",
+          "required": true,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "is_final",
+          "alias": "isFinal",
+          "required": true,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "next_cursor",
+          "alias": "nextCursor",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "output_base64",
+          "alias": "outputBase64",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "output_start_cursor",
+          "alias": "outputStartCursor",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "process_id",
+          "alias": "processId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "truncated_before",
+          "alias": "truncatedBefore",
+          "required": true,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "BackgroundProcessOutputParams",
+      "fields": [
+        {
+          "name": "cursor",
+          "alias": "cursor",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "from_end",
+          "alias": "fromEnd",
+          "required": true,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "max_bytes",
+          "alias": "maxBytes",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "process_id",
+          "alias": "processId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "wait_ms",
+          "alias": "waitMs",
+          "required": true,
+          "kind": "int",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "BackgroundProcessOutputUnavailableResponse",
+      "fields": [
+        {
+          "name": "availability",
+          "alias": "availability",
+          "required": false,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "unavailable"
+          ]
+        },
+        {
+          "name": "process_id",
+          "alias": "processId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "BackgroundProcessStopParams",
+      "fields": [
+        {
+          "name": "process_id",
+          "alias": "processId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "BackgroundProcessStopResponse",
+      "fields": [
+        {
+          "name": "exit_code",
+          "alias": "exitCode",
+          "required": false,
+          "kind": "int",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "process_id",
+          "alias": "processId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "status",
+          "alias": "status",
+          "required": true,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "running",
+            "completed",
+            "failed",
+            "stopped",
+            "orphaned"
+          ]
         }
       ]
     },
@@ -2807,6 +3163,31 @@
           "literals": [
             "cancelled"
           ]
+        }
+      ]
+    },
+    {
+      "name": "ChannelFrame",
+      "fields": [
+        {
+          "name": "channel_id",
+          "alias": "channelId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "message",
+          "alias": "message",
+          "required": true,
+          "kind": "dict",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
         }
       ]
     },
@@ -3949,6 +4330,16 @@
           "name": "enable_notifications",
           "alias": "enableNotifications",
           "required": true,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "enable_system_trust_store",
+          "alias": "enableSystemTrustStore",
+          "required": false,
           "kind": "bool",
           "optional": false,
           "models": [],
@@ -6721,11 +7112,31 @@
           "literals": []
         },
         {
+          "name": "file_existed",
+          "alias": "fileExisted",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "file_path",
           "alias": "filePath",
           "required": true,
           "kind": "str",
           "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "previous_content",
+          "alias": "previousContent",
+          "required": false,
+          "kind": "str",
+          "optional": true,
           "models": [],
           "enums": [],
           "literals": []
@@ -8328,6 +8739,29 @@
           "literals": []
         },
         {
+          "name": "image_delivery",
+          "alias": "imageDelivery",
+          "required": false,
+          "kind": "literal",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "native",
+            "resource_link"
+          ]
+        },
+        {
+          "name": "max_context_length",
+          "alias": "maxContextLength",
+          "required": false,
+          "kind": "int",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "name",
           "alias": "name",
           "required": true,
@@ -8352,6 +8786,22 @@
           "alias": "thinking",
           "required": true,
           "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        {
+          "name": "thinking_levels",
+          "alias": "thinkingLevels",
+          "required": false,
+          "kind": "list",
           "optional": false,
           "models": [],
           "enums": [],
@@ -10017,6 +10467,73 @@
       ]
     },
     {
+      "name": "ProviderAuthReadParams",
+      "fields": [
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ProviderAuthReadResponse",
+      "fields": [
+        {
+          "name": "auth",
+          "alias": "auth",
+          "required": true,
+          "kind": "model",
+          "optional": false,
+          "models": [
+            "ProviderAuthView"
+          ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ProviderAuthView",
+      "fields": [
+        {
+          "name": "api_base",
+          "alias": "apiBase",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "model_display_name",
+          "alias": "modelDisplayName",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "provider_name",
+          "alias": "providerName",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
       "name": "ProxySettingsView",
       "fields": [
         {
@@ -10038,6 +10555,67 @@
           "models": [],
           "enums": [],
           "literals": []
+        }
+      ]
+    },
+    {
+      "name": "PublicBackgroundProcess",
+      "fields": [
+        {
+          "name": "command",
+          "alias": "command",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "created_at",
+          "alias": "createdAt",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "exit_code",
+          "alias": "exitCode",
+          "required": false,
+          "kind": "int",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "process_id",
+          "alias": "processId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "status",
+          "alias": "status",
+          "required": true,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "running",
+            "completed",
+            "failed",
+            "stopped",
+            "orphaned"
+          ]
         }
       ]
     },
@@ -10095,6 +10673,16 @@
           "required": true,
           "kind": "str",
           "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "input_entry_id",
+          "alias": "inputEntryId",
+          "required": false,
+          "kind": "str",
+          "optional": true,
           "models": [],
           "enums": [],
           "literals": []
@@ -10219,6 +10807,16 @@
           "required": true,
           "kind": "str",
           "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "input_entry_id",
+          "alias": "inputEntryId",
+          "required": false,
+          "kind": "str",
+          "optional": true,
           "models": [],
           "enums": [],
           "literals": []
@@ -10418,6 +11016,7 @@
             "FileWriteEffectDetail",
             "GenericEffectDetail",
             "ProcessEffectDetail",
+            "ScratchpadEffectDetail",
             "ShellEffectDetail",
             "SkillEffectDetail",
             "SubagentEffectDetail",
@@ -10448,6 +11047,16 @@
           "required": true,
           "kind": "str",
           "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "input_entry_id",
+          "alias": "inputEntryId",
+          "required": false,
+          "kind": "str",
+          "optional": true,
           "models": [],
           "enums": [],
           "literals": []
@@ -10666,6 +11275,16 @@
           "literals": []
         },
         {
+          "name": "input_entry_id",
+          "alias": "inputEntryId",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "related_entry_id",
           "alias": "relatedEntryId",
           "required": false,
@@ -10807,6 +11426,16 @@
           "required": true,
           "kind": "str",
           "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "input_entry_id",
+          "alias": "inputEntryId",
+          "required": false,
+          "kind": "str",
+          "optional": true,
           "models": [],
           "enums": [],
           "literals": []
@@ -10963,6 +11592,16 @@
           "literals": []
         },
         {
+          "name": "input_entry_id",
+          "alias": "inputEntryId",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "related_entry_id",
           "alias": "relatedEntryId",
           "required": false,
@@ -11062,6 +11701,26 @@
           "literals": []
         },
         {
+          "name": "retry_at",
+          "alias": "retryAt",
+          "required": false,
+          "kind": "int",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "retry_attempt",
+          "alias": "retryAttempt",
+          "required": false,
+          "kind": "int",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "turn_id",
           "alias": "turnId",
           "required": true,
@@ -11085,6 +11744,16 @@
           "models": [
             "AgentSummary"
           ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "archived_at",
+          "alias": "archivedAt",
+          "required": false,
+          "kind": "int",
+          "optional": true,
+          "models": [],
           "enums": [],
           "literals": []
         },
@@ -11148,6 +11817,16 @@
           "alias": "id",
           "required": true,
           "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "is_unseen",
+          "alias": "isUnseen",
+          "required": false,
+          "kind": "bool",
           "optional": false,
           "models": [],
           "enums": [],
@@ -11270,6 +11949,18 @@
           "models": [],
           "enums": [],
           "literals": []
+        },
+        {
+          "name": "worktree",
+          "alias": "worktree",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "PublicSessionWorktree"
+          ],
+          "enums": [],
+          "literals": []
         }
       ]
     },
@@ -11284,6 +11975,18 @@
           "optional": false,
           "models": [
             "PublicCallbackEntry"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "background_processes",
+          "alias": "backgroundProcesses",
+          "required": false,
+          "kind": "list",
+          "optional": false,
+          "models": [
+            "PublicBackgroundProcess"
           ],
           "enums": [],
           "literals": []
@@ -11410,6 +12113,51 @@
       ]
     },
     {
+      "name": "PublicSessionWorktree",
+      "fields": [
+        {
+          "name": "branch",
+          "alias": "branch",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "created",
+          "alias": "created",
+          "required": true,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "name",
+          "alias": "name",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "path",
+          "alias": "path",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
       "name": "PublicTurn",
       "fields": [
         {
@@ -11440,6 +12188,16 @@
           "required": true,
           "kind": "str",
           "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "input_entry_id",
+          "alias": "inputEntryId",
+          "required": false,
+          "kind": "str",
+          "optional": true,
           "models": [],
           "enums": [],
           "literals": []
@@ -12764,6 +13522,16 @@
       "name": "ScheduledLoop",
       "fields": [
         {
+          "name": "cron",
+          "alias": "cron",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "id",
           "alias": "id",
           "required": true,
@@ -12776,9 +13544,9 @@
         {
           "name": "interval_seconds",
           "alias": "intervalSeconds",
-          "required": true,
+          "required": false,
           "kind": "int",
-          "optional": false,
+          "optional": true,
           "models": [],
           "enums": [],
           "literals": []
@@ -12823,6 +13591,140 @@
         {
           "name": "loop_id",
           "alias": "loopId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ScratchpadEffectDetail",
+      "fields": [
+        {
+          "name": "display",
+          "alias": "display",
+          "required": true,
+          "kind": "model",
+          "optional": false,
+          "models": [
+            "EffectCallDisplay"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "input",
+          "alias": "input",
+          "required": true,
+          "kind": "model",
+          "optional": false,
+          "models": [
+            "ScratchpadListInput",
+            "ScratchpadReadInput",
+            "ScratchpadWriteInput"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "kind",
+          "alias": "kind",
+          "required": false,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "scratchpad"
+          ]
+        },
+        {
+          "name": "tool_name",
+          "alias": "toolName",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ScratchpadListInput",
+      "fields": [
+        {
+          "name": "action",
+          "alias": "action",
+          "required": false,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "list"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ScratchpadReadInput",
+      "fields": [
+        {
+          "name": "action",
+          "alias": "action",
+          "required": false,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "read"
+          ]
+        },
+        {
+          "name": "path",
+          "alias": "path",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "ScratchpadWriteInput",
+      "fields": [
+        {
+          "name": "action",
+          "alias": "action",
+          "required": false,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "write"
+          ]
+        },
+        {
+          "name": "content",
+          "alias": "content",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "path",
+          "alias": "path",
           "required": true,
           "kind": "str",
           "optional": false,
@@ -12933,6 +13835,46 @@
           "models": [
             "PublicError"
           ],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SessionArchiveParams",
+      "fields": [
+        {
+          "name": "archived",
+          "alias": "archived",
+          "required": true,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SessionArchiveResponse",
+      "fields": [
+        {
+          "name": "archived_at",
+          "alias": "archivedAt",
+          "required": false,
+          "kind": "int",
+          "optional": true,
+          "models": [],
           "enums": [],
           "literals": []
         }
@@ -13895,6 +14837,16 @@
           "literals": []
         },
         {
+          "name": "include_archived",
+          "alias": "includeArchived",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "limit",
           "alias": "limit",
           "required": false,
@@ -14192,6 +15144,21 @@
           "literals": [
             "stdio"
           ]
+        }
+      ]
+    },
+    {
+      "name": "SessionMarkAsSeenParams",
+      "fields": [
+        {
+          "name": "session_id",
+          "alias": "sessionId",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
         }
       ]
     },
@@ -15250,6 +16217,312 @@
           "models": [],
           "enums": [],
           "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SetupProviderView",
+      "fields": [
+        {
+          "name": "api_base",
+          "alias": "apiBase",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "api_key_env_var",
+          "alias": "apiKeyEnvVar",
+          "required": false,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "browser_auth_allow_origin_rewrite",
+          "alias": "browserAuthAllowOriginRewrite",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "browser_auth_api_base_url",
+          "alias": "browserAuthApiBaseUrl",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "browser_auth_base_url",
+          "alias": "browserAuthBaseUrl",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "name",
+          "alias": "name",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SetupStatusParams",
+      "fields": [
+        {
+          "name": "provider",
+          "alias": "provider",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SetupStatusResponse",
+      "fields": [
+        {
+          "name": "active_model",
+          "alias": "activeModel",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "console_base_url",
+          "alias": "consoleBaseUrl",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "enable_system_trust_store",
+          "alias": "enableSystemTrustStore",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "has_api_key",
+          "alias": "hasApiKey",
+          "required": true,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "provider",
+          "alias": "provider",
+          "required": true,
+          "kind": "model",
+          "optional": false,
+          "models": [
+            "SetupProviderView"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "supports_browser_sign_in",
+          "alias": "supportsBrowserSignIn",
+          "required": true,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "theme",
+          "alias": "theme",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "vibe_base_url",
+          "alias": "vibeBaseUrl",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SetupStoreCredentialParams",
+      "fields": [
+        {
+          "name": "api_key",
+          "alias": "apiKey",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "custom_domain",
+          "alias": "customDomain",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "provider",
+          "alias": "provider",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SetupStoreCredentialResponse",
+      "fields": [
+        {
+          "name": "detail",
+          "alias": "detail",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "outcome",
+          "alias": "outcome",
+          "required": true,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "completed",
+            "env_var_error",
+            "save_error"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SetupSubmitChoicesParams",
+      "fields": [
+        {
+          "name": "console_base_url",
+          "alias": "consoleBaseUrl",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "provider",
+          "alias": "provider",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "SetupProviderView"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "theme",
+          "alias": "theme",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "vibe_base_url",
+          "alias": "vibeBaseUrl",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "SetupSubmitChoicesResponse",
+      "fields": [
+        {
+          "name": "failures",
+          "alias": "failures",
+          "required": false,
+          "kind": "list",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "outcome",
+          "alias": "outcome",
+          "required": true,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "completed",
+            "provider_config_error"
+          ]
         }
       ]
     },
@@ -16770,6 +18043,16 @@
     {
       "name": "SubagentEffectDetail",
       "fields": [
+        {
+          "name": "agent_name",
+          "alias": "agentName",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
         {
           "name": "child_session_id",
           "alias": "childSessionId",
@@ -20583,6 +21866,184 @@
       ]
     },
     {
+      "name": "WorkspaceWorktreeReapCancelParams",
+      "fields": [
+        {
+          "name": "cwd",
+          "alias": "cwd",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "request_id",
+          "alias": "requestId",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "requester_id",
+          "alias": "requesterId",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "WorkspaceWorktreeReapParams",
+      "fields": [
+        {
+          "name": "cwd",
+          "alias": "cwd",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "request_id",
+          "alias": "requestId",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "requester_id",
+          "alias": "requesterId",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "WorkspaceWorktreeReapResponse",
+      "fields": [
+        {
+          "name": "branch",
+          "alias": "branch",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "branch_deleted",
+          "alias": "branchDeleted",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "outcome",
+          "alias": "outcome",
+          "required": true,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "removed",
+            "kept_dirty",
+            "kept_in_use",
+            "kept_unmanaged",
+            "kept_error",
+            "not_found",
+            "kept_cancelled"
+          ]
+        },
+        {
+          "name": "reasons",
+          "alias": "reasons",
+          "required": false,
+          "kind": "list",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "root",
+          "alias": "root",
+          "required": false,
+          "kind": "str",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "WorkspaceWorktreeRemoveConfirmParams",
+      "fields": [
+        {
+          "name": "cwd",
+          "alias": "cwd",
+          "required": true,
+          "kind": "str",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "delete_branch",
+          "alias": "deleteBranch",
+          "required": false,
+          "kind": "bool",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "force",
+          "alias": "force",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "inspect",
+          "alias": "inspect",
+          "required": false,
+          "kind": "bool",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
       "name": "WorkspaceWorktreeRemoveParams",
       "fields": [
         {
@@ -20611,11 +22072,31 @@
           "literals": []
         },
         {
+          "name": "branch_created",
+          "alias": "branchCreated",
+          "required": false,
+          "kind": "bool",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "branch_deleted",
           "alias": "branchDeleted",
           "required": false,
           "kind": "bool",
           "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "holders",
+          "alias": "holders",
+          "required": false,
+          "kind": "int",
+          "optional": true,
           "models": [],
           "enums": [],
           "literals": []
@@ -20699,6 +22180,18 @@
           ]
         },
         {
+          "name": "progress",
+          "alias": "progress",
+          "required": false,
+          "kind": "model",
+          "optional": true,
+          "models": [
+            "WorktreeEffectProgress"
+          ],
+          "enums": [],
+          "literals": []
+        },
+        {
           "name": "tool_name",
           "alias": "toolName",
           "required": true,
@@ -20739,6 +22232,45 @@
           "required": true,
           "kind": "str",
           "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": []
+        }
+      ]
+    },
+    {
+      "name": "WorktreeEffectProgress",
+      "fields": [
+        {
+          "name": "completed_files",
+          "alias": "completedFiles",
+          "required": false,
+          "kind": "int",
+          "optional": true,
+          "models": [],
+          "enums": [],
+          "literals": []
+        },
+        {
+          "name": "phase",
+          "alias": "phase",
+          "required": true,
+          "kind": "literal",
+          "optional": false,
+          "models": [],
+          "enums": [],
+          "literals": [
+            "naming",
+            "fetching",
+            "checking_out"
+          ]
+        },
+        {
+          "name": "total_files",
+          "alias": "totalFiles",
+          "required": false,
+          "kind": "int",
+          "optional": true,
           "models": [],
           "enums": [],
           "literals": []

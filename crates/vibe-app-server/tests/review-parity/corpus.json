@@ -1,7 +1,7 @@
 {
   "quietSeconds": 0.5,
   "reference": {
-    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
   },
   "scenarios": [
     {
@@ -11264,6 +11264,7 @@
               },
               "state": {
                 "activeCallbacks": [],
+                "backgroundProcesses": [],
                 "childSessions": [],
                 "eventId": "<nonzero>",
                 "format": "vibe.public-session-state/v1",
@@ -11278,6 +11279,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-2>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-1>",
@@ -11315,6 +11317,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-4>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -11332,7 +11335,9 @@
                       "durationMs": "<duration>",
                       "output": {
                         "content": "made in turn one\n",
-                        "filePath": "<ws>/created.txt"
+                        "fileExisted": false,
+                        "filePath": "<ws>/created.txt",
+                        "previousContent": null
                       },
                       "outputText": "",
                       "status": "completed"
@@ -11375,6 +11380,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-1>",
                     "state": {
@@ -11420,6 +11426,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-1>",
@@ -11438,6 +11445,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-8>",
+                    "inputEntryId": null,
                     "kind": "rewind",
                     "message": {
                       "prose": 20,
@@ -11467,12 +11475,14 @@
                     "name": "auto-approve",
                     "safety": "yolo"
                   },
+                  "archivedAt": null,
                   "bumpedAt": "<time>",
                   "contextUsage": null,
                   "createdAt": "<time>",
                   "cwd": "<ws>",
                   "harness": null,
                   "id": "<id-1>",
+                  "isUnseen": false,
                   "model": "mistral-medium-3.5",
                   "parentSessionId": null,
                   "pinnedAt": null,
@@ -11491,7 +11501,8 @@
                   "updatedAt": "<time>",
                   "workspaceRoots": [
                     "<ws>"
-                  ]
+                  ],
+                  "worktree": null
                 },
                 "turnQueue": {
                   "items": [],
@@ -12060,6 +12071,7 @@
               },
               "state": {
                 "activeCallbacks": [],
+                "backgroundProcesses": [],
                 "childSessions": [],
                 "eventId": 0,
                 "format": "vibe.public-session-state/v1",
@@ -12074,6 +12086,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-3>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "user",
                     "sessionId": "<id-2>",
@@ -12111,6 +12124,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-5>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-2>",
                     "state": {
@@ -12128,7 +12142,9 @@
                       "durationMs": "<duration>",
                       "output": {
                         "content": "made in turn one\n",
-                        "filePath": "<ws>/created.txt"
+                        "fileExisted": false,
+                        "filePath": "<ws>/created.txt",
+                        "previousContent": null
                       },
                       "outputText": "",
                       "status": "completed"
@@ -12171,6 +12187,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-6>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "sessionId": "<id-2>",
                     "state": {
@@ -12216,6 +12233,7 @@
                     "createdAt": "<time>",
                     "generationStatus": "completed",
                     "id": "<id-7>",
+                    "inputEntryId": null,
                     "relatedEntryId": null,
                     "role": "assistant",
                     "sessionId": "<id-2>",
@@ -12234,6 +12252,7 @@
                     },
                     "generationStatus": "completed",
                     "id": "<id-9>",
+                    "inputEntryId": null,
                     "kind": "rewind",
                     "message": {
                       "prose": 20,
@@ -12263,12 +12282,14 @@
                     "name": "auto-approve",
                     "safety": "yolo"
                   },
+                  "archivedAt": null,
                   "bumpedAt": null,
                   "contextUsage": null,
                   "createdAt": "<time>",
                   "cwd": "<ws>",
                   "harness": null,
                   "id": "<id-2>",
+                  "isUnseen": false,
                   "model": "mistral-medium-3.5",
                   "parentSessionId": "<id-1>",
                   "pinnedAt": null,
@@ -12287,7 +12308,8 @@
                   "updatedAt": "<time>",
                   "workspaceRoots": [
                     "<ws>"
-                  ]
+                  ],
+                  "worktree": null
                 },
                 "turnQueue": {
                   "items": [],

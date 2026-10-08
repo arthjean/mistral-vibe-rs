@@ -26,9 +26,11 @@
 //! always prompted, but some entries are permissive in what a session grant
 //! covers: where the reference records the literal command text, this port
 //! records an arity pattern such as `git reset *` or `python3 *`, so one
-//! approval here releases more later calls than it does upstream. Every ledger
-//! is checked in both directions: an entry that stops diverging fails the suite
-//! rather than rotting in the list.
+//! approval here releases more later calls than it does upstream. A
+//! requirement for a path outside the workspace that names a different subject
+//! belongs in [`OUTSIDE_PATH_DIVERGENCES`], which admits its two patterns and
+//! its label together. Every ledger is checked in both directions: an entry
+//! that stops diverging fails the suite rather than rotting in the list.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -109,6 +111,95 @@ const REQUIREMENT_DIVERGENCES: &[(&str, &str, &str)] = &[
     ("npm run $TASK", "/requirements/0/label", UNSCOPED_LABEL),
     ("cargo $CMD", "/requirements/0/label", UNSCOPED_LABEL),
 ];
+
+/// Why an outside-workspace requirement names the directory here and the path
+/// upstream.
+const OUTSIDE_EXACT_PATH: &str = "since v2.25.8 a shell call reaching outside the workspace \
+     is asked about per resolved path rather than per parent directory: `_collect_outside_paths` \
+     keeps every resolved operand and the managed working directory as it is \
+     (`vibe/core/tools/builtins/bash.py:285-333` at 376f6a33413a, \
+     `experimental_bash.py:354-390`), and `_build_outside_directory_permission` \
+     (`bash.py:527-535`, `experimental_bash.py:1485-1493`) names that path as the invocation \
+     pattern and in the label, with the exact-path grant `path_grant_pattern` encodes \
+     (`vibe/permissions.py:73-75`) as the session pattern. This port still raises a \
+     `<directory>/*` glob over the directory holding the path (`outside_directory` in \
+     `crates/vibe-core/src/policy.rs`, fed by `escaping_glob` and `ShellPolicyContext::managed` \
+     in `crates/vibe-core/src/shell.rs`), so both sides ask but a session approval here covers \
+     every sibling of the path the reference approves alone";
+
+/// Requirements for a path outside the workspace whose subject differs, as
+/// `(case, requirement index)`. Each entry admits that requirement's
+/// `invocationPattern`, `sessionPattern` and `label` together, and fails when
+/// any of the three stops diverging: [`OUTSIDE_EXACT_PATH`] is the one cause.
+const OUTSIDE_PATH_DIVERGENCES: &[(&str, usize)] = &[
+    ("cat <outside>/secret.txt $X", 1),
+    ("cd -- <outside> && git status", 0),
+    ("cd <outside> && git status", 0),
+    ("diff -X /etc/hosts a.txt b.txt", 0),
+    ("git diff --no-index /etc/passwd /dev/null", 0),
+    ("git diff --no-index /etc/passwd /dev/null", 1),
+    ("grep -f /etc/hosts notes.txt", 0),
+    ("sort --random-source=/etc/hosts in.txt", 0),
+    ("plain: cd <outside> && git status", 0),
+    ("pager: cd <outside> && git status", 0),
+    ("pager-off: cd <outside> && git status", 0),
+    ("include: cd <outside> && git status", 0),
+    ("log-pager: cd <outside> && git status", 0),
+    ("fsmonitor: cd <outside> && git status", 0),
+    ("diff-driver: cd <outside> && git status", 0),
+    ("gpg: cd <outside> && git status", 0),
+    (
+        "cat ../elsewhere/secret.txt (cwd Some(\"<workdir>\"), shell None, env [])",
+        0,
+    ),
+    (
+        "cat nested/secret.txt (cwd Some(\"<outside>\"), shell None, env [])",
+        0,
+    ),
+    (
+        "cat nested/secret.txt (cwd Some(\"<outside>\"), shell None, env [])",
+        1,
+    ),
+    (
+        "cat secret.txt (cwd Some(\"<outside>\"), shell None, env [])",
+        0,
+    ),
+    (
+        "git status (cwd Some(\"<outside>\"), shell None, env [])",
+        0,
+    ),
+    ("pwd (cwd Some(\"<outside>\"), shell None, env [])", 0),
+    (
+        "sudo ls (cwd Some(\"<outside>\"), shell None, env [\"A\"])",
+        1,
+    ),
+];
+
+/// Every requirement field the two requirement ledgers admit, as
+/// `(case, pointer)`.
+fn requirement_ledger() -> BTreeSet<(String, String)> {
+    REQUIREMENT_DIVERGENCES
+        .iter()
+        .map(|(command, pointer, _)| ((*command).to_owned(), (*pointer).to_owned()))
+        .chain(OUTSIDE_PATH_DIVERGENCES.iter().flat_map(|(case, index)| {
+            ["invocationPattern", "sessionPattern", "label"]
+                .map(|field| ((*case).to_owned(), format!("/requirements/{index}/{field}")))
+        }))
+        .collect()
+}
+
+/// The key a repository case is replayed and ledgered under.
+fn repository_key(case: &RepositoryCase) -> String {
+    format!("{}: {}", case.fixture, case.command)
+}
+
+/// The key a managed case is replayed and ledgered under.
+fn managed_key(case: &ManagedCase) -> String {
+    format!(
+        "{} (cwd {:?}, shell {:?}, env {:?})",
+        case.command, case.cwd, case.shell, case.env
+    )
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -604,6 +695,9 @@ fn every_escaping_operand_matches_the_reference() {
 /// What replaying one family of resolutions found.
 #[derive(Default)]
 struct Replay {
+    /// Every case key compared, which is what scopes a ledger entry's stale
+    /// direction to the family that replays it.
+    compared: BTreeSet<String>,
     conforming: usize,
     /// Cases resolving to `ask` here where the reference grants.
     stricter: BTreeSet<String>,
@@ -623,6 +717,7 @@ impl Replay {
         lists: &ShellCommandLists,
         workspace: &OperandWorkspace,
     ) {
+        self.compared.insert(key.to_owned());
         // The reference answering `None` defers to the configured permission,
         // which is what this port's analysis returns in the same place.
         let expected =
@@ -725,10 +820,7 @@ impl Replay {
             unlisted.is_empty(),
             "{family}: commands diverging from the reference without a ledger entry: {unlisted:?}"
         );
-        let requirement_ledger = REQUIREMENT_DIVERGENCES
-            .iter()
-            .map(|(command, pointer, _)| ((*command).to_owned(), (*pointer).to_owned()))
-            .collect::<BTreeSet<_>>();
+        let requirement_ledger = requirement_ledger();
         let unlisted = self
             .requirement_diffs
             .difference(&requirement_ledger)
@@ -737,6 +829,15 @@ impl Replay {
         assert!(
             unlisted.is_empty(),
             "{family}: requirements diverging from the reference without a ledger entry: {unlisted:?}"
+        );
+        let stale = requirement_ledger
+            .iter()
+            .filter(|(key, _)| self.compared.contains(key))
+            .filter(|entry| !self.requirement_diffs.contains(*entry))
+            .collect::<Vec<_>>();
+        assert!(
+            stale.is_empty(),
+            "{family}: requirement ledger entries that no longer diverge; remove them: {stale:?}"
         );
         eprintln!(
             "shell policy: {family} {}/{total} conforming, {} ledgered, {} requirement fields ledgered",
@@ -751,6 +852,38 @@ impl Replay {
             self.untolerated
         );
     }
+}
+
+/// Every requirement ledger entry names a case one family replays, so the
+/// per-family stale check in [`Replay::finish`] reads every entry somewhere.
+#[test]
+fn every_requirement_ledger_entry_names_a_corpus_case() {
+    let corpus = corpus();
+    let keys = corpus
+        .resolutions
+        .iter()
+        .map(|case| case.command.clone())
+        .chain(corpus.repository_resolutions.iter().map(repository_key))
+        .chain(corpus.managed_resolutions.iter().map(managed_key))
+        .collect::<BTreeSet<_>>();
+    let orphans = requirement_ledger()
+        .into_iter()
+        .filter(|(key, _)| !keys.contains(key))
+        .collect::<Vec<_>>();
+    assert!(
+        orphans.is_empty(),
+        "requirement ledger entries naming no corpus case: {orphans:?}"
+    );
+    assert!(
+        OUTSIDE_EXACT_PATH.contains(&crate::parity::REFERENCE_COMMIT[..12]),
+        "the outside-path ledger does not cite the pin it was measured at"
+    );
+    eprintln!(
+        "shell policy: {} requirement fields ledgered, {} of them over {} outside paths",
+        requirement_ledger().len(),
+        OUTSIDE_PATH_DIVERGENCES.len() * 3,
+        OUTSIDE_PATH_DIVERGENCES.len()
+    );
 }
 
 /// US-110: the permission a command resolves to is the reference's, and every
@@ -779,8 +912,9 @@ fn every_resolution_matches_the_reference() {
             &workspace,
         );
     }
-    // Every ledger entry is a resolution case, so the stale direction is read
-    // against this family alone.
+    // Every stricter entry is a resolution case, so its stale direction is read
+    // against this family alone; the requirement ledgers are read per family in
+    // `Replay::finish`.
     let stale = STRICTER_THAN_THE_REFERENCE
         .iter()
         .filter(|command| !replay.stricter.contains(**command))
@@ -788,15 +922,6 @@ fn every_resolution_matches_the_reference() {
     assert!(
         stale.is_empty(),
         "ledger entries that no longer diverge; remove them: {stale:?}"
-    );
-    let stale = REQUIREMENT_DIVERGENCES
-        .iter()
-        .map(|(command, pointer, _)| ((*command).to_owned(), (*pointer).to_owned()))
-        .filter(|entry| !replay.requirement_diffs.contains(entry))
-        .collect::<Vec<_>>();
-    assert!(
-        stale.is_empty(),
-        "requirement ledger entries that no longer diverge; remove them: {stale:?}"
     );
     replay.finish("resolutions", corpus.counts.resolution_cases);
 }
@@ -826,7 +951,7 @@ fn every_repository_resolution_matches_the_reference() {
             let command = workspace.expand(&case.command);
             let analysis = analyze_shell(ShellFlavor::Posix, &command, &context, &lists);
             replay.compare(
-                &format!("{fixture}: {}", case.command),
+                &repository_key(case),
                 &analysis,
                 case.permission.as_deref(),
                 &case.requirements,
@@ -868,10 +993,7 @@ fn every_managed_resolution_matches_the_reference() {
         );
         let analysis = analyze_shell(ShellFlavor::Posix, &case.command, &context, &lists);
         replay.compare(
-            &format!(
-                "{} (cwd {:?}, shell {:?}, env {:?})",
-                case.command, case.cwd, case.shell, case.env
-            ),
+            &managed_key(case),
             &analysis,
             case.permission.as_deref(),
             &case.requirements,

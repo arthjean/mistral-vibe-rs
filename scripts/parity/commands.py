@@ -975,6 +975,8 @@ class _FakeAppServer:
         self.history = fixture.get("history", [])
         self.turn_active = fixture.get("turnActive", False)
         self.resources = _FakeResources(app, fixture)
+        # Since v2.26.0 `/branch` reads which backend answers the session.
+        self.state = _ns(session=_ns(harness=fixture.get("harness", "legacy")))
 
     async def clear_history(self) -> None:
         _fail_if_requested(self._fixture.get("clearHistory", {}))
@@ -1086,20 +1088,26 @@ class _FakeMcp:
         self.state = None
 
     async def read(self) -> Any:
-        from vibe.app_server.models import MCPSourceKind
+        from vibe.app_server.models import MCPSourceKind, MCPState
 
         mcp = self._fixture.get("mcp", {})
+        # A source shows its alias where no display name is set
+        # (`MCPSourceSummary._default_display_name`).
         sources = [
-            _ns(name=name, kind=MCPSourceKind.SERVER) for name in mcp.get("sources", [])
+            _ns(name=name, display_name=name, kind=MCPSourceKind.SERVER)
+            for name in mcp.get("sources", [])
         ] + [
-            _ns(name=name, kind=MCPSourceKind.CONNECTOR)
+            _ns(name=name, display_name=name, kind=MCPSourceKind.CONNECTOR)
             for name in mcp.get("connectors", [])
         ]
-        return _ns(
+        state = _ns(
             sources=sources,
             connector_error=mcp.get("connectorError"),
             statuses=dict(mcp.get("statuses", {})),
         )
+        # Since v2.26.0 `/mcp <name>` resolves through the state's own lookup.
+        state.resolve_source = lambda query: MCPState.resolve_source(state, query)
+        return state
 
     async def add(self, **keywords: Any) -> Any:
         added = self._fixture.get("mcpAdd", {})

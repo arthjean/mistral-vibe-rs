@@ -8,7 +8,8 @@
 //! the environment and agent profile through their own layers, the dotenv file
 //! through `load_dotenv_values`, and the sign-in URLs through the gateway's
 //! validator. This module replays every case against the port and fails on any
-//! difference: no divergence is kept in these families.
+//! difference the stack ledger below does not name, and on an entry whose
+//! difference stopped reproducing.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -21,6 +22,31 @@ use crate::parity::REFERENCE_COMMIT;
 const CORPUS_RELATIVE: &str = "tests/config-surface/corpus.json";
 /// What the capture writes for the per-scenario temporary root.
 const ROOT_PLACEHOLDER: &str = "{root}";
+
+/// v2.26.0 turned background session titles on by default.
+const GENERATE_TITLES: &str = "v2.26.0 turns background session titles on by default (models.py:112); \
+     registry.rs ships `generate_titles = false`";
+
+/// Pointers at which a stack or write case diverges, as `(case, pointer,
+/// reason)`. A comparison descends into tables, so an entry names the one key
+/// that moved. Every entry dates from the v2.26.0 re-pin (`376f6a3`).
+const STACK_DIVERGENCES: &[(&str, &str, &str)] = &[
+    (
+        "stack-trusted-project-inherits-the-user-file",
+        "/session_logging/generate_titles",
+        GENERATE_TITLES,
+    ),
+    (
+        "write-keeps-the-file-order-and-appends-new-keys",
+        "/session_logging/generate_titles",
+        GENERATE_TITLES,
+    ),
+    (
+        "write-keeps-the-file-order-and-appends-new-keys",
+        "after the writes: /session_logging/generate_titles",
+        GENERATE_TITLES,
+    ),
+];
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -168,6 +194,38 @@ fn pruned(value: &JsonValue) -> Option<JsonValue> {
     }
 }
 
+/// Every pointer under `pointer` at which two values disagree, as
+/// `(pointer, reference, port)`. Tables are walked key by key, and a key one
+/// side lacks is one difference rendered `absent` on that side; any other pair
+/// is one difference.
+fn differences(
+    pointer: &str,
+    reference: &JsonValue,
+    port: &JsonValue,
+    found: &mut Vec<(String, String, String)>,
+) {
+    let rendered =
+        |value: Option<&JsonValue>| value.map_or_else(|| "absent".to_owned(), JsonValue::to_string);
+    match (reference, port) {
+        (JsonValue::Object(reference), JsonValue::Object(port)) => {
+            let keys = reference.keys().chain(port.keys()).collect::<BTreeSet<_>>();
+            for key in keys {
+                let nested = format!("{pointer}/{key}");
+                match (reference.get(key), port.get(key)) {
+                    (Some(reference), Some(port)) => differences(&nested, reference, port, found),
+                    (reference, port) => {
+                        found.push((nested, rendered(reference), rendered(port)));
+                    }
+                }
+            }
+        }
+        (reference, port) if reference == port => {}
+        (reference, port) => {
+            found.push((pointer.to_owned(), reference.to_string(), port.to_string()))
+        }
+    }
+}
+
 /// The name the reference gives the layer a write without a target lands in.
 fn layer_name(target: ConfigTarget) -> &'static str {
     match target {
@@ -199,7 +257,7 @@ fn config_files(root: &Path) -> BTreeMap<String, String> {
     files
 }
 
-fn replay_stack(case: &StackCase, failures: &mut Vec<String>) {
+fn replay_stack(case: &StackCase, observed: &mut Vec<(String, String, String, String)>) {
     let temporary = tempfile::tempdir().expect("temporary root");
     let root = temporary.path().canonicalize().expect("canonical root");
     let home = root.join(".vibe");
@@ -228,13 +286,13 @@ fn replay_stack(case: &StackCase, failures: &mut Vec<String>) {
     .with_project_trusted(store.is_trusted(&cwd) == Some(true));
 
     let mut check = |what: &str, reference: &JsonValue, port: &JsonValue| {
-        let reference = resolve_root(reference, &root);
-        if &reference != port {
-            failures.push(format!(
-                "{}: {what}: reference {reference}, port {port}",
-                case.name
-            ));
-        }
+        let mut found = Vec::new();
+        differences(what, &resolve_root(reference, &root), port, &mut found);
+        observed.extend(
+            found
+                .into_iter()
+                .map(|(pointer, reference, port)| (case.name.clone(), pointer, reference, port)),
+        );
     };
     let snapshot = config
         .load()
@@ -278,7 +336,7 @@ fn replay_stack(case: &StackCase, failures: &mut Vec<String>) {
     let after = json(&config.load().expect("the stack reloads").effective);
     for (key, expected) in case.after_writes.iter().flatten() {
         let found = after.get(key).cloned().unwrap_or(JsonValue::Null);
-        check(&format!("/{key} after the writes"), expected, &found);
+        check(&format!("after the writes: /{key}"), expected, &found);
     }
 }
 
@@ -292,14 +350,46 @@ fn every_layer_stack_composes_and_writes_as_the_reference_does() {
         .chain(&corpus.stack.writes)
         .collect::<Vec<_>>();
     assert!(!corpus.stack.writes.is_empty());
-    let mut failures = Vec::new();
+    let mut observed = Vec::new();
     for case in &cases {
-        replay_stack(case, &mut failures);
+        replay_stack(case, &mut observed);
     }
-    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    let unrecorded = observed
+        .iter()
+        .filter(|(case, pointer, ..)| {
+            !STACK_DIVERGENCES
+                .iter()
+                .any(|(name, entry, _)| name == case && entry == pointer)
+        })
+        .map(|(case, pointer, reference, port)| {
+            format!("{case}: {pointer}: reference {reference}, port {port}")
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        unrecorded.is_empty(),
+        "the layer stacks diverge where no ledger entry records it:\n{}",
+        unrecorded.join("\n")
+    );
+    let stale = STACK_DIVERGENCES
+        .iter()
+        .filter(|(name, entry, _)| {
+            !observed
+                .iter()
+                .any(|(case, pointer, ..)| case == name && pointer == entry)
+        })
+        .map(|(name, entry, _)| format!("{name}: {entry}"))
+        .collect::<Vec<_>>();
+    assert!(
+        stale.is_empty(),
+        "the layer stacks: these recorded divergences no longer reproduce: {stale:?}"
+    );
+    let diverging = cases
+        .iter()
+        .filter(|case| observed.iter().any(|(name, ..)| name == &case.name))
+        .count();
     println!(
-        "config surface: {}/{} layer stacks conform, {} with writes",
-        cases.len(),
+        "config surface: {}/{} layer stacks conform ({diverging} ledgered), {} with writes",
+        cases.len() - diverging,
         cases.len(),
         corpus.stack.writes.len()
     );

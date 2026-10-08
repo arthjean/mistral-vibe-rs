@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "reference": {
-    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
   },
   "note": "Experiments startup corpus: what a session the pinned reference's app server builds configures before and after its rollout lookup, for each gate document, each eval cache seed and a new or a resumed session. The cache seed is recorded by its age against the scenario's clock, the lookup is answered one call before the connection, and the only key derivative the capture reads is the 32-character API-key digest. Regenerate with scripts/parity/experiments.py --corpus when the pinned reference moves.",
   "startup": [
@@ -1422,34 +1422,7 @@
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,
-      "cachedAfterLookup": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "lean",
-            "rules": []
-          },
-          "vibe_cli_smart_approve": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true,
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_smart_approve"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "inExperiment": true
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      }
+      "cachedAfterLookup": null
     },
     {
       "id": "telemetry-disabled/cached/resumed",
@@ -1536,34 +1509,7 @@
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,
-      "cachedAfterLookup": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "lean",
-            "rules": []
-          },
-          "vibe_cli_smart_approve": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true,
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_smart_approve"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "inExperiment": true
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      }
+      "cachedAfterLookup": null
     },
     {
       "id": "telemetry-disabled/cached-past-the-bound/new",
@@ -1650,34 +1596,7 @@
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,
-      "cachedAfterLookup": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "lean",
-            "rules": []
-          },
-          "vibe_cli_smart_approve": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true,
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_smart_approve"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "inExperiment": true
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      }
+      "cachedAfterLookup": null
     },
     {
       "id": "telemetry-disabled/cached-past-the-bound/resumed",
@@ -1764,34 +1683,7 @@
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,
-      "cachedAfterLookup": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "lean",
-            "rules": []
-          },
-          "vibe_cli_smart_approve": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true,
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_smart_approve"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "inExperiment": true
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      }
+      "cachedAfterLookup": null
     },
     {
       "id": "telemetry-disabled/cached-at-the-baseline/new",
@@ -1862,18 +1754,7 @@
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,
-      "cachedAfterLookup": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": []
-          },
-          "vibe_cli_smart_approve": {
-            "defaultValue": false,
-            "rules": []
-          }
-        }
-      }
+      "cachedAfterLookup": null
     },
     {
       "id": "telemetry-disabled/cached-at-the-baseline/resumed",
@@ -1944,18 +1825,7 @@
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,
-      "cachedAfterLookup": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": []
-          },
-          "vibe_cli_smart_approve": {
-            "defaultValue": false,
-            "rules": []
-          }
-        }
-      }
+      "cachedAfterLookup": null
     },
     {
       "id": "telemetry-disabled/cached-for-another-key/new",
@@ -2328,34 +2198,7 @@
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,
-      "cachedAfterLookup": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "lean",
-            "rules": []
-          },
-          "vibe_cli_smart_approve": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true,
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_smart_approve"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "inExperiment": true
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      }
+      "cachedAfterLookup": null
     },
     {
       "id": "experiments-disabled/cached/resumed",
@@ -2442,34 +2285,7 @@
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,
-      "cachedAfterLookup": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "lean",
-            "rules": []
-          },
-          "vibe_cli_smart_approve": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true,
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_smart_approve"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "inExperiment": true
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      }
+      "cachedAfterLookup": null
     },
     {
       "id": "experiments-disabled/cached-past-the-bound/new",
@@ -2556,34 +2372,7 @@
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,
-      "cachedAfterLookup": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "lean",
-            "rules": []
-          },
-          "vibe_cli_smart_approve": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true,
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_smart_approve"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "inExperiment": true
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      }
+      "cachedAfterLookup": null
     },
     {
       "id": "experiments-disabled/cached-past-the-bound/resumed",
@@ -2670,34 +2459,7 @@
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,
-      "cachedAfterLookup": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "lean",
-            "rules": []
-          },
-          "vibe_cli_smart_approve": {
-            "defaultValue": false,
-            "rules": [
-              {
-                "force": true,
-                "tracks": [
-                  {
-                    "experiment": {
-                      "key": "vibe_cli_smart_approve"
-                    },
-                    "result": {
-                      "key": "1",
-                      "variationId": 1,
-                      "inExperiment": true
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      }
+      "cachedAfterLookup": null
     },
     {
       "id": "experiments-disabled/cached-at-the-baseline/new",
@@ -2768,18 +2530,7 @@
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,
-      "cachedAfterLookup": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": []
-          },
-          "vibe_cli_smart_approve": {
-            "defaultValue": false,
-            "rules": []
-          }
-        }
-      }
+      "cachedAfterLookup": null
     },
     {
       "id": "experiments-disabled/cached-at-the-baseline/resumed",
@@ -2850,18 +2601,7 @@
         "experimental_enable_registry_skills": false
       },
       "awaitingAfterLookup": false,
-      "cachedAfterLookup": {
-        "features": {
-          "vibe_cli_system_prompt": {
-            "defaultValue": "cli",
-            "rules": []
-          },
-          "vibe_cli_smart_approve": {
-            "defaultValue": false,
-            "rules": []
-          }
-        }
-      }
+      "cachedAfterLookup": null
     },
     {
       "id": "experiments-disabled/cached-for-another-key/new",

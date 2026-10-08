@@ -59,6 +59,7 @@
   "projectLinks/resolveRoot": "ProjectLinksResolveRootParams",
   "projectLinks/save": "ProjectLinksSaveParams",
   "projectLinks/unlink": "ProjectLinksUnlinkParams",
+  "providerAuth/read": "ProviderAuthReadParams",
   "review/approve": "ReviewMutationParams",
   "review/baseline": "ReviewBaselineParams",
   "review/hunks": "ReviewHunksParams",
@@ -67,6 +68,9 @@
   "review/turnDiff": "ReviewTurnDiffParams",
   "runtime/read": "RuntimeReadParams",
   "session/agent/update": "AgentSwitchParams",
+  "session/archive": "SessionArchiveParams",
+  "session/backgroundProcess/output": "BackgroundProcessOutputParams",
+  "session/backgroundProcess/stop": "BackgroundProcessStopParams",
   "session/compact": "SessionCompactParams",
   "session/context/inject": "ContextInjectParams",
   "session/continue": "SessionContinueParams",
@@ -77,6 +81,7 @@
   "session/history/list": "SessionHistoryListParams",
   "session/list": "SessionListParams",
   "session/log/read": "SessionLogReadParams",
+  "session/markAsSeen": "SessionMarkAsSeenParams",
   "session/pin": "SessionPinParams",
   "session/read": "SessionReadParams",
   "session/ready/read": "SessionReadyReadParams",
@@ -98,6 +103,9 @@
   "session/turn/queue/resume": "TurnQueueResumeParams",
   "session/turn/queue/steer": "TurnQueueSteerParams",
   "session/turns/list": "SessionTurnsListParams",
+  "setup/status": "SetupStatusParams",
+  "setup/store-credential": "SetupStoreCredentialParams",
+  "setup/submit-choices": "SetupSubmitChoicesParams",
   "shell/interrupt": null,
   "shell/run": "ShellRunParams",
   "skills/catalog": "SkillsCatalogParams",
@@ -133,7 +141,9 @@
   "workspace/git/worktrees/limit/update": "WorkspaceWorktreeLimitUpdateParams",
   "workspace/git/worktrees/list": "WorkspaceWorktreeListParams",
   "workspace/git/worktrees/prune": "WorkspaceWorktreePruneParams",
-  "workspace/git/worktrees/remove": "WorkspaceWorktreeRemoveParams",
+  "workspace/git/worktrees/reap": "WorkspaceWorktreeReapParams",
+  "workspace/git/worktrees/reap/cancel": "WorkspaceWorktreeReapCancelParams",
+  "workspace/git/worktrees/remove": "WorkspaceWorktreeRemoveConfirmParams",
   "workspace/prompt/prepare": "WorkspacePromptPrepareParams",
   "workspace/trust/decision": "WorkspaceTrustDecisionParams",
   "workspace/trust/status": "WorkspaceTrustStatusParams",
@@ -151,7 +161,10 @@
   "SessionSettingsUpdateParams.require_update",
   "SessionShellCommandParams.validate_action",
   "UserDisplayContent.strip_nonempty",
-  "_TurnQueueInputParams.validate_entries"
+  "WorkspaceWorktreeReapCancelParams.validate_request_identity",
+  "WorkspaceWorktreeReapParams.validate_request_identity",
+  "_TurnQueueInputParams.validate_entries",
+  "_infer_resource_kind"
  ],
  "defs": {
   "AccountReadParams": {
@@ -610,6 +623,25 @@
       ],
       "sub_type": "str"
      }
+    },
+    {
+     "name": "path_scope",
+     "alias": "pathScope",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "enum",
+        "name": "PathGrantScope",
+        "values": [
+         "exact",
+         "directory_recursive"
+        ],
+        "sub_type": "str"
+       }
+      }
+     }
     }
    ],
    "extra": "forbid",
@@ -643,6 +675,86 @@
         "type": "str"
        }
       }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "BackgroundProcessOutputParams": {
+   "type": "model",
+   "name": "BackgroundProcessOutputParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "process_id",
+     "alias": "processId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "from_end",
+     "alias": "fromEnd",
+     "schema": {
+      "type": "bool"
+     }
+    },
+    {
+     "name": "cursor",
+     "alias": "cursor",
+     "schema": {
+      "type": "int",
+      "strict": true,
+      "ge": 0
+     }
+    },
+    {
+     "name": "wait_ms",
+     "alias": "waitMs",
+     "schema": {
+      "type": "int",
+      "strict": true,
+      "ge": 0,
+      "le": 5000
+     }
+    },
+    {
+     "name": "max_bytes",
+     "alias": "maxBytes",
+     "schema": {
+      "type": "int",
+      "strict": true,
+      "ge": 1,
+      "le": 64000
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "BackgroundProcessStopParams": {
+   "type": "model",
+   "name": "BackgroundProcessStopParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "process_id",
+     "alias": "processId",
+     "schema": {
+      "type": "str"
      }
     }
    ],
@@ -2732,6 +2844,21 @@
    "extra": "forbid",
    "byName": true
   },
+  "ProviderAuthReadParams": {
+   "type": "model",
+   "name": "ProviderAuthReadParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
   "ResourceContentBlock": {
    "type": "model",
    "name": "ResourceContentBlock",
@@ -2753,33 +2880,37 @@
      "name": "resource",
      "alias": "resource",
      "schema": {
-      "type": "tagged-union",
-      "discriminator": "kind",
-      "choices": [
-       [
-        "text",
-        {
-         "type": "ref",
-         "name": "UserTextResource"
-        }
+      "type": "function-before",
+      "function": "_infer_resource_kind",
+      "schema": {
+       "type": "tagged-union",
+       "discriminator": "kind",
+       "choices": [
+        [
+         "text",
+         {
+          "type": "ref",
+          "name": "UserTextResource"
+         }
+        ],
+        [
+         "blob",
+         {
+          "type": "ref",
+          "name": "UserBlobResource"
+         }
+        ],
+        [
+         "link",
+         {
+          "type": "ref",
+          "name": "UserResourceLink"
+         }
+        ]
        ],
-       [
-        "blob",
-        {
-         "type": "ref",
-         "name": "UserBlobResource"
-        }
-       ],
-       [
-        "link",
-        {
-         "type": "ref",
-         "name": "UserResourceLink"
-        }
-       ]
-      ],
-      "strict": false,
-      "from_attributes": true
+       "strict": false,
+       "from_attributes": true
+      }
      }
     }
    ],
@@ -3355,6 +3486,28 @@
    "extra": "forbid",
    "byName": true
   },
+  "SessionArchiveParams": {
+   "type": "model",
+   "name": "SessionArchiveParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "archived",
+     "alias": "archived",
+     "schema": {
+      "type": "bool"
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
   "SessionCompactParams": {
    "type": "model",
    "name": "SessionCompactParams",
@@ -3820,6 +3973,16 @@
        }
       }
      }
+    },
+    {
+     "name": "include_archived",
+     "alias": "includeArchived",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
     }
    ],
    "extra": "forbid",
@@ -3960,6 +4123,21 @@
         "type": "str"
        }
       }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SessionMarkAsSeenParams": {
+   "type": "model",
+   "name": "SessionMarkAsSeenParams",
+   "fields": [
+    {
+     "name": "session_id",
+     "alias": "sessionId",
+     "schema": {
+      "type": "str"
      }
     }
    ],
@@ -4579,6 +4757,188 @@
       "schema": {
        "type": "ref",
        "name": "PageRequest"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SetupProviderView": {
+   "type": "model",
+   "name": "SetupProviderView",
+   "fields": [
+    {
+     "name": "name",
+     "alias": "name",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "api_base",
+     "alias": "apiBase",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "api_key_env_var",
+     "alias": "apiKeyEnvVar",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "str"
+      }
+     }
+    },
+    {
+     "name": "browser_auth_base_url",
+     "alias": "browserAuthBaseUrl",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "browser_auth_api_base_url",
+     "alias": "browserAuthApiBaseUrl",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "browser_auth_allow_origin_rewrite",
+     "alias": "browserAuthAllowOriginRewrite",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SetupStatusParams": {
+   "type": "model",
+   "name": "SetupStatusParams",
+   "fields": [
+    {
+     "name": "provider",
+     "alias": "provider",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SetupStoreCredentialParams": {
+   "type": "model",
+   "name": "SetupStoreCredentialParams",
+   "fields": [
+    {
+     "name": "provider",
+     "alias": "provider",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "api_key",
+     "alias": "apiKey",
+     "schema": {
+      "type": "str"
+     }
+    },
+    {
+     "name": "custom_domain",
+     "alias": "customDomain",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true
+  },
+  "SetupSubmitChoicesParams": {
+   "type": "model",
+   "name": "SetupSubmitChoicesParams",
+   "fields": [
+    {
+     "name": "provider",
+     "alias": "provider",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "ref",
+        "name": "SetupProviderView"
+       }
+      }
+     }
+    },
+    {
+     "name": "console_base_url",
+     "alias": "consoleBaseUrl",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "vibe_base_url",
+     "alias": "vibeBaseUrl",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
+      }
+     }
+    },
+    {
+     "name": "theme",
+     "alias": "theme",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str"
+       }
       }
      }
     }
@@ -6015,7 +6375,11 @@
         "type": "str"
        }
       }
-     }
+     },
+     "aliases": [
+      "mediaType",
+      "mimeType"
+     ]
     },
     {
      "name": "kind",
@@ -6171,7 +6535,11 @@
         "type": "str"
        }
       }
-     }
+     },
+     "aliases": [
+      "mediaType",
+      "mimeType"
+     ]
     },
     {
      "name": "kind",
@@ -6266,7 +6634,11 @@
         "type": "str"
        }
       }
-     }
+     },
+     "aliases": [
+      "mediaType",
+      "mimeType"
+     ]
     },
     {
      "name": "kind",
@@ -6720,9 +7092,9 @@
    "extra": "forbid",
    "byName": true
   },
-  "WorkspaceWorktreeRemoveParams": {
+  "WorkspaceWorktreeReapCancelParams": {
    "type": "model",
-   "name": "WorkspaceWorktreeRemoveParams",
+   "name": "WorkspaceWorktreeReapCancelParams",
    "fields": [
     {
      "name": "cwd",
@@ -6731,6 +7103,139 @@
       "type": "str",
       "min_length": 1
      }
+    },
+    {
+     "name": "requester_id",
+     "alias": "requesterId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str",
+        "min_length": 1
+       }
+      }
+     }
+    },
+    {
+     "name": "request_id",
+     "alias": "requestId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str",
+        "min_length": 1
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true,
+   "validators": [
+    {
+     "mode": "function-after",
+     "function": "WorkspaceWorktreeReapCancelParams.validate_request_identity"
+    }
+   ]
+  },
+  "WorkspaceWorktreeReapParams": {
+   "type": "model",
+   "name": "WorkspaceWorktreeReapParams",
+   "fields": [
+    {
+     "name": "cwd",
+     "alias": "cwd",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    },
+    {
+     "name": "requester_id",
+     "alias": "requesterId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str",
+        "min_length": 1
+       }
+      }
+     }
+    },
+    {
+     "name": "request_id",
+     "alias": "requestId",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "str",
+        "min_length": 1
+       }
+      }
+     }
+    }
+   ],
+   "extra": "forbid",
+   "byName": true,
+   "validators": [
+    {
+     "mode": "function-after",
+     "function": "WorkspaceWorktreeReapParams.validate_request_identity"
+    }
+   ]
+  },
+  "WorkspaceWorktreeRemoveConfirmParams": {
+   "type": "model",
+   "name": "WorkspaceWorktreeRemoveConfirmParams",
+   "fields": [
+    {
+     "name": "cwd",
+     "alias": "cwd",
+     "schema": {
+      "type": "str",
+      "min_length": 1
+     }
+    },
+    {
+     "name": "force",
+     "alias": "force",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
+    },
+    {
+     "name": "delete_branch",
+     "alias": "deleteBranch",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "nullable",
+       "schema": {
+        "type": "bool"
+       }
+      }
+     }
+    },
+    {
+     "name": "inspect",
+     "alias": "inspect",
+     "schema": {
+      "type": "default",
+      "schema": {
+       "type": "bool"
+      }
+     }
     }
    ],
    "extra": "forbid",
@@ -6738,6 +7243,6 @@
   }
  },
  "reference": {
-  "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+  "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
  }
 }

@@ -1,7 +1,7 @@
 {
   "quietSeconds": 0.5,
   "reference": {
-    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
   },
   "scenarios": [
     {
@@ -11227,6 +11227,7 @@
                   },
                   "generationStatus": "in_progress",
                   "id": "<id-2>",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "sessionId": "<id-1>",
                   "state": {
@@ -11767,6 +11768,7 @@
                   },
                   "generationStatus": "in_progress",
                   "id": "<id-2>",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "sessionId": "<id-1>",
                   "state": {
@@ -12230,6 +12232,7 @@
                   },
                   "generationStatus": "in_progress",
                   "id": "<id-2>",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "sessionId": "<id-1>",
                   "state": {
@@ -12686,6 +12689,7 @@
                   },
                   "generationStatus": "in_progress",
                   "id": "<id-2>",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "sessionId": "<id-1>",
                   "state": {
@@ -13107,8 +13111,8 @@
               },
               {
                 "content": {
-                  "prose": 164,
-                  "sha256": "7f15c34e8af2b0718d17d8d364530d6069cb924dc795522d438473d1e84a9ba7"
+                  "prose": 241,
+                  "sha256": "d1ebc66dc0215379325629b8d18c2c86d25820ff68cc7d168fbee1d192481b8e"
                 },
                 "role": "tool",
                 "toolCallId": "<id-2>"
@@ -13210,6 +13214,7 @@
                   },
                   "generationStatus": "in_progress",
                   "id": "<id-2>",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "sessionId": "<id-1>",
                   "state": {
@@ -13272,8 +13277,8 @@
                       "display": {
                         "approvalNote": null,
                         "message": {
-                          "prose": 139,
-                          "sha256": "b9e2c6155d499e443ce487f29f195b45e4f5773db52cd7cb5dd245dc0cf69204"
+                          "prose": 216,
+                          "sha256": "ebdcd7b5b904c139c88b97f4e620a5ef9a30cb451a1fa56b6d23bffbdf328428"
                         },
                         "success": false,
                         "suffix": "",
@@ -13285,8 +13290,8 @@
                         "code": null,
                         "details": null,
                         "message": {
-                          "prose": 139,
-                          "sha256": "b9e2c6155d499e443ce487f29f195b45e4f5773db52cd7cb5dd245dc0cf69204"
+                          "prose": 216,
+                          "sha256": "ebdcd7b5b904c139c88b97f4e620a5ef9a30cb451a1fa56b6d23bffbdf328428"
                         }
                       },
                       "output": null,
@@ -13651,6 +13656,7 @@
                   },
                   "generationStatus": "in_progress",
                   "id": "<id-2>",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "sessionId": "<id-1>",
                   "state": {
@@ -13914,6 +13920,7 @@
               "toolName": "connector_Drive_search"
             },
             "kind": "approval",
+            "pathScopeChoices": [],
             "reason": null,
             "relatedEntryId": "<id-2>",
             "requiredPermissions": []
@@ -14145,6 +14152,7 @@
                   },
                   "generationStatus": "in_progress",
                   "id": "<id-2>",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "sessionId": "<id-1>",
                   "state": {
@@ -14223,6 +14231,7 @@
                     "value": {
                       "output": {
                         "decision": {
+                          "pathScope": null,
                           "type": "approve"
                         },
                         "feedback": null,
@@ -14617,6 +14626,7 @@
                   },
                   "generationStatus": "in_progress",
                   "id": "<id-2>",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "sessionId": "<id-1>",
                   "state": {
@@ -15006,6 +15016,7 @@
                   },
                   "generationStatus": "in_progress",
                   "id": "<id-2>",
+                  "inputEntryId": null,
                   "relatedEntryId": null,
                   "sessionId": "<id-1>",
                   "state": {

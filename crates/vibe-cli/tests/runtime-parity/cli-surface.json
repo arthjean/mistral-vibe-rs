@@ -23,7 +23,7 @@
         "described": {
           "chars": 11,
           "marker": "<described>",
-          "sha256": "5ae6c6b56af3e3bc25ae8dd12b56f2d0f88e30c8d6a6b51f5c90960357ef9737"
+          "sha256": "dca2c0f9a43aaa8d153577ccb735005d7c801133e6669a2bc1bf4227eaf8d89c"
         }
       },
       "streams": {
@@ -1599,7 +1599,7 @@
         "described": {
           "chars": 11,
           "marker": "<described>",
-          "sha256": "5ae6c6b56af3e3bc25ae8dd12b56f2d0f88e30c8d6a6b51f5c90960357ef9737"
+          "sha256": "dca2c0f9a43aaa8d153577ccb735005d7c801133e6669a2bc1bf4227eaf8d89c"
         }
       },
       "streams": {
@@ -3307,7 +3307,7 @@
         "described": {
           "chars": 11,
           "marker": "<described>",
-          "sha256": "5ae6c6b56af3e3bc25ae8dd12b56f2d0f88e30c8d6a6b51f5c90960357ef9737"
+          "sha256": "dca2c0f9a43aaa8d153577ccb735005d7c801133e6669a2bc1bf4227eaf8d89c"
         }
       },
       "streams": {
@@ -6595,9 +6595,9 @@
           "default": false,
           "dest": "experimental_harness",
           "help": {
-            "chars": 83,
+            "chars": 148,
             "marker": "<described>",
-            "sha256": "b7d2539e67212a0a6ea1a59c8b21ca332fe554a019eff814f698d9afc8b7a8c7"
+            "sha256": "c717bcd72d221a2595105247a1db0a843b7aa92bc599eaab3ae090cd47813887"
           },
           "helpSuppressed": false,
           "invocation": "--experimental-harness",
@@ -6616,9 +6616,9 @@
           "default": false,
           "dest": "legacy_harness",
           "help": {
-            "chars": 67,
+            "chars": 98,
             "marker": "<described>",
-            "sha256": "8569c3784d93e00384e3aed375c6ce6f8384d963e62b0f36dc021a88ebd1a19d"
+            "sha256": "941124ecc06158569b74c06b950fa879676502fad41b16ae999693ab0ac7cab0"
           },
           "helpSuppressed": false,
           "invocation": "--legacy-harness",
@@ -6637,9 +6637,9 @@
           "default": false,
           "dest": "smart_approve",
           "help": {
-            "chars": 112,
+            "chars": 82,
             "marker": "<described>",
-            "sha256": "e6594ffff0c83dce344a12a698806acf6f84744aee72fdf31df93c61c8170f86"
+            "sha256": "de34e36156802d930d4917a5084b11091ea1a86ebbeebe34e941740c5154b3e9"
           },
           "helpSuppressed": false,
           "invocation": "--smart-approve",
@@ -7362,45 +7362,56 @@
             "kind": "invocation"
           },
           {
-            "chars": 77,
+            "chars": 78,
             "cleartext": null,
             "described": {
-              "chars": 53,
+              "chars": 54,
               "marker": "<described>",
-              "sha256": "01b4ab78d825b1835b51630d8b2371c838cc90f6158fb534ef8b59bdbe3e129f"
+              "sha256": "c5ecfa9e0b299eeef19b9796d2c3c60fa3da58b9ff1e56ba089fea321c85bd74"
             },
             "indent": 24,
             "kind": "continuation"
           },
           {
-            "chars": 53,
+            "chars": 78,
             "cleartext": null,
             "described": {
-              "chars": 29,
+              "chars": 54,
               "marker": "<described>",
-              "sha256": "3f4d0925ea772c5ad9a7d2ad4b5607afce87caf4426ef08a219dcc565178afac"
+              "sha256": "ef5cfbba8dc9e48201c619d7eeedd75ca9e4fc6d1e73eefb83814a4446f2ea92"
             },
             "indent": 24,
             "kind": "continuation"
           },
           {
-            "chars": 71,
+            "chars": 62,
+            "cleartext": null,
+            "described": {
+              "chars": 38,
+              "marker": "<described>",
+              "sha256": "5ca3afa0fee9b47152f25b246a7898b2de74478e4c55c7d77a9b4aff0b56514e"
+            },
+            "indent": 24,
+            "kind": "continuation"
+          },
+          {
+            "chars": 73,
             "cleartext": "--legacy-harness",
             "described": {
-              "chars": 47,
+              "chars": 49,
               "marker": "<described>",
-              "sha256": "3651b7b2830a147d75441499043a7b908f60e34ea8eebef9d24ab571634b0b5e"
+              "sha256": "1662fde288223b75fa7e5173c66f8be654fcf6fbcccf96215602d4c596e1fec3"
             },
             "indent": 2,
             "kind": "invocation"
           },
           {
-            "chars": 43,
+            "chars": 72,
             "cleartext": null,
             "described": {
-              "chars": 19,
+              "chars": 48,
               "marker": "<described>",
-              "sha256": "8a63aa17df509ee497668481296afdf5854499ae03da2c4bd2a1ae359bc637ca"
+              "sha256": "1db414d6f47e15cea18b1bba91f701a9593dda47d9a24b7ab27685044178840c"
             },
             "indent": 24,
             "kind": "continuation"
@@ -7417,23 +7428,12 @@
             "kind": "invocation"
           },
           {
-            "chars": 75,
+            "chars": 54,
             "cleartext": null,
             "described": {
-              "chars": 51,
+              "chars": 30,
               "marker": "<described>",
-              "sha256": "d61bd18741a79334cc8cec74151f630df8306d101f88f294f3a8a86dd2108d54"
-            },
-            "indent": 24,
-            "kind": "continuation"
-          },
-          {
-            "chars": 32,
-            "cleartext": null,
-            "described": {
-              "chars": 8,
-              "marker": "<described>",
-              "sha256": "4c324e5a748e5090baf9e144497ab13647fc00e6405312c202154173ca3a1cef"
+              "sha256": "54a3c48c1807ad1e6b5017ed9318b5aef995164a34572a4139eb563ba167489e"
             },
             "indent": 24,
             "kind": "continuation"
@@ -7811,7 +7811,7 @@
             "kind": "epilogEntry"
           }
         ],
-        "sha256": "f81c215ebff49369b97b54b9376390f0eb5ca610555b55d28db740da8d39d99a"
+        "sha256": "9e2fef7eed7725ff61a4544c62b190eee34f946ea05ac99f8b9599ad2f36bdf2"
       },
       "mutuallyExclusiveGroups": [
         {
@@ -8901,13 +8901,13 @@
     }
   ],
   "reference": {
-    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd",
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
     "sourceFiles": [
       "vibe/cli/entrypoint.py",
       "vibe/cli/mcp_command.py",
       "vibe/_experimental_harness.py"
     ],
-    "version": "2.25.7"
+    "version": "2.26.0"
   },
   "schemaVersion": 1,
   "unavailable": [

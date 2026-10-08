@@ -1136,7 +1136,7 @@
   ],
   "note": "Onboarding corpus: the reference's screen graph, transitions, focus targets, validation classes, persisted effects and terminating values, observed by driving the real OnboardingApp through Textual's headless pilot with the sign-in service, the credential persistence and the config orchestrator replaced by recorders. No rendered cell, SVG or styled text appears here, and every reference-authored message and screen sentence is committed as a SHA-256 digest and a length. Regenerate with scripts/parity/onboarding.py --corpus when the pinned reference moves.",
   "reference": {
-    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd"
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
   },
   "schemaVersion": 4,
   "screenGraph": [

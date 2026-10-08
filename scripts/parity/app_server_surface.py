@@ -231,6 +231,7 @@ METHOD_MODELS: dict[str, tuple[str | None, str | None]] = {
     ),
     "projectLinks/save": ("ProjectLinksSaveParams", "ProjectLinkMutationResponse"),
     "projectLinks/unlink": ("ProjectLinksUnlinkParams", "ProjectLinksUnlinkResponse"),
+    "providerAuth/read": ("ProviderAuthReadParams", "ProviderAuthReadResponse"),
     "review/approve": ("ReviewMutationParams", "EmptyResponse"),
     "review/baseline": ("ReviewBaselineParams", "ReviewBaselineResponse"),
     "review/hunks": ("ReviewHunksParams", "ReviewHunksResponse"),
@@ -239,6 +240,15 @@ METHOD_MODELS: dict[str, tuple[str | None, str | None]] = {
     "review/turnDiff": ("ReviewTurnDiffParams", "ReviewTurnDiffResponse"),
     "runtime/read": ("RuntimeReadParams", "RuntimeReadResponse"),
     "session/agent/update": ("AgentSwitchParams", "RuntimeMutationResponse"),
+    "session/archive": ("SessionArchiveParams", "SessionArchiveResponse"),
+    "session/backgroundProcess/output": (
+        "BackgroundProcessOutputParams",
+        "BackgroundProcessOutputResponse",
+    ),
+    "session/backgroundProcess/stop": (
+        "BackgroundProcessStopParams",
+        "BackgroundProcessStopResponse",
+    ),
     "session/compact": ("SessionCompactParams", "SessionCompactResponse"),
     "session/context/inject": ("ContextInjectParams", "ContextInjectResponse"),
     "session/continue": ("SessionContinueParams", "SessionContinueResponse"),
@@ -252,6 +262,7 @@ METHOD_MODELS: dict[str, tuple[str | None, str | None]] = {
     "session/history/list": ("SessionHistoryListParams", "SessionHistoryListResponse"),
     "session/list": ("SessionListParams", "SessionListResponse"),
     "session/log/read": ("SessionLogReadParams", "SessionLogReadResponse"),
+    "session/markAsSeen": ("SessionMarkAsSeenParams", "EmptyResponse"),
     "session/pin": ("SessionPinParams", "SessionPinResponse"),
     "session/read": ("SessionReadParams", "SessionReadResponse"),
     "session/ready/read": ("SessionReadyReadParams", "SessionReadyReadResponse"),
@@ -288,6 +299,12 @@ METHOD_MODELS: dict[str, tuple[str | None, str | None]] = {
     # models because the classes survive: `session/shellCommand` builds a
     # ShellRunParams internally (_shell_requests.py:76) and `session/rename`
     # validates SessionTitleUpdateParams (_host.py:263-264).
+    "setup/status": ("SetupStatusParams", "SetupStatusResponse"),
+    "setup/store-credential": (
+        "SetupStoreCredentialParams",
+        "SetupStoreCredentialResponse",
+    ),
+    "setup/submit-choices": ("SetupSubmitChoicesParams", "SetupSubmitChoicesResponse"),
     "shell/interrupt": (None, None),
     "shell/run": ("ShellRunParams", "ShellRunResponse"),
     "skills/catalog": ("SkillsCatalogParams", "SkillsCatalogResponse"),
@@ -353,8 +370,18 @@ METHOD_MODELS: dict[str, tuple[str | None, str | None]] = {
         "WorkspaceWorktreePruneParams",
         "WorkspaceWorktreePruneResponse",
     ),
+    "workspace/git/worktrees/reap": (
+        "WorkspaceWorktreeReapParams",
+        "WorkspaceWorktreeReapResponse",
+    ),
+    "workspace/git/worktrees/reap/cancel": (
+        "WorkspaceWorktreeReapCancelParams",
+        "EmptyResponse",
+    ),
+    # Since v2.26.0 the dispatcher validates the removal with the subclass that
+    # adds `inspect` (vibe/app_server/_host.py:540-541).
     "workspace/git/worktrees/remove": (
-        "WorkspaceWorktreeRemoveParams",
+        "WorkspaceWorktreeRemoveConfirmParams",
         "WorkspaceWorktreeRemoveResponse",
     ),
     "workspace/prompt/prepare": (
@@ -450,7 +477,9 @@ UNION_ROOTS: tuple[tuple[str, str], ...] = (
     ("vibe.app_server.models", "EffectState"),
     ("vibe.app_server.models", "TeleportEvent"),
     ("vibe.app_server.protocol", "SessionMCPServer"),
+    ("vibe.app_server.protocol", "BackgroundProcessOutputResponse"),
 )
+UNION_NAMES = frozenset(name for _, name in UNION_ROOTS)
 
 #: Models no routed method reaches but that still cross the wire: the JSON-RPC
 #: envelopes, the structured `invalid_params` detail, the notification bases and
@@ -468,9 +497,15 @@ UNION_ROOTS: tuple[tuple[str, str], ...] = (
 #: inherited.
 #: `SessionOptions` is an alias of `AgentConfig` since v2.25.7
 #: (vibe/app_server/protocol.py:373), so it is recorded under that name.
+#: `ChannelFrame` is the envelope v2.26.0 wraps each message in when one
+#: connection multiplexes several servers (vibe/app_server/multiplex.py:14).
+#: `WorkspaceWorktreeRemoveParams` is only inherited since v2.26.0: the removal,
+#: the reap and its cancellation each validate a subclass of it
+#: (vibe/app_server/protocol.py:1665,1712,1731).
 EXTRA_MODEL_ROOTS: tuple[str, ...] = (
     "CallbackRespondParams",
     "CallbackRespondResponse",
+    "ChannelFrame",
     "CompactionDetails",
     "EventNotificationParams",
     "EventWatermarkResponse",
@@ -498,6 +533,7 @@ EXTRA_MODEL_ROOTS: tuple[str, ...] = (
     "TodoEffectOutput",
     "WebFetchEffectOutput",
     "WebSearchEffectOutput",
+    "WorkspaceWorktreeRemoveParams",
 )
 
 #: Enum vocabularies the replay pins by name. One that the pinned reference does
@@ -525,6 +561,7 @@ SOURCE_MODULES: tuple[str, ...] = (
     "vibe.app_server._effect_models",
     "vibe.app_server.config",
     "vibe.app_server.review",
+    "vibe.app_server.multiplex",
     # Three contracts the app-server publishes are declared outside it: the
     # effect displays every entry detail carries, the question models the
     # user-input callback and the `ask_user_question` effect take, and the
@@ -754,7 +791,9 @@ def capture(commit: str) -> dict[str, Any]:
     for name in declared:
         params_name, response_name = METHOD_MODELS[name]
         for model_name in (params_name, response_name):
-            if model_name is not None:
+            # A response declared as a discriminated union is recorded with
+            # the other union roots.
+            if model_name is not None and model_name not in UNION_NAMES:
                 census.record(census.model(model_name))
         methods.append({
             "name": name,

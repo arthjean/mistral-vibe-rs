@@ -1127,8 +1127,8 @@
         },
         {
           "text": {
-            "digest": "4b882fb4782704a690c4698e8e57e773f24d90ec4975dcc8c09523841db0686b",
-            "length": 2703
+            "digest": "191905d067d2e3bcd9e5c8a6bad97a8e862c2e19b5c18d58ccde84c48849209e",
+            "length": 2708
           },
           "type": "message"
         }
@@ -4540,12 +4540,11 @@
           "type": "agentInstalled"
         },
         {
-          "ok": true,
           "text": {
-            "digest": "6c23308e20c5d13df26ef92379c6bafd9793226c9887627ff87dd68d98900932",
-            "length": 64
+            "digest": "ee563e9dae72c71e703dedac6cb882058709a4a461d2c9ff247803720c42d3e4",
+            "length": 21
           },
-          "type": "status"
+          "type": "message"
         }
       ],
       "fixture": {
@@ -4616,12 +4615,11 @@
           "type": "agentInstalled"
         },
         {
-          "ok": true,
           "text": {
-            "digest": "6c23308e20c5d13df26ef92379c6bafd9793226c9887627ff87dd68d98900932",
-            "length": 64
+            "digest": "ea702e21a90ed143b3e1110d62830fbfdb66cb8042d82723f1e74518103ccde7",
+            "length": 23
           },
-          "type": "status"
+          "type": "message"
         }
       ],
       "fixture": {
@@ -5760,9 +5758,9 @@
       "length": 83
     },
     {
-      "digest": "e2bb1b3c3ac51d0e549bab6ae541b7ca8c5a1691827db275bea75492c56935d4",
+      "digest": "4ce0dc4dec34d8abcc96d5fa8655b194222abcf330dcd57fa58557dfd24d2bec",
       "id": "line-30",
-      "length": 113
+      "length": 87
     },
     {
       "digest": "bc476a5a57f6b90c8572cd056629354bd7bf2a7bfa853d4cf1d99ae40f6621f8",
@@ -5830,9 +5828,9 @@
       "length": 46
     },
     {
-      "digest": "73e773d89345a95af0210f872c2eb05938303aa21e20d486f6479bbdb087d55b",
+      "digest": "f8eb8f55f42ac184fa9aa9e538270558a204f9990259271f745b95acbb94d2ef",
       "id": "line-44",
-      "length": 37
+      "length": 68
     },
     {
       "digest": "0652ed627c379ee1e473c621e72d0c975c69d670840e4aa48fef2caeb8dde460",
@@ -7217,8 +7215,8 @@
     }
   ],
   "reference": {
-    "commit": "4a96003186b166d55b9f06895c45bb136eef61cd",
-    "version": "2.25.7"
+    "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1",
+    "version": "2.26.0"
   },
   "schemaVersion": 3,
   "traits": [

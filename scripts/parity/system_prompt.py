@@ -60,7 +60,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = REPOSITORY / "crates/vibe-cli/tests/system-prompt-parity/corpus.json"
@@ -1026,7 +1026,7 @@ def main() -> int:
             print(json.dumps({"cwd": chosen["cwd"], "environment": environment_for(chosen, arguments.root)}))
             return 0
         if arguments.live_binary is not None:
-            command = [str(arguments.live_binary.resolve())]
+            command = [str(arguments.live_binary.resolve()), *HARNESS_FLAGS]
             selected = [s for s in live_scenarios() if not arguments.only or any(n in s["name"] for n in arguments.only)]
             captured = [capture(s, None, command) for s in selected]
             arguments.output.write_text(rendered({"scenarios": captured}), encoding="utf-8")
@@ -1034,7 +1034,7 @@ def main() -> int:
             return 0
         reference = resolve_reference(arguments.reference, arguments.expected_commit)
         interpreter = reference_interpreter(arguments.reference)
-        command = [str(arguments.reference / ".venv/bin/vibe")]
+        command = [str(arguments.reference / ".venv/bin/vibe"), *HARNESS_FLAGS]
         selected = [s for s in scenarios() if not arguments.only or any(n in s["name"] for n in arguments.only)]
         captured = []
         for chosen in selected:

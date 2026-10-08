@@ -22,10 +22,18 @@ import sys
 
 #: The reference commit every committed corpus was captured from. A checkout at
 #: any other revision is not an oracle for those corpora.
-EXPECTED_COMMIT = "4a96003186b166d55b9f06895c45bb136eef61cd"
+EXPECTED_COMMIT = "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
 
 #: The package version :data:`EXPECTED_COMMIT` publishes.
-EXPECTED_VERSION = "2.25.7"
+EXPECTED_VERSION = "2.26.0"
+
+#: The flags a capture adds to every entry point it starts, on both sides of a
+#: replay. Since v2.26.0 the reference starts on its Unified Harness unless told
+#: otherwise (``vibe/_experimental_harness.py``), while this port reproduces the
+#: legacy backend, so the corpora measure that backend through its escape hatch
+#: and the Unified Harness is scorecard row 36. The port receives the same flags
+#: so the selection a session reports stays comparable.
+HARNESS_FLAGS = ("--legacy-harness",)
 
 #: Where the read-only reference checkout lives. ``VIBE_REFERENCE`` overrides
 #: the default for machines that hold it elsewhere, and ``--reference`` wins

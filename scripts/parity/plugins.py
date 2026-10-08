@@ -20,8 +20,9 @@ component and file. Diagnostic messages are left out: the port writes its own
 prose for them. ``crates/vibe-core/tests/plugins_parity_tests.rs`` replays it.
 
 ``server`` serves the reference's own ``vibe-app-server`` over stdio in a fresh
-home per scenario, with ``--experimental-harness``, the unified rollout in the
-eval cache, or neither, and records what the plugin methods answer around a
+home per scenario, with ``--experimental-harness``, ``--legacy-harness``, or
+neither, which since v2.26.0 starts the Unified Harness whatever the rollout in
+the eval cache says, and records what the plugin methods answer around a
 session start, a reload and the MCP mutations a plugin server refuses. One
 scenario declares MCP servers a plugin ships: one found on ``PATH``, which is
 the ``vibe-mcp-stdio-fixture`` binary this repository builds, one script the
@@ -68,7 +69,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT  # noqa: E402
+from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT, HARNESS_FLAGS  # noqa: E402
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 FIXTURES = REPOSITORY / "crates/vibe-core/tests/plugins-parity/fixtures.json"
@@ -514,7 +515,7 @@ def server_scenarios() -> list[dict[str, Any]]:
             ],
         },
         {
-            "name": "rollout/unified",
+            "name": "default/unified",
             "flags": [],
             "home": {**DEMO, **ROLLOUT_CACHE},
             "steps": [
@@ -530,7 +531,7 @@ def server_scenarios() -> list[dict[str, Any]]:
         },
         {
             "name": "legacy/declines",
-            "flags": [],
+            "flags": list(HARNESS_FLAGS),
             "home": DEMO,
             "steps": [
                 request("plugin_catalog/read", sessionId="$S"),

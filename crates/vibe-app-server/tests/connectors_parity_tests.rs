@@ -67,6 +67,19 @@ struct Divergence {
 
 const GATEWAY_FAILURES: &[&str] = &["call/gateway-401", "call/gateway-404", "call/gateway-500"];
 
+/// The scenarios whose recorded turn streams an assistant entry.
+const ASSISTANT_TURNS: &[&str] = &[
+    "call/ask-approval",
+    "call/disabled-tool",
+    "call/gateway-401",
+    "call/gateway-404",
+    "call/gateway-500",
+    "call/not-ready",
+    "call/structured",
+    "call/success",
+    "call/tool-error",
+];
+
 const LEDGER: &[Divergence] = &[
     Divergence {
         scenarios: GATEWAY_FAILURES,
@@ -112,6 +125,31 @@ const LEDGER: &[Divergence] = &[
         pointer: "/steps/7/turn/0/entryId",
         row: "17",
         reason: "the same renumbering, in the second turn",
+    },
+    Divergence {
+        scenarios: ASSISTANT_TURNS,
+        pointer: "/steps/1/turn/1/entry/inputEntryId",
+        row: "17",
+        reason: "since v2.26.0 every public history entry declares the user entry its turn \
+                 answers (`vibe/app_server/models.py:949` at `376f6a3`), null on these entries; \
+                 this port's entries do not carry the field",
+    },
+    Divergence {
+        scenarios: &["call/ask-approval"],
+        pointer: "/callbacks/0/pathScopeChoices",
+        row: "17",
+        reason: "since v2.26.0 an approval callback lists the path grant scopes it offers \
+                 (`vibe/app_server/models.py:322`, filled by `vibe/app_server/_turns.py:863` at \
+                 `376f6a3`), empty for a connector call; this port's callback does not carry the \
+                 field",
+    },
+    Divergence {
+        scenarios: &["call/ask-approval"],
+        pointer: "/steps/1/turn/4/patch/0/value/output/decision/pathScope",
+        row: "17",
+        reason: "since v2.26.0 the approval decision an effect records holds the path grant \
+                 scope it chose (`vibe/app_server/models.py:312` at `376f6a3`), null for a plain \
+                 approval; this port's decision does not carry the field",
     },
 ];
 

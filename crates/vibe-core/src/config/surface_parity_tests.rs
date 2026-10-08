@@ -54,10 +54,16 @@ const VIBE_HOME_PLACEHOLDER: &str = "{vibe_home}";
 
 /// Reference fields this port does not declare, each with the reason.
 ///
-/// The configuration pass of 2026-10-06 declared the last four, so the list is
-/// empty and the replay fails on any field the reference adds. An entry whose
-/// field becomes declared fails the replay as stale.
-const UNDECLARED_FIELDS: &[(&str, &str)] = &[];
+/// The configuration pass of 2026-10-06 declared the last four, and the v2.26.0
+/// re-pin added one: the field that release introduced, citing its declaration
+/// in `vibe/core/config/vibe_schema.py` at `376f6a3`. The replay fails on any
+/// other field the reference adds. An entry whose field becomes declared fails
+/// the replay as stale.
+const UNDECLARED_FIELDS: &[(&str, &str)] = &[(
+    "utility_models",
+    "v2.26.0 per-feature utility model table (vibe_schema.py:376), unported; the registry \
+     declares no such key and the port picks its title model without one",
+)];
 
 /// The sentinel v2.24.0 ships for `active_model`, meaning "not pinned": both
 /// implementations now carry it in the document they ship and resolve it when
@@ -90,9 +96,66 @@ const STRATEGY_DIVERGENCES: &[(&str, &str, &str, &str)] = &[];
 /// strategy any more or the port implements it.
 const UNIMPLEMENTED_STRATEGIES: &[(&str, &str)] = &[];
 
+/// v2.26.0 gave `ModelConfig` a per-model thinking level set, which this
+/// port's model entries do not carry.
+const THINKING_LEVELS: &str = "v2.26.0 adds `thinking_levels` to ModelConfig, defaulting to all five levels \
+     (models.py:485); the port's model entries carry no such key";
+
+/// v2.26.0 made "no threshold set" a value a model entry carries.
+const UNSET_THRESHOLD_DROPPED: &str = "v2.26.0 defaults a model's `auto_compact_threshold` to the unset sentinel -1 \
+     (models.py:492; _defaults.py:30) and drops the sentinel when it writes a model entry out \
+     (models.py:563); the port's default models ship 200000";
+
+/// v2.26.0 lets the global threshold reach the shipped default models.
+const GLOBAL_THRESHOLD: &str = "v2.26.0 materializes the unset sentinel for a model that sets no threshold \
+     (models.py:492), so a layer's global `auto_compact_threshold` now reaches the shipped \
+     default models as well (vibe_schema.py:949); the port's default models carry their own \
+     200000, which counts as set and keeps the global value out";
+
+/// v2.26.0 resolves the threshold sentinel for `models` entries alone.
+const UNSET_THRESHOLD: &str = "v2.26.0 resolves the unset threshold sentinel only for entries of `models` \
+     (vibe_schema.py:949), so a `compaction_model`, `vision_model` or routed extra entry that \
+     sets no threshold validates to -1 (models.py:492); the port completes it to 200000";
+
+/// v2.26.0 matches the model allowlist against names.
+const ALLOWLIST_BY_NAME: &str = "v2.26.0 matches `allowed_models` against model names rather than aliases \
+     (vibe_schema.py:690, :1004), so a pattern written for the `local` alias matches no name, \
+     warns, and admits every model; the port still matches aliases";
+
+/// v2.26.0 warns when the allowlist excludes the pinned model.
+const DISALLOWED_ACTIVE_MODEL: &str = "v2.26.0 records a warning when `allowed_models` excludes the pinned \
+     `active_model` (vibe_schema.py:1016); the port falls back to the default alias without \
+     one";
+
 /// Pointers at which the document this port ships diverges from the reference
-/// default document, as `(pointer, reason)`.
-const DEFAULT_DIVERGENCES: &[(&str, &str)] = &[];
+/// default document, as `(pointer, reason)`. A key the port ships and the
+/// reference does not is named at its own pointer.
+const DEFAULT_DIVERGENCES: &[(&str, &str)] = &[
+    (
+        "/auto_compact_threshold",
+        "v2.26.0 defaults the global threshold to the unset sentinel -1 (vibe_schema.py:386) \
+         and drops it from the document `create_default_config` ships (vibe_schema.py:1119); \
+         registry.rs ships 200000",
+    ),
+    ("/models/local/thinking_levels", THINKING_LEVELS),
+    (
+        "/models/local/auto_compact_threshold",
+        UNSET_THRESHOLD_DROPPED,
+    ),
+    (
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "/models/mistral-medium-3.5/auto_compact_threshold",
+        UNSET_THRESHOLD_DROPPED,
+    ),
+    (
+        "/session_logging/generate_titles",
+        "v2.26.0 turns background session titles on by default (models.py:112); registry.rs \
+         ships false",
+    ),
+];
 
 /// Pointers at which a merge scenario diverges, as `(scenario, pointer, reason)`.
 const SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[];
@@ -100,8 +163,524 @@ const SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[];
 /// Pointers at which a model scenario diverges, as `(scenario, pointer,
 /// reason)`. `/active_model` and `/validation_warnings` name the validated alias
 /// and the warning count; every other pointer lies under `/models` or
-/// `/compaction_model`.
-const MODEL_SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[];
+/// `/compaction_model`. Every entry dates from the v2.26.0 re-pin (`376f6a3`).
+const MODEL_SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[
+    (
+        "models-defaults-only",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-defaults-only",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-sparse-override-of-a-default-model",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-sparse-override-of-a-default-model",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-alias-map-form",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-alias-map-form",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-added-entry-inherits-the-global-threshold",
+        "/models/local/auto_compact_threshold",
+        GLOBAL_THRESHOLD,
+    ),
+    (
+        "models-added-entry-inherits-the-global-threshold",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-added-entry-inherits-the-global-threshold",
+        "/models/mistral-medium-3.5/auto_compact_threshold",
+        GLOBAL_THRESHOLD,
+    ),
+    (
+        "models-added-entry-inherits-the-global-threshold",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-added-entry-inherits-the-global-threshold",
+        "/models/scratch/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-entry-keeps-its-own-threshold",
+        "/models/local/auto_compact_threshold",
+        GLOBAL_THRESHOLD,
+    ),
+    (
+        "models-entry-keeps-its-own-threshold",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-entry-keeps-its-own-threshold",
+        "/models/mistral-medium-3.5/auto_compact_threshold",
+        GLOBAL_THRESHOLD,
+    ),
+    (
+        "models-entry-keeps-its-own-threshold",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-entry-keeps-its-own-threshold",
+        "/models/scratch/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-unknown-active-model-falls-back",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-unknown-active-model-falls-back",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-active-model-selects-an-added-entry",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-active-model-selects-an-added-entry",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-active-model-selects-an-added-entry",
+        "/models/scratch/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-two-layers-deep-merge-one-entry",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-two-layers-deep-merge-one-entry",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-entry-without-an-alias-borrows-its-name",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-entry-without-an-alias-borrows-its-name",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-entry-without-an-alias-borrows-its-name",
+        "/models/scratch/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-compaction-model-without-an-alias-borrows-its-name",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-compaction-model-without-an-alias-borrows-its-name",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-compaction-model-without-an-alias-borrows-its-name",
+        "/compaction_model/auto_compact_threshold",
+        UNSET_THRESHOLD,
+    ),
+    (
+        "models-compaction-model-without-an-alias-borrows-its-name",
+        "/compaction_model/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-allowed-models-glob-narrows-the-available-set",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-allowed-models-glob-narrows-the-available-set",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-allowed-models-regex-is-case-insensitive",
+        "/validation_warnings",
+        ALLOWLIST_BY_NAME,
+    ),
+    (
+        "models-allowed-models-regex-is-case-insensitive",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-allowed-models-regex-is-case-insensitive",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-allowed-models-regex-is-case-insensitive",
+        "/available_models",
+        ALLOWLIST_BY_NAME,
+    ),
+    (
+        "models-allowed-models-regex-is-case-insensitive",
+        "/default_model_alias",
+        ALLOWLIST_BY_NAME,
+    ),
+    (
+        "models-allowed-models-regex-is-case-insensitive",
+        "/active_model_alias",
+        ALLOWLIST_BY_NAME,
+    ),
+    (
+        "models-allowed-models-matching-nothing-warns-and-admits-all",
+        "/validation_warnings",
+        ALLOWLIST_BY_NAME,
+    ),
+    (
+        "models-allowed-models-matching-nothing-warns-and-admits-all",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-allowed-models-matching-nothing-warns-and-admits-all",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-allowed-models-matching-nothing-warns-and-admits-all",
+        "/available_models",
+        ALLOWLIST_BY_NAME,
+    ),
+    (
+        "models-allowed-models-matching-nothing-warns-and-admits-all",
+        "/default_model_alias",
+        ALLOWLIST_BY_NAME,
+    ),
+    (
+        "models-allowed-models-matching-nothing-warns-and-admits-all",
+        "/active_model_alias",
+        ALLOWLIST_BY_NAME,
+    ),
+    (
+        "models-allowed-models-excluding-the-pin-falls-back",
+        "/validation_warnings",
+        DISALLOWED_ACTIVE_MODEL,
+    ),
+    (
+        "models-allowed-models-excluding-the-pin-falls-back",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-allowed-models-excluding-the-pin-falls-back",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-allowed-models-excluding-the-default",
+        "/validation_warnings",
+        ALLOWLIST_BY_NAME,
+    ),
+    (
+        "models-allowed-models-excluding-the-default",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-allowed-models-excluding-the-default",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-allowed-models-excluding-the-default",
+        "/available_models",
+        ALLOWLIST_BY_NAME,
+    ),
+    (
+        "models-allowed-models-excluding-the-default",
+        "/default_model_alias",
+        ALLOWLIST_BY_NAME,
+    ),
+    (
+        "models-allowed-models-excluding-the-default",
+        "/active_model_alias",
+        ALLOWLIST_BY_NAME,
+    ),
+    (
+        "models-routed-extra-models-from-json-text",
+        "/models/extra/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-routed-extra-models-from-json-text",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-routed-extra-models-from-json-text",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-routed-extra-models-from-json-text",
+        "/routed_extra_models/0/auto_compact_threshold",
+        UNSET_THRESHOLD,
+    ),
+    (
+        "models-routed-extra-models-from-json-text",
+        "/routed_extra_models/0/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-routed-extra-models-from-json-text",
+        "/routed_extra_models/1/auto_compact_threshold",
+        UNSET_THRESHOLD,
+    ),
+    (
+        "models-routed-extra-models-from-json-text",
+        "/routed_extra_models/1/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-routed-extra-models-keep-what-the-operator-wrote",
+        "/models/fresh/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-routed-extra-models-keep-what-the-operator-wrote",
+        "/models/local/auto_compact_threshold",
+        GLOBAL_THRESHOLD,
+    ),
+    (
+        "models-routed-extra-models-keep-what-the-operator-wrote",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-routed-extra-models-keep-what-the-operator-wrote",
+        "/models/mistral-medium-3.5/auto_compact_threshold",
+        GLOBAL_THRESHOLD,
+    ),
+    (
+        "models-routed-extra-models-keep-what-the-operator-wrote",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-routed-extra-models-keep-what-the-operator-wrote",
+        "/routed_extra_models/0/auto_compact_threshold",
+        UNSET_THRESHOLD,
+    ),
+    (
+        "models-routed-extra-models-keep-what-the-operator-wrote",
+        "/routed_extra_models/0/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-routed-extra-models-keep-what-the-operator-wrote",
+        "/routed_extra_models/1/auto_compact_threshold",
+        UNSET_THRESHOLD,
+    ),
+    (
+        "models-routed-extra-models-keep-what-the-operator-wrote",
+        "/routed_extra_models/1/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-routed-extra-models-not-a-list",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-routed-extra-models-not-a-list",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-routed-default-reaches-a-pinned-installation",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-routed-default-reaches-a-pinned-installation",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-routed-default-reaches-a-pinned-installation",
+        "/models/routed/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-routed-definition-keeps-the-operator-overrides",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-routed-definition-keeps-the-operator-overrides",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-unknown-active-model-resolves-to-the-routed-default",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-unknown-active-model-resolves-to-the-routed-default",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-unknown-active-model-resolves-to-the-routed-default",
+        "/models/routed/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-vision-model-is-completed-like-a-model",
+        "/models/local/auto_compact_threshold",
+        GLOBAL_THRESHOLD,
+    ),
+    (
+        "models-vision-model-is-completed-like-a-model",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-vision-model-is-completed-like-a-model",
+        "/models/mistral-medium-3.5/auto_compact_threshold",
+        GLOBAL_THRESHOLD,
+    ),
+    (
+        "models-vision-model-is-completed-like-a-model",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-vision-model-is-completed-like-a-model",
+        "/vision_model/auto_compact_threshold",
+        UNSET_THRESHOLD,
+    ),
+    (
+        "models-vision-model-is-completed-like-a-model",
+        "/vision_model/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-compaction-model-ignores-the-global-threshold",
+        "/models/local/auto_compact_threshold",
+        GLOBAL_THRESHOLD,
+    ),
+    (
+        "models-compaction-model-ignores-the-global-threshold",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-compaction-model-ignores-the-global-threshold",
+        "/models/mistral-medium-3.5/auto_compact_threshold",
+        GLOBAL_THRESHOLD,
+    ),
+    (
+        "models-compaction-model-ignores-the-global-threshold",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-compaction-model-ignores-the-global-threshold",
+        "/compaction_model/auto_compact_threshold",
+        UNSET_THRESHOLD,
+    ),
+    (
+        "models-compaction-model-ignores-the-global-threshold",
+        "/compaction_model/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-admin-threshold-overrides-every-model",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-admin-threshold-overrides-every-model",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-admin-threshold-overrides-every-model",
+        "/models/scratch/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-user-threshold-keeps-a-model-threshold",
+        "/models/local/auto_compact_threshold",
+        GLOBAL_THRESHOLD,
+    ),
+    (
+        "models-user-threshold-keeps-a-model-threshold",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-user-threshold-keeps-a-model-threshold",
+        "/models/mistral-medium-3.5/auto_compact_threshold",
+        GLOBAL_THRESHOLD,
+    ),
+    (
+        "models-user-threshold-keeps-a-model-threshold",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-user-threshold-keeps-a-model-threshold",
+        "/models/scratch/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-compaction-model-keeps-the-alias-it-declares",
+        "/models/local/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-compaction-model-keeps-the-alias-it-declares",
+        "/models/mistral-medium-3.5/thinking_levels",
+        THINKING_LEVELS,
+    ),
+    (
+        "models-compaction-model-keeps-the-alias-it-declares",
+        "/compaction_model/auto_compact_threshold",
+        UNSET_THRESHOLD,
+    ),
+    (
+        "models-compaction-model-keeps-the-alias-it-declares",
+        "/compaction_model/thinking_levels",
+        THINKING_LEVELS,
+    ),
+];
 
 /// One divergence a replay observed: the case, the pointer, and both values
 /// rendered with sensitive values redacted.
@@ -519,6 +1098,24 @@ fn a_load_with_no_configuration_file_composes_the_reference_default_document() {
             &mut observed,
         );
     }
+    // A key the port ships and the reference does not is a divergence at its
+    // own pointer. A field the reference withdrew still ships here, and the
+    // census test is what records it; this check would report it a second time.
+    let retired = ledger(WITHDRAWN_FIELDS);
+    for (key, value) in snapshot
+        .effective
+        .iter()
+        .filter(|(key, _)| !corpus.defaults.document.contains_key(key.as_str()))
+        .filter(|(key, _)| !retired.contains_key(key.as_str()))
+    {
+        let value = serde_json::to_value(value).expect("a field serializes");
+        observed.push(Observed {
+            case: "defaults".to_owned(),
+            pointer: format!("/{}", escape_pointer_token(key)),
+            reference: "absent".to_owned(),
+            port: render(key, &value),
+        });
+    }
     let default_ledger = DEFAULT_DIVERGENCES
         .iter()
         .map(|(pointer, reason)| ("defaults", *pointer, *reason))
@@ -528,20 +1125,6 @@ fn a_load_with_no_configuration_file_composes_the_reference_default_document() {
         unpinned_observed,
         "the reference no longer ships the unpinned `active_model` sentinel; \
          drop the recorded divergence instead of carrying it"
-    );
-
-    // A field the reference withdrew still ships here, and the census test is
-    // what records it; this check would report it a second time.
-    let retired = ledger(WITHDRAWN_FIELDS);
-    let extra = snapshot
-        .effective
-        .keys()
-        .filter(|key| !corpus.defaults.document.contains_key(key.as_str()))
-        .filter(|key| !retired.contains_key(key.as_str()))
-        .collect::<Vec<_>>();
-    assert!(
-        extra.is_empty(),
-        "the port ships defaults the reference does not: {extra:?}"
     );
     assert!(snapshot.validation_warnings.is_empty());
 
