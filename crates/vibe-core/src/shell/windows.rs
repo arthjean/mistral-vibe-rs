@@ -18,8 +18,8 @@ use regex::Regex;
 use super::lexer::{WordSplit, split_tokens};
 use super::{
     GuardrailDialect, ShellAnalysis, ShellCommandLists, ShellFlavor, ShellPolicyContext,
-    command_node, command_requirements, deferred, escaping_directory_glob, escaping_glob,
-    guardrail_requirements, refusal,
+    command_node, command_requirements, deferred, escaping_directory, escaping_path,
+    guardrail_requirements, refusal, retain_ungranted,
 };
 use crate::policy::{PermissionMode, PermissionRequirement, PermissionScope};
 
@@ -648,7 +648,7 @@ pub(crate) fn file_redirection_targets(command: &str) -> Vec<String> {
         .collect()
 }
 
-/// Where `token` reaches outside the workspace, as a glob, and whether it is
+/// The path `token` reaches outside the workspace, and whether it is
 /// dynamic: a variable that stays unexpanded, a provider other than the file
 /// system, or a drive-relative path such as `C:notes.txt`.
 fn path_reach(
@@ -689,27 +689,29 @@ fn path_reach(
         return (None, true);
     }
     (
-        escaping_glob(ShellFlavor::PowerShell, context, &value),
+        escaping_path(ShellFlavor::PowerShell, context, &value),
         false,
     )
 }
 
-/// Reference `_analyze_windows_paths`: the directories the parts reach
-/// outside the workspace, as globs, and the tokens that cannot be positioned.
+/// Reference `_analyze_windows_paths`: the paths the parts reach outside the
+/// workspace, and the tokens that cannot be positioned.
 fn analyze_paths(
     parts: &[String],
     context: &ShellPolicyContext,
     environment: &[(String, String)],
 ) -> (BTreeSet<String>, BTreeSet<String>) {
-    let mut globs = BTreeSet::new();
+    let mut paths = BTreeSet::new();
     let mut dynamic = BTreeSet::new();
-    if let Some(glob) = escaping_directory_glob(context, &context.working_directory) {
-        globs.insert(glob);
+    if let Some(cwd) = &context.unpositioned_cwd {
+        paths.insert(cwd.clone());
+    } else if let Some(path) = escaping_directory(context, &context.working_directory) {
+        paths.insert(path);
     }
     let mut collect = |token: &str| {
-        let (glob, is_dynamic) = path_reach(token, context, environment);
-        if let Some(glob) = glob {
-            globs.insert(glob);
+        let (path, is_dynamic) = path_reach(token, context, environment);
+        if let Some(path) = path {
+            paths.insert(path);
         }
         if is_dynamic {
             dynamic.insert(token.to_owned());
@@ -744,7 +746,7 @@ fn analyze_paths(
             collect(token);
         }
     }
-    (globs, dynamic)
+    (paths, dynamic)
 }
 
 fn command_requirement(pattern: String, label: String) -> PermissionRequirement {
@@ -793,6 +795,8 @@ pub(super) fn analyze_powershell(
         }
     }
     let (outside, dynamic) = analyze_paths(&parts, context, &environment);
+    let mut outside = outside.into_iter().collect::<Vec<_>>();
+    retain_ungranted(&mut outside, lists);
 
     let mut context_required = context.context_requirements.clone();
     let targets = parts
@@ -827,7 +831,6 @@ pub(super) fn analyze_powershell(
         };
     }
 
-    let outside = outside.into_iter().collect::<Vec<_>>();
     let mut requirements = command_requirements(
         &parts,
         &outside,

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Ask about a shell operand outside the working directory, and a managed
+  call's `cwd` there, by its resolved path, as the reference does since
+  v2.25.8: approving it grants that path alone, written as
+  `vibe-path:exact:<path>`, instead of every file in its directory, and the
+  requirement publishes `pathScopeRoot` when the path is a directory. Every
+  shell, PowerShell included, now reads back the `vibe-path:` grants and the
+  absolute path globs its `allowlist` holds before asking, so a permanent
+  approval of an outside path survives the session; a command entry such as
+  `cat` or `*` never grants a path.
+
 - Ask about a file outside the working directory by its own path, as the
   reference does since v2.25.8: approving it for the session or permanently
   grants that path alone, written as `vibe-path:exact:<path>`, instead of

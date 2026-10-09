@@ -1,4 +1,534 @@
 {
+  "allowlistGrants": [
+    {
+      "allowlist": [
+        "cat",
+        "vibe-path:exact:<outside>/secret.txt"
+      ],
+      "command": "cat <outside>/secret.txt",
+      "cwd": null,
+      "hasReason": false,
+      "permission": "always",
+      "requirements": [],
+      "resolver": "legacy"
+    },
+    {
+      "allowlist": [
+        "cat",
+        "vibe-path:exact:<outside>/secret.txt"
+      ],
+      "command": "cat <outside>/nested/secret.txt",
+      "cwd": null,
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/nested/secret.txt",
+          "label": {
+            "described": "sha256:d5bdfee721ae61766ccbcc1da921afda",
+            "length": 45
+          },
+          "pathScopeRoot": null,
+          "scope": "outside_directory",
+          "sessionPattern": "vibe-path:exact:<outside>/nested/secret.txt"
+        }
+      ],
+      "resolver": "legacy"
+    },
+    {
+      "allowlist": [
+        "cat",
+        "vibe-path:exact:<outside>/secret.txt"
+      ],
+      "command": "cat <outside>/secret.txt <outside>/nested/secret.txt",
+      "cwd": null,
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/nested/secret.txt",
+          "label": {
+            "described": "sha256:d5bdfee721ae61766ccbcc1da921afda",
+            "length": 45
+          },
+          "pathScopeRoot": null,
+          "scope": "outside_directory",
+          "sessionPattern": "vibe-path:exact:<outside>/nested/secret.txt"
+        }
+      ],
+      "resolver": "legacy"
+    },
+    {
+      "allowlist": [
+        "cat",
+        "vibe-path:directory_recursive:<outside>"
+      ],
+      "command": "cat <outside>/nested/secret.txt",
+      "cwd": null,
+      "hasReason": false,
+      "permission": "always",
+      "requirements": [],
+      "resolver": "legacy"
+    },
+    {
+      "allowlist": [
+        "cat",
+        "vibe-path:directory_recursive:<outside>/nested"
+      ],
+      "command": "cat <outside>/secret.txt",
+      "cwd": null,
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/secret.txt",
+          "label": {
+            "described": "sha256:9d4dcea7f76ce0169504db13046d2bf9",
+            "length": 38
+          },
+          "pathScopeRoot": null,
+          "scope": "outside_directory",
+          "sessionPattern": "vibe-path:exact:<outside>/secret.txt"
+        }
+      ],
+      "resolver": "legacy"
+    },
+    {
+      "allowlist": [
+        "cat",
+        "<outside>/*"
+      ],
+      "command": "cat <outside>/secret.txt",
+      "cwd": null,
+      "hasReason": false,
+      "permission": "always",
+      "requirements": [],
+      "resolver": "legacy"
+    },
+    {
+      "allowlist": [
+        "cat",
+        "<outside>/*"
+      ],
+      "command": "cat <outside>/nested/secret.txt",
+      "cwd": null,
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/nested/secret.txt",
+          "label": {
+            "described": "sha256:d5bdfee721ae61766ccbcc1da921afda",
+            "length": 45
+          },
+          "pathScopeRoot": null,
+          "scope": "outside_directory",
+          "sessionPattern": "vibe-path:exact:<outside>/nested/secret.txt"
+        }
+      ],
+      "resolver": "legacy"
+    },
+    {
+      "allowlist": [
+        "cat",
+        "<outside>/secre?.txt"
+      ],
+      "command": "cat <outside>/secret.txt",
+      "cwd": null,
+      "hasReason": false,
+      "permission": "always",
+      "requirements": [],
+      "resolver": "legacy"
+    },
+    {
+      "allowlist": [
+        "cat",
+        "<outside>/secret.txt"
+      ],
+      "command": "cat <outside>/secret.txt",
+      "cwd": null,
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/secret.txt",
+          "label": {
+            "described": "sha256:9d4dcea7f76ce0169504db13046d2bf9",
+            "length": 38
+          },
+          "pathScopeRoot": null,
+          "scope": "outside_directory",
+          "sessionPattern": "vibe-path:exact:<outside>/secret.txt"
+        }
+      ],
+      "resolver": "legacy"
+    },
+    {
+      "allowlist": [
+        "cat",
+        "elsewhere/*"
+      ],
+      "command": "cat <outside>/secret.txt",
+      "cwd": null,
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/secret.txt",
+          "label": {
+            "described": "sha256:9d4dcea7f76ce0169504db13046d2bf9",
+            "length": 38
+          },
+          "pathScopeRoot": null,
+          "scope": "outside_directory",
+          "sessionPattern": "vibe-path:exact:<outside>/secret.txt"
+        }
+      ],
+      "resolver": "legacy"
+    },
+    {
+      "allowlist": [
+        "*"
+      ],
+      "command": "cat <outside>/secret.txt",
+      "cwd": null,
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "cat <outside>/secret.txt",
+          "label": "cat *",
+          "pathScopeRoot": null,
+          "scope": "command_pattern",
+          "sessionPattern": "cat *"
+        },
+        {
+          "invocationPattern": "<outside>/secret.txt",
+          "label": {
+            "described": "sha256:9d4dcea7f76ce0169504db13046d2bf9",
+            "length": 38
+          },
+          "pathScopeRoot": null,
+          "scope": "outside_directory",
+          "sessionPattern": "vibe-path:exact:<outside>/secret.txt"
+        }
+      ],
+      "resolver": "legacy"
+    },
+    {
+      "allowlist": [
+        "cat",
+        "/*"
+      ],
+      "command": "cat <outside>/secret.txt",
+      "cwd": null,
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/secret.txt",
+          "label": {
+            "described": "sha256:9d4dcea7f76ce0169504db13046d2bf9",
+            "length": 38
+          },
+          "pathScopeRoot": null,
+          "scope": "outside_directory",
+          "sessionPattern": "vibe-path:exact:<outside>/secret.txt"
+        }
+      ],
+      "resolver": "legacy"
+    },
+    {
+      "allowlist": [
+        "cat",
+        "vibe-path:recursive:<outside>"
+      ],
+      "command": "cat <outside>/secret.txt",
+      "cwd": null,
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/secret.txt",
+          "label": {
+            "described": "sha256:9d4dcea7f76ce0169504db13046d2bf9",
+            "length": 38
+          },
+          "pathScopeRoot": null,
+          "scope": "outside_directory",
+          "sessionPattern": "vibe-path:exact:<outside>/secret.txt"
+        }
+      ],
+      "resolver": "legacy"
+    },
+    {
+      "allowlist": [
+        "cat",
+        "vibe-path:exact:<outside>/./nested/../secret.txt"
+      ],
+      "command": "cat <outside>/secret.txt",
+      "cwd": null,
+      "hasReason": false,
+      "permission": "always",
+      "requirements": [],
+      "resolver": "legacy"
+    },
+    {
+      "allowlist": [
+        "vibe-path:exact:<outside>/secret.txt"
+      ],
+      "command": "cat <outside>/secret.txt",
+      "cwd": null,
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "cat <outside>/secret.txt",
+          "label": "cat *",
+          "pathScopeRoot": null,
+          "scope": "command_pattern",
+          "sessionPattern": "cat *"
+        }
+      ],
+      "resolver": "legacy"
+    },
+    {
+      "allowlist": [
+        "sudo",
+        "vibe-path:exact:<outside>/secret.txt"
+      ],
+      "command": "sudo cat <outside>/secret.txt",
+      "cwd": null,
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "sudo cat <outside>/secret.txt",
+          "label": "sudo cat <outside>/secret.txt",
+          "pathScopeRoot": null,
+          "scope": "command_pattern",
+          "sessionPattern": "sudo cat <outside>/secret.txt"
+        }
+      ],
+      "resolver": "legacy"
+    },
+    {
+      "allowlist": [
+        "grep",
+        "vibe-path:exact:<outside>/secret.txt"
+      ],
+      "command": "grep -f <outside>/secret.txt notes.txt",
+      "cwd": null,
+      "hasReason": false,
+      "permission": "always",
+      "requirements": [],
+      "resolver": "legacy"
+    },
+    {
+      "allowlist": [
+        "cat",
+        "vibe-path:directory_recursive:<outside>/approved"
+      ],
+      "command": "cat <outside>/approved/link/secret.txt",
+      "cwd": null,
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/nested/secret.txt",
+          "label": {
+            "described": "sha256:d5bdfee721ae61766ccbcc1da921afda",
+            "length": 45
+          },
+          "pathScopeRoot": null,
+          "scope": "outside_directory",
+          "sessionPattern": "vibe-path:exact:<outside>/nested/secret.txt"
+        }
+      ],
+      "resolver": "legacy"
+    },
+    {
+      "allowlist": [
+        "ls",
+        "vibe-path:directory_recursive:<outside>"
+      ],
+      "command": "ls <outside>",
+      "cwd": null,
+      "hasReason": false,
+      "permission": "always",
+      "requirements": [],
+      "resolver": "legacy"
+    },
+    {
+      "allowlist": [
+        "cd",
+        "git status",
+        "vibe-path:directory_recursive:<outside>"
+      ],
+      "command": "cd <outside> && git status",
+      "cwd": null,
+      "hasReason": false,
+      "permission": "always",
+      "requirements": [],
+      "resolver": "legacy"
+    },
+    {
+      "allowlist": [
+        "pwd",
+        "vibe-path:directory_recursive:<outside>"
+      ],
+      "command": "pwd",
+      "cwd": "<outside>/nested",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": [],
+      "resolver": "managed"
+    },
+    {
+      "allowlist": [
+        "pwd",
+        "vibe-path:exact:<outside>"
+      ],
+      "command": "pwd",
+      "cwd": "<outside>",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": [],
+      "resolver": "managed"
+    },
+    {
+      "allowlist": [
+        "pwd",
+        "vibe-path:exact:<outside>"
+      ],
+      "command": "pwd",
+      "cwd": "<outside>/nested",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/nested",
+          "label": {
+            "described": "sha256:730747d75dce92e7b8548858f552e9be",
+            "length": 34
+          },
+          "pathScopeRoot": "<outside>/nested",
+          "scope": "outside_directory",
+          "sessionPattern": "vibe-path:exact:<outside>/nested"
+        }
+      ],
+      "resolver": "managed"
+    },
+    {
+      "allowlist": [
+        "cat",
+        "vibe-path:exact:<outside>"
+      ],
+      "command": "cat secret.txt",
+      "cwd": "<outside>",
+      "hasReason": false,
+      "permission": "always",
+      "requirements": [],
+      "resolver": "managed"
+    },
+    {
+      "allowlist": [
+        "cat",
+        "<outside>/*"
+      ],
+      "command": "cat nested/secret.txt",
+      "cwd": "<outside>",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>",
+          "label": {
+            "described": "sha256:f7f953559eeb444deea225026c02fb78",
+            "length": 27
+          },
+          "pathScopeRoot": "<outside>",
+          "scope": "outside_directory",
+          "sessionPattern": "vibe-path:exact:<outside>"
+        },
+        {
+          "invocationPattern": "<outside>/nested/secret.txt",
+          "label": {
+            "described": "sha256:d5bdfee721ae61766ccbcc1da921afda",
+            "length": 45
+          },
+          "pathScopeRoot": null,
+          "scope": "outside_directory",
+          "sessionPattern": "vibe-path:exact:<outside>/nested/secret.txt"
+        }
+      ],
+      "resolver": "managed"
+    },
+    {
+      "allowlist": [
+        "cat",
+        "vibe-path:exact:<outside>/secret.txt"
+      ],
+      "command": "cat ../elsewhere/secret.txt",
+      "cwd": null,
+      "hasReason": false,
+      "permission": "always",
+      "requirements": [],
+      "resolver": "managed"
+    },
+    {
+      "allowlist": [
+        "cat",
+        "vibe-path:directory_recursive:<outside>/approved"
+      ],
+      "command": "cat <outside>/approved/link/secret.txt",
+      "cwd": null,
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "<outside>/nested/secret.txt",
+          "label": {
+            "described": "sha256:d5bdfee721ae61766ccbcc1da921afda",
+            "length": 45
+          },
+          "pathScopeRoot": null,
+          "scope": "outside_directory",
+          "sessionPattern": "vibe-path:exact:<outside>/nested/secret.txt"
+        }
+      ],
+      "resolver": "managed"
+    },
+    {
+      "allowlist": [
+        "*"
+      ],
+      "command": "pwd",
+      "cwd": "<outside>",
+      "hasReason": false,
+      "permission": "ask",
+      "requirements": [
+        {
+          "invocationPattern": "pwd",
+          "label": "pwd *",
+          "pathScopeRoot": null,
+          "scope": "command_pattern",
+          "sessionPattern": "pwd *"
+        },
+        {
+          "invocationPattern": "<outside>",
+          "label": {
+            "described": "sha256:f7f953559eeb444deea225026c02fb78",
+            "length": 27
+          },
+          "pathScopeRoot": "<outside>",
+          "scope": "outside_directory",
+          "sessionPattern": "vibe-path:exact:<outside>"
+        }
+      ],
+      "resolver": "managed"
+    }
+  ],
   "commandSets": {
     "allowlist": [
       "cd",
@@ -157,10 +687,12 @@
     ]
   },
   "counts": {
+    "allowlistGrantCases": 28,
     "extractionCases": 47,
     "managedCases": 16,
-    "outsideDirCases": 23,
+    "outsidePathCases": 28,
     "pathCommands": 45,
+    "pathGrantMatchCases": 32,
     "repositoryCases": 40,
     "resolutionCases": 132,
     "stdinPermissionCases": 21,
@@ -476,6 +1008,7 @@
             "described": "sha256:f7f953559eeb444deea225026c02fb78",
             "length": 27
           },
+          "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
           "sessionPattern": "vibe-path:exact:<outside>"
         }
@@ -513,6 +1046,7 @@
             "described": "sha256:f7f953559eeb444deea225026c02fb78",
             "length": 27
           },
+          "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
           "sessionPattern": "vibe-path:exact:<outside>"
         }
@@ -532,6 +1066,7 @@
             "described": "sha256:f7f953559eeb444deea225026c02fb78",
             "length": 27
           },
+          "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
           "sessionPattern": "vibe-path:exact:<outside>"
         },
@@ -541,6 +1076,7 @@
             "described": "sha256:d5bdfee721ae61766ccbcc1da921afda",
             "length": 45
           },
+          "pathScopeRoot": null,
           "scope": "outside_directory",
           "sessionPattern": "vibe-path:exact:<outside>/nested/secret.txt"
         }
@@ -560,6 +1096,7 @@
             "described": "sha256:9d4dcea7f76ce0169504db13046d2bf9",
             "length": 38
           },
+          "pathScopeRoot": null,
           "scope": "outside_directory",
           "sessionPattern": "vibe-path:exact:<outside>/secret.txt"
         }
@@ -579,6 +1116,7 @@
             "described": "sha256:672467dc313166f179c337118f00e325",
             "length": 23
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "shell override: /bin/zsh"
         }
@@ -601,6 +1139,7 @@
             "described": "sha256:d5b3b391a5c1da2c18b3c4024219a7e8",
             "length": 25
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "env override *"
         }
@@ -619,6 +1158,7 @@
         {
           "invocationPattern": "rm -rf build",
           "label": "rm *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "rm *"
         },
@@ -628,6 +1168,7 @@
             "described": "sha256:672467dc313166f179c337118f00e325",
             "length": 23
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "shell override: /bin/zsh"
         },
@@ -637,6 +1178,7 @@
             "described": "sha256:a7c7d4565fd1047480490e58d8d75fdb",
             "length": 22
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "env override *"
         }
@@ -681,6 +1223,7 @@
             "described": "sha256:f7f953559eeb444deea225026c02fb78",
             "length": 27
           },
+          "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
           "sessionPattern": "vibe-path:exact:<outside>"
         }
@@ -697,6 +1240,7 @@
         {
           "invocationPattern": "ls",
           "label": "ls *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "ls *"
         },
@@ -706,6 +1250,7 @@
             "described": "sha256:672467dc313166f179c337118f00e325",
             "length": 23
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "shell override: /bin/zsh"
         }
@@ -724,6 +1269,7 @@
         {
           "invocationPattern": "sudo ls",
           "label": "sudo ls",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "sudo ls"
         },
@@ -733,6 +1279,7 @@
             "described": "sha256:f7f953559eeb444deea225026c02fb78",
             "length": 27
           },
+          "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
           "sessionPattern": "vibe-path:exact:<outside>"
         },
@@ -742,6 +1289,7 @@
             "described": "sha256:d3bdc53d88df1d136d7cd646226b4aae",
             "length": 22
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "env override *"
         }
@@ -750,132 +1298,326 @@
     }
   ],
   "note": "Captured from the pinned reference by scripts/parity/shell_policy.py. Command names, node-kind names, scope values, booleans and the answers to cases this repository authored are observations; a label that is not one of its requirement's patterns is recorded as a digest and a length, and no reference-authored description, label or refusal text is recorded here.",
-  "outsideDirs": [
+  "outsidePaths": [
     {
       "command": "cat <workdir>/inside.txt",
-      "directories": []
+      "paths": []
     },
     {
       "command": "cat ./inside.txt",
-      "directories": []
+      "paths": []
     },
     {
       "command": "cat inside.txt",
-      "directories": []
+      "paths": []
     },
     {
       "command": "cat <outside>/secret.txt",
-      "directories": [
-        "<outside>"
+      "paths": [
+        "<outside>/secret.txt"
       ]
     },
     {
       "command": "cat <outside>/nested/secret.txt",
-      "directories": [
-        "<outside>/nested"
+      "paths": [
+        "<outside>/nested/secret.txt"
       ]
     },
     {
       "command": "grep needle <outside>/secret.txt",
-      "directories": [
-        "<outside>"
+      "paths": [
+        "<outside>/secret.txt"
       ]
     },
     {
       "command": "wc -l <outside>/secret.txt",
-      "directories": [
-        "<outside>"
+      "paths": [
+        "<outside>/secret.txt"
       ]
     },
     {
       "command": "ls <outside>",
-      "directories": [
+      "paths": [
         "<outside>"
       ]
     },
     {
       "command": "cat <scratchpad>/note.txt",
-      "directories": []
+      "paths": []
     },
     {
       "command": "rm <outside>/secret.txt",
-      "directories": [
-        "<outside>"
+      "paths": [
+        "<outside>/secret.txt"
       ]
     },
     {
       "command": "cp <outside>/secret.txt <workdir>/copy.txt",
-      "directories": [
-        "<outside>"
+      "paths": [
+        "<outside>/secret.txt"
       ]
     },
     {
       "command": "chmod +x <outside>/secret.txt",
-      "directories": [
-        "<outside>"
+      "paths": [
+        "<outside>/secret.txt"
       ]
     },
     {
       "command": "chmod 755 <outside>/secret.txt",
-      "directories": [
-        "<outside>"
+      "paths": [
+        "<outside>/secret.txt"
       ]
     },
     {
       "command": "cat -n <outside>/secret.txt",
-      "directories": [
-        "<outside>"
+      "paths": [
+        "<outside>/secret.txt"
       ]
     },
     {
       "command": "ls --color <outside>",
-      "directories": [
+      "paths": [
         "<outside>"
       ]
     },
     {
       "command": "cat <outside>/a.txt && cat <outside>/b.txt",
-      "directories": [
-        "<outside>"
+      "paths": [
+        "<outside>/a.txt",
+        "<outside>/b.txt"
       ]
     },
     {
       "command": "echo <outside>/secret.txt",
-      "directories": []
+      "paths": []
     },
     {
       "command": "cat ~/.ssh/id_rsa",
-      "directories": [
-        "<home>/.ssh"
+      "paths": [
+        "<home>/.ssh/id_rsa"
       ]
     },
     {
       "command": "cat /etc/passwd",
-      "directories": [
-        "/etc"
+      "paths": [
+        "/etc/passwd"
       ]
     },
     {
       "command": "cat ../elsewhere/secret.txt",
-      "directories": [
-        "<outside>"
+      "paths": [
+        "<outside>/secret.txt"
       ]
     },
     {
       "command": "cat <workdir>/../elsewhere/nested/secret.txt",
-      "directories": [
-        "<outside>/nested"
+      "paths": [
+        "<outside>/nested/secret.txt"
       ]
     },
     {
       "command": "cat sub/../inside.txt",
-      "directories": []
+      "paths": []
     },
     {
       "command": "cat ../../../../etc/passwd",
-      "directories": [
-        "/etc"
+      "paths": [
+        "/etc/passwd"
       ]
+    },
+    {
+      "command": "cat <outside>/secret.txt <outside>/nested/secret.txt",
+      "paths": [
+        "<outside>/nested/secret.txt",
+        "<outside>/secret.txt"
+      ]
+    },
+    {
+      "command": "ls <outside>/nested",
+      "paths": [
+        "<outside>/nested"
+      ]
+    },
+    {
+      "command": "touch <outside>/missing/new.txt",
+      "paths": [
+        "<outside>/missing/new.txt"
+      ]
+    },
+    {
+      "command": "cat <workdir>/escape/secret.txt",
+      "paths": [
+        "<outside>/secret.txt"
+      ]
+    },
+    {
+      "command": "cat <outside>/approved/link/secret.txt",
+      "paths": [
+        "<outside>/nested/secret.txt"
+      ]
+    }
+  ],
+  "pathGrantMatches": [
+    {
+      "matches": true,
+      "path": "/srv/app/a.txt",
+      "pattern": "vibe-path:exact:/srv/app/a.txt"
+    },
+    {
+      "matches": true,
+      "path": "/srv/app/a.txt",
+      "pattern": "vibe-path:exact:/srv/app/./a.txt"
+    },
+    {
+      "matches": false,
+      "path": "/srv/app/a.txt",
+      "pattern": "vibe-path:exact:/srv/app"
+    },
+    {
+      "matches": true,
+      "path": "/srv/app/a.txt",
+      "pattern": "vibe-path:directory_recursive:/srv/app"
+    },
+    {
+      "matches": true,
+      "path": "/srv/app",
+      "pattern": "vibe-path:directory_recursive:/srv/app"
+    },
+    {
+      "matches": false,
+      "path": "/srv/application",
+      "pattern": "vibe-path:directory_recursive:/srv/app"
+    },
+    {
+      "matches": true,
+      "path": "/srv/app/a.txt",
+      "pattern": "vibe-path:directory_recursive:/srv/app/"
+    },
+    {
+      "matches": false,
+      "path": "/srv/app/a.txt",
+      "pattern": "vibe-path:recursive:/srv/app"
+    },
+    {
+      "matches": false,
+      "path": "/srv/app/a.txt",
+      "pattern": "vibe-path:/srv/app/a.txt"
+    },
+    {
+      "matches": false,
+      "path": "/srv/app/a.txt",
+      "pattern": "vibe-path"
+    },
+    {
+      "matches": true,
+      "path": "/srv/app/a.txt",
+      "pattern": "/srv/app/*"
+    },
+    {
+      "matches": false,
+      "path": "/srv/app/sub/a.txt",
+      "pattern": "/srv/app/*"
+    },
+    {
+      "matches": true,
+      "path": "/srv/app/a.txt",
+      "pattern": "/srv/*/a.txt"
+    },
+    {
+      "matches": true,
+      "path": "/srv/app/a.txt",
+      "pattern": "/srv/app/?.txt"
+    },
+    {
+      "matches": true,
+      "path": "/srv/app/a.txt",
+      "pattern": "/srv/app/[ab].txt"
+    },
+    {
+      "matches": false,
+      "path": "/srv/app/a.txt",
+      "pattern": "/srv/app/a.txt"
+    },
+    {
+      "matches": false,
+      "path": "/srv/app/a.txt",
+      "pattern": "/*"
+    },
+    {
+      "matches": false,
+      "path": "/srv/app/a.txt",
+      "pattern": "/**"
+    },
+    {
+      "matches": false,
+      "path": "/srv/app/a.txt",
+      "pattern": "srv/app/*"
+    },
+    {
+      "matches": false,
+      "path": "/srv/app/a.txt",
+      "pattern": "*"
+    },
+    {
+      "matches": false,
+      "path": "/srv/app/a.txt",
+      "pattern": "*/a.txt"
+    },
+    {
+      "matches": false,
+      "path": "/srv/app/a.txt",
+      "pattern": "cat"
+    },
+    {
+      "matches": false,
+      "path": "/srv/app/a.txt",
+      "pattern": "npm *"
+    },
+    {
+      "matches": false,
+      "path": "/srv/app/a.txt",
+      "pattern": "cat /srv/app/*"
+    },
+    {
+      "matches": true,
+      "path": "C:\\srv\\app\\a.txt",
+      "pattern": "C:\\srv\\app\\*"
+    },
+    {
+      "matches": true,
+      "path": "C:\\srv\\app\\a.txt",
+      "pattern": "c:/SRV/app/*"
+    },
+    {
+      "matches": false,
+      "path": "C:\\srv\\app\\sub\\a.txt",
+      "pattern": "C:\\srv\\app\\*"
+    },
+    {
+      "matches": false,
+      "path": "C:\\srv\\app\\a.txt",
+      "pattern": "C:srv\\*"
+    },
+    {
+      "matches": true,
+      "path": "C:\\srv\\app\\a.txt",
+      "pattern": "vibe-path:exact:c:\\SRV\\app\\A.txt"
+    },
+    {
+      "matches": true,
+      "path": "C:\\srv\\app\\a.txt",
+      "pattern": "vibe-path:directory_recursive:C:\\srv"
+    },
+    {
+      "matches": true,
+      "path": "\\\\server\\share\\a.txt",
+      "pattern": "\\\\server\\share\\*"
+    },
+    {
+      "matches": false,
+      "path": "/srv/app/a.txt",
+      "pattern": "\\srv\\app\\*"
     }
   ],
   "reference": {
@@ -922,6 +1664,7 @@
             "described": "sha256:f7f953559eeb444deea225026c02fb78",
             "length": 27
           },
+          "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
           "sessionPattern": "vibe-path:exact:<outside>"
         }
@@ -939,6 +1682,7 @@
             "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
             "length": 10
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git status [git repositories: <workdir>/.git]"
         }
@@ -956,6 +1700,7 @@
             "described": "sha256:246050b60c622e9e0a8d742976690204",
             "length": 8
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git diff [git repositories: <workdir>/.git]"
         }
@@ -973,6 +1718,7 @@
             "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
             "length": 7
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git log [git repositories: <workdir>/.git]"
         }
@@ -990,6 +1736,7 @@
             "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
             "length": 7
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git log [git repositories: <workdir>/.git]"
         }
@@ -1007,6 +1754,7 @@
             "described": "sha256:f7f953559eeb444deea225026c02fb78",
             "length": 27
           },
+          "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
           "sessionPattern": "vibe-path:exact:<outside>"
         },
@@ -1016,6 +1764,7 @@
             "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
             "length": 10
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git status [git repositories: <workdir>/.git | directory:<outside>]"
         }
@@ -1061,6 +1810,7 @@
             "described": "sha256:f7f953559eeb444deea225026c02fb78",
             "length": 27
           },
+          "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
           "sessionPattern": "vibe-path:exact:<outside>"
         }
@@ -1078,6 +1828,7 @@
             "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
             "length": 10
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git status [git repositories: <workdir>/.git]"
         }
@@ -1095,6 +1846,7 @@
             "described": "sha256:246050b60c622e9e0a8d742976690204",
             "length": 8
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git diff [git repositories: <workdir>/.git]"
         }
@@ -1112,6 +1864,7 @@
             "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
             "length": 7
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git log [git repositories: <workdir>/.git]"
         }
@@ -1129,6 +1882,7 @@
             "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
             "length": 7
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git log [git repositories: <workdir>/.git]"
         }
@@ -1146,6 +1900,7 @@
             "described": "sha256:f7f953559eeb444deea225026c02fb78",
             "length": 27
           },
+          "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
           "sessionPattern": "vibe-path:exact:<outside>"
         },
@@ -1155,6 +1910,7 @@
             "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
             "length": 10
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git status [git repositories: <workdir>/.git | directory:<outside>]"
         }
@@ -1186,6 +1942,7 @@
             "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
             "length": 7
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git log [git repositories: <workdir>/.git]"
         }
@@ -1203,6 +1960,7 @@
             "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
             "length": 7
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git log [git repositories: <workdir>/.git]"
         }
@@ -1220,6 +1978,7 @@
             "described": "sha256:f7f953559eeb444deea225026c02fb78",
             "length": 27
           },
+          "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
           "sessionPattern": "vibe-path:exact:<outside>"
         }
@@ -1237,6 +1996,7 @@
             "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
             "length": 10
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git status [git repositories: <workdir>/.git]"
         }
@@ -1254,6 +2014,7 @@
             "described": "sha256:246050b60c622e9e0a8d742976690204",
             "length": 8
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git diff [git repositories: <workdir>/.git]"
         }
@@ -1285,6 +2046,7 @@
             "described": "sha256:f7f953559eeb444deea225026c02fb78",
             "length": 27
           },
+          "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
           "sessionPattern": "vibe-path:exact:<outside>"
         },
@@ -1294,6 +2056,7 @@
             "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
             "length": 10
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git status [git repositories: <workdir>/.git | directory:<outside>]"
         }
@@ -1311,6 +2074,7 @@
             "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
             "length": 10
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git status [git repositories: <workdir>/.git]"
         }
@@ -1328,6 +2092,7 @@
             "described": "sha256:246050b60c622e9e0a8d742976690204",
             "length": 8
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git diff [git repositories: <workdir>/.git]"
         }
@@ -1345,6 +2110,7 @@
             "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
             "length": 7
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git log [git repositories: <workdir>/.git]"
         }
@@ -1362,6 +2128,7 @@
             "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
             "length": 7
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git log [git repositories: <workdir>/.git]"
         }
@@ -1379,6 +2146,7 @@
             "described": "sha256:f7f953559eeb444deea225026c02fb78",
             "length": 27
           },
+          "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
           "sessionPattern": "vibe-path:exact:<outside>"
         },
@@ -1388,6 +2156,7 @@
             "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
             "length": 10
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git status [git repositories: <workdir>/.git | directory:<outside>]"
         }
@@ -1419,6 +2188,7 @@
             "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
             "length": 7
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git log [git repositories: <workdir>/.git]"
         }
@@ -1436,6 +2206,7 @@
             "described": "sha256:fa7b080f3e54dea088785fcbaafa358e",
             "length": 7
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git log [git repositories: <workdir>/.git]"
         }
@@ -1453,6 +2224,7 @@
             "described": "sha256:f7f953559eeb444deea225026c02fb78",
             "length": 27
           },
+          "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
           "sessionPattern": "vibe-path:exact:<outside>"
         }
@@ -1498,6 +2270,7 @@
         {
           "invocationPattern": "rm -rf build",
           "label": "rm *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "rm *"
         }
@@ -1511,6 +2284,7 @@
         {
           "invocationPattern": "rm file.txt",
           "label": "rm *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "rm *"
         }
@@ -1524,6 +2298,7 @@
         {
           "invocationPattern": "dd if=/dev/zero of=disk.img",
           "label": "dd *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "dd *"
         }
@@ -1537,6 +2312,7 @@
         {
           "invocationPattern": "mkfs.ext4 /dev/sdb1",
           "label": "mkfs.ext4 *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "mkfs.ext4 *"
         }
@@ -1550,6 +2326,7 @@
         {
           "invocationPattern": "shutdown -h now",
           "label": "shutdown *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "shutdown *"
         }
@@ -1563,6 +2340,7 @@
         {
           "invocationPattern": "eval echo hi",
           "label": "eval *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "eval *"
         }
@@ -1690,6 +2468,7 @@
         {
           "invocationPattern": "python3 script.py",
           "label": "python3 *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "python3 *"
         }
@@ -1709,6 +2488,7 @@
         {
           "invocationPattern": "/usr/bin/vim notes.txt",
           "label": "/usr/bin/vim *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "/usr/bin/vim *"
         }
@@ -1731,6 +2511,7 @@
             "described": "sha256:e436ecd66d6b18790da4595e645a1631",
             "length": 44
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "python3 <<'EOF'\nprint(1)\nEOF"
         }
@@ -1751,6 +2532,7 @@
             "described": "sha256:74440bf3141d30983fb296d758656799",
             "length": 47
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "cat 'unterminated"
         }
@@ -1764,6 +2546,7 @@
         {
           "invocationPattern": "sudo apt update",
           "label": "sudo apt update",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "sudo apt update"
         }
@@ -1777,6 +2560,7 @@
         {
           "invocationPattern": "sudo ls",
           "label": "sudo ls",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "sudo ls"
         }
@@ -1796,12 +2580,14 @@
         {
           "invocationPattern": "find . -exec rm {}",
           "label": "find . -exec rm {}",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "find . -exec rm {}"
         },
         {
           "invocationPattern": "find . -exec rm {}",
           "label": "find . -exec rm {}",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "find . -exec rm {}"
         }
@@ -1815,12 +2601,14 @@
         {
           "invocationPattern": "find . -execdir rm {}",
           "label": "find . -execdir rm {}",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "find . -execdir rm {}"
         },
         {
           "invocationPattern": "find . -execdir rm {}",
           "label": "find . -execdir rm {}",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "find . -execdir rm {}"
         }
@@ -1834,12 +2622,14 @@
         {
           "invocationPattern": "find . -ok rm {}",
           "label": "find . -ok rm {}",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "find . -ok rm {}"
         },
         {
           "invocationPattern": "find . -ok rm {}",
           "label": "find . -ok rm {}",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "find . -ok rm {}"
         }
@@ -1853,12 +2643,14 @@
         {
           "invocationPattern": "find . -okdir rm {}",
           "label": "find . -okdir rm {}",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "find . -okdir rm {}"
         },
         {
           "invocationPattern": "find . -okdir rm {}",
           "label": "find . -okdir rm {}",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "find . -okdir rm {}"
         }
@@ -1872,6 +2664,7 @@
         {
           "invocationPattern": "find . -exec rm {}",
           "label": "find . -exec rm {}",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "find . -exec rm {}"
         },
@@ -1881,6 +2674,7 @@
             "described": "sha256:907c04349f3cb86847fe445cf9b69c6b",
             "length": 64
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "find . -exec rm {} ; && find . -exec rm {} ;"
         }
@@ -1894,6 +2688,7 @@
         {
           "invocationPattern": "cargo build",
           "label": "cargo build *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "cargo build *"
         }
@@ -1907,6 +2702,7 @@
         {
           "invocationPattern": "npm run build",
           "label": "npm run build *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "npm run build *"
         }
@@ -1920,6 +2716,7 @@
         {
           "invocationPattern": "npm run test",
           "label": "npm run test *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "npm run test *"
         }
@@ -1933,6 +2730,7 @@
         {
           "invocationPattern": "rm -rf build",
           "label": "rm *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "rm *"
         }
@@ -1958,12 +2756,14 @@
         {
           "invocationPattern": "cargo build",
           "label": "cargo build *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "cargo build *"
         },
         {
           "invocationPattern": "cargo test",
           "label": "cargo test *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "cargo test *"
         }
@@ -1977,6 +2777,7 @@
         {
           "invocationPattern": "unknown-binary --flag",
           "label": "unknown-binary *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "unknown-binary *"
         }
@@ -2008,12 +2809,14 @@
         {
           "invocationPattern": "cat",
           "label": "cat *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "cat *"
         },
         {
           "invocationPattern": "which ls",
           "label": "which *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "which *"
         }
@@ -2030,6 +2833,7 @@
             "described": "sha256:e436ecd66d6b18790da4595e645a1631",
             "length": 44
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "cat file.txt > out.txt"
         }
@@ -2043,6 +2847,7 @@
         {
           "invocationPattern": "git -c core.pager=sh log",
           "label": "git -c core.pager=sh log",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git -c core.pager=sh log"
         }
@@ -2059,6 +2864,7 @@
             "described": "sha256:ca2f16ba5ac31d77430c03705ef6da8e",
             "length": 27
           },
+          "pathScopeRoot": null,
           "scope": "outside_directory",
           "sessionPattern": "vibe-path:exact:/dev/null"
         },
@@ -2068,6 +2874,7 @@
             "described": "sha256:4c3c8efba9982bcb5d0ac3e8117620b6",
             "length": 29
           },
+          "pathScopeRoot": null,
           "scope": "outside_directory",
           "sessionPattern": "vibe-path:exact:/etc/passwd"
         }
@@ -2081,6 +2888,7 @@
         {
           "invocationPattern": "rg --pre helper needle .",
           "label": "rg *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "rg *"
         }
@@ -2094,6 +2902,7 @@
         {
           "invocationPattern": "git reset --hard",
           "label": "git reset --hard",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git reset --hard"
         }
@@ -2107,6 +2916,7 @@
         {
           "invocationPattern": "git reset --hard -- src",
           "label": "git reset --hard -- src",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git reset --hard -- src"
         }
@@ -2120,6 +2930,7 @@
         {
           "invocationPattern": "sort -o out.txt in.txt",
           "label": "sort -o out.txt in.txt",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "sort -o out.txt in.txt"
         }
@@ -2142,6 +2953,7 @@
             "described": "sha256:638870963f1af55d63ebd7c3aa964b2f",
             "length": 28
           },
+          "pathScopeRoot": null,
           "scope": "outside_directory",
           "sessionPattern": "vibe-path:exact:/etc/hosts"
         }
@@ -2155,6 +2967,7 @@
         {
           "invocationPattern": "date -s 10:00",
           "label": "date -s 10:00",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "date -s 10:00"
         }
@@ -2168,6 +2981,7 @@
         {
           "invocationPattern": "date 0101120025",
           "label": "date 0101120025",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "date 0101120025"
         }
@@ -2187,6 +3001,7 @@
         {
           "invocationPattern": "less -k keys notes.txt",
           "label": "less -k keys notes.txt",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "less -k keys notes.txt"
         }
@@ -2206,6 +3021,7 @@
         {
           "invocationPattern": "more +:e notes.txt",
           "label": "more +:e notes.txt",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "more +:e notes.txt"
         }
@@ -2219,6 +3035,7 @@
         {
           "invocationPattern": "uniq a.txt b.txt",
           "label": "uniq a.txt b.txt",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "uniq a.txt b.txt"
         }
@@ -2238,6 +3055,7 @@
         {
           "invocationPattern": "tree -o out.txt",
           "label": "tree -o out.txt",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "tree -o out.txt"
         }
@@ -2257,6 +3075,7 @@
         {
           "invocationPattern": "md5sum -c sums.txt",
           "label": "md5sum -c sums.txt",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "md5sum -c sums.txt"
         }
@@ -2276,6 +3095,7 @@
         {
           "invocationPattern": "wc --files0-from=list.txt",
           "label": "wc --files0-from=list.txt",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "wc --files0-from=list.txt"
         }
@@ -2295,6 +3115,7 @@
         {
           "invocationPattern": "du --files0-from=list.txt",
           "label": "du --files0-from=list.txt",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "du --files0-from=list.txt"
         }
@@ -2308,6 +3129,7 @@
         {
           "invocationPattern": "file -z archive.gz",
           "label": "file -z archive.gz",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "file -z archive.gz"
         }
@@ -2330,6 +3152,7 @@
             "described": "sha256:638870963f1af55d63ebd7c3aa964b2f",
             "length": 28
           },
+          "pathScopeRoot": null,
           "scope": "outside_directory",
           "sessionPattern": "vibe-path:exact:/etc/hosts"
         }
@@ -2346,6 +3169,7 @@
             "described": "sha256:638870963f1af55d63ebd7c3aa964b2f",
             "length": 28
           },
+          "pathScopeRoot": null,
           "scope": "outside_directory",
           "sessionPattern": "vibe-path:exact:/etc/hosts"
         }
@@ -2359,6 +3183,7 @@
         {
           "invocationPattern": "find . -delete",
           "label": "find . -delete",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "find . -delete"
         }
@@ -2372,6 +3197,7 @@
         {
           "invocationPattern": "find . -fprint out.txt",
           "label": "find . -fprint out.txt",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "find . -fprint out.txt"
         }
@@ -2388,6 +3214,7 @@
             "described": "sha256:3d30af43661fbf95010c6ed4df3b9f22",
             "length": 18
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git log --ext-diff [git repositories: directory:<workdir>]"
         }
@@ -2404,6 +3231,7 @@
             "described": "sha256:eaafeb1fde46a5fd6dc0b136173748c1",
             "length": 24
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git log --output=out.txt [git repositories: directory:<workdir>]"
         }
@@ -2426,6 +3254,7 @@
             "described": "sha256:089d5620fb45b9504d239d73db4476b3",
             "length": 30
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git diff --diff-merges=remerge [git repositories: directory:<workdir>]"
         }
@@ -2439,6 +3268,7 @@
         {
           "invocationPattern": "sort -o x y",
           "label": "sort -o x y",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "sort -o x y"
         }
@@ -2452,12 +3282,14 @@
         {
           "invocationPattern": "sudo ls",
           "label": "sudo ls",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "sudo ls"
         },
         {
           "invocationPattern": "sudo ls",
           "label": "sudo ls",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "sudo ls"
         }
@@ -2471,6 +3303,7 @@
         {
           "invocationPattern": "eval git log --ext-diff",
           "label": "eval *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "eval *"
         },
@@ -2480,6 +3313,7 @@
             "described": "sha256:3d30af43661fbf95010c6ed4df3b9f22",
             "length": 18
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git log --ext-diff [git repositories: directory:<workdir>]"
         }
@@ -2493,12 +3327,14 @@
         {
           "invocationPattern": "eval 'sort -o x y'",
           "label": "eval *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "eval *"
         },
         {
           "invocationPattern": "sort -o x y",
           "label": "sort -o x y",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "sort -o x y"
         }
@@ -2512,12 +3348,14 @@
         {
           "invocationPattern": "exec sort -o x y",
           "label": "exec *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "exec *"
         },
         {
           "invocationPattern": "sort -o x y",
           "label": "sort -o x y",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "sort -o x y"
         }
@@ -2531,12 +3369,14 @@
         {
           "invocationPattern": "exec -a name sort -o x y",
           "label": "exec *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "exec *"
         },
         {
           "invocationPattern": "sort -o x y",
           "label": "sort -o x y",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "sort -o x y"
         }
@@ -2550,6 +3390,7 @@
         {
           "invocationPattern": "exec",
           "label": "exec *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "exec *"
         }
@@ -2584,6 +3425,7 @@
             "described": "sha256:f7f953559eeb444deea225026c02fb78",
             "length": 27
           },
+          "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
           "sessionPattern": "vibe-path:exact:<outside>"
         }
@@ -2597,12 +3439,14 @@
         {
           "invocationPattern": "cd",
           "label": "cd *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "cd *"
         },
         {
           "invocationPattern": "git status",
           "label": "git status",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git status"
         },
@@ -2612,6 +3456,7 @@
             "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
             "length": 10
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git status [git repositories: directory:<workdir> | dynamic-directory]"
         }
@@ -2625,12 +3470,14 @@
         {
           "invocationPattern": "pushd <outside>",
           "label": "pushd *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "pushd *"
         },
         {
           "invocationPattern": "popd",
           "label": "popd *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "popd *"
         }
@@ -2644,6 +3491,7 @@
         {
           "invocationPattern": "popd +1",
           "label": "popd *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "popd *"
         },
@@ -2653,6 +3501,7 @@
             "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
             "length": 10
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git status [git repositories: directory:<workdir> | dynamic-directory]"
         }
@@ -2669,6 +3518,7 @@
             "described": "sha256:f7f953559eeb444deea225026c02fb78",
             "length": 27
           },
+          "pathScopeRoot": "<outside>",
           "scope": "outside_directory",
           "sessionPattern": "vibe-path:exact:<outside>"
         },
@@ -2678,6 +3528,7 @@
             "described": "sha256:e62b04aadf39df1a47b771265e4ae5c4",
             "length": 10
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git status [git repositories: directory:<workdir> | dynamic-directory]"
         }
@@ -2694,6 +3545,7 @@
             "described": "sha256:494a5b0a7ee50e50972bcc18056ac010",
             "length": 51
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git $SUB"
         }
@@ -2710,6 +3562,7 @@
             "described": "sha256:494a5b0a7ee50e50972bcc18056ac010",
             "length": 51
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "sudo $CMD"
         }
@@ -2726,6 +3579,7 @@
             "described": "sha256:494a5b0a7ee50e50972bcc18056ac010",
             "length": 51
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "git log $REF"
         }
@@ -2739,6 +3593,7 @@
         {
           "invocationPattern": "echo",
           "label": "echo *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "echo *"
         }
@@ -2752,6 +3607,7 @@
         {
           "invocationPattern": "ls {a,b}",
           "label": "ls *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "ls *"
         }
@@ -2768,6 +3624,7 @@
             "described": "sha256:aa4cd38ef287a8504655ce63606a4ccb",
             "length": 56
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "HOME=/x git status"
         }
@@ -2781,6 +3638,7 @@
         {
           "invocationPattern": "ls",
           "label": "ls *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "ls *"
         }
@@ -2794,6 +3652,7 @@
         {
           "invocationPattern": "ls",
           "label": "ls *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "ls *"
         }
@@ -2822,6 +3681,7 @@
             "described": "sha256:e436ecd66d6b18790da4595e645a1631",
             "length": 44
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "ls >&file"
         }
@@ -2838,6 +3698,7 @@
             "described": "sha256:4d43c25388b01267ba061c4e0a9b51d4",
             "length": 86
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "cat <<< text"
         }
@@ -2851,6 +3712,7 @@
         {
           "invocationPattern": "echo $'a'",
           "label": "echo *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "echo *"
         }
@@ -2867,6 +3729,7 @@
             "described": "sha256:14586885161ff5dd866fa86f2fac9fda",
             "length": 53
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "=ls"
         }
@@ -2880,6 +3743,7 @@
         {
           "invocationPattern": "ls",
           "label": "ls *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "ls *"
         }
@@ -2896,6 +3760,7 @@
             "described": "sha256:61766404d151fa1921c2f0e2d887933a",
             "length": 67
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "f() { ls; }"
         }
@@ -2912,6 +3777,7 @@
             "described": "sha256:dc10c63d456920da3da1a2bfe02baf92",
             "length": 50
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "ls \\\n -la"
         }
@@ -2928,6 +3794,7 @@
             "described": "sha256:3bbbce9eecd05d39984aab47fff4176c",
             "length": 68
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "[[ -n $FOO ]]"
         }
@@ -2941,6 +3808,7 @@
         {
           "invocationPattern": "env FOO=1 ls",
           "label": "env *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "env *"
         }
@@ -2954,6 +3822,7 @@
         {
           "invocationPattern": ". ./script.sh",
           "label": ". *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": ". *"
         }
@@ -2970,6 +3839,7 @@
             "described": "sha256:494a5b0a7ee50e50972bcc18056ac010",
             "length": 51
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "npm run $TASK"
         }
@@ -2983,6 +3853,7 @@
         {
           "invocationPattern": "npm run build",
           "label": "npm run build *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "npm run build *"
         }
@@ -2999,6 +3870,7 @@
             "described": "sha256:494a5b0a7ee50e50972bcc18056ac010",
             "length": 51
           },
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "cargo $CMD"
         }
@@ -3012,6 +3884,7 @@
         {
           "invocationPattern": "docker compose up",
           "label": "docker compose up *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "docker compose up *"
         }
@@ -3025,12 +3898,14 @@
         {
           "invocationPattern": "echo \"$(date)\"",
           "label": "echo *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "echo *"
         },
         {
           "invocationPattern": "date",
           "label": "date",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "date"
         }
@@ -3044,6 +3919,7 @@
         {
           "invocationPattern": "cat <outside>/secret.txt",
           "label": "cat *",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "cat *"
         },
@@ -3053,13 +3929,14 @@
             "described": "sha256:9d4dcea7f76ce0169504db13046d2bf9",
             "length": 38
           },
+          "pathScopeRoot": null,
           "scope": "outside_directory",
           "sessionPattern": "vibe-path:exact:<outside>/secret.txt"
         }
       ]
     }
   ],
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "stdinPermissions": [
     {
       "command": "git log",
@@ -3071,6 +3948,7 @@
         {
           "invocationPattern": "input to pager session session_1",
           "label": "input to pager session session_1",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "input to pager session session_1"
         }
@@ -3086,6 +3964,7 @@
         {
           "invocationPattern": "input to pager session session_1",
           "label": "input to pager session session_1",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "input to pager session session_1"
         }
@@ -3101,6 +3980,7 @@
         {
           "invocationPattern": "input to pager session session_1",
           "label": "input to pager session session_1",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "input to pager session session_1"
         }
@@ -3122,6 +4002,7 @@
         {
           "invocationPattern": "input to pager session session_1",
           "label": "input to pager session session_1",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "input to pager session session_1"
         }
@@ -3137,6 +4018,7 @@
         {
           "invocationPattern": "input to pager session session_1",
           "label": "input to pager session session_1",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "input to pager session session_1"
         }
@@ -3152,6 +4034,7 @@
         {
           "invocationPattern": "input to pager session session_1",
           "label": "input to pager session session_1",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "input to pager session session_1"
         }
@@ -3167,6 +4050,7 @@
         {
           "invocationPattern": "input to pager session session_1",
           "label": "input to pager session session_1",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "input to pager session session_1"
         }
@@ -3194,6 +4078,7 @@
         {
           "invocationPattern": "input to pager session session_1",
           "label": "input to pager session session_1",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "input to pager session session_1"
         }
@@ -3215,6 +4100,7 @@
         {
           "invocationPattern": "input to pager session session_1",
           "label": "input to pager session session_1",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "input to pager session session_1"
         }
@@ -3230,6 +4116,7 @@
         {
           "invocationPattern": "input to pager session session_1",
           "label": "input to pager session session_1",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "input to pager session session_1"
         }
@@ -3251,6 +4138,7 @@
         {
           "invocationPattern": "input to pager session session_1",
           "label": "input to pager session session_1",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "input to pager session session_1"
         }
@@ -3266,6 +4154,7 @@
         {
           "invocationPattern": "input to pager session session_1",
           "label": "input to pager session session_1",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "input to pager session session_1"
         }
@@ -3281,6 +4170,7 @@
         {
           "invocationPattern": "input to pager session session_1",
           "label": "input to pager session session_1",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "input to pager session session_1"
         }
@@ -3302,6 +4192,7 @@
         {
           "invocationPattern": "input to pager session session_1",
           "label": "input to pager session session_1",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "input to pager session session_1"
         }
@@ -3317,6 +4208,7 @@
         {
           "invocationPattern": "input to pager session session_1",
           "label": "input to pager session session_1",
+          "pathScopeRoot": null,
           "scope": "command_pattern",
           "sessionPattern": "input to pager session session_1"
         }

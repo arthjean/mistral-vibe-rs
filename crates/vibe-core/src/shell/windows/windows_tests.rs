@@ -115,7 +115,7 @@ fn a_path_that_cannot_be_positioned_is_asked_about_as_written() {
 }
 
 #[test]
-fn a_path_outside_the_workspace_names_its_directory() {
+fn a_path_outside_the_workspace_is_named_by_itself() {
     let analysis = analyze(r"type \\server\share\secret.txt");
     assert_eq!(analysis.mode, PermissionMode::Ask);
     assert!(
@@ -124,6 +124,44 @@ fn a_path_outside_the_workspace_names_its_directory() {
             .iter()
             .all(|requirement| requirement.scope == PermissionScope::OutsideDirectory),
         "{analysis:?}"
+    );
+    assert_eq!(
+        patterns(&analysis),
+        vec![r"\\server\share\secret.txt".to_owned()]
+    );
+    assert_eq!(
+        analysis.requirements[0].session_pattern,
+        r"vibe-path:exact:\\server\share\secret.txt"
+    );
+}
+
+/// Reference `test_windows_shell_honors_an_exact_persisted_outside_path_grant`:
+/// the encoded grant a permanent approval wrote clears its own path and no
+/// sibling.
+#[test]
+fn an_exact_persisted_grant_clears_its_path_and_no_sibling() {
+    let mut lists = lists();
+    lists.allowlist = vec![
+        "type".to_owned(),
+        r"vibe-path:exact:D:\outside\approved.txt".to_owned(),
+    ];
+    let approved = analyze_shell(
+        ShellFlavor::PowerShell,
+        r#"type "D:\outside\approved.txt""#,
+        &context(),
+        &lists,
+    );
+    assert_eq!(approved.mode, PermissionMode::Always, "{approved:?}");
+    let sibling = analyze_shell(
+        ShellFlavor::PowerShell,
+        r#"type "D:\outside\sibling.txt""#,
+        &context(),
+        &lists,
+    );
+    assert_eq!(sibling.mode, PermissionMode::Ask);
+    assert_eq!(
+        patterns(&sibling),
+        vec![r"D:\outside\sibling.txt".to_owned()]
     );
 }
 

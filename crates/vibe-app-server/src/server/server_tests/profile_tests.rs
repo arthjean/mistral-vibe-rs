@@ -11,7 +11,9 @@ async fn accept_edits_profile_auto_approves_only_mutating_file_tools() {
         .request(ApprovalRequest {
             tool: "edit".to_owned(),
             input: Value::Null,
-            requirements: vec![PermissionRequirement::outside_directory("/workspace/*")],
+            requirements: vec![PermissionRequirement::outside_path(std::path::Path::new(
+                "/workspace/notes.md",
+            ))],
             rationale: "edit file".to_owned(),
             call_id: None,
         })
@@ -21,7 +23,9 @@ async fn accept_edits_profile_auto_approves_only_mutating_file_tools() {
         .request(ApprovalRequest {
             tool: "read_file".to_owned(),
             input: Value::Null,
-            requirements: vec![PermissionRequirement::outside_directory("/workspace/*")],
+            requirements: vec![PermissionRequirement::outside_path(std::path::Path::new(
+                "/workspace/notes.md",
+            ))],
             rationale: "read file".to_owned(),
             call_id: None,
         })

@@ -1,11 +1,12 @@
 //! Differential oracle for the shell policy.
 //!
 //! The Python reference is the authority on which commands a shell call
-//! extracts, which of them have their path operands inspected, which
-//! directories a call reaches outside the workspace, and what permission the
-//! whole thing resolves to. `scripts/parity/shell_policy.py` asks it all four
-//! questions and records the answers; this module replays them against
-//! [`extract_commands`], [`inspects_paths`] and [`analyze_shell`].
+//! extracts, which of them have their path operands inspected, which paths a
+//! call reaches outside the workspace, which of them the shell's allowlist
+//! already grants, and what permission the whole thing resolves to.
+//! `scripts/parity/shell_policy.py` asks it every one of those questions and
+//! records the answers; this module replays them against [`extract_commands`],
+//! [`inspects_paths`], [`path_grant_pattern_matches`] and [`analyze_shell`].
 //!
 //! The corpus is committed: it carries command names, node-kind names, scope
 //! values, booleans and the answers to cases this repository authored, and no
@@ -26,11 +27,9 @@
 //! always prompted, but some entries are permissive in what a session grant
 //! covers: where the reference records the literal command text, this port
 //! records an arity pattern such as `git reset *` or `python3 *`, so one
-//! approval here releases more later calls than it does upstream. A
-//! requirement for a path outside the workspace that names a different subject
-//! belongs in [`OUTSIDE_PATH_DIVERGENCES`], which admits its two patterns and
-//! its label together. Every ledger is checked in both directions: an entry
-//! that stops diverging fails the suite rather than rotting in the list.
+//! approval here releases more later calls than it does upstream. Every ledger
+//! is checked in both directions: an entry that stops diverging fails the suite
+//! rather than rotting in the list.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -42,14 +41,14 @@ use sha2::{Digest, Sha256};
 
 use super::*;
 use crate::parity::{off_pin_reason, pinned_interpreter, reference_root};
-use crate::policy::PermissionScope;
+use crate::policy::{PermissionScope, path_grant_pattern_matches};
 use crate::tools::config::{ToolConfigResolver, shell_read_only_commands};
 
 const CAPTURE_SCRIPT: &str = "scripts/parity/shell_policy.py";
 const CORPUS_RELATIVE: &str = "tests/shell-policy/policy.json";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 3;
+const CORPUS_SCHEMA_VERSION: u32 = 4;
 
 /// The commands the reference resolves to `always` and this port asks about.
 ///
@@ -112,85 +111,26 @@ const REQUIREMENT_DIVERGENCES: &[(&str, &str, &str)] = &[
     ("cargo $CMD", "/requirements/0/label", UNSCOPED_LABEL),
 ];
 
-/// Why an outside-workspace requirement names the directory here and the path
-/// upstream.
-const OUTSIDE_EXACT_PATH: &str = "since v2.25.8 a shell call reaching outside the workspace \
-     is asked about per resolved path rather than per parent directory: `_collect_outside_paths` \
-     keeps every resolved operand and the managed working directory as it is \
-     (`vibe/core/tools/builtins/bash.py:285-333` at 376f6a33413a, \
-     `experimental_bash.py:354-390`), and `_build_outside_directory_permission` \
-     (`bash.py:527-535`, `experimental_bash.py:1485-1493`) names that path as the invocation \
-     pattern and in the label, with the exact-path grant `path_grant_pattern` encodes \
-     (`vibe/permissions.py:73-75`) as the session pattern. This port still raises a \
-     `<directory>/*` glob over the directory holding the path (`outside_directory` in \
-     `crates/vibe-core/src/policy.rs`, fed by `escaping_glob` and `ShellPolicyContext::managed` \
-     in `crates/vibe-core/src/shell.rs`), so both sides ask but a session approval here covers \
-     every sibling of the path the reference approves alone";
-
-/// Requirements for a path outside the workspace whose subject differs, as
-/// `(case, requirement index)`. Each entry admits that requirement's
-/// `invocationPattern`, `sessionPattern` and `label` together, and fails when
-/// any of the three stops diverging: [`OUTSIDE_EXACT_PATH`] is the one cause.
-const OUTSIDE_PATH_DIVERGENCES: &[(&str, usize)] = &[
-    ("cat <outside>/secret.txt $X", 1),
-    ("cd -- <outside> && git status", 0),
-    ("cd <outside> && git status", 0),
-    ("diff -X /etc/hosts a.txt b.txt", 0),
-    ("git diff --no-index /etc/passwd /dev/null", 0),
-    ("git diff --no-index /etc/passwd /dev/null", 1),
-    ("grep -f /etc/hosts notes.txt", 0),
-    ("sort --random-source=/etc/hosts in.txt", 0),
-    ("plain: cd <outside> && git status", 0),
-    ("pager: cd <outside> && git status", 0),
-    ("pager-off: cd <outside> && git status", 0),
-    ("include: cd <outside> && git status", 0),
-    ("log-pager: cd <outside> && git status", 0),
-    ("fsmonitor: cd <outside> && git status", 0),
-    ("diff-driver: cd <outside> && git status", 0),
-    ("gpg: cd <outside> && git status", 0),
-    (
-        "cat ../elsewhere/secret.txt (cwd Some(\"<workdir>\"), shell None, env [])",
-        0,
-    ),
-    (
-        "cat nested/secret.txt (cwd Some(\"<outside>\"), shell None, env [])",
-        0,
-    ),
-    (
-        "cat nested/secret.txt (cwd Some(\"<outside>\"), shell None, env [])",
-        1,
-    ),
-    (
-        "cat secret.txt (cwd Some(\"<outside>\"), shell None, env [])",
-        0,
-    ),
-    (
-        "git status (cwd Some(\"<outside>\"), shell None, env [])",
-        0,
-    ),
-    ("pwd (cwd Some(\"<outside>\"), shell None, env [])", 0),
-    (
-        "sudo ls (cwd Some(\"<outside>\"), shell None, env [\"A\"])",
-        1,
-    ),
-];
-
-/// Every requirement field the two requirement ledgers admit, as
+/// Every requirement field the requirement ledger admits, as
 /// `(case, pointer)`.
 fn requirement_ledger() -> BTreeSet<(String, String)> {
     REQUIREMENT_DIVERGENCES
         .iter()
         .map(|(command, pointer, _)| ((*command).to_owned(), (*pointer).to_owned()))
-        .chain(OUTSIDE_PATH_DIVERGENCES.iter().flat_map(|(case, index)| {
-            ["invocationPattern", "sessionPattern", "label"]
-                .map(|field| ((*case).to_owned(), format!("/requirements/{index}/{field}")))
-        }))
         .collect()
 }
 
 /// The key a repository case is replayed and ledgered under.
 fn repository_key(case: &RepositoryCase) -> String {
     format!("{}: {}", case.fixture, case.command)
+}
+
+/// The key an allowlist grant case is replayed and ledgered under.
+fn grant_key(case: &GrantCase) -> String {
+    format!(
+        "{} {:?}: {} (cwd {:?})",
+        case.resolver, case.allowlist, case.command, case.cwd
+    )
 }
 
 /// The key a managed case is replayed and ledgered under.
@@ -211,12 +151,14 @@ struct Corpus {
     counts: Counts,
     command_sets: CommandSets,
     extraction: Vec<ExtractionCase>,
-    outside_dirs: Vec<OutsideCase>,
+    outside_paths: Vec<OutsideCase>,
     resolutions: Vec<ResolutionCase>,
     repository_resolutions: Vec<RepositoryCase>,
     managed_resolutions: Vec<ManagedCase>,
     windows_grammar: WindowsGrammar,
     stdin_permissions: Vec<StdinCase>,
+    allowlist_grants: Vec<GrantCase>,
+    path_grant_matches: Vec<GrantMatchCase>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -229,12 +171,14 @@ struct Reference {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Counts {
     extraction_cases: usize,
-    outside_dir_cases: usize,
+    outside_path_cases: usize,
     resolution_cases: usize,
     repository_cases: usize,
     managed_cases: usize,
     windows_grammar_cases: usize,
     stdin_permission_cases: usize,
+    allowlist_grant_cases: usize,
+    path_grant_match_cases: usize,
     path_commands: usize,
 }
 
@@ -260,7 +204,33 @@ struct ExtractionCase {
 #[serde(deny_unknown_fields)]
 struct OutsideCase {
     command: String,
-    directories: Vec<String>,
+    paths: Vec<String>,
+}
+
+/// A call resolved with path grants in the shell's allowlist.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct GrantCase {
+    /// `legacy` or `managed`, the resolver that answered.
+    resolver: String,
+    allowlist: Vec<String>,
+    command: String,
+    cwd: Option<String>,
+    permission: Option<String>,
+    #[serde(default)]
+    #[expect(dead_code, reason = "the reason text itself is reference prose")]
+    has_reason: bool,
+    #[serde(default)]
+    requirements: Vec<Requirement>,
+}
+
+/// One verdict of reference `path_grant_pattern_matches`.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GrantMatchCase {
+    path: String,
+    pattern: String,
+    matches: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -403,6 +373,7 @@ struct Requirement {
     invocation_pattern: String,
     session_pattern: String,
     label: Label,
+    path_scope_root: Option<String>,
 }
 
 /// A requirement label as the corpus commits it.
@@ -593,12 +564,24 @@ impl OperandWorkspace {
         let outside = root.path().join("elsewhere");
         let scratchpad = workdir.join(".vibe").join("scratchpad");
         fs::create_dir_all(outside.join("nested")).expect("outside tree");
+        fs::create_dir_all(outside.join("approved")).expect("approved directory");
         fs::create_dir_all(workdir.join("nested")).expect("nested workdir");
         fs::create_dir_all(&scratchpad).expect("scratchpad");
         fs::write(workdir.join("inside.txt"), "inside").expect("inside file");
         fs::write(outside.join("secret.txt"), "secret").expect("outside file");
         fs::write(outside.join("nested").join("secret.txt"), "secret").expect("nested file");
         fs::write(scratchpad.join("note.txt"), "note").expect("scratchpad file");
+        // The two directory links the capture's tree holds.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+            symlink(&outside, workdir.join("escape")).expect("escape link");
+            symlink(
+                outside.join("nested"),
+                outside.join("approved").join("link"),
+            )
+            .expect("approved link");
+        }
         Self {
             _root: root,
             workdir,
@@ -655,40 +638,35 @@ fn canonical(path: &Path) -> String {
         .into_owned()
 }
 
-/// US-111: the directories a call reaches outside the workspace are the
-/// reference's, named as the globs one approval covers.
+/// US-111: the paths a call reaches outside the workspace are the
+/// reference's, each named by where it resolves.
 #[test]
 fn every_escaping_operand_matches_the_reference() {
     let corpus = corpus();
-    assert_eq!(corpus.outside_dirs.len(), corpus.counts.outside_dir_cases);
+    assert_eq!(corpus.outside_paths.len(), corpus.counts.outside_path_cases);
     let workspace = OperandWorkspace::build();
     let context = workspace.context();
     let lists = posix_lists();
 
-    for case in &corpus.outside_dirs {
+    for case in &corpus.outside_paths {
         let command = workspace.expand(&case.command);
         let analysis = analyze_shell(ShellFlavor::Posix, &command, &context, &lists);
         let reached = analysis
             .requirements
             .iter()
             .filter(|requirement| requirement.scope == PermissionScope::OutsideDirectory)
-            .map(|requirement| requirement.invocation_pattern.clone())
-            .collect::<Vec<_>>();
-        let expected = case
-            .directories
-            .iter()
-            .map(|directory| format!("{}/*", workspace.expand(directory)))
+            .map(|requirement| workspace.normalize(&requirement.invocation_pattern))
             .collect::<Vec<_>>();
         assert_eq!(
-            reached, expected,
-            "`{}` reaches different directories here",
+            reached, case.paths,
+            "`{}` reaches different paths here",
             case.command
         );
     }
     eprintln!(
         "shell policy: escaping operands {}/{}",
-        corpus.outside_dirs.len(),
-        corpus.counts.outside_dir_cases
+        corpus.outside_paths.len(),
+        corpus.counts.outside_path_cases
     );
 }
 
@@ -763,6 +741,10 @@ impl Replay {
                     ),
                     invocation_pattern,
                     session_pattern,
+                    path_scope_root: requirement
+                        .path_scope_root
+                        .as_deref()
+                        .map(|root| workspace.normalize(root)),
                 }
             })
             .collect::<Vec<_>>();
@@ -791,6 +773,10 @@ impl Replay {
                     here.session_pattern == upstream.session_pattern,
                 ),
                 ("label", here.label == upstream.label),
+                (
+                    "pathScopeRoot",
+                    here.path_scope_root == upstream.path_scope_root,
+                ),
             ];
             for (field, equal) in fields {
                 if !equal {
@@ -865,6 +851,7 @@ fn every_requirement_ledger_entry_names_a_corpus_case() {
         .map(|case| case.command.clone())
         .chain(corpus.repository_resolutions.iter().map(repository_key))
         .chain(corpus.managed_resolutions.iter().map(managed_key))
+        .chain(corpus.allowlist_grants.iter().map(grant_key))
         .collect::<BTreeSet<_>>();
     let orphans = requirement_ledger()
         .into_iter()
@@ -874,15 +861,9 @@ fn every_requirement_ledger_entry_names_a_corpus_case() {
         orphans.is_empty(),
         "requirement ledger entries naming no corpus case: {orphans:?}"
     );
-    assert!(
-        OUTSIDE_EXACT_PATH.contains(&crate::parity::REFERENCE_COMMIT[..12]),
-        "the outside-path ledger does not cite the pin it was measured at"
-    );
     eprintln!(
-        "shell policy: {} requirement fields ledgered, {} of them over {} outside paths",
-        requirement_ledger().len(),
-        OUTSIDE_PATH_DIVERGENCES.len() * 3,
-        OUTSIDE_PATH_DIVERGENCES.len()
+        "shell policy: {} requirement fields ledgered",
+        requirement_ledger().len()
     );
 }
 
@@ -1004,6 +985,79 @@ fn every_managed_resolution_matches_the_reference() {
     replay.finish("managed resolutions", corpus.counts.managed_cases);
 }
 
+/// A path grant in the shell's allowlist clears the outside paths it covers,
+/// and nothing else in the allowlist does, under both resolvers.
+#[test]
+fn every_allowlist_grant_resolution_matches_the_reference() {
+    let corpus = corpus();
+    assert_eq!(
+        corpus.allowlist_grants.len(),
+        corpus.counts.allowlist_grant_cases
+    );
+    let workspace = OperandWorkspace::build();
+    let mut replay = Replay::default();
+    for case in &corpus.allowlist_grants {
+        let mut lists = posix_lists();
+        lists.allowlist = case
+            .allowlist
+            .iter()
+            .map(|entry| workspace.expand(entry))
+            .collect();
+        let command = workspace.expand(&case.command);
+        let context = match case.resolver.as_str() {
+            "legacy" => workspace.context(),
+            "managed" => {
+                let cwd = case.cwd.as_deref().map(|cwd| workspace.expand(cwd));
+                workspace
+                    .context()
+                    .managed(ShellFlavor::Posix, cwd.as_deref(), Vec::new())
+            }
+            other => panic!("unknown resolver {other}"),
+        };
+        let analysis = analyze_shell(ShellFlavor::Posix, &command, &context, &lists);
+        replay.compare(
+            &grant_key(case),
+            &analysis,
+            case.permission.as_deref(),
+            &case.requirements,
+            &lists,
+            &workspace,
+        );
+    }
+    replay.finish("allowlist grants", corpus.counts.allowlist_grant_cases);
+}
+
+/// Only an encoded grant or an absolute path glob reads as a path grant, and
+/// then as the reference matches it.
+#[test]
+fn every_path_grant_verdict_matches_the_reference() {
+    let corpus = corpus();
+    assert_eq!(
+        corpus.path_grant_matches.len(),
+        corpus.counts.path_grant_match_cases
+    );
+    let differing = corpus
+        .path_grant_matches
+        .iter()
+        .filter(|case| path_grant_pattern_matches(&case.path, &case.pattern) != case.matches)
+        .map(|case| {
+            format!(
+                "{} against {}: {} upstream",
+                case.path, case.pattern, case.matches
+            )
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        differing.is_empty(),
+        "path grant verdicts differ: {differing:#?}"
+    );
+    eprintln!(
+        "shell policy: path grant verdicts {}/{}",
+        corpus.path_grant_matches.len(),
+        corpus.counts.path_grant_match_cases
+    );
+}
+
 /// The PowerShell grammar splits, tokenizes, names, matches and expands as the
 /// reference does.
 #[test]
@@ -1115,6 +1169,7 @@ fn every_stdin_permission_matches_the_reference() {
                     &requirement.invocation_pattern,
                     &requirement.session_pattern,
                 ),
+                path_scope_root: requirement.path_scope_root.clone(),
             })
             .collect::<Vec<_>>();
         let label = format!("{} `{}` (known {})", case.family, case.command, case.known);

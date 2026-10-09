@@ -105,6 +105,33 @@ pub fn path_pattern_matches(path: &str, pattern: &str) -> bool {
     pattern_matches(pattern, &normalized)
 }
 
+/// Whether a shell allowlist entry `pattern` grants `path`.
+///
+/// Reference `path_grant_pattern_matches`: a shell allowlist also holds command
+/// prefixes and wildcards (`cat`, `npm *`, `*`), which must never clear a path
+/// outside the workdir because `fnmatch` would accept them. Only an encoded
+/// grant or an absolute path glob is read as a path grant, and then exactly as
+/// [`path_pattern_matches`] reads it.
+#[must_use]
+pub fn path_grant_pattern_matches(path: &str, pattern: &str) -> bool {
+    (parse_path_grant_pattern(pattern).is_some() || is_legacy_path_grant_pattern(pattern))
+        && path_pattern_matches(path, pattern)
+}
+
+/// Reference `_is_legacy_path_grant_pattern`: an absolute path glob such as
+/// `/tmp/*` or `C:\tmp\*`, read under the grammar the pattern itself is
+/// written in.
+fn is_legacy_path_grant_pattern(pattern: &str) -> bool {
+    if !pattern.contains(['*', '?', '[']) {
+        return false;
+    }
+    if is_windows_path(pattern) {
+        is_windows_absolute(pattern)
+    } else {
+        pattern.starts_with('/')
+    }
+}
+
 /// The root a recursive grant of `path` would reach, when there is one.
 ///
 /// Reference `shell_path_scope_root`: only a directory the session can list and

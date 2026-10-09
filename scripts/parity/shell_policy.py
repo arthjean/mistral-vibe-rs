@@ -8,14 +8,18 @@ the questions its policy ports:
   bash-grammar extraction the hand-rolled tokenizer in this port replaces;
 * which commands have their path operands inspected (``_PATH_COMMANDS``), and
   which predicates make ``find`` an execution rather than a read;
-* what ``_collect_outside_dirs`` answers for operands pointing inside the
-  workdir, outside it, and into the scratchpad;
+* what ``_collect_outside_paths`` answers for operands pointing inside the
+  workdir, outside it, into the scratchpad and through a symlink;
 * what ``BashTool.resolve_permission`` decides for a fixed command list, down
   to the scope, the two patterns and the label of every requirement it raises;
 * what the same resolver decides for git commands run inside repositories whose
   configuration can start a program, one fixture repository per setting;
 * what the managed resolver (``ExperimentalBash``) decides once a call carries
   its own cwd, shell or environment;
+* what both resolvers decide once the shell's allowlist carries path grants:
+  the encoded grants a permanent approval writes there and the absolute path
+  globs an operator may write, beside command prefixes that must never read as
+  one, and what ``path_grant_pattern_matches`` answers for each kind of entry;
 * what ``BashStdin.resolve_permission`` decides for input to a session, given
   the command the session runs;
 * what the PowerShell grammar helpers of ``windows_shell.py`` answer: part
@@ -65,7 +69,7 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 DEFAULT_OUTPUT = Path("crates/vibe-core/tests/shell-policy/policy.json")
 INTERPRETER_VARIABLE = "VIBE_PARITY_PYTHON"
 
@@ -354,6 +358,132 @@ OUTSIDE_DIR_CASES: tuple[str, ...] = (
     "cat <workdir>/../elsewhere/nested/secret.txt",
     "cat sub/../inside.txt",
     "cat ../../../../etc/passwd",
+    # Every operand is its own path: two files of one directory, a directory,
+    # a file that does not exist yet, and two links that are named by where
+    # they lead rather than by how they were written.
+    "cat <outside>/secret.txt <outside>/nested/secret.txt",
+    "ls <outside>/nested",
+    "touch <outside>/missing/new.txt",
+    "cat <workdir>/escape/secret.txt",
+    "cat <outside>/approved/link/secret.txt",
+)
+
+#: The encoded grants the allowlist cases name, as their placeholder forms.
+EXACT_SECRET = "vibe-path:exact:<outside>/secret.txt"
+RECURSIVE_OUTSIDE = "vibe-path:directory_recursive:<outside>"
+
+#: Calls resolved with path grants in the shell's allowlist, as
+#: `(resolver, allowlist, command, cwd)`. Since v2.25.8 a permanent approval
+#: writes the encoded grant into the tool's allowlist and every shell reads it
+#: back before asking; an absolute path glob is read the same way, while a
+#: command prefix or wildcard never clears a path.
+ALLOWLIST_GRANT_CASES: tuple[tuple[str, tuple[str, ...], str, str | None], ...] = (
+    ("legacy", ("cat", EXACT_SECRET), "cat <outside>/secret.txt", None),
+    ("legacy", ("cat", EXACT_SECRET), "cat <outside>/nested/secret.txt", None),
+    (
+        "legacy",
+        ("cat", EXACT_SECRET),
+        "cat <outside>/secret.txt <outside>/nested/secret.txt",
+        None,
+    ),
+    ("legacy", ("cat", RECURSIVE_OUTSIDE), "cat <outside>/nested/secret.txt", None),
+    (
+        "legacy",
+        ("cat", "vibe-path:directory_recursive:<outside>/nested"),
+        "cat <outside>/secret.txt",
+        None,
+    ),
+    ("legacy", ("cat", "<outside>/*"), "cat <outside>/secret.txt", None),
+    ("legacy", ("cat", "<outside>/*"), "cat <outside>/nested/secret.txt", None),
+    ("legacy", ("cat", "<outside>/secre?.txt"), "cat <outside>/secret.txt", None),
+    ("legacy", ("cat", "<outside>/secret.txt"), "cat <outside>/secret.txt", None),
+    ("legacy", ("cat", "elsewhere/*"), "cat <outside>/secret.txt", None),
+    ("legacy", ("*",), "cat <outside>/secret.txt", None),
+    ("legacy", ("cat", "/*"), "cat <outside>/secret.txt", None),
+    (
+        "legacy",
+        ("cat", "vibe-path:recursive:<outside>"),
+        "cat <outside>/secret.txt",
+        None,
+    ),
+    (
+        "legacy",
+        ("cat", "vibe-path:exact:<outside>/./nested/../secret.txt"),
+        "cat <outside>/secret.txt",
+        None,
+    ),
+    ("legacy", (EXACT_SECRET,), "cat <outside>/secret.txt", None),
+    ("legacy", ("sudo", EXACT_SECRET), "sudo cat <outside>/secret.txt", None),
+    (
+        "legacy",
+        ("grep", EXACT_SECRET),
+        "grep -f <outside>/secret.txt notes.txt",
+        None,
+    ),
+    (
+        "legacy",
+        ("cat", "vibe-path:directory_recursive:<outside>/approved"),
+        "cat <outside>/approved/link/secret.txt",
+        None,
+    ),
+    ("legacy", ("ls", RECURSIVE_OUTSIDE), "ls <outside>", None),
+    (
+        "legacy",
+        ("cd", "git status", RECURSIVE_OUTSIDE),
+        "cd <outside> && git status",
+        None,
+    ),
+    ("managed", ("pwd", RECURSIVE_OUTSIDE), "pwd", "<outside>/nested"),
+    ("managed", ("pwd", "vibe-path:exact:<outside>"), "pwd", "<outside>"),
+    ("managed", ("pwd", "vibe-path:exact:<outside>"), "pwd", "<outside>/nested"),
+    ("managed", ("cat", "vibe-path:exact:<outside>"), "cat secret.txt", "<outside>"),
+    ("managed", ("cat", "<outside>/*"), "cat nested/secret.txt", "<outside>"),
+    ("managed", ("cat", EXACT_SECRET), "cat ../elsewhere/secret.txt", None),
+    (
+        "managed",
+        ("cat", "vibe-path:directory_recursive:<outside>/approved"),
+        "cat <outside>/approved/link/secret.txt",
+        None,
+    ),
+    ("managed", ("*",), "pwd", "<outside>"),
+)
+
+#: `(path, pattern)` pairs offered to ``path_grant_pattern_matches``: encoded
+#: grants of both scopes and an unknown one, absolute path globs in both
+#: grammars, and the command entries a shell allowlist also holds.
+PATH_GRANT_MATCH_CASES: tuple[tuple[str, str], ...] = (
+    ("/srv/app/a.txt", "vibe-path:exact:/srv/app/a.txt"),
+    ("/srv/app/a.txt", "vibe-path:exact:/srv/app/./a.txt"),
+    ("/srv/app/a.txt", "vibe-path:exact:/srv/app"),
+    ("/srv/app/a.txt", "vibe-path:directory_recursive:/srv/app"),
+    ("/srv/app", "vibe-path:directory_recursive:/srv/app"),
+    ("/srv/application", "vibe-path:directory_recursive:/srv/app"),
+    ("/srv/app/a.txt", "vibe-path:directory_recursive:/srv/app/"),
+    ("/srv/app/a.txt", "vibe-path:recursive:/srv/app"),
+    ("/srv/app/a.txt", "vibe-path:/srv/app/a.txt"),
+    ("/srv/app/a.txt", "vibe-path"),
+    ("/srv/app/a.txt", "/srv/app/*"),
+    ("/srv/app/sub/a.txt", "/srv/app/*"),
+    ("/srv/app/a.txt", "/srv/*/a.txt"),
+    ("/srv/app/a.txt", "/srv/app/?.txt"),
+    ("/srv/app/a.txt", "/srv/app/[ab].txt"),
+    ("/srv/app/a.txt", "/srv/app/a.txt"),
+    ("/srv/app/a.txt", "/*"),
+    ("/srv/app/a.txt", "/**"),
+    ("/srv/app/a.txt", "srv/app/*"),
+    ("/srv/app/a.txt", "*"),
+    ("/srv/app/a.txt", "*/a.txt"),
+    ("/srv/app/a.txt", "cat"),
+    ("/srv/app/a.txt", "npm *"),
+    ("/srv/app/a.txt", "cat /srv/app/*"),
+    ("C:\\srv\\app\\a.txt", "C:\\srv\\app\\*"),
+    ("C:\\srv\\app\\a.txt", "c:/SRV/app/*"),
+    ("C:\\srv\\app\\sub\\a.txt", "C:\\srv\\app\\*"),
+    ("C:\\srv\\app\\a.txt", "C:srv\\*"),
+    ("C:\\srv\\app\\a.txt", "vibe-path:exact:c:\\SRV\\app\\A.txt"),
+    ("C:\\srv\\app\\a.txt", "vibe-path:directory_recursive:C:\\srv"),
+    ("\\\\server\\share\\a.txt", "\\\\server\\share\\*"),
+    ("/srv/app/a.txt", "\\srv\\app\\*"),
 )
 
 #: Every action GNU findutils documents (``man find``, ACTIONS), plus the
@@ -618,12 +748,19 @@ def capture_command_sets(reference: Path) -> dict[str, Any]:
     }
 
 
-def _bash_tool(reference: Path, workdir: Path, scratchpad: Path) -> Any:
+def _bash_tool(
+    reference: Path,
+    workdir: Path,
+    scratchpad: Path,
+    allowlist: list[str] | None = None,
+) -> Any:
     sys.path.insert(0, str(reference))
     from vibe.core.config.harness_files import HarnessFilesManager
     from vibe.core.tools.builtins.bash import Bash, BashToolConfig
 
     config = BashToolConfig()
+    if allowlist is not None:
+        config.allowlist[:] = allowlist
     return Bash(
         lambda: config,
         None,
@@ -659,30 +796,26 @@ def _expand(text: str, placeholders: list[tuple[str, str]]) -> str:
     return text
 
 
-def capture_outside_dirs(reference: Path) -> list[dict[str, Any]]:
-    """What ``_collect_outside_dirs`` answers for the authored operands."""
+def capture_outside_paths(reference: Path) -> list[dict[str, Any]]:
+    """What ``_collect_outside_paths`` answers for the authored operands.
+
+    The reference keeps ``_collect_outside_dirs`` beside it only for its own
+    tests; ``resolve_permission`` reads this one.
+    """
     sys.path.insert(0, str(reference))
     import tempfile
 
-    from vibe.core.tools.builtins.bash import _collect_outside_dirs, _extract_commands
+    from vibe.core.tools.builtins.bash import _collect_outside_paths, _extract_commands
     from vibe.core.workspace import Workspace
 
     with tempfile.TemporaryDirectory() as root:
-        workdir = Path(root) / "workspace"
-        outside = Path(root) / "elsewhere"
-        scratchpad = workdir / ".vibe" / "scratchpad"
-        (outside / "nested").mkdir(parents=True)
-        scratchpad.mkdir(parents=True)
-        (workdir / "inside.txt").write_text("inside", encoding="utf-8")
-        (outside / "secret.txt").write_text("secret", encoding="utf-8")
-        (outside / "nested" / "secret.txt").write_text("secret", encoding="utf-8")
-        (scratchpad / "note.txt").write_text("note", encoding="utf-8")
+        workdir, outside, scratchpad = _operand_tree(Path(root))
         placeholders = _placeholders(workdir, outside, scratchpad)
 
         captured = []
         for case in OUTSIDE_DIR_CASES:
             command = _expand(case, placeholders)
-            dirs = _collect_outside_dirs(
+            paths = _collect_outside_paths(
                 _extract_commands(command),
                 workspace=Workspace.for_session(workdir, [workdir]),
                 scratchpad_dir=scratchpad,
@@ -690,26 +823,34 @@ def capture_outside_dirs(reference: Path) -> list[dict[str, Any]]:
             captured.append(
                 {
                     "command": case,
-                    "directories": sorted(
-                        _normalize(entry, placeholders) for entry in dirs
-                    ),
+                    "paths": sorted(_normalize(entry, placeholders) for entry in paths),
                 }
             )
         return captured
 
 
 def _operand_tree(root: Path) -> tuple[Path, Path, Path]:
-    """The workdir, outside and scratchpad directories every case resolves in."""
+    """The workdir, outside and scratchpad directories every case resolves in.
+
+    Two directory links lead somewhere else: ``<workdir>/escape`` out of the
+    workspace, and ``<outside>/approved/link`` out of a directory a recursive
+    grant may name.
+    """
     workdir = root / "workspace"
     outside = root / "elsewhere"
     scratchpad = workdir / ".vibe" / "scratchpad"
     (outside / "nested").mkdir(parents=True)
+    (outside / "approved").mkdir(parents=True)
     (workdir / "nested").mkdir(parents=True)
     scratchpad.mkdir(parents=True)
     (workdir / "inside.txt").write_text("inside", encoding="utf-8")
     (outside / "secret.txt").write_text("secret", encoding="utf-8")
     (outside / "nested" / "secret.txt").write_text("secret", encoding="utf-8")
     (scratchpad / "note.txt").write_text("note", encoding="utf-8")
+    (workdir / "escape").symlink_to(outside, target_is_directory=True)
+    (outside / "approved" / "link").symlink_to(
+        outside / "nested", target_is_directory=True
+    )
     return workdir, outside, scratchpad
 
 
@@ -733,6 +874,9 @@ def _resolution(
                 ),
                 "sessionPattern": _normalize(required.session_pattern, placeholders),
                 "label": committed_label(required, placeholders),
+                "pathScopeRoot": None
+                if required.path_scope_root is None
+                else _normalize(required.path_scope_root, placeholders),
             }
             for required in context.required_permissions
         ],
@@ -792,24 +936,12 @@ def capture_managed_resolutions(reference: Path) -> list[dict[str, Any]]:
     sys.path.insert(0, str(reference))
     import tempfile
 
-    from vibe.core.config.harness_files import HarnessFilesManager
-    from vibe.core.tools.builtins.experimental_bash import (
-        ExperimentalBash,
-        ExperimentalBashArgs,
-        ExperimentalBashToolConfig,
-    )
+    from vibe.core.tools.builtins.experimental_bash import ExperimentalBashArgs
 
     with tempfile.TemporaryDirectory() as root:
         workdir, outside, scratchpad = _operand_tree(Path(root))
         placeholders = _placeholders(workdir, outside, scratchpad)
-        config = ExperimentalBashToolConfig()
-        tool = ExperimentalBash(
-            lambda: config,
-            None,
-            cwd=workdir,
-            harness_files=HarnessFilesManager(sources=(), cwd=workdir),
-            scratchpad_dir=scratchpad,
-        )
+        tool = _managed_tool(reference, workdir, scratchpad)
         captured = []
         for command, cwd, shell, env in MANAGED_CASES:
             arguments = ExperimentalBashArgs(
@@ -829,6 +961,83 @@ def capture_managed_resolutions(reference: Path) -> list[dict[str, Any]]:
                 }
             )
         return captured
+
+
+def _managed_tool(
+    reference: Path,
+    workdir: Path,
+    scratchpad: Path,
+    allowlist: list[str] | None = None,
+) -> Any:
+    sys.path.insert(0, str(reference))
+    from vibe.core.config.harness_files import HarnessFilesManager
+    from vibe.core.tools.builtins.experimental_bash import (
+        ExperimentalBash,
+        ExperimentalBashToolConfig,
+    )
+
+    config = ExperimentalBashToolConfig()
+    if allowlist is not None:
+        config.allowlist[:] = allowlist
+    return ExperimentalBash(
+        lambda: config,
+        None,
+        cwd=workdir,
+        harness_files=HarnessFilesManager(sources=(), cwd=workdir),
+        scratchpad_dir=scratchpad,
+    )
+
+
+def capture_allowlist_grants(reference: Path) -> list[dict[str, Any]]:
+    """What both resolvers decide with path grants in the shell's allowlist."""
+    sys.path.insert(0, str(reference))
+    import tempfile
+
+    from vibe.core.tools.builtins.bash import BashArgs
+    from vibe.core.tools.builtins.experimental_bash import ExperimentalBashArgs
+
+    captured = []
+    with tempfile.TemporaryDirectory() as root:
+        workdir, outside, scratchpad = _operand_tree(Path(root))
+        placeholders = _placeholders(workdir, outside, scratchpad)
+        for resolver, entries, command, cwd in ALLOWLIST_GRANT_CASES:
+            allowlist = [_expand(entry, placeholders) for entry in entries]
+            expanded = _expand(command, placeholders)
+            if resolver == "legacy":
+                tool = _bash_tool(reference, workdir, scratchpad, allowlist)
+                resolved = tool.resolve_permission(BashArgs(command=expanded))
+            else:
+                tool = _managed_tool(reference, workdir, scratchpad, allowlist)
+                resolved = tool.resolve_permission(
+                    ExperimentalBashArgs(
+                        command=expanded,
+                        cwd=_expand(cwd, placeholders) if cwd is not None else None,
+                    )
+                )
+            captured.append(
+                {
+                    "resolver": resolver,
+                    "allowlist": list(entries),
+                    "cwd": cwd,
+                    **_resolution(command, resolved, placeholders),
+                }
+            )
+    return captured
+
+
+def capture_path_grant_matches(reference: Path) -> list[dict[str, Any]]:
+    """What ``path_grant_pattern_matches`` answers for each authored pair."""
+    sys.path.insert(0, str(reference))
+    from vibe.permissions import path_grant_pattern_matches
+
+    return [
+        {
+            "path": path,
+            "pattern": pattern,
+            "matches": path_grant_pattern_matches(path, pattern),
+        }
+        for path, pattern in PATH_GRANT_MATCH_CASES
+    ]
 
 
 def capture_stdin_permissions(reference: Path) -> list[dict[str, Any]]:
@@ -966,12 +1175,14 @@ def build_corpus(reference: Path, expected_commit: str | None) -> dict[str, Any]
     pin = resolve_reference(reference, expected_commit)
     extraction = capture_extraction(reference)
     sets = capture_command_sets(reference)
-    outside = capture_outside_dirs(reference)
+    outside = capture_outside_paths(reference)
     resolutions = capture_resolutions(reference)
     repository = capture_repository_resolutions(reference)
     managed = capture_managed_resolutions(reference)
     windows = capture_windows_grammar(reference)
     stdin = capture_stdin_permissions(reference)
+    grants = capture_allowlist_grants(reference)
+    matches = capture_path_grant_matches(reference)
     return {
         "schemaVersion": SCHEMA_VERSION,
         "reference": pin,
@@ -986,22 +1197,26 @@ def build_corpus(reference: Path, expected_commit: str | None) -> dict[str, Any]
         ),
         "counts": {
             "extractionCases": len(extraction),
-            "outsideDirCases": len(outside),
+            "outsidePathCases": len(outside),
             "resolutionCases": len(resolutions),
             "repositoryCases": len(repository),
             "managedCases": len(managed),
             "windowsGrammarCases": len(windows["commands"]),
             "stdinPermissionCases": len(stdin),
+            "allowlistGrantCases": len(grants),
+            "pathGrantMatchCases": len(matches),
             "pathCommands": len(sets["pathCommands"]),
         },
         "commandSets": sets,
         "extraction": extraction,
-        "outsideDirs": outside,
+        "outsidePaths": outside,
         "resolutions": resolutions,
         "repositoryResolutions": repository,
         "managedResolutions": managed,
         "windowsGrammar": windows,
         "stdinPermissions": stdin,
+        "allowlistGrants": grants,
+        "pathGrantMatches": matches,
     }
 
 
@@ -1040,11 +1255,13 @@ def main() -> int:
     print(
         f"wrote {arguments.output} "
         f"({counts['extractionCases']} extraction cases, "
-        f"{counts['outsideDirCases']} outside-directory cases, "
+        f"{counts['outsidePathCases']} outside-path cases, "
         f"{counts['resolutionCases']} resolution cases, "
         f"{counts['repositoryCases']} repository cases, "
         f"{counts['managedCases']} managed cases, "
         f"{counts['stdinPermissionCases']} stdin cases, "
+        f"{counts['allowlistGrantCases']} allowlist grant cases, "
+        f"{counts['pathGrantMatchCases']} path grant verdicts, "
         f"{counts['pathCommands']} path commands)"
     )
     return 0

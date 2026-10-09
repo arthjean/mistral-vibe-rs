@@ -20,7 +20,10 @@ use crate::tools::{
 pub mod arity;
 mod path_grants;
 
-pub use path_grants::{PathGrantScope, path_grant_pattern, path_pattern_matches, path_scope_root};
+pub use path_grants::{
+    PathGrantScope, path_grant_pattern, path_grant_pattern_matches, path_pattern_matches,
+    path_scope_root,
+};
 
 /// The rationale a rule stored by an approval carries, which is also what tells
 /// the two apart when a session is rebuilt.
@@ -168,28 +171,12 @@ impl PermissionRequirement {
         }
     }
 
-    /// A directory a command reaches outside every root, named by a glob over
-    /// it.
+    /// A path a file tool or a shell operand reaches outside every root.
     ///
-    /// The shape reference `_build_outside_directory_permission` raised before
-    /// v2.25.8, which the shell still raises (row 6 of `docs/parity.md`).
-    #[must_use]
-    pub fn outside_directory(glob: &str) -> Self {
-        Self {
-            scope: PermissionScope::OutsideDirectory,
-            invocation_pattern: glob.to_owned(),
-            session_pattern: glob.to_owned(),
-            label: format!("outside workdir ({glob})"),
-            literal: false,
-            path_scope_root: None,
-        }
-    }
-
-    /// A path a file tool reaches outside every root.
-    ///
-    /// Reference `resolve_file_tool_permission` since v2.25.8: the call is
-    /// asked about the resolved path itself, the session pattern is its exact
-    /// encoded grant, so approving one file leaves its siblings asking, and the
+    /// Reference `resolve_file_tool_permission` and the shells'
+    /// `_build_outside_directory_permission` since v2.25.8: the call is asked
+    /// about the resolved path itself, the session pattern is its exact encoded
+    /// grant, so approving one file leaves its siblings asking, and the
     /// recursive grant root is the path when it is a directory the session can
     /// enter.
     #[must_use]

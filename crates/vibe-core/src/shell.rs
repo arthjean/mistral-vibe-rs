@@ -4,7 +4,10 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 use crate::platform::{PathPolicyError, Platform, PolicyPath, parse_policy_path};
-use crate::policy::{PermissionContext, PermissionMode, PermissionRequirement, PermissionScope};
+use crate::policy::{
+    PermissionContext, PermissionMode, PermissionRequirement, PermissionScope,
+    path_grant_pattern_matches,
+};
 use crate::scratchpad::is_scratchpad_path;
 use crate::tools::config::ShellCommandConfig;
 
@@ -75,8 +78,8 @@ pub struct ShellPolicyContext {
     pub roots: Vec<PolicyPath>,
     /// The session's own scratchpad, whose paths never raise a requirement.
     ///
-    /// Reference `_collect_outside_dirs` consults `is_scratchpad_path` before
-    /// it collects a directory, so the runtime's own capability is not
+    /// Reference `_collect_outside_paths` consults `is_scratchpad_path` before
+    /// it collects a path, so the runtime's own capability is not
     /// something the operator is asked about. [`None`] for a session whose
     /// scratchpad could not be opened.
     pub scratchpad: Option<PathBuf>,
@@ -91,6 +94,9 @@ pub struct ShellPolicyContext {
     pub context_requirements: Vec<PermissionRequirement>,
     /// The call's environment overrides, which a PowerShell path may expand.
     pub environment: Vec<(String, String)>,
+    /// A managed call's `cwd` as written, when the policy could not position
+    /// it, which is then asked about as an outside path.
+    pub unpositioned_cwd: Option<String>,
 }
 
 /// The reference resolver a shell tool answers through.
@@ -124,6 +130,7 @@ impl ShellPolicyContext {
             resolver: ShellResolver::Legacy,
             context_requirements: Vec::new(),
             environment: Vec::new(),
+            unpositioned_cwd: None,
         }
     }
 
@@ -146,19 +153,13 @@ impl ShellPolicyContext {
         mut self,
         flavor: ShellFlavor,
         cwd: Option<&str>,
-        mut context_requirements: Vec<PermissionRequirement>,
+        context_requirements: Vec<PermissionRequirement>,
     ) -> Self {
         if let Some(raw) = cwd.map(str::trim).filter(|raw| !raw.is_empty()) {
             let expanded = expand_home(raw);
             match normalize_operand(operand_platform(flavor), &self, &expanded) {
                 Ok(directory) => self.working_directory = directory,
-                Err(_) => context_requirements.insert(
-                    0,
-                    PermissionRequirement::outside_directory(&join_glob(
-                        &expanded,
-                        separator_for(operand_platform(flavor)),
-                    )),
-                ),
+                Err(_) => self.unpositioned_cwd = Some(expanded),
             }
         }
         self.resolver = ShellResolver::Managed;
@@ -175,7 +176,7 @@ impl ShellPolicyContext {
 
     /// The same context whose operands may also reach `roots`.
     ///
-    /// Reference `_collect_outside_dirs` positions an operand against
+    /// Reference `_collect_outside_paths` positions an operand against
     /// `Workspace.authorized_roots`, which holds every `--add-dir` root beside
     /// the working directory.
     #[must_use]
@@ -501,8 +502,10 @@ fn analyze_posix(
         Err(reason) => return refusal(reason),
     };
 
-    // 2. The operands that leave the workspace.
-    let (outside, operands) = collect_outside_directories(flavor, parts, context);
+    // 2. The operands that leave the workspace, less those the allowlist
+    // already grants by path.
+    let (mut outside, operands) = collect_outside_paths(flavor, parts, context);
+    retain_ungranted(&mut outside, lists);
 
     // 3. The grant, when nothing withheld it.
     let mut rationale = text
@@ -639,8 +642,8 @@ fn needs_exact_command_scope(text: &TextAnalysis, requirements: &[PermissionRequ
 }
 
 /// Reference `_build_required_permissions`: one requirement per session
-/// pattern the parts earn, then one per directory the call leaves the
-/// workspace for.
+/// pattern the parts earn, then one per path the call reaches outside the
+/// workspace, in sorted order.
 fn command_requirements<'lists>(
     parts: &[String],
     outside: &[String],
@@ -674,9 +677,9 @@ fn command_requirements<'lists>(
             requirements.push(requirement);
         }
     }
-    for glob in outside {
-        rationale.push(format!("`{glob}` is outside the workspace roots"));
-        requirements.push(PermissionRequirement::outside_directory(glob));
+    for path in outside {
+        rationale.push(format!("`{path}` is outside the workspace roots"));
+        requirements.push(PermissionRequirement::outside_path(Path::new(path)));
     }
     requirements
 }
@@ -959,28 +962,28 @@ fn command_node(segment: &str) -> ShellCommandNode {
     }
 }
 
-/// The directories a call reaches outside every root, as the globs a
-/// requirement names them by, and the operands they came from.
+/// The paths a call reaches outside every root, sorted and deduplicated, and
+/// the operands they came from.
 ///
-/// Reference `_collect_outside_dirs`: only a path-inspecting command's operands
-/// are considered, a flag and a `chmod` mode are skipped, a token that does not
-/// look like a path is skipped, the scratchpad is skipped, and a file
-/// contributes its parent directory while a directory contributes itself. The
-/// globs are sorted and deduplicated, so two operands in one directory are one
-/// approval.
-fn collect_outside_directories(
+/// Reference `_collect_outside_paths`: only a path-inspecting command's
+/// operands are considered, a flag and a `chmod` mode are skipped, a token that
+/// does not look like a path is skipped, the scratchpad is skipped, and every
+/// operand left outside is named by its resolved path, so two files in one
+/// directory are two approvals.
+fn collect_outside_paths(
     flavor: ShellFlavor,
     segments: &[String],
     context: &ShellPolicyContext,
 ) -> (Vec<String>, Vec<String>) {
-    let mut globs = BTreeSet::new();
+    let mut paths = BTreeSet::new();
     let mut operands = Vec::new();
-    // The managed resolver positions the call's own directory too, and names
-    // it by itself rather than by its parent.
-    if context.resolver == ShellResolver::Managed
-        && let Some(glob) = escaping_directory_glob(context, &context.working_directory)
-    {
-        globs.insert(glob);
+    // The managed resolver positions the call's own directory too.
+    if context.resolver == ShellResolver::Managed {
+        if let Some(cwd) = &context.unpositioned_cwd {
+            paths.insert(cwd.clone());
+        } else if let Some(path) = escaping_directory(context, &context.working_directory) {
+            paths.insert(path);
+        }
     }
     // Reference `_split_command_tokens`: the legacy resolver keeps a backslash
     // literal on a Windows host, because a path like `C:\Users\me` would
@@ -999,16 +1002,31 @@ fn collect_outside_directories(
             if !looks_like_path(&token) {
                 continue;
             }
-            if let Some(glob) = escaping_glob(flavor, context, &token) {
-                globs.insert(glob);
+            if let Some(path) = escaping_path(flavor, context, &token) {
+                paths.insert(path);
             }
             operands.push(token);
         }
     }
-    (globs.into_iter().collect(), operands)
+    (paths.into_iter().collect(), operands)
 }
 
-/// Reference `_collect_outside_dirs`: only a token shaped like a path is
+/// Drops every outside path a shell allowlist entry already grants.
+///
+/// Reference `resolve_permission` of every shell family since v2.25.8: a
+/// permanent approval writes the encoded grant into the tool's allowlist, and
+/// an operator may write an absolute path glob there, so both are read back
+/// before the call is asked about; a command prefix never is.
+fn retain_ungranted(outside: &mut Vec<String>, lists: &ShellCommandLists) {
+    outside.retain(|path| {
+        !lists
+            .allowlist
+            .iter()
+            .any(|pattern| path_grant_pattern_matches(path, pattern))
+    });
+}
+
+/// Reference `_collect_outside_paths`: only a token shaped like a path is
 /// resolved, so a `grep` pattern and a `chmod` mode never become directories.
 fn looks_like_path(token: &str) -> bool {
     token.starts_with('/')
@@ -1018,11 +1036,6 @@ fn looks_like_path(token: &str) -> bool {
         || token.contains('\\')
 }
 
-/// The glob naming where `token` reaches, or [`None`] when it stays inside.
-///
-/// The operand is parsed under the interpreter's own path grammar and then
-/// positioned on the host's, which is what lets a Git Bash `/c/work/notes.txt`
-/// land on the Windows workspace root it names.
 /// The path grammar an operand of `flavor` is written in.
 fn operand_platform(flavor: ShellFlavor) -> Platform {
     match flavor {
@@ -1032,14 +1045,20 @@ fn operand_platform(flavor: ShellFlavor) -> Platform {
     }
 }
 
-fn escaping_glob(flavor: ShellFlavor, context: &ShellPolicyContext, token: &str) -> Option<String> {
+/// The resolved path `token` reaches outside every root, or [`None`] when it
+/// stays inside.
+///
+/// The operand is parsed under the interpreter's own path grammar and then
+/// positioned on the host's, which is what lets a Git Bash `/c/work/notes.txt`
+/// land on the Windows workspace root it names.
+fn escaping_path(flavor: ShellFlavor, context: &ShellPolicyContext, token: &str) -> Option<String> {
     let platform = operand_platform(flavor);
     let expanded = expand_home(token);
     let Ok(path) = normalize_operand(platform, context, &expanded) else {
         // A path the policy cannot position is treated as outside rather than
         // as inside, which is the direction the reference resolves an
-        // unresolvable operand in.
-        return Some(join_glob(&expanded, separator_for(platform)));
+        // unresolvable operand in, and is named as written.
+        return Some(expanded);
     };
     let host = policy_path_to_host(&path);
     if let Some(host) = host.as_deref()
@@ -1059,24 +1078,12 @@ fn escaping_glob(flavor: ShellFlavor, context: &ShellPolicyContext, token: &str)
         }
         Some(_) | None => lexically_inside,
     };
-    if inside {
-        return None;
-    }
-    // A directory names itself; a file names the directory holding it, which is
-    // what makes one approval cover a sibling read.
-    let directory = match host.as_deref() {
-        Some(host) if host.is_dir() => path.clone(),
-        Some(_) | None => parent_of(&path),
-    };
-    Some(join_glob(
-        &render_policy_path(&directory),
-        separator_for(directory.platform),
-    ))
+    (!inside).then(|| outside_name(&path))
 }
 
-/// The glob naming a managed call's own directory when it leaves the
-/// workspace, which the reference collects as the directory itself.
-fn escaping_directory_glob(context: &ShellPolicyContext, directory: &PolicyPath) -> Option<String> {
+/// A managed call's own directory when it leaves the workspace, which the
+/// reference collects as the resolved directory itself.
+fn escaping_directory(context: &ShellPolicyContext, directory: &PolicyPath) -> Option<String> {
     let host = policy_path_to_host(directory);
     if let Some(host) = host.as_deref()
         && is_scratchpad_path(host, context.scratchpad.as_deref())
@@ -1090,12 +1097,24 @@ fn escaping_directory_glob(context: &ShellPolicyContext, directory: &PolicyPath)
             }
             Some(_) | None => true,
         };
-    (!inside).then(|| {
-        join_glob(
-            &render_policy_path(directory),
-            separator_for(directory.platform),
-        )
-    })
+    (!inside).then(|| outside_name(directory))
+}
+
+/// The text an outside requirement names `path` by.
+///
+/// Reference `resolve_tool_path`, a non-strict `Path.resolve()`: a path on the
+/// host is resolved through every symlink its existing prefix crosses, so an
+/// approval names where the call actually reaches rather than the link it went
+/// through, and without the verbatim prefix Windows canonicalization adds. A
+/// path in a grammar the host cannot open stays as the policy rendered it, as
+/// `str(PureWindowsPath(...))` does on a POSIX host.
+fn outside_name(path: &PolicyPath) -> String {
+    match policy_path_to_host(path) {
+        Some(host) => crate::worktree::strip_verbatim_prefix(
+            &crate::worktree::resolve_lenient(&host).to_string_lossy(),
+        ),
+        None => render_policy_path(path),
+    }
 }
 
 /// The separator `platform` writes a path with.
@@ -1105,23 +1124,6 @@ fn separator_for(platform: Platform) -> char {
     } else {
         '/'
     }
-}
-
-/// `directory` joined with `*`, which is how the reference names the class of
-/// paths one approval covers.
-fn join_glob(directory: &str, separator: char) -> String {
-    if directory.ends_with(separator) {
-        format!("{directory}*")
-    } else {
-        format!("{directory}{separator}*")
-    }
-}
-
-/// `path` without its last component, or `path` when it has none.
-fn parent_of(path: &PolicyPath) -> PolicyPath {
-    let mut parent = path.clone();
-    parent.components.pop();
-    parent
 }
 
 /// The text a requirement names `path` by, in the separator its platform uses.
@@ -1143,7 +1145,7 @@ fn render_policy_path(path: &PolicyPath) -> String {
 
 /// `token` with a leading `~` replaced by the operator's home directory.
 ///
-/// Reference `_collect_outside_dirs` calls `Path.expanduser` before resolving,
+/// Reference `_collect_outside_paths` calls `Path.expanduser` before resolving,
 /// without which `cat ~/.ssh/id_rsa` would position under a literal `~`
 /// directory inside the workspace and never raise a requirement.
 fn expand_home(token: &str) -> String {
@@ -1183,13 +1185,12 @@ fn normalize_operand(
 /// `operand` positioned on the working directory with its `..` components
 /// folded away.
 ///
-/// Reference `_collect_outside_dirs` calls `Path.resolve()`, which folds a
+/// Reference `_collect_outside_paths` calls `Path.resolve()`, which folds a
 /// traversal instead of refusing it, so `cat sub/../notes.txt` is measured where
 /// it actually reads. [`parse_policy_path`] refuses one, because the file tools
 /// it also serves must never let a `..` cross a root; the folding therefore
 /// happens here, on a shell operand only. Without it a traversal is treated as
-/// unresolvable, which both asks about a path that never left the workspace and
-/// names it by a glob built on the file rather than on the directory holding it.
+/// unresolvable, which asks about a path that never left the workspace.
 fn fold_traversal(
     platform: Platform,
     context: &ShellPolicyContext,
@@ -1647,7 +1648,8 @@ mod tests {
     // ----------------------------------------------------------------------
 
     /// US-111: an allowlisted reader pointed outside the roots asks, under an
-    /// `outside_directory` requirement naming the parent directory.
+    /// `outside_directory` requirement naming the path itself and granting it
+    /// by its exact encoded form.
     #[test]
     fn an_allowlisted_reader_pointed_outside_the_roots_still_asks() {
         let inside = analyze("wc -l /work/project/notes.txt");
@@ -1665,9 +1667,82 @@ mod tests {
             .iter()
             .find(|requirement| requirement.scope == PermissionScope::OutsideDirectory)
             .expect("an escaping operand raises an outside-directory requirement");
-        assert_eq!(requirement.invocation_pattern, "/etc/*");
-        assert_eq!(requirement.session_pattern, "/etc/*");
-        assert_eq!(requirement.label, "outside workdir (/etc/*)");
+        assert_eq!(requirement.invocation_pattern, "/etc/passwd");
+        assert_eq!(requirement.session_pattern, "vibe-path:exact:/etc/passwd");
+        assert_eq!(requirement.label, "outside workdir (/etc/passwd)");
+        assert_eq!(
+            requirement.path_scope_root, None,
+            "a file offers no recursive root"
+        );
+    }
+
+    /// An outside directory offers itself as the root a recursive grant would
+    /// reach, which a file never does.
+    #[cfg(unix)]
+    #[test]
+    fn an_outside_directory_offers_itself_as_the_recursive_root() {
+        let analysis = analyze("ls /etc");
+        let requirement = analysis
+            .requirements
+            .iter()
+            .find(|requirement| requirement.scope == PermissionScope::OutsideDirectory)
+            .expect("an outside directory raises a requirement");
+        assert_eq!(requirement.invocation_pattern, "/etc");
+        assert_eq!(requirement.path_scope_root.as_deref(), Some("/etc"));
+    }
+
+    /// The shell reads back the path grants its allowlist holds, the encoded
+    /// ones a permanent approval writes and an absolute path glob, and never a
+    /// command entry.
+    #[test]
+    fn the_allowlist_grants_outside_paths_by_path_only() {
+        let resolve = |entries: &[&str], command: &str| {
+            let mut lists = posix_lists();
+            lists.allowlist = entries.iter().map(|entry| (*entry).to_owned()).collect();
+            analyze_shell(ShellFlavor::Posix, command, &posix_context(), &lists)
+        };
+        let exact = resolve(
+            &["cat", "vibe-path:exact:/srv/data/a.txt"],
+            "cat /srv/data/a.txt",
+        );
+        assert_eq!(
+            exact.mode,
+            PermissionMode::Always,
+            "{:?}",
+            exact.requirements
+        );
+
+        let sibling = resolve(
+            &["cat", "vibe-path:exact:/srv/data/a.txt"],
+            "cat /srv/data/b.txt",
+        );
+        assert_eq!(sibling.mode, PermissionMode::Ask);
+        assert_eq!(
+            session_patterns(&sibling),
+            vec!["vibe-path:exact:/srv/data/b.txt".to_owned()]
+        );
+
+        let recursive = resolve(
+            &["cat", "vibe-path:directory_recursive:/srv"],
+            "cat /srv/data/a.txt",
+        );
+        assert_eq!(recursive.mode, PermissionMode::Always);
+
+        let glob = resolve(&["cat", "/srv/data/*"], "cat /srv/data/a.txt");
+        assert_eq!(glob.mode, PermissionMode::Always);
+        let nested = resolve(&["cat", "/srv/data/*"], "cat /srv/data/sub/a.txt");
+        assert_eq!(
+            nested.mode,
+            PermissionMode::Ask,
+            "a `*` never crosses a separator"
+        );
+
+        let wildcard = resolve(&["cat", "*"], "cat /srv/data/a.txt");
+        assert_eq!(
+            wildcard.mode,
+            PermissionMode::Ask,
+            "a command wildcard is not a path grant"
+        );
     }
 
     /// US-111: a flag and a `chmod` mode are not paths.
@@ -1690,18 +1765,18 @@ mod tests {
         );
     }
 
-    /// US-111: identical directories are emitted once, whichever operand
-    /// reached them.
+    /// US-111: every outside path is its own approval, in sorted order, and
+    /// one path reached twice is asked about once.
     #[test]
-    fn one_directory_is_one_approval() {
-        let analysis = analyze("cat /etc/passwd /etc/group && cat /etc/hosts");
+    fn every_outside_path_is_its_own_approval() {
+        let analysis = analyze("cat /srv/b.txt /srv/a.txt && cat /srv/b.txt");
         let outside = analysis
             .requirements
             .iter()
             .filter(|requirement| requirement.scope == PermissionScope::OutsideDirectory)
+            .map(|requirement| requirement.invocation_pattern.as_str())
             .collect::<Vec<_>>();
-        assert_eq!(outside.len(), 1, "{outside:?}");
-        assert_eq!(outside[0].invocation_pattern, "/etc/*");
+        assert_eq!(outside, ["/srv/a.txt", "/srv/b.txt"]);
     }
 
     /// US-111: a command that inspects no path never resolves its arguments,
@@ -1781,10 +1856,9 @@ mod tests {
             "{:?}",
             analysis.rationale
         );
-        let expected = format!(
-            "{}/.ssh/*",
-            home.display().to_string().trim_end_matches('/')
-        );
+        let expected = crate::worktree::resolve_lenient(&home.join(".ssh").join("id_rsa"))
+            .display()
+            .to_string();
         assert!(
             analysis
                 .requirements
@@ -1796,8 +1870,7 @@ mod tests {
     }
 
     /// US-111: an operand that ascends is folded before it is positioned, so it
-    /// is measured where it actually reads and named by the directory holding
-    /// it rather than by itself.
+    /// is measured and named where it actually reads.
     #[test]
     fn an_ascending_operand_is_folded_before_it_is_positioned() {
         let outside = analyze("cat ../elsewhere/secret.txt");
@@ -1807,8 +1880,11 @@ mod tests {
             .iter()
             .find(|requirement| requirement.scope == PermissionScope::OutsideDirectory)
             .expect("an ascending operand leaves the workspace");
-        assert_eq!(requirement.invocation_pattern, "/work/elsewhere/*");
-        assert_eq!(requirement.session_pattern, "/work/elsewhere/*");
+        assert_eq!(requirement.invocation_pattern, "/work/elsewhere/secret.txt");
+        assert_eq!(
+            requirement.session_pattern,
+            "vibe-path:exact:/work/elsewhere/secret.txt"
+        );
 
         // An ascent that lands back inside raises nothing, which is what keeps a
         // relative read of a sibling directory from asking.
@@ -1825,7 +1901,7 @@ mod tests {
         assert!(
             root.requirements
                 .iter()
-                .any(|requirement| requirement.invocation_pattern == "/etc/*"),
+                .any(|requirement| requirement.invocation_pattern == "/etc/passwd"),
             "{:?}",
             root.requirements
         );

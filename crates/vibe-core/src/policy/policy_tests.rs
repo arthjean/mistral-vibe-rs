@@ -72,15 +72,15 @@ async fn store_trusting(root: &Path) -> PermissionStore {
 /// `sessionPattern`, `label` and `pathScopeRoot`, and refuses anything else.
 #[test]
 fn a_requirement_serializes_as_the_five_camel_cased_fields_and_nothing_else() {
-    let requirement = PermissionRequirement::outside_directory("/outside/*");
+    let requirement = PermissionRequirement::outside_path(Path::new("/outside/notes.txt"));
     let wire = serde_json::to_value(&requirement).expect("serialize");
     assert_eq!(
         wire,
         json!({
             "scope": "outside_directory",
-            "invocationPattern": "/outside/*",
-            "sessionPattern": "/outside/*",
-            "label": "outside workdir (/outside/*)",
+            "invocationPattern": "/outside/notes.txt",
+            "sessionPattern": "vibe-path:exact:/outside/notes.txt",
+            "label": "outside workdir (/outside/notes.txt)",
             "pathScopeRoot": null,
         })
     );
@@ -908,9 +908,9 @@ async fn a_profile_grant_outranks_the_blanket_refusal_written_next_to_it() {
     let allowed = store
         .resolve(
             "edit",
-            &PermissionContext::asking(vec![PermissionRequirement::outside_directory(
-                "/workspace/plans/*",
-            )]),
+            &PermissionContext::asking(vec![PermissionRequirement::outside_path(Path::new(
+                "/workspace/plans/next.md",
+            ))]),
         )
         .await
         .expect("resolution");
@@ -919,9 +919,9 @@ async fn a_profile_grant_outranks_the_blanket_refusal_written_next_to_it() {
     let refused = store
         .resolve(
             "edit",
-            &PermissionContext::asking(vec![PermissionRequirement::outside_directory(
-                "/workspace/src/*",
-            )]),
+            &PermissionContext::asking(vec![PermissionRequirement::outside_path(Path::new(
+                "/workspace/src/main.rs",
+            ))]),
         )
         .await
         .expect("resolution");
