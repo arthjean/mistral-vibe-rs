@@ -11,11 +11,10 @@ use std::sync::LazyLock;
 use std::time::Duration;
 
 use regex::Regex;
-use serde_json::{Map, Value};
 
 use crate::events::ModelMessage;
 use crate::llm::BackendContext;
-use crate::llm::utility::{self, UtilityRequest, UtilitySelection};
+use crate::llm::utility::{self, Attribution, UtilityFeature, UtilityRequest, UtilitySelection};
 use crate::observability::{self, LogLevel};
 use crate::prompt::library::UtilityPrompt;
 
@@ -187,19 +186,20 @@ pub fn clean_title(content: Option<&str>) -> Option<String> {
 /// Reference `generate_session_title`: the utility model's title for
 /// `messages`, refining `previous_title` when there is one. Answers `None`
 /// for an empty transcript, an unusable answer, a failure or a timeout; the
-/// failure is logged.
+/// failure is logged. `attribution` labels the call `title_generation`,
+/// which keeps it out of the session's model-turn counts.
 pub async fn generate_session_title(
     messages: &[ModelMessage],
     previous_title: Option<&str>,
     selection: &UtilitySelection,
     context: &BackendContext,
+    attribution: Attribution<'_>,
 ) -> Option<String> {
     let transcript = build_title_transcript(messages);
     if transcript.is_empty() {
         return None;
     }
     let user_content = user_prompt(&transcript, previous_title);
-    let metadata = Map::from_iter([("call_type".to_owned(), Value::from("secondary_call"))]);
     let request = UtilityRequest {
         system_prompt: UtilityPrompt::SessionTitle.text(),
         user_content: &user_content,
@@ -207,7 +207,8 @@ pub async fn generate_session_title(
         request_timeout: REQUEST_TIMEOUT,
         retry_budget: RETRY_BUDGET,
         skip_if_no_key: false,
-        metadata: &metadata,
+        call_type: utility::feature_call_type(UtilityFeature::Title),
+        attribution,
     };
     match tokio::time::timeout(
         TOTAL_TIMEOUT,

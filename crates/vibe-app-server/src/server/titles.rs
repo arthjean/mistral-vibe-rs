@@ -25,6 +25,20 @@ pub(crate) struct TitleJob {
 }
 
 impl AppServer {
+    /// Reference `_auto_titles_enabled` for a session this server opened:
+    /// a terminal or desktop client with `generate_titles` on, unless the
+    /// harness switch turns titles off. Such a session probes for a fast
+    /// model before it is answered (`vibe/app_server/_runtime.py:1951-1959`).
+    pub(crate) fn session_titles_itself(&self, session_id: &str) -> bool {
+        if std::env::var(DISABLE_ENVIRONMENT).is_ok_and(|value| value == "1") {
+            return false;
+        }
+        self.lock_sessions()
+            .ok()
+            .and_then(|sessions| sessions.get(session_id).map(|session| session.auto_title))
+            .unwrap_or(false)
+    }
+
     /// The title the model step that just completed on `session_id` makes
     /// due, if any, with the snapshot that announces the work. `periodic` is
     /// whether the fast utility model serves titles, and `turn_completing`

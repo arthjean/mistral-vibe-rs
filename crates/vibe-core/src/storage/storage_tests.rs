@@ -570,7 +570,7 @@ fn session_logging_defaults_under_the_vibe_home() {
         enabled: true,
         save_dir: home.join("logs").join("session"),
         session_prefix: "session".to_owned(),
-        generate_titles: false,
+        generate_titles: true,
     };
     assert_eq!(
         SessionLogging::from_effective(&toml::Table::new(), home),
@@ -585,7 +585,7 @@ fn session_logging_reads_overrides_from_the_effective_configuration() {
     let home = Path::new("/home/user/.vibe");
     let effective: toml::Table = toml::from_str(
         "[session_logging]\nenabled = false\nsave_dir = \"/srv/sessions\"\n\
-         session_prefix = \"chat\"\ngenerate_titles = true\n",
+         session_prefix = \"chat\"\ngenerate_titles = false\n",
     )
     .expect("configuration parses");
     assert_eq!(
@@ -594,7 +594,7 @@ fn session_logging_reads_overrides_from_the_effective_configuration() {
             enabled: false,
             save_dir: PathBuf::from("/srv/sessions"),
             session_prefix: "chat".to_owned(),
-            generate_titles: true,
+            generate_titles: false,
         }
     );
 

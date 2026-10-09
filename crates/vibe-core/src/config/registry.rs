@@ -445,6 +445,17 @@ const SESSION_LOGGING: &str = r#"{
     }
 }"#;
 
+const UTILITY_MODELS: &str = r#"{
+    "type": "object",
+    "properties": {
+        "title": {"type": "string"},
+        "smart_approve": {"type": "string"}
+    }
+}"#;
+
+/// Reference `UtilityModelsConfig()`: no feature names a model.
+const DEFAULT_UTILITY_MODELS: &str = r#"{"title": "", "smart_approve": ""}"#;
+
 const EXPERIMENTS: &str = r#"{
     "type": "object",
     "properties": {
@@ -561,7 +572,7 @@ const DEFAULT_PROJECT_CONTEXT: &str = r#"{"default_commit_count": 5, "timeout_se
 /// `save_dir` is empty in the declaration and resolved under the vibe home when
 /// the configuration loads, as the reference resolves it from `SESSION_LOG_DIR`.
 const DEFAULT_SESSION_LOGGING: &str =
-    r#"{"save_dir": "", "session_prefix": "session", "enabled": true, "generate_titles": false}"#;
+    r#"{"save_dir": "", "session_prefix": "session", "enabled": true, "generate_titles": true}"#;
 
 const DEFAULT_EXPERIMENTS: &str = r#"{
     "enable": true,
@@ -706,6 +717,12 @@ pub static FIELDS: &[FieldSpec] = &[
         FieldDefault::None,
         "Image-capable model that describes images for an active model that cannot see them.",
         COMPACTION_MODEL,
+    ),
+    FieldSpec::declared("utility_models", FieldKind::Complex, SHALLOW_MERGE).published(
+        FieldDefault::Json(DEFAULT_UTILITY_MODELS),
+        "Model alias each background feature (session titles, the smart-approve classifier) \
+         runs on, or `active` for the session's model. Empty selects automatically.",
+        UTILITY_MODELS,
     ),
     FieldSpec::declared("auto_compact_threshold", FieldKind::Int, REPLACE)
         .popular()

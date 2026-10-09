@@ -238,6 +238,9 @@ where
                     }
                 };
                 let attached = connection.attached_session_ids();
+                // A fork copies its source and does not probe for a fast
+                // model (`vibe/app_server/_runtime.py:1073`).
+                let forks = requests_fork(&bytes);
                 let batch = connection.dispatch(&bytes);
                 // A session this request attached opens with its connector
                 // catalog resolved, as the reference resolves it while it
@@ -245,6 +248,13 @@ where
                 for session_id in connection.attached_session_ids() {
                     if !attached.contains(&session_id) {
                         let _ = server.open_session_connectors(&session_id).await;
+                        if !forks && server.session_titles_itself(&session_id) {
+                            let driver = Arc::clone(&driver);
+                            let _ = tokio::task::spawn_blocking(move || {
+                                driver.probe_utility_models();
+                            })
+                            .await;
+                        }
                     }
                 }
                 for outbound in batch.outbound {
@@ -677,7 +687,12 @@ async fn run_turn<D>(
             return;
         };
         let _ = events.send(ServeEvent::Frame(started));
-        let title = driver.generate_title(job.messages.clone(), job.previous_title.clone());
+        let title = driver.generate_title(
+            job.session_id.clone(),
+            job.messages.clone(),
+            job.previous_title.clone(),
+            server.client_telemetry(),
+        );
         let server = server.clone();
         let events = events.clone();
         tokio::spawn(async move {
@@ -782,6 +797,21 @@ enum ServeEvent {
     },
     /// Background work failed fatally for this connection.
     Failed(TransportError),
+}
+
+/// Whether a frame asks for a fork, alone or within a batch.
+fn requests_fork(bytes: &[u8]) -> bool {
+    let is_fork = |request: &serde_json::Value| {
+        request
+            .get("method")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|method| matches!(method, "session/fork" | "internal/session/fork"))
+    };
+    match serde_json::from_slice::<serde_json::Value>(bytes) {
+        Ok(serde_json::Value::Array(batch)) => batch.iter().any(is_fork),
+        Ok(request) => is_fork(&request),
+        Err(_) => false,
+    }
 }
 
 async fn fail_deferred(server: &AppServer, deferred: &[DeferredWork], message: &str) {

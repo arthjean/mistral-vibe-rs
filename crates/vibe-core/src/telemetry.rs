@@ -422,6 +422,12 @@ pub enum TelemetryCallType {
     #[default]
     MainCall,
     SecondaryCall,
+    /// A smart approval's verdict, made on the utility model.
+    SmartApprove,
+    /// A session title, made on the utility model.
+    TitleGeneration,
+    /// A worktree name, made on the utility model.
+    WorktreeTitle,
 }
 
 impl TelemetryCallType {
@@ -430,6 +436,9 @@ impl TelemetryCallType {
         match self {
             Self::MainCall => "main_call",
             Self::SecondaryCall => "secondary_call",
+            Self::SmartApprove => "smart_approve",
+            Self::TitleGeneration => "title_generation",
+            Self::WorktreeTitle => "worktree_title",
         }
     }
 }

@@ -14,7 +14,8 @@ use serde_json::{Map, Value, json};
 
 use super::adapter::{lax_count, truthy};
 use super::error::{
-    BackendErrorSource, BackendFailure, KeyOrigin, LocalFailure, LocalKind, TransportFailure,
+    BackendErrorSource, BackendFailure, KeyOrigin, KeySource, LocalFailure, LocalKind,
+    TransportFailure,
 };
 use super::generic::{CallFacts, merge_headers};
 use super::pump::{ChunkPump, ChunkStream, EventSource, Settle};
@@ -29,6 +30,8 @@ use super::{BackendContext, ModelRequest};
 use crate::provider::config::ProviderConfig;
 
 const PATH: &str = "/v1/chat/completions";
+/// The variable the Mistral client reads a key from when it is handed none.
+const CLIENT_KEY_VARIABLE: &str = "MISTRAL_API_KEY";
 
 pub struct MistralBackend {
     provider: ProviderConfig,
@@ -100,7 +103,18 @@ impl MistralBackend {
         let resolved = context.credentials.resolve(&provider.api_key_env_var);
         let (api_key, api_key_origin) = match resolved {
             Some((key, origin)) => (Some(key), Some(origin)),
-            None => (None, None),
+            // The client handed no key reads `MISTRAL_API_KEY` from the
+            // environment (`mistralai` `get_security_from_env`), so a provider
+            // whose own variable resolves nothing still sends that one, and
+            // reports no origin for it.
+            None => (
+                context
+                    .credentials
+                    .resolve(CLIENT_KEY_VARIABLE)
+                    .filter(|(_, origin)| origin.source == KeySource::Environment)
+                    .map(|(key, _)| key),
+                None,
+            ),
         };
         #[allow(clippy::cast_possible_truncation)]
         let budget_millis = (api.retry_max_elapsed_time.as_secs_f64() * 1000.0) as i64;

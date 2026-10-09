@@ -135,7 +135,18 @@ where
     }
 
     pub fn start_session(&mut self, options: &SessionOptions) -> Result<String, ClientError> {
-        self.client.start_session(options)
+        let session_id = self.client.start_session(options)?;
+        self.probe_for_titles(&session_id);
+        Ok(session_id)
+    }
+
+    /// A root session that titles itself learns whether a fast model serves
+    /// its titles before it is handed back, as the reference's session open
+    /// waits on the probe.
+    fn probe_for_titles(&self, session_id: &str) {
+        if self.client.session_titles_itself(session_id) {
+            self.driver.probe_utility_models();
+        }
     }
 
     /// The configuration and session service this session composes over.
@@ -221,7 +232,29 @@ where
         method: &str,
         params: Value,
     ) -> Result<BTreeMap<String, Value>, ClientError> {
-        self.client.public_call(method, params)
+        let requested = params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        let result = self.client.public_call(method, params)?;
+        // A resumed or continued session opens a root of its own, which the
+        // reference builds, probe included; a fork copies its source and
+        // does not probe (`vibe/app_server/_runtime.py:1073`).
+        if matches!(
+            method,
+            "session/resume"
+                | "session/continue"
+                | "internal/session/resume"
+                | "internal/session/continue"
+        ) && let Some(session_id) = result
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+            .or(requested)
+        {
+            self.probe_for_titles(&session_id);
+        }
+        Ok(result)
     }
 
     pub async fn public_call_async(
@@ -928,9 +961,12 @@ where
             self.server.land_title(job, None);
             return Ok(());
         };
-        let title = self
-            .driver
-            .generate_title(job.messages.clone(), job.previous_title.clone());
+        let title = self.driver.generate_title(
+            job.session_id.clone(),
+            job.messages.clone(),
+            job.previous_title.clone(),
+            self.server.client_telemetry(),
+        );
         let server = self.server.clone();
         runtime.spawn(async move {
             let title = title.await;

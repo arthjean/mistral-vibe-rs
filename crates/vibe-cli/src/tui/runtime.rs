@@ -477,8 +477,10 @@ pub(in crate::tui) fn interactive_test_runtime_with_trust(
                     "TEST_CREDENTIAL",
                 )
                 .expect("a known style"),
+                providers: Vec::new(),
                 models: Vec::new(),
                 allowed_models: Vec::new(),
+                utility_models: Default::default(),
                 model: "test-model".to_owned(),
                 api: vibe_core::provider::config::ApiSettings::default(),
                 system_prompt: "test".to_owned(),

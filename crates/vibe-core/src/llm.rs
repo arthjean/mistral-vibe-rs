@@ -21,6 +21,7 @@ use serde_json::{Map, Value};
 
 pub mod adapter;
 pub mod anthropic;
+pub mod availability;
 pub mod call;
 pub mod chat;
 pub mod completion;
@@ -37,6 +38,8 @@ pub mod types;
 pub mod utility;
 pub mod vertex;
 
+#[cfg(test)]
+mod availability_parity_tests;
 #[cfg(test)]
 mod backend_parity_tests;
 

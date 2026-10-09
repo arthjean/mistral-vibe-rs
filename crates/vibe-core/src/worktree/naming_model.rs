@@ -2,7 +2,7 @@
 //!
 //! Reference `vibe/core/git/worktree/naming_model.py` over
 //! `vibe/core/llm/utility_completion.py`. Naming is a nicety on the
-//! session-start path, and the caller always holds a deterministic name, so
+//! session-start path whose caller already has a fallback name, so
 //! every failure is [`None`]: no prompt, no provider, no key, too slow, or an
 //! error of any kind. The request is bounded twice, one attempt at 1.5 seconds
 //! inside a 2 second budget for everything, and never retried.
@@ -12,12 +12,14 @@ use std::time::Duration;
 
 use crate::engine::CompletionProvider;
 use crate::events::ModelMessage;
+use crate::llm::availability::ModelAvailability;
 use crate::llm::completion::LlmCompletion;
 use crate::llm::{BackendContext, Credentials, utility};
 use crate::observability::{self, LogLevel};
 use crate::prompt::library::UtilityPrompt;
 use crate::provider::config::{ApiSettings, ModelRouting};
 use crate::provider::{ProviderInput, RequestLimits};
+use crate::telemetry::{LaunchContext, TelemetryCallType};
 
 /// One attempt's deadline (`naming_model.py:15`).
 pub const REQUEST_TIMEOUT: Duration = Duration::from_millis(1_500);
@@ -28,15 +30,21 @@ pub const MAX_TOKENS: u32 = 24;
 
 /// The non-retrying provider a utility completion runs on, picked the way
 /// `select_utility_model` picks it (`vibe/core/llm/utility_completion.py`):
-/// the fast Mistral model whenever a Mistral provider is usable, the
-/// session's own model otherwise. [`None`] is the reference's
+/// a fast Mistral model a probe or the public API vouches for, the session's
+/// own model otherwise. [`None`] is the reference's
 /// `skip_if_no_key`: a provider whose key does not resolve is not called.
 #[must_use]
 pub fn utility_provider(
     routing: &ModelRouting,
     credentials: Arc<dyn Credentials>,
 ) -> Option<Arc<dyn CompletionProvider>> {
-    let selection = utility::select(routing, credentials.as_ref()).ok()?;
+    let selection = utility::select(
+        routing,
+        credentials.as_ref(),
+        ModelAvailability::global(),
+        None,
+    )
+    .ok()?;
     let key = &selection.provider.api_key_env_var;
     if !key.is_empty() && credentials.resolve(key).is_none() {
         return None;
@@ -62,6 +70,7 @@ pub fn utility_provider(
 pub fn suggest_worktree_name_blocking(
     prompt: Option<&str>,
     provider: Option<&dyn CompletionProvider>,
+    launch: Option<&LaunchContext>,
 ) -> Option<String> {
     let prompt = prompt.filter(|prompt| !prompt.is_empty())?;
     let provider = provider?;
@@ -72,7 +81,7 @@ pub fn suggest_worktree_name_blocking(
                     .enable_all()
                     .build()
                     .ok()?;
-                runtime.block_on(suggest_worktree_name(Some(prompt), Some(provider)))
+                runtime.block_on(suggest_worktree_name(Some(prompt), Some(provider), launch))
             })
             .join()
             .ok()
@@ -84,14 +93,16 @@ pub fn suggest_worktree_name_blocking(
 ///
 /// What comes back is the model's raw text; the caller slugifies it with the
 /// same rule as the prompt, so an answer that does not fit is never used
-/// unfiltered.
+/// unfiltered. The request is labeled `worktree_title` and reports `launch`
+/// as a session's requests do.
 pub async fn suggest_worktree_name(
     prompt: Option<&str>,
     provider: Option<&dyn CompletionProvider>,
+    launch: Option<&LaunchContext>,
 ) -> Option<String> {
     let prompt = prompt.filter(|prompt| !prompt.is_empty())?;
     let provider = provider?;
-    match tokio::time::timeout(TOTAL_TIMEOUT, complete(prompt, provider)).await {
+    match tokio::time::timeout(TOTAL_TIMEOUT, complete(prompt, provider, launch)).await {
         Ok(answer) => answer,
         Err(_) => {
             observability::log(LogLevel::Debug, "Worktree name suggestion timed out");
@@ -100,7 +111,11 @@ pub async fn suggest_worktree_name(
     }
 }
 
-async fn complete(prompt: &str, provider: &dyn CompletionProvider) -> Option<String> {
+async fn complete(
+    prompt: &str,
+    provider: &dyn CompletionProvider,
+    launch: Option<&LaunchContext>,
+) -> Option<String> {
     let input = ProviderInput {
         turn_id: None,
         session_id: None,
@@ -123,10 +138,14 @@ async fn complete(prompt: &str, provider: &dyn CompletionProvider) -> Option<Str
             max_tokens: Some(MAX_TOKENS),
             temperature_millis: Some(0),
         },
-        metadata: std::collections::BTreeMap::from([(
-            "call_type".to_owned(),
-            "secondary_call".to_owned(),
-        )]),
+        // Every field the census carries without a session is a string.
+        metadata: utility::request_metadata(launch, None, TelemetryCallType::WorktreeTitle)
+            .into_iter()
+            .filter_map(|(key, value)| match value {
+                serde_json::Value::String(value) => Some((key, value)),
+                _ => None,
+            })
+            .collect(),
     };
     match tokio::time::timeout(REQUEST_TIMEOUT, provider.complete(&input)).await {
         Ok(Ok(answer)) => {

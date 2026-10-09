@@ -96,8 +96,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let config = LiveDriverConfig {
         compaction_prompts: CompactionPromptResolution::default(),
         provider,
+        providers: routing.providers.clone(),
         models: routing.models.clone(),
         allowed_models: routing.allowed_models.clone(),
+        utility_models: routing.utility_models.clone(),
         model: dotenv
             .variable("VIBE_MODEL")
             .unwrap_or_else(|| "mistral-medium-3.5".to_owned()),

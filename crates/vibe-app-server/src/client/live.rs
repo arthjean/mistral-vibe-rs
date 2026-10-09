@@ -28,8 +28,9 @@ use vibe_core::extensions::{
     DelegationUpdate, ExtensionSource, SubagentFuture, SubagentManager, SubagentRun,
     SubagentRunner,
 };
+use vibe_core::llm::availability::ModelAvailability;
 use vibe_core::llm::completion::LlmCompletion;
-use vibe_core::llm::utility::{self, UtilitySelection};
+use vibe_core::llm::utility::{self, UtilityFeature, UtilitySelection};
 use vibe_core::llm::{AmbientCredentials, BackendContext, Credentials, MapCredentials};
 use vibe_core::matching::NameFilter;
 use vibe_core::mcp::{
@@ -37,6 +38,7 @@ use vibe_core::mcp::{
 };
 use vibe_core::middleware::{CompactionSettings, ContextWarningMiddleware, PlanAgentMiddleware};
 use vibe_core::policy::{PolicyGuardedTool, resolve_task_tool_permission};
+use vibe_core::provider::config::UtilityModels;
 use vibe_core::provider::config::{ApiSettings, ModelConfig, ModelRouting, ProviderConfig};
 use vibe_core::provider::{
     ProviderError, ProviderInput, RequestLimits, ToolChoice, ToolDefinition,
@@ -66,12 +68,18 @@ pub struct LiveDriverConfig {
     /// The provider turns are sent to. Its `api_key_env_var` names the key,
     /// read from the environment, the global dotenv file, then the keyring.
     pub provider: ProviderConfig,
+    /// Every provider the configuration declares, which a background
+    /// completion may run on instead (reference `get_mistral_provider`). The
+    /// entry named like [`LiveDriverConfig::provider`] is read as that one.
+    pub providers: Vec<ProviderConfig>,
     /// The models the configuration declares, which a turn's model name is
     /// resolved against for its temperature, thinking level and image support.
     pub models: Vec<ModelConfig>,
     /// The `allowed_models` patterns, which decide whether the fast utility
     /// model may run a background completion. Reference `_fast_model_allowed`.
     pub allowed_models: Vec<String>,
+    /// The `[utility_models]` overrides, which name a title's model outright.
+    pub utility_models: UtilityModels,
     /// The model a turn that names none runs on.
     pub model: String,
     /// The request timeout and the retry budget, with the three transport
@@ -139,10 +147,10 @@ pub struct LiveTurnDriver {
     /// `_build_backend_metadata`, read off the same census the session's
     /// telemetry client reports.
     request_census: Option<vibe_core::telemetry::TelemetryContext>,
-    /// What background session titles run on (reference
-    /// `select_utility_model`), when this driver's configuration has a model
-    /// to run them on.
-    titles: Option<(UtilitySelection, BackendContext)>,
+    /// What background session titles choose their model from (reference
+    /// `select_utility_model`), read again for every title since a probe may
+    /// have answered meanwhile.
+    titles: Option<TitleRouting>,
 }
 
 /// The provider-bound half of compaction: it binds the core manager to this
@@ -487,13 +495,21 @@ impl LiveTurnDriver {
         Self::with_credentials(config, credentials)
     }
 
+    /// Builds the driver around the credential the launch resolved for its
+    /// own provider. Any other variable, which a background completion on
+    /// another provider reads, resolves as [`LiveTurnDriver::from_environment`]
+    /// resolves it.
     pub fn from_credential(
         config: LiveDriverConfig,
         credential: String,
     ) -> Result<Self, DriverError> {
-        let credentials = Arc::new(MapCredentials(
-            [(config.provider.api_key_env_var.clone(), credential)].into(),
-        ));
+        let credentials = Arc::new(LaunchCredentials {
+            launch: MapCredentials([(config.provider.api_key_env_var.clone(), credential)].into()),
+            ambient: AmbientCredentials::new(
+                vibe_core::config::DotenvValues::global(&crate::host::vibe_home()),
+                vibe_core::auth::KeyringStore::native(),
+            ),
+        });
         Self::with_credentials(config, credentials)
     }
 
@@ -505,11 +521,9 @@ impl LiveTurnDriver {
         if !variable.is_empty() && credentials.resolve(variable).is_none() {
             return Err(DriverError::MissingCredentialEnvironment(variable.clone()));
         }
-        let titles = title_selection(&config, credentials.as_ref()).map(|selection| {
-            (
-                selection,
-                BackendContext::ambient(config.api, credentials.clone()),
-            )
+        let titles = Some(TitleRouting {
+            routing: title_routing(&config),
+            context: BackendContext::ambient(config.api, credentials.clone()),
         });
         let context = BackendContext::ambient(config.api, credentials);
         let provider = LlmCompletion::new(config.provider, config.models, config.model, context)
@@ -905,22 +919,61 @@ impl TurnDriver for LiveTurnDriver {
     fn title_model_is_fast(&self) -> Option<bool> {
         self.titles
             .as_ref()
-            .map(|(selection, _)| selection.is_fast())
+            .and_then(TitleRouting::selection)
+            .map(|selection| selection.is_fast())
+    }
+
+    fn probe_utility_models(&self) {
+        let Some(titles) = self.titles.clone() else {
+            return;
+        };
+        // On a thread of its own, so a caller inside a runtime and one
+        // outside it both wait for the answer the same way.
+        let probed = std::thread::spawn(move || {
+            let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            else {
+                return;
+            };
+            runtime.block_on(utility::ensure_probed(
+                &titles.routing,
+                &[UtilityFeature::Title],
+                None,
+                ModelAvailability::global(),
+                &titles.context,
+            ));
+        });
+        let _ = probed.join();
     }
 
     fn generate_title(
         &self,
+        session_id: String,
         messages: Vec<ModelMessage>,
         previous_title: Option<String>,
+        telemetry: Arc<dyn vibe_core::telemetry::ClientTelemetry>,
     ) -> super::TitleFuture {
         let titles = self.titles.clone();
+        // The launch the session's own requests report.
+        let launch = self
+            .request_census
+            .as_ref()
+            .and_then(vibe_core::telemetry::TelemetryContext::resolved_launch);
         Box::pin(async move {
-            let (selection, context) = titles?;
+            let titles = titles?;
+            let selection = titles.selection()?;
+            let context = titles.context;
             vibe_core::session_title::generate_session_title(
                 &messages,
                 previous_title.as_deref(),
                 &selection,
                 &context,
+                utility::Attribution {
+                    launch: launch.as_ref(),
+                    session_id: Some(&session_id),
+                    telemetry: Some(telemetry.as_ref()),
+                },
             )
             .await
         })
@@ -1313,12 +1366,54 @@ impl Drop for ControlRegistration<'_> {
         }
     }
 }
-/// Reference `select_utility_model` over the provider and model this driver
-/// runs turns on.
-fn title_selection(
-    config: &LiveDriverConfig,
-    credentials: &dyn Credentials,
-) -> Option<UtilitySelection> {
+/// The launch's own credential first, then the ambient ones.
+struct LaunchCredentials {
+    launch: MapCredentials,
+    ambient: AmbientCredentials,
+}
+
+impl Credentials for LaunchCredentials {
+    fn resolve(&self, variable: &str) -> Option<(String, vibe_core::llm::error::KeyOrigin)> {
+        self.launch
+            .resolve(variable)
+            .or_else(|| self.ambient.resolve(variable))
+    }
+}
+
+/// What a title's model is chosen from: the configured providers and models,
+/// with the session's own model active, and the credentials and budgets the
+/// call runs with.
+#[derive(Clone)]
+struct TitleRouting {
+    routing: ModelRouting,
+    context: BackendContext,
+}
+
+impl TitleRouting {
+    /// Reference `select_utility_model`, or `None` when the configuration
+    /// leaves nothing to run a title on.
+    fn selection(&self) -> Option<UtilitySelection> {
+        utility::select(
+            &self.routing,
+            self.context.credentials.as_ref(),
+            ModelAvailability::global(),
+            Some(UtilityFeature::Title),
+        )
+        .ok()
+    }
+}
+
+/// The routing a title reads: every configured provider, the driver's own
+/// standing in for the entry of the same name, and the driver's model active.
+fn title_routing(config: &LiveDriverConfig) -> ModelRouting {
+    let mut providers = config.providers.clone();
+    match providers
+        .iter_mut()
+        .find(|provider| provider.name == config.provider.name)
+    {
+        Some(entry) => *entry = config.provider.clone(),
+        None => providers.push(config.provider.clone()),
+    }
     let mut models = config.models.clone();
     if !models
         .iter()
@@ -1326,14 +1421,14 @@ fn title_selection(
     {
         models.push(ModelConfig::new(&config.model, &config.provider.name));
     }
-    let routing = ModelRouting {
-        providers: vec![config.provider.clone()],
+    ModelRouting {
+        providers,
         models,
         active_alias: Some(config.model.clone()),
         allowed_models: config.allowed_models.clone(),
         api: config.api,
-    };
-    utility::select(&routing, credentials).ok()
+        utility_models: config.utility_models.clone(),
+    }
 }
 
 /// Where the ambient configuration saves sessions, or `None` when it saves

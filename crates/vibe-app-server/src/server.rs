@@ -753,6 +753,12 @@ impl AppServer {
         self
     }
 
+    /// The client a server-raised event reports through, such as the
+    /// `vibe.request_sent` of a session title.
+    pub(crate) fn client_telemetry(&self) -> Arc<dyn ClientTelemetry> {
+        Arc::clone(&self.client_telemetry)
+    }
+
     /// Installs the harness decision the launch resolved from its flags.
     #[must_use]
     pub fn using_harness_selection(mut self, harness: HarnessSelection) -> Self {

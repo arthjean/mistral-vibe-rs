@@ -187,11 +187,16 @@ fn naming_prompt(arguments: &Arguments) -> Option<String> {
 
 /// The naming model's suggestion, or [`None`] whenever there is none to be had
 /// in time. The key the utility model needs resolves from the environment or
-/// the global dotenv file, as every credential of this launch does.
+/// the global dotenv file, as every credential of this launch does. The
+/// request reports the CLI launch (`vibe/cli/entrypoint.py:377-379`).
 fn suggest_worktree_name(arguments: &Arguments, prompt: Option<&str>) -> Option<String> {
     prompt.filter(|prompt| !prompt.is_empty())?;
     let provider = utility_provider(arguments)?;
-    naming_model::suggest_worktree_name_blocking(prompt, Some(provider.as_ref()))
+    naming_model::suggest_worktree_name_blocking(
+        prompt,
+        Some(provider.as_ref()),
+        Some(&crate::cli_launch_context()),
+    )
 }
 
 /// The provider utility completions of this launch run on: the fast Mistral

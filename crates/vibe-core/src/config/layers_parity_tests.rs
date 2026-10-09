@@ -23,30 +23,10 @@ const CORPUS_RELATIVE: &str = "tests/config-surface/corpus.json";
 /// What the capture writes for the per-scenario temporary root.
 const ROOT_PLACEHOLDER: &str = "{root}";
 
-/// v2.26.0 turned background session titles on by default.
-const GENERATE_TITLES: &str = "v2.26.0 turns background session titles on by default (models.py:112); \
-     registry.rs ships `generate_titles = false`";
-
 /// Pointers at which a stack or write case diverges, as `(case, pointer,
 /// reason)`. A comparison descends into tables, so an entry names the one key
-/// that moved. Every entry dates from the v2.26.0 re-pin (`376f6a3`).
-const STACK_DIVERGENCES: &[(&str, &str, &str)] = &[
-    (
-        "stack-trusted-project-inherits-the-user-file",
-        "/session_logging/generate_titles",
-        GENERATE_TITLES,
-    ),
-    (
-        "write-keeps-the-file-order-and-appends-new-keys",
-        "/session_logging/generate_titles",
-        GENERATE_TITLES,
-    ),
-    (
-        "write-keeps-the-file-order-and-appends-new-keys",
-        "after the writes: /session_logging/generate_titles",
-        GENERATE_TITLES,
-    ),
-];
+/// that moved.
+const STACK_DIVERGENCES: &[(&str, &str, &str)] = &[];
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]

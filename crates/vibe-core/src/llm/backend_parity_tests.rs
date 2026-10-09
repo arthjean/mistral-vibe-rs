@@ -29,12 +29,11 @@ use super::error::{BackendErrorSource, CallFailure, KeySource, WrappedCause};
 use super::python_json::Ordered;
 use super::retry::{Clock, RetryObserver, RetryReason, SleepFuture, SleepKind, next_delay};
 use super::types::{Chunk, Image, Message, Role, Tool, ToolCall, ToolChoice};
-use super::utility;
 use super::{Backend, BackendContext, MapCredentials, ModelRequest, TokenFuture, VertexAccess};
 use crate::parity::{RESTORE_COMMAND, off_pin_reason, reference_root};
-use crate::provider::config::{ApiSettings, ModelConfig, ModelRouting, ProviderConfig};
+use crate::provider::config::{ApiSettings, ModelConfig, ProviderConfig};
 
-const CORPUS: &str = include_str!("../../tests/llm-backends/corpus.json");
+pub(super) const CORPUS: &str = include_str!("../../tests/llm-backends/corpus.json");
 const SCORECARD: &str = include_str!("../../../../docs/parity.md");
 const CAPTURE_SCRIPT: &str = "scripts/parity/llm_backends.py";
 const SESSION_ID: &str = "session-oracle";
@@ -58,56 +57,18 @@ struct Divergence {
 
 const LEDGER: &[Divergence] = &[];
 
-/// v2.26.0 stopped assuming the fast model off the public Mistral API.
-const UNPROBED_DEPLOYMENT: &str = "v2.26.0 assumes the fast model only on the public Mistral API origin and \
-     otherwise waits for the availability probe to report the deployment serves it \
-     (vibe/core/llm/utility_completion.py:218, :234, :245; vibe/core/llm/model_probe.py:103), \
-     so an unprobed keyless self-hosted provider falls back to the active model; \
-     `utility::select` has no probe and still picks `mistral-vibe-cli-fast` there";
-
-/// The utility selections this port answers differently, matched as
-/// `LEDGER` is: `scenario` prefixes `utilitySelections/<case>` and `suffix`
-/// names the answered field. Every entry dates from the v2.26.0 re-pin
-/// (`376f6a3`).
-const UTILITY_LEDGER: &[Divergence] = &[
-    Divergence {
-        scenario: "utilitySelections/keyless-mistral",
-        suffix: "/model",
-        row: "10",
-        reason: UNPROBED_DEPLOYMENT,
-    },
-    Divergence {
-        scenario: "utilitySelections/keyless-mistral",
-        suffix: "/alias",
-        row: "10",
-        reason: UNPROBED_DEPLOYMENT,
-    },
-    Divergence {
-        scenario: "utilitySelections/keyless-mistral",
-        suffix: "/provider",
-        row: "10",
-        reason: UNPROBED_DEPLOYMENT,
-    },
-    Divergence {
-        scenario: "utilitySelections/keyless-mistral",
-        suffix: "/fast",
-        row: "10",
-        reason: UNPROBED_DEPLOYMENT,
-    },
-];
-
 // --------------------------------------------------------------------------
 // The scripted stand-in
 // --------------------------------------------------------------------------
 
-struct StandIn {
-    base: String,
+pub(super) struct StandIn {
+    pub(super) base: String,
     requests: Arc<Mutex<Vec<Value>>>,
     task: tokio::task::JoinHandle<()>,
 }
 
 impl StandIn {
-    async fn start(responses: &[Value]) -> Self {
+    pub(super) async fn start(responses: &[Value]) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
             .expect("the stand-in binds a loopback port");
@@ -134,7 +95,7 @@ impl StandIn {
         }
     }
 
-    fn requests(&self) -> Vec<Value> {
+    pub(super) fn requests(&self) -> Vec<Value> {
         self.requests.lock().expect("requests lock").clone()
     }
 }
@@ -339,7 +300,7 @@ fn sse_body(events: &[Value], crlf: bool) -> Vec<u8> {
     out.into_bytes()
 }
 
-fn closed_port() -> String {
+pub(super) fn closed_port() -> String {
     let probe = std::net::TcpListener::bind("127.0.0.1:0").expect("a probe port binds");
     let port = probe.local_addr().expect("the probe has an address").port();
     drop(probe);
@@ -350,12 +311,12 @@ fn closed_port() -> String {
 // The fake clock, the retry recorder and the Vertex stand-in
 // --------------------------------------------------------------------------
 
-struct FakeClock {
+pub(super) struct FakeClock {
     state: Mutex<(f64, Vec<Value>)>,
 }
 
 impl FakeClock {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             state: Mutex::new((1_000.0, Vec::new())),
         }
@@ -413,7 +374,7 @@ impl RetryObserver for Recorder {
     }
 }
 
-struct FakeVertex(String);
+pub(super) struct FakeVertex(pub(super) String);
 
 impl VertexAccess for FakeVertex {
     fn access_token(&self) -> TokenFuture<'_> {
@@ -429,7 +390,7 @@ impl VertexAccess for FakeVertex {
 // Reading a scenario
 // --------------------------------------------------------------------------
 
-fn toml_table(value: &Value) -> toml::Table {
+pub(super) fn toml_table(value: &Value) -> toml::Table {
     let value = toml::Value::try_from(value).expect("a scenario entry converts to TOML");
     value
         .as_table()
@@ -834,7 +795,7 @@ async fn run_call(scenario: &Scenario<'_>, entry: &Value) -> Value {
     Value::Object(record)
 }
 
-fn substitute(value: &Value, from: &[(&str, &str)]) -> Value {
+pub(super) fn substitute(value: &Value, from: &[(&str, &str)]) -> Value {
     match value {
         Value::String(text) => {
             Value::String(from.iter().fold(text.clone(), |text, (needle, with)| {
@@ -949,7 +910,7 @@ fn is_digest(value: &Value) -> bool {
 /// Every JSON pointer at which `port` departs from `reference`. A digest in
 /// the corpus is the reference's own prose: this port's value there must be a
 /// digest too, and must never equal it.
-fn differences(reference: &Value, port: &Value, pointer: &str, found: &mut Vec<String>) {
+pub(super) fn differences(reference: &Value, port: &Value, pointer: &str, found: &mut Vec<String>) {
     if is_digest(reference) {
         if !is_digest(port) {
             found.push(pointer.to_owned());
@@ -997,7 +958,7 @@ fn differences(reference: &Value, port: &Value, pointer: &str, found: &mut Vec<S
     }
 }
 
-fn resolve(value: &Value, pointer: &str) -> String {
+pub(super) fn resolve(value: &Value, pointer: &str) -> String {
     let pointer = pointer.split(' ').next().unwrap_or_default();
     value.pointer(pointer).map_or_else(
         || "<absent>".to_owned(),
@@ -1120,105 +1081,6 @@ fn the_generic_backoff_matches_every_recorded_delay() {
 }
 
 #[test]
-fn the_utility_model_is_selected_as_the_corpus_records() {
-    let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
-    let mut unexplained = Vec::new();
-    let mut reproduced = vec![0_usize; UTILITY_LEDGER.len()];
-    for case in corpus["utilitySelections"]
-        .as_array()
-        .expect("the corpus holds selections")
-    {
-        let active = &case["active"];
-        let mut model = ModelConfig::new(
-            active["name"].as_str().expect("an active model"),
-            active["provider"].as_str().expect("an active provider"),
-        );
-        model.alias = active["alias"].as_str().expect("an alias").to_owned();
-        let providers = case["providers"]
-            .as_array()
-            .expect("providers")
-            .iter()
-            .map(|entry| {
-                let mut provider = ProviderConfig::new(
-                    entry["name"].as_str().expect("a provider name"),
-                    entry["apiBase"].as_str().expect("an API base"),
-                );
-                provider.api_key_env_var =
-                    entry["keyVariable"].as_str().unwrap_or_default().to_owned();
-                if entry["backend"].as_str() == Some("mistral") {
-                    provider.backend = crate::provider::config::BackendKind::Mistral;
-                }
-                provider
-            })
-            .collect();
-        let routing = ModelRouting {
-            providers,
-            models: vec![model],
-            active_alias: active["alias"].as_str().map(str::to_owned),
-            allowed_models: case["allowedModels"]
-                .as_array()
-                .expect("an allowlist")
-                .iter()
-                .filter_map(Value::as_str)
-                .map(str::to_owned)
-                .collect(),
-            api: ApiSettings::default(),
-        };
-        let credentials = MapCredentials(
-            case["env"]
-                .as_array()
-                .expect("an environment")
-                .iter()
-                .filter_map(Value::as_str)
-                .map(|name| (name.to_owned(), "oracle-key".to_owned()))
-                .collect(),
-        );
-        let selected = utility::select(&routing, &credentials).expect("a selection");
-        let port = json!({
-            "model": selected.model.name,
-            "alias": selected.model.alias,
-            "provider": selected.provider.name,
-            "fast": selected.is_fast(),
-            "temperature": selected.model.temperature,
-        });
-        let name = format!(
-            "utilitySelections/{}",
-            case["name"].as_str().expect("a case name")
-        );
-        for key in ["model", "alias", "provider", "fast", "temperature"] {
-            if case[key] == port[key] {
-                continue;
-            }
-            let pointer = format!("/{key}");
-            match UTILITY_LEDGER.iter().position(|entry| {
-                name.starts_with(entry.scenario) && pointer.ends_with(entry.suffix)
-            }) {
-                Some(index) => reproduced[index] += 1,
-                None => unexplained.push(format!(
-                    "{name} {pointer}: reference {}, port {}",
-                    case[key], port[key]
-                )),
-            }
-        }
-    }
-    assert!(
-        unexplained.is_empty(),
-        "utility selections no ledger entry names:\n{}",
-        unexplained.join("\n")
-    );
-    let stale: Vec<String> = UTILITY_LEDGER
-        .iter()
-        .zip(&reproduced)
-        .filter(|(_, count)| **count == 0)
-        .map(|(entry, _)| format!("{} {}", entry.scenario, entry.suffix))
-        .collect();
-    assert!(
-        stale.is_empty(),
-        "these utility ledger entries no longer reproduce and should be removed: {stale:?}"
-    );
-}
-
-#[test]
 fn vertex_requests_go_to_the_recorded_regional_endpoints() {
     let corpus: Value = serde_json::from_str(CORPUS).expect("the corpus parses");
     for case in corpus["vertexEndpoints"]
@@ -1242,7 +1104,7 @@ fn every_ledger_entry_names_another_scorecard_row() {
         .map(|(number, _)| number.trim())
         .filter(|number| number.parse::<u32>().is_ok())
         .collect();
-    for entry in LEDGER.iter().chain(UTILITY_LEDGER) {
+    for entry in LEDGER {
         assert!(
             rows.contains(entry.row),
             "{} {} names row {}, which docs/parity.md does not carry",

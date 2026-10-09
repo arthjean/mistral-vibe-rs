@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+- Learn whether the deployment serves a fast model before titling a session,
+  as the reference does since v2.26.0: a terminal or desktop session opened
+  with `generate_titles` on first sends the Mistral provider a one-token
+  completion for `mistral-vibe-cli-fast`, then `mistral-small-latest`, and
+  remembers the verdict in `utility_model_cache.json` under the vibe home, for
+  a week when served and an hour when refused. Titles and worktree names run
+  on a fast model only on the public Mistral API or where a probe found it
+  served, the `allowed_models` list admits it by its name rather than its
+  alias, and a title looks for the Mistral provider among every configured
+  provider. `VIBE_TEST_DISABLE_MODEL_PROBE=1` turns the probe off.
+
+- Send `MISTRAL_API_KEY` from the environment to a Mistral provider whose own
+  key variable is empty or unset, as the Mistral client does.
+
+- Read the `[utility_models]` table, as the reference does since v2.26.0:
+  `title` names, by alias, the model a session title runs on, or `active` for
+  the session's own model; an alias no available model carries leaves the
+  automatic choice, and a session whose titles are overridden skips the
+  fast-model probe. `smart_approve` is accepted and validated; the smart
+  approval it configures runs only on the reference's Unified Harness.
+
+- Generate session titles by default, as the reference does since v2.26.0:
+  `session_logging.generate_titles` now defaults to `true`, so a terminal or
+  desktop session probes for a fast model when it opens and titles itself in
+  the background; set it to `false` to keep the first-message preview.
+
+- Label background completions as the reference does since v2.26.0: a session
+  title is sent as `title_generation` with its session and launch, and reports
+  its own `vibe.request_sent`; a worktree name is sent as `worktree_title` with
+  its launch.
+
 - Ask about a shell operand outside the working directory, and a managed
   call's `cwd` there, by its resolved path, as the reference does since
   v2.25.8: approving it grants that path alone, written as

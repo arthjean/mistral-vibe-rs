@@ -234,6 +234,52 @@ impl ApiSettings {
     }
 }
 
+/// A background feature with a model of its own. Reference `UtilityFeature`,
+/// whose values are the `[utility_models]` keys.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UtilityFeature {
+    Title,
+    SmartApprove,
+}
+
+/// Written in `[utility_models]`, runs the feature on whatever model the
+/// session runs on.
+/// Reference `ACTIVE_MODEL_SELECTOR`.
+pub const ACTIVE_MODEL_SELECTOR: &str = "active";
+
+/// Reference `UtilityModelsConfig`: the model alias each background feature
+/// runs on, where an empty one leaves the feature on automatic selection.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct UtilityModels {
+    pub title: String,
+    pub smart_approve: String,
+}
+
+impl UtilityModels {
+    /// Reads the `utility_models` table; a missing one configures nothing.
+    #[must_use]
+    pub fn from_table(table: Option<&Table>) -> Self {
+        let read = |key: &str| {
+            table
+                .and_then(|table| string(table, key))
+                .unwrap_or_default()
+        };
+        Self {
+            title: read("title"),
+            smart_approve: read("smart_approve"),
+        }
+    }
+
+    /// The alias configured for `feature`, trimmed. Reference `alias_for`.
+    #[must_use]
+    pub fn alias_for(&self, feature: UtilityFeature) -> &str {
+        match feature {
+            UtilityFeature::Title => self.title.trim(),
+            UtilityFeature::SmartApprove => self.smart_approve.trim(),
+        }
+    }
+}
+
 /// Every provider and model a configuration declares, and the model new turns
 /// run on.
 #[derive(Debug, Clone, PartialEq)]
@@ -245,6 +291,8 @@ pub struct ModelRouting {
     pub active_alias: Option<String>,
     pub allowed_models: Vec<String>,
     pub api: ApiSettings,
+    /// The `[utility_models]` overrides.
+    pub utility_models: UtilityModels,
 }
 
 /// Why a call has no model or provider to run on. Reference raises
@@ -303,7 +351,59 @@ impl ModelRouting {
             active_alias: active_alias.map(str::to_owned),
             allowed_models,
             api: ApiSettings::from_table(effective),
+            utility_models: UtilityModels::from_table(
+                effective.get("utility_models").and_then(Value::as_table),
+            ),
         }
+    }
+
+    /// Reference `available_models`: the models whose name the allowlist
+    /// admits, or every model when there is no allowlist or it admits none,
+    /// which a configuration that is not an administrator's degrades to.
+    #[must_use]
+    pub fn available_models(&self) -> Vec<&ModelConfig> {
+        if self.allowed_models.is_empty() {
+            return self.models.iter().collect();
+        }
+        let filter = NameFilter::new(&self.allowed_models);
+        let allowed: Vec<&ModelConfig> = self
+            .models
+            .iter()
+            .filter(|model| filter.matches(&model.name))
+            .collect();
+        if allowed.is_empty() {
+            self.models.iter().collect()
+        } else {
+            allowed
+        }
+    }
+
+    /// The override `[utility_models]` sets for `feature`, or `None` to let
+    /// selection decide. A configured model whose alias is literally `active`
+    /// is taken before the selector meaning. Reference `get_utility_model`.
+    ///
+    /// # Errors
+    ///
+    /// The `active` selector with no active model to resolve.
+    pub fn utility_model(
+        &self,
+        feature: UtilityFeature,
+    ) -> Result<Option<ModelConfig>, RoutingError> {
+        let alias = self.utility_models.alias_for(feature);
+        if alias.is_empty() {
+            return Ok(None);
+        }
+        if let Some(model) = self
+            .available_models()
+            .into_iter()
+            .find(|model| model.alias == alias)
+        {
+            return Ok(Some(model.clone()));
+        }
+        if alias == ACTIVE_MODEL_SELECTOR && !self.models.iter().any(|model| model.alias == alias) {
+            return self.model(None).map(Some);
+        }
+        Ok(None)
     }
 
     /// The model a call names, by alias first and then by API name, or the

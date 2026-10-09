@@ -18,6 +18,7 @@ use vibe_core::mcp::McpServerConfig;
 use vibe_core::middleware::CompactionSettings;
 use vibe_core::provider::{ProviderError, Usage};
 use vibe_core::storage::{HydratedSession, SessionStore};
+use vibe_core::telemetry::ClientTelemetry;
 use vibe_core::tools::ToolRegistry;
 pub use vibe_protocol::{
     CallbackKind as ClientCallbackKind, ClientCapabilities, ClientEntrypoint, ClientInfo,
@@ -137,12 +138,21 @@ pub trait TurnDriver: Send + Sync {
         None
     }
 
-    /// Reference `generate_session_title`: a title for the conversation,
-    /// refining `previous_title`, or `None` when the model gives none.
+    /// Reference `ensure_utility_models_probed` for a root session that
+    /// titles itself: learns, before the session is answered, whether the
+    /// deployment serves a fast model to run titles on. Blocks for at most
+    /// twice the probe budget.
+    fn probe_utility_models(&self) {}
+
+    /// Reference `generate_session_title`: a title for `session_id`'s
+    /// conversation, refining `previous_title`, or `None` when the model gives
+    /// none. The call's `vibe.request_sent` goes to `telemetry`.
     fn generate_title(
         &self,
+        _session_id: String,
         _messages: Vec<ModelMessage>,
         _previous_title: Option<String>,
+        _telemetry: Arc<dyn ClientTelemetry>,
     ) -> TitleFuture {
         Box::pin(async { None })
     }

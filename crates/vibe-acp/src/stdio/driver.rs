@@ -126,11 +126,13 @@ where
 
     fn generate_title(
         &self,
+        session_id: String,
         messages: Vec<vibe_core::events::ModelMessage>,
         previous_title: Option<String>,
+        telemetry: std::sync::Arc<dyn vibe_core::telemetry::ClientTelemetry>,
     ) -> TitleFuture {
         match self.resolve() {
-            Ok(driver) => driver.generate_title(messages, previous_title),
+            Ok(driver) => driver.generate_title(session_id, messages, previous_title, telemetry),
             Err(_) => Box::pin(async { None }),
         }
     }

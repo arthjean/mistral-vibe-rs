@@ -54,16 +54,11 @@ const VIBE_HOME_PLACEHOLDER: &str = "{vibe_home}";
 
 /// Reference fields this port does not declare, each with the reason.
 ///
-/// The configuration pass of 2026-10-06 declared the last four, and the v2.26.0
-/// re-pin added one: the field that release introduced, citing its declaration
-/// in `vibe/core/config/vibe_schema.py` at `376f6a3`. The replay fails on any
-/// other field the reference adds. An entry whose field becomes declared fails
-/// the replay as stale.
-const UNDECLARED_FIELDS: &[(&str, &str)] = &[(
-    "utility_models",
-    "v2.26.0 per-feature utility model table (vibe_schema.py:376), unported; the registry \
-     declares no such key and the port picks its title model without one",
-)];
+/// Empty since `utility_models` (`vibe/core/config/vibe_schema.py:376` at
+/// `376f6a3`), the one field the v2.26.0 re-pin added, was declared. The
+/// replay fails on any field the reference adds, and an entry whose field
+/// becomes declared fails it as stale.
+const UNDECLARED_FIELDS: &[(&str, &str)] = &[];
 
 /// The sentinel v2.24.0 ships for `active_model`, meaning "not pinned": both
 /// implementations now carry it in the document they ship and resolve it when
@@ -149,11 +144,6 @@ const DEFAULT_DIVERGENCES: &[(&str, &str)] = &[
     (
         "/models/mistral-medium-3.5/auto_compact_threshold",
         UNSET_THRESHOLD_DROPPED,
-    ),
-    (
-        "/session_logging/generate_titles",
-        "v2.26.0 turns background session titles on by default (models.py:112); registry.rs \
-         ships false",
     ),
 ];
 

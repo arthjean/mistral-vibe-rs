@@ -1,4 +1,4840 @@
 {
+ "availabilityKeys": [
+  {
+   "apiBase": "https://api.mistral.ai/v1",
+   "backend": "mistral",
+   "credential": "oracle-key",
+   "key": "5c8337641778f20c79b27599a4084499",
+   "model": "mistral-vibe-cli-fast"
+  },
+  {
+   "apiBase": "https://api.mistral.ai/v1/",
+   "backend": "mistral",
+   "credential": "oracle-key",
+   "key": "5c8337641778f20c79b27599a4084499",
+   "model": "mistral-vibe-cli-fast"
+  },
+  {
+   "apiBase": "https://api.mistral.ai/v1///",
+   "backend": "mistral",
+   "credential": "oracle-key",
+   "key": "5c8337641778f20c79b27599a4084499",
+   "model": "mistral-vibe-cli-fast"
+  },
+  {
+   "apiBase": "https://api.mistral.ai/v1",
+   "backend": "mistral",
+   "credential": "oracle-key",
+   "key": "1c403da054cbacc9e9fe2ae042e70d79",
+   "model": "mistral-small-latest"
+  },
+  {
+   "apiBase": "https://api.mistral.ai/v1",
+   "backend": "mistral",
+   "credential": "another-key",
+   "key": "c7def904b175baa3af1f7841ab155228",
+   "model": "mistral-vibe-cli-fast"
+  },
+  {
+   "apiBase": "http://127.0.0.1:8080/v1",
+   "backend": "mistral",
+   "credential": null,
+   "key": "bf418665e28e3946e4bc892dbb55dc84",
+   "model": "mistral-vibe-cli-fast"
+  },
+  {
+   "apiBase": "https://example.test/v1",
+   "backend": "generic",
+   "credential": "oracle-key",
+   "key": "fb020a460aabc0a7a6b498524c6074e5",
+   "model": "mistral-small-latest"
+  },
+  {
+   "apiBase": "https://exämple.test/v1",
+   "backend": "mistral",
+   "credential": "kéy",
+   "key": "25d74c9b566543b40f64d331c1f3a210",
+   "model": "mistral-vibe-cli-fast"
+  }
+ ],
+ "availabilityProbes": [
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "served-first",
+   "observed": [
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small",
+      "fast": true,
+      "model": "mistral-vibe-cli-fast",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "refused-first-served-second",
+   "observed": [
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":false,\"stored_at_timestamp\":1800000000},\"<mistral-small-latest>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      },
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-small-latest",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small-latest",
+      "fast": true,
+      "model": "mistral-small-latest",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "message": "status 404"
+     },
+     "status": 404
+    },
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "refused-both",
+   "observed": [
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":false,\"stored_at_timestamp\":1800000000},\"<mistral-small-latest>\":{\"available\":false,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      },
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-small-latest",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "big",
+      "fast": false,
+      "model": "big",
+      "provider": "openai",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "message": "status 400"
+     },
+     "status": 400
+    },
+    {
+     "json": {
+      "message": "status 403"
+     },
+     "status": 403
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "unauthorized",
+   "observed": [
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":false,\"stored_at_timestamp\":1800000000},\"<mistral-small-latest>\":{\"available\":false,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      },
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-small-latest",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "big",
+      "fast": false,
+      "model": "big",
+      "provider": "openai",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "message": "status 401"
+     },
+     "status": 401
+    },
+    {
+     "json": {
+      "message": "status 401"
+     },
+     "status": 401
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "unprocessable",
+   "observed": [
+    {
+     "file": "{\"<mistral-small-latest>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      },
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-small-latest",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small-latest",
+      "fast": true,
+      "model": "mistral-small-latest",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "message": "status 422"
+     },
+     "status": 422
+    },
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "request-timeout-status",
+   "observed": [
+    {
+     "file": "{\"<mistral-small-latest>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      },
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-small-latest",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small-latest",
+      "fast": true,
+      "model": "mistral-small-latest",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "message": "status 408"
+     },
+     "status": 408
+    },
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "rate-limited",
+   "observed": [
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      },
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small",
+      "fast": true,
+      "model": "mistral-vibe-cli-fast",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "message": "status 429"
+     },
+     "status": 429
+    },
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "server-errors",
+   "observed": [
+    {
+     "file": "{\"<mistral-small-latest>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      },
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      },
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-small-latest",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small-latest",
+      "fast": true,
+      "model": "mistral-small-latest",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    },
+    {
+     "file": "{\"<mistral-small-latest>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [],
+     "selection": {
+      "alias": "mistral-small-latest",
+      "fast": true,
+      "model": "mistral-small-latest",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    },
+    {
+     "file": "{\"<mistral-small-latest>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small-latest",
+      "fast": true,
+      "model": "mistral-small-latest",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "message": "status 500"
+     },
+     "status": 500
+    },
+    {
+     "json": {
+      "message": "status 503"
+     },
+     "status": 503
+    },
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    },
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    },
+    {
+     "advance": 601,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "slow-first",
+   "observed": [
+    {
+     "file": null,
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "big",
+      "fast": false,
+      "model": "big",
+      "provider": "openai",
+      "temperature": 0.2
+     }
+    },
+    {
+     "file": null,
+     "requests": [],
+     "selection": {
+      "alias": "big",
+      "fast": false,
+      "model": "big",
+      "provider": "openai",
+      "temperature": 0.2
+     }
+    },
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":true,\"stored_at_timestamp\":1800000601}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small",
+      "fast": true,
+      "model": "mistral-vibe-cli-fast",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "delay": 3.0,
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    },
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    },
+    {
+     "advance": 599,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    },
+    {
+     "advance": 2,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "connection-refused",
+   "observed": [
+    {
+     "file": null,
+     "requests": [],
+     "selection": {
+      "alias": "big",
+      "fast": false,
+      "model": "big",
+      "provider": "openai",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$CLOSED/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {},
+   "models": [],
+   "name": "keyed-without-key",
+   "observed": [
+    {
+     "file": null,
+     "requests": [],
+     "selection": {
+      "alias": "big",
+      "fast": false,
+      "model": "big",
+      "provider": "openai",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {},
+   "models": [],
+   "name": "keyless",
+   "observed": [
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small",
+      "fast": true,
+      "model": "mistral-vibe-cli-fast",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "MISTRAL_API_KEY": "oracle-client-key"
+   },
+   "models": [],
+   "name": "keyless-client-environment-key",
+   "observed": [
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-client-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small",
+      "fast": true,
+      "model": "mistral-vibe-cli-fast",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {},
+   "models": [],
+   "name": "keyless-refused",
+   "observed": [
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":false,\"stored_at_timestamp\":1800000000},\"<mistral-small-latest>\":{\"available\":false,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      },
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-small-latest",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "big",
+      "fast": false,
+      "model": "big",
+      "provider": "openai",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "message": "status 404"
+     },
+     "status": 404
+    },
+    {
+     "json": {
+      "message": "status 404"
+     },
+     "status": 404
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "no-features",
+   "observed": [
+    {
+     "file": null,
+     "requests": [],
+     "selection": {
+      "alias": "big",
+      "fast": false,
+      "model": "big",
+      "provider": "openai",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "disabled",
+   "observed": [
+    {
+     "file": null,
+     "requests": [],
+     "selection": {
+      "alias": "big",
+      "fast": false,
+      "model": "big",
+      "provider": "openai",
+      "temperature": 0.2
+     }
+    },
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small",
+      "fast": true,
+      "model": "mistral-vibe-cli-fast",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": true,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    },
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "no-mistral-provider",
+   "observed": [
+    {
+     "file": null,
+     "requests": [],
+     "selection": {
+      "alias": "big",
+      "fast": false,
+      "model": "big",
+      "provider": "openai",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    }
+   ],
+   "rawFile": null,
+   "responses": [],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [
+    "mistral-small-latest"
+   ],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "allowlist-second-only",
+   "observed": [
+    {
+     "file": "{\"<mistral-small-latest>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-small-latest",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small-latest",
+      "fast": true,
+      "model": "mistral-small-latest",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [
+    "big"
+   ],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "allowlist-excludes-both",
+   "observed": [
+    {
+     "file": null,
+     "requests": [],
+     "selection": {
+      "alias": "big",
+      "fast": false,
+      "model": "big",
+      "provider": "openai",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [
+    "mistral-small"
+   ],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "allowlist-alias-only",
+   "observed": [
+    {
+     "file": null,
+     "requests": [],
+     "selection": {
+      "alias": "big",
+      "fast": false,
+      "model": "big",
+      "provider": "openai",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "cached-available",
+   "observed": [
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":true,\"stored_at_timestamp\":1799999990}}",
+     "requests": [],
+     "selection": {
+      "alias": "mistral-small",
+      "fast": true,
+      "model": "mistral-vibe-cli-fast",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [
+    {
+     "age": 10,
+     "available": true,
+     "model": "mistral-vibe-cli-fast"
+    }
+   ],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "cached-unavailable",
+   "observed": [
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":false,\"stored_at_timestamp\":1799999990},\"<mistral-small-latest>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-small-latest",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small-latest",
+      "fast": true,
+      "model": "mistral-small-latest",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [
+    {
+     "age": 10,
+     "available": false,
+     "model": "mistral-vibe-cli-fast"
+    }
+   ],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "cached-both-unavailable",
+   "observed": [
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":false,\"stored_at_timestamp\":1799999990},\"<mistral-small-latest>\":{\"available\":false,\"stored_at_timestamp\":1799996401}}",
+     "requests": [],
+     "selection": {
+      "alias": "big",
+      "fast": false,
+      "model": "big",
+      "provider": "openai",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [
+    {
+     "age": 10,
+     "available": false,
+     "model": "mistral-vibe-cli-fast"
+    },
+    {
+     "age": 3599,
+     "available": false,
+     "model": "mistral-small-latest"
+    }
+   ],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "stale-unavailable",
+   "observed": [
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small",
+      "fast": true,
+      "model": "mistral-vibe-cli-fast",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [
+    {
+     "age": 3600,
+     "available": false,
+     "model": "mistral-vibe-cli-fast"
+    }
+   ],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "stale-available",
+   "observed": [
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":false,\"stored_at_timestamp\":1800000000},\"<mistral-small-latest>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      },
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-small-latest",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small-latest",
+      "fast": true,
+      "model": "mistral-small-latest",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "message": "status 404"
+     },
+     "status": 404
+    },
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [
+    {
+     "age": 604800,
+     "available": true,
+     "model": "mistral-vibe-cli-fast"
+    }
+   ],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "fresh-available-boundary",
+   "observed": [
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":true,\"stored_at_timestamp\":1799395201}}",
+     "requests": [],
+     "selection": {
+      "alias": "mistral-small",
+      "fast": true,
+      "model": "mistral-vibe-cli-fast",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [
+    {
+     "age": 604799,
+     "available": true,
+     "model": "mistral-vibe-cli-fast"
+    }
+   ],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "second-cached-available",
+   "observed": [
+    {
+     "file": "{\"<mistral-small-latest>\":{\"available\":true,\"stored_at_timestamp\":1799999990},\"<mistral-vibe-cli-fast>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small",
+      "fast": true,
+      "model": "mistral-vibe-cli-fast",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [
+    {
+     "age": 10,
+     "available": true,
+     "model": "mistral-small-latest"
+    }
+   ],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "prune-on-write",
+   "observed": [
+    {
+     "file": "{\"foreign-fresh\":{\"available\":true,\"stored_at_timestamp\":1799999995},\"foreign-extra\":{\"available\":true,\"note\":\"kept as written\",\"stored_at_timestamp\":1800000000},\"f\\u00f6rdern\":{\"available\":true,\"stored_at_timestamp\":1800000000},\"<mistral-vibe-cli-fast>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small",
+      "fast": true,
+      "model": "mistral-vibe-cli-fast",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [
+    {
+     "raw": "foreign-fresh",
+     "value": {
+      "available": true,
+      "stored_at_timestamp": 1799999995
+     }
+    },
+    {
+     "raw": "foreign-stale",
+     "value": {
+      "available": false,
+      "stored_at_timestamp": 1799996000
+     }
+    },
+    {
+     "raw": "foreign-extra",
+     "value": {
+      "available": true,
+      "note": "kept as written",
+      "stored_at_timestamp": 1800000000
+     }
+    },
+    {
+     "raw": "foreign-flag",
+     "value": {
+      "available": false,
+      "stored_at_timestamp": true
+     }
+    },
+    {
+     "raw": "foreign-float",
+     "value": {
+      "available": true,
+      "stored_at_timestamp": 1500000000.0
+     }
+    },
+    {
+     "raw": "foreign-text",
+     "value": "not an entry"
+    },
+    {
+     "raw": "fördern",
+     "value": {
+      "available": true,
+      "stored_at_timestamp": 1800000000
+     }
+    }
+   ],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "malformed-file",
+   "observed": [
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small",
+      "fast": true,
+      "model": "mistral-vibe-cli-fast",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": "{not json",
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "array-file",
+   "observed": [
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small",
+      "fast": true,
+      "model": "mistral-vibe-cli-fast",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": "[1, 2]",
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "malformed-entry",
+   "observed": [
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small",
+      "fast": true,
+      "model": "mistral-vibe-cli-fast",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [
+    {
+     "raw": "$FIRST",
+     "value": {
+      "available": "yes",
+      "stored_at_timestamp": 1800000000
+     }
+    }
+   ],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "remembered-in-process",
+   "observed": [
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small",
+      "fast": true,
+      "model": "mistral-vibe-cli-fast",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    },
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [],
+     "selection": {
+      "alias": "mistral-small",
+      "fast": true,
+      "model": "mistral-vibe-cli-fast",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    },
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "external-write-within-a-minute",
+   "observed": [
+    {
+     "file": null,
+     "requests": [],
+     "selection": {
+      "alias": "big",
+      "fast": false,
+      "model": "big",
+      "provider": "openai",
+      "temperature": 0.2
+     }
+    },
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":false,\"stored_at_timestamp\":1800000000},\"<mistral-small-latest>\":{\"available\":false,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      },
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-small-latest",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "big",
+      "fast": false,
+      "model": "big",
+      "provider": "openai",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "message": "status 404"
+     },
+     "status": 404
+    },
+    {
+     "json": {
+      "message": "status 404"
+     },
+     "status": 404
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [],
+     "seed": []
+    },
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": [
+      {
+       "age": 0,
+       "available": true,
+       "model": "mistral-vibe-cli-fast"
+      }
+     ]
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "external-write-after-a-minute",
+   "observed": [
+    {
+     "file": null,
+     "requests": [],
+     "selection": {
+      "alias": "big",
+      "fast": false,
+      "model": "big",
+      "provider": "openai",
+      "temperature": 0.2
+     }
+    },
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":true,\"stored_at_timestamp\":1800000061}}",
+     "requests": [],
+     "selection": {
+      "alias": "mistral-small",
+      "fast": true,
+      "model": "mistral-vibe-cli-fast",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [],
+     "seed": []
+    },
+    {
+     "advance": 61,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": [
+      {
+       "age": 0,
+       "available": true,
+       "model": "mistral-vibe-cli-fast"
+      }
+     ]
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": null,
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "unknown-active-model",
+   "observed": [
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small",
+      "fast": true,
+      "model": "mistral-vibe-cli-fast",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "medium",
+    "name": "mistral-medium-latest",
+    "provider": "mistral"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "active-on-mistral",
+   "observed": [
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small",
+      "fast": true,
+      "model": "mistral-vibe-cli-fast",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "title-overridden",
+   "observed": [
+    {
+     "file": null,
+     "requests": [],
+     "selection": {
+      "alias": "big",
+      "fast": false,
+      "model": "big",
+      "provider": "openai",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {
+    "title": "big"
+   }
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "title-overridden-to-missing",
+   "observed": [
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small",
+      "fast": true,
+      "model": "mistral-vibe-cli-fast",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {
+    "title": "nope"
+   }
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "smart-approve-overridden",
+   "observed": [
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small",
+      "fast": true,
+      "model": "mistral-vibe-cli-fast",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {
+    "smart_approve": "big"
+   }
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "both-features-overridden",
+   "observed": [
+    {
+     "file": null,
+     "requests": [],
+     "selection": {
+      "alias": "big",
+      "fast": false,
+      "model": "big",
+      "provider": "openai",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title",
+      "smart_approve"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {
+    "smart_approve": "big",
+    "title": "big"
+   }
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "one-of-two-features-overridden",
+   "observed": [
+    {
+     "file": "{\"<mistral-vibe-cli-fast>\":{\"available\":true,\"stored_at_timestamp\":1800000000}}",
+     "requests": [
+      {
+       "body": {
+        "max_tokens": 1,
+        "messages": [
+         {
+          "content": "ping",
+          "role": "user"
+         }
+        ],
+        "metadata": {
+         "arch": "<arch>",
+         "call_source": "vibe_code",
+         "call_type": "secondary_call",
+         "host_kind": "local",
+         "os": "<os>",
+         "os_version": "<os_version>",
+         "version": "<version>"
+        },
+        "model": "mistral-vibe-cli-fast",
+        "reasoning_effort": null,
+        "stream": false,
+        "temperature": 0.0,
+        "tools": null
+       },
+       "headers": {
+        "accept": "application/json",
+        "authorization": "Bearer oracle-key",
+        "content-type": "application/json",
+        "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+       },
+       "method": "POST",
+       "path": "/v1/chat/completions"
+      }
+     ],
+     "selection": {
+      "alias": "mistral-small",
+      "fast": true,
+      "model": "mistral-vibe-cli-fast",
+      "provider": "mistral",
+      "temperature": 0.2
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "ok",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "smart_approve",
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {
+    "smart_approve": "big"
+   }
+  },
+  {
+   "active": null,
+   "allowedModels": [],
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "models": [],
+   "name": "override-cannot-resolve",
+   "observed": [
+    {
+     "file": null,
+     "requests": [],
+     "selection": {
+      "error": true
+     }
+    }
+   ],
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "rawFile": null,
+   "responses": [],
+   "rounds": [
+    {
+     "advance": 0,
+     "budget": 1.0,
+     "disabled": false,
+     "features": [
+      "title"
+     ],
+     "seed": []
+    }
+   ],
+   "seed": [],
+   "utilityModels": {
+    "title": "active"
+   }
+  }
+ ],
  "reference": {
   "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
  },
@@ -81955,7 +86791,1262 @@
    ]
   }
  ],
- "schemaVersion": 1,
+ "schemaVersion": 3,
+ "utilityCompletions": [
+  {
+   "active": {
+    "alias": "large",
+    "name": "mistral-large-latest",
+    "provider": "mistral"
+   },
+   "allowedModels": [],
+   "callType": null,
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "feature": "title",
+   "launch": {
+    "agent_entrypoint": "cli",
+    "agent_version": "9.9.9",
+    "client_name": "vibe_cli",
+    "client_version": "9.9.9",
+    "terminal_emulator": "kitty"
+   },
+   "models": [],
+   "name": "title-attributed",
+   "observed": {
+    "content": "Cafe notes",
+    "requests": [
+     {
+      "body": {
+       "max_tokens": 24,
+       "messages": [
+        {
+         "content": "Answer with a short label.",
+         "role": "system"
+        },
+        {
+         "content": "Résumé of the café session 🚀",
+         "role": "user"
+        }
+       ],
+       "metadata": {
+        "agent_entrypoint": "cli",
+        "agent_version": "9.9.9",
+        "arch": "<arch>",
+        "call_source": "vibe_code",
+        "call_type": "title_generation",
+        "client_name": "vibe_cli",
+        "client_version": "9.9.9",
+        "host_kind": "local",
+        "os": "<os>",
+        "os_version": "<os_version>",
+        "session_id": "session-oracle",
+        "terminal_emulator": "kitty",
+        "version": "<version>"
+       },
+       "model": "mistral-large-latest",
+       "reasoning_effort": null,
+       "stream": false,
+       "temperature": 0.0,
+       "tools": null
+      },
+      "headers": {
+       "accept": "application/json",
+       "authorization": "Bearer oracle-key",
+       "content-type": "application/json",
+       "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+      },
+      "method": "POST",
+      "path": "/v1/chat/completions"
+     }
+    ],
+    "telemetry": [
+     {
+      "correlationId": null,
+      "event": "vibe.request_sent",
+      "properties": {
+       "attachment_counts": {},
+       "call_source": "vibe_code",
+       "call_type": "title_generation",
+       "message_id": null,
+       "model": "large",
+       "nb_context_chars": 54,
+       "nb_context_messages": 2,
+       "nb_prompt_chars": 28
+      }
+     }
+    ]
+   },
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "Cafe notes",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "session": "session-oracle",
+   "skipIfNoKey": false,
+   "telemetry": true,
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "large",
+    "name": "mistral-large-latest",
+    "provider": "mistral"
+   },
+   "allowedModels": [],
+   "callType": null,
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "feature": "title",
+   "launch": null,
+   "models": [],
+   "name": "title-unattributed",
+   "observed": {
+    "content": "Cafe notes",
+    "requests": [
+     {
+      "body": {
+       "max_tokens": 24,
+       "messages": [
+        {
+         "content": "Answer with a short label.",
+         "role": "system"
+        },
+        {
+         "content": "Résumé of the café session 🚀",
+         "role": "user"
+        }
+       ],
+       "metadata": {
+        "arch": "<arch>",
+        "call_source": "vibe_code",
+        "call_type": "title_generation",
+        "host_kind": "local",
+        "os": "<os>",
+        "os_version": "<os_version>",
+        "version": "<version>"
+       },
+       "model": "mistral-large-latest",
+       "reasoning_effort": null,
+       "stream": false,
+       "temperature": 0.0,
+       "tools": null
+      },
+      "headers": {
+       "accept": "application/json",
+       "authorization": "Bearer oracle-key",
+       "content-type": "application/json",
+       "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+      },
+      "method": "POST",
+      "path": "/v1/chat/completions"
+     }
+    ],
+    "telemetry": null
+   },
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "Cafe notes",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "session": null,
+   "skipIfNoKey": false,
+   "telemetry": false,
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "large",
+    "name": "mistral-large-latest",
+    "provider": "mistral"
+   },
+   "allowedModels": [],
+   "callType": null,
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "feature": "title",
+   "launch": {
+    "agent_entrypoint": "cli",
+    "agent_version": "9.9.9",
+    "client_name": "vibe_cli",
+    "client_version": "9.9.9",
+    "terminal_emulator": null
+   },
+   "models": [],
+   "name": "title-without-terminal",
+   "observed": {
+    "content": "Cafe notes",
+    "requests": [
+     {
+      "body": {
+       "max_tokens": 24,
+       "messages": [
+        {
+         "content": "Answer with a short label.",
+         "role": "system"
+        },
+        {
+         "content": "Résumé of the café session 🚀",
+         "role": "user"
+        }
+       ],
+       "metadata": {
+        "agent_entrypoint": "cli",
+        "agent_version": "9.9.9",
+        "arch": "<arch>",
+        "call_source": "vibe_code",
+        "call_type": "title_generation",
+        "client_name": "vibe_cli",
+        "client_version": "9.9.9",
+        "host_kind": "local",
+        "os": "<os>",
+        "os_version": "<os_version>",
+        "session_id": "session-oracle",
+        "version": "<version>"
+       },
+       "model": "mistral-large-latest",
+       "reasoning_effort": null,
+       "stream": false,
+       "temperature": 0.0,
+       "tools": null
+      },
+      "headers": {
+       "accept": "application/json",
+       "authorization": "Bearer oracle-key",
+       "content-type": "application/json",
+       "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+      },
+      "method": "POST",
+      "path": "/v1/chat/completions"
+     }
+    ],
+    "telemetry": [
+     {
+      "correlationId": null,
+      "event": "vibe.request_sent",
+      "properties": {
+       "attachment_counts": {},
+       "call_source": "vibe_code",
+       "call_type": "title_generation",
+       "message_id": null,
+       "model": "large",
+       "nb_context_chars": 54,
+       "nb_context_messages": 2,
+       "nb_prompt_chars": 28
+      }
+     }
+    ]
+   },
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "Cafe notes",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "session": "session-oracle",
+   "skipIfNoKey": false,
+   "telemetry": true,
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "large",
+    "name": "mistral-large-latest",
+    "provider": "mistral"
+   },
+   "allowedModels": [],
+   "callType": null,
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "feature": "smart_approve",
+   "launch": null,
+   "models": [],
+   "name": "smart-approve",
+   "observed": {
+    "content": "Cafe notes",
+    "requests": [
+     {
+      "body": {
+       "max_tokens": 24,
+       "messages": [
+        {
+         "content": "Answer with a short label.",
+         "role": "system"
+        },
+        {
+         "content": "Résumé of the café session 🚀",
+         "role": "user"
+        }
+       ],
+       "metadata": {
+        "arch": "<arch>",
+        "call_source": "vibe_code",
+        "call_type": "smart_approve",
+        "host_kind": "local",
+        "os": "<os>",
+        "os_version": "<os_version>",
+        "session_id": "session-oracle",
+        "version": "<version>"
+       },
+       "model": "mistral-large-latest",
+       "reasoning_effort": null,
+       "stream": false,
+       "temperature": 0.0,
+       "tools": null
+      },
+      "headers": {
+       "accept": "application/json",
+       "authorization": "Bearer oracle-key",
+       "content-type": "application/json",
+       "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+      },
+      "method": "POST",
+      "path": "/v1/chat/completions"
+     }
+    ],
+    "telemetry": [
+     {
+      "correlationId": null,
+      "event": "vibe.request_sent",
+      "properties": {
+       "attachment_counts": {},
+       "call_source": "vibe_code",
+       "call_type": "smart_approve",
+       "message_id": null,
+       "model": "large",
+       "nb_context_chars": 54,
+       "nb_context_messages": 2,
+       "nb_prompt_chars": 28
+      }
+     }
+    ]
+   },
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "Cafe notes",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "session": "session-oracle",
+   "skipIfNoKey": false,
+   "telemetry": true,
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "large",
+    "name": "mistral-large-latest",
+    "provider": "mistral"
+   },
+   "allowedModels": [],
+   "callType": "worktree_title",
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "feature": null,
+   "launch": {
+    "agent_entrypoint": "cli",
+    "agent_version": "9.9.9",
+    "client_name": "vibe_cli",
+    "client_version": "9.9.9",
+    "terminal_emulator": "kitty"
+   },
+   "models": [],
+   "name": "worktree-title",
+   "observed": {
+    "content": "Cafe notes",
+    "requests": [
+     {
+      "body": {
+       "max_tokens": 24,
+       "messages": [
+        {
+         "content": "Answer with a short label.",
+         "role": "system"
+        },
+        {
+         "content": "Résumé of the café session 🚀",
+         "role": "user"
+        }
+       ],
+       "metadata": {
+        "agent_entrypoint": "cli",
+        "agent_version": "9.9.9",
+        "arch": "<arch>",
+        "call_source": "vibe_code",
+        "call_type": "worktree_title",
+        "client_name": "vibe_cli",
+        "client_version": "9.9.9",
+        "host_kind": "local",
+        "os": "<os>",
+        "os_version": "<os_version>",
+        "terminal_emulator": "kitty",
+        "version": "<version>"
+       },
+       "model": "mistral-large-latest",
+       "reasoning_effort": null,
+       "stream": false,
+       "temperature": 0.0,
+       "tools": null
+      },
+      "headers": {
+       "accept": "application/json",
+       "authorization": "Bearer oracle-key",
+       "content-type": "application/json",
+       "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+      },
+      "method": "POST",
+      "path": "/v1/chat/completions"
+     }
+    ],
+    "telemetry": null
+   },
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "Cafe notes",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "session": null,
+   "skipIfNoKey": true,
+   "telemetry": false,
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "large",
+    "name": "mistral-large-latest",
+    "provider": "mistral"
+   },
+   "allowedModels": [],
+   "callType": "worktree_title",
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "feature": null,
+   "launch": {
+    "agent_entrypoint": "cli",
+    "agent_version": "9.9.9",
+    "client_name": "vibe_cli",
+    "client_version": "9.9.9",
+    "terminal_emulator": "kitty"
+   },
+   "models": [],
+   "name": "worktree-title-reported",
+   "observed": {
+    "content": "Cafe notes",
+    "requests": [
+     {
+      "body": {
+       "max_tokens": 24,
+       "messages": [
+        {
+         "content": "Answer with a short label.",
+         "role": "system"
+        },
+        {
+         "content": "Résumé of the café session 🚀",
+         "role": "user"
+        }
+       ],
+       "metadata": {
+        "agent_entrypoint": "cli",
+        "agent_version": "9.9.9",
+        "arch": "<arch>",
+        "call_source": "vibe_code",
+        "call_type": "worktree_title",
+        "client_name": "vibe_cli",
+        "client_version": "9.9.9",
+        "host_kind": "local",
+        "os": "<os>",
+        "os_version": "<os_version>",
+        "terminal_emulator": "kitty",
+        "version": "<version>"
+       },
+       "model": "mistral-large-latest",
+       "reasoning_effort": null,
+       "stream": false,
+       "temperature": 0.0,
+       "tools": null
+      },
+      "headers": {
+       "accept": "application/json",
+       "authorization": "Bearer oracle-key",
+       "content-type": "application/json",
+       "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+      },
+      "method": "POST",
+      "path": "/v1/chat/completions"
+     }
+    ],
+    "telemetry": [
+     {
+      "correlationId": null,
+      "event": "vibe.request_sent",
+      "properties": {
+       "attachment_counts": {},
+       "call_source": "vibe_code",
+       "call_type": "worktree_title",
+       "message_id": null,
+       "model": "large",
+       "nb_context_chars": 54,
+       "nb_context_messages": 2,
+       "nb_prompt_chars": 28
+      }
+     }
+    ]
+   },
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "Cafe notes",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "session": null,
+   "skipIfNoKey": true,
+   "telemetry": true,
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "large",
+    "name": "mistral-large-latest",
+    "provider": "mistral"
+   },
+   "allowedModels": [],
+   "callType": null,
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "feature": null,
+   "launch": null,
+   "models": [],
+   "name": "unlabeled",
+   "observed": {
+    "content": "Cafe notes",
+    "requests": [
+     {
+      "body": {
+       "max_tokens": 24,
+       "messages": [
+        {
+         "content": "Answer with a short label.",
+         "role": "system"
+        },
+        {
+         "content": "Résumé of the café session 🚀",
+         "role": "user"
+        }
+       ],
+       "metadata": {
+        "arch": "<arch>",
+        "call_source": "vibe_code",
+        "call_type": "secondary_call",
+        "host_kind": "local",
+        "os": "<os>",
+        "os_version": "<os_version>",
+        "session_id": "session-oracle",
+        "version": "<version>"
+       },
+       "model": "mistral-large-latest",
+       "reasoning_effort": null,
+       "stream": false,
+       "temperature": 0.0,
+       "tools": null
+      },
+      "headers": {
+       "accept": "application/json",
+       "authorization": "Bearer oracle-key",
+       "content-type": "application/json",
+       "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+      },
+      "method": "POST",
+      "path": "/v1/chat/completions"
+     }
+    ],
+    "telemetry": [
+     {
+      "correlationId": null,
+      "event": "vibe.request_sent",
+      "properties": {
+       "attachment_counts": {},
+       "call_source": "vibe_code",
+       "call_type": "secondary_call",
+       "message_id": null,
+       "model": "large",
+       "nb_context_chars": 54,
+       "nb_context_messages": 2,
+       "nb_prompt_chars": 28
+      }
+     }
+    ]
+   },
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "Cafe notes",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "session": "session-oracle",
+   "skipIfNoKey": false,
+   "telemetry": true,
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "large",
+    "name": "mistral-large-latest",
+    "provider": "mistral"
+   },
+   "allowedModels": [],
+   "callType": "worktree_title",
+   "env": {},
+   "feature": null,
+   "launch": null,
+   "models": [],
+   "name": "skipped-without-key",
+   "observed": {
+    "content": null,
+    "requests": [],
+    "telemetry": []
+   },
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "responses": [],
+   "session": null,
+   "skipIfNoKey": true,
+   "telemetry": true,
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "large",
+    "name": "mistral-large-latest",
+    "provider": "mistral"
+   },
+   "allowedModels": [],
+   "callType": "worktree_title",
+   "env": {},
+   "feature": null,
+   "launch": null,
+   "models": [],
+   "name": "keyless-not-skipped",
+   "observed": {
+    "content": "Cafe notes",
+    "requests": [
+     {
+      "body": {
+       "max_tokens": 24,
+       "messages": [
+        {
+         "content": "Answer with a short label.",
+         "role": "system"
+        },
+        {
+         "content": "Résumé of the café session 🚀",
+         "role": "user"
+        }
+       ],
+       "metadata": {
+        "arch": "<arch>",
+        "call_source": "vibe_code",
+        "call_type": "worktree_title",
+        "host_kind": "local",
+        "os": "<os>",
+        "os_version": "<os_version>",
+        "version": "<version>"
+       },
+       "model": "mistral-large-latest",
+       "reasoning_effort": null,
+       "stream": false,
+       "temperature": 0.0,
+       "tools": null
+      },
+      "headers": {
+       "accept": "application/json",
+       "content-type": "application/json",
+       "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+      },
+      "method": "POST",
+      "path": "/v1/chat/completions"
+     }
+    ],
+    "telemetry": [
+     {
+      "correlationId": null,
+      "event": "vibe.request_sent",
+      "properties": {
+       "attachment_counts": {},
+       "call_source": "vibe_code",
+       "call_type": "worktree_title",
+       "message_id": null,
+       "model": "large",
+       "nb_context_chars": 54,
+       "nb_context_messages": 2,
+       "nb_prompt_chars": 28
+      }
+     }
+    ]
+   },
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "Cafe notes",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "session": null,
+   "skipIfNoKey": true,
+   "telemetry": true,
+   "utilityModels": {}
+  },
+  {
+   "active": {
+    "alias": "large",
+    "name": "mistral-large-latest",
+    "provider": "mistral"
+   },
+   "allowedModels": [],
+   "callType": null,
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "feature": "title",
+   "launch": null,
+   "models": [
+    {
+     "alias": "medium",
+     "name": "mistral-medium-latest",
+     "provider": "mistral"
+    }
+   ],
+   "name": "title-override",
+   "observed": {
+    "content": "Cafe notes",
+    "requests": [
+     {
+      "body": {
+       "max_tokens": 24,
+       "messages": [
+        {
+         "content": "Answer with a short label.",
+         "role": "system"
+        },
+        {
+         "content": "Résumé of the café session 🚀",
+         "role": "user"
+        }
+       ],
+       "metadata": {
+        "arch": "<arch>",
+        "call_source": "vibe_code",
+        "call_type": "title_generation",
+        "host_kind": "local",
+        "os": "<os>",
+        "os_version": "<os_version>",
+        "session_id": "session-oracle",
+        "version": "<version>"
+       },
+       "model": "mistral-medium-latest",
+       "reasoning_effort": null,
+       "stream": false,
+       "temperature": 0.0,
+       "tools": null
+      },
+      "headers": {
+       "accept": "application/json",
+       "authorization": "Bearer oracle-key",
+       "content-type": "application/json",
+       "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+      },
+      "method": "POST",
+      "path": "/v1/chat/completions"
+     }
+    ],
+    "telemetry": [
+     {
+      "correlationId": null,
+      "event": "vibe.request_sent",
+      "properties": {
+       "attachment_counts": {},
+       "call_source": "vibe_code",
+       "call_type": "title_generation",
+       "message_id": null,
+       "model": "medium",
+       "nb_context_chars": 54,
+       "nb_context_messages": 2,
+       "nb_prompt_chars": 28
+      }
+     }
+    ]
+   },
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "Cafe notes",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "session": "session-oracle",
+   "skipIfNoKey": false,
+   "telemetry": true,
+   "utilityModels": {
+    "title": "medium"
+   }
+  },
+  {
+   "active": {
+    "alias": "large",
+    "name": "mistral-large-latest",
+    "provider": "mistral"
+   },
+   "allowedModels": [],
+   "callType": null,
+   "env": {
+    "ORACLE_API_KEY": "oracle-key"
+   },
+   "feature": "title",
+   "launch": null,
+   "models": [],
+   "name": "empty-answer",
+   "observed": {
+    "content": "",
+    "requests": [
+     {
+      "body": {
+       "max_tokens": 24,
+       "messages": [
+        {
+         "content": "Answer with a short label.",
+         "role": "system"
+        },
+        {
+         "content": "Résumé of the café session 🚀",
+         "role": "user"
+        }
+       ],
+       "metadata": {
+        "arch": "<arch>",
+        "call_source": "vibe_code",
+        "call_type": "title_generation",
+        "host_kind": "local",
+        "os": "<os>",
+        "os_version": "<os_version>",
+        "session_id": "session-oracle",
+        "version": "<version>"
+       },
+       "model": "mistral-large-latest",
+       "reasoning_effort": null,
+       "stream": false,
+       "temperature": 0.0,
+       "tools": null
+      },
+      "headers": {
+       "accept": "application/json",
+       "authorization": "Bearer oracle-key",
+       "content-type": "application/json",
+       "user-agent": "mistral-client-python/Mistral-Vibe/<version>"
+      },
+      "method": "POST",
+      "path": "/v1/chat/completions"
+     }
+    ],
+    "telemetry": [
+     {
+      "correlationId": null,
+      "event": "vibe.request_sent",
+      "properties": {
+       "attachment_counts": {},
+       "call_source": "vibe_code",
+       "call_type": "title_generation",
+       "message_id": null,
+       "model": "large",
+       "nb_context_chars": 54,
+       "nb_context_messages": 2,
+       "nb_prompt_chars": 28
+      }
+     }
+    ]
+   },
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "$BASE/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "responses": [
+    {
+     "json": {
+      "choices": [
+       {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+         "content": "",
+         "role": "assistant"
+        }
+       }
+      ],
+      "created": 1700000000,
+      "id": "cmpl-oracle",
+      "model": "oracle-model",
+      "object": "chat.completion",
+      "usage": {
+       "completion_tokens": 5,
+       "prompt_tokens": 12,
+       "total_tokens": 17
+      }
+     },
+     "status": 200
+    }
+   ],
+   "session": "session-oracle",
+   "skipIfNoKey": false,
+   "telemetry": true,
+   "utilityModels": {}
+  }
+ ],
  "utilitySelections": [
   {
    "active": {
@@ -81969,24 +88060,29 @@
     "ORACLE_API_KEY"
    ],
    "fast": true,
+   "feature": null,
    "model": "mistral-vibe-cli-fast",
+   "models": [],
    "name": "mistral-with-key",
    "provider": "mistral",
    "providers": [
     {
-     "apiBase": "https://api.openai.com/v1",
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
      "backend": "generic",
-     "keyVariable": "OPENAI_KEY",
      "name": "openai"
     },
     {
-     "apiBase": "https://api.mistral.ai/v1",
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
      "backend": "mistral",
-     "keyVariable": "ORACLE_API_KEY",
      "name": "mistral"
     }
    ],
-   "temperature": 0.2
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {}
   },
   {
    "active": {
@@ -81998,24 +88094,29 @@
    "allowedModels": [],
    "env": [],
    "fast": false,
+   "feature": null,
    "model": "big",
+   "models": [],
    "name": "mistral-without-key",
    "provider": "openai",
    "providers": [
     {
-     "apiBase": "https://api.openai.com/v1",
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
      "backend": "generic",
-     "keyVariable": "OPENAI_KEY",
      "name": "openai"
     },
     {
-     "apiBase": "https://api.mistral.ai/v1",
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
      "backend": "mistral",
-     "keyVariable": "ORACLE_API_KEY",
      "name": "mistral"
     }
    ],
-   "temperature": 0.2
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {}
   },
   {
    "active": {
@@ -82029,18 +88130,23 @@
     "ORACLE_API_KEY"
    ],
    "fast": false,
+   "feature": null,
    "model": "big",
+   "models": [],
    "name": "no-mistral-provider",
    "provider": "openai",
    "providers": [
     {
-     "apiBase": "https://api.openai.com/v1",
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
      "backend": "generic",
-     "keyVariable": "OPENAI_KEY",
      "name": "openai"
     }
    ],
-   "temperature": 0.2
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {}
   },
   {
    "active": {
@@ -82052,24 +88158,29 @@
    "allowedModels": [],
    "env": [],
    "fast": false,
+   "feature": null,
    "model": "big",
+   "models": [],
    "name": "keyless-mistral",
    "provider": "openai",
    "providers": [
     {
-     "apiBase": "https://api.openai.com/v1",
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
      "backend": "generic",
-     "keyVariable": "OPENAI_KEY",
      "name": "openai"
     },
     {
-     "apiBase": "http://127.0.0.1:1/v1",
+     "api_base": "http://127.0.0.1:1/v1",
+     "api_key_env_var": "",
      "backend": "mistral",
-     "keyVariable": "",
      "name": "mistral"
     }
    ],
-   "temperature": 0.2
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {}
   },
   {
    "active": {
@@ -82085,24 +88196,29 @@
     "ORACLE_API_KEY"
    ],
    "fast": false,
+   "feature": null,
    "model": "big",
+   "models": [],
    "name": "allowlist-excludes-fast",
    "provider": "openai",
    "providers": [
     {
-     "apiBase": "https://api.openai.com/v1",
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
      "backend": "generic",
-     "keyVariable": "OPENAI_KEY",
      "name": "openai"
     },
     {
-     "apiBase": "https://api.mistral.ai/v1",
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
      "backend": "mistral",
-     "keyVariable": "ORACLE_API_KEY",
      "name": "mistral"
     }
    ],
-   "temperature": 0.2
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {}
   },
   {
    "active": {
@@ -82118,24 +88234,1698 @@
     "ORACLE_API_KEY"
    ],
    "fast": true,
+   "feature": null,
    "model": "mistral-vibe-cli-fast",
+   "models": [],
    "name": "allowlist-admits-fast",
    "provider": "mistral",
    "providers": [
     {
-     "apiBase": "https://api.openai.com/v1",
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
      "backend": "generic",
-     "keyVariable": "OPENAI_KEY",
      "name": "openai"
     },
     {
-     "apiBase": "https://api.mistral.ai/v1",
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
      "backend": "mistral",
-     "keyVariable": "ORACLE_API_KEY",
      "name": "mistral"
     }
    ],
-   "temperature": 0.2
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "big",
+   "allowedModels": [
+    "mistral-small"
+   ],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": false,
+   "feature": null,
+   "model": "big",
+   "models": [],
+   "name": "allowlist-alias-only",
+   "provider": "openai",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "mistral-small",
+   "allowedModels": [
+    "mistral-vibe-cli-fast"
+   ],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": true,
+   "feature": null,
+   "model": "mistral-vibe-cli-fast",
+   "models": [],
+   "name": "allowlist-fast-name",
+   "provider": "mistral",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "mistral-small",
+   "allowedModels": [
+    "MISTRAL-VIBE-CLI-FAST"
+   ],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": true,
+   "feature": null,
+   "model": "mistral-vibe-cli-fast",
+   "models": [],
+   "name": "allowlist-case-insensitive",
+   "provider": "mistral",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "mistral-small",
+   "allowedModels": [
+    "re:mistral-vibe-.*"
+   ],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": true,
+   "feature": null,
+   "model": "mistral-vibe-cli-fast",
+   "models": [],
+   "name": "allowlist-regex",
+   "provider": "mistral",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "big",
+   "allowedModels": [
+    "mistral-small-latest"
+   ],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": false,
+   "feature": null,
+   "model": "big",
+   "models": [],
+   "name": "allowlist-second-unprobed",
+   "provider": "openai",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "mistral-small-latest",
+   "allowedModels": [
+    "mistral-small-latest"
+   ],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": true,
+   "feature": null,
+   "model": "mistral-small-latest",
+   "models": [],
+   "name": "allowlist-second-served",
+   "provider": "mistral",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {
+    "mistral-small-latest": true
+   }
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "big",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": false,
+   "feature": null,
+   "model": "big",
+   "models": [],
+   "name": "public-first-refused",
+   "provider": "openai",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {
+    "mistral-vibe-cli-fast": false
+   }
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "mistral-small-latest",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": true,
+   "feature": null,
+   "model": "mistral-small-latest",
+   "models": [],
+   "name": "public-first-refused-second-served",
+   "provider": "mistral",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {
+    "mistral-small-latest": true,
+    "mistral-vibe-cli-fast": false
+   }
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "mistral-small",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": true,
+   "feature": null,
+   "model": "mistral-vibe-cli-fast",
+   "models": [],
+   "name": "public-second-served-first-unknown",
+   "provider": "mistral",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {
+    "mistral-small-latest": true
+   }
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "big",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": false,
+   "feature": null,
+   "model": "big",
+   "models": [],
+   "name": "public-both-refused",
+   "provider": "openai",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {
+    "mistral-small-latest": false,
+    "mistral-vibe-cli-fast": false
+   }
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "mistral-small",
+   "allowedModels": [],
+   "env": [],
+   "fast": true,
+   "feature": null,
+   "model": "mistral-vibe-cli-fast",
+   "models": [],
+   "name": "keyless-first-served",
+   "provider": "mistral",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "http://127.0.0.1:1/v1",
+     "api_key_env_var": "",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {
+    "mistral-vibe-cli-fast": true
+   }
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "mistral-small-latest",
+   "allowedModels": [],
+   "env": [],
+   "fast": true,
+   "feature": null,
+   "model": "mistral-small-latest",
+   "models": [],
+   "name": "keyless-second-served",
+   "provider": "mistral",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "http://127.0.0.1:1/v1",
+     "api_key_env_var": "",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {
+    "mistral-small-latest": true
+   }
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "mistral-small-latest",
+   "allowedModels": [],
+   "env": [],
+   "fast": true,
+   "feature": null,
+   "model": "mistral-small-latest",
+   "models": [],
+   "name": "keyless-first-refused-second-served",
+   "provider": "mistral",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "http://127.0.0.1:1/v1",
+     "api_key_env_var": "",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {
+    "mistral-small-latest": true,
+    "mistral-vibe-cli-fast": false
+   }
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "big",
+   "allowedModels": [],
+   "env": [],
+   "fast": false,
+   "feature": null,
+   "model": "big",
+   "models": [],
+   "name": "keyless-both-refused",
+   "provider": "openai",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "http://127.0.0.1:1/v1",
+     "api_key_env_var": "",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {
+    "mistral-small-latest": false,
+    "mistral-vibe-cli-fast": false
+   }
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "mistral-small",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": true,
+   "feature": null,
+   "model": "mistral-vibe-cli-fast",
+   "models": [],
+   "name": "public-explicit-port",
+   "provider": "mistral",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai:443/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "mistral-small",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": true,
+   "feature": null,
+   "model": "mistral-vibe-cli-fast",
+   "models": [],
+   "name": "public-uppercase",
+   "provider": "mistral",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "HTTPS://API.Mistral.AI/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "big",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": false,
+   "feature": null,
+   "model": "big",
+   "models": [],
+   "name": "public-other-port",
+   "provider": "openai",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai:8443/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "big",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": false,
+   "feature": null,
+   "model": "big",
+   "models": [],
+   "name": "public-plain-http",
+   "provider": "openai",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "http://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "big",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": false,
+   "feature": null,
+   "model": "big",
+   "models": [],
+   "name": "public-http-port-443",
+   "provider": "openai",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "http://api.mistral.ai:443/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "big",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": false,
+   "feature": null,
+   "model": "big",
+   "models": [],
+   "name": "public-invalid-port",
+   "provider": "openai",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai:99999/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "mistral-small",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": true,
+   "feature": null,
+   "model": "mistral-vibe-cli-fast",
+   "models": [],
+   "name": "public-empty-port",
+   "provider": "mistral",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai:/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "mistral-small",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": true,
+   "feature": null,
+   "model": "mistral-vibe-cli-fast",
+   "models": [],
+   "name": "public-bare-origin",
+   "provider": "mistral",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "big",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": false,
+   "feature": null,
+   "model": "big",
+   "models": [],
+   "name": "public-other-host",
+   "provider": "openai",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://eu.api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "medium",
+    "name": "mistral-medium-latest",
+    "provider": "mistral"
+   },
+   "alias": "mistral-small",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": true,
+   "feature": null,
+   "model": "mistral-vibe-cli-fast",
+   "models": [],
+   "name": "active-on-mistral",
+   "provider": "mistral",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "small-eu",
+    "name": "small-eu",
+    "provider": "mistral-eu"
+   },
+   "alias": "small-eu",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": false,
+   "feature": null,
+   "model": "small-eu",
+   "models": [],
+   "name": "active-on-second-mistral",
+   "provider": "mistral-eu",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    },
+    {
+     "api_base": "http://127.0.0.1:2/v1",
+     "api_key_env_var": "",
+     "backend": "mistral",
+     "name": "mistral-eu"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "small-eu",
+    "name": "small-eu",
+    "provider": "mistral-eu"
+   },
+   "alias": "mistral-small",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": true,
+   "feature": null,
+   "model": "mistral-vibe-cli-fast",
+   "models": [],
+   "name": "active-on-second-mistral-served",
+   "provider": "mistral-eu",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    },
+    {
+     "api_base": "http://127.0.0.1:2/v1",
+     "api_key_env_var": "",
+     "backend": "mistral",
+     "name": "mistral-eu"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {
+    "mistral-vibe-cli-fast": true
+   }
+  },
+  {
+   "active": null,
+   "alias": "mistral-small",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": true,
+   "feature": null,
+   "model": "mistral-vibe-cli-fast",
+   "models": [],
+   "name": "unknown-active-with-fast",
+   "provider": "mistral",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {}
+  },
+  {
+   "active": null,
+   "allowedModels": [],
+   "env": [],
+   "error": true,
+   "feature": null,
+   "models": [],
+   "name": "unknown-active-without-fast",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "utilityModels": {},
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "mistral-small",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": true,
+   "feature": null,
+   "model": "mistral-vibe-cli-fast",
+   "models": [],
+   "name": "unknown-provider-with-fast",
+   "provider": "mistral",
+   "providers": [
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "small",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": false,
+   "feature": "title",
+   "model": "small-model",
+   "models": [
+    {
+     "alias": "small",
+     "name": "small-model",
+     "provider": "openai"
+    }
+   ],
+   "name": "override-title",
+   "provider": "openai",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {
+    "title": "small"
+   },
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "small",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": false,
+   "feature": "title",
+   "model": "small-model",
+   "models": [
+    {
+     "alias": "small",
+     "name": "small-model",
+     "provider": "openai"
+    }
+   ],
+   "name": "override-title-padded",
+   "provider": "openai",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {
+    "title": "  small "
+   },
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "fast-latest",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": false,
+   "feature": "title",
+   "model": "mistral-small-latest",
+   "models": [
+    {
+     "alias": "fast-latest",
+     "name": "mistral-small-latest",
+     "provider": "mistral"
+    }
+   ],
+   "name": "override-title-fast-name",
+   "provider": "mistral",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {
+    "title": "fast-latest"
+   },
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "big",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": false,
+   "feature": "title",
+   "model": "big",
+   "models": [
+    {
+     "alias": "small",
+     "name": "small-model",
+     "provider": "openai"
+    }
+   ],
+   "name": "override-title-active-selector",
+   "provider": "openai",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {
+    "title": "active"
+   },
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "active",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": false,
+   "feature": "title",
+   "model": "aliased-active",
+   "models": [
+    {
+     "alias": "active",
+     "name": "aliased-active",
+     "provider": "openai"
+    }
+   ],
+   "name": "override-title-aliased-active",
+   "provider": "openai",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {
+    "title": "active"
+   },
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "mistral-small",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": true,
+   "feature": "title",
+   "model": "mistral-vibe-cli-fast",
+   "models": [
+    {
+     "alias": "small",
+     "name": "small-model",
+     "provider": "openai"
+    }
+   ],
+   "name": "override-title-unknown",
+   "provider": "mistral",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {
+    "title": "nope"
+   },
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "big",
+   "allowedModels": [
+    "big"
+   ],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": false,
+   "feature": "title",
+   "model": "big",
+   "models": [
+    {
+     "alias": "small",
+     "name": "small-model",
+     "provider": "openai"
+    }
+   ],
+   "name": "override-title-excluded",
+   "provider": "openai",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {
+    "title": "small"
+   },
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "small",
+   "allowedModels": [
+    "zzz"
+   ],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": false,
+   "feature": "title",
+   "model": "small-model",
+   "models": [
+    {
+     "alias": "small",
+     "name": "small-model",
+     "provider": "openai"
+    }
+   ],
+   "name": "override-title-allowlist-admits-nothing",
+   "provider": "openai",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {
+    "title": "small"
+   },
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "mistral-small",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": true,
+   "feature": "title",
+   "model": "mistral-vibe-cli-fast",
+   "models": [
+    {
+     "alias": "small",
+     "name": "small-model",
+     "provider": "openai"
+    }
+   ],
+   "name": "override-smart-approve-only",
+   "provider": "mistral",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {
+    "smart_approve": "small"
+   },
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "small",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": false,
+   "feature": "smart_approve",
+   "model": "small-model",
+   "models": [
+    {
+     "alias": "small",
+     "name": "small-model",
+     "provider": "openai"
+    }
+   ],
+   "name": "override-smart-approve",
+   "provider": "openai",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {
+    "smart_approve": "small"
+   },
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "mistral-small",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": true,
+   "feature": null,
+   "model": "mistral-vibe-cli-fast",
+   "models": [
+    {
+     "alias": "small",
+     "name": "small-model",
+     "provider": "openai"
+    }
+   ],
+   "name": "override-without-feature",
+   "provider": "mistral",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {
+    "title": "small"
+   },
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "error": true,
+   "feature": "title",
+   "models": [
+    {
+     "alias": "orphan",
+     "name": "orphan-model",
+     "provider": "gone"
+    }
+   ],
+   "name": "override-unknown-provider",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "utilityModels": {
+    "title": "orphan"
+   },
+   "verdicts": {}
+  },
+  {
+   "active": null,
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "error": true,
+   "feature": "title",
+   "models": [
+    {
+     "alias": "small",
+     "name": "small-model",
+     "provider": "openai"
+    }
+   ],
+   "name": "override-active-selector-without-active",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "utilityModels": {
+    "title": "active"
+   },
+   "verdicts": {}
+  },
+  {
+   "active": {
+    "alias": "big",
+    "name": "big",
+    "provider": "openai"
+   },
+   "alias": "mistral-small",
+   "allowedModels": [],
+   "env": [
+    "ORACLE_API_KEY"
+   ],
+   "fast": true,
+   "feature": "title",
+   "model": "mistral-vibe-cli-fast",
+   "models": [
+    {
+     "alias": "small",
+     "name": "small-model",
+     "provider": "openai"
+    }
+   ],
+   "name": "no-override-for-title",
+   "provider": "mistral",
+   "providers": [
+    {
+     "api_base": "https://api.openai.com/v1",
+     "api_key_env_var": "OPENAI_KEY",
+     "api_style": "openai",
+     "backend": "generic",
+     "name": "openai"
+    },
+    {
+     "api_base": "https://api.mistral.ai/v1",
+     "api_key_env_var": "ORACLE_API_KEY",
+     "backend": "mistral",
+     "name": "mistral"
+    }
+   ],
+   "temperature": 0.2,
+   "utilityModels": {},
+   "verdicts": {}
   }
  ],
  "vertexEndpoints": [

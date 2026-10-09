@@ -433,6 +433,11 @@ impl InProcessClient {
         Ok(session_id)
     }
 
+    /// Whether a session this client opened titles itself in the background.
+    pub(crate) fn session_titles_itself(&self, session_id: &str) -> bool {
+        self.server.session_titles_itself(session_id)
+    }
+
     /// The configuration and session service the server behind this client
     /// composes over.
     #[must_use]

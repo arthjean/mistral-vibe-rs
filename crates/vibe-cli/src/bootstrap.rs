@@ -245,7 +245,9 @@ pub(crate) fn route_driver_config(
     Ok(LiveDriverConfig {
         compaction_prompts: workspace.compaction_prompts(),
         provider: route.provider.clone(),
+        providers: routing.providers,
         allowed_models: routing.allowed_models,
+        utility_models: routing.utility_models,
         models: routing.models,
         model: route.model.clone(),
         api: routing.api,
@@ -294,7 +296,9 @@ pub(crate) fn live_driver_config(
     Ok(LiveDriverConfig {
         compaction_prompts: workspace.compaction_prompts(),
         provider: launch_provider(arguments, &routing)?,
+        providers: routing.providers.clone(),
         allowed_models: routing.allowed_models,
+        utility_models: routing.utility_models,
         models: routing.models,
         model: model.to_owned(),
         api: routing.api,

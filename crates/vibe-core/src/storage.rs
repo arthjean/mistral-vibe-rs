@@ -143,7 +143,7 @@ impl SessionLogging {
             session_prefix: text("session_prefix")
                 .unwrap_or(DEFAULT_SESSION_PREFIX)
                 .to_owned(),
-            generate_titles: flag("generate_titles", false),
+            generate_titles: flag("generate_titles", true),
         }
     }
 

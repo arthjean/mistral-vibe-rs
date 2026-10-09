@@ -118,11 +118,20 @@ impl ServerConnection {
             return Err(ProtocolFault::invalid_params(worktrees::REOPEN_REFUSAL));
         }
         let provider = self.server.utility_provider.clone();
+        // What the client declared about itself, as the session's own
+        // requests report it (`vibe/app_server/_runtime.py:1257`).
+        let launch = self.launch.clone();
         let resolution = worktrees::resolve(
             Some(&input),
             params.working_directory.as_deref(),
             &self.session_worktrees(),
-            |prompt| naming_model::suggest_worktree_name_blocking(prompt, provider.as_deref()),
+            |prompt| {
+                naming_model::suggest_worktree_name_blocking(
+                    prompt,
+                    provider.as_deref(),
+                    launch.as_ref(),
+                )
+            },
         )
         .map_err(|error| ProtocolFault::invalid_params(error.to_string()))?;
         if let Some(cwd) = &resolution.cwd {

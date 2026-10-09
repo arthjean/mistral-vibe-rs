@@ -72,13 +72,6 @@ struct Divergence {
 
 const PLAN_REVIEWS: &[&str] = &["plan/edited-during-review", "plan/unchanged-during-review"];
 
-const MODEL_PROBE: &str = "since v2.26.0 a root session opened with titles on first asks the \
-     provider whether it serves a fast model, with a one-token completion that offers no tools \
-     (`vibe/app_server/_runtime.py:1956`, `vibe/core/llm/model_probe.py:189-211` at 376f6a3), \
-     so the reference sends one more utility request than this port, which sends no probe. \
-     The stand-in answers the probe apart, so every title still reads the reply its scenario \
-     scripted";
-
 const LEDGER: &[Divergence] = &[
     // ---------------------------------------------------------- row 3
     Divergence {
@@ -188,31 +181,6 @@ const LEDGER: &[Divergence] = &[
         pointer: "/steps/1/persisted/0/messages/3/message/",
         row: "3",
         reason: "the plan-review outcome, as the saved tool message, its result and its display",
-    },
-    // --------------------------------------------------------- row 10
-    Divergence {
-        scenarios: &["titles/first-answer"],
-        pointer: "/requests/2",
-        row: "10",
-        reason: MODEL_PROBE,
-    },
-    Divergence {
-        scenarios: &["titles/manual-title-wins"],
-        pointer: "/requests/1",
-        row: "10",
-        reason: MODEL_PROBE,
-    },
-    Divergence {
-        scenarios: &["titles/after-compaction"],
-        pointer: "/requests/5",
-        row: "10",
-        reason: MODEL_PROBE,
-    },
-    Divergence {
-        scenarios: &["titles/tool-heavy-turn"],
-        pointer: "/requests/11",
-        row: "10",
-        reason: MODEL_PROBE,
     },
     // --------------------------------------------------------- row 13
     Divergence {

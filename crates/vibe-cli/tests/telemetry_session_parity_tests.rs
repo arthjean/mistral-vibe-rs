@@ -50,62 +50,13 @@ struct Divergence {
     reason: &'static str,
 }
 
-/// The requests the terminal client makes besides its turns: row 10 for the
-/// fast-model probe, row 16 for the title request. The oracle queues scripted
-/// answers only once startup is quiet, so the probe takes the default answer
-/// and shifts nothing else.
-const BACKGROUND_REQUESTS: &str = "since v2.26.0 the terminal client generates session titles \
-     by default (`vibe/core/config/models.py:112` at `376f6a3`), so opening a session first \
-     probes once for a fast model to run them on, a request labeled `secondary_call` \
-     (`vibe/app_server/_runtime.py:1951-1959`, `vibe/core/llm/model_probe.py:213-216`), and the \
-     first answer is followed by a title request labeled `title_generation` \
-     (`vibe/core/llm/utility_completion.py:212-213`); this port's client makes neither, so the \
-     request count and the census compared position by position differ in every terminal run";
-
-/// Row 16: the title request's own event.
-const TITLE_EVENT: &str = "the title request is reported as its own `vibe.request_sent`, with \
-     its call type and attachment counts, and the sorted events after it shift by one; this \
-     port sends no title request";
-
-const LEDGER: &[Divergence] = &[
-    Divergence {
-        scenario: "tui/*",
-        pointer: "/*/events/*/properties/is_cold_start",
-        reason: "the reference reports whether Python rebuilt its bytecode cache, false from a \
+const LEDGER: &[Divergence] = &[Divergence {
+    scenario: "tui/*",
+    pointer: "/*/events/*/properties/is_cold_start",
+    reason: "the reference reports whether Python rebuilt its bytecode cache, false from a \
                  source checkout and null for its own frozen binaries; this port is a compiled \
                  binary and reports null",
-    },
-    Divergence {
-        scenario: "tui/*",
-        pointer: "/*/chatRequests",
-        reason: BACKGROUND_REQUESTS,
-    },
-    Divergence {
-        scenario: "tui/*",
-        pointer: "/*/chatMetadata/*",
-        reason: BACKGROUND_REQUESTS,
-    },
-    Divergence {
-        scenario: "tui/*",
-        pointer: "/*/chatMetadata/*/*",
-        reason: BACKGROUND_REQUESTS,
-    },
-    Divergence {
-        scenario: "tui/prompt*",
-        pointer: "/*/events/*",
-        reason: TITLE_EVENT,
-    },
-    Divergence {
-        scenario: "tui/prompt*",
-        pointer: "/*/events/*/event",
-        reason: TITLE_EVENT,
-    },
-    Divergence {
-        scenario: "tui/prompt*",
-        pointer: "/*/events/*/properties/*",
-        reason: TITLE_EVENT,
-    },
-];
+}];
 
 fn repository() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
