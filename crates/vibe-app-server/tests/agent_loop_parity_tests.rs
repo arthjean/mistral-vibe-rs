@@ -339,9 +339,8 @@ const SESSION_ARCHIVE: &str = "v2.26.0 publishes each session's `archivedAt` and
      read null and false in every scenario";
 
 const PATH_SCOPE: &str = "v2.26.0 approvals carry a path grant scope: `pathScopeChoices` on the \
-     request, `pathScope` on the decision (`vibe/app_server/models.py:312,322` at 376f6a3) and \
-     `pathScopeRoot` on each required permission (`vibe/permissions.py:60`), empty or null for \
-     every call these scenarios approve; this port's payloads carry none of them";
+     request and `pathScope` on the decision (`vibe/app_server/models.py:312,322` at 376f6a3), \
+     empty or null for every call these scenarios approve; this port's payloads carry neither";
 
 const FIELDS: &[FieldDivergence] = &[
     FieldDivergence {
@@ -389,11 +388,6 @@ const FIELDS: &[FieldDivergence] = &[
     },
     FieldDivergence {
         suffix: "/pathScope",
-        row: "17",
-        reason: PATH_SCOPE,
-    },
-    FieldDivergence {
-        suffix: "/pathScopeRoot",
         row: "17",
         reason: PATH_SCOPE,
     },

@@ -754,6 +754,7 @@ fn command_requirement(pattern: String, label: String) -> PermissionRequirement 
         session_pattern: pattern,
         label,
         literal: false,
+        path_scope_root: None,
     }
 }
 

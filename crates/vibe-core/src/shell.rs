@@ -331,6 +331,7 @@ pub fn override_requirements(
             session_pattern: pattern,
             label: format!("custom shell ({shell})"),
             literal: false,
+            path_scope_root: None,
         });
     }
     if !environment.is_empty() {
@@ -343,6 +344,7 @@ pub fn override_requirements(
             session_pattern: "env override *".to_owned(),
             label: format!("custom environment ({names})"),
             literal: false,
+            path_scope_root: None,
         });
     }
     requirements
@@ -621,6 +623,7 @@ pub fn pager_input_permission(
         session_pattern: label.clone(),
         label,
         literal: false,
+        path_scope_root: None,
     }])
 }
 

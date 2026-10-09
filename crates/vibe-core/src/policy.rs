@@ -18,6 +18,9 @@ use crate::tools::{
 };
 
 pub mod arity;
+mod path_grants;
+
+pub use path_grants::{PathGrantScope, path_grant_pattern, path_pattern_matches, path_scope_root};
 
 /// The rationale a rule stored by an approval carries, which is also what tells
 /// the two apart when a session is rebuilt.
@@ -115,6 +118,14 @@ pub struct PermissionRequirement {
     /// never reaches the wire and a payload that carries it still reads.
     #[serde(default, skip_serializing)]
     pub literal: bool,
+    /// The directory a recursive grant of this requirement would reach.
+    ///
+    /// Reference `RequiredPermission.path_scope_root` (`vibe/permissions.py`,
+    /// since v2.25.8): set by [`path_scope_root`] on an outside-directory
+    /// requirement whose target is a directory the session can enter, and
+    /// null everywhere else, which is how it crosses the wire.
+    #[serde(default)]
+    pub path_scope_root: Option<String>,
 }
 
 impl PermissionRequirement {
@@ -132,6 +143,7 @@ impl PermissionRequirement {
             session_pattern: session_pattern.clone(),
             label: session_pattern,
             literal: false,
+            path_scope_root: None,
         }
     }
 
@@ -152,13 +164,15 @@ impl PermissionRequirement {
             session_pattern: segment.to_owned(),
             label: segment.to_owned(),
             literal: true,
+            path_scope_root: None,
         }
     }
 
-    /// A directory the call reaches outside every root.
+    /// A directory a command reaches outside every root, named by a glob over
+    /// it.
     ///
-    /// Reference `_build_outside_directory_permission` and the shared file-tool
-    /// chain, which both carry the glob as both patterns.
+    /// The shape reference `_build_outside_directory_permission` raised before
+    /// v2.25.8, which the shell still raises (row 6 of `docs/parity.md`).
     #[must_use]
     pub fn outside_directory(glob: &str) -> Self {
         Self {
@@ -167,6 +181,27 @@ impl PermissionRequirement {
             session_pattern: glob.to_owned(),
             label: format!("outside workdir ({glob})"),
             literal: false,
+            path_scope_root: None,
+        }
+    }
+
+    /// A path a file tool reaches outside every root.
+    ///
+    /// Reference `resolve_file_tool_permission` since v2.25.8: the call is
+    /// asked about the resolved path itself, the session pattern is its exact
+    /// encoded grant, so approving one file leaves its siblings asking, and the
+    /// recursive grant root is the path when it is a directory the session can
+    /// enter.
+    #[must_use]
+    pub fn outside_path(resolved: &Path) -> Self {
+        let path = resolved.display().to_string();
+        Self {
+            scope: PermissionScope::OutsideDirectory,
+            session_pattern: path_grant_pattern(&path, PathGrantScope::Exact),
+            label: format!("outside workdir ({path})"),
+            literal: false,
+            path_scope_root: path_scope_root(resolved),
+            invocation_pattern: path,
         }
     }
 
@@ -184,6 +219,7 @@ impl PermissionRequirement {
             session_pattern: glob_escape(resolved),
             label: format!("accessing sensitive files ({tool})"),
             literal: false,
+            path_scope_root: None,
         }
     }
 
@@ -198,6 +234,7 @@ impl PermissionRequirement {
             session_pattern: scope.to_owned(),
             label: format!("fetching from {scope}"),
             literal: false,
+            path_scope_root: None,
         }
     }
 
@@ -301,7 +338,9 @@ impl PermissionRule {
     /// Reference `PermissionStore.covers`: the tool and the scope have to be
     /// the rule's own, and the requirement's invocation pattern has to match the
     /// rule's session pattern under [`wildcard_match`], or equal it when the
-    /// requirement is literal.
+    /// requirement is literal. An outside-directory requirement is matched by
+    /// path instead, under [`path_pattern_matches`], so an encoded grant covers
+    /// what its scope reaches and a path glob never lets `*` cross a separator.
     ///
     /// Only an approval is held to the literal reading. The reference stores
     /// approvals alone, each under a scope; a rule with no scope is this port's
@@ -311,7 +350,9 @@ impl PermissionRule {
     pub fn covers(&self, tool: &str, requirement: &PermissionRequirement) -> bool {
         (self.tool == tool || self.tool == "*")
             && self.scope.is_none_or(|scope| scope == requirement.scope)
-            && if requirement.literal && self.scope.is_some() {
+            && if self.scope == Some(PermissionScope::OutsideDirectory) {
+                path_pattern_matches(&requirement.invocation_pattern, &self.pattern)
+            } else if requirement.literal && self.scope.is_some() {
                 self.pattern == requirement.invocation_pattern
             } else {
                 wildcard_match(&requirement.invocation_pattern, &self.pattern)
@@ -1209,9 +1250,8 @@ fn resolve_locked(
             required_permissions: Vec::new(),
         });
     }
-    // Every path outside every root carries its own requirement, deduplicated
-    // by the directory it names: reference `_build_outside_directory_permission`
-    // over a set of directories rather than over one per file.
+    // Every path outside every root carries its own requirement, named by the
+    // resolved path: reference `resolve_file_tool_permission` since v2.25.8.
     let mut requirements = context.requirements.clone();
     for (path, canonical) in &positioned {
         if canonical
@@ -1221,7 +1261,7 @@ fn resolve_locked(
             continue;
         }
         let named = canonical.as_deref().unwrap_or(path.as_path());
-        let requirement = PermissionRequirement::outside_directory(&outside_glob(named));
+        let requirement = PermissionRequirement::outside_path(named);
         if !requirements.contains(&requirement) {
             requirements.push(requirement);
         }
@@ -1291,9 +1331,10 @@ fn resolve_locked(
 /// Resolves what a file tool may do with `path`, before the trust roots.
 ///
 /// Reference `resolve_file_tool_permission`, in its order: the scratchpad is
-/// the runtime's own capability and is granted first; the denylist refuses and
-/// the allowlist grants, both against the resolved absolute path and both
-/// before anything else is read; a sensitive match then raises a `file_pattern`
+/// the runtime's own capability and is granted first; the denylist refuses
+/// under `fnmatch` and the allowlist grants under [`path_pattern_matches`],
+/// which reads the encoded grants a permanent approval writes there, both
+/// against the resolved absolute path and both before anything else is read; a sensitive match then raises a `file_pattern`
 /// requirement even where the configured permission is `always`. The
 /// working-directory boundary is the one step this port answers elsewhere: the
 /// roots live in the store, so the path travels on the context and
@@ -1320,7 +1361,11 @@ pub fn resolve_file_tool_permission(
             "`{subject}` matches the `{tool}` denylist entry `{pattern}`"
         ));
     }
-    if let Some(pattern) = matched_pattern(&settings.allowlist, &subject) {
+    if let Some(pattern) = settings
+        .allowlist
+        .iter()
+        .find(|pattern| path_pattern_matches(&subject, pattern))
+    {
         return PermissionContext::settled(PermissionMode::Always).because(format!(
             "`{subject}` matches the `{tool}` allowlist entry `{pattern}`"
         ));
@@ -1377,7 +1422,7 @@ fn matched_path_pattern<'a>(patterns: &'a [String], subject: &str) -> Option<&'a
     let subject = subject.to_lowercase();
     patterns
         .iter()
-        .find(|pattern| path_pattern_matches(&pattern.to_lowercase(), &subject))
+        .find(|pattern| pure_path_match(&pattern.to_lowercase(), &subject))
 }
 
 /// Whether a resolved absolute path is one a sensitive pattern names.
@@ -1389,19 +1434,19 @@ pub fn matches_sensitive_pattern(patterns: &[String], resolved: &Path) -> bool {
     matched_path_pattern(patterns, &resolved.display().to_string()).is_some()
 }
 
-/// Whether `pattern` names `subject` the way a sensitive pattern names a file.
+/// Whether `pattern` names `subject` under `PurePath.match`.
 ///
 /// Reference `resolve_file_tool_permission` runs `sensitive_patterns` through
-/// `PurePath.match` while the allowlist and the denylist beside it stay on
-/// `fnmatch`, so the two matchers answer differently and both are kept. This
-/// one compares component by component and anchors on the right: `.env` names a
-/// file called `.env` at any depth, `/etc/*` names only a direct child of
-/// `/etc`, and a `*` never crosses a separator the way `fnmatch` lets it.
+/// it, and [`path_pattern_matches`] runs an absolute allowlist glob through it,
+/// while the denylist stays on `fnmatch`. This matcher compares component by
+/// component and anchors on the right: `.env` names a file called `.env` at any
+/// depth, `/etc/*` names only a direct child of `/etc`, and a `*` never crosses
+/// a separator the way `fnmatch` lets it.
 ///
 /// A pattern naming no component matches nothing. Upstream raises `ValueError`
 /// there; failing to read a pattern is a reason to raise no requirement from
 /// it, never a reason to drop the ones the other patterns raise.
-fn path_pattern_matches(pattern: &str, subject: &str) -> bool {
+fn pure_path_match(pattern: &str, subject: &str) -> bool {
     let expected = path_components(pattern);
     let Some(width) = (!expected.is_empty()).then_some(expected.len()) else {
         return false;
@@ -1458,20 +1503,6 @@ fn component_matches(pattern: &str, component: &str) -> bool {
         "*" => !component.is_empty(),
         _ => pattern_matches(pattern, component),
     }
-}
-
-/// The glob an outside path is named by: the parent for a file, the directory
-/// itself for a directory, joined with `*`.
-///
-/// Reference `resolve_file_tool_permission` names `parent / "*"`, and
-/// `_collect_outside_dirs` names the directory a command operand resolves to.
-fn outside_glob(canonical: &Path) -> String {
-    let directory = if canonical.is_dir() {
-        canonical
-    } else {
-        canonical.parent().unwrap_or(canonical)
-    };
-    directory.join("*").display().to_string()
 }
 
 /// The most specific rule answering for `requirement`, or [`None`] when none

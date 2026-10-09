@@ -1,14 +1,17 @@
 //! Differential oracle for the permission vocabulary.
 //!
 //! The Python reference is the authority on which scopes exist, which fields a
-//! requirement carries, what the arity table holds, and what
-//! `build_session_pattern` and `wildcard_match` answer, and which matcher
-//! reads a sensitive pattern.
-//! `scripts/parity/permission_surface.py` asks it all six questions and
-//! records the answers; this module replays them against
-//! [`PermissionScope`], [`PermissionRequirement`], [`arity::ARITY`],
-//! [`arity::build_session_pattern`], [`wildcard_match`] and the two path
-//! matchers [`resolve_file_tool_permission`] reads its lists with.
+//! requirement carries, what the arity table holds, what
+//! `build_session_pattern` and `wildcard_match` answer, which matcher reads a
+//! sensitive pattern, an allowlist entry and a denylist entry, how a path grant
+//! is encoded and matched, and what a stored rule covers.
+//! `scripts/parity/permission_surface.py` asks it every question and records
+//! the answers; this module replays them against [`PermissionScope`],
+//! [`PathGrantScope`], [`PermissionRequirement`], [`arity::ARITY`],
+//! [`arity::build_session_pattern`], [`wildcard_match`],
+//! [`path_grant_pattern`], [`path_pattern_matches`], [`PermissionRule::covers`]
+//! and the file-tool chain, [`resolve_file_tool_permission`] composed with the
+//! store's working-directory check.
 //!
 //! The corpus is committed: it carries enum values, field names, command names,
 //! integers and the answers to cases this repository authored, all of which are
@@ -23,7 +26,7 @@
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde::Deserialize;
@@ -36,7 +39,7 @@ const CAPTURE_SCRIPT: &str = "scripts/parity/permission_surface.py";
 const CORPUS_RELATIVE: &str = "tests/permission-surface/vocabulary.json";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 4;
+const CORPUS_SCHEMA_VERSION: u32 = 5;
 
 /// One observed difference from the reference, scoped to the corpus pointer
 /// it contradicts.
@@ -54,47 +57,11 @@ struct Divergence {
 
 /// Every difference the replay admits, measured at the pin in
 /// `crate::parity::REFERENCE_COMMIT`.
-const DIVERGENCES: &[Divergence] = &[
-    Divergence {
-        pointer: "/requirement/fields/5",
-        port: "undeclared",
-        reason: PATH_SCOPE_ROOT,
-    },
-    Divergence {
-        pointer: "/fileToolChain/outsideInvocationPattern",
-        port: "<outside>/*",
-        reason: OUTSIDE_EXACT_FILE,
-    },
-    Divergence {
-        pointer: "/fileToolChain/outsideSessionPattern",
-        port: "<outside>/*",
-        reason: OUTSIDE_EXACT_FILE,
-    },
-    Divergence {
-        pointer: "/fileToolChain/outsideLabel",
-        port: "outside workdir (<outside>/*)",
-        reason: OUTSIDE_EXACT_FILE,
-    },
-];
-
-/// Why the requirement model carries one field fewer here.
-const PATH_SCOPE_ROOT: &str = "since v2.25.8 the reference requirement declares an optional \
-     `path_scope_root` that crosses the wire as `pathScopeRoot` (`vibe/permissions.py:60` at \
-     376f6a33413a): the directory an approval may widen to when the operator picks the \
-     recursive grant, filled by `shell_path_scope_root` (`vibe/core/tools/utils.py:86-94`) and \
-     read by `scope_required_permissions` (`vibe/permissions.py:140-160`). This port has neither \
-     the field nor the exact versus recursive grant choice, so its requirement serializes four \
-     keys and refuses a payload that carries the fifth";
-
-/// Why an outside-workdir file requirement still names a directory glob here.
-const OUTSIDE_EXACT_FILE: &str = "since v2.25.8 the shared file-tool chain asks about the \
-     resolved file itself (`vibe/core/tools/utils.py:230-242` at 376f6a33413a): the invocation \
-     pattern and the label name the file, and the session pattern is the exact-path grant \
-     encoding `path_grant_pattern` builds (`vibe/permissions.py:73-75`), which \
-     `PermissionStore.covers` matches by path rather than as a glob \
-     (`vibe/core/tools/permissions.py:41-42`). This port still asks about the parent directory \
-     through `outside_glob` (`crates/vibe-core/src/policy.rs`), so one approval covers every \
-     sibling of the file";
+///
+/// The v2.26.0 re-pin opened four, the requirement's `pathScopeRoot` and the
+/// three fields of the exact-path grant of a file outside the working
+/// directory; the path grant pass closed them.
+const DIVERGENCES: &[Divergence] = &[];
 
 /// Whether the port's `answer` at `pointer` is the reference `expected` one or
 /// the divergence [`DIVERGENCES`] records there, failing on anything else and
@@ -139,6 +106,7 @@ struct Corpus {
     note: String,
     counts: Counts,
     scopes: Vec<String>,
+    path_grant_scopes: Vec<String>,
     requirement: RequirementModel,
     arity: BTreeMap<String, usize>,
     session_patterns: Vec<SessionPatternCase>,
@@ -146,6 +114,9 @@ struct Corpus {
     sensitive_matches: Vec<SensitiveCase>,
     sensitive_chain: Vec<SensitiveChainCase>,
     file_tool_chain: FileToolChain,
+    path_grants: PathGrants,
+    covers: Vec<CoversCase>,
+    list_chain: Vec<ListChainCase>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -163,6 +134,11 @@ struct Counts {
     wildcard_cases: usize,
     sensitive_cases: usize,
     sensitive_chain_cases: usize,
+    path_grant_encoding_cases: usize,
+    path_match_cases: usize,
+    covers_cases: usize,
+    list_chain_cases: usize,
+    outside_targets: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -209,7 +185,10 @@ struct SensitiveCase {
     #[serde(default)]
     #[expect(dead_code, reason = "the refusal is named by the null verdict")]
     sensitive_raises: Option<String>,
-    list_matches: bool,
+    /// What the allowlist matcher, `path_pattern_matches`, answers.
+    allow_matches: bool,
+    /// What the denylist matcher, `fnmatch`, answers.
+    deny_matches: bool,
 }
 
 /// What the whole file-tool chain answers for one sensitive pattern.
@@ -229,11 +208,69 @@ struct FileToolChain {
     sensitive_invocation_pattern: String,
     sensitive_session_pattern: String,
     sensitive_label: String,
-    outside_scope: String,
-    outside_invocation_pattern: String,
-    outside_session_pattern: String,
-    outside_label: String,
     permission: String,
+    outside: Vec<OutsideCase>,
+}
+
+/// The requirement the chain raises for one target outside the working
+/// directory, with `<outside>` standing for the directory holding it.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct OutsideCase {
+    target: String,
+    permission: String,
+    scope: String,
+    invocation_pattern: String,
+    session_pattern: String,
+    label: String,
+    path_scope_root: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PathGrants {
+    encodings: Vec<EncodingCase>,
+    matches: Vec<PathMatchCase>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EncodingCase {
+    path: String,
+    scope: PathGrantScope,
+    pattern: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PathMatchCase {
+    path: String,
+    pattern: String,
+    matches: bool,
+}
+
+/// What a stored rule covers, as `PermissionStore.covers` answers it.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CoversCase {
+    rule_scope: PermissionScope,
+    rule_pattern: String,
+    scope: PermissionScope,
+    invocation_pattern: String,
+    literal: bool,
+    covers: bool,
+}
+
+/// What the file-tool chain answers with one list entry configured, with
+/// `{workdir}` and `{outside}` standing for the two temporary directories.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ListChainCase {
+    list: String,
+    pattern: String,
+    path: String,
+    permission: Option<String>,
+    scopes: Vec<String>,
 }
 
 /// The value `scope` crosses the wire as.
@@ -328,6 +365,32 @@ fn the_scope_vocabulary_is_the_reference_one() {
         "permission surface: scopes {}/{}, 0 missing, 0 invented",
         spoken.len(),
         corpus.counts.scopes
+    );
+}
+
+/// The two path grant scopes, each under the value the encoded grant carries.
+#[test]
+fn the_path_grant_scope_vocabulary_is_the_reference_one() {
+    let corpus = corpus();
+    let spoken = PathGrantScope::ALL
+        .into_iter()
+        .map(|scope| {
+            let wire = serde_json::to_value(scope)
+                .ok()
+                .and_then(|value| value.as_str().map(ToOwned::to_owned))
+                .expect("a path grant scope serializes as a string");
+            assert_eq!(wire, scope.label(), "the wire value and the label agree");
+            wire
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        spoken, corpus.path_grant_scopes,
+        "the path grant scope vocabulary diverged"
+    );
+    eprintln!(
+        "permission surface: path grant scopes {}/{}",
+        spoken.len(),
+        corpus.path_grant_scopes.len()
     );
 }
 
@@ -509,8 +572,8 @@ fn every_wildcard_verdict_matches_the_reference() {
     );
 }
 
-/// US-108: the two requirements the shared file-tool chain produces carry the
-/// reference scope, patterns and label shape.
+/// US-108: the sensitive requirement the shared file-tool chain produces
+/// carries the reference scope, patterns and label shape.
 #[test]
 fn the_file_tool_chain_produces_the_reference_requirements() {
     let corpus = corpus();
@@ -555,33 +618,123 @@ fn the_file_tool_chain_produces_the_reference_requirements() {
         sensitive.permission.map(permission_label),
         Some(chain.permission.as_str())
     );
+}
 
-    // The outside case resolves a file that does not exist under a canonical
-    // temporary directory, which the corpus records as `<outside>`. The port's
-    // answer is what `resolve_locked` builds for that path.
-    let outside = tempfile::tempdir().expect("outside directory");
-    let canonical_outside = outside.path().canonicalize().expect("canonical");
-    let outside_root = canonical_outside.display().to_string();
-    let escaping = PermissionRequirement::outside_directory(&outside_glob(
-        &canonical_outside.join("secret.txt"),
-    ));
-    assert_eq!(wire_scope(escaping.scope), chain.outside_scope);
-    check_against_ledger(
-        "/fileToolChain/outsideInvocationPattern",
-        &chain.outside_invocation_pattern,
-        &escaping
-            .invocation_pattern
-            .replace(&outside_root, "<outside>"),
-    );
-    check_against_ledger(
-        "/fileToolChain/outsideSessionPattern",
-        &chain.outside_session_pattern,
-        &escaping.session_pattern.replace(&outside_root, "<outside>"),
-    );
-    check_against_ledger(
-        "/fileToolChain/outsideLabel",
-        &chain.outside_label,
-        &escaping.label.replace(&outside_root, "<outside>"),
+/// A store trusting `root`, which is what a session opening a workspace does.
+async fn store_trusting(root: &Path) -> PermissionStore {
+    let store = PermissionStore::default();
+    store
+        .set_trust(root, TrustDecision::Trusted, TrustRootKind::Workspace)
+        .await
+        .expect("trust");
+    store
+}
+
+/// What the chain answers for `context`, in the reference's terms: the
+/// permission a list settled, or `ask` with the scopes of what the working
+/// directory check still raises, or nothing when neither decided.
+async fn chain_answer(
+    store: &PermissionStore,
+    context: &PermissionContext,
+) -> (Option<String>, Vec<String>) {
+    if let Some(mode) = context.permission
+        && context.requirements.is_empty()
+    {
+        return (Some(permission_label(mode).to_owned()), Vec::new());
+    }
+    let resolution = store
+        .resolve("read_file", context)
+        .await
+        .expect("resolution");
+    if resolution.required_permissions.is_empty() {
+        return (None, Vec::new());
+    }
+    (
+        Some(permission_label(PermissionMode::Ask).to_owned()),
+        resolution
+            .required_permissions
+            .iter()
+            .map(|requirement| wire_scope(requirement.scope))
+            .collect(),
+    )
+}
+
+/// Since v2.25.8 a path outside the working directory is asked about by its
+/// resolved path, granted by its exact encoded path, and offers a recursive
+/// grant root only when it is a directory.
+#[tokio::test]
+async fn an_outside_target_raises_the_reference_requirement() {
+    let corpus = corpus();
+    let outside_cases = &corpus.file_tool_chain.outside;
+    assert_eq!(outside_cases.len(), corpus.counts.outside_targets);
+    let workspace = tempfile::tempdir().expect("workspace");
+    let store = store_trusting(workspace.path()).await;
+    let settings = ToolConfigResolver::new().view::<SharedToolConfig>("read_file");
+    for case in outside_cases {
+        let outside = tempfile::tempdir().expect("outside directory");
+        let target = match case.target.as_str() {
+            "missing-file" => outside.path().join("secret.txt"),
+            "file" => {
+                let file = outside.path().join("present.txt");
+                fs::write(&file, "secret").expect("write");
+                file
+            }
+            "directory" => {
+                let directory = outside.path().join("folder");
+                fs::create_dir(&directory).expect("directory");
+                directory
+            }
+            other => panic!("the corpus names an unknown target `{other}`"),
+        };
+        let root = outside
+            .path()
+            .canonicalize()
+            .expect("canonical")
+            .display()
+            .to_string();
+        let context = resolve_file_tool_permission(&target, "read_file", &settings, None);
+        let resolution = store
+            .resolve("read_file", &context)
+            .await
+            .expect("resolution");
+        assert_eq!(
+            permission_label(resolution.mode),
+            case.permission,
+            "`{}` settles differently here",
+            case.target
+        );
+        let [requirement] = resolution.required_permissions.as_slice() else {
+            panic!(
+                "`{}` raised {:?} here",
+                case.target, resolution.required_permissions
+            );
+        };
+        let placeholder = |value: &str| value.replace(&root, "<outside>");
+        assert_eq!(wire_scope(requirement.scope), case.scope);
+        assert_eq!(
+            placeholder(&requirement.invocation_pattern),
+            case.invocation_pattern,
+            "`{}` is asked about differently here",
+            case.target
+        );
+        assert_eq!(
+            placeholder(&requirement.session_pattern),
+            case.session_pattern,
+            "`{}` is granted differently here",
+            case.target
+        );
+        assert_eq!(placeholder(&requirement.label), case.label);
+        assert_eq!(
+            requirement.path_scope_root.as_deref().map(placeholder),
+            case.path_scope_root,
+            "`{}` offers another recursive grant root here",
+            case.target
+        );
+    }
+    eprintln!(
+        "permission surface: outside targets {}/{}",
+        outside_cases.len(),
+        corpus.counts.outside_targets
     );
 }
 
@@ -612,7 +765,7 @@ fn every_sensitive_pattern_verdict_matches_the_reference() {
         let expected = case.sensitive_matches.unwrap_or(false);
         refused = refused.saturating_add(usize::from(case.sensitive_matches.is_none()));
         assert_eq!(
-            path_pattern_matches(&case.pattern, &case.path),
+            pure_path_match(&case.pattern, &case.path),
             expected,
             "`{}` against `{}` is decided differently here",
             case.pattern,
@@ -626,32 +779,200 @@ fn every_sensitive_pattern_verdict_matches_the_reference() {
     );
 }
 
-/// US-263: the allowlist and the denylist keep the unanchored matcher, so the
-/// two answer differently and the corpus proves the difference is measured.
+/// The allowlist reads an entry under `path_pattern_matches` since v2.25.8
+/// and the denylist keeps `fnmatch`, beside the sensitive matcher, so the
+/// three path matchers answer differently and the corpus proves the
+/// differences are measured.
 #[test]
-fn the_two_path_matchers_stay_distinct() {
+fn the_three_path_matchers_stay_distinct() {
     let corpus = corpus();
     let mut separating = Vec::new();
     for case in &corpus.sensitive_matches {
         assert_eq!(
-            pattern_matches(&case.pattern, &case.path),
-            case.list_matches,
-            "`{}` against `{}` is decided differently by the list matcher here",
+            path_pattern_matches(&case.path, &case.pattern),
+            case.allow_matches,
+            "`{}` against `{}` is decided differently by the allowlist matcher here",
             case.pattern,
             case.path
         );
-        if case.sensitive_matches != Some(case.list_matches) {
+        assert_eq!(
+            pattern_matches(&case.pattern, &case.path),
+            case.deny_matches,
+            "`{}` against `{}` is decided differently by the denylist matcher here",
+            case.pattern,
+            case.path
+        );
+        if case.allow_matches != case.deny_matches
+            || case.sensitive_matches != Some(case.deny_matches)
+        {
             separating.push(format!("{} -> {}", case.pattern, case.path));
         }
     }
     assert!(
+        corpus
+            .sensitive_matches
+            .iter()
+            .any(|case| case.allow_matches != case.deny_matches),
+        "the corpus has to keep separating the allowlist from the denylist"
+    );
+    assert!(
         separating.len() >= 6,
-        "the corpus has to keep separating the two matchers: {separating:?}"
+        "the corpus has to keep separating the matchers: {separating:?}"
     );
     eprintln!(
-        "permission surface: {} of {} pattern pairs separate the two matchers",
+        "permission surface: {} of {} pattern pairs separate the matchers",
         separating.len(),
         corpus.sensitive_matches.len()
+    );
+}
+
+/// A path grant encodes the normalized path under its scope, as the reference
+/// writes it for a POSIX and for a Windows path.
+#[test]
+fn every_path_grant_encoding_matches_the_reference() {
+    let corpus = corpus();
+    let encodings = &corpus.path_grants.encodings;
+    assert_eq!(encodings.len(), corpus.counts.path_grant_encoding_cases);
+    for case in encodings {
+        assert_eq!(
+            path_grant_pattern(&case.path, case.scope),
+            case.pattern,
+            "`{}` under {:?} is encoded differently here",
+            case.path.escape_debug(),
+            case.scope
+        );
+    }
+    eprintln!(
+        "permission surface: path grant encodings {}/{}",
+        encodings.len(),
+        corpus.counts.path_grant_encoding_cases
+    );
+}
+
+/// An encoded grant, an absolute glob and a relative glob each cover what
+/// they cover upstream.
+#[test]
+fn every_path_grant_verdict_matches_the_reference() {
+    let corpus = corpus();
+    let matches = &corpus.path_grants.matches;
+    assert_eq!(matches.len(), corpus.counts.path_match_cases);
+    for case in matches {
+        assert_eq!(
+            path_pattern_matches(&case.path, &case.pattern),
+            case.matches,
+            "`{}` against `{}` is decided differently here",
+            case.path.escape_debug(),
+            case.pattern.escape_debug()
+        );
+    }
+    eprintln!(
+        "permission surface: path grant verdicts {}/{}",
+        matches.len(),
+        corpus.counts.path_match_cases
+    );
+}
+
+/// A stored approval covers a requirement as `PermissionStore.covers` does:
+/// by path for an outside-directory requirement, by wildcard or by its literal
+/// text for every other scope.
+#[test]
+fn every_covers_verdict_matches_the_reference() {
+    let corpus = corpus();
+    assert_eq!(corpus.covers.len(), corpus.counts.covers_cases);
+    for case in &corpus.covers {
+        let rule = PermissionRule {
+            tool: "read_file".to_owned(),
+            scope: Some(case.rule_scope),
+            pattern: case.rule_pattern.clone(),
+            mode: PermissionMode::Always,
+            rationale: SESSION_APPROVAL.to_owned(),
+        };
+        let requirement = PermissionRequirement {
+            scope: case.scope,
+            invocation_pattern: case.invocation_pattern.clone(),
+            session_pattern: case.invocation_pattern.clone(),
+            label: case.invocation_pattern.clone(),
+            literal: case.literal,
+            path_scope_root: None,
+        };
+        assert_eq!(
+            rule.covers("read_file", &requirement),
+            case.covers,
+            "a {:?} rule `{}` decides {:?} `{}` (literal {}) differently here",
+            case.rule_scope,
+            case.rule_pattern,
+            case.scope,
+            case.invocation_pattern,
+            case.literal
+        );
+    }
+    eprintln!(
+        "permission surface: covers {}/{}",
+        corpus.covers.len(),
+        corpus.counts.covers_cases
+    );
+}
+
+/// The whole chain, with one allowlist or denylist entry: the allowlist reads
+/// an encoded grant and anchors an absolute glob, the denylist keeps
+/// `fnmatch`, and a path outside the working directory that no entry grants
+/// is still asked about.
+#[tokio::test]
+async fn the_list_chain_answers_like_the_reference() {
+    let corpus = corpus();
+    assert_eq!(corpus.list_chain.len(), corpus.counts.list_chain_cases);
+    let workspace = tempfile::tempdir().expect("workspace");
+    let outside = tempfile::tempdir().expect("outside directory");
+    let store = store_trusting(workspace.path()).await;
+    let canonical = |path: &Path| {
+        path.canonicalize()
+            .expect("canonical")
+            .display()
+            .to_string()
+    };
+    let (workdir, outside_root) = (canonical(workspace.path()), canonical(outside.path()));
+    let fill = |template: &str| {
+        template
+            .replace("{workdir}", &workdir)
+            .replace("{outside}", &outside_root)
+    };
+    for case in &corpus.list_chain {
+        let entry = vec![fill(&case.pattern)];
+        let settings = SharedToolConfig {
+            permission: PermissionMode::Ask,
+            allowlist: if case.list == "allowlist" {
+                entry.clone()
+            } else {
+                Vec::new()
+            },
+            denylist: if case.list == "denylist" {
+                entry
+            } else {
+                Vec::new()
+            },
+            sensitive_patterns: Vec::new(),
+        };
+        let path = PathBuf::from(fill(&case.path));
+        let path = if path.is_absolute() {
+            path
+        } else {
+            workspace.path().join(path)
+        };
+        let context = resolve_file_tool_permission(&path, "read_file", &settings, None);
+        let (permission, scopes) = chain_answer(&store, &context).await;
+        assert_eq!(
+            (permission.as_deref(), scopes.as_slice()),
+            (case.permission.as_deref(), case.scopes.as_slice()),
+            "the {} entry `{}` decides `{}` differently here",
+            case.list,
+            case.pattern,
+            case.path
+        );
+    }
+    eprintln!(
+        "permission surface: list chain {}/{}",
+        corpus.list_chain.len(),
+        corpus.counts.list_chain_cases
     );
 }
 

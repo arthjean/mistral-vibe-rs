@@ -65,13 +65,13 @@ async fn store_trusting(root: &Path) -> PermissionStore {
 }
 
 // --------------------------------------------------------------------------
-// US-105: the four scopes and the four-field requirement
+// US-105: the four scopes and the requirement fields
 // --------------------------------------------------------------------------
 
 /// A requirement crosses the wire as exactly `scope`, `invocationPattern`,
-/// `sessionPattern` and `label`, and refuses anything else.
+/// `sessionPattern`, `label` and `pathScopeRoot`, and refuses anything else.
 #[test]
-fn a_requirement_serializes_as_the_four_camel_cased_fields_and_nothing_else() {
+fn a_requirement_serializes_as_the_five_camel_cased_fields_and_nothing_else() {
     let requirement = PermissionRequirement::outside_directory("/outside/*");
     let wire = serde_json::to_value(&requirement).expect("serialize");
     assert_eq!(
@@ -81,6 +81,7 @@ fn a_requirement_serializes_as_the_four_camel_cased_fields_and_nothing_else() {
             "invocationPattern": "/outside/*",
             "sessionPattern": "/outside/*",
             "label": "outside workdir (/outside/*)",
+            "pathScopeRoot": null,
         })
     );
 
@@ -120,36 +121,78 @@ fn the_scope_vocabulary_is_exactly_the_four_reference_values() {
     }
 }
 
-/// A path outside the working directory is labeled by the parent joined
-/// with `*`, which is what the operator approves for the session.
+/// A file outside the working directory is asked about by its own path and
+/// granted by its exact encoded path, so approving it leaves its siblings
+/// asking, and a file offers no recursive grant root.
 #[tokio::test]
-async fn an_outside_path_is_named_by_its_parent_directory() {
+async fn an_outside_file_is_named_by_its_own_path() {
     let workspace = tempdir().expect("workspace");
     let outside = tempdir().expect("outside");
     let store = store_trusting(workspace.path()).await;
     let escaping = outside.path().join("secret.txt");
+    let sibling = outside.path().join("sibling.txt");
     std::fs::write(&escaping, "secret").expect("write");
+    std::fs::write(&sibling, "secret").expect("write");
+
+    let resolve = |path: PathBuf| {
+        let store = store.clone();
+        async move {
+            store
+                .resolve(
+                    "read_file",
+                    &PermissionContext::deferred().over_paths(vec![path]),
+                )
+                .await
+                .expect("resolution")
+        }
+    };
+    let resolution = resolve(escaping.clone()).await;
+
+    let canonical = escaping.canonicalize().expect("canonical");
+    let path = canonical.display().to_string();
+    assert_eq!(resolution.mode, PermissionMode::Ask);
+    let [requirement] = resolution.required_permissions.as_slice() else {
+        panic!("one requirement: {:?}", resolution.required_permissions);
+    };
+    assert_eq!(
+        requirement,
+        &PermissionRequirement::outside_path(&canonical)
+    );
+    assert_eq!(requirement.invocation_pattern, path);
+    assert_eq!(
+        requirement.session_pattern,
+        format!("vibe-path:exact:{path}")
+    );
+    assert_eq!(requirement.label, format!("outside workdir ({path})"));
+    assert_eq!(requirement.path_scope_root, None);
+
+    store
+        .add_rule(requirement.approved_rule("read_file", SESSION_APPROVAL))
+        .await;
+    assert_eq!(resolve(escaping).await.mode, PermissionMode::Always);
+    assert_eq!(resolve(sibling).await.mode, PermissionMode::Ask);
+}
+
+/// A directory outside the working directory offers itself as the root a
+/// recursive grant would reach.
+#[tokio::test]
+async fn an_outside_directory_offers_itself_as_the_recursive_grant_root() {
+    let workspace = tempdir().expect("workspace");
+    let outside = tempdir().expect("outside");
+    let store = store_trusting(workspace.path()).await;
 
     let resolution = store
         .resolve(
-            "read_file",
-            &PermissionContext::deferred().over_paths(vec![escaping]),
+            "grep",
+            &PermissionContext::deferred().over_paths(vec![outside.path().to_path_buf()]),
         )
         .await
         .expect("resolution");
 
-    let glob = format!(
-        "{}/*",
-        outside.path().canonicalize().expect("canonical").display()
-    );
-    assert_eq!(resolution.mode, PermissionMode::Ask);
+    let directory = outside.path().canonicalize().expect("canonical");
     assert_eq!(
-        resolution.required_permissions,
-        [PermissionRequirement::outside_directory(&glob)]
-    );
-    assert_eq!(
-        resolution.required_permissions[0].label,
-        format!("outside workdir ({glob})")
+        resolution.required_permissions[0].path_scope_root,
+        Some(directory.display().to_string())
     );
 }
 
@@ -259,6 +302,7 @@ async fn a_literal_requirement_is_covered_only_by_its_exact_text() {
             "bash",
             &PermissionContext::asking(vec![PermissionRequirement {
                 literal: false,
+                path_scope_root: None,
                 ..PermissionRequirement::exact_command("git log --ext-diff")
             }]),
         )

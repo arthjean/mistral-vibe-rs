@@ -128,19 +128,18 @@ const UNEMITTED_NOTIFICATIONS: &[(&str, &str)] = &[(
 const LOCAL_NOTIFICATIONS: &[(&str, &str)] = &[];
 
 /// Enum vocabularies the reference declares that this port does not model yet.
-const UNMODELED_ENUMS: &[(&str, &str)] = &[(
-    "PathGrantScope",
-    "v2.26.0 declares it (vibe/permissions.py:26 at 376f6a3) as the scope a path grant takes, offered by ApprovalCallbackDetail.path_scope_choices and chosen in ApprovalDecision.path_scope (vibe/app_server/models.py:322 and 312); this port models no path grant scope",
-)];
+///
+/// The v2.26.0 re-pin opened `PathGrantScope`, which the path grant pass
+/// closed by modeling it as `vibe_core::policy::PathGrantScope`.
+const UNMODELED_ENUMS: &[(&str, &str)] = &[];
 
 /// Values a vocabulary this port declares is missing, each with the reference
 /// declaration that added it. The comparison below still fails on any other
 /// difference, on order, and on an entry whose value this port now spells.
-const DIVERGENT_ENUM_VALUES: &[(&str, &str, &str)] = &[(
-    "ToolEffectKind",
-    "scratchpad",
-    "v2.26.0 adds it after process (vibe/utils/tool_presentation.py:53 at 376f6a3) with ScratchpadEffectDetail (vibe/app_server/_effect_models.py:331); vibe_core::events::ToolEffectKind has no such kind",
-)];
+///
+/// The v2.26.0 re-pin opened `ToolEffectKind/scratchpad`, which the path grant
+/// pass closed by spelling it.
+const DIVERGENT_ENUM_VALUES: &[(&str, &str, &str)] = &[];
 
 /// Protocol error codes the reference declares that this port does not speak.
 const UNSPOKEN_ERROR_CODES: &[(&str, &str)] = &[];
@@ -674,7 +673,7 @@ fn the_enum_vocabularies_this_port_declares_match_the_reference() {
 
     // The vocabularies this port already spells. Everything else is in the
     // backlog above until the story that models it lands.
-    let declared: [(&str, Vec<String>); 23] = [
+    let declared: [(&str, Vec<String>); 24] = [
         (
             "RuntimeMutationStatus",
             wire_values(&crate::vocabulary::RuntimeMutationStatus::ALL),
@@ -776,6 +775,12 @@ fn the_enum_vocabularies_this_port_declares_match_the_reference() {
             // requirement unnameable.
             "PermissionScope",
             wire_values(&vibe_core::policy::PermissionScope::ALL),
+        ),
+        (
+            // The scope a path grant takes, which is also the middle field of
+            // the encoded grant `path_grant_pattern` writes.
+            "PathGrantScope",
+            wire_values(&vibe_core::policy::PathGrantScope::ALL),
         ),
         (
             "PublicEntryGenerationStatus",
@@ -1657,11 +1662,17 @@ async fn every_effect_kind_publishes_an_entry_that_validates_against_the_census(
         issues.is_empty(),
         "published effect entries diverge from the census: {issues:?}"
     );
-    // No tool declares these two kinds upstream either: the session worktree
+    // No tool declares these three kinds upstream either: the session worktree
     // methods publish `worktree` (`vibe/app_server/_worktree_effects.py`), which
-    // row 5 has not ported, and nothing at the pin publishes `process`
-    // (`vibe/app_server/_effect_models.py` only declares its detail).
-    let toolless = [ToolEffectKind::Worktree, ToolEffectKind::Process];
+    // row 5 has not ported, nothing at the pin publishes `process`
+    // (`vibe/app_server/_effect_models.py` only declares its detail), and only
+    // the Unified harness's scratchpad tool publishes `scratchpad`
+    // (`vibe/app_server/_unified_tool_projection.py`), which row 36 holds.
+    let toolless = [
+        ToolEffectKind::Worktree,
+        ToolEffectKind::Process,
+        ToolEffectKind::Scratchpad,
+    ];
     for kind in toolless {
         assert!(
             !published.contains(kind.label()),

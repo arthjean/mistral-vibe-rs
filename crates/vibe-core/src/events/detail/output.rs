@@ -219,7 +219,10 @@ const fn model(kind: ToolEffectKind) -> Option<&'static [Field]> {
         ToolEffectKind::WebFetch => Some(WEB_FETCH),
         ToolEffectKind::Skill => Some(SKILL),
         ToolEffectKind::Subagent => Some(SUBAGENT),
-        ToolEffectKind::Tool | ToolEffectKind::Worktree | ToolEffectKind::Process => None,
+        ToolEffectKind::Tool
+        | ToolEffectKind::Worktree
+        | ToolEffectKind::Process
+        | ToolEffectKind::Scratchpad => None,
     }
 }
 

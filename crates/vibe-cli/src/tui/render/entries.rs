@@ -404,8 +404,8 @@ fn category_label(kind: transcript::EffectKind, running: bool) -> &'static str {
         (Kind::Subagent, true) => "running subagents",
         (Kind::Worktree, false) => "created worktrees",
         (Kind::Worktree, true) => "creating worktrees",
-        (Kind::Tool | Kind::Process, false) => "called tools",
-        (Kind::Tool | Kind::Process, true) => "calling tools",
+        (Kind::Tool | Kind::Process | Kind::Scratchpad, false) => "called tools",
+        (Kind::Tool | Kind::Process | Kind::Scratchpad, true) => "calling tools",
     }
 }
 

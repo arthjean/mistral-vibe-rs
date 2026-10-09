@@ -661,10 +661,13 @@ fn completed_body(kind: EffectKind, output: &Value) -> Vec<BodyLine> {
         EffectKind::WebSearch => web_search_lines(output),
         EffectKind::WebFetch => detail_lines(text("content")),
         EffectKind::Process => process_lines(output),
-        // A worktree entry settles with no output of its own.
-        EffectKind::Skill | EffectKind::Subagent | EffectKind::Tool | EffectKind::Worktree => {
-            generic_lines(output)
-        }
+        // A worktree entry settles with no output of its own, and the
+        // reference terminal has no result widget for a scratchpad call.
+        EffectKind::Skill
+        | EffectKind::Subagent
+        | EffectKind::Tool
+        | EffectKind::Worktree
+        | EffectKind::Scratchpad => generic_lines(output),
     }
 }
 

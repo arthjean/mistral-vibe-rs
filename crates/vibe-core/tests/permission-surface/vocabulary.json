@@ -141,24 +141,586 @@
   },
   "counts": {
     "arityEntries": 138,
+    "coversCases": 14,
+    "listChainCases": 12,
+    "outsideTargets": 3,
+    "pathGrantEncodingCases": 17,
+    "pathMatchCases": 47,
     "scopes": 4,
     "sensitiveCases": 20,
     "sensitiveChainCases": 6,
     "sessionPatternCases": 20,
     "wildcardCases": 19
   },
+  "covers": [
+    {
+      "covers": true,
+      "invocationPattern": "/srv/app/a.txt",
+      "literal": false,
+      "rulePattern": "vibe-path:exact:/srv/app/a.txt",
+      "ruleScope": "outside_directory",
+      "scope": "outside_directory"
+    },
+    {
+      "covers": false,
+      "invocationPattern": "/srv/app/b.txt",
+      "literal": false,
+      "rulePattern": "vibe-path:exact:/srv/app/a.txt",
+      "ruleScope": "outside_directory",
+      "scope": "outside_directory"
+    },
+    {
+      "covers": true,
+      "invocationPattern": "/srv/app/a.txt",
+      "literal": true,
+      "rulePattern": "vibe-path:exact:/srv/app/a.txt",
+      "ruleScope": "outside_directory",
+      "scope": "outside_directory"
+    },
+    {
+      "covers": true,
+      "invocationPattern": "/srv/app/x/y.txt",
+      "literal": false,
+      "rulePattern": "vibe-path:directory_recursive:/srv/app",
+      "ruleScope": "outside_directory",
+      "scope": "outside_directory"
+    },
+    {
+      "covers": false,
+      "invocationPattern": "/srv/application/y.txt",
+      "literal": false,
+      "rulePattern": "vibe-path:directory_recursive:/srv/app",
+      "ruleScope": "outside_directory",
+      "scope": "outside_directory"
+    },
+    {
+      "covers": true,
+      "invocationPattern": "/srv/app/x",
+      "literal": false,
+      "rulePattern": "/srv/app/*",
+      "ruleScope": "outside_directory",
+      "scope": "outside_directory"
+    },
+    {
+      "covers": false,
+      "invocationPattern": "/srv/app/x/y",
+      "literal": false,
+      "rulePattern": "/srv/app/*",
+      "ruleScope": "outside_directory",
+      "scope": "outside_directory"
+    },
+    {
+      "covers": true,
+      "invocationPattern": "/srv/app/*",
+      "literal": false,
+      "rulePattern": "/srv/app/*",
+      "ruleScope": "outside_directory",
+      "scope": "outside_directory"
+    },
+    {
+      "covers": false,
+      "invocationPattern": "/srv/app/a.txt",
+      "literal": false,
+      "rulePattern": "vibe-path:exact:/srv/app/a.txt",
+      "ruleScope": "outside_directory",
+      "scope": "command_pattern"
+    },
+    {
+      "covers": true,
+      "invocationPattern": "npm run build",
+      "literal": false,
+      "rulePattern": "npm run *",
+      "ruleScope": "command_pattern",
+      "scope": "command_pattern"
+    },
+    {
+      "covers": true,
+      "invocationPattern": "git log *",
+      "literal": true,
+      "rulePattern": "git log *",
+      "ruleScope": "command_pattern",
+      "scope": "command_pattern"
+    },
+    {
+      "covers": false,
+      "invocationPattern": "git log -p",
+      "literal": true,
+      "rulePattern": "git log *",
+      "ruleScope": "command_pattern",
+      "scope": "command_pattern"
+    },
+    {
+      "covers": true,
+      "invocationPattern": "git log -p",
+      "literal": false,
+      "rulePattern": "git log *",
+      "ruleScope": "command_pattern",
+      "scope": "command_pattern"
+    },
+    {
+      "covers": true,
+      "invocationPattern": "/srv/app/.env",
+      "literal": false,
+      "rulePattern": "/srv/app/[.]env",
+      "ruleScope": "file_pattern",
+      "scope": "file_pattern"
+    }
+  ],
   "fileToolChain": {
-    "outsideInvocationPattern": "<outside>/secret.txt",
-    "outsideLabel": "outside workdir (<outside>/secret.txt)",
-    "outsideScope": "outside_directory",
-    "outsideSessionPattern": "vibe-path:exact:<outside>/secret.txt",
+    "outside": [
+      {
+        "invocationPattern": "<outside>/secret.txt",
+        "label": "outside workdir (<outside>/secret.txt)",
+        "pathScopeRoot": null,
+        "permission": "ask",
+        "scope": "outside_directory",
+        "sessionPattern": "vibe-path:exact:<outside>/secret.txt",
+        "target": "missing-file"
+      },
+      {
+        "invocationPattern": "<outside>/present.txt",
+        "label": "outside workdir (<outside>/present.txt)",
+        "pathScopeRoot": null,
+        "permission": "ask",
+        "scope": "outside_directory",
+        "sessionPattern": "vibe-path:exact:<outside>/present.txt",
+        "target": "file"
+      },
+      {
+        "invocationPattern": "<outside>/folder",
+        "label": "outside workdir (<outside>/folder)",
+        "pathScopeRoot": "<outside>/folder",
+        "permission": "ask",
+        "scope": "outside_directory",
+        "sessionPattern": "vibe-path:exact:<outside>/folder",
+        "target": "directory"
+      }
+    ],
     "permission": "ask",
     "sensitiveInvocationPattern": "<workdir>/.env",
     "sensitiveLabel": "accessing sensitive files (<tool>)",
     "sensitiveScope": "file_pattern",
     "sensitiveSessionPattern": "<workdir>/.env"
   },
-  "note": "Captured from the pinned reference by scripts/parity/permission_surface.py. Scope values, requirement field names, command names, arities and the answers to cases this repository authored are observations; no reference-authored description text is recorded here.",
+  "listChain": [
+    {
+      "list": "allowlist",
+      "path": "notes/a.txt",
+      "pattern": "{workdir}/notes/*",
+      "permission": "always",
+      "scopes": []
+    },
+    {
+      "list": "allowlist",
+      "path": "notes/sub/a.txt",
+      "pattern": "{workdir}/notes/*",
+      "permission": null,
+      "scopes": []
+    },
+    {
+      "list": "denylist",
+      "path": "notes/sub/a.txt",
+      "pattern": "{workdir}/notes/*",
+      "permission": "never",
+      "scopes": []
+    },
+    {
+      "list": "allowlist",
+      "path": "notes/a.txt",
+      "pattern": "vibe-path:exact:{workdir}/notes/a.txt",
+      "permission": "always",
+      "scopes": []
+    },
+    {
+      "list": "allowlist",
+      "path": "notes/b.txt",
+      "pattern": "vibe-path:exact:{workdir}/notes/a.txt",
+      "permission": null,
+      "scopes": []
+    },
+    {
+      "list": "allowlist",
+      "path": "notes/sub/a.txt",
+      "pattern": "vibe-path:directory_recursive:{workdir}/notes",
+      "permission": "always",
+      "scopes": []
+    },
+    {
+      "list": "allowlist",
+      "path": "notes/a.txt",
+      "pattern": "vibe-path:directory_recursive:{workdir}/no",
+      "permission": null,
+      "scopes": []
+    },
+    {
+      "list": "denylist",
+      "path": "notes/a.txt",
+      "pattern": "vibe-path:exact:{workdir}/notes/a.txt",
+      "permission": null,
+      "scopes": []
+    },
+    {
+      "list": "allowlist",
+      "path": "notes/a.txt",
+      "pattern": "*.txt",
+      "permission": "always",
+      "scopes": []
+    },
+    {
+      "list": "allowlist",
+      "path": "notes/a.txt",
+      "pattern": "notes/*",
+      "permission": null,
+      "scopes": []
+    },
+    {
+      "list": "allowlist",
+      "path": "{outside}/secret.txt",
+      "pattern": "vibe-path:exact:{outside}/secret.txt",
+      "permission": "always",
+      "scopes": []
+    },
+    {
+      "list": "allowlist",
+      "path": "{outside}/other.txt",
+      "pattern": "vibe-path:exact:{outside}/secret.txt",
+      "permission": "ask",
+      "scopes": [
+        "outside_directory"
+      ]
+    }
+  ],
+  "note": "Captured from the pinned reference by scripts/parity/permission_surface.py. Scope values, requirement field names, command names, arities and the answers to cases this repository authored, path grant encodings and verdicts are observations; no reference-authored description text is recorded here.",
+  "pathGrantScopes": [
+    "exact",
+    "directory_recursive"
+  ],
+  "pathGrants": {
+    "encodings": [
+      {
+        "path": "/srv/app/notes.txt",
+        "pattern": "vibe-path:exact:/srv/app/notes.txt",
+        "scope": "exact"
+      },
+      {
+        "path": "/srv/app/",
+        "pattern": "vibe-path:directory_recursive:/srv/app",
+        "scope": "directory_recursive"
+      },
+      {
+        "path": "/srv//app/./x/../y",
+        "pattern": "vibe-path:exact:/srv/app/y",
+        "scope": "exact"
+      },
+      {
+        "path": "/srv/app/*.txt",
+        "pattern": "vibe-path:exact:/srv/app/*.txt",
+        "scope": "exact"
+      },
+      {
+        "path": "relative/./a/..",
+        "pattern": "vibe-path:exact:relative",
+        "scope": "exact"
+      },
+      {
+        "path": "",
+        "pattern": "vibe-path:exact:.",
+        "scope": "exact"
+      },
+      {
+        "path": "..",
+        "pattern": "vibe-path:exact:..",
+        "scope": "exact"
+      },
+      {
+        "path": "/..",
+        "pattern": "vibe-path:exact:/",
+        "scope": "exact"
+      },
+      {
+        "path": "a/../../b",
+        "pattern": "vibe-path:exact:../b",
+        "scope": "exact"
+      },
+      {
+        "path": "//lead",
+        "pattern": "vibe-path:exact:\\\\lead",
+        "scope": "exact"
+      },
+      {
+        "path": "///triple",
+        "pattern": "vibe-path:exact:\\\\\\triple",
+        "scope": "exact"
+      },
+      {
+        "path": "C:\\Users\\Me\\File.txt",
+        "pattern": "vibe-path:exact:c:\\users\\me\\file.txt",
+        "scope": "exact"
+      },
+      {
+        "path": "c:/users/me",
+        "pattern": "vibe-path:directory_recursive:c:\\users\\me",
+        "scope": "directory_recursive"
+      },
+      {
+        "path": "\\\\server\\share\\X",
+        "pattern": "vibe-path:exact:\\\\server\\share\\x",
+        "scope": "exact"
+      },
+      {
+        "path": "C:\\a\\..\\..\\b",
+        "pattern": "vibe-path:exact:c:\\b",
+        "scope": "exact"
+      },
+      {
+        "path": "c:..\\x",
+        "pattern": "vibe-path:exact:c:..\\x",
+        "scope": "exact"
+      },
+      {
+        "path": "\\Windows\\..\\x",
+        "pattern": "vibe-path:exact:\\x",
+        "scope": "exact"
+      }
+    ],
+    "matches": [
+      {
+        "matches": true,
+        "path": "/srv/app/a.txt",
+        "pattern": "vibe-path:exact:/srv/app/a.txt"
+      },
+      {
+        "matches": false,
+        "path": "/srv/app/b.txt",
+        "pattern": "vibe-path:exact:/srv/app/a.txt"
+      },
+      {
+        "matches": true,
+        "path": "/srv/app/./a.txt",
+        "pattern": "vibe-path:exact:/srv/app/a.txt"
+      },
+      {
+        "matches": true,
+        "path": "/srv/app/a.txt",
+        "pattern": "vibe-path:exact:/srv/app/./a.txt"
+      },
+      {
+        "matches": false,
+        "path": "/srv/app/a.txt",
+        "pattern": "vibe-path:exact:/srv/app"
+      },
+      {
+        "matches": true,
+        "path": "/srv/app",
+        "pattern": "vibe-path:directory_recursive:/srv/app"
+      },
+      {
+        "matches": true,
+        "path": "/srv/app/x/y.txt",
+        "pattern": "vibe-path:directory_recursive:/srv/app"
+      },
+      {
+        "matches": false,
+        "path": "/srv/application/y.txt",
+        "pattern": "vibe-path:directory_recursive:/srv/app"
+      },
+      {
+        "matches": true,
+        "path": "/srv/app/x",
+        "pattern": "vibe-path:directory_recursive:/srv/app/"
+      },
+      {
+        "matches": true,
+        "path": "/srv/app",
+        "pattern": "vibe-path:directory_recursive:/"
+      },
+      {
+        "matches": false,
+        "path": "/srv",
+        "pattern": "vibe-path:directory_recursive:/srv/app"
+      },
+      {
+        "matches": false,
+        "path": "/srv/app/x.txt",
+        "pattern": "vibe-path:exact:/srv/app/*.txt"
+      },
+      {
+        "matches": true,
+        "path": "/srv/app/*.txt",
+        "pattern": "vibe-path:exact:/srv/app/*.txt"
+      },
+      {
+        "matches": false,
+        "path": "/srv/app/a.txt",
+        "pattern": "vibe-path:EXACT:/srv/app/a.txt"
+      },
+      {
+        "matches": false,
+        "path": "/srv/app/a.txt",
+        "pattern": "vibe-path:exact"
+      },
+      {
+        "matches": false,
+        "path": "/srv/app/a.txt",
+        "pattern": "vibe-path:exact:"
+      },
+      {
+        "matches": false,
+        "path": "/x",
+        "pattern": "vibe-path:directory_recursive:"
+      },
+      {
+        "matches": false,
+        "path": "/srv/app/a.txt",
+        "pattern": "other:exact:/srv/app/a.txt"
+      },
+      {
+        "matches": true,
+        "path": "/srv/app/a.txt",
+        "pattern": "/srv/app/*"
+      },
+      {
+        "matches": false,
+        "path": "/srv/app/x/a.txt",
+        "pattern": "/srv/app/*"
+      },
+      {
+        "matches": false,
+        "path": "/srv/app/a.txt",
+        "pattern": "/srv/*"
+      },
+      {
+        "matches": true,
+        "path": "/srv/app/a.txt",
+        "pattern": "/srv/app/a.txt"
+      },
+      {
+        "matches": false,
+        "path": "/srv/app/a.txt",
+        "pattern": "/srv/app/A.txt"
+      },
+      {
+        "matches": true,
+        "path": "/srv/app/a.txt",
+        "pattern": "/srv/app/a.txt/"
+      },
+      {
+        "matches": true,
+        "path": "/srv/app/./a.txt",
+        "pattern": "/srv/app/*"
+      },
+      {
+        "matches": true,
+        "path": "/srv/a/a.txt",
+        "pattern": "/srv/**/a.txt"
+      },
+      {
+        "matches": false,
+        "path": "/srv/a/b/a.txt",
+        "pattern": "/srv/**/a.txt"
+      },
+      {
+        "matches": false,
+        "path": "/srv/a.txt",
+        "pattern": "/srv/**/a.txt"
+      },
+      {
+        "matches": true,
+        "path": "/",
+        "pattern": "/"
+      },
+      {
+        "matches": true,
+        "path": "/srv/app/a.txt",
+        "pattern": "*.txt"
+      },
+      {
+        "matches": false,
+        "path": "/srv/app/a.txt",
+        "pattern": "app/*"
+      },
+      {
+        "matches": true,
+        "path": "/srv/app/a.txt",
+        "pattern": "*/app/*"
+      },
+      {
+        "matches": true,
+        "path": "/srv/app/a.txt",
+        "pattern": "*"
+      },
+      {
+        "matches": false,
+        "path": "/srv/app/a.txt",
+        "pattern": ""
+      },
+      {
+        "matches": false,
+        "path": "/srv/app/a.txt",
+        "pattern": "["
+      },
+      {
+        "matches": true,
+        "path": "relative/a.txt",
+        "pattern": "relative/*"
+      },
+      {
+        "matches": true,
+        "path": "relative/a.txt",
+        "pattern": "vibe-path:exact:relative/a.txt"
+      },
+      {
+        "matches": true,
+        "path": "C:\\Work\\A.txt",
+        "pattern": "vibe-path:exact:c:/work/a.txt"
+      },
+      {
+        "matches": true,
+        "path": "C:\\Work\\Sub\\A.txt",
+        "pattern": "vibe-path:directory_recursive:C:\\Work"
+      },
+      {
+        "matches": false,
+        "path": "C:\\Workshop\\A.txt",
+        "pattern": "vibe-path:directory_recursive:C:\\Work"
+      },
+      {
+        "matches": true,
+        "path": "C:\\Work\\A.txt",
+        "pattern": "C:\\Work\\*"
+      },
+      {
+        "matches": false,
+        "path": "C:\\Work\\Sub\\A.txt",
+        "pattern": "C:\\Work\\*"
+      },
+      {
+        "matches": true,
+        "path": "C:\\Work\\A.txt",
+        "pattern": "c:/work/*.TXT"
+      },
+      {
+        "matches": true,
+        "path": "C:\\Work\\A.txt",
+        "pattern": "*.txt"
+      },
+      {
+        "matches": false,
+        "path": "C:\\Work\\A.txt",
+        "pattern": "work\\*"
+      },
+      {
+        "matches": true,
+        "path": "//srv/a",
+        "pattern": "//srv/*"
+      },
+      {
+        "matches": false,
+        "path": "/srv/a",
+        "pattern": "vibe-path:exact://srv/a"
+      }
+    ]
+  },
   "reference": {
     "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
   },
@@ -203,7 +765,7 @@
     ],
     "forbidsExtra": true
   },
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "scopes": [
     "command_pattern",
     "outside_directory",
@@ -258,122 +820,142 @@
   ],
   "sensitiveMatches": [
     {
-      "listMatches": true,
+      "allowMatches": true,
+      "denyMatches": true,
       "path": "/srv/app/.env",
       "pattern": "**/.env",
       "sensitiveMatches": true
     },
     {
-      "listMatches": true,
+      "allowMatches": true,
+      "denyMatches": true,
       "path": "/srv/app/.env.local",
       "pattern": "**/.env.*",
       "sensitiveMatches": true
     },
     {
-      "listMatches": false,
+      "allowMatches": false,
+      "denyMatches": false,
       "path": "/srv/app/.env",
       "pattern": ".env",
       "sensitiveMatches": true
     },
     {
-      "listMatches": false,
+      "allowMatches": false,
+      "denyMatches": false,
       "path": "/srv/app/.env.local",
       "pattern": ".env",
       "sensitiveMatches": false
     },
     {
-      "listMatches": false,
+      "allowMatches": false,
+      "denyMatches": false,
       "path": "/srv/app/secrets/token.json",
       "pattern": "secrets/*",
       "sensitiveMatches": true
     },
     {
-      "listMatches": false,
+      "allowMatches": false,
+      "denyMatches": false,
       "path": "/srv/app/secrets",
       "pattern": "secrets",
       "sensitiveMatches": true
     },
     {
-      "listMatches": true,
+      "allowMatches": true,
+      "denyMatches": true,
       "path": "/etc/passwd",
       "pattern": "/etc/*",
       "sensitiveMatches": true
     },
     {
-      "listMatches": true,
+      "allowMatches": false,
+      "denyMatches": true,
       "path": "/etc/ssl/private/key.pem",
       "pattern": "/etc/*",
       "sensitiveMatches": false
     },
     {
-      "listMatches": true,
+      "allowMatches": true,
+      "denyMatches": true,
       "path": "/srv/app/.env",
       "pattern": "/srv/*/.env",
       "sensitiveMatches": true
     },
     {
-      "listMatches": true,
+      "allowMatches": false,
+      "denyMatches": true,
       "path": "/srv/a/b/.env",
       "pattern": "/srv/*/.env",
       "sensitiveMatches": false
     },
     {
-      "listMatches": false,
+      "allowMatches": false,
+      "denyMatches": false,
       "path": "/srv/app/config/.env",
       "pattern": "app/*/.env",
       "sensitiveMatches": true
     },
     {
-      "listMatches": true,
+      "allowMatches": true,
+      "denyMatches": true,
       "path": "/srv/app/certs/server.pem",
       "pattern": "*.pem",
       "sensitiveMatches": true
     },
     {
-      "listMatches": true,
+      "allowMatches": true,
+      "denyMatches": true,
       "path": "/srv/app/.env",
       "pattern": "*",
       "sensitiveMatches": true
     },
     {
-      "listMatches": true,
+      "allowMatches": true,
+      "denyMatches": true,
       "path": "/srv/app/config/db.json",
       "pattern": "**/config/*.json",
       "sensitiveMatches": true
     },
     {
-      "listMatches": true,
+      "allowMatches": true,
+      "denyMatches": true,
       "path": "/.env",
       "pattern": "**/.env",
       "sensitiveMatches": true
     },
     {
-      "listMatches": true,
+      "allowMatches": true,
+      "denyMatches": true,
       "path": "/.env",
       "pattern": "*/.env",
       "sensitiveMatches": false
     },
     {
-      "listMatches": false,
+      "allowMatches": false,
+      "denyMatches": false,
       "path": "/srv/a/x/b",
       "pattern": "a/**/b",
       "sensitiveMatches": true
     },
     {
-      "listMatches": false,
+      "allowMatches": false,
+      "denyMatches": false,
       "path": "/srv/a/x/y/b",
       "pattern": "a/**/b",
       "sensitiveMatches": false
     },
     {
-      "listMatches": false,
+      "allowMatches": false,
+      "denyMatches": false,
       "path": "/srv/app/.env",
       "pattern": "",
       "sensitiveMatches": null,
       "sensitiveRaises": "ValueError"
     },
     {
-      "listMatches": false,
+      "allowMatches": false,
+      "denyMatches": false,
       "path": "/srv/app/.env",
       "pattern": "[",
       "sensitiveMatches": false

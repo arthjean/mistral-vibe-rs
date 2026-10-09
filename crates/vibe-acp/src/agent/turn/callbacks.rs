@@ -62,12 +62,19 @@ where
                     let permissions = required_permissions
                         .iter()
                         .map(|permission| {
-                            json!({
+                            // Reference `build_permission_options` dumps each
+                            // requirement with `exclude_none`, so a grant root
+                            // appears only when the target offers one.
+                            let mut meta = json!({
                                 "scope": permission.scope,
                                 "invocation_pattern": permission.invocation_pattern,
                                 "session_pattern": permission.session_pattern,
                                 "label": permission.label,
-                            })
+                            });
+                            if let Some(root) = &permission.path_scope_root {
+                                meta["path_scope_root"] = json!(root);
+                            }
+                            meta
                         })
                         .collect::<Vec<_>>();
                     self.answer_approval(harness, &tool_call_id, permissions)

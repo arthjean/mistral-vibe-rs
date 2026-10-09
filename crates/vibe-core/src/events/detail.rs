@@ -57,11 +57,14 @@ pub enum ToolEffectKind {
     /// A background process the Unified harness manages
     /// (`vibe/app_server/_unified_tool_projection.py`).
     Process,
+    /// A call to the Unified harness's scratchpad tool, which v2.26.0 projects
+    /// onto a kind of its own (`vibe/app_server/_unified_tool_projection.py`).
+    Scratchpad,
 }
 
 impl ToolEffectKind {
     /// Every kind, in the order the reference vocabulary declares them.
-    pub const ALL: [Self; 14] = [
+    pub const ALL: [Self; 15] = [
         Self::Tool,
         Self::Shell,
         Self::FileEdit,
@@ -76,6 +79,7 @@ impl ToolEffectKind {
         Self::Subagent,
         Self::Worktree,
         Self::Process,
+        Self::Scratchpad,
     ];
 
     /// Which kind a tool name maps to. A name with no mapping is a plain tool.
@@ -116,6 +120,7 @@ impl ToolEffectKind {
             Self::Subagent => "Running subagent",
             Self::Worktree => "Creating worktree",
             Self::Process => "Running process",
+            Self::Scratchpad => "Using the scratchpad",
         }
     }
 
@@ -137,6 +142,7 @@ impl ToolEffectKind {
             Self::Subagent => "subagent",
             Self::Worktree => "worktree",
             Self::Process => "process",
+            Self::Scratchpad => "scratchpad",
         }
     }
 
@@ -153,7 +159,7 @@ impl ToolEffectKind {
             Self::WebFetch => ("Fetching", "Fetched"),
             Self::Skill => ("Loading", "Loaded"),
             Self::Worktree => ("Creating", "Created"),
-            Self::Tool | Self::Todo | Self::Process => ("Running", "Ran"),
+            Self::Tool | Self::Todo | Self::Process | Self::Scratchpad => ("Running", "Ran"),
         }
     }
 }
@@ -971,8 +977,10 @@ fn project_input(kind: ToolEffectKind, arguments: &Value) -> Value {
             "branch": string_argument(arguments, &["branch"]),
             "path": string_argument(arguments, &["path"]),
         }),
-        // Reference `ProcessEffectDetail.input` is any JSON value.
-        ToolEffectKind::Process => arguments.clone(),
+        // Reference `ProcessEffectDetail.input` is any JSON value, and no tool
+        // of this port publishes a scratchpad call, so its arguments stand as
+        // they came.
+        ToolEffectKind::Process | ToolEffectKind::Scratchpad => arguments.clone(),
     }
 }
 
@@ -1171,11 +1179,13 @@ fn call_summary(
         }
         // A tool with no presentation of its own shows its arguments, and the
         // summary is all there is to show. No tool of this port publishes the
-        // worktree or process kinds, so a call under either reads the same way.
+        // worktree, process or scratchpad kinds, so a call under any of them
+        // reads the same way.
         ToolEffectKind::Tool
         | ToolEffectKind::Todo
         | ToolEffectKind::Worktree
-        | ToolEffectKind::Process => {
+        | ToolEffectKind::Process
+        | ToolEffectKind::Scratchpad => {
             let summary = generic_call_summary(tool_name, arguments, wire_order);
             (summary.clone(), summary)
         }
@@ -1632,7 +1642,9 @@ fn completed_header(
         ToolEffectKind::Skill => Header::new("Loaded", call.subject(), ""),
         ToolEffectKind::Subagent => Header::new("Completed", call.subject(), ""),
         ToolEffectKind::Worktree => Header::new("Created", call.subject(), ""),
-        ToolEffectKind::Tool | ToolEffectKind::Process => Header::new("Ran", call.subject(), ""),
+        ToolEffectKind::Tool | ToolEffectKind::Process | ToolEffectKind::Scratchpad => {
+            Header::new("Ran", call.subject(), "")
+        }
     }
 }
 

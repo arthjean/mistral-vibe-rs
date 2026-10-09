@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Ask about a file outside the working directory by its own path, as the
+  reference does since v2.25.8: approving it for the session or permanently
+  grants that path alone, written as `vibe-path:exact:<path>`, instead of
+  every file in its directory, and the requirement publishes `pathScopeRoot`,
+  the directory a recursive grant would reach. A file tool's `allowlist` now
+  honors the `vibe-path:` grants the reference writes there and matches an
+  absolute glob such as `/srv/app/*` against direct children only; the
+  `denylist` is unchanged.
+
 - Describe `/status` as the reference does since v2.26.0 and, on a unified
   session, append its "Model & Provider" section: the active model, its
   provider and the provider's API base, rebuilt without user information,

@@ -352,6 +352,7 @@ async fn interactive_approval_callback_returns_the_exact_policy_decision() {
             "invocationPattern": "cargo test",
             "sessionPattern": "cargo test *",
             "label": "cargo test *",
+            "pathScopeRoot": null,
         }])
     );
     assert_eq!(detail["effect"]["input"], json!({"command": "cargo test"}));
