@@ -182,13 +182,7 @@ struct FieldDivergence {
     reason: &'static str,
 }
 
-const FIELDS: &[FieldDivergence] = &[FieldDivergence {
-    suffix: "/inputEntryId",
-    row: "17",
-    reason: "v2.26.0 gives every public history entry and turn an `inputEntryId` \
-             (`vibe/app_server/models.py:949,1236` at 376f6a3), null on the legacy backend; \
-             this port's entries and turns do not carry the field",
-}];
+const FIELDS: &[FieldDivergence] = &[];
 
 fn repository() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

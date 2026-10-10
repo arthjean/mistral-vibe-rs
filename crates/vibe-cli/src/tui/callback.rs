@@ -1025,6 +1025,7 @@ mod tests {
         state.entries.push(crate::tui::hydration::history_entry(
             PublicHistoryEntry::Notice {
                 metadata: vibe_app_server::client::PublicEntryMetadata {
+                    input_entry_id: None,
                     id: "notice:callback-1:plan-review".to_owned(),
                     session_id: "session".to_owned(),
                     turn_id: None,

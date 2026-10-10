@@ -206,6 +206,7 @@ impl ProjectsService {
                         "id": format!("scheduled-loop:{loop_id}"),
                         "sessionId": scheduled.session_id,
                         "turnId": Value::Null,
+                        "inputEntryId": Value::Null,
                         "createdAt": now_seconds.saturating_mul(1_000),
                         "updatedAt": now_seconds.saturating_mul(1_000),
                         "generationStatus": "completed",

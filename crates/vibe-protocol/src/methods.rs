@@ -10,7 +10,7 @@
 /// The lifecycle frames (`initialize` and the `initialized` notification) are
 /// deliberately absent: they are handled before method dispatch and are not
 /// part of the negotiated surface.
-pub const SERVER_METHODS: [&str; 137] = [
+pub const SERVER_METHODS: [&str; 146] = [
     "account/read",
     "agents/install",
     "agents/list",
@@ -77,6 +77,9 @@ pub const SERVER_METHODS: [&str; 137] = [
     "review/turnDiff",
     "runtime/read",
     "session/agent/update",
+    "session/archive",
+    "session/backgroundProcess/output",
+    "session/backgroundProcess/stop",
     "session/compact",
     "session/context/inject",
     "session/continue",
@@ -87,6 +90,7 @@ pub const SERVER_METHODS: [&str; 137] = [
     "session/history/list",
     "session/list",
     "session/log/read",
+    "session/markAsSeen",
     "session/pin",
     "session/read",
     "session/ready/read",
@@ -108,6 +112,9 @@ pub const SERVER_METHODS: [&str; 137] = [
     "session/turn/queue/resume",
     "session/turn/queue/steer",
     "session/turns/list",
+    "setup/status",
+    "setup/store-credential",
+    "setup/submit-choices",
     "shell/interrupt",
     "shell/run",
     "skills/catalog",
@@ -143,6 +150,8 @@ pub const SERVER_METHODS: [&str; 137] = [
     "workspace/git/worktrees/limit/update",
     "workspace/git/worktrees/list",
     "workspace/git/worktrees/prune",
+    "workspace/git/worktrees/reap",
+    "workspace/git/worktrees/reap/cancel",
     "workspace/git/worktrees/remove",
     "workspace/prompt/prepare",
     "workspace/trust/decision",

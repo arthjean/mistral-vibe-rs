@@ -59,6 +59,7 @@ import json
 import os
 from pathlib import Path
 import queue
+import re
 import shutil
 import subprocess
 import sys
@@ -168,6 +169,7 @@ class Session(rewind.Session):
         self.queue_items: list[str] = []
         self.turns: list[str] = []
         self.server_requests: list[Any] = []
+        self.worktrees: list[str] = []
         self.running = 0
 
     def learn(self, message: dict[str, Any]) -> None:
@@ -186,6 +188,12 @@ class Session(rewind.Session):
         for found in find_values(message, "turnId"):
             if found not in self.turns:
                 self.turns.append(found)
+        # The linked worktrees a `workspace/git/worktrees/list` answer names.
+        result = message.get("result")
+        if isinstance(result, dict) and isinstance(result.get("worktrees"), list):
+            for found in find_values(result["worktrees"], "root"):
+                if found not in self.worktrees:
+                    self.worktrees.append(found)
 
     def substitute(self, value: Any) -> Any:
         value = super().substitute(value)
@@ -195,7 +203,8 @@ class Session(rewind.Session):
             return [self.substitute(item) for item in value]
         if not isinstance(value, str):
             return value
-        for prefix, table in (("$C", self.callbacks), ("$Q", self.queue_items), ("$T", self.turns)):
+        for prefix, table in (("$C", self.callbacks), ("$Q", self.queue_items), ("$T", self.turns),
+                              ("$W", self.worktrees)):
             for index in range(len(table), 0, -1):
                 value = value.replace(f"{prefix}{index}", table[index - 1])
         return value
@@ -282,14 +291,17 @@ def run_scenario(scenario: dict[str, Any], command: list[str], quiet: float) -> 
             "GIT_COMMITTER_NAME": "Oracle",
             "GIT_COMMITTER_EMAIL": "oracle@example.invalid",
         }
-        server = Server(command, env, world.workspace, scenario.get("client", {}), world)
+        def spawn() -> Server:
+            return Server(command, env, world.workspace, scenario.get("client", {}), world)
+
+        servers = [spawn()]
         steps: list[dict[str, Any]] = []
         try:
-            run_steps(scenario, server, session, steps, quiet)
+            run_steps(scenario, servers, spawn, session, steps, quiet)
         except (OracleError, rewind.OracleError, acp.OracleError) as error:
             steps.append({"failure": str(error)})
         finally:
-            server.stop()
+            servers[-1].stop()
         return {
             "steps": steps,
             "sessions": session.sessions,
@@ -446,15 +458,24 @@ def observe(
 
 def run_steps(
     scenario: dict[str, Any],
-    server: Server,
+    servers: list[Server],
+    spawn: Any,
     session: Session,
     steps: list[dict[str, Any]],
     quiet: float,
 ) -> None:
     world = session.world
+    server = servers[-1]
     identifier = 0
     for step in scenario["steps"]:
         identifier += 1
+        if "restart" in step:
+            # A fresh server over the same home and workspace, for what
+            # outlives the connection that `session/stop` closes.
+            server.stop()
+            server = spawn()
+            servers.append(server)
+            continue
         if step.get("init"):
             params = step.get("params", {"clientInfo": {"name": "protocol-oracle", "version": "0"}})
             server.send({"jsonrpc": "2.0", "id": identifier, "method": "initialize", "params": params})
@@ -524,7 +545,7 @@ def run_steps(
             observe(steps, "ack", observed, None)
             continue
         if "write" in step:
-            acp.write_tree(world.workspace, step["write"])
+            acp.write_tree(Path(session.substitute(step.get("into", "$WS"))), step["write"])
             continue
         if "raw" in step:
             server.raw(step["raw"].encode("utf-8"))
@@ -571,6 +592,22 @@ def run_steps(
 # --------------------------------------------------------------------------
 
 
+# A managed worktree lives under `worktrees/<repository>-<12 hex>/`, the hex
+# drawn from the common git directory (`vibe/core/git/worktree/repository.py`),
+# so it changes with every scenario's temporary workspace.
+MANAGED_ROOT = re.compile(r"/worktrees/[^/]+-[0-9a-f]{12}/")
+
+
+def managed_roots(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: managed_roots(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [managed_roots(item) for item in value]
+    if isinstance(value, str):
+        return MANAGED_ROOT.sub("/worktrees/<repository>/", value)
+    return value
+
+
 def normalize_run(scenario: dict[str, Any], run: dict[str, Any]) -> list[Any]:
     normalizer = rewind.Normalizer(scenario, run["paths"])
     for identity in run["sessions"]:
@@ -582,7 +619,7 @@ def normalize_run(scenario: dict[str, Any], run: dict[str, Any]) -> list[Any]:
         if "failure" in step:
             observed.append({"failure": normalizer.text(step["failure"])})
             continue
-        entry = normalizer.value(copy.deepcopy(step))
+        entry = managed_roots(normalizer.value(copy.deepcopy(step)))
         # A notification is compared by its name and the shape of what it
         # carries, whatever the step: its values are ids, clocks and counters.
         entry["notifications"] = [
@@ -1105,6 +1142,92 @@ def session_flows() -> list[dict[str, Any]]:
                   {"repoLocalPaths": ["$WS", "$ROOT"], "sessionCwd": "$WS/nested"}),
              send("workspace/git/checkouts", {"repoLocalPaths": []}),
              send("workspace/git/checkouts", {"repoLocalPaths": "$WS"}),
+         ]},
+        {"name": "flows/setup",
+         "config": '\n[[providers]]\nname = "other"\napi_base = "https://other.example.invalid/v1"\n'
+                   'api_key_env_var = "OTHER_ORACLE_KEY"\n',
+         "steps": [
+             INIT,
+             exact(send("setup/status")),
+             exact(send("setup/status", {"provider": "other"})),
+             send("setup/status", {"provider": "nope"}),
+             send("setup/status", {"provider": "other", "bogus": 1}),
+             exact(send("setup/store-credential", {"provider": "other", "apiKey": "oracle-stored"})),
+             exact(send("setup/status", {"provider": "other"})),
+             send("setup/store-credential", {"provider": "nope", "apiKey": "x"}),
+             send("setup/store-credential", {"provider": "other"}),
+             exact(send("setup/submit-choices")),
+             exact(send("setup/submit-choices", {"theme": "dracula"})),
+             exact(send("setup/status")),
+             exact(send("setup/submit-choices", {
+                 "provider": {"name": "other", "apiBase": "https://moved.example.invalid/v1",
+                              "apiKeyEnvVar": "OTHER_ORACLE_KEY"},
+                 "consoleBaseUrl": "https://console.example.invalid"})),
+             exact(send("setup/status", {"provider": "other"})),
+             exact(send("setup/submit-choices", {"provider": {"name": "ghost", "apiBase": "https://g.invalid"}})),
+             send("setup/submit-choices", {"provider": {"name": "other"}}),
+         ]},
+        {"name": "flows/worktree-reap",
+         "git": True,
+         "steps": [
+             INIT,
+             {"start": {"agentConfig": {"cwd": "$WS", "agent": "auto-approve",
+                                        "worktree": {"kind": "create", "branch": "oracle-reap",
+                                                     "name": "oracle-reap"}}}},
+             exact(send("workspace/git/worktrees/list", {"cwd": "$WS"})),
+             exact(send("workspace/git/worktrees/remove", {"cwd": "$W1", "inspect": True})),
+             send("workspace/git/worktrees/reap", {"cwd": "$W1", "requesterId": "r1"}),
+             exact(send("workspace/git/worktrees/reap/cancel", {"cwd": "$W1", "requestId": "q1"})),
+             exact(send("workspace/git/worktrees/reap",
+                        {"cwd": "$W1", "requesterId": "r1", "requestId": "q1"})),
+             exact(send("workspace/git/worktrees/reap/cancel",
+                        {"cwd": "$W1", "requesterId": "r1", "requestId": "q1"})),
+             exact(send("workspace/git/worktrees/reap",
+                        {"cwd": "$W1", "requesterId": "r2", "requestId": "q2"})),
+             exact(send("workspace/git/worktrees/list", {"cwd": "$WS"})),
+             exact(send("session/stop", {"sessionId": "$S1"})),
+             {"restart": True},
+             INIT,
+             exact(send("workspace/git/worktrees/list", {"cwd": "$WS"})),
+             exact(send("workspace/git/worktrees/reap", {"cwd": "$WS/missing"})),
+         ]},
+        {"name": "flows/worktree-reap-idle",
+         "git": True,
+         "steps": [
+             INIT,
+             {"start": {"agentConfig": {"cwd": "$WS", "agent": "auto-approve",
+                                        "worktree": {"kind": "create", "branch": "oracle-idle",
+                                                     "name": "oracle-idle"}}}},
+             exact(send("workspace/git/worktrees/list", {"cwd": "$WS"})),
+             exact(send("session/stop", {"sessionId": "$S1"})),
+             {"restart": True},
+             INIT,
+             exact(send("workspace/git/worktrees/remove", {"cwd": "$W1", "inspect": True})),
+             exact(send("workspace/git/worktrees/reap/cancel", {"cwd": "$W1"})),
+             exact(send("workspace/git/worktrees/reap", {"cwd": "$W1"})),
+             exact(send("workspace/git/worktrees/list", {"cwd": "$WS"})),
+         ]},
+        {"name": "flows/worktree-reap-dirty",
+         "git": True,
+         "steps": [
+             INIT,
+             {"start": {"agentConfig": {"cwd": "$WS", "agent": "auto-approve",
+                                        "worktree": {"kind": "create", "branch": "oracle-dirty",
+                                                     "name": "oracle-dirty"}}}},
+             exact(send("workspace/git/worktrees/list", {"cwd": "$WS"})),
+             {"write": {"draft.txt": "unsaved\n"}, "into": "$W1"},
+             exact(send("workspace/git/worktrees/remove", {"cwd": "$W1", "inspect": True})),
+             exact(send("workspace/git/worktrees/reap",
+                        {"cwd": "$W1", "requesterId": "r1", "requestId": "q1"})),
+             exact(send("session/stop", {"sessionId": "$S1"})),
+             {"restart": True},
+             INIT,
+             exact(send("workspace/git/worktrees/list", {"cwd": "$WS"})),
+             exact(send("workspace/git/worktrees/remove", {"cwd": "$W1", "inspect": True})),
+             exact(send("workspace/git/worktrees/reap/cancel", {"cwd": "$W1", "requesterId": "r1"})),
+             exact(send("workspace/git/worktrees/reap", {"cwd": "$W1"})),
+             exact(send("workspace/git/worktrees/list", {"cwd": "$WS"})),
+             exact(send("workspace/git/worktrees/reap", {"cwd": "$W1"})),
          ]},
         {"name": "flows/session-stop",
          "steps": [

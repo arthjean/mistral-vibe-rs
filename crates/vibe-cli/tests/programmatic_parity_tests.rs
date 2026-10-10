@@ -49,37 +49,7 @@ struct Divergence {
     reason: &'static str,
 }
 
-const INPUT_ENTRY: &str = "row 17: since v2.26.0 every public history entry declares the user \
-     entry its turn answers, right after `turnId` (`vibe/app_server/models.py:949` at `376f6a3`), \
-     null in every entry these runs print; this port's entries do not carry the field";
-
-/// The recorded key order is compared position by position.
-const KEY_ORDER: &str = "row 17: the missing `inputEntryId`, and in one denial the missing \
-     approval fields below, shift every later key of the recorded key order in each history \
-     entry the json and streaming formats print";
-
-const LEDGER: &[Divergence] = &[
-    Divergence {
-        scenario: "*",
-        pointer: "/*/stdout/json/*/inputEntryId",
-        reason: INPUT_ENTRY,
-    },
-    Divergence {
-        scenario: "*",
-        pointer: "/*/stdout/lines/*/json/inputEntryId",
-        reason: INPUT_ENTRY,
-    },
-    Divergence {
-        scenario: "*",
-        pointer: "/*/stdout/layout/**",
-        reason: KEY_ORDER,
-    },
-    Divergence {
-        scenario: "*",
-        pointer: "/*/stdout/lines/*/layout/**",
-        reason: KEY_ORDER,
-    },
-];
+const LEDGER: &[Divergence] = &[];
 
 fn repository() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

@@ -42,6 +42,8 @@ pub enum WorktreeReleaseOutcome {
     KeptInUse,
     KeptUnmanaged,
     NotFound,
+    /// A reap its requester withdrew before it could complete.
+    KeptCancelled,
 }
 
 impl WorktreeReleaseOutcome {
@@ -54,6 +56,7 @@ impl WorktreeReleaseOutcome {
             Self::KeptInUse => "kept_in_use",
             Self::KeptUnmanaged => "kept_unmanaged",
             Self::NotFound => "not_found",
+            Self::KeptCancelled => "kept_cancelled",
         }
     }
 }
@@ -81,6 +84,12 @@ impl WorktreeRelease {
             reasons: Vec::new(),
             snapshot_ref: None,
         }
+    }
+
+    /// The release of a directory that is not Vibe's.
+    #[must_use]
+    pub fn kept_unmanaged() -> Self {
+        Self::outcome(WorktreeReleaseOutcome::KeptUnmanaged)
     }
 
     fn with_branch(mut self, branch: &str) -> Self {
@@ -299,30 +308,42 @@ impl ManagedWorktree {
             .filter_map(|claim| {
                 let record = claim.read()?;
                 record.base_commit.as_ref()?;
-                Some((record.claimed_at, claim))
+                Some((record.claimed_at, record.reap_requested, claim))
             })
             .collect::<Vec<_>>();
-        claimed.sort_by(|(left_at, left), (right_at, right)| {
+        claimed.sort_by(|(left_at, _, left), (right_at, _, right)| {
             (left_at, &left.bucket, &left.name).cmp(&(right_at, &right.bucket, &right.name))
         });
+        let claimed = claimed
+            .into_iter()
+            .map(|(_, reap_requested, claim)| (reap_requested, claim));
         let mut excess = claimed.len().saturating_sub(limit);
         let mut removed = 0;
-        for (_, claim) in claimed {
-            if excess == 0 {
-                break;
+        // A worktree whose reap is pending is finished whatever the limit, so
+        // a reap a holder deferred completes on the next sweep.
+        for (reap_requested, claim) in claimed {
+            if !reap_requested && excess == 0 {
+                continue;
             }
             if claim.is_starting() {
                 continue;
             }
             let bucket = claim.bucket.clone();
             let name = claim.name.clone();
-            match Self::new(claim).prune_with_snapshot() {
-                Ok(release) => {
+            let managed = Self::new(claim);
+            let released = if reap_requested {
+                managed.reap_if_requested()
+            } else {
+                managed.prune_with_snapshot().map(Some)
+            };
+            match released {
+                Ok(None) => {}
+                Ok(Some(release)) => {
                     if matches!(
                         release.outcome,
                         WorktreeReleaseOutcome::Removed | WorktreeReleaseOutcome::NotFound
                     ) {
-                        excess -= 1;
+                        excess = excess.saturating_sub(1);
                     }
                     if release.outcome == WorktreeReleaseOutcome::Removed {
                         removed += 1;
@@ -422,7 +443,205 @@ impl ManagedWorktree {
             return Ok(WorktreeRelease::outcome(WorktreeReleaseOutcome::KeptInUse)
                 .with_branch(&record.branch));
         }
-        self.release_unheld(&record)
+        self.release_unheld(&record, false)
+    }
+
+    /// The sessions standing in this worktree other than `session_id`, which
+    /// never counts as in the way of its own question
+    /// (`vibe/core/git/worktree/record.py:273-278`).
+    #[must_use]
+    pub fn holders_excluding(&self, session_id: Option<&str>) -> BTreeSet<String> {
+        let mut held_by = self.claim.holders();
+        if let Some(session_id) = session_id {
+            held_by.remove(session_id);
+        }
+        held_by
+    }
+
+    /// The outcome a release would have, without touching anything: `Removed`
+    /// means a removal now would succeed. The asking session is discounted
+    /// and no holder is released (`vibe/core/git/worktree/repository.py:993-1038`).
+    pub fn probe_release(
+        &self,
+        session_id: Option<&str>,
+    ) -> Result<WorktreeRelease, WorktreeError> {
+        let Some(record) = self.claim.read() else {
+            return Ok(WorktreeRelease::outcome(
+                WorktreeReleaseOutcome::KeptUnmanaged,
+            ));
+        };
+        let root = self.root();
+        if !root.is_dir() {
+            return Ok(WorktreeRelease::outcome(WorktreeReleaseOutcome::NotFound));
+        }
+        let Some(base_commit) = record.base_commit.clone() else {
+            return Ok(WorktreeRelease::outcome(
+                WorktreeReleaseOutcome::KeptUnmanaged,
+            ));
+        };
+        if self.claim.is_starting() || !self.holders_excluding(session_id).is_empty() {
+            return Ok(WorktreeRelease::outcome(WorktreeReleaseOutcome::KeptInUse)
+                .with_branch(&record.branch));
+        }
+        let state = self
+            .prepared_from(&record, &base_commit)
+            .inspect_for_cleanup()?;
+        if !state.is_clean() {
+            return Ok(WorktreeRelease {
+                outcome: WorktreeReleaseOutcome::KeptDirty,
+                root: Some(root),
+                branch: Some(record.branch.clone()),
+                branch_deleted: false,
+                reasons: state.reasons(),
+                snapshot_ref: None,
+            });
+        }
+        Ok(WorktreeRelease::outcome(WorktreeReleaseOutcome::Removed)
+            .with_root(&root)
+            .with_branch(&record.branch))
+    }
+
+    /// Removes a worktree whose discard the caller confirmed: no snapshot,
+    /// and the branch goes with it when Vibe created it unless `delete_branch`
+    /// answers otherwise. The asking session is discounted
+    /// (`vibe/core/git/worktree/repository.py:1040-1089`).
+    pub fn force_release(
+        &self,
+        session_id: Option<&str>,
+        delete_branch: Option<bool>,
+    ) -> Result<WorktreeRelease, WorktreeError> {
+        let Some(record) = self.claim.read() else {
+            return Ok(WorktreeRelease::outcome(
+                WorktreeReleaseOutcome::KeptUnmanaged,
+            ));
+        };
+        let root = self.root();
+        // Before the in-use check: a stale claim whose directory is gone is
+        // forgotten rather than kept in use by a leftover starting marker.
+        if !root.is_dir() {
+            self.claim.delete();
+            return Ok(WorktreeRelease::outcome(WorktreeReleaseOutcome::NotFound));
+        }
+        if self.claim.is_starting() || !self.holders_excluding(session_id).is_empty() {
+            return Ok(WorktreeRelease::outcome(WorktreeReleaseOutcome::KeptInUse)
+                .with_branch(&record.branch));
+        }
+        let Some(base_commit) = record.base_commit.clone() else {
+            return Ok(WorktreeRelease::outcome(
+                WorktreeReleaseOutcome::KeptUnmanaged,
+            ));
+        };
+        let delete_branch = delete_branch.unwrap_or(record.branch_created);
+        self.prepared_from(&record, &base_commit)
+            .remove(delete_branch)?;
+        self.claim.delete();
+        Ok(WorktreeRelease {
+            outcome: WorktreeReleaseOutcome::Removed,
+            root: Some(root),
+            branch: Some(record.branch.clone()),
+            branch_deleted: delete_branch,
+            reasons: Vec::new(),
+            snapshot_ref: None,
+        })
+    }
+
+    /// Snapshots and removes this worktree once nobody holds it, recording the
+    /// request so the reap completes later when a holder is still in the way.
+    ///
+    /// A requester names itself with the request it makes, which a
+    /// cancellation can then withdraw: a request already withdrawn is refused
+    /// as cancelled rather than recorded again
+    /// (`vibe/core/git/worktree/repository.py:1091-1117`).
+    pub fn reap(&self, request: Option<(&str, &str)>) -> Result<WorktreeRelease, WorktreeError> {
+        let record = {
+            let _lock = self.claim.locked()?;
+            let Some(mut record) = self.claim.read() else {
+                return Ok(WorktreeRelease::outcome(
+                    WorktreeReleaseOutcome::KeptUnmanaged,
+                ));
+            };
+            if let Some((requester_id, request_id)) = request {
+                if record.reap_cancellations.contains(request_id) {
+                    return Ok(
+                        WorktreeRelease::outcome(WorktreeReleaseOutcome::KeptCancelled)
+                            .with_root(&self.root())
+                            .with_branch(&record.branch),
+                    );
+                }
+                let mut requests = record.reap_requests.clone();
+                requests.insert(requester_id.to_owned(), request_id.to_owned());
+                if !record.reap_requested || requests != record.reap_requests {
+                    record.reap_requested = true;
+                    record.reap_requests = requests;
+                    self.claim.write(&record)?;
+                }
+            } else if !record.reap_requested {
+                record.reap_requested = true;
+                self.claim.write(&record)?;
+            }
+            record
+        };
+        self.reap_requested(&record)
+    }
+
+    /// Completes a reap asked for earlier, once its last holder is gone, and
+    /// answers [`None`] when none is pending
+    /// (`vibe/core/git/worktree/repository.py:1119-1124`).
+    pub fn reap_if_requested(&self) -> Result<Option<WorktreeRelease>, WorktreeError> {
+        match self.claim.read() {
+            Some(record) if record.reap_requested => self.reap_requested(&record).map(Some),
+            _ => Ok(None),
+        }
+    }
+
+    /// Withdraws a pending reap while the worktree is still there.
+    ///
+    /// With no requester every pending reap is withdrawn. A requester withdraws
+    /// the request it names, or its current one, and the withdrawn identity is
+    /// remembered so the request arriving late is refused
+    /// (`vibe/core/git/worktree/repository.py:1126-1166`).
+    pub fn cancel_reap(
+        &self,
+        requester_id: Option<&str>,
+        request_id: Option<&str>,
+    ) -> Result<(), WorktreeError> {
+        let _lock = self.claim.locked()?;
+        let Some(record) = self.claim.read() else {
+            return Ok(());
+        };
+        let Some(requester_id) = requester_id else {
+            if record.reap_requested {
+                let mut updated = record;
+                updated.reap_requested = false;
+                updated.reap_requests.clear();
+                self.claim.write(&updated)?;
+            }
+            return Ok(());
+        };
+        let mut updated = record.clone();
+        let current = updated.reap_requests.get(requester_id).cloned();
+        let cancelled = request_id
+            .map(ToOwned::to_owned)
+            .or_else(|| current.clone());
+        if let Some(cancelled) = &cancelled {
+            updated.reap_cancellations.insert(cancelled.clone());
+        }
+        if current.is_some() && current == cancelled {
+            updated.reap_requests.remove(requester_id);
+        }
+        updated.reap_requested = !updated.reap_requests.is_empty();
+        if updated != record {
+            self.claim.write(&updated)?;
+        }
+        Ok(())
+    }
+
+    fn reap_requested(&self, record: &WorktreeRecord) -> Result<WorktreeRelease, WorktreeError> {
+        if self.claim.is_starting() || !self.claim.holders().is_empty() {
+            return Ok(WorktreeRelease::outcome(WorktreeReleaseOutcome::KeptInUse)
+                .with_branch(&record.branch));
+        }
+        self.release_unheld(record, true)
     }
 
     fn discard_retained_snapshot(&self, recovery: &WorktreeRecoveryRecord) {
@@ -610,7 +829,14 @@ impl ManagedWorktree {
     /// snapshot that will not write keeps it. Holders are checked again just
     /// before the removal, which narrows the window a session in another
     /// process could join in (`vibe/core/git/worktree/repository.py:1011-1099`).
-    fn release_unheld(&self, record: &WorktreeRecord) -> Result<WorktreeRelease, WorktreeError> {
+    ///
+    /// A reap always snapshots, records how to recover, and gives up when its
+    /// request was withdrawn during the inspection.
+    fn release_unheld(
+        &self,
+        record: &WorktreeRecord,
+        snapshot_before_removal: bool,
+    ) -> Result<WorktreeRelease, WorktreeError> {
         let root = self.root();
         if !root.is_dir() {
             self.claim.delete();
@@ -624,7 +850,7 @@ impl ManagedWorktree {
         let prepared = self.prepared_from(record, &base_commit);
         let state = prepared.inspect_for_cleanup()?;
         let mut snapshot = None;
-        if !state.is_clean() {
+        if snapshot_before_removal || !state.is_clean() {
             match prepared.snapshot() {
                 Ok(saved) => snapshot = Some(saved),
                 Err(error) => {
@@ -661,6 +887,29 @@ impl ManagedWorktree {
             return Ok(WorktreeRelease::outcome(WorktreeReleaseOutcome::KeptInUse)
                 .with_root(&root)
                 .with_branch(&record.branch));
+        }
+        let mut record = record.clone();
+        if snapshot_before_removal {
+            match self.claim.read() {
+                None => {
+                    return Ok(
+                        WorktreeRelease::outcome(WorktreeReleaseOutcome::KeptUnmanaged)
+                            .with_root(&root),
+                    );
+                }
+                Some(current) if !current.reap_requested => {
+                    return Ok(
+                        WorktreeRelease::outcome(WorktreeReleaseOutcome::KeptCancelled)
+                            .with_root(&root)
+                            .with_branch(&current.branch),
+                    );
+                }
+                Some(current) => record = current,
+            }
+            if let Some(saved) = &snapshot {
+                self.claim
+                    .write_recovery(&WorktreeRecoveryRecord::new(&record, saved)?)?;
+            }
         }
         prepared.remove(record.branch_created)?;
         self.claim.delete();

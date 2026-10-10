@@ -133,6 +133,7 @@ pub(super) fn restored_shell_entry(
 ) -> PublicHistoryEntry {
     PublicHistoryEntry::Effect {
         metadata: PublicEntryMetadata {
+            input_entry_id: None,
             id: record.operation_id.clone(),
             session_id: session_id.to_owned(),
             turn_id: None,
@@ -599,6 +600,7 @@ impl AppServer {
             .unwrap_or_default();
         let entry = PublicHistoryEntry::Effect {
             metadata: PublicEntryMetadata {
+                input_entry_id: None,
                 id: operation_id.to_owned(),
                 session_id: session.id.clone(),
                 turn_id: None,

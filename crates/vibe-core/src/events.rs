@@ -369,6 +369,10 @@ pub struct PublicEntryMetadata {
     pub session_id: String,
     #[serde(default)]
     pub turn_id: Option<String>,
+    /// The user entry the turn answers. Reference `_PublicHistoryEntryBase`
+    /// publishes it since v2.26.0, and only its Unified Harness fills it.
+    #[serde(default)]
+    pub input_entry_id: Option<String>,
     pub created_at: u64,
     pub updated_at: u64,
     pub generation_status: PublicEntryGenerationStatus,
@@ -643,6 +647,10 @@ pub struct PublicTurn {
     pub id: String,
     pub session_id: String,
     pub status: PublicTurnStatus,
+    /// The user entry the turn answers. Reference `PublicTurn` publishes it
+    /// since v2.26.0, and only its Unified Harness fills it.
+    #[serde(default)]
+    pub input_entry_id: Option<String>,
     pub started_at: u64,
     #[serde(default)]
     pub completed_at: Option<u64>,

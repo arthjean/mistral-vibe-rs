@@ -927,6 +927,8 @@ fn the_remove_answers_every_outcome_as_a_result() {
             "branch": null,
             "branchDeleted": false,
             "reasons": [],
+            "branchCreated": null,
+            "holders": null,
         }),
     );
 
@@ -941,5 +943,87 @@ fn the_remove_answers_every_outcome_as_a_result() {
     assert_eq!(removed["root"], json!(text(&prepared.root)));
     assert_eq!(removed["branch"], json!("topic"));
     assert_eq!(removed["branchDeleted"], json!(true));
+    assert_eq!(removed["branchCreated"], json!(true));
+    assert_eq!(removed["holders"], json!(0));
     assert!(!prepared.path.exists());
+}
+
+#[test]
+fn an_inspected_removal_changes_nothing_and_a_forced_one_drops_the_work() {
+    let (_scratch, root) = case_root();
+    let checkout = checkout(&root);
+    let mut connection = connected(&root);
+    let prepared = abandoned_worktree(&root, &checkout, "review", "topic");
+    std::fs::write(prepared.path.join("draft.txt"), "unsaved\n").expect("the worktree is writable");
+
+    let inspected = answer(
+        &mut connection,
+        2,
+        "workspace/git/worktrees/remove",
+        json!({"cwd": text(&prepared.path), "inspect": true}),
+    );
+    assert_eq!(inspected["outcome"], json!("kept_dirty"));
+    assert!(prepared.path.exists(), "an inspection removes nothing");
+
+    let forced = answer(
+        &mut connection,
+        3,
+        "workspace/git/worktrees/remove",
+        json!({"cwd": text(&prepared.path), "force": true, "deleteBranch": false}),
+    );
+    assert_eq!(forced["outcome"], json!("removed"));
+    assert_eq!(forced["branchDeleted"], json!(false));
+    assert!(!prepared.path.exists());
+}
+
+#[test]
+fn a_reap_removes_an_unheld_worktree_and_a_cancelled_request_keeps_it() {
+    let (_scratch, root) = case_root();
+    let checkout = checkout(&root);
+    let mut connection = connected(&root);
+
+    let unmanaged = answer(
+        &mut connection,
+        2,
+        "workspace/git/worktrees/reap",
+        json!({"cwd": text(&checkout)}),
+    );
+    assert_eq!(
+        unmanaged,
+        json!({
+            "outcome": "kept_unmanaged",
+            "root": null,
+            "branch": null,
+            "branchDeleted": false,
+            "reasons": [],
+        })
+    );
+
+    let kept = abandoned_worktree(&root, &checkout, "kept", "kept-topic");
+    let cancelled = answer(
+        &mut connection,
+        3,
+        "workspace/git/worktrees/reap/cancel",
+        json!({"cwd": text(&kept.path), "requesterId": "desktop", "requestId": "r1"}),
+    );
+    assert_eq!(cancelled, json!({}));
+    let late = answer(
+        &mut connection,
+        4,
+        "workspace/git/worktrees/reap",
+        json!({"cwd": text(&kept.path), "requesterId": "desktop", "requestId": "r1"}),
+    );
+    assert_eq!(late["outcome"], json!("kept_cancelled"));
+    assert!(kept.path.exists());
+
+    let reaped = abandoned_worktree(&root, &checkout, "reaped", "reaped-topic");
+    let removed = answer(
+        &mut connection,
+        5,
+        "workspace/git/worktrees/reap",
+        json!({"cwd": text(&reaped.path)}),
+    );
+    assert_eq!(removed["outcome"], json!("removed"));
+    assert_eq!(removed["branchDeleted"], json!(true));
+    assert!(!reaped.path.exists());
 }

@@ -529,6 +529,7 @@ impl ServerConnection {
             };
             let settled = status != PublicTurnStatus::InProgress;
             Some(vec![PublicTurn {
+                input_entry_id: None,
                 id: format!("{child_session_id}-turn"),
                 session_id: child_session_id.to_owned(),
                 status,
@@ -1513,8 +1514,11 @@ fn listed_session(store: &SessionStore, session: &SessionInfo, root: &str) -> Va
         "updatedAt": time_ms(Some(&session.updated_at)),
         "bumpedAt": session.bumped_at.as_deref().and_then(parse_iso_millis),
         "pinnedAt": null,
+        "archivedAt": null,
+        "isUnseen": false,
         "cwd": (!session.cwd.is_empty()).then_some(&session.cwd),
         "workspaceRoots": [],
+        "worktree": null,
         "model": null,
         "reasoningEffort": null,
         "agent": null,
@@ -1581,8 +1585,11 @@ fn stored_state(session_id: &str, hydrated: &HydratedSession, history_limit: usi
             "updatedAt": time_ms(metadata.end_time.as_deref()),
             "bumpedAt": metadata.bumped_at.as_deref().and_then(parse_iso_millis),
             "pinnedAt": null,
+            "archivedAt": metadata.archived_at.as_deref().and_then(parse_iso_millis),
+            "isUnseen": false,
             "cwd": cwd,
             "workspaceRoots": [],
+            "worktree": null,
             "model": null,
             "reasoningEffort": null,
             "agent": null,
@@ -1596,6 +1603,7 @@ fn stored_state(session_id: &str, hydrated: &HydratedSession, history_limit: usi
         "turns": [],
         "activeCallbacks": [],
         "childSessions": [],
+        "backgroundProcesses": [],
         "turnQueue": {"items": [], "paused": false, "maxItems": 32},
         "retrying": null,
     })

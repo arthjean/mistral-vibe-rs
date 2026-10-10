@@ -159,9 +159,19 @@ const TODO_ITEM: &[Field] = &[
 
 const TODO: &[Field] = &[optional("todos", "todos", Kind::List(TODO_ITEM), nothing)];
 
+/// Since v2.26.0 the reference also declares whether the write replaced a file
+/// and the text it replaced, defaulted because only its Unified Harness states
+/// them: the legacy `write_file` refuses an existing file.
 const FILE_WRITE: &[Field] = &[
     required("file_path", "filePath", Kind::Str),
     required("content", "content", Kind::Str),
+    optional("file_existed", "fileExisted", Kind::Bool, no),
+    optional(
+        "previous_content",
+        "previousContent",
+        Kind::OptionalStr,
+        null,
+    ),
 ];
 
 const ANSWER: &[Field] = &[

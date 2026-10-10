@@ -218,13 +218,6 @@ const LEDGER: &[Divergence] = &[
         row: "22",
         reason: "the same request, one message earlier when the prompt is the last message",
     },
-    Divergence {
-        scenarios: &["lifecycle/picker-during-turn"],
-        pointer: "/steps/4/response/error/message",
-        row: "17",
-        reason: "the refusal names the running turn, which this port numbers `turn-N` where the \
-                 reference mints a UUID",
-    },
 ];
 
 fn repository() -> PathBuf {

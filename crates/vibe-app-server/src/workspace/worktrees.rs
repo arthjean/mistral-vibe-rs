@@ -40,10 +40,42 @@ struct LimitUpdateParams {
 #[serde(deny_unknown_fields)]
 struct PruneParams {}
 
+/// Reference `WorkspaceWorktreeRemoveConfirmParams`: the confirmation flags
+/// a client asks before it discards (`vibe/app_server/protocol.py:1657-1677`).
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct RemoveParams {
     cwd: String,
+    #[serde(default)]
+    force: bool,
+    #[serde(default)]
+    delete_branch: Option<bool>,
+    #[serde(default)]
+    inspect: bool,
+}
+
+/// Reference `WorkspaceWorktreeReapParams` and
+/// `WorkspaceWorktreeReapCancelParams`, whose request identities the wire
+/// validation already checked.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct ReapParams {
+    cwd: String,
+    #[serde(default)]
+    requester_id: Option<String>,
+    #[serde(default)]
+    request_id: Option<String>,
+}
+
+/// The session the asking connection is attached to, which the router hands
+/// the worktree methods beside the client's own parameters: its holder is the
+/// one that never counts as in use (`vibe/app_server/server.py:765-775`).
+fn connection_root(params: &BTreeMap<String, Value>) -> (BTreeMap<String, Value>, Option<String>) {
+    let mut params = params.clone();
+    let root = params
+        .remove(crate::server::CONNECTION_ROOT_PARAM)
+        .and_then(|root| root.as_str().map(ToOwned::to_owned));
+    (params, root)
 }
 
 fn parse<T: serde::de::DeserializeOwned>(
@@ -159,13 +191,63 @@ impl WorkspaceService {
         &self,
         params: &BTreeMap<String, Value>,
     ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
-        let params: RemoveParams = parse(params)?;
+        let (params, session_id) = connection_root(params);
+        let params: RemoveParams = parse(&params)?;
         let answer = crate::worktrees::remove_response(
             required_path(&params.cwd)?,
             &self.managed_worktrees(),
+            &crate::worktrees::RemoveRequest {
+                force: params.force,
+                delete_branch: params.delete_branch,
+                session_id: session_id.as_deref(),
+                inspect: params.inspect,
+            },
         );
         Ok(WorkspaceDispatch::result(
             answer.as_object().cloned().unwrap_or_default(),
+        ))
+    }
+
+    /// Reference `workspace/git/worktrees/reap`: the worktree `cwd` sits in is
+    /// snapshotted and removed once nobody holds it, and the request is kept
+    /// until then (`vibe/app_server/_host.py:516-523`).
+    pub(super) fn worktrees_reap(
+        &self,
+        params: &BTreeMap<String, Value>,
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
+        let (params, _) = connection_root(params);
+        let params: ReapParams = parse(&params)?;
+        let request = params
+            .requester_id
+            .as_deref()
+            .zip(params.request_id.as_deref());
+        let answer = crate::worktrees::reap_response(
+            required_path(&params.cwd)?,
+            &self.managed_worktrees(),
+            request,
+        );
+        Ok(WorkspaceDispatch::result(
+            answer.as_object().cloned().unwrap_or_default(),
+        ))
+    }
+
+    /// Reference `workspace/git/worktrees/reap/cancel`, which answers nothing
+    /// (`vibe/app_server/_host.py:524-532`).
+    pub(super) fn worktrees_reap_cancel(
+        &self,
+        params: &BTreeMap<String, Value>,
+    ) -> Result<WorkspaceDispatch, WorkspaceServiceError> {
+        let (params, _) = connection_root(params);
+        let params: ReapParams = parse(&params)?;
+        crate::worktrees::cancel_reap(
+            required_path(&params.cwd)?,
+            &self.managed_worktrees(),
+            params.requester_id.as_deref(),
+            params.request_id.as_deref(),
+        )
+        .map_err(git_refusal)?;
+        Ok(WorkspaceDispatch::result(
+            std::iter::empty::<(&str, Value)>(),
         ))
     }
 }

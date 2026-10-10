@@ -50,6 +50,7 @@ fn the_view_carries_every_field_the_wire_declares() {
             "defaultModelAlias",
             "disableWelcomeBannerAnimation",
             "enableNotifications",
+            "enableSystemTrustStore",
             "enableTelemetry",
             "enableUpdateChecks",
             "experimentalEnableRegistrySkills",
@@ -106,6 +107,63 @@ fn the_active_model_is_the_entry_its_alias_names() {
     );
 }
 
+#[test]
+fn every_model_states_its_window_its_levels_and_how_images_reach_it() {
+    let (_temporary, snapshot) = loaded(
+        "enable_system_trust_store = true
+",
+    );
+    let view = snapshot.config_view();
+    assert_eq!(view["enableSystemTrustStore"], true);
+    let model = |alias: &str| {
+        view["models"]
+            .as_array()
+            .expect("models is a list")
+            .iter()
+            .find(|model| model["alias"] == alias)
+            .cloned()
+            .expect("the shipped model is published")
+    };
+    let medium = model("mistral-medium-3.5");
+    assert_eq!(medium["maxContextLength"], serde_json::Value::Null);
+    assert_eq!(
+        medium["thinkingLevels"],
+        serde_json::json!(["off", "low", "medium", "high", "max"])
+    );
+    // The legacy harness advertises no fallback for a model that cannot read
+    // images, so only a vision model states a delivery.
+    assert_eq!(medium["imageDelivery"], "native");
+    assert_eq!(model("local")["imageDelivery"], serde_json::Value::Null);
+}
+
+#[test]
+fn a_narrowed_level_set_resets_a_stored_level_it_does_not_offer() {
+    let (_temporary, snapshot) = loaded(
+        "active_model = \"narrow\"\n\n[[models]]\nname = \"narrow-model\"\nprovider = \"mistral\"\nalias = \"narrow\"\nthinking = \"max\"\nthinking_levels = [\"low\", \"low\", \"medium\"]\nmax_context_length = 128000\n",
+    );
+    let view = snapshot.config_view();
+    let active = &view["activeModel"];
+    assert_eq!(
+        active["thinkingLevels"],
+        serde_json::json!(["low", "medium"])
+    );
+    assert_eq!(
+        active["thinking"], "medium",
+        "without `high` the last offered level is the default"
+    );
+    assert_eq!(active["maxContextLength"], 128_000);
+}
+
+#[test]
+fn an_emptied_level_set_offers_off_alone() {
+    let (_temporary, snapshot) = loaded(
+        "active_model = \"bare\"\n\n[[models]]\nname = \"bare-model\"\nprovider = \"mistral\"\nalias = \"bare\"\nthinking = \"high\"\nthinking_levels = []\n",
+    );
+    let active = &snapshot.config_view()["activeModel"];
+    assert_eq!(active["thinkingLevels"], serde_json::json!(["off"]));
+    assert_eq!(active["thinking"], "off");
+}
+
 /// An `active_model` naming nothing configured already falls back during the
 /// load; a view built from a table that still names nothing publishes an empty
 /// model rather than failing the response.
@@ -124,7 +182,10 @@ fn an_unresolvable_active_model_publishes_an_empty_model() {
             "alias": "",
             "displayName": "",
             "thinking": "off",
-            "supportsImages": false
+            "supportsImages": false,
+            "maxContextLength": null,
+            "thinkingLevels": ["off", "low", "medium", "high", "max"],
+            "imageDelivery": null
         })
     );
 }

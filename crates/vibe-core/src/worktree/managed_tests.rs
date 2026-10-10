@@ -6,7 +6,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use super::{ManagedRoot, ManagedWorktree, PreparedWorktree, WorktreeError, WorktreeRepository};
+use super::{
+    ManagedRoot, ManagedWorktree, PreparedWorktree, SNAPSHOT_REF_PREFIX, WorktreeError,
+    WorktreeReleaseOutcome, WorktreeRepository,
+};
 
 fn git(directory: &Path, arguments: &[&str]) {
     let status = Command::new("git")
@@ -123,4 +126,98 @@ fn a_forgotten_claim_holds_nothing_and_its_last_holder_cleans_up() {
         !held.claim().directory().exists(),
         "the last holder out of a forgotten claim removes its directory"
     );
+}
+
+#[test]
+fn a_held_worktree_keeps_its_reap_until_the_sweep_finds_it_unheld() {
+    let (_scratch, checkout, managed) = fixture();
+    let (prepared, held) = prepared(&checkout, &managed, "review");
+    held.hold("s1", prepared.pending_hold.as_ref())
+        .expect("held");
+
+    let kept = held.reap(Some(("desktop", "r1"))).expect("the reap runs");
+    assert_eq!(kept.outcome, WorktreeReleaseOutcome::KeptInUse);
+    let record = held.claim().read().expect("the claim stays");
+    assert!(record.reap_requested);
+    assert_eq!(
+        record.reap_requests.get("desktop").map(String::as_str),
+        Some("r1")
+    );
+
+    held.release_holder("s1").expect("released");
+    let swept = ManagedWorktree::prune(&managed, 15).expect("the sweep runs");
+    assert_eq!(swept, 1, "a pending reap is finished under the limit too");
+    assert!(!prepared.path.exists());
+    let recovery = held
+        .claim()
+        .read_recovery()
+        .expect("a reap records how to recover the work");
+    assert!(recovery.snapshot_ref.starts_with(SNAPSHOT_REF_PREFIX));
+}
+
+#[test]
+fn a_cancelled_reap_refuses_the_same_request_arriving_late() {
+    let (_scratch, checkout, managed) = fixture();
+    let (prepared, held) = prepared(&checkout, &managed, "review");
+    held.hold("s1", prepared.pending_hold.as_ref())
+        .expect("held");
+    held.reap(Some(("desktop", "r1"))).expect("the reap runs");
+    held.reap(Some(("cli", "r2"))).expect("the reap runs");
+
+    held.cancel_reap(Some("desktop"), None)
+        .expect("the reap is withdrawn");
+    let record = held.claim().read().expect("the claim stays");
+    assert!(record.reap_requested, "the other requester's reap stands");
+    assert!(record.reap_cancellations.contains("r1"));
+
+    held.release_holder("s1").expect("released");
+    let late = held.reap(Some(("desktop", "r1"))).expect("the reap runs");
+    assert_eq!(late.outcome, WorktreeReleaseOutcome::KeptCancelled);
+    assert!(prepared.path.exists());
+
+    held.cancel_reap(None, None)
+        .expect("every reap is withdrawn");
+    let record = held.claim().read().expect("the claim stays");
+    assert!(!record.reap_requested && record.reap_requests.is_empty());
+    assert!(held.reap_if_requested().expect("no error").is_none());
+}
+
+#[test]
+fn an_unheld_reap_snapshots_a_clean_worktree_before_removing_it() {
+    let (_scratch, checkout, managed) = fixture();
+    let (prepared, held) = prepared(&checkout, &managed, "review");
+    held.hold("s1", prepared.pending_hold.as_ref())
+        .expect("held");
+    held.release_holder("s1").expect("released");
+
+    let reaped = held.reap(None).expect("the reap runs");
+    assert_eq!(reaped.outcome, WorktreeReleaseOutcome::Removed);
+    assert!(
+        reaped.snapshot_ref.is_some(),
+        "a reap always saves the state"
+    );
+    assert!(!prepared.path.exists());
+}
+
+#[test]
+fn a_probe_discounts_the_asker_and_a_forced_release_drops_the_work() {
+    let (_scratch, checkout, managed) = fixture();
+    let (prepared, held) = prepared(&checkout, &managed, "review");
+    held.hold("s1", prepared.pending_hold.as_ref())
+        .expect("held");
+    fs::write(prepared.path.join("draft.txt"), "unsaved\n").expect("the worktree is writable");
+
+    let other = held.probe_release(Some("s2")).expect("the probe runs");
+    assert_eq!(other.outcome, WorktreeReleaseOutcome::KeptInUse);
+    let own = held.probe_release(Some("s1")).expect("the probe runs");
+    assert_eq!(own.outcome, WorktreeReleaseOutcome::KeptDirty);
+    assert!(prepared.path.exists(), "a probe changes nothing");
+
+    let forced = held
+        .force_release(Some("s1"), Some(false))
+        .expect("the release runs");
+    assert_eq!(forced.outcome, WorktreeReleaseOutcome::Removed);
+    assert!(!forced.branch_deleted);
+    assert!(forced.snapshot_ref.is_none());
+    assert!(!prepared.path.exists());
 }

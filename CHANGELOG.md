@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- Answer the app-server surface v2.26.0 added, as the reference's legacy
+  backend does: every model a configuration view lists states
+  `maxContextLength`, `thinkingLevels` and `imageDelivery`, the view states
+  `enableSystemTrustStore`, sessions state `archivedAt`, `isUnseen` and
+  `worktree`, the session state lists `backgroundProcesses`, turns and history
+  entries name their `inputEntryId`, a write's output states `fileExisted` and
+  `previousContent`, and a subagent's effect names its `agentName`. The nine
+  methods v2.26.0 declared are declared here too: the three `setup/*` methods
+  serve an onboarding client before any session opens (the seed its wizard
+  opens on, the key it stores, the provider, bases and theme it chooses),
+  `workspace/git/worktrees/reap` snapshots and removes a managed worktree once
+  nobody holds it and keeps the request for the next retention sweep
+  otherwise, `workspace/git/worktrees/reap/cancel` withdraws one, and the
+  session archive, seen and background process methods are refused as the
+  legacy backend refuses them. `workspace/git/worktrees/remove` reads
+  `force`, `deleteBranch` and `inspect` and answers `branchCreated` and
+  `holders`, a model entry declares `thinking_levels` and
+  `max_context_length`, and a turn is named by a random UUID.
+
 - Release a session's managed worktree when its connection closes, through
   `session/stop` or a disconnect, as the reference's backend shutdown does: the
   session stops holding it, and a worktree it created and never ran a turn in

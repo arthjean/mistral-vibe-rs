@@ -220,6 +220,7 @@ fn stale_mutations_and_duplicate_callbacks_leave_runtime_unchanged() {
                     callback_id,
                     metadata:
                         PublicEntryMetadata {
+                            input_entry_id: None,
                             generation_status: PublicEntryGenerationStatus::Completed,
                             ..
                         },
@@ -416,6 +417,7 @@ fn cancelled_user_input_is_answered_without_interrupting_the_turn() {
                 PublicHistoryEntry::Callback {
                     metadata:
                         PublicEntryMetadata {
+                            input_entry_id: None,
                             generation_status: PublicEntryGenerationStatus::Completed,
                             ..
                         },

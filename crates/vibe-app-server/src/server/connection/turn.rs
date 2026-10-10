@@ -150,8 +150,7 @@ impl ServerConnection {
         if let Some(published) = self.server.workspace.publish_draft(&session.id)? {
             session.persisted = Some(published);
         }
-        let turn_sequence = self.server.next_turn.fetch_add(1, Ordering::Relaxed);
-        let turn_id = format!("turn-{turn_sequence}");
+        let turn_id = self.server.mint_turn_id();
         if let Some(review) = &session.review {
             let message_index = review_message_index(&self.server.workspace, session)?;
             review
@@ -164,6 +163,7 @@ impl ServerConnection {
         session.active_turn_started_at = Some(started_at);
         session.status = SessionStatus::Running;
         let turn = PublicTurn {
+            input_entry_id: None,
             id: turn_id,
             session_id: session.id.clone(),
             status: PublicTurnStatus::InProgress,
@@ -345,6 +345,7 @@ impl ServerConnection {
             .unwrap_or_else(vibe_core::session_id::uuid_v4);
         let entry = PublicHistoryEntry::Message {
             metadata: PublicEntryMetadata {
+                input_entry_id: None,
                 id: entry_id.clone(),
                 session_id: session.id.clone(),
                 turn_id: Some(turn_id.clone()),
@@ -443,6 +444,7 @@ impl ServerConnection {
         session.active_scheduled_loop = None;
         session.status = SessionStatus::Cancelled;
         session.record_turn(PublicTurn {
+            input_entry_id: None,
             id: params.expected_turn_id.clone(),
             session_id: canonical_session_id,
             status: PublicTurnStatus::Interrupted,

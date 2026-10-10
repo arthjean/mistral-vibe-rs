@@ -161,10 +161,21 @@ pub(super) fn public_session_state(session: &SessionRuntime) -> Value {
             "bumpedAt": session.bumped_at,
             // `session/pin` is not served, so no session is ever pinned.
             "pinnedAt": null,
+            // Reference `build_public_state`: the archive mark of the saved
+            // session, which the legacy harness never derives an unseen flag
+            // from.
+            "archivedAt": session
+                .persisted
+                .as_ref()
+                .and_then(|persisted| persisted.metadata.archived_at.as_deref())
+                .and_then(vibe_core::storage::parse_iso_millis),
+            "isUnseen": false,
             // Reference `project_workdir`: the configured display directory
             // when there is one.
             "cwd": session.displayed_workdir.as_ref().unwrap_or(&session.working_directory),
             "workspaceRoots": workspace_roots,
+            // Only the Unified Harness moves a session into a worktree (row 36).
+            "worktree": null,
             "model": session.intent.model.as_ref().or(session.active_model_alias.as_ref()),
             // Reference `build_public_state` never sets it on the legacy
             // harness.
@@ -194,6 +205,8 @@ pub(super) fn public_session_state(session: &SessionRuntime) -> Value {
             .map(|callback| callback.entry.clone())
             .collect::<Vec<_>>(),
         "childSessions": [],
+        // Only the Unified Harness tracks background processes (row 36).
+        "backgroundProcesses": [],
         "turnQueue": {"items": [], "paused": false, "maxItems": TURN_QUEUE_MAX_ITEMS},
         "retrying": null,
     })
@@ -211,6 +224,7 @@ pub(super) fn checkpoint_entry(
     let timestamp = now_millis();
     PublicHistoryEntry::Checkpoint {
         metadata: vibe_core::events::PublicEntryMetadata {
+            input_entry_id: None,
             id: format!("checkpoint:{kind}:{}", vibe_core::session_id::uuid_v4()),
             session_id: session_id.to_owned(),
             turn_id: None,
@@ -263,6 +277,7 @@ pub(super) fn persisted_projection(
     // reference counts them (`history_message_id`), which is also the
     // identity a rewind resolves.
     let metadata = |index: usize, suffix: &str, id: Option<&String>| PublicEntryMetadata {
+        input_entry_id: None,
         id: id.cloned().unwrap_or_else(|| {
             history_entry_id(reference_message_index(&hydrated.messages, index), suffix)
         }),

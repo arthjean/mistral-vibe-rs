@@ -76,31 +76,6 @@ const TASK_REFUSALS: &[&str] = &[
     "delegation/disabled-subagent",
 ];
 
-/// Every delegation scenario: each starts a `task` call whose detail v2.26.0
-/// extends.
-const DELEGATIONS: &[&str] = &[
-    "delegation/ask-parent",
-    "delegation/child-approval",
-    "delegation/child-denied",
-    "delegation/child-error",
-    "delegation/depth",
-    "delegation/disabled-subagent",
-    "delegation/explore",
-    "delegation/primary-agent",
-    "delegation/unknown-agent",
-];
-
-/// The delegations whose child asks the parent's client for an approval.
-const CHILD_APPROVALS: &[&str] = &["delegation/child-approval", "delegation/child-denied"];
-
-const SUBAGENT_NAME: &str = "v2.26.0 names the agent a subagent call runs on its detail \
-     (`vibe/app_server/_effect_models.py:295` at 376f6a3), null until the call is known; this \
-     port omits the field";
-
-const MODEL_VIEW: &str = "v2.26.0 reports a model's `maxContextLength`, `thinkingLevels` and \
-     `imageDelivery` (`vibe/app_server/config.py:25-33` at 376f6a3), unset, all five levels and \
-     null for a model that names none of them; this port's model view omits the three";
-
 const LEDGER: &[Divergence] = &[
     Divergence {
         scenarios: &[
@@ -223,42 +198,6 @@ const LEDGER: &[Divergence] = &[
         pointer: "/steps/1/turn/10/patch/0/value/output/message",
         row: "3",
         reason: "the plan-review outcome, as the settled effect's output",
-    },
-    Divergence {
-        scenarios: DELEGATIONS,
-        pointer: "/steps/1/turn/2/detail/agentName",
-        row: "17",
-        reason: SUBAGENT_NAME,
-    },
-    Divergence {
-        scenarios: DELEGATIONS,
-        pointer: "/steps/1/turn/3/patch/0/value/agentName",
-        row: "17",
-        reason: SUBAGENT_NAME,
-    },
-    Divergence {
-        scenarios: CHILD_APPROVALS,
-        pointer: "/steps/1/turn/4/detail/effect/agentName",
-        row: "17",
-        reason: SUBAGENT_NAME,
-    },
-    Divergence {
-        scenarios: &["profile/custom-model"],
-        pointer: "/steps/2/response/result/runtime/activeModel/imageDelivery",
-        row: "17",
-        reason: MODEL_VIEW,
-    },
-    Divergence {
-        scenarios: &["profile/custom-model"],
-        pointer: "/steps/2/response/result/runtime/activeModel/maxContextLength",
-        row: "17",
-        reason: MODEL_VIEW,
-    },
-    Divergence {
-        scenarios: &["profile/custom-model"],
-        pointer: "/steps/2/response/result/runtime/activeModel/thinkingLevels",
-        row: "17",
-        reason: MODEL_VIEW,
     },
 ];
 

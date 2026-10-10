@@ -18,7 +18,7 @@
 //! either implementation is managed by the other: a session of one holds off a
 //! retention sweep of the other.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs::{self, File, OpenOptions};
 use std::io::Write as _;
 use std::path::{Component, Path, PathBuf};
@@ -68,6 +68,18 @@ pub struct WorktreeRecord {
     pub branch_created: bool,
     #[serde(with = "timestamp")]
     pub claimed_at: UtcTimestamp,
+    /// A reap was asked for and is still pending, which lets a retention sweep
+    /// finish one a holder was still in the way of.
+    #[serde(default)]
+    pub reap_requested: bool,
+    /// The pending reap of each requester, by the request it last made, so a
+    /// cancellation withdraws one requester's reap without another's.
+    #[serde(default)]
+    pub reap_requests: BTreeMap<String, String>,
+    /// The requests a cancellation withdrew, which a delayed request carrying
+    /// the same identity is refused under.
+    #[serde(default)]
+    pub reap_cancellations: BTreeSet<String>,
 }
 
 const fn record_version() -> u32 {
@@ -85,6 +97,9 @@ impl WorktreeRecord {
             base_commit: None,
             branch_created,
             claimed_at: UtcTimestamp::now(),
+            reap_requested: false,
+            reap_requests: BTreeMap::new(),
+            reap_cancellations: BTreeSet::new(),
         }
     }
 }
@@ -225,6 +240,11 @@ impl PruneLock {
     }
 }
 
+/// Holds the claims registry lock for its lifetime ([`WorktreeClaim::locked`]).
+pub struct ClaimLock {
+    _lock: DirectoryLock,
+}
+
 /// One managed worktree, addressed by its bucket and name.
 ///
 /// The two travel as one value because they are meaningless apart and
@@ -310,6 +330,16 @@ impl WorktreeClaim {
     #[must_use]
     pub fn directory(&self) -> PathBuf {
         self.managed.claims().join(&self.bucket).join(&self.name)
+    }
+
+    /// Holds the claims registry lock for as long as the guard lives, which
+    /// is how a record is read and rewritten without losing a concurrent
+    /// update (`vibe/core/git/worktree/record.py:178-183`). Nothing that takes
+    /// the lock itself, such as reading the holders, may run under it.
+    pub fn locked(&self) -> Result<ClaimLock, WorktreeError> {
+        Ok(ClaimLock {
+            _lock: DirectoryLock::acquire(&self.managed, REGISTRY_LOCK_FILENAME)?,
+        })
     }
 
     pub fn write(&self, record: &WorktreeRecord) -> Result<(), WorktreeError> {

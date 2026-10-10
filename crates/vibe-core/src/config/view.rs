@@ -70,6 +70,7 @@ impl ConfigSnapshot {
             "worktreeLimit": self.worktree_limit(),
             "enableUpdateChecks": self.bool_field("enable_update_checks", true),
             "enableNotifications": self.bool_field("enable_notifications", true),
+            "enableSystemTrustStore": self.bool_field("enable_system_trust_store", false),
             "experimentalEnableTabStatus": self.bool_field("experimental_enable_tab_status", true),
             "enableTelemetry": self.bool_field("enable_telemetry", true),
             "experimentalEnableRegistrySkills": self.bool_field("experimental_enable_registry_skills", false),
@@ -410,6 +411,10 @@ impl ConfigSnapshot {
 fn model_view(entry: &Table, alias: &str) -> JsonValue {
     let declared = table_str(entry, "alias", alias);
     let thinking = table_str(entry, "thinking", "off");
+    let supports_images = entry
+        .get("supports_images")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let display_name = entry
         .get("display_name")
         .and_then(Value::as_str)
@@ -422,12 +427,34 @@ fn model_view(entry: &Table, alias: &str) -> JsonValue {
         } else {
             "off".to_owned()
         },
-        "supportsImages": entry
-            .get("supports_images")
-            .and_then(Value::as_bool)
-            .unwrap_or(false),
+        "supportsImages": supports_images,
         "displayName": display_name,
+        "maxContextLength": entry.get("max_context_length").and_then(Value::as_integer),
+        "thinkingLevels": thinking_levels(entry),
+        // Reference `_project_model_config`: a model reading images natively
+        // receives them so. A model that does not would receive a link to the
+        // file only from a runtime that advertises that fallback, which the
+        // legacy harness does not (`_runtime.py:1230`), so it states none.
+        "imageDelivery": supports_images.then_some("native"),
     })
+}
+
+/// The levels a model entry offers, as the load settled them, and all five for
+/// an entry the load never completed.
+fn thinking_levels(entry: &Table) -> Vec<String> {
+    entry
+        .get("thinking_levels")
+        .and_then(Value::as_array)
+        .map(|levels| {
+            levels
+                .iter()
+                .filter_map(Value::as_str)
+                .filter(|level| THINKING_LEVELS.contains(level))
+                .map(ToOwned::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .filter(|levels| !levels.is_empty())
+        .unwrap_or_else(|| THINKING_LEVELS.map(ToOwned::to_owned).to_vec())
 }
 
 /// The view a configuration with no resolvable active model publishes.
@@ -436,7 +463,16 @@ fn model_view(entry: &Table, alias: &str) -> JsonValue {
 /// response down; a client renders an empty model the same way it renders a
 /// missing one.
 fn empty_model_view() -> JsonValue {
-    json!({"name": "", "alias": "", "thinking": "off", "supportsImages": false, "displayName": ""})
+    json!({
+        "name": "",
+        "alias": "",
+        "thinking": "off",
+        "supportsImages": false,
+        "displayName": "",
+        "maxContextLength": null,
+        "thinkingLevels": THINKING_LEVELS,
+        "imageDelivery": null,
+    })
 }
 
 fn table_str(entry: &Table, key: &str, fallback: &str) -> String {

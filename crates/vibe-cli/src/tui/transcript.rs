@@ -1206,6 +1206,7 @@ mod tests {
 
     fn metadata(id: &str) -> PublicEntryMetadata {
         PublicEntryMetadata {
+            input_entry_id: None,
             id: id.to_owned(),
             session_id: "session".to_owned(),
             turn_id: None,

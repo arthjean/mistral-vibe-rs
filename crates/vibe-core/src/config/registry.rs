@@ -301,7 +301,9 @@ const MODEL_ITEMS: &str = r#"{
             "output_price": {"type": "number"},
             "cached_input_price": {"type": ["number", "null"]},
             "thinking": {"enum": ["off", "low", "medium", "high", "max"]},
+            "thinking_levels": {"type": "array", "items": {"enum": ["off", "low", "medium", "high", "max"]}},
             "supports_images": {"type": "boolean"},
+            "max_context_length": {"type": "integer", "minimum": 1},
             "auto_compact_threshold": {"type": "integer"}
         }
     },
@@ -320,7 +322,9 @@ const COMPACTION_MODEL: &str = r#"{
         "output_price": {"type": "number"},
         "cached_input_price": {"type": ["number", "null"]},
         "thinking": {"enum": ["off", "low", "medium", "high", "max"]},
+        "thinking_levels": {"type": "array", "items": {"enum": ["off", "low", "medium", "high", "max"]}},
         "supports_images": {"type": "boolean"},
+        "max_context_length": {"type": "integer", "minimum": 1},
         "auto_compact_threshold": {"type": "integer"}
     }
 }"#;
@@ -341,7 +345,9 @@ const ROUTED_MODEL_CONFIG: &str = r#"{
         "output_price": {"type": "number"},
         "cached_input_price": {"type": ["number", "null"]},
         "thinking": {"enum": ["off", "low", "medium", "high", "max"]},
+        "thinking_levels": {"type": "array", "items": {"enum": ["off", "low", "medium", "high", "max"]}},
         "supports_images": {"type": "boolean"},
+        "max_context_length": {"type": "integer", "minimum": 1},
         "auto_compact_threshold": {"type": "integer"}
     }
 }"#;
@@ -465,6 +471,29 @@ const EXPERIMENTS: &str = r#"{
     }
 }"#;
 
+/// The providers the reference ships, which a provider named by an onboarding
+/// client resolves against after the configured ones (reference
+/// `DEFAULT_PROVIDERS`).
+#[must_use]
+pub fn shipped_providers() -> Vec<toml::Table> {
+    serde_json::from_str::<JsonValue>(DEFAULT_PROVIDERS)
+        .ok()
+        .and_then(|value| toml::Value::try_from(value).ok())
+        .and_then(|value| match value {
+            toml::Value::Array(entries) => Some(
+                entries
+                    .into_iter()
+                    .filter_map(|entry| match entry {
+                        toml::Value::Table(table) => Some(table),
+                        _ => None,
+                    })
+                    .collect(),
+            ),
+            _ => None,
+        })
+        .unwrap_or_default()
+}
+
 /// The two providers the reference ships.
 const DEFAULT_PROVIDERS: &str = r#"[
     {
@@ -510,6 +539,7 @@ const DEFAULT_MODELS: &str = r#"[
         "output_price": 7.5,
         "cached_input_price": 0.15,
         "thinking": "high",
+        "thinking_levels": ["off", "low", "medium", "high", "max"],
         "supports_images": true,
         "auto_compact_threshold": 200000
     },
@@ -522,6 +552,7 @@ const DEFAULT_MODELS: &str = r#"[
         "input_price": 0.0,
         "output_price": 0.0,
         "thinking": "off",
+        "thinking_levels": ["off", "low", "medium", "high", "max"],
         "supports_images": false,
         "auto_compact_threshold": 200000
     }
@@ -593,9 +624,9 @@ pub const DEFAULT_AUTO_COMPACT_THRESHOLD: i64 = 200_000;
 /// model reaches validation. A merged entry only carries what its layers set,
 /// so the load completes it from here.
 ///
-/// `cached_input_price` is absent on purpose: it defaults to null upstream and
-/// TOML carries no null, so an entry that sets none stays without the key.
-/// `auto_compact_threshold` is absent too: an entry of `models` is filled from
+/// `cached_input_price` and `max_context_length` are absent on purpose: they
+/// default to null upstream and TOML carries no null, so an entry that sets
+/// none stays without the key. `auto_compact_threshold` is absent too: an entry of `models` is filled from
 /// the global value rather than from a per-model constant. The one definition
 /// that is not an entry of `models` falls back to
 /// [`DEFAULT_AUTO_COMPACT_THRESHOLD`] instead.
@@ -604,6 +635,7 @@ pub const MODEL_DEFAULTS: &str = r#"{
     "input_price": 0.0,
     "output_price": 0.0,
     "thinking": "off",
+    "thinking_levels": ["off", "low", "medium", "high", "max"],
     "supports_images": false
 }"#;
 

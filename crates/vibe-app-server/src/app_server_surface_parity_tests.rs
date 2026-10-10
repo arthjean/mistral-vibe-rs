@@ -69,47 +69,12 @@ const UNROUTED_METHODS: &[(&str, &str)] = &[];
 /// declaration and dispatcher it was measured from.
 ///
 /// The v2.26.0 re-pin grew the reference inventory from 136 to 146 names
-/// (`vibe/app_server/protocol.py:108-255` at 376f6a3). An undeclared method is
-/// unrouted too, so these entries also account for it in the unrouted backlog.
-/// A method declared while listed here fails the replay as a stale entry.
-const UNDECLARED_METHODS: &[(&str, &str)] = &[
-    (
-        "session/archive",
-        "v2.26.0 declares it at vibe/app_server/protocol.py:189 and routes it to the session backend host (vibe/app_server/server.py:922 and 973 at 376f6a3); SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
-        "session/backgroundProcess/output",
-        "v2.26.0 declares it at vibe/app_server/protocol.py:176 and serves it from the unified backend (vibe/app_server/_unified_harness_backend_adapter.py:4370 at 376f6a3); SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
-        "session/backgroundProcess/stop",
-        "v2.26.0 declares it at vibe/app_server/protocol.py:177 and serves it from the unified backend (vibe/app_server/_unified_harness_backend_adapter.py:4372 at 376f6a3); SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
-        "session/markAsSeen",
-        "v2.26.0 declares it at vibe/app_server/protocol.py:187 and routes it to the session backend host (vibe/app_server/server.py:922 and 978 at 376f6a3); SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
-        "setup/status",
-        "v2.26.0 declares it at vibe/app_server/protocol.py:204 and answers it without a session (vibe/app_server/server.py:753, vibe/app_server/_setup.py:63 at 376f6a3); SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
-        "setup/store-credential",
-        "v2.26.0 declares it at vibe/app_server/protocol.py:205 and answers it without a session (vibe/app_server/server.py:754, vibe/app_server/_setup.py:66 at 376f6a3); SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
-        "setup/submit-choices",
-        "v2.26.0 declares it at vibe/app_server/protocol.py:206 and answers it without a session (vibe/app_server/server.py:755, vibe/app_server/_setup.py:69 at 376f6a3); SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
-        "workspace/git/worktrees/reap",
-        "v2.26.0 declares it at vibe/app_server/protocol.py:248 and routes it to the host (vibe/app_server/server.py:760, vibe/app_server/_host.py:516 at 376f6a3); SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-    (
-        "workspace/git/worktrees/reap/cancel",
-        "v2.26.0 declares it at vibe/app_server/protocol.py:249 and routes it to the host (vibe/app_server/server.py:761, vibe/app_server/_host.py:524 at 376f6a3); SERVER_METHODS does not declare it and nothing here routes it",
-    ),
-];
+/// (`vibe/app_server/protocol.py:108-255` at 376f6a3); the slash command pass
+/// declared `providerAuth/read` and the protocol pass the other nine. An
+/// undeclared method is unrouted too, so an entry here also accounts for it in
+/// the unrouted backlog, and a method declared while listed fails the replay
+/// as a stale entry.
+const UNDECLARED_METHODS: &[(&str, &str)] = &[];
 
 /// Reference notifications this build does not emit yet.
 ///

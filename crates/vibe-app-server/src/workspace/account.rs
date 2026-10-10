@@ -292,7 +292,7 @@ impl WorkspaceService {
     }
 
     pub(crate) fn resolve_credential(&self, variable: &str) -> Option<String> {
-        let environ = DotenvValues::global(&self.paths.vibe_home).environment();
+        let environ = self.credential_environment();
         let store = vibe_core::auth::KeyringStore::native();
         vibe_core::auth::resolve_api_key(variable, &environ, &store).filter(|key| !key.is_empty())
     }

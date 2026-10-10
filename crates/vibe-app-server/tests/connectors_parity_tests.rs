@@ -67,19 +67,6 @@ struct Divergence {
 
 const GATEWAY_FAILURES: &[&str] = &["call/gateway-401", "call/gateway-404", "call/gateway-500"];
 
-/// The scenarios whose recorded turn streams an assistant entry.
-const ASSISTANT_TURNS: &[&str] = &[
-    "call/ask-approval",
-    "call/disabled-tool",
-    "call/gateway-401",
-    "call/gateway-404",
-    "call/gateway-500",
-    "call/not-ready",
-    "call/structured",
-    "call/success",
-    "call/tool-error",
-];
-
 const LEDGER: &[Divergence] = &[
     Divergence {
         scenarios: GATEWAY_FAILURES,
@@ -99,40 +86,6 @@ const LEDGER: &[Divergence] = &[
         pointer: "/steps/1/turn/3/patch/0/value/error/message",
         row: "21",
         reason: "the same sentence, as the failed effect's error",
-    },
-    Divergence {
-        scenarios: &["lifecycle/toggle-during-turn"],
-        pointer: "/steps/2/response/error/message",
-        row: "17",
-        reason: "the refusal names the running turn, which this port numbers `turn-N` where the \
-                 reference mints a UUID",
-    },
-    Divergence {
-        scenarios: &["lifecycle/toggle-during-turn"],
-        pointer: "/steps/3/response/error/message",
-        row: "17",
-        reason: "the same turn identifier, in the refused refresh",
-    },
-    Divergence {
-        scenarios: &["lifecycle/toggle-during-turn"],
-        pointer: "/steps/5/turn/0/entryId",
-        row: "17",
-        reason: "the normalizer numbers identifiers in order of appearance, and the reference's \
-                 turn identifier took a number this port's does not",
-    },
-    Divergence {
-        scenarios: &["lifecycle/toggle-during-turn"],
-        pointer: "/steps/7/turn/0/entryId",
-        row: "17",
-        reason: "the same renumbering, in the second turn",
-    },
-    Divergence {
-        scenarios: ASSISTANT_TURNS,
-        pointer: "/steps/1/turn/1/entry/inputEntryId",
-        row: "17",
-        reason: "since v2.26.0 every public history entry declares the user entry its turn \
-                 answers (`vibe/app_server/models.py:949` at `376f6a3`), null on these entries; \
-                 this port's entries do not carry the field",
     },
 ];
 

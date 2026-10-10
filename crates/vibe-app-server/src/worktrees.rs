@@ -17,7 +17,7 @@ use vibe_core::worktree::lifecycle::{
 };
 use vibe_core::worktree::{
     LinkedWorktree, ManagedRoot, ManagedWorktree, PendingSessionHold, PreparedWorktree,
-    WorktreeError, WorktreeRepository,
+    WorktreeError, WorktreeRelease, WorktreeRepository,
 };
 
 use crate::host::expand_home;
@@ -276,47 +276,126 @@ fn details(cwd: &Path, worktrees: &[LinkedWorktree], managed: &ManagedRoot) -> D
     }
 }
 
+/// How a client asked `workspace/git/worktrees/remove` to remove.
+pub(crate) struct RemoveRequest<'a> {
+    /// Discard the work without saving a snapshot.
+    pub(crate) force: bool,
+    /// Whether a forced removal deletes the branch, the record's own answer
+    /// when [`None`].
+    pub(crate) delete_branch: Option<bool>,
+    /// The session the asking connection is attached to.
+    pub(crate) session_id: Option<&'a str>,
+    /// Answer what a removal would do, without removing anything.
+    pub(crate) inspect: bool,
+}
+
 /// What `workspace/git/worktrees/remove` answers for `cwd`.
 ///
 /// A kept worktree is a normal outcome the client renders, never a fault, so a
-/// removal that failed answers `kept_error` with the reason
-/// (`vibe/app_server/_host.py:894-912`).
-pub(crate) fn remove_response(cwd: &Path, managed: &ManagedRoot) -> Value {
+/// removal that failed answers `kept_error` with the reason. Whether Vibe
+/// created the branch and how many other sessions hold the worktree are read
+/// before anything is released, so even a kept worktree reports them
+/// (`vibe/app_server/_host.py:961-1018`).
+pub(crate) fn remove_response(cwd: &Path, managed: &ManagedRoot, request: &RemoveRequest) -> Value {
     let cwd = resolve_request_path(cwd);
     let Some(held) = ManagedWorktree::at(managed, &cwd) else {
-        return removal("kept_unmanaged", None, None, false, Vec::new());
+        return removal(&WorktreeRelease::kept_unmanaged(), None, None);
     };
-    match held.release(None) {
-        Ok(release) => removal(
-            release.outcome.as_str(),
-            release.root.as_deref().map(path_string),
-            release.branch,
-            release.branch_deleted,
-            release.reasons,
-        ),
+    let branch_created = held.claim().read().map(|record| record.branch_created);
+    let holders = held.holders_excluding(request.session_id).len();
+    let released = if request.inspect {
+        held.probe_release(request.session_id)
+    } else if request.force {
+        held.force_release(request.session_id, request.delete_branch)
+    } else {
+        held.release(None)
+    };
+    match released {
+        Ok(release) => removal(&release, branch_created, Some(holders)),
         Err(error) => {
+            let doing = if request.inspect { "probe" } else { "remove" };
             vibe_core::observability::log(
                 vibe_core::observability::LogLevel::Warning,
-                &format!("Failed to remove worktree cwd={}: {error}", cwd.display()),
+                &format!("Failed to {doing} worktree cwd={}: {error}", cwd.display()),
             );
-            removal("kept_error", None, None, false, vec![error.to_string()])
+            let mut answer = kept_error(&error);
+            answer["branchCreated"] = json!(branch_created);
+            answer["holders"] = json!(holders);
+            answer
         }
     }
 }
 
-fn removal(
-    outcome: &str,
-    root: Option<String>,
-    branch: Option<String>,
-    branch_deleted: bool,
-    reasons: Vec<String>,
+/// What `workspace/git/worktrees/reap` answers for `cwd`: the removal's
+/// outcome, or `kept_cancelled` when the requester withdrew the request
+/// (`vibe/app_server/_host.py:1021-1043`).
+pub(crate) fn reap_response(
+    cwd: &Path,
+    managed: &ManagedRoot,
+    request: Option<(&str, &str)>,
 ) -> Value {
+    let cwd = resolve_request_path(cwd);
+    let Some(held) = ManagedWorktree::at(managed, &cwd) else {
+        return reaped(&WorktreeRelease::kept_unmanaged());
+    };
+    match held.reap(request) {
+        Ok(release) => reaped(&release),
+        Err(error) => {
+            vibe_core::observability::log(
+                vibe_core::observability::LogLevel::Warning,
+                &format!("Failed to reap worktree cwd={}: {error}", cwd.display()),
+            );
+            kept_error(&error)
+        }
+    }
+}
+
+/// Withdraws the pending reap of the worktree `cwd` sits in, which a
+/// directory outside every managed worktree has none of.
+pub(crate) fn cancel_reap(
+    cwd: &Path,
+    managed: &ManagedRoot,
+    requester_id: Option<&str>,
+    request_id: Option<&str>,
+) -> Result<(), WorktreeError> {
+    match ManagedWorktree::at(managed, &resolve_request_path(cwd)) {
+        Some(held) => held.cancel_reap(requester_id, request_id),
+        None => Ok(()),
+    }
+}
+
+/// Reference `WorkspaceWorktreeReapResponse`.
+fn reaped(release: &WorktreeRelease) -> Value {
     json!({
-        "outcome": outcome,
-        "root": root,
-        "branch": branch,
-        "branchDeleted": branch_deleted,
-        "reasons": reasons,
+        "outcome": release.outcome.as_str(),
+        "root": release.root.as_deref().map(path_string),
+        "branch": release.branch,
+        "branchDeleted": release.branch_deleted,
+        "reasons": release.reasons,
+    })
+}
+
+/// Reference `WorkspaceWorktreeRemoveResponse`.
+fn removal(
+    release: &WorktreeRelease,
+    branch_created: Option<bool>,
+    holders: Option<usize>,
+) -> Value {
+    let mut answer = reaped(release);
+    answer["branchCreated"] = json!(branch_created);
+    answer["holders"] = json!(holders);
+    answer
+}
+
+/// A worktree kept because the operation on it failed, which is reported as
+/// kept rather than as a fault: the work is still there.
+fn kept_error(error: &WorktreeError) -> Value {
+    json!({
+        "outcome": "kept_error",
+        "root": null,
+        "branch": null,
+        "branchDeleted": false,
+        "reasons": [error.to_string()],
     })
 }
 

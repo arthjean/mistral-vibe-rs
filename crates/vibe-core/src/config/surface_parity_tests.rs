@@ -91,11 +91,6 @@ const STRATEGY_DIVERGENCES: &[(&str, &str, &str, &str)] = &[];
 /// strategy any more or the port implements it.
 const UNIMPLEMENTED_STRATEGIES: &[(&str, &str)] = &[];
 
-/// v2.26.0 gave `ModelConfig` a per-model thinking level set, which this
-/// port's model entries do not carry.
-const THINKING_LEVELS: &str = "v2.26.0 adds `thinking_levels` to ModelConfig, defaulting to all five levels \
-     (models.py:485); the port's model entries carry no such key";
-
 /// v2.26.0 made "no threshold set" a value a model entry carries.
 const UNSET_THRESHOLD_DROPPED: &str = "v2.26.0 defaults a model's `auto_compact_threshold` to the unset sentinel -1 \
      (models.py:492; _defaults.py:30) and drops the sentinel when it writes a model entry out \
@@ -132,14 +127,9 @@ const DEFAULT_DIVERGENCES: &[(&str, &str)] = &[
          and drops it from the document `create_default_config` ships (vibe_schema.py:1119); \
          registry.rs ships 200000",
     ),
-    ("/models/local/thinking_levels", THINKING_LEVELS),
     (
         "/models/local/auto_compact_threshold",
         UNSET_THRESHOLD_DROPPED,
-    ),
-    (
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
     ),
     (
         "/models/mistral-medium-3.5/auto_compact_threshold",
@@ -156,59 +146,14 @@ const SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[];
 /// `/compaction_model`. Every entry dates from the v2.26.0 re-pin (`376f6a3`).
 const MODEL_SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[
     (
-        "models-defaults-only",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-defaults-only",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-sparse-override-of-a-default-model",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-sparse-override-of-a-default-model",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-alias-map-form",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-alias-map-form",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
         "models-added-entry-inherits-the-global-threshold",
         "/models/local/auto_compact_threshold",
         GLOBAL_THRESHOLD,
     ),
     (
         "models-added-entry-inherits-the-global-threshold",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-added-entry-inherits-the-global-threshold",
         "/models/mistral-medium-3.5/auto_compact_threshold",
         GLOBAL_THRESHOLD,
-    ),
-    (
-        "models-added-entry-inherits-the-global-threshold",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-added-entry-inherits-the-global-threshold",
-        "/models/scratch/thinking_levels",
-        THINKING_LEVELS,
     ),
     (
         "models-entry-keeps-its-own-threshold",
@@ -217,83 +162,8 @@ const MODEL_SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[
     ),
     (
         "models-entry-keeps-its-own-threshold",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-entry-keeps-its-own-threshold",
         "/models/mistral-medium-3.5/auto_compact_threshold",
         GLOBAL_THRESHOLD,
-    ),
-    (
-        "models-entry-keeps-its-own-threshold",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-entry-keeps-its-own-threshold",
-        "/models/scratch/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-unknown-active-model-falls-back",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-unknown-active-model-falls-back",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-active-model-selects-an-added-entry",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-active-model-selects-an-added-entry",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-active-model-selects-an-added-entry",
-        "/models/scratch/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-two-layers-deep-merge-one-entry",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-two-layers-deep-merge-one-entry",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-entry-without-an-alias-borrows-its-name",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-entry-without-an-alias-borrows-its-name",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-entry-without-an-alias-borrows-its-name",
-        "/models/scratch/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-compaction-model-without-an-alias-borrows-its-name",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-compaction-model-without-an-alias-borrows-its-name",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
     ),
     (
         "models-compaction-model-without-an-alias-borrows-its-name",
@@ -301,34 +171,9 @@ const MODEL_SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[
         UNSET_THRESHOLD,
     ),
     (
-        "models-compaction-model-without-an-alias-borrows-its-name",
-        "/compaction_model/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-allowed-models-glob-narrows-the-available-set",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-allowed-models-glob-narrows-the-available-set",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
         "models-allowed-models-regex-is-case-insensitive",
         "/validation_warnings",
         ALLOWLIST_BY_NAME,
-    ),
-    (
-        "models-allowed-models-regex-is-case-insensitive",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-allowed-models-regex-is-case-insensitive",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
     ),
     (
         "models-allowed-models-regex-is-case-insensitive",
@@ -349,16 +194,6 @@ const MODEL_SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[
         "models-allowed-models-matching-nothing-warns-and-admits-all",
         "/validation_warnings",
         ALLOWLIST_BY_NAME,
-    ),
-    (
-        "models-allowed-models-matching-nothing-warns-and-admits-all",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-allowed-models-matching-nothing-warns-and-admits-all",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
     ),
     (
         "models-allowed-models-matching-nothing-warns-and-admits-all",
@@ -381,29 +216,9 @@ const MODEL_SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[
         DISALLOWED_ACTIVE_MODEL,
     ),
     (
-        "models-allowed-models-excluding-the-pin-falls-back",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-allowed-models-excluding-the-pin-falls-back",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
         "models-allowed-models-excluding-the-default",
         "/validation_warnings",
         ALLOWLIST_BY_NAME,
-    ),
-    (
-        "models-allowed-models-excluding-the-default",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-allowed-models-excluding-the-default",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
     ),
     (
         "models-allowed-models-excluding-the-default",
@@ -422,43 +237,13 @@ const MODEL_SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[
     ),
     (
         "models-routed-extra-models-from-json-text",
-        "/models/extra/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-routed-extra-models-from-json-text",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-routed-extra-models-from-json-text",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-routed-extra-models-from-json-text",
         "/routed_extra_models/0/auto_compact_threshold",
         UNSET_THRESHOLD,
     ),
     (
         "models-routed-extra-models-from-json-text",
-        "/routed_extra_models/0/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-routed-extra-models-from-json-text",
         "/routed_extra_models/1/auto_compact_threshold",
         UNSET_THRESHOLD,
-    ),
-    (
-        "models-routed-extra-models-from-json-text",
-        "/routed_extra_models/1/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-routed-extra-models-keep-what-the-operator-wrote",
-        "/models/fresh/thinking_levels",
-        THINKING_LEVELS,
     ),
     (
         "models-routed-extra-models-keep-what-the-operator-wrote",
@@ -467,18 +252,8 @@ const MODEL_SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[
     ),
     (
         "models-routed-extra-models-keep-what-the-operator-wrote",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-routed-extra-models-keep-what-the-operator-wrote",
         "/models/mistral-medium-3.5/auto_compact_threshold",
         GLOBAL_THRESHOLD,
-    ),
-    (
-        "models-routed-extra-models-keep-what-the-operator-wrote",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
     ),
     (
         "models-routed-extra-models-keep-what-the-operator-wrote",
@@ -487,68 +262,8 @@ const MODEL_SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[
     ),
     (
         "models-routed-extra-models-keep-what-the-operator-wrote",
-        "/routed_extra_models/0/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-routed-extra-models-keep-what-the-operator-wrote",
         "/routed_extra_models/1/auto_compact_threshold",
         UNSET_THRESHOLD,
-    ),
-    (
-        "models-routed-extra-models-keep-what-the-operator-wrote",
-        "/routed_extra_models/1/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-routed-extra-models-not-a-list",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-routed-extra-models-not-a-list",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-routed-default-reaches-a-pinned-installation",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-routed-default-reaches-a-pinned-installation",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-routed-default-reaches-a-pinned-installation",
-        "/models/routed/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-routed-definition-keeps-the-operator-overrides",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-routed-definition-keeps-the-operator-overrides",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-unknown-active-model-resolves-to-the-routed-default",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-unknown-active-model-resolves-to-the-routed-default",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-unknown-active-model-resolves-to-the-routed-default",
-        "/models/routed/thinking_levels",
-        THINKING_LEVELS,
     ),
     (
         "models-vision-model-is-completed-like-a-model",
@@ -557,18 +272,8 @@ const MODEL_SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[
     ),
     (
         "models-vision-model-is-completed-like-a-model",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-vision-model-is-completed-like-a-model",
         "/models/mistral-medium-3.5/auto_compact_threshold",
         GLOBAL_THRESHOLD,
-    ),
-    (
-        "models-vision-model-is-completed-like-a-model",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
     ),
     (
         "models-vision-model-is-completed-like-a-model",
@@ -576,19 +281,9 @@ const MODEL_SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[
         UNSET_THRESHOLD,
     ),
     (
-        "models-vision-model-is-completed-like-a-model",
-        "/vision_model/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
         "models-compaction-model-ignores-the-global-threshold",
         "/models/local/auto_compact_threshold",
         GLOBAL_THRESHOLD,
-    ),
-    (
-        "models-compaction-model-ignores-the-global-threshold",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
     ),
     (
         "models-compaction-model-ignores-the-global-threshold",
@@ -597,33 +292,8 @@ const MODEL_SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[
     ),
     (
         "models-compaction-model-ignores-the-global-threshold",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-compaction-model-ignores-the-global-threshold",
         "/compaction_model/auto_compact_threshold",
         UNSET_THRESHOLD,
-    ),
-    (
-        "models-compaction-model-ignores-the-global-threshold",
-        "/compaction_model/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-admin-threshold-overrides-every-model",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-admin-threshold-overrides-every-model",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-admin-threshold-overrides-every-model",
-        "/models/scratch/thinking_levels",
-        THINKING_LEVELS,
     ),
     (
         "models-user-threshold-keeps-a-model-threshold",
@@ -632,43 +302,13 @@ const MODEL_SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[
     ),
     (
         "models-user-threshold-keeps-a-model-threshold",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-user-threshold-keeps-a-model-threshold",
         "/models/mistral-medium-3.5/auto_compact_threshold",
         GLOBAL_THRESHOLD,
-    ),
-    (
-        "models-user-threshold-keeps-a-model-threshold",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-user-threshold-keeps-a-model-threshold",
-        "/models/scratch/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-compaction-model-keeps-the-alias-it-declares",
-        "/models/local/thinking_levels",
-        THINKING_LEVELS,
-    ),
-    (
-        "models-compaction-model-keeps-the-alias-it-declares",
-        "/models/mistral-medium-3.5/thinking_levels",
-        THINKING_LEVELS,
     ),
     (
         "models-compaction-model-keeps-the-alias-it-declares",
         "/compaction_model/auto_compact_threshold",
         UNSET_THRESHOLD,
-    ),
-    (
-        "models-compaction-model-keeps-the-alias-it-declares",
-        "/compaction_model/thinking_levels",
-        THINKING_LEVELS,
     ),
 ];
 

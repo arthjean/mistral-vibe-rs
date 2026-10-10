@@ -78,12 +78,19 @@ pub(crate) fn route(method: &str) -> Route {
     match method {
         "events/read" => Route::Events,
         "plugin_catalog/read" | "plugins/read" => Route::DeclinedCatalog,
+        // The onboarding wizard runs before any session, so the setup methods
+        // never build or read one (`vibe/app_server/server.py:765-775`).
         "config/schema"
         | "session/history/get"
+        | "setup/status"
+        | "setup/store-credential"
+        | "setup/submit-choices"
         | "workspace/git/checkouts"
         | "workspace/git/worktrees/limit/update"
         | "workspace/git/worktrees/list"
         | "workspace/git/worktrees/prune"
+        | "workspace/git/worktrees/reap"
+        | "workspace/git/worktrees/reap/cancel"
         | "workspace/git/worktrees/remove"
         | "workspace/trust/status"
         | "workspace/trust/untrustedConfig"
@@ -98,11 +105,20 @@ pub(crate) fn route(method: &str) -> Route {
         | "session/resume"
         | "session/continue" => Route::Host,
         "agents/list" | "config/read" | "workspace/trust/decision" => Route::SessionOptional,
-        "shell/run" | "shell/interrupt" | "session/title/update" => Route::RootUnserved,
+        // Only a Unified Harness session runs background processes; the legacy
+        // one asks for a session first and then knows no such method.
+        "shell/run"
+        | "shell/interrupt"
+        | "session/title/update"
+        | "session/backgroundProcess/output"
+        | "session/backgroundProcess/stop" => Route::RootUnserved,
         "plugin/info" | "plugin/reload" | "providerAuth/read" | "session/turn/queue/steer" => {
             Route::RootDeclined
         }
-        "session/pin" => Route::Unserved,
+        // The legacy session host implements neither the pin, the archive nor
+        // the seen marks, and says so before reading the request
+        // (`vibe/app_server/server.py:922` and `973-982`).
+        "session/pin" | "session/archive" | "session/markAsSeen" => Route::Unserved,
         method if method.starts_with("projectLinks/") => Route::Host,
         method
             if method.starts_with("mcp/")
@@ -245,7 +261,7 @@ impl ServerConnection {
             }
             _ => {}
         }
-        let request = ServerRequest {
+        let mut request = ServerRequest {
             params: validated
                 .as_object()
                 .map(|object| {
@@ -257,6 +273,15 @@ impl ServerConnection {
                 .unwrap_or_default(),
             ..request
         };
+        // The attached session asks the worktree removal questions, and its own
+        // holder is never in the way of them (`vibe/app_server/server.py:765-775`).
+        if method == "workspace/git/worktrees/remove"
+            && let Some(root) = self.root_id()
+        {
+            request
+                .params
+                .insert(crate::server::CONNECTION_ROOT_PARAM.to_owned(), json!(root));
+        }
         if method == "session/start" {
             return self.reference_session_start(request);
         }

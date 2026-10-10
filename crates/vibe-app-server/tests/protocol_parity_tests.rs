@@ -38,7 +38,7 @@ const CAPTURE_SCRIPT: &str = "scripts/parity/app_server_protocol.py";
 
 /// The scenarios the corpus may not fall below, so a recapture that lost
 /// coverage fails here and not only on the machine that made it.
-const SCENARIO_FLOOR: usize = 300;
+const SCENARIO_FLOOR: usize = 344;
 
 /// How many scenarios the capture script runs side by side. Each owns its
 /// directories, backend and server processes.
@@ -69,148 +69,11 @@ impl Divergence {
     }
 }
 
-/// What the v2.26.0 re-pin opened (`376f6a3`): fields the reference's public
-/// models gained, and the methods this port neither declares nor routes, which
-/// the per-method probes reach.
-const LEDGER: &[Divergence] = &[
-    Divergence {
-        scenario: "*",
-        suffix: "/maxContextLength",
-        reason: "since v2.26.0 every model a configuration view lists states its context window \
-                 (`vibe/app_server/config.py:25`, projected by `vibe/app_server/_projection.py:162` \
-                 at `376f6a3`); this port's model view does not carry the field",
-    },
-    Divergence {
-        scenario: "*",
-        suffix: "/thinkingLevels",
-        reason: "since v2.26.0 every model a configuration view lists names the thinking levels \
-                 it offers (`vibe/app_server/config.py:28`, projected by \
-                 `vibe/app_server/_projection.py:164` at `376f6a3`); this port's model view does \
-                 not carry the field",
-    },
-    Divergence {
-        scenario: "*",
-        suffix: "/imageDelivery",
-        reason: "since v2.26.0 every model a configuration view lists states how file-backed \
-                 images reach it (`vibe/app_server/config.py:33`, projected by \
-                 `vibe/app_server/_projection.py:151-163` at `376f6a3`); this port's model view \
-                 does not carry the field",
-    },
-    Divergence {
-        scenario: "*",
-        suffix: "/config/enableSystemTrustStore",
-        reason: "since v2.26.0 the configuration view publishes the outbound TLS trust setting \
-                 (`vibe/app_server/config.py:99`, projected by \
-                 `vibe/app_server/_projection.py:111` at `376f6a3`); this port's view does not \
-                 carry the field",
-    },
-    Divergence {
-        scenario: "*",
-        suffix: "/inputEntryId",
-        reason: "since v2.26.0 a public turn and every public history entry name the user entry \
-                 the turn answers (`vibe/app_server/models.py:1236` and `949` at `376f6a3`); this \
-                 port's turns and entries do not carry the field",
-    },
-    Divergence {
-        scenario: "*",
-        suffix: "/session/archivedAt",
-        reason: "since v2.26.0 a public session records when it was archived \
-                 (`vibe/app_server/models.py:1185` at `376f6a3`); this port's session does not \
-                 carry the field",
-    },
-    Divergence {
-        scenario: "*",
-        suffix: "/session/isUnseen",
-        reason: "since v2.26.0 a public session says whether it holds activity its user has not \
-                 seen (`vibe/app_server/models.py:1186` at `376f6a3`); this port's session does \
-                 not carry the field",
-    },
-    Divergence {
-        scenario: "*",
-        suffix: "/session/worktree",
-        reason: "since v2.26.0 a public session names the managed worktree it runs in \
-                 (`vibe/app_server/models.py:1191`, shaped by `PublicSessionWorktree` at \
-                 `vibe/app_server/models.py:1157` at `376f6a3`); this port's session does not \
-                 carry the field",
-    },
-    Divergence {
-        scenario: "*",
-        suffix: "/state/backgroundProcesses",
-        reason: "since v2.26.0 the public session state lists the session's background processes \
-                 (`vibe/app_server/models.py:1263` at `376f6a3`); this port's state does not carry \
-                 the list",
-    },
-    Divergence {
-        scenario: "*",
-        suffix: "/output/fileExisted",
-        reason: "since v2.26.0 a file write's output says whether it replaced an existing file \
-                 (`vibe/app_server/_effect_models.py:158` at `376f6a3`); this port's output does \
-                 not carry the field",
-    },
-    Divergence {
-        scenario: "*",
-        suffix: "/output/previousContent",
-        reason: "since v2.26.0 a file write's output carries the text it replaced \
-                 (`vibe/app_server/_effect_models.py:159` at `376f6a3`); this port's output does \
-                 not carry the field",
-    },
-    Divergence {
-        scenario: "probe/session/backgroundProcess/output/bare",
-        suffix: "/error/code",
-        reason: "v2.26.0 declares `session/backgroundProcess/output` \
-                 (`vibe/app_server/protocol.py:176` at `376f6a3`), so with no session the \
-                 reference asks for one first (`vibe/app_server/server.py:1333`); this port does \
-                 not declare it and answers that the method is unknown",
-    },
-    Divergence {
-        scenario: "probe/session/backgroundProcess/stop/bare",
-        suffix: "/error/code",
-        reason: "v2.26.0 declares `session/backgroundProcess/stop` \
-                 (`vibe/app_server/protocol.py:177` at `376f6a3`), so with no session the \
-                 reference asks for one first (`vibe/app_server/server.py:1333`); this port does \
-                 not declare it and answers that the method is unknown",
-    },
-    Divergence {
-        scenario: "probe/setup/status/*",
-        suffix: "",
-        reason: "v2.26.0 answers `setup/status` without a session, with the onboarding seed, \
-                 and refuses a `sessionId` (`vibe/app_server/protocol.py:1807`, \
-                 `vibe/app_server/_setup.py:63` at `376f6a3`); this port does not declare it and \
-                 answers that the method is unknown",
-    },
-    Divergence {
-        scenario: "probe/setup/store-credential/*",
-        suffix: "",
-        reason: "v2.26.0 validates `setup/store-credential` against its parameters \
-                 (`vibe/app_server/protocol.py:1831`, `vibe/app_server/_setup.py:66` at \
-                 `376f6a3`); this port does not declare it and answers that the method is \
-                 unknown",
-    },
-    Divergence {
-        scenario: "probe/setup/submit-choices/*",
-        suffix: "",
-        reason: "v2.26.0 answers `setup/submit-choices` without a session and refuses a \
-                 `sessionId` (`vibe/app_server/protocol.py:1853`, \
-                 `vibe/app_server/_setup.py:69` at `376f6a3`); this port does not declare it and \
-                 answers that the method is unknown",
-    },
-    Divergence {
-        scenario: "probe/workspace/git/worktrees/reap/*",
-        suffix: "",
-        reason: "v2.26.0 validates `workspace/git/worktrees/reap` against its parameters \
-                 (`vibe/app_server/protocol.py:1712`, `vibe/app_server/_host.py:516` at \
-                 `376f6a3`); this port does not declare it and answers that the method is \
-                 unknown",
-    },
-    Divergence {
-        scenario: "probe/workspace/git/worktrees/reap/cancel/*",
-        suffix: "",
-        reason: "v2.26.0 validates `workspace/git/worktrees/reap/cancel` against its parameters \
-                 (`vibe/app_server/protocol.py:1731`, `vibe/app_server/_host.py:524` at \
-                 `376f6a3`); this port does not declare it and answers that the method is \
-                 unknown",
-    },
-];
+/// What the port still answers differently. The v2.26.0 re-pin (`376f6a3`)
+/// opened eleven fields the reference's public models gained and seven
+/// methods this port neither declared nor routed, and the protocol pass closed
+/// all of them.
+const LEDGER: &[Divergence] = &[];
 
 fn repository() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

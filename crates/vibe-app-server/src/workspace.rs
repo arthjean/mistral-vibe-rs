@@ -22,6 +22,7 @@ mod config;
 mod internal;
 mod provider_auth;
 mod sessions;
+mod setup;
 mod skills;
 mod system_prompt;
 pub(crate) use sessions::{
@@ -87,10 +88,15 @@ pub const WORKSPACE_METHODS: &[&str] = &[
     "config/write",
     "session/agent/update",
     "skills/list",
+    "setup/status",
+    "setup/store-credential",
+    "setup/submit-choices",
     "workspace/git/checkouts",
     "workspace/git/worktrees/limit/update",
     "workspace/git/worktrees/list",
     "workspace/git/worktrees/prune",
+    "workspace/git/worktrees/reap",
+    "workspace/git/worktrees/reap/cancel",
     "workspace/git/worktrees/remove",
     "workspace/prompt/prepare",
 ];
@@ -188,6 +194,10 @@ pub struct WorkspaceService {
     /// The identities `identity/read` already resolved (reference
     /// `AgentLoop.identity_cache`).
     identity_cache: Arc<vibe_core::identity::IdentityCache>,
+    /// The keys `setup/store-credential` stored this run, which the reference
+    /// also exports into its own environment: they resolve first, whichever
+    /// store accepted them.
+    stored_keys: Arc<Mutex<BTreeMap<String, String>>>,
     /// The skills that seed discovery in place of the legacy builtins: a
     /// unified session's plugin skills. `None` seeds the builtins.
     seeded_skills: Option<Arc<BTreeMap<String, vibe_core::extensions::SkillDefinition>>>,
@@ -381,6 +391,7 @@ impl WorkspaceService {
             drafts: Arc::new(Mutex::new(BTreeMap::new())),
             session_logging,
             identity_cache: Arc::default(),
+            stored_keys: Arc::default(),
             seeded_skills: None,
         }
     }
@@ -839,6 +850,11 @@ impl WorkspaceService {
             "workspace/git/worktrees/limit/update" => self.worktrees_limit_update(params),
             "workspace/git/worktrees/prune" => self.worktrees_prune(params),
             "workspace/git/worktrees/remove" => self.worktrees_remove(params),
+            "workspace/git/worktrees/reap" => self.worktrees_reap(params),
+            "setup/status" => self.setup_status(params),
+            "setup/store-credential" => self.setup_store_credential(params),
+            "setup/submit-choices" => self.setup_submit_choices(params),
+            "workspace/git/worktrees/reap/cancel" => self.worktrees_reap_cancel(params),
             _ => Err(WorkspaceServiceError::MethodNotFound(method.to_owned())),
         }
     }

@@ -256,6 +256,7 @@ fn message_entry(
 ) -> PublicHistoryEntry {
     PublicHistoryEntry::Message {
         metadata: PublicEntryMetadata {
+            input_entry_id: None,
             id: id.to_owned(),
             session_id: session_id.to_owned(),
             turn_id: Some(turn_id.to_owned()),

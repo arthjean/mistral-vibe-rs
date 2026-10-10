@@ -641,7 +641,7 @@ fn the_configuration_envelopes_are_the_reference_shapes() {
             .as_object()
             .expect("the view is an object")
             .len(),
-        29,
+        30,
         "the view is the whole `ConfigView`"
     );
     assert!(read["strippedHistoryImages"].is_u64());

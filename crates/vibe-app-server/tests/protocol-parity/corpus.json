@@ -19780,6 +19780,1188 @@
       }
     },
     {
+      "name": "flows/setup",
+      "observed": [
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "activeModel": "mistral-medium-3.5",
+              "consoleBaseUrl": "<backend>",
+              "enableSystemTrustStore": false,
+              "hasApiKey": true,
+              "provider": {
+                "apiBase": "<backend>/v1",
+                "apiKeyEnvVar": "MISTRAL_API_KEY",
+                "browserAuthAllowOriginRewrite": false,
+                "browserAuthApiBaseUrl": "https://console.mistral.ai/api",
+                "browserAuthBaseUrl": "https://console.mistral.ai",
+                "name": "mistral"
+              },
+              "supportsBrowserSignIn": true,
+              "theme": "auto",
+              "vibeBaseUrl": "<backend>"
+            }
+          },
+          "step": "setup/status"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "activeModel": "mistral-medium-3.5",
+              "consoleBaseUrl": "<backend>",
+              "enableSystemTrustStore": false,
+              "hasApiKey": false,
+              "provider": {
+                "apiBase": "https://other.example.invalid/v1",
+                "apiKeyEnvVar": "OTHER_ORACLE_KEY",
+                "browserAuthAllowOriginRewrite": false,
+                "browserAuthApiBaseUrl": null,
+                "browserAuthBaseUrl": null,
+                "name": "other"
+              },
+              "supportsBrowserSignIn": false,
+              "theme": "auto",
+              "vibeBaseUrl": "<backend>"
+            }
+          },
+          "step": "setup/status"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": null,
+              "message": {
+                "prose": 28,
+                "sha256": "a1d432228df12a88aa8002827eb0a1cda36c8c9941dc1901097fccda3ebdd7ab"
+              }
+            }
+          },
+          "step": "setup/status"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 30,
+                      "sha256": "43386f74323f11d019208f474707b65e66ce1f7e1ad6741104a25ebcb263aac7"
+                    },
+                    "path": [
+                      "bogus"
+                    ]
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            }
+          },
+          "step": "setup/status"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "detail": null,
+              "outcome": "completed"
+            }
+          },
+          "step": "setup/store-credential"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "activeModel": "mistral-medium-3.5",
+              "consoleBaseUrl": "<backend>",
+              "enableSystemTrustStore": false,
+              "hasApiKey": true,
+              "provider": {
+                "apiBase": "https://other.example.invalid/v1",
+                "apiKeyEnvVar": "OTHER_ORACLE_KEY",
+                "browserAuthAllowOriginRewrite": false,
+                "browserAuthApiBaseUrl": null,
+                "browserAuthBaseUrl": null,
+                "name": "other"
+              },
+              "supportsBrowserSignIn": false,
+              "theme": "auto",
+              "vibeBaseUrl": "<backend>"
+            }
+          },
+          "step": "setup/status"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": null,
+              "message": {
+                "prose": 28,
+                "sha256": "a1d432228df12a88aa8002827eb0a1cda36c8c9941dc1901097fccda3ebdd7ab"
+              }
+            }
+          },
+          "step": "setup/store-credential"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 14,
+                      "sha256": "71a96be9e2ce034f704c0b2a745894820fe1a61e86957cf734f99e08e0a2e338"
+                    },
+                    "path": [
+                      "apiKey"
+                    ]
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            }
+          },
+          "step": "setup/store-credential"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "failures": [],
+              "outcome": "completed"
+            }
+          },
+          "step": "setup/submit-choices"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "failures": [],
+              "outcome": "completed"
+            }
+          },
+          "step": "setup/submit-choices"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "activeModel": "mistral-medium-3.5",
+              "consoleBaseUrl": "<backend>",
+              "enableSystemTrustStore": false,
+              "hasApiKey": true,
+              "provider": {
+                "apiBase": "<backend>/v1",
+                "apiKeyEnvVar": "MISTRAL_API_KEY",
+                "browserAuthAllowOriginRewrite": false,
+                "browserAuthApiBaseUrl": "https://console.mistral.ai/api",
+                "browserAuthBaseUrl": "https://console.mistral.ai",
+                "name": "mistral"
+              },
+              "supportsBrowserSignIn": true,
+              "theme": "dracula",
+              "vibeBaseUrl": "<backend>"
+            }
+          },
+          "step": "setup/status"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "failures": [],
+              "outcome": "completed"
+            }
+          },
+          "step": "setup/submit-choices"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "activeModel": "mistral-medium-3.5",
+              "consoleBaseUrl": "https://console.example.invalid",
+              "enableSystemTrustStore": false,
+              "hasApiKey": true,
+              "provider": {
+                "apiBase": "https://moved.example.invalid/v1",
+                "apiKeyEnvVar": "OTHER_ORACLE_KEY",
+                "browserAuthAllowOriginRewrite": false,
+                "browserAuthApiBaseUrl": null,
+                "browserAuthBaseUrl": null,
+                "name": "other"
+              },
+              "supportsBrowserSignIn": false,
+              "theme": "dracula",
+              "vibeBaseUrl": "<backend>"
+            }
+          },
+          "step": "setup/status"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "failures": [],
+              "outcome": "completed"
+            }
+          },
+          "step": "setup/submit-choices"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 14,
+                      "sha256": "71a96be9e2ce034f704c0b2a745894820fe1a61e86957cf734f99e08e0a2e338"
+                    },
+                    "path": [
+                      "provider",
+                      "apiBase"
+                    ]
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            }
+          },
+          "step": "setup/submit-choices"
+        }
+      ],
+      "scenario": {
+        "config": "\n[[providers]]\nname = \"other\"\napi_base = \"https://other.example.invalid/v1\"\napi_key_env_var = \"OTHER_ORACLE_KEY\"\n",
+        "name": "flows/setup",
+        "steps": [
+          {
+            "init": true
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "setup/status",
+              "params": {}
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "setup/status",
+              "params": {
+                "provider": "other"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "setup/status",
+              "params": {
+                "provider": "nope"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "setup/status",
+              "params": {
+                "bogus": 1,
+                "provider": "other"
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "setup/store-credential",
+              "params": {
+                "apiKey": "oracle-stored",
+                "provider": "other"
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "setup/status",
+              "params": {
+                "provider": "other"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "setup/store-credential",
+              "params": {
+                "apiKey": "x",
+                "provider": "nope"
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "setup/store-credential",
+              "params": {
+                "provider": "other"
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "setup/submit-choices",
+              "params": {}
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "setup/submit-choices",
+              "params": {
+                "theme": "dracula"
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "setup/status",
+              "params": {}
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "setup/submit-choices",
+              "params": {
+                "consoleBaseUrl": "https://console.example.invalid",
+                "provider": {
+                  "apiBase": "https://moved.example.invalid/v1",
+                  "apiKeyEnvVar": "OTHER_ORACLE_KEY",
+                  "name": "other"
+                }
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "setup/status",
+              "params": {
+                "provider": "other"
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "setup/submit-choices",
+              "params": {
+                "provider": {
+                  "apiBase": "https://g.invalid",
+                  "name": "ghost"
+                }
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "setup/submit-choices",
+              "params": {
+                "provider": {
+                  "name": "other"
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "flows/worktree-reap",
+      "observed": [
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "repositoryBranch": null,
+              "repositoryCwd": "<ws>",
+              "repositoryMappedCwd": "<ws>",
+              "repositoryRoot": "<ws>",
+              "worktrees": [
+                {
+                  "branch": "oracle-reap",
+                  "branchChanges": null,
+                  "cwd": "<vibe-home>/worktrees/<repository>/oracle-reap",
+                  "name": "oracle-reap",
+                  "repoRoot": "<ws>",
+                  "root": "<vibe-home>/worktrees/<repository>/oracle-reap"
+                }
+              ]
+            }
+          },
+          "step": "workspace/git/worktrees/list"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "branch": "oracle-reap",
+              "branchCreated": true,
+              "branchDeleted": false,
+              "holders": 0,
+              "outcome": "removed",
+              "reasons": [],
+              "root": "<vibe-home>/worktrees/<repository>/oracle-reap"
+            }
+          },
+          "step": "workspace/git/worktrees/remove"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 64,
+                      "sha256": "280ef4646bbab61ac0c2af3b66cb0229d6cf470ba8633f41ef2b74a9b1cee926"
+                    },
+                    "path": []
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            }
+          },
+          "step": "workspace/git/worktrees/reap"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "error": {
+              "code": "invalid_params",
+              "data": {
+                "errorCount": 1,
+                "issues": [
+                  {
+                    "message": {
+                      "prose": 43,
+                      "sha256": "d1a534a4d3088ae459d0dba78f17d70544da803c36667c43e2cc9de5038e5d13"
+                    },
+                    "path": []
+                  }
+                ]
+              },
+              "message": {
+                "prose": 26,
+                "sha256": "51443a02e25f076479ac1054f804b03b0bbc9cdbf4ce7a25edb3fabd5e2c5551"
+              }
+            }
+          },
+          "step": "workspace/git/worktrees/reap/cancel"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "branch": "oracle-reap",
+              "branchDeleted": false,
+              "outcome": "kept_in_use",
+              "reasons": [],
+              "root": null
+            }
+          },
+          "step": "workspace/git/worktrees/reap"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {}
+          },
+          "step": "workspace/git/worktrees/reap/cancel"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "branch": "oracle-reap",
+              "branchDeleted": false,
+              "outcome": "kept_in_use",
+              "reasons": [],
+              "root": null
+            }
+          },
+          "step": "workspace/git/worktrees/reap"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "repositoryBranch": null,
+              "repositoryCwd": "<ws>",
+              "repositoryMappedCwd": "<ws>",
+              "repositoryRoot": "<ws>",
+              "worktrees": [
+                {
+                  "branch": "oracle-reap",
+                  "branchChanges": null,
+                  "cwd": "<vibe-home>/worktrees/<repository>/oracle-reap",
+                  "name": "oracle-reap",
+                  "repoRoot": "<ws>",
+                  "root": "<vibe-home>/worktrees/<repository>/oracle-reap"
+                }
+              ]
+            }
+          },
+          "step": "workspace/git/worktrees/list"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "closed": true
+            }
+          },
+          "step": "session/stop"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "repositoryBranch": null,
+              "repositoryCwd": "<ws>",
+              "repositoryMappedCwd": "<ws>",
+              "repositoryRoot": "<ws>",
+              "worktrees": []
+            }
+          },
+          "step": "workspace/git/worktrees/list"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "branch": null,
+              "branchDeleted": false,
+              "outcome": "kept_unmanaged",
+              "reasons": [],
+              "root": null
+            }
+          },
+          "step": "workspace/git/worktrees/reap"
+        }
+      ],
+      "scenario": {
+        "git": true,
+        "name": "flows/worktree-reap",
+        "steps": [
+          {
+            "init": true
+          },
+          {
+            "start": {
+              "agentConfig": {
+                "agent": "auto-approve",
+                "cwd": "$WS",
+                "worktree": {
+                  "branch": "oracle-reap",
+                  "kind": "create",
+                  "name": "oracle-reap"
+                }
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "workspace/git/worktrees/list",
+              "params": {
+                "cwd": "$WS"
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "workspace/git/worktrees/remove",
+              "params": {
+                "cwd": "$W1",
+                "inspect": true
+              }
+            }
+          },
+          {
+            "send": {
+              "method": "workspace/git/worktrees/reap",
+              "params": {
+                "cwd": "$W1",
+                "requesterId": "r1"
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "workspace/git/worktrees/reap/cancel",
+              "params": {
+                "cwd": "$W1",
+                "requestId": "q1"
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "workspace/git/worktrees/reap",
+              "params": {
+                "cwd": "$W1",
+                "requestId": "q1",
+                "requesterId": "r1"
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "workspace/git/worktrees/reap/cancel",
+              "params": {
+                "cwd": "$W1",
+                "requestId": "q1",
+                "requesterId": "r1"
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "workspace/git/worktrees/reap",
+              "params": {
+                "cwd": "$W1",
+                "requestId": "q2",
+                "requesterId": "r2"
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "workspace/git/worktrees/list",
+              "params": {
+                "cwd": "$WS"
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "session/stop",
+              "params": {
+                "sessionId": "$S1"
+              }
+            }
+          },
+          {
+            "restart": true
+          },
+          {
+            "init": true
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "workspace/git/worktrees/list",
+              "params": {
+                "cwd": "$WS"
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "workspace/git/worktrees/reap",
+              "params": {
+                "cwd": "$WS/missing"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "flows/worktree-reap-idle",
+      "observed": [
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "repositoryBranch": null,
+              "repositoryCwd": "<ws>",
+              "repositoryMappedCwd": "<ws>",
+              "repositoryRoot": "<ws>",
+              "worktrees": [
+                {
+                  "branch": "oracle-idle",
+                  "branchChanges": null,
+                  "cwd": "<vibe-home>/worktrees/<repository>/oracle-idle",
+                  "name": "oracle-idle",
+                  "repoRoot": "<ws>",
+                  "root": "<vibe-home>/worktrees/<repository>/oracle-idle"
+                }
+              ]
+            }
+          },
+          "step": "workspace/git/worktrees/list"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "closed": true
+            }
+          },
+          "step": "session/stop"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "branch": null,
+              "branchCreated": null,
+              "branchDeleted": false,
+              "holders": 0,
+              "outcome": "kept_unmanaged",
+              "reasons": [],
+              "root": null
+            }
+          },
+          "step": "workspace/git/worktrees/remove"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {}
+          },
+          "step": "workspace/git/worktrees/reap/cancel"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "branch": null,
+              "branchDeleted": false,
+              "outcome": "kept_unmanaged",
+              "reasons": [],
+              "root": null
+            }
+          },
+          "step": "workspace/git/worktrees/reap"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "repositoryBranch": null,
+              "repositoryCwd": "<ws>",
+              "repositoryMappedCwd": "<ws>",
+              "repositoryRoot": "<ws>",
+              "worktrees": []
+            }
+          },
+          "step": "workspace/git/worktrees/list"
+        }
+      ],
+      "scenario": {
+        "git": true,
+        "name": "flows/worktree-reap-idle",
+        "steps": [
+          {
+            "init": true
+          },
+          {
+            "start": {
+              "agentConfig": {
+                "agent": "auto-approve",
+                "cwd": "$WS",
+                "worktree": {
+                  "branch": "oracle-idle",
+                  "kind": "create",
+                  "name": "oracle-idle"
+                }
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "workspace/git/worktrees/list",
+              "params": {
+                "cwd": "$WS"
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "session/stop",
+              "params": {
+                "sessionId": "$S1"
+              }
+            }
+          },
+          {
+            "restart": true
+          },
+          {
+            "init": true
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "workspace/git/worktrees/remove",
+              "params": {
+                "cwd": "$W1",
+                "inspect": true
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "workspace/git/worktrees/reap/cancel",
+              "params": {
+                "cwd": "$W1"
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "workspace/git/worktrees/reap",
+              "params": {
+                "cwd": "$W1"
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "workspace/git/worktrees/list",
+              "params": {
+                "cwd": "$WS"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "flows/worktree-reap-dirty",
+      "observed": [
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "repositoryBranch": null,
+              "repositoryCwd": "<ws>",
+              "repositoryMappedCwd": "<ws>",
+              "repositoryRoot": "<ws>",
+              "worktrees": [
+                {
+                  "branch": "oracle-dirty",
+                  "branchChanges": null,
+                  "cwd": "<vibe-home>/worktrees/<repository>/oracle-dirty",
+                  "name": "oracle-dirty",
+                  "repoRoot": "<ws>",
+                  "root": "<vibe-home>/worktrees/<repository>/oracle-dirty"
+                }
+              ]
+            }
+          },
+          "step": "workspace/git/worktrees/list"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "branch": "oracle-dirty",
+              "branchCreated": true,
+              "branchDeleted": false,
+              "holders": 0,
+              "outcome": "kept_dirty",
+              "reasons": [
+                {
+                  "prose": 15,
+                  "sha256": "58f592fe9ad4e9071b207336c06ba70caeebe205af516aeece557dad5fce39a7"
+                }
+              ],
+              "root": "<vibe-home>/worktrees/<repository>/oracle-dirty"
+            }
+          },
+          "step": "workspace/git/worktrees/remove"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "branch": "oracle-dirty",
+              "branchDeleted": false,
+              "outcome": "kept_in_use",
+              "reasons": [],
+              "root": null
+            }
+          },
+          "step": "workspace/git/worktrees/reap"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "closed": true
+            }
+          },
+          "step": "session/stop"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "repositoryBranch": null,
+              "repositoryCwd": "<ws>",
+              "repositoryMappedCwd": "<ws>",
+              "repositoryRoot": "<ws>",
+              "worktrees": []
+            }
+          },
+          "step": "workspace/git/worktrees/list"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "branch": null,
+              "branchCreated": null,
+              "branchDeleted": false,
+              "holders": 0,
+              "outcome": "kept_unmanaged",
+              "reasons": [],
+              "root": null
+            }
+          },
+          "step": "workspace/git/worktrees/remove"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {}
+          },
+          "step": "workspace/git/worktrees/reap/cancel"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "branch": null,
+              "branchDeleted": false,
+              "outcome": "kept_unmanaged",
+              "reasons": [],
+              "root": null
+            }
+          },
+          "step": "workspace/git/worktrees/reap"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "repositoryBranch": null,
+              "repositoryCwd": "<ws>",
+              "repositoryMappedCwd": "<ws>",
+              "repositoryRoot": "<ws>",
+              "worktrees": []
+            }
+          },
+          "step": "workspace/git/worktrees/list"
+        },
+        {
+          "notifications": [],
+          "response": {
+            "result": {
+              "branch": null,
+              "branchDeleted": false,
+              "outcome": "kept_unmanaged",
+              "reasons": [],
+              "root": null
+            }
+          },
+          "step": "workspace/git/worktrees/reap"
+        }
+      ],
+      "scenario": {
+        "git": true,
+        "name": "flows/worktree-reap-dirty",
+        "steps": [
+          {
+            "init": true
+          },
+          {
+            "start": {
+              "agentConfig": {
+                "agent": "auto-approve",
+                "cwd": "$WS",
+                "worktree": {
+                  "branch": "oracle-dirty",
+                  "kind": "create",
+                  "name": "oracle-dirty"
+                }
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "workspace/git/worktrees/list",
+              "params": {
+                "cwd": "$WS"
+              }
+            }
+          },
+          {
+            "into": "$W1",
+            "write": {
+              "draft.txt": "unsaved\n"
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "workspace/git/worktrees/remove",
+              "params": {
+                "cwd": "$W1",
+                "inspect": true
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "workspace/git/worktrees/reap",
+              "params": {
+                "cwd": "$W1",
+                "requestId": "q1",
+                "requesterId": "r1"
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "session/stop",
+              "params": {
+                "sessionId": "$S1"
+              }
+            }
+          },
+          {
+            "restart": true
+          },
+          {
+            "init": true
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "workspace/git/worktrees/list",
+              "params": {
+                "cwd": "$WS"
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "workspace/git/worktrees/remove",
+              "params": {
+                "cwd": "$W1",
+                "inspect": true
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "workspace/git/worktrees/reap/cancel",
+              "params": {
+                "cwd": "$W1",
+                "requesterId": "r1"
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "workspace/git/worktrees/reap",
+              "params": {
+                "cwd": "$W1"
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "workspace/git/worktrees/list",
+              "params": {
+                "cwd": "$WS"
+              }
+            }
+          },
+          {
+            "exact": true,
+            "send": {
+              "method": "workspace/git/worktrees/reap",
+              "params": {
+                "cwd": "$W1"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "flows/session-stop",
       "observed": [
         {

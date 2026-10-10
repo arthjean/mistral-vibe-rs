@@ -224,6 +224,7 @@ fn complete_model_definition(entry: &mut Table) {
     for (key, value) in &defaults {
         entry.entry(key.clone()).or_insert_with(|| value.clone());
     }
+    settle_thinking(entry);
 }
 
 /// The compaction threshold the routed definition itself publishes, which is
@@ -304,6 +305,27 @@ fn coerce_model_field(key: &str, value: &JsonValue) -> Option<Option<Value>> {
             as_number(value).map(Value::Float)
         }
         "auto_compact_threshold" => as_integer(value).map(Value::Integer),
+        // `Field(default=None, ge=1)`: null is the unknown window, and a
+        // window below one is refused.
+        "max_context_length" => {
+            if value.is_null() {
+                return Some(None);
+            }
+            as_integer(value)
+                .filter(|window| *window >= 1)
+                .map(Value::Integer)
+        }
+        "thinking_levels" => value
+            .as_array()?
+            .iter()
+            .map(|level| {
+                level
+                    .as_str()
+                    .filter(|level| registry::THINKING_VALUES.contains(level))
+                    .map(|level| Value::String(level.to_owned()))
+            })
+            .collect::<Option<Vec<_>>>()
+            .map(Value::Array),
         "supports_images" => as_flag(value).map(Value::Boolean),
         "thinking" => value
             .as_str()
@@ -585,7 +607,45 @@ fn complete_model_entries(effective: &mut Table) {
             for (key, value) in &defaults {
                 model.entry(key.clone()).or_insert_with(|| value.clone());
             }
+            settle_thinking(model);
         }
+    }
+}
+
+/// Reference `ModelConfig`'s thinking validators
+/// (`vibe/core/config/models.py:495-523`): the offered levels lose their
+/// duplicates in first-seen order, an emptied set offers `off` alone, and a
+/// stored level the set does not offer is read as the set's default one, `high`
+/// when offered and the last level otherwise. Re-derived on every load, so the
+/// stored level stays in the operator's file and applies again once the set
+/// widens.
+fn settle_thinking(model: &mut Table) {
+    let Some(Value::Array(levels)) = model.get_mut("thinking_levels") else {
+        return;
+    };
+    let mut offered: Vec<Value> = Vec::new();
+    for level in levels.drain(..) {
+        if !offered.contains(&level) {
+            offered.push(level);
+        }
+    }
+    if offered.is_empty() {
+        offered.push(Value::String("off".to_owned()));
+    }
+    let high = Value::String("high".to_owned());
+    let fallback = if offered.contains(&high) {
+        Some(high)
+    } else {
+        offered.last().cloned()
+    };
+    *levels = offered;
+    let stored = model.get("thinking").cloned();
+    let offered_now = model
+        .get("thinking_levels")
+        .and_then(Value::as_array)
+        .is_some_and(|levels| stored.as_ref().is_some_and(|level| levels.contains(level)));
+    if !offered_now && let Some(fallback) = fallback {
+        model.insert("thinking".to_owned(), fallback);
     }
 }
 
@@ -621,6 +681,7 @@ fn complete_model_field(effective: &mut Table, field: &str) {
             .entry(key.clone())
             .or_insert_with(|| value.clone());
     }
+    settle_thinking(compaction);
     compaction
         .entry("auto_compact_threshold".to_owned())
         .or_insert(Value::Integer(registry::DEFAULT_AUTO_COMPACT_THRESHOLD));

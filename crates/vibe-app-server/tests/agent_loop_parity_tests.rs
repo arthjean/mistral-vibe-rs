@@ -210,14 +210,6 @@ const LEDGER: &[Divergence] = &[
         row: "13",
         reason: "the same resume checkpoint",
     },
-    // --------------------------------------------------------- row 17
-    Divergence {
-        scenarios: &["relocate/during-turn"],
-        pointer: "/steps/0/response/error/message",
-        row: "17",
-        reason: "the refusal names the running turn, which this port numbers where the \
-                 reference mints a UUID",
-    },
     // --------------------------------------------------------- row 19
     Divergence {
         scenarios: &["titles/after-compaction"],
@@ -319,51 +311,7 @@ struct FieldDivergence {
     reason: &'static str,
 }
 
-const SESSION_ARCHIVE: &str = "v2.26.0 publishes each session's `archivedAt` and `isUnseen` \
-     (`vibe/app_server/models.py:1185-1186` at 376f6a3), the state `session/archive` and \
-     `session/markAsSeen` keep; this port routes neither method and omits both fields, which \
-     read null and false in every scenario";
-
-const FIELDS: &[FieldDivergence] = &[
-    FieldDivergence {
-        suffix: "/inputEntryId",
-        row: "17",
-        reason: "v2.26.0 gives every public history entry and turn an `inputEntryId` \
-                 (`vibe/app_server/models.py:949,1236` at 376f6a3), null on the legacy \
-                 backend; this port's entries and turns do not carry the field",
-    },
-    FieldDivergence {
-        suffix: "/archivedAt",
-        row: "17",
-        reason: SESSION_ARCHIVE,
-    },
-    FieldDivergence {
-        suffix: "/isUnseen",
-        row: "17",
-        reason: SESSION_ARCHIVE,
-    },
-    FieldDivergence {
-        suffix: "/worktree",
-        row: "17",
-        reason: "v2.26.0 publishes the managed worktree a session runs in \
-                 (`vibe/app_server/models.py:1191` at 376f6a3), null outside one; this port \
-                 omits the field",
-    },
-    FieldDivergence {
-        suffix: "/backgroundProcesses",
-        row: "17",
-        reason: "v2.26.0 session state lists the Unified Harness's background processes \
-                 (`vibe/app_server/models.py:1263` at 376f6a3), empty on the legacy backend; \
-                 this port omits the field",
-    },
-    FieldDivergence {
-        suffix: "/agentName",
-        row: "17",
-        reason: "v2.26.0 names the agent a subagent call runs on its detail \
-                 (`vibe/app_server/_effect_models.py:295` at 376f6a3), null until the call is \
-                 known; this port omits the field",
-    },
-];
+const FIELDS: &[FieldDivergence] = &[];
 
 fn repository() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

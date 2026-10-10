@@ -130,6 +130,7 @@ impl AppServer {
         let now = now_millis();
         let entry = PublicHistoryEntry::Notice {
             metadata: PublicEntryMetadata {
+                input_entry_id: None,
                 id: vibe_core::session_id::uuid_v4(),
                 session_id: job.session_id.clone(),
                 turn_id: None,

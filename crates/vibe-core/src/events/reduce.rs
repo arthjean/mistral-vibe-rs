@@ -971,6 +971,7 @@ fn entry_metadata(
         |turn_id| format!("entry-{turn_id}-{event_id}"),
     );
     PublicEntryMetadata {
+        input_entry_id: None,
         id,
         session_id: state.session_id.clone(),
         turn_id: state.turn_id.clone(),

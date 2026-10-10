@@ -117,8 +117,7 @@ impl AppServer {
         {
             session.persisted = Some(published);
         }
-        let turn_sequence = self.next_turn.fetch_add(1, Ordering::Relaxed);
-        let turn_id = format!("turn-{turn_sequence}");
+        let turn_id = self.mint_turn_id();
         if let Some(review) = &session.review {
             let message_index = review_message_index(&self.workspace, session)?;
             review
@@ -131,6 +130,7 @@ impl AppServer {
         session.active_scheduled_loop = Some(loop_id.clone());
         session.status = SessionStatus::Running;
         session.record_turn(PublicTurn {
+            input_entry_id: None,
             id: turn_id.clone(),
             session_id: canonical_session_id.clone(),
             status: PublicTurnStatus::InProgress,
@@ -281,6 +281,7 @@ impl AppServer {
             self.publish_retention_notice(review);
         }
         let turn = PublicTurn {
+            input_entry_id: None,
             id: turn_id.to_owned(),
             session_id: target_session_id.clone(),
             status,
@@ -397,6 +398,7 @@ impl AppServer {
             SessionStatus::Idle
         };
         let turn = PublicTurn {
+            input_entry_id: None,
             id: turn_id.to_owned(),
             session_id: session_id.to_owned(),
             status: PublicTurnStatus::Failed,

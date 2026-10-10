@@ -615,6 +615,8 @@ pub struct AppServer {
     /// The harness this process resolved, which `config/read` reports.
     harness: Arc<HarnessSelection>,
     next_session: Arc<AtomicU64>,
+    /// Unit tests number turns so their fixtures can name them.
+    #[cfg(test)]
     next_turn: Arc<AtomicU64>,
     next_callback: Arc<AtomicU64>,
     /// The sessions this process holds open, each under the lease that keeps a
@@ -671,6 +673,7 @@ impl Default for AppServer {
             secondary_provider: None,
             harness: Arc::new(HarnessSelection::default()),
             next_session: Arc::new(AtomicU64::new(1)),
+            #[cfg(test)]
             next_turn: Arc::new(AtomicU64::new(1)),
             next_callback: Arc::new(AtomicU64::new(1)),
             leases: Arc::new(Mutex::new(BTreeMap::new())),
@@ -1316,6 +1319,22 @@ fn object(value: Value) -> BTreeMap<String, Value> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+impl AppServer {
+    /// Reference `PublicTurn(id=str(uuid4()))` (`vibe/app_server/_turns.py:276`):
+    /// every turn is named by a random UUID. Unit tests number them instead,
+    /// so a fixture can address the turn it started.
+    pub(crate) fn mint_turn_id(&self) -> String {
+        #[cfg(test)]
+        {
+            format!("turn-{}", self.next_turn.fetch_add(1, Ordering::Relaxed))
+        }
+        #[cfg(not(test))]
+        {
+            vibe_core::session_id::uuid_v4()
+        }
+    }
 }
 
 /// Reference `uuid4()`: a new session is named by a random UUID, whose first

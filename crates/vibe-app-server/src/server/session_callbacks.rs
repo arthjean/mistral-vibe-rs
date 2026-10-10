@@ -100,6 +100,7 @@ impl AppServer {
         let timestamp = now_millis();
         let callback = PublicHistoryEntry::Callback {
             metadata: PublicEntryMetadata {
+                input_entry_id: None,
                 id: format!("callback:{callback_id}"),
                 session_id: session.id.clone(),
                 turn_id: Some(turn_id.to_owned()),
@@ -136,6 +137,7 @@ impl AppServer {
         if let Some(file_path) = plan_review_path {
             let entry = PublicHistoryEntry::Notice {
                 metadata: PublicEntryMetadata {
+                    input_entry_id: None,
                     id: format!("notice:{callback_id}:plan-review"),
                     session_id: snapshot.session_id.clone(),
                     turn_id: Some(turn_id.to_owned()),

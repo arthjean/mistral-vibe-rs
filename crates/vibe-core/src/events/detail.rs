@@ -611,6 +611,11 @@ impl Serialize for EffectDetail {
         if self.kind == ToolEffectKind::Subagent || self.child_session_id.is_some() {
             map.serialize_entry("childSessionId", &self.child_session_id)?;
         }
+        // Reference `SubagentEffectDetail.agent_name`, the name a spawn gave
+        // its child, which only the Unified Harness fills in.
+        if self.kind == ToolEffectKind::Subagent {
+            map.serialize_entry("agentName", &None::<String>)?;
+        }
         map.end()
     }
 }
