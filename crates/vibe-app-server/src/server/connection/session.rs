@@ -598,7 +598,7 @@ impl ServerConnection {
     /// this session created it and never used it. Best effort: the close has
     /// already happened, and a worktree kept here is one retention reclaims
     /// later.
-    fn release_worktree(&self, cwd: &Path, session_id: &str, roll_back: bool) {
+    pub(super) fn release_worktree(&self, cwd: &Path, session_id: &str, roll_back: bool) {
         let lifecycle = self.session_worktrees();
         if !roll_back {
             lifecycle.release(cwd, session_id);

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Release a session's managed worktree when its connection closes, through
+  `session/stop` or a disconnect, as the reference's backend shutdown does: the
+  session stops holding it, and a worktree it created and never ran a turn in
+  is taken back instead of waiting for retention.
+
 - Write a saved session's archive and seen marks, as the reference does since
   v2.26.0: `meta.json` carries `archived_at`, `unseen_at` and `seen_at` after
   `pinned_at`, null on every session this port saves, and a session the

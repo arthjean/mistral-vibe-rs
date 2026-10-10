@@ -359,15 +359,21 @@ impl ServerConnection {
                 if let Some(session) = sessions.get_mut(session_id) {
                     session.attachments = session.attachments.saturating_sub(1);
                     if session.attachments == 0 && session.status != SessionStatus::Closed {
-                        released.push(session.id.clone());
+                        let unstarted_worktree =
+                            session.created_worktree.is_some() && session.latest_turn.is_none();
+                        released.push((
+                            session.id.clone(),
+                            PathBuf::from(&session.working_directory),
+                            unstarted_worktree,
+                        ));
                     }
                 }
             }
         }
         // A connection that goes away lets go of what it held, as the
-        // reference's backend shutdown does: the lease, and the terminal's
-        // pointer to the session it leaves.
-        for session_id in released {
+        // reference's backend shutdown does: the lease, the worktree it stood
+        // in, and the terminal's pointer to the session it leaves.
+        for (session_id, working_directory, unstarted_worktree) in released {
             // Reference `VibeCodeController.close`: a push still waiting is
             // answered no and every run stops, so nothing ships after the
             // session is gone.
@@ -377,6 +383,7 @@ impl ServerConnection {
                 runtime.spawn(async move { server.reset_vibe_code(&session).await });
             }
             self.server.release_lease(&session_id);
+            self.release_worktree(&working_directory, &session_id, unstarted_worktree);
             let _ = self
                 .server
                 .workspace
