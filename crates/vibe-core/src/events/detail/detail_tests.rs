@@ -291,12 +291,15 @@ fn a_callback_output_names_the_form_it_answers() {
     let approval = CallbackOutput::Approval {
         decision: ApprovalDecision {
             decision: ApprovalDecisionType::CancelTurn,
+            path_scope: None,
         },
         feedback: None,
     };
     let wire = serde_json::to_value(&approval).expect("serializes");
     assert_eq!(wire["type"], "approval");
     assert_eq!(wire["decision"]["type"], "cancel_turn");
+    // Reference `ApprovalDecision.path_scope` crosses the wire even unset.
+    assert_eq!(wire["decision"]["pathScope"], serde_json::Value::Null);
     assert!(approval.requests_turn_cancel());
 
     let answer = CallbackOutput::UserInput {
@@ -324,6 +327,7 @@ fn a_callback_detail_names_what_it_asks_for() {
         )),
         required_permissions: vec![PermissionRequirement::command("rm -rf /")],
         choices: ApprovalDecisionType::ALL.to_vec(),
+        path_scope_choices: Vec::new(),
         related_entry_id: Some("entry-1".to_owned()),
         reason: None,
     };

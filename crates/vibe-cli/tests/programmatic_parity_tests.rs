@@ -79,21 +79,6 @@ const LEDGER: &[Divergence] = &[
         pointer: "/*/stdout/lines/*/layout/**",
         reason: KEY_ORDER,
     },
-    Divergence {
-        scenario: "approval/denied",
-        pointer: "/*/stdout/lines/*/json/detail/pathScopeChoices",
-        reason: "row 17: since v2.26.0 an approval callback lists the path grant scopes it \
-                 offers (`vibe/app_server/models.py:322`, filled by \
-                 `vibe/app_server/_turns.py:863` at `376f6a3`), empty here; this port's \
-                 callback does not carry the field",
-    },
-    Divergence {
-        scenario: "approval/denied",
-        pointer: "/*/stdout/lines/*/json/state/output/decision/pathScope",
-        reason: "row 17: since v2.26.0 the approval decision an effect records holds the path \
-                 grant scope it chose (`vibe/app_server/models.py:312` at `376f6a3`), null for a \
-                 denial; this port's decision does not carry the field",
-    },
 ];
 
 fn repository() -> PathBuf {

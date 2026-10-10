@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use super::attachments::{PromptDraft, prepare_submission};
-use super::callback::activate_pending_callback_state;
+use super::callback::{activate_pending_callback_state, approval_options};
 use super::chat_input::InputMode;
 use super::commands::CommandContext;
 use super::completion::CompletionEngine;
@@ -33,7 +33,9 @@ use ratatui::backend::TestBackend;
 use serde::Deserialize;
 use serde_json::Value;
 
+use vibe_app_server::client::ApprovalDecisionType;
 use vibe_core::parity::{REFERENCE_COMMIT, off_pin_reason, pinned_interpreter, reference_root};
+use vibe_core::policy::{PathGrantScope, PermissionRequirement};
 
 /// The Python reference lives in a checkout outside this repository, so the
 /// live oracle probe can only run on a workstation that holds it at
@@ -325,20 +327,43 @@ impl SessionManagementReplay {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 enum TraceEvent {
-    PresentApproval { id: String, at_ms: u64 },
-    PresentQuestions { at_ms: u64 },
-    Input { input: ReplayInput, at_ms: u64 },
-    AnswerAndPresentApproval { id: String, at_ms: u64 },
+    PresentApproval {
+        id: String,
+        at_ms: u64,
+    },
+    /// An approval of one path outside the workdir offering `scope`.
+    PresentPathApproval {
+        target: String,
+        scope: PathGrantScope,
+        at_ms: u64,
+    },
+    PresentQuestions {
+        at_ms: u64,
+    },
+    Input {
+        input: ReplayInput,
+        at_ms: u64,
+    },
+    AnswerAndPresentApproval {
+        id: String,
+        at_ms: u64,
+    },
     PlanReviewStart,
     RemovePlan,
-    WritePlan { content: String },
+    WritePlan {
+        content: String,
+    },
     RefreshPlan,
-    Queue { text: String },
+    Queue {
+        text: String,
+    },
     DrainBatch,
     PauseQueue,
     ResumeQueue,
     ShellStart,
-    ShellChunk { text: String },
+    ShellChunk {
+        text: String,
+    },
     ShellCancel,
 }
 
@@ -400,6 +425,45 @@ impl Replay {
                         .iter()
                         .any(|line| line == "Permissions: cargo test")
                 )
+            }
+            TraceEvent::PresentPathApproval {
+                target,
+                scope,
+                at_ms,
+            } => {
+                let mut pending = approval("path");
+                let requirement = PermissionRequirement::outside_path(Path::new(target));
+                let CallbackRequest::Approval { options, .. } = &mut pending.request else {
+                    unreachable!("the approval fixture is typed")
+                };
+                *options = approval_options(&ApprovalDecisionType::ALL, &[*scope], &[requirement])
+                    .expect("the path approval offers options");
+                let rows = options
+                    .iter()
+                    .map(|option| {
+                        let (decision, scope) = option
+                            .id
+                            .split_once(':')
+                            .map_or((option.id.as_str(), None), |(decision, scope)| {
+                                (decision, Some(scope))
+                            });
+                        let action = match decision {
+                            "approve" => "once",
+                            "approve_for_session" => "session",
+                            "approve_permanently" => "permanent",
+                            other => other,
+                        };
+                        scope.map_or_else(|| action.to_owned(), |scope| format!("{action}:{scope}"))
+                    })
+                    .collect::<Vec<_>>()
+                    .join(",");
+                assert!(activate_pending_callback_state(
+                    &mut self.state,
+                    &mut self.controls,
+                    pending,
+                    *at_ms,
+                ));
+                format!("active:path:options={rows}")
             }
             TraceEvent::PresentQuestions { at_ms } => {
                 assert!(activate_pending_callback_state(
@@ -607,6 +671,14 @@ fn observe_callback_outcome(outcome: CallbackInputOutcome) -> String {
         CallbackInputOutcome::Submit(CallbackChoice::Approve {
             scope: ApprovalScope::Once,
         }) => "submit:approve_once".to_owned(),
+        CallbackInputOutcome::Submit(CallbackChoice::ApprovePath { scope, path_scope }) => {
+            let lasting = if scope == ApprovalScope::Permanent {
+                "permanent"
+            } else {
+                "session"
+            };
+            format!("submit:{lasting}:{}", path_scope.label())
+        }
         CallbackInputOutcome::Submit(CallbackChoice::UserInput { answers }) => {
             let answers = answers
                 .iter()

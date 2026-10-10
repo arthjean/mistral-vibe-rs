@@ -690,7 +690,7 @@ struct GrantApproval;
 
 impl ApprovalAgent for GrantApproval {
     fn request<'a>(&'a self, _request: ApprovalRequest) -> ApprovalFuture<'a> {
-        Box::pin(async { Ok(ApprovalDecision::ApproveForSession) })
+        Box::pin(async { Ok(ApprovalDecision::ApproveForSession(None)) })
     }
 }
 

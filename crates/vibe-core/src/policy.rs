@@ -21,8 +21,9 @@ pub mod arity;
 mod path_grants;
 
 pub use path_grants::{
-    PathGrantScope, path_grant_pattern, path_grant_pattern_matches, path_pattern_matches,
-    path_scope_root,
+    PathGrantScope, PathScopeRefusal, approval_path_scope, available_path_scopes,
+    path_grant_pattern, path_grant_pattern_matches, path_pattern_matches, path_scope_root,
+    path_scope_target, scope_required_permissions,
 };
 
 /// The rationale a rule stored by an approval carries, which is also what tells
@@ -423,8 +424,12 @@ pub struct ApprovalRequest {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ApprovalDecision {
     ApproveOnce,
-    ApproveForSession,
-    ApprovePermanently,
+    /// Approved for the session, outside paths granted under the scope the
+    /// operator chose, or the exact one when they chose none (reference
+    /// `ApprovalDecision.path_scope`).
+    ApproveForSession(Option<PathGrantScope>),
+    /// Approved permanently, under the same choice of path scope.
+    ApprovePermanently(Option<PathGrantScope>),
     Deny,
     /// Refused with the reason the model is told instead of the result.
     Reject(String),
@@ -982,8 +987,16 @@ impl PermissionStore {
                         }
                         Ok(self.lease(state.revision, tool, context, settings, answered))
                     }
-                    ApprovalDecision::ApproveForSession | ApprovalDecision::ApprovePermanently => {
-                        let permanent = decision == ApprovalDecision::ApprovePermanently;
+                    ApprovalDecision::ApproveForSession(selected)
+                    | ApprovalDecision::ApprovePermanently(selected) => {
+                        let permanent = matches!(decision, ApprovalDecision::ApprovePermanently(_));
+                        // Reference `approval_grant_permissions`: the server
+                        // derives the grant from the scope the operator chose,
+                        // and a scope it did not offer fails the turn once the
+                        // answer is in.
+                        let scope = approval_path_scope(&uncovered, selected)
+                            .map_err(|refusal| PolicyError::TurnFailed(refusal.to_string()))?;
+                        let uncovered = scope_required_permissions(&uncovered, scope);
                         let persistence = if permanent {
                             PERMANENT_APPROVAL
                         } else {

@@ -13989,6 +13989,4596 @@
       }
     },
     {
+      "name": "approval/path-scope-recursive",
+      "observed": {
+        "callbacks": [
+          {
+            "choices": [
+              "approve",
+              "approve_for_session",
+              "approve_permanently",
+              "deny",
+              "cancel_turn"
+            ],
+            "kind": "approval",
+            "requiredPermissions": [
+              {
+                "invocationPattern": "<root>/outside/data",
+                "label": {
+                  "prose": 37,
+                  "sha256": "6a9fbaeceaac22cd20514af21d8c69833f9568b1f44d2a5511cf00f79fb633fb"
+                },
+                "pathScopeRoot": "<root>/outside/data",
+                "scope": "outside_directory",
+                "sessionPattern": "vibe-path:exact:<root>/outside/data"
+              }
+            ]
+          }
+        ],
+        "requests": [
+          {
+            "conversation": [
+              {
+                "content": "Look outside",
+                "role": "user"
+              }
+            ],
+            "tools": [
+              "ask_user_question",
+              "bash",
+              "edit",
+              "grep",
+              "read_file",
+              "skill",
+              "task",
+              "todo",
+              "web_fetch",
+              "web_search",
+              "write_file"
+            ],
+            "utility": false
+          },
+          {
+            "conversation": [
+              {
+                "content": "Look outside",
+                "role": "user"
+              },
+              {
+                "content": "",
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "arguments": {
+                      "prose": 51,
+                      "sha256": "e97bf98637af16fa51072031e77b6b284922a224206f3afd6e0a4187c1f8c7ed"
+                    },
+                    "id": "call_g1",
+                    "name": "grep"
+                  }
+                ]
+              },
+              {
+                "content": {
+                  "prose": 93,
+                  "sha256": "ca606e366622b1ec13d3c232a5df27e0b339f1a4384185dda0a21993a8054cf5"
+                },
+                "role": "tool",
+                "toolCallId": "call_g1"
+              }
+            ],
+            "tools": [
+              "ask_user_question",
+              "bash",
+              "edit",
+              "grep",
+              "read_file",
+              "skill",
+              "task",
+              "todo",
+              "web_fetch",
+              "web_search",
+              "write_file"
+            ],
+            "utility": false
+          },
+          {
+            "conversation": [
+              {
+                "content": "Look outside",
+                "role": "user"
+              },
+              {
+                "content": "",
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "arguments": {
+                      "prose": 51,
+                      "sha256": "e97bf98637af16fa51072031e77b6b284922a224206f3afd6e0a4187c1f8c7ed"
+                    },
+                    "id": "call_g1",
+                    "name": "grep"
+                  }
+                ]
+              },
+              {
+                "content": {
+                  "prose": 93,
+                  "sha256": "ca606e366622b1ec13d3c232a5df27e0b339f1a4384185dda0a21993a8054cf5"
+                },
+                "role": "tool",
+                "toolCallId": "call_g1"
+              },
+              {
+                "content": "",
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "arguments": {
+                      "prose": 63,
+                      "sha256": "8758e3e36431bc7da68d47780053f5d24d00845fce720aeb2e74d3463a9032e8"
+                    },
+                    "id": "call_g2",
+                    "name": "grep"
+                  }
+                ]
+              },
+              {
+                "content": {
+                  "prose": 98,
+                  "sha256": "4f18da94b5ddde7914cd0e5fe56596441076f58e94512b6b839bb0df51ac5426"
+                },
+                "role": "tool",
+                "toolCallId": "call_g2"
+              }
+            ],
+            "tools": [
+              "ask_user_question",
+              "bash",
+              "edit",
+              "grep",
+              "read_file",
+              "skill",
+              "task",
+              "todo",
+              "web_fetch",
+              "web_search",
+              "write_file"
+            ],
+            "utility": false
+          }
+        ],
+        "steps": [
+          {
+            "turn": [
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/bumpedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "turn/started",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "turn": {
+                    "completedAt": null,
+                    "error": null,
+                    "id": "<id-2>",
+                    "inputEntryId": null,
+                    "queueItemId": null,
+                    "sessionId": "<id-1>",
+                    "startedAt": "<time>",
+                    "status": "in_progress",
+                    "stopReason": null
+                  }
+                }
+              },
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/status",
+                      "value": {
+                        "activeTurnId": "<id-2>",
+                        "type": "running"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "session/statsUpdated",
+                "params": {
+                  "contextWindow": 200000,
+                  "sessionId": "<id-1>",
+                  "stats": {
+                    "cachedInputPricePerMillion": 0.15,
+                    "contextTokens": 0,
+                    "inputPricePerMillion": 1.5,
+                    "lastTurnCachedTokens": 0,
+                    "lastTurnCompletionTokens": 0,
+                    "lastTurnDuration": 0,
+                    "lastTurnPromptTokens": 0,
+                    "outputPricePerMillion": 7.5,
+                    "sessionCachedTokens": 0,
+                    "sessionCompletionTokens": 0,
+                    "sessionPromptTokens": 0,
+                    "steps": 0,
+                    "tokensPerSecond": 0,
+                    "toolCallsAgreed": 0,
+                    "toolCallsFailed": 0,
+                    "toolCallsRejected": 0,
+                    "toolCallsSucceeded": 0
+                  }
+                }
+              },
+              {
+                "method": "history/entryAdded",
+                "params": {
+                  "entry": {
+                    "content": [
+                      {
+                        "text": "Look outside",
+                        "type": "text"
+                      }
+                    ],
+                    "createdAt": "<time>",
+                    "generationStatus": "completed",
+                    "id": "<id-3>",
+                    "inputEntryId": null,
+                    "relatedEntryId": null,
+                    "role": "user",
+                    "sessionId": "<id-1>",
+                    "source": "turn_start",
+                    "turnId": "<id-2>",
+                    "type": "message",
+                    "updatedAt": "<time>",
+                    "userDisplayContent": null
+                  },
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/preview",
+                      "value": "Look outside"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "history/entryAdded",
+                "params": {
+                  "entry": {
+                    "createdAt": "<time>",
+                    "detail": {
+                      "display": {
+                        "content": null,
+                        "message": "grep",
+                        "settledMessage": "grep",
+                        "settledVerb": "Ran",
+                        "statusText": {
+                          "prose": 15,
+                          "sha256": "bc9797766c2d1d79ff30fbdbb9c7941b32b70eae4be210be81aaaa73f58f8e1c"
+                        },
+                        "suffix": "",
+                        "summary": "grep",
+                        "verb": "Running"
+                      },
+                      "input": null,
+                      "kind": "file_search",
+                      "toolName": "grep"
+                    },
+                    "generationStatus": "in_progress",
+                    "id": "call_g1",
+                    "inputEntryId": null,
+                    "relatedEntryId": null,
+                    "sessionId": "<id-1>",
+                    "state": {
+                      "outputText": "",
+                      "status": "running"
+                    },
+                    "title": "grep",
+                    "turnId": "<id-2>",
+                    "type": "effect",
+                    "updatedAt": "<time>"
+                  },
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "call_g1",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/detail",
+                      "value": {
+                        "display": {
+                          "content": null,
+                          "message": {
+                            "prose": 30,
+                            "sha256": "782cf736128f10fc8a7727ecd38353f7982672d150c213d52c95d8e37b4b00c3"
+                          },
+                          "settledMessage": {
+                            "prose": 30,
+                            "sha256": "782cf736128f10fc8a7727ecd38353f7982672d150c213d52c95d8e37b4b00c3"
+                          },
+                          "settledVerb": "Searched",
+                          "statusText": {
+                            "prose": 15,
+                            "sha256": "bc9797766c2d1d79ff30fbdbb9c7941b32b70eae4be210be81aaaa73f58f8e1c"
+                          },
+                          "suffix": "",
+                          "summary": {
+                            "prose": 39,
+                            "sha256": "5772e255badab06d83e7f293c9e9294dd66f9f3556d7a66c04bae8533a6bc3dd"
+                          },
+                          "verb": "Searching"
+                        },
+                        "input": {
+                          "maxMatches": null,
+                          "path": "<root>/outside/data",
+                          "pattern": "alpha"
+                        },
+                        "kind": "file_search",
+                        "toolName": "grep"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "session/statsUpdated",
+                "params": {
+                  "contextWindow": 200000,
+                  "sessionId": "<id-1>",
+                  "stats": {
+                    "cachedInputPricePerMillion": 0.15,
+                    "contextTokens": 15,
+                    "inputPricePerMillion": 1.5,
+                    "lastTurnCachedTokens": 0,
+                    "lastTurnCompletionTokens": 5,
+                    "lastTurnDuration": "<nonzero>",
+                    "lastTurnPromptTokens": 10,
+                    "outputPricePerMillion": 7.5,
+                    "sessionCachedTokens": 0,
+                    "sessionCompletionTokens": 5,
+                    "sessionPromptTokens": 10,
+                    "steps": 1,
+                    "tokensPerSecond": "<nonzero>",
+                    "toolCallsAgreed": 0,
+                    "toolCallsFailed": 0,
+                    "toolCallsRejected": 0,
+                    "toolCallsSucceeded": 0
+                  }
+                }
+              },
+              {
+                "method": "history/entryAdded",
+                "params": {
+                  "entry": {
+                    "callbackId": "<id-5>",
+                    "createdAt": "<time>",
+                    "detail": {
+                      "choices": [
+                        "approve",
+                        "approve_for_session",
+                        "approve_permanently",
+                        "deny",
+                        "cancel_turn"
+                      ],
+                      "effect": {
+                        "display": {
+                          "content": null,
+                          "message": {
+                            "prose": 30,
+                            "sha256": "782cf736128f10fc8a7727ecd38353f7982672d150c213d52c95d8e37b4b00c3"
+                          },
+                          "settledMessage": {
+                            "prose": 30,
+                            "sha256": "782cf736128f10fc8a7727ecd38353f7982672d150c213d52c95d8e37b4b00c3"
+                          },
+                          "settledVerb": "Searched",
+                          "statusText": {
+                            "prose": 15,
+                            "sha256": "bc9797766c2d1d79ff30fbdbb9c7941b32b70eae4be210be81aaaa73f58f8e1c"
+                          },
+                          "suffix": "",
+                          "summary": {
+                            "prose": 39,
+                            "sha256": "5772e255badab06d83e7f293c9e9294dd66f9f3556d7a66c04bae8533a6bc3dd"
+                          },
+                          "verb": "Searching"
+                        },
+                        "input": {
+                          "maxMatches": null,
+                          "path": "<root>/outside/data",
+                          "pattern": "alpha"
+                        },
+                        "kind": "file_search",
+                        "toolName": "grep"
+                      },
+                      "kind": "approval",
+                      "pathScopeChoices": [
+                        "directory_recursive"
+                      ],
+                      "reason": null,
+                      "relatedEntryId": "call_g1",
+                      "requiredPermissions": [
+                        {
+                          "invocationPattern": "<root>/outside/data",
+                          "label": {
+                            "prose": 37,
+                            "sha256": "6a9fbaeceaac22cd20514af21d8c69833f9568b1f44d2a5511cf00f79fb633fb"
+                          },
+                          "pathScopeRoot": "<root>/outside/data",
+                          "scope": "outside_directory",
+                          "sessionPattern": "vibe-path:exact:<root>/outside/data"
+                        }
+                      ]
+                    },
+                    "generationStatus": "in_progress",
+                    "id": "<id-6>",
+                    "inputEntryId": null,
+                    "relatedEntryId": "call_g1",
+                    "sessionId": "<id-1>",
+                    "state": {
+                      "status": "open"
+                    },
+                    "title": {
+                      "prose": 11,
+                      "sha256": "a73f7c7a7fc642a442e4b45ce5abe0c249b3ee020f85adc1be5b86498f7cd5db"
+                    },
+                    "turnId": "<id-2>",
+                    "type": "callback",
+                    "updatedAt": "<time>"
+                  },
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "call_g1",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/state",
+                      "value": {
+                        "callbackId": "<id-5>",
+                        "outputText": "",
+                        "status": "blocked"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/status",
+                      "value": {
+                        "activeTurnId": "<id-2>",
+                        "callbackId": "<id-5>",
+                        "reason": "approval",
+                        "type": "blocked"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "<id-6>",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/state",
+                      "value": {
+                        "output": {
+                          "decision": {
+                            "pathScope": "directory_recursive",
+                            "type": "approve_for_session"
+                          },
+                          "feedback": null,
+                          "type": "approval"
+                        },
+                        "status": "answered"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/generationStatus",
+                      "value": "completed"
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "call_g1",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/state",
+                      "value": {
+                        "outputText": "",
+                        "status": "running"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/status",
+                      "value": {
+                        "activeTurnId": "<id-2>",
+                        "type": "running"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "call_g1",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/state",
+                      "value": {
+                        "approvalSource": "user",
+                        "approvalType": "ask",
+                        "decision": "execute",
+                        "display": {
+                          "approvalNote": null,
+                          "message": {
+                            "prose": 15,
+                            "sha256": "0af6e5eac1681dd31a0bb1aef8378dcfe826af093f7c59a80bd902e9d9c06238"
+                          },
+                          "success": true,
+                          "suffix": "",
+                          "verb": "Searched",
+                          "warnings": []
+                        },
+                        "durationMs": "<rate>",
+                        "output": {
+                          "matchCount": 1,
+                          "matches": "<root>/outside/data/a.txt:1:alpha",
+                          "parsedMatches": [
+                            {
+                              "line": 1,
+                              "path": "<root>/outside/data/a.txt"
+                            }
+                          ],
+                          "wasTruncated": false
+                        },
+                        "outputText": "",
+                        "status": "completed"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/generationStatus",
+                      "value": "completed"
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryAdded",
+                "params": {
+                  "entry": {
+                    "createdAt": "<time>",
+                    "detail": {
+                      "display": {
+                        "content": null,
+                        "message": "grep",
+                        "settledMessage": "grep",
+                        "settledVerb": "Ran",
+                        "statusText": {
+                          "prose": 15,
+                          "sha256": "bc9797766c2d1d79ff30fbdbb9c7941b32b70eae4be210be81aaaa73f58f8e1c"
+                        },
+                        "suffix": "",
+                        "summary": "grep",
+                        "verb": "Running"
+                      },
+                      "input": null,
+                      "kind": "file_search",
+                      "toolName": "grep"
+                    },
+                    "generationStatus": "in_progress",
+                    "id": "call_g2",
+                    "inputEntryId": null,
+                    "relatedEntryId": null,
+                    "sessionId": "<id-1>",
+                    "state": {
+                      "outputText": "",
+                      "status": "running"
+                    },
+                    "title": "grep",
+                    "turnId": "<id-2>",
+                    "type": "effect",
+                    "updatedAt": "<time>"
+                  },
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "call_g2",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/detail",
+                      "value": {
+                        "display": {
+                          "content": null,
+                          "message": {
+                            "prose": 42,
+                            "sha256": "d6bcbfdfa1ef887321d4f62c8fd7153beb9d4a4c626f74e33fce8f67fc6f5d7c"
+                          },
+                          "settledMessage": {
+                            "prose": 42,
+                            "sha256": "d6bcbfdfa1ef887321d4f62c8fd7153beb9d4a4c626f74e33fce8f67fc6f5d7c"
+                          },
+                          "settledVerb": "Searched",
+                          "statusText": {
+                            "prose": 15,
+                            "sha256": "bc9797766c2d1d79ff30fbdbb9c7941b32b70eae4be210be81aaaa73f58f8e1c"
+                          },
+                          "suffix": "",
+                          "summary": {
+                            "prose": 51,
+                            "sha256": "0b4935954590b589518f7df286d85d23e26c1973670123bf10df7559624d464f"
+                          },
+                          "verb": "Searching"
+                        },
+                        "input": {
+                          "maxMatches": null,
+                          "path": "<root>/outside/data/nested/b.txt",
+                          "pattern": "beta"
+                        },
+                        "kind": "file_search",
+                        "toolName": "grep"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "call_g2",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/state",
+                      "value": {
+                        "approvalSource": "smart",
+                        "approvalType": "always",
+                        "decision": "execute",
+                        "display": {
+                          "approvalNote": null,
+                          "message": {
+                            "prose": 14,
+                            "sha256": "0bca73e175b4c2f49805a87b20a6e112521a47a5f8e1edda4db70c77ef306c67"
+                          },
+                          "success": true,
+                          "suffix": "",
+                          "verb": "Searched",
+                          "warnings": []
+                        },
+                        "durationMs": "<rate>",
+                        "output": {
+                          "matchCount": 1,
+                          "matches": "<root>/outside/data/nested/b.txt:1:beta",
+                          "parsedMatches": [
+                            {
+                              "line": 1,
+                              "path": "<root>/outside/data/nested/b.txt"
+                            }
+                          ],
+                          "wasTruncated": false
+                        },
+                        "outputText": "",
+                        "status": "completed"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/generationStatus",
+                      "value": "completed"
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryAdded",
+                "params": {
+                  "entry": {
+                    "content": [
+                      {
+                        "text": "Searched both.",
+                        "type": "text"
+                      }
+                    ],
+                    "createdAt": "<time>",
+                    "generationStatus": "in_progress",
+                    "id": "<id-8>",
+                    "inputEntryId": null,
+                    "relatedEntryId": null,
+                    "role": "assistant",
+                    "sessionId": "<id-1>",
+                    "source": null,
+                    "turnId": "<id-2>",
+                    "type": "message",
+                    "updatedAt": "<time>",
+                    "userDisplayContent": null
+                  },
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "<id-8>",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/generationStatus",
+                      "value": "completed"
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "session/statsUpdated",
+                "params": {
+                  "contextWindow": 200000,
+                  "sessionId": "<id-1>",
+                  "stats": {
+                    "cachedInputPricePerMillion": 0.15,
+                    "contextTokens": 15,
+                    "inputPricePerMillion": 1.5,
+                    "lastTurnCachedTokens": 0,
+                    "lastTurnCompletionTokens": 5,
+                    "lastTurnDuration": "<nonzero>",
+                    "lastTurnPromptTokens": 10,
+                    "outputPricePerMillion": 7.5,
+                    "sessionCachedTokens": 0,
+                    "sessionCompletionTokens": 15,
+                    "sessionPromptTokens": 30,
+                    "steps": 4,
+                    "tokensPerSecond": "<nonzero>",
+                    "toolCallsAgreed": 2,
+                    "toolCallsFailed": 0,
+                    "toolCallsRejected": 0,
+                    "toolCallsSucceeded": 2
+                  }
+                }
+              },
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/status",
+                      "value": {
+                        "type": "idle"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "turn/completed",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "turn": {
+                    "completedAt": "<time>",
+                    "error": null,
+                    "id": "<id-2>",
+                    "inputEntryId": null,
+                    "queueItemId": null,
+                    "sessionId": "<id-1>",
+                    "startedAt": "<time>",
+                    "status": "completed",
+                    "stopReason": null
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "persisted": [
+              {
+                "child": false,
+                "messages": [
+                  {
+                    "keys": [
+                      "role",
+                      "content",
+                      "injected",
+                      "message_id"
+                    ],
+                    "message": {
+                      "content": "Look outside",
+                      "injected": false,
+                      "message_id": "<id-3>",
+                      "role": "user"
+                    }
+                  },
+                  {
+                    "keys": [
+                      "role",
+                      "injected",
+                      "tool_calls",
+                      "message_id"
+                    ],
+                    "message": {
+                      "injected": false,
+                      "message_id": "<id-9>",
+                      "role": "assistant",
+                      "tool_calls": [
+                        {
+                          "function": {
+                            "arguments": {
+                              "prose": 51,
+                              "sha256": "e97bf98637af16fa51072031e77b6b284922a224206f3afd6e0a4187c1f8c7ed"
+                            },
+                            "name": "grep"
+                          },
+                          "id": "call_g1",
+                          "index": 0,
+                          "presentation": {
+                            "display": {
+                              "message": {
+                                "prose": 30,
+                                "sha256": "782cf736128f10fc8a7727ecd38353f7982672d150c213d52c95d8e37b4b00c3"
+                              },
+                              "settledMessage": {
+                                "prose": 30,
+                                "sha256": "782cf736128f10fc8a7727ecd38353f7982672d150c213d52c95d8e37b4b00c3"
+                              },
+                              "settledVerb": "Searched",
+                              "statusText": {
+                                "prose": 15,
+                                "sha256": "bc9797766c2d1d79ff30fbdbb9c7941b32b70eae4be210be81aaaa73f58f8e1c"
+                              },
+                              "suffix": "",
+                              "summary": {
+                                "prose": 39,
+                                "sha256": "5772e255badab06d83e7f293c9e9294dd66f9f3556d7a66c04bae8533a6bc3dd"
+                              },
+                              "verb": "Searching"
+                            },
+                            "kind": "file_search"
+                          },
+                          "type": "function"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "keys": [
+                      "role",
+                      "content",
+                      "injected",
+                      "name",
+                      "tool_call_id",
+                      "tool_result"
+                    ],
+                    "message": {
+                      "content": {
+                        "prose": 93,
+                        "sha256": "ca606e366622b1ec13d3c232a5df27e0b339f1a4384185dda0a21993a8054cf5"
+                      },
+                      "injected": false,
+                      "name": "grep",
+                      "role": "tool",
+                      "tool_call_id": "call_g1",
+                      "tool_result": {
+                        "cancelled": false,
+                        "duration": "<rate>",
+                        "output": {
+                          "match_count": 1,
+                          "matches": "<root>/outside/data/a.txt:1:alpha",
+                          "pattern": "alpha",
+                          "was_truncated": false
+                        },
+                        "presentation": {
+                          "display": {
+                            "message": {
+                              "prose": 15,
+                              "sha256": "0af6e5eac1681dd31a0bb1aef8378dcfe826af093f7c59a80bd902e9d9c06238"
+                            },
+                            "success": true,
+                            "suffix": "",
+                            "verb": "Searched",
+                            "warnings": []
+                          },
+                          "kind": "file_search",
+                          "projectedOutput": {
+                            "match_count": 1,
+                            "matches": "<root>/outside/data/a.txt:1:alpha",
+                            "parsed_matches": [
+                              {
+                                "line": 1,
+                                "path": "<root>/outside/data/a.txt"
+                              }
+                            ],
+                            "was_truncated": false
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "keys": [
+                      "role",
+                      "injected",
+                      "tool_calls",
+                      "message_id"
+                    ],
+                    "message": {
+                      "injected": false,
+                      "message_id": "<id-10>",
+                      "role": "assistant",
+                      "tool_calls": [
+                        {
+                          "function": {
+                            "arguments": {
+                              "prose": 63,
+                              "sha256": "8758e3e36431bc7da68d47780053f5d24d00845fce720aeb2e74d3463a9032e8"
+                            },
+                            "name": "grep"
+                          },
+                          "id": "call_g2",
+                          "index": 0,
+                          "presentation": {
+                            "display": {
+                              "message": {
+                                "prose": 42,
+                                "sha256": "d6bcbfdfa1ef887321d4f62c8fd7153beb9d4a4c626f74e33fce8f67fc6f5d7c"
+                              },
+                              "settledMessage": {
+                                "prose": 42,
+                                "sha256": "d6bcbfdfa1ef887321d4f62c8fd7153beb9d4a4c626f74e33fce8f67fc6f5d7c"
+                              },
+                              "settledVerb": "Searched",
+                              "statusText": {
+                                "prose": 15,
+                                "sha256": "bc9797766c2d1d79ff30fbdbb9c7941b32b70eae4be210be81aaaa73f58f8e1c"
+                              },
+                              "suffix": "",
+                              "summary": {
+                                "prose": 51,
+                                "sha256": "0b4935954590b589518f7df286d85d23e26c1973670123bf10df7559624d464f"
+                              },
+                              "verb": "Searching"
+                            },
+                            "kind": "file_search"
+                          },
+                          "type": "function"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "keys": [
+                      "role",
+                      "content",
+                      "injected",
+                      "name",
+                      "tool_call_id",
+                      "tool_result"
+                    ],
+                    "message": {
+                      "content": {
+                        "prose": 98,
+                        "sha256": "4f18da94b5ddde7914cd0e5fe56596441076f58e94512b6b839bb0df51ac5426"
+                      },
+                      "injected": false,
+                      "name": "grep",
+                      "role": "tool",
+                      "tool_call_id": "call_g2",
+                      "tool_result": {
+                        "cancelled": false,
+                        "duration": "<rate>",
+                        "output": {
+                          "match_count": 1,
+                          "matches": "<root>/outside/data/nested/b.txt:1:beta",
+                          "pattern": "beta",
+                          "was_truncated": false
+                        },
+                        "presentation": {
+                          "display": {
+                            "message": {
+                              "prose": 14,
+                              "sha256": "0bca73e175b4c2f49805a87b20a6e112521a47a5f8e1edda4db70c77ef306c67"
+                            },
+                            "success": true,
+                            "suffix": "",
+                            "verb": "Searched",
+                            "warnings": []
+                          },
+                          "kind": "file_search",
+                          "projectedOutput": {
+                            "match_count": 1,
+                            "matches": "<root>/outside/data/nested/b.txt:1:beta",
+                            "parsed_matches": [
+                              {
+                                "line": 1,
+                                "path": "<root>/outside/data/nested/b.txt"
+                              }
+                            ],
+                            "was_truncated": false
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "keys": [
+                      "role",
+                      "content",
+                      "injected",
+                      "message_id"
+                    ],
+                    "message": {
+                      "content": "Searched both.",
+                      "injected": false,
+                      "message_id": "<id-8>",
+                      "role": "assistant"
+                    }
+                  }
+                ],
+                "meta": {
+                  "child_sessions": [],
+                  "parent_session_id": null,
+                  "stats": {
+                    "cached_input_price_per_million": 0.15,
+                    "context_tokens": 15,
+                    "input_price_per_million": 1.5,
+                    "last_turn_cached_tokens": 0,
+                    "last_turn_completion_tokens": 5,
+                    "last_turn_duration": "<rate>",
+                    "last_turn_prompt_tokens": 10,
+                    "last_turn_total_tokens": 15,
+                    "output_price_per_million": 7.5,
+                    "session_cached_tokens": 0,
+                    "session_completion_tokens": 15,
+                    "session_cost": 0.0001575,
+                    "session_prompt_tokens": 30,
+                    "session_total_llm_tokens": 45,
+                    "steps": 4,
+                    "tokens_per_second": "<rate>",
+                    "tool_calls_agreed": 2,
+                    "tool_calls_failed": 0,
+                    "tool_calls_hook_denied": 0,
+                    "tool_calls_rejected": 0,
+                    "tool_calls_succeeded": 2
+                  },
+                  "title": null,
+                  "title_source": "auto",
+                  "total_messages": 6
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "scenario": {
+        "backend": [
+          {
+            "toolCalls": [
+              {
+                "arguments": {
+                  "path": "$ROOT/outside/data",
+                  "pattern": "alpha"
+                },
+                "id": "call_g1",
+                "name": "grep"
+              }
+            ]
+          },
+          {
+            "toolCalls": [
+              {
+                "arguments": {
+                  "path": "$ROOT/outside/data/nested/b.txt",
+                  "pattern": "beta"
+                },
+                "id": "call_g2",
+                "name": "grep"
+              }
+            ]
+          },
+          {
+            "text": "Searched both."
+          }
+        ],
+        "callbacks": [
+          {
+            "output": {
+              "decision": {
+                "pathScope": "directory_recursive",
+                "type": "approve_for_session"
+              },
+              "type": "approval"
+            }
+          }
+        ],
+        "name": "approval/path-scope-recursive",
+        "steps": [
+          {
+            "write": {
+              "$ROOT/outside/data/a.txt": "alpha\n",
+              "$ROOT/outside/data/nested/b.txt": "beta\n"
+            }
+          },
+          {
+            "start": {
+              "agent": "accept-edits"
+            }
+          },
+          {
+            "turn": "Look outside"
+          },
+          {
+            "persisted": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "approval/path-scope-permanent",
+      "observed": {
+        "callbacks": [
+          {
+            "choices": [
+              "approve",
+              "approve_for_session",
+              "approve_permanently",
+              "deny",
+              "cancel_turn"
+            ],
+            "kind": "approval",
+            "requiredPermissions": [
+              {
+                "invocationPattern": "<root>/outside/data",
+                "label": {
+                  "prose": 37,
+                  "sha256": "6a9fbaeceaac22cd20514af21d8c69833f9568b1f44d2a5511cf00f79fb633fb"
+                },
+                "pathScopeRoot": "<root>/outside/data",
+                "scope": "outside_directory",
+                "sessionPattern": "vibe-path:exact:<root>/outside/data"
+              }
+            ]
+          }
+        ],
+        "requests": [
+          {
+            "conversation": [
+              {
+                "content": "Look outside",
+                "role": "user"
+              }
+            ],
+            "tools": [
+              "ask_user_question",
+              "bash",
+              "edit",
+              "grep",
+              "read_file",
+              "skill",
+              "task",
+              "todo",
+              "web_fetch",
+              "web_search",
+              "write_file"
+            ],
+            "utility": false
+          },
+          {
+            "conversation": [
+              {
+                "content": "Look outside",
+                "role": "user"
+              },
+              {
+                "content": "",
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "arguments": {
+                      "prose": 51,
+                      "sha256": "e97bf98637af16fa51072031e77b6b284922a224206f3afd6e0a4187c1f8c7ed"
+                    },
+                    "id": "call_g1",
+                    "name": "grep"
+                  }
+                ]
+              },
+              {
+                "content": {
+                  "prose": 93,
+                  "sha256": "ca606e366622b1ec13d3c232a5df27e0b339f1a4384185dda0a21993a8054cf5"
+                },
+                "role": "tool",
+                "toolCallId": "call_g1"
+              }
+            ],
+            "tools": [
+              "ask_user_question",
+              "bash",
+              "edit",
+              "grep",
+              "read_file",
+              "skill",
+              "task",
+              "todo",
+              "web_fetch",
+              "web_search",
+              "write_file"
+            ],
+            "utility": false
+          }
+        ],
+        "steps": [
+          {
+            "turn": [
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/bumpedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "turn/started",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "turn": {
+                    "completedAt": null,
+                    "error": null,
+                    "id": "<id-2>",
+                    "inputEntryId": null,
+                    "queueItemId": null,
+                    "sessionId": "<id-1>",
+                    "startedAt": "<time>",
+                    "status": "in_progress",
+                    "stopReason": null
+                  }
+                }
+              },
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/status",
+                      "value": {
+                        "activeTurnId": "<id-2>",
+                        "type": "running"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "session/statsUpdated",
+                "params": {
+                  "contextWindow": 200000,
+                  "sessionId": "<id-1>",
+                  "stats": {
+                    "cachedInputPricePerMillion": 0.15,
+                    "contextTokens": 0,
+                    "inputPricePerMillion": 1.5,
+                    "lastTurnCachedTokens": 0,
+                    "lastTurnCompletionTokens": 0,
+                    "lastTurnDuration": 0,
+                    "lastTurnPromptTokens": 0,
+                    "outputPricePerMillion": 7.5,
+                    "sessionCachedTokens": 0,
+                    "sessionCompletionTokens": 0,
+                    "sessionPromptTokens": 0,
+                    "steps": 0,
+                    "tokensPerSecond": 0,
+                    "toolCallsAgreed": 0,
+                    "toolCallsFailed": 0,
+                    "toolCallsRejected": 0,
+                    "toolCallsSucceeded": 0
+                  }
+                }
+              },
+              {
+                "method": "history/entryAdded",
+                "params": {
+                  "entry": {
+                    "content": [
+                      {
+                        "text": "Look outside",
+                        "type": "text"
+                      }
+                    ],
+                    "createdAt": "<time>",
+                    "generationStatus": "completed",
+                    "id": "<id-3>",
+                    "inputEntryId": null,
+                    "relatedEntryId": null,
+                    "role": "user",
+                    "sessionId": "<id-1>",
+                    "source": "turn_start",
+                    "turnId": "<id-2>",
+                    "type": "message",
+                    "updatedAt": "<time>",
+                    "userDisplayContent": null
+                  },
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/preview",
+                      "value": "Look outside"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "history/entryAdded",
+                "params": {
+                  "entry": {
+                    "createdAt": "<time>",
+                    "detail": {
+                      "display": {
+                        "content": null,
+                        "message": "grep",
+                        "settledMessage": "grep",
+                        "settledVerb": "Ran",
+                        "statusText": {
+                          "prose": 15,
+                          "sha256": "bc9797766c2d1d79ff30fbdbb9c7941b32b70eae4be210be81aaaa73f58f8e1c"
+                        },
+                        "suffix": "",
+                        "summary": "grep",
+                        "verb": "Running"
+                      },
+                      "input": null,
+                      "kind": "file_search",
+                      "toolName": "grep"
+                    },
+                    "generationStatus": "in_progress",
+                    "id": "call_g1",
+                    "inputEntryId": null,
+                    "relatedEntryId": null,
+                    "sessionId": "<id-1>",
+                    "state": {
+                      "outputText": "",
+                      "status": "running"
+                    },
+                    "title": "grep",
+                    "turnId": "<id-2>",
+                    "type": "effect",
+                    "updatedAt": "<time>"
+                  },
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "call_g1",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/detail",
+                      "value": {
+                        "display": {
+                          "content": null,
+                          "message": {
+                            "prose": 30,
+                            "sha256": "782cf736128f10fc8a7727ecd38353f7982672d150c213d52c95d8e37b4b00c3"
+                          },
+                          "settledMessage": {
+                            "prose": 30,
+                            "sha256": "782cf736128f10fc8a7727ecd38353f7982672d150c213d52c95d8e37b4b00c3"
+                          },
+                          "settledVerb": "Searched",
+                          "statusText": {
+                            "prose": 15,
+                            "sha256": "bc9797766c2d1d79ff30fbdbb9c7941b32b70eae4be210be81aaaa73f58f8e1c"
+                          },
+                          "suffix": "",
+                          "summary": {
+                            "prose": 39,
+                            "sha256": "5772e255badab06d83e7f293c9e9294dd66f9f3556d7a66c04bae8533a6bc3dd"
+                          },
+                          "verb": "Searching"
+                        },
+                        "input": {
+                          "maxMatches": null,
+                          "path": "<root>/outside/data",
+                          "pattern": "alpha"
+                        },
+                        "kind": "file_search",
+                        "toolName": "grep"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "session/statsUpdated",
+                "params": {
+                  "contextWindow": 200000,
+                  "sessionId": "<id-1>",
+                  "stats": {
+                    "cachedInputPricePerMillion": 0.15,
+                    "contextTokens": 15,
+                    "inputPricePerMillion": 1.5,
+                    "lastTurnCachedTokens": 0,
+                    "lastTurnCompletionTokens": 5,
+                    "lastTurnDuration": "<nonzero>",
+                    "lastTurnPromptTokens": 10,
+                    "outputPricePerMillion": 7.5,
+                    "sessionCachedTokens": 0,
+                    "sessionCompletionTokens": 5,
+                    "sessionPromptTokens": 10,
+                    "steps": 1,
+                    "tokensPerSecond": "<nonzero>",
+                    "toolCallsAgreed": 0,
+                    "toolCallsFailed": 0,
+                    "toolCallsRejected": 0,
+                    "toolCallsSucceeded": 0
+                  }
+                }
+              },
+              {
+                "method": "history/entryAdded",
+                "params": {
+                  "entry": {
+                    "callbackId": "<id-5>",
+                    "createdAt": "<time>",
+                    "detail": {
+                      "choices": [
+                        "approve",
+                        "approve_for_session",
+                        "approve_permanently",
+                        "deny",
+                        "cancel_turn"
+                      ],
+                      "effect": {
+                        "display": {
+                          "content": null,
+                          "message": {
+                            "prose": 30,
+                            "sha256": "782cf736128f10fc8a7727ecd38353f7982672d150c213d52c95d8e37b4b00c3"
+                          },
+                          "settledMessage": {
+                            "prose": 30,
+                            "sha256": "782cf736128f10fc8a7727ecd38353f7982672d150c213d52c95d8e37b4b00c3"
+                          },
+                          "settledVerb": "Searched",
+                          "statusText": {
+                            "prose": 15,
+                            "sha256": "bc9797766c2d1d79ff30fbdbb9c7941b32b70eae4be210be81aaaa73f58f8e1c"
+                          },
+                          "suffix": "",
+                          "summary": {
+                            "prose": 39,
+                            "sha256": "5772e255badab06d83e7f293c9e9294dd66f9f3556d7a66c04bae8533a6bc3dd"
+                          },
+                          "verb": "Searching"
+                        },
+                        "input": {
+                          "maxMatches": null,
+                          "path": "<root>/outside/data",
+                          "pattern": "alpha"
+                        },
+                        "kind": "file_search",
+                        "toolName": "grep"
+                      },
+                      "kind": "approval",
+                      "pathScopeChoices": [
+                        "directory_recursive"
+                      ],
+                      "reason": null,
+                      "relatedEntryId": "call_g1",
+                      "requiredPermissions": [
+                        {
+                          "invocationPattern": "<root>/outside/data",
+                          "label": {
+                            "prose": 37,
+                            "sha256": "6a9fbaeceaac22cd20514af21d8c69833f9568b1f44d2a5511cf00f79fb633fb"
+                          },
+                          "pathScopeRoot": "<root>/outside/data",
+                          "scope": "outside_directory",
+                          "sessionPattern": "vibe-path:exact:<root>/outside/data"
+                        }
+                      ]
+                    },
+                    "generationStatus": "in_progress",
+                    "id": "<id-6>",
+                    "inputEntryId": null,
+                    "relatedEntryId": "call_g1",
+                    "sessionId": "<id-1>",
+                    "state": {
+                      "status": "open"
+                    },
+                    "title": {
+                      "prose": 11,
+                      "sha256": "a73f7c7a7fc642a442e4b45ce5abe0c249b3ee020f85adc1be5b86498f7cd5db"
+                    },
+                    "turnId": "<id-2>",
+                    "type": "callback",
+                    "updatedAt": "<time>"
+                  },
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "call_g1",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/state",
+                      "value": {
+                        "callbackId": "<id-5>",
+                        "outputText": "",
+                        "status": "blocked"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/status",
+                      "value": {
+                        "activeTurnId": "<id-2>",
+                        "callbackId": "<id-5>",
+                        "reason": "approval",
+                        "type": "blocked"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "<id-6>",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/state",
+                      "value": {
+                        "output": {
+                          "decision": {
+                            "pathScope": "directory_recursive",
+                            "type": "approve_permanently"
+                          },
+                          "feedback": null,
+                          "type": "approval"
+                        },
+                        "status": "answered"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/generationStatus",
+                      "value": "completed"
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "call_g1",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/state",
+                      "value": {
+                        "outputText": "",
+                        "status": "running"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/status",
+                      "value": {
+                        "activeTurnId": "<id-2>",
+                        "type": "running"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "call_g1",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/state",
+                      "value": {
+                        "approvalSource": "user",
+                        "approvalType": "ask",
+                        "decision": "execute",
+                        "display": {
+                          "approvalNote": null,
+                          "message": {
+                            "prose": 15,
+                            "sha256": "0af6e5eac1681dd31a0bb1aef8378dcfe826af093f7c59a80bd902e9d9c06238"
+                          },
+                          "success": true,
+                          "suffix": "",
+                          "verb": "Searched",
+                          "warnings": []
+                        },
+                        "durationMs": "<rate>",
+                        "output": {
+                          "matchCount": 1,
+                          "matches": "<root>/outside/data/a.txt:1:alpha",
+                          "parsedMatches": [
+                            {
+                              "line": 1,
+                              "path": "<root>/outside/data/a.txt"
+                            }
+                          ],
+                          "wasTruncated": false
+                        },
+                        "outputText": "",
+                        "status": "completed"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/generationStatus",
+                      "value": "completed"
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryAdded",
+                "params": {
+                  "entry": {
+                    "content": [
+                      {
+                        "text": "Searched.",
+                        "type": "text"
+                      }
+                    ],
+                    "createdAt": "<time>",
+                    "generationStatus": "in_progress",
+                    "id": "<id-7>",
+                    "inputEntryId": null,
+                    "relatedEntryId": null,
+                    "role": "assistant",
+                    "sessionId": "<id-1>",
+                    "source": null,
+                    "turnId": "<id-2>",
+                    "type": "message",
+                    "updatedAt": "<time>",
+                    "userDisplayContent": null
+                  },
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "<id-7>",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/generationStatus",
+                      "value": "completed"
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "session/statsUpdated",
+                "params": {
+                  "contextWindow": 200000,
+                  "sessionId": "<id-1>",
+                  "stats": {
+                    "cachedInputPricePerMillion": 0.15,
+                    "contextTokens": 15,
+                    "inputPricePerMillion": 1.5,
+                    "lastTurnCachedTokens": 0,
+                    "lastTurnCompletionTokens": 5,
+                    "lastTurnDuration": "<nonzero>",
+                    "lastTurnPromptTokens": 10,
+                    "outputPricePerMillion": 7.5,
+                    "sessionCachedTokens": 0,
+                    "sessionCompletionTokens": 10,
+                    "sessionPromptTokens": 20,
+                    "steps": 3,
+                    "tokensPerSecond": "<nonzero>",
+                    "toolCallsAgreed": 1,
+                    "toolCallsFailed": 0,
+                    "toolCallsRejected": 0,
+                    "toolCallsSucceeded": 1
+                  }
+                }
+              },
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/status",
+                      "value": {
+                        "type": "idle"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "turn/completed",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "turn": {
+                    "completedAt": "<time>",
+                    "error": null,
+                    "id": "<id-2>",
+                    "inputEntryId": null,
+                    "queueItemId": null,
+                    "sessionId": "<id-1>",
+                    "startedAt": "<time>",
+                    "status": "completed",
+                    "stopReason": null
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "file": "active_model = \"mistral-medium-3.5\"\nenable_telemetry = false\nenable_update_checks = false\n\n[[providers]]\nname = \"mistral\"\napi_base = \"<backend>/v1\"\napi_key_env_var = \"MISTRAL_API_KEY\"\nbackend = \"mistral\"\n\n[tools.grep]\nallowlist = [\n    \"vibe-path:directory_recursive:<root>/outside/data\",\n]\n"
+          }
+        ]
+      },
+      "scenario": {
+        "backend": [
+          {
+            "toolCalls": [
+              {
+                "arguments": {
+                  "path": "$ROOT/outside/data",
+                  "pattern": "alpha"
+                },
+                "id": "call_g1",
+                "name": "grep"
+              }
+            ]
+          },
+          {
+            "text": "Searched."
+          }
+        ],
+        "callbacks": [
+          {
+            "output": {
+              "decision": {
+                "pathScope": "directory_recursive",
+                "type": "approve_permanently"
+              },
+              "type": "approval"
+            }
+          }
+        ],
+        "name": "approval/path-scope-permanent",
+        "steps": [
+          {
+            "write": {
+              "$ROOT/outside/data/a.txt": "alpha\n",
+              "$ROOT/outside/data/nested/b.txt": "beta\n"
+            }
+          },
+          {
+            "start": {
+              "agent": "accept-edits"
+            }
+          },
+          {
+            "turn": "Look outside"
+          },
+          {
+            "file": "$ROOT/vibe-home/config.toml"
+          }
+        ]
+      }
+    },
+    {
+      "name": "approval/path-scope-exact",
+      "observed": {
+        "callbacks": [
+          {
+            "choices": [
+              "approve",
+              "approve_for_session",
+              "approve_permanently",
+              "deny",
+              "cancel_turn"
+            ],
+            "kind": "approval",
+            "requiredPermissions": [
+              {
+                "invocationPattern": "<root>/outside/data/a.txt",
+                "label": {
+                  "prose": 43,
+                  "sha256": "4210a1f3d45a0ae3b4e2f7559a6d08735269eb0603728733a86c1bc61dd4214d"
+                },
+                "pathScopeRoot": null,
+                "scope": "outside_directory",
+                "sessionPattern": "vibe-path:exact:<root>/outside/data/a.txt"
+              }
+            ]
+          },
+          {
+            "choices": [
+              "approve",
+              "approve_for_session",
+              "approve_permanently",
+              "deny",
+              "cancel_turn"
+            ],
+            "kind": "approval",
+            "requiredPermissions": [
+              {
+                "invocationPattern": "<root>/outside/data/nested/b.txt",
+                "label": {
+                  "prose": 50,
+                  "sha256": "c46814c72d19019a253e19af6a38708d3c00c4b60eedf98c17e245e723dd3dad"
+                },
+                "pathScopeRoot": null,
+                "scope": "outside_directory",
+                "sessionPattern": "vibe-path:exact:<root>/outside/data/nested/b.txt"
+              }
+            ]
+          }
+        ],
+        "requests": [
+          {
+            "conversation": [
+              {
+                "content": "Look outside",
+                "role": "user"
+              }
+            ],
+            "tools": [
+              "ask_user_question",
+              "bash",
+              "edit",
+              "grep",
+              "read_file",
+              "skill",
+              "task",
+              "todo",
+              "web_fetch",
+              "web_search",
+              "write_file"
+            ],
+            "utility": false
+          },
+          {
+            "conversation": [
+              {
+                "content": "Look outside",
+                "role": "user"
+              },
+              {
+                "content": "",
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "arguments": {
+                      "prose": 42,
+                      "sha256": "ac5bb7f3627db0f8f357045912e2015ac9389ce2d7355fd8df6a07368648e8ea"
+                    },
+                    "id": "call_r1",
+                    "name": "read_file"
+                  }
+                ]
+              },
+              {
+                "content": {
+                  "prose": 169,
+                  "sha256": "0c6f2b6742b5184a48b174f226fff3848a47e3c5dd404566446a9f60cade7ac1"
+                },
+                "role": "tool",
+                "toolCallId": "call_r1"
+              }
+            ],
+            "tools": [
+              "ask_user_question",
+              "bash",
+              "edit",
+              "grep",
+              "read_file",
+              "skill",
+              "task",
+              "todo",
+              "web_fetch",
+              "web_search",
+              "write_file"
+            ],
+            "utility": false
+          },
+          {
+            "conversation": [
+              {
+                "content": "Look outside",
+                "role": "user"
+              },
+              {
+                "content": "",
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "arguments": {
+                      "prose": 42,
+                      "sha256": "ac5bb7f3627db0f8f357045912e2015ac9389ce2d7355fd8df6a07368648e8ea"
+                    },
+                    "id": "call_r1",
+                    "name": "read_file"
+                  }
+                ]
+              },
+              {
+                "content": {
+                  "prose": 169,
+                  "sha256": "0c6f2b6742b5184a48b174f226fff3848a47e3c5dd404566446a9f60cade7ac1"
+                },
+                "role": "tool",
+                "toolCallId": "call_r1"
+              },
+              {
+                "content": "",
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "arguments": {
+                      "prose": 42,
+                      "sha256": "ac5bb7f3627db0f8f357045912e2015ac9389ce2d7355fd8df6a07368648e8ea"
+                    },
+                    "id": "call_r2",
+                    "name": "read_file"
+                  }
+                ]
+              },
+              {
+                "content": {
+                  "prose": 169,
+                  "sha256": "0c6f2b6742b5184a48b174f226fff3848a47e3c5dd404566446a9f60cade7ac1"
+                },
+                "role": "tool",
+                "toolCallId": "call_r2"
+              }
+            ],
+            "tools": [
+              "ask_user_question",
+              "bash",
+              "edit",
+              "grep",
+              "read_file",
+              "skill",
+              "task",
+              "todo",
+              "web_fetch",
+              "web_search",
+              "write_file"
+            ],
+            "utility": false
+          },
+          {
+            "conversation": [
+              {
+                "content": "Look outside",
+                "role": "user"
+              },
+              {
+                "content": "",
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "arguments": {
+                      "prose": 42,
+                      "sha256": "ac5bb7f3627db0f8f357045912e2015ac9389ce2d7355fd8df6a07368648e8ea"
+                    },
+                    "id": "call_r1",
+                    "name": "read_file"
+                  }
+                ]
+              },
+              {
+                "content": {
+                  "prose": 169,
+                  "sha256": "0c6f2b6742b5184a48b174f226fff3848a47e3c5dd404566446a9f60cade7ac1"
+                },
+                "role": "tool",
+                "toolCallId": "call_r1"
+              },
+              {
+                "content": "",
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "arguments": {
+                      "prose": 42,
+                      "sha256": "ac5bb7f3627db0f8f357045912e2015ac9389ce2d7355fd8df6a07368648e8ea"
+                    },
+                    "id": "call_r2",
+                    "name": "read_file"
+                  }
+                ]
+              },
+              {
+                "content": {
+                  "prose": 169,
+                  "sha256": "0c6f2b6742b5184a48b174f226fff3848a47e3c5dd404566446a9f60cade7ac1"
+                },
+                "role": "tool",
+                "toolCallId": "call_r2"
+              },
+              {
+                "content": "",
+                "role": "assistant",
+                "toolCalls": [
+                  {
+                    "arguments": {
+                      "prose": 49,
+                      "sha256": "3ae5af94fedd8d2fff610120be2c271a32aace052a95884108bdd3cc66444570"
+                    },
+                    "id": "call_r3",
+                    "name": "read_file"
+                  }
+                ]
+              },
+              {
+                "content": {
+                  "prose": 175,
+                  "sha256": "368362459db88b258acde604a1dfa42f8da219adb0bbcf08dec06714124b720e"
+                },
+                "role": "tool",
+                "toolCallId": "call_r3"
+              }
+            ],
+            "tools": [
+              "ask_user_question",
+              "bash",
+              "edit",
+              "grep",
+              "read_file",
+              "skill",
+              "task",
+              "todo",
+              "web_fetch",
+              "web_search",
+              "write_file"
+            ],
+            "utility": false
+          }
+        ],
+        "steps": [
+          {
+            "turn": [
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/bumpedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "turn/started",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "turn": {
+                    "completedAt": null,
+                    "error": null,
+                    "id": "<id-2>",
+                    "inputEntryId": null,
+                    "queueItemId": null,
+                    "sessionId": "<id-1>",
+                    "startedAt": "<time>",
+                    "status": "in_progress",
+                    "stopReason": null
+                  }
+                }
+              },
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/status",
+                      "value": {
+                        "activeTurnId": "<id-2>",
+                        "type": "running"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "session/statsUpdated",
+                "params": {
+                  "contextWindow": 200000,
+                  "sessionId": "<id-1>",
+                  "stats": {
+                    "cachedInputPricePerMillion": 0.15,
+                    "contextTokens": 0,
+                    "inputPricePerMillion": 1.5,
+                    "lastTurnCachedTokens": 0,
+                    "lastTurnCompletionTokens": 0,
+                    "lastTurnDuration": 0,
+                    "lastTurnPromptTokens": 0,
+                    "outputPricePerMillion": 7.5,
+                    "sessionCachedTokens": 0,
+                    "sessionCompletionTokens": 0,
+                    "sessionPromptTokens": 0,
+                    "steps": 0,
+                    "tokensPerSecond": 0,
+                    "toolCallsAgreed": 0,
+                    "toolCallsFailed": 0,
+                    "toolCallsRejected": 0,
+                    "toolCallsSucceeded": 0
+                  }
+                }
+              },
+              {
+                "method": "history/entryAdded",
+                "params": {
+                  "entry": {
+                    "content": [
+                      {
+                        "text": "Look outside",
+                        "type": "text"
+                      }
+                    ],
+                    "createdAt": "<time>",
+                    "generationStatus": "completed",
+                    "id": "<id-3>",
+                    "inputEntryId": null,
+                    "relatedEntryId": null,
+                    "role": "user",
+                    "sessionId": "<id-1>",
+                    "source": "turn_start",
+                    "turnId": "<id-2>",
+                    "type": "message",
+                    "updatedAt": "<time>",
+                    "userDisplayContent": null
+                  },
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/preview",
+                      "value": "Look outside"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "history/entryAdded",
+                "params": {
+                  "entry": {
+                    "createdAt": "<time>",
+                    "detail": {
+                      "display": {
+                        "content": null,
+                        "message": "read_file",
+                        "settledMessage": "read_file",
+                        "settledVerb": "Ran",
+                        "statusText": {
+                          "prose": 12,
+                          "sha256": "33e97951020dc75b1cd9cd3edb4d6f53b56fe454546289cf8c915287555f9d24"
+                        },
+                        "suffix": "",
+                        "summary": "read_file",
+                        "verb": "Running"
+                      },
+                      "input": null,
+                      "kind": "file_read",
+                      "toolName": "read_file"
+                    },
+                    "generationStatus": "in_progress",
+                    "id": "call_r1",
+                    "inputEntryId": null,
+                    "relatedEntryId": null,
+                    "sessionId": "<id-1>",
+                    "state": {
+                      "outputText": "",
+                      "status": "running"
+                    },
+                    "title": "read_file",
+                    "turnId": "<id-2>",
+                    "type": "effect",
+                    "updatedAt": "<time>"
+                  },
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "call_r1",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/detail",
+                      "value": {
+                        "display": {
+                          "content": null,
+                          "message": "<root>/outside/data/a.txt",
+                          "settledMessage": "<root>/outside/data/a.txt",
+                          "settledVerb": "Read",
+                          "statusText": {
+                            "prose": 12,
+                            "sha256": "33e97951020dc75b1cd9cd3edb4d6f53b56fe454546289cf8c915287555f9d24"
+                          },
+                          "suffix": "",
+                          "summary": {
+                            "prose": 33,
+                            "sha256": "fd945fb99e0fff69b8eff1f3cd532d47ed83cf6ec727d15ae9878beb2f72791d"
+                          },
+                          "verb": "Reading"
+                        },
+                        "input": {
+                          "filePath": "<root>/outside/data/a.txt",
+                          "limit": 2000,
+                          "offset": null
+                        },
+                        "kind": "file_read",
+                        "toolName": "read_file"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "session/statsUpdated",
+                "params": {
+                  "contextWindow": 200000,
+                  "sessionId": "<id-1>",
+                  "stats": {
+                    "cachedInputPricePerMillion": 0.15,
+                    "contextTokens": 15,
+                    "inputPricePerMillion": 1.5,
+                    "lastTurnCachedTokens": 0,
+                    "lastTurnCompletionTokens": 5,
+                    "lastTurnDuration": "<nonzero>",
+                    "lastTurnPromptTokens": 10,
+                    "outputPricePerMillion": 7.5,
+                    "sessionCachedTokens": 0,
+                    "sessionCompletionTokens": 5,
+                    "sessionPromptTokens": 10,
+                    "steps": 1,
+                    "tokensPerSecond": "<nonzero>",
+                    "toolCallsAgreed": 0,
+                    "toolCallsFailed": 0,
+                    "toolCallsRejected": 0,
+                    "toolCallsSucceeded": 0
+                  }
+                }
+              },
+              {
+                "method": "history/entryAdded",
+                "params": {
+                  "entry": {
+                    "callbackId": "<id-5>",
+                    "createdAt": "<time>",
+                    "detail": {
+                      "choices": [
+                        "approve",
+                        "approve_for_session",
+                        "approve_permanently",
+                        "deny",
+                        "cancel_turn"
+                      ],
+                      "effect": {
+                        "display": {
+                          "content": null,
+                          "message": "<root>/outside/data/a.txt",
+                          "settledMessage": "<root>/outside/data/a.txt",
+                          "settledVerb": "Read",
+                          "statusText": {
+                            "prose": 12,
+                            "sha256": "33e97951020dc75b1cd9cd3edb4d6f53b56fe454546289cf8c915287555f9d24"
+                          },
+                          "suffix": "",
+                          "summary": {
+                            "prose": 33,
+                            "sha256": "fd945fb99e0fff69b8eff1f3cd532d47ed83cf6ec727d15ae9878beb2f72791d"
+                          },
+                          "verb": "Reading"
+                        },
+                        "input": {
+                          "filePath": "<root>/outside/data/a.txt",
+                          "limit": 2000,
+                          "offset": null
+                        },
+                        "kind": "file_read",
+                        "toolName": "read_file"
+                      },
+                      "kind": "approval",
+                      "pathScopeChoices": [
+                        "exact"
+                      ],
+                      "reason": null,
+                      "relatedEntryId": "call_r1",
+                      "requiredPermissions": [
+                        {
+                          "invocationPattern": "<root>/outside/data/a.txt",
+                          "label": {
+                            "prose": 43,
+                            "sha256": "4210a1f3d45a0ae3b4e2f7559a6d08735269eb0603728733a86c1bc61dd4214d"
+                          },
+                          "pathScopeRoot": null,
+                          "scope": "outside_directory",
+                          "sessionPattern": "vibe-path:exact:<root>/outside/data/a.txt"
+                        }
+                      ]
+                    },
+                    "generationStatus": "in_progress",
+                    "id": "<id-6>",
+                    "inputEntryId": null,
+                    "relatedEntryId": "call_r1",
+                    "sessionId": "<id-1>",
+                    "state": {
+                      "status": "open"
+                    },
+                    "title": {
+                      "prose": 16,
+                      "sha256": "f7ad21c3a4577c1c9fc7ae5e478d628c766a77a118b9c6cbfd81ff111d6b8bb8"
+                    },
+                    "turnId": "<id-2>",
+                    "type": "callback",
+                    "updatedAt": "<time>"
+                  },
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "call_r1",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/state",
+                      "value": {
+                        "callbackId": "<id-5>",
+                        "outputText": "",
+                        "status": "blocked"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/status",
+                      "value": {
+                        "activeTurnId": "<id-2>",
+                        "callbackId": "<id-5>",
+                        "reason": "approval",
+                        "type": "blocked"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "<id-6>",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/state",
+                      "value": {
+                        "output": {
+                          "decision": {
+                            "pathScope": "exact",
+                            "type": "approve_for_session"
+                          },
+                          "feedback": null,
+                          "type": "approval"
+                        },
+                        "status": "answered"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/generationStatus",
+                      "value": "completed"
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "call_r1",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/state",
+                      "value": {
+                        "outputText": "",
+                        "status": "running"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/status",
+                      "value": {
+                        "activeTurnId": "<id-2>",
+                        "type": "running"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "call_r1",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/state",
+                      "value": {
+                        "approvalSource": "user",
+                        "approvalType": "ask",
+                        "decision": "execute",
+                        "display": {
+                          "approvalNote": null,
+                          "message": {
+                            "prose": 37,
+                            "sha256": "8281f98f23af701ec48d28ec93c997387e686e0fea56af328a8e2897f44fb82d"
+                          },
+                          "success": true,
+                          "suffix": "",
+                          "verb": "Read",
+                          "warnings": []
+                        },
+                        "durationMs": "<rate>",
+                        "output": {
+                          "content": {
+                            "prose": 15,
+                            "sha256": "723f72d991177ffac1dd5f2b3438b2a6d70b74c74969ab10f9833fefc862f768"
+                          },
+                          "filePath": "<root>/outside/data/a.txt",
+                          "numLines": 1,
+                          "requestedLimit": 2000,
+                          "requestedOffset": null,
+                          "startLine": 1,
+                          "totalLines": 1,
+                          "wasTruncated": false
+                        },
+                        "outputText": "",
+                        "status": "completed"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/generationStatus",
+                      "value": "completed"
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryAdded",
+                "params": {
+                  "entry": {
+                    "createdAt": "<time>",
+                    "detail": {
+                      "display": {
+                        "content": null,
+                        "message": "read_file",
+                        "settledMessage": "read_file",
+                        "settledVerb": "Ran",
+                        "statusText": {
+                          "prose": 12,
+                          "sha256": "33e97951020dc75b1cd9cd3edb4d6f53b56fe454546289cf8c915287555f9d24"
+                        },
+                        "suffix": "",
+                        "summary": "read_file",
+                        "verb": "Running"
+                      },
+                      "input": null,
+                      "kind": "file_read",
+                      "toolName": "read_file"
+                    },
+                    "generationStatus": "in_progress",
+                    "id": "call_r2",
+                    "inputEntryId": null,
+                    "relatedEntryId": null,
+                    "sessionId": "<id-1>",
+                    "state": {
+                      "outputText": "",
+                      "status": "running"
+                    },
+                    "title": "read_file",
+                    "turnId": "<id-2>",
+                    "type": "effect",
+                    "updatedAt": "<time>"
+                  },
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "call_r2",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/detail",
+                      "value": {
+                        "display": {
+                          "content": null,
+                          "message": "<root>/outside/data/a.txt",
+                          "settledMessage": "<root>/outside/data/a.txt",
+                          "settledVerb": "Read",
+                          "statusText": {
+                            "prose": 12,
+                            "sha256": "33e97951020dc75b1cd9cd3edb4d6f53b56fe454546289cf8c915287555f9d24"
+                          },
+                          "suffix": "",
+                          "summary": {
+                            "prose": 33,
+                            "sha256": "fd945fb99e0fff69b8eff1f3cd532d47ed83cf6ec727d15ae9878beb2f72791d"
+                          },
+                          "verb": "Reading"
+                        },
+                        "input": {
+                          "filePath": "<root>/outside/data/a.txt",
+                          "limit": 2000,
+                          "offset": null
+                        },
+                        "kind": "file_read",
+                        "toolName": "read_file"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "call_r2",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/state",
+                      "value": {
+                        "approvalSource": "smart",
+                        "approvalType": "always",
+                        "decision": "execute",
+                        "display": {
+                          "approvalNote": null,
+                          "message": {
+                            "prose": 37,
+                            "sha256": "8281f98f23af701ec48d28ec93c997387e686e0fea56af328a8e2897f44fb82d"
+                          },
+                          "success": true,
+                          "suffix": "",
+                          "verb": "Read",
+                          "warnings": []
+                        },
+                        "durationMs": "<rate>",
+                        "output": {
+                          "content": {
+                            "prose": 15,
+                            "sha256": "723f72d991177ffac1dd5f2b3438b2a6d70b74c74969ab10f9833fefc862f768"
+                          },
+                          "filePath": "<root>/outside/data/a.txt",
+                          "numLines": 1,
+                          "requestedLimit": 2000,
+                          "requestedOffset": null,
+                          "startLine": 1,
+                          "totalLines": 1,
+                          "wasTruncated": false
+                        },
+                        "outputText": "",
+                        "status": "completed"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/generationStatus",
+                      "value": "completed"
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryAdded",
+                "params": {
+                  "entry": {
+                    "createdAt": "<time>",
+                    "detail": {
+                      "display": {
+                        "content": null,
+                        "message": "read_file",
+                        "settledMessage": "read_file",
+                        "settledVerb": "Ran",
+                        "statusText": {
+                          "prose": 12,
+                          "sha256": "33e97951020dc75b1cd9cd3edb4d6f53b56fe454546289cf8c915287555f9d24"
+                        },
+                        "suffix": "",
+                        "summary": "read_file",
+                        "verb": "Running"
+                      },
+                      "input": null,
+                      "kind": "file_read",
+                      "toolName": "read_file"
+                    },
+                    "generationStatus": "in_progress",
+                    "id": "call_r3",
+                    "inputEntryId": null,
+                    "relatedEntryId": null,
+                    "sessionId": "<id-1>",
+                    "state": {
+                      "outputText": "",
+                      "status": "running"
+                    },
+                    "title": "read_file",
+                    "turnId": "<id-2>",
+                    "type": "effect",
+                    "updatedAt": "<time>"
+                  },
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "call_r3",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/detail",
+                      "value": {
+                        "display": {
+                          "content": null,
+                          "message": "<root>/outside/data/nested/b.txt",
+                          "settledMessage": "<root>/outside/data/nested/b.txt",
+                          "settledVerb": "Read",
+                          "statusText": {
+                            "prose": 12,
+                            "sha256": "33e97951020dc75b1cd9cd3edb4d6f53b56fe454546289cf8c915287555f9d24"
+                          },
+                          "suffix": "",
+                          "summary": {
+                            "prose": 40,
+                            "sha256": "0e90e0cc6040f7d248fa9af4c6117312301992dc53a7d2435dd9301f77e15cfc"
+                          },
+                          "verb": "Reading"
+                        },
+                        "input": {
+                          "filePath": "<root>/outside/data/nested/b.txt",
+                          "limit": 2000,
+                          "offset": null
+                        },
+                        "kind": "file_read",
+                        "toolName": "read_file"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryAdded",
+                "params": {
+                  "entry": {
+                    "callbackId": "<id-9>",
+                    "createdAt": "<time>",
+                    "detail": {
+                      "choices": [
+                        "approve",
+                        "approve_for_session",
+                        "approve_permanently",
+                        "deny",
+                        "cancel_turn"
+                      ],
+                      "effect": {
+                        "display": {
+                          "content": null,
+                          "message": "<root>/outside/data/nested/b.txt",
+                          "settledMessage": "<root>/outside/data/nested/b.txt",
+                          "settledVerb": "Read",
+                          "statusText": {
+                            "prose": 12,
+                            "sha256": "33e97951020dc75b1cd9cd3edb4d6f53b56fe454546289cf8c915287555f9d24"
+                          },
+                          "suffix": "",
+                          "summary": {
+                            "prose": 40,
+                            "sha256": "0e90e0cc6040f7d248fa9af4c6117312301992dc53a7d2435dd9301f77e15cfc"
+                          },
+                          "verb": "Reading"
+                        },
+                        "input": {
+                          "filePath": "<root>/outside/data/nested/b.txt",
+                          "limit": 2000,
+                          "offset": null
+                        },
+                        "kind": "file_read",
+                        "toolName": "read_file"
+                      },
+                      "kind": "approval",
+                      "pathScopeChoices": [
+                        "exact"
+                      ],
+                      "reason": null,
+                      "relatedEntryId": "call_r3",
+                      "requiredPermissions": [
+                        {
+                          "invocationPattern": "<root>/outside/data/nested/b.txt",
+                          "label": {
+                            "prose": 50,
+                            "sha256": "c46814c72d19019a253e19af6a38708d3c00c4b60eedf98c17e245e723dd3dad"
+                          },
+                          "pathScopeRoot": null,
+                          "scope": "outside_directory",
+                          "sessionPattern": "vibe-path:exact:<root>/outside/data/nested/b.txt"
+                        }
+                      ]
+                    },
+                    "generationStatus": "in_progress",
+                    "id": "<id-10>",
+                    "inputEntryId": null,
+                    "relatedEntryId": "call_r3",
+                    "sessionId": "<id-1>",
+                    "state": {
+                      "status": "open"
+                    },
+                    "title": {
+                      "prose": 16,
+                      "sha256": "f7ad21c3a4577c1c9fc7ae5e478d628c766a77a118b9c6cbfd81ff111d6b8bb8"
+                    },
+                    "turnId": "<id-2>",
+                    "type": "callback",
+                    "updatedAt": "<time>"
+                  },
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "call_r3",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/state",
+                      "value": {
+                        "callbackId": "<id-9>",
+                        "outputText": "",
+                        "status": "blocked"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/status",
+                      "value": {
+                        "activeTurnId": "<id-2>",
+                        "callbackId": "<id-9>",
+                        "reason": "approval",
+                        "type": "blocked"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "<id-10>",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/state",
+                      "value": {
+                        "output": {
+                          "decision": {
+                            "pathScope": "exact",
+                            "type": "approve_for_session"
+                          },
+                          "feedback": null,
+                          "type": "approval"
+                        },
+                        "status": "answered"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/generationStatus",
+                      "value": "completed"
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "call_r3",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/state",
+                      "value": {
+                        "outputText": "",
+                        "status": "running"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/status",
+                      "value": {
+                        "activeTurnId": "<id-2>",
+                        "type": "running"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "call_r3",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/state",
+                      "value": {
+                        "approvalSource": "user",
+                        "approvalType": "ask",
+                        "decision": "execute",
+                        "display": {
+                          "approvalNote": null,
+                          "message": {
+                            "prose": 44,
+                            "sha256": "69aac8c055712437bde68847bc99a9cfe1bd77c43c1446703f2f260731419eaa"
+                          },
+                          "success": true,
+                          "suffix": "",
+                          "verb": "Read",
+                          "warnings": []
+                        },
+                        "durationMs": "<rate>",
+                        "output": {
+                          "content": {
+                            "prose": 14,
+                            "sha256": "49ddeba8719ae47a84555c51e1e30f3bc2c0e394aad046993ad69c9acc3ecd41"
+                          },
+                          "filePath": "<root>/outside/data/nested/b.txt",
+                          "numLines": 1,
+                          "requestedLimit": 2000,
+                          "requestedOffset": null,
+                          "startLine": 1,
+                          "totalLines": 1,
+                          "wasTruncated": false
+                        },
+                        "outputText": "",
+                        "status": "completed"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/generationStatus",
+                      "value": "completed"
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryAdded",
+                "params": {
+                  "entry": {
+                    "content": [
+                      {
+                        "text": "Read them.",
+                        "type": "text"
+                      }
+                    ],
+                    "createdAt": "<time>",
+                    "generationStatus": "in_progress",
+                    "id": "<id-11>",
+                    "inputEntryId": null,
+                    "relatedEntryId": null,
+                    "role": "assistant",
+                    "sessionId": "<id-1>",
+                    "source": null,
+                    "turnId": "<id-2>",
+                    "type": "message",
+                    "updatedAt": "<time>",
+                    "userDisplayContent": null
+                  },
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "<id-11>",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/generationStatus",
+                      "value": "completed"
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "session/statsUpdated",
+                "params": {
+                  "contextWindow": 200000,
+                  "sessionId": "<id-1>",
+                  "stats": {
+                    "cachedInputPricePerMillion": 0.15,
+                    "contextTokens": 15,
+                    "inputPricePerMillion": 1.5,
+                    "lastTurnCachedTokens": 0,
+                    "lastTurnCompletionTokens": 5,
+                    "lastTurnDuration": "<nonzero>",
+                    "lastTurnPromptTokens": 10,
+                    "outputPricePerMillion": 7.5,
+                    "sessionCachedTokens": 0,
+                    "sessionCompletionTokens": 20,
+                    "sessionPromptTokens": 40,
+                    "steps": 5,
+                    "tokensPerSecond": "<nonzero>",
+                    "toolCallsAgreed": 3,
+                    "toolCallsFailed": 0,
+                    "toolCallsRejected": 0,
+                    "toolCallsSucceeded": 3
+                  }
+                }
+              },
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/status",
+                      "value": {
+                        "type": "idle"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "turn/completed",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "turn": {
+                    "completedAt": "<time>",
+                    "error": null,
+                    "id": "<id-2>",
+                    "inputEntryId": null,
+                    "queueItemId": null,
+                    "sessionId": "<id-1>",
+                    "startedAt": "<time>",
+                    "status": "completed",
+                    "stopReason": null
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "persisted": [
+              {
+                "child": false,
+                "messages": [
+                  {
+                    "keys": [
+                      "role",
+                      "content",
+                      "injected",
+                      "message_id"
+                    ],
+                    "message": {
+                      "content": "Look outside",
+                      "injected": false,
+                      "message_id": "<id-3>",
+                      "role": "user"
+                    }
+                  },
+                  {
+                    "keys": [
+                      "role",
+                      "injected",
+                      "tool_calls",
+                      "message_id"
+                    ],
+                    "message": {
+                      "injected": false,
+                      "message_id": "<id-12>",
+                      "role": "assistant",
+                      "tool_calls": [
+                        {
+                          "function": {
+                            "arguments": {
+                              "prose": 42,
+                              "sha256": "ac5bb7f3627db0f8f357045912e2015ac9389ce2d7355fd8df6a07368648e8ea"
+                            },
+                            "name": "read_file"
+                          },
+                          "id": "call_r1",
+                          "index": 0,
+                          "presentation": {
+                            "display": {
+                              "message": "<root>/outside/data/a.txt",
+                              "settledMessage": "<root>/outside/data/a.txt",
+                              "settledVerb": "Read",
+                              "statusText": {
+                                "prose": 12,
+                                "sha256": "33e97951020dc75b1cd9cd3edb4d6f53b56fe454546289cf8c915287555f9d24"
+                              },
+                              "suffix": "",
+                              "summary": {
+                                "prose": 33,
+                                "sha256": "fd945fb99e0fff69b8eff1f3cd532d47ed83cf6ec727d15ae9878beb2f72791d"
+                              },
+                              "verb": "Reading"
+                            },
+                            "kind": "file_read"
+                          },
+                          "type": "function"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "keys": [
+                      "role",
+                      "content",
+                      "injected",
+                      "name",
+                      "tool_call_id",
+                      "tool_result"
+                    ],
+                    "message": {
+                      "content": {
+                        "prose": 169,
+                        "sha256": "0c6f2b6742b5184a48b174f226fff3848a47e3c5dd404566446a9f60cade7ac1"
+                      },
+                      "injected": false,
+                      "name": "read_file",
+                      "role": "tool",
+                      "tool_call_id": "call_r1",
+                      "tool_result": {
+                        "cancelled": false,
+                        "duration": "<rate>",
+                        "output": {
+                          "content": {
+                            "prose": 15,
+                            "sha256": "723f72d991177ffac1dd5f2b3438b2a6d70b74c74969ab10f9833fefc862f768"
+                          },
+                          "file_path": "<root>/outside/data/a.txt",
+                          "num_lines": 1,
+                          "requested_limit": 2000,
+                          "requested_offset": null,
+                          "start_line": 1,
+                          "total_lines": 1,
+                          "was_truncated": false
+                        },
+                        "presentation": {
+                          "display": {
+                            "message": {
+                              "prose": 37,
+                              "sha256": "8281f98f23af701ec48d28ec93c997387e686e0fea56af328a8e2897f44fb82d"
+                            },
+                            "success": true,
+                            "suffix": "",
+                            "verb": "Read",
+                            "warnings": []
+                          },
+                          "kind": "file_read"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "keys": [
+                      "role",
+                      "injected",
+                      "tool_calls",
+                      "message_id"
+                    ],
+                    "message": {
+                      "injected": false,
+                      "message_id": "<id-13>",
+                      "role": "assistant",
+                      "tool_calls": [
+                        {
+                          "function": {
+                            "arguments": {
+                              "prose": 42,
+                              "sha256": "ac5bb7f3627db0f8f357045912e2015ac9389ce2d7355fd8df6a07368648e8ea"
+                            },
+                            "name": "read_file"
+                          },
+                          "id": "call_r2",
+                          "index": 0,
+                          "presentation": {
+                            "display": {
+                              "message": "<root>/outside/data/a.txt",
+                              "settledMessage": "<root>/outside/data/a.txt",
+                              "settledVerb": "Read",
+                              "statusText": {
+                                "prose": 12,
+                                "sha256": "33e97951020dc75b1cd9cd3edb4d6f53b56fe454546289cf8c915287555f9d24"
+                              },
+                              "suffix": "",
+                              "summary": {
+                                "prose": 33,
+                                "sha256": "fd945fb99e0fff69b8eff1f3cd532d47ed83cf6ec727d15ae9878beb2f72791d"
+                              },
+                              "verb": "Reading"
+                            },
+                            "kind": "file_read"
+                          },
+                          "type": "function"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "keys": [
+                      "role",
+                      "content",
+                      "injected",
+                      "name",
+                      "tool_call_id",
+                      "tool_result"
+                    ],
+                    "message": {
+                      "content": {
+                        "prose": 169,
+                        "sha256": "0c6f2b6742b5184a48b174f226fff3848a47e3c5dd404566446a9f60cade7ac1"
+                      },
+                      "injected": false,
+                      "name": "read_file",
+                      "role": "tool",
+                      "tool_call_id": "call_r2",
+                      "tool_result": {
+                        "cancelled": false,
+                        "duration": "<rate>",
+                        "output": {
+                          "content": {
+                            "prose": 15,
+                            "sha256": "723f72d991177ffac1dd5f2b3438b2a6d70b74c74969ab10f9833fefc862f768"
+                          },
+                          "file_path": "<root>/outside/data/a.txt",
+                          "num_lines": 1,
+                          "requested_limit": 2000,
+                          "requested_offset": null,
+                          "start_line": 1,
+                          "total_lines": 1,
+                          "was_truncated": false
+                        },
+                        "presentation": {
+                          "display": {
+                            "message": {
+                              "prose": 37,
+                              "sha256": "8281f98f23af701ec48d28ec93c997387e686e0fea56af328a8e2897f44fb82d"
+                            },
+                            "success": true,
+                            "suffix": "",
+                            "verb": "Read",
+                            "warnings": []
+                          },
+                          "kind": "file_read"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "keys": [
+                      "role",
+                      "injected",
+                      "tool_calls",
+                      "message_id"
+                    ],
+                    "message": {
+                      "injected": false,
+                      "message_id": "<id-14>",
+                      "role": "assistant",
+                      "tool_calls": [
+                        {
+                          "function": {
+                            "arguments": {
+                              "prose": 49,
+                              "sha256": "3ae5af94fedd8d2fff610120be2c271a32aace052a95884108bdd3cc66444570"
+                            },
+                            "name": "read_file"
+                          },
+                          "id": "call_r3",
+                          "index": 0,
+                          "presentation": {
+                            "display": {
+                              "message": "<root>/outside/data/nested/b.txt",
+                              "settledMessage": "<root>/outside/data/nested/b.txt",
+                              "settledVerb": "Read",
+                              "statusText": {
+                                "prose": 12,
+                                "sha256": "33e97951020dc75b1cd9cd3edb4d6f53b56fe454546289cf8c915287555f9d24"
+                              },
+                              "suffix": "",
+                              "summary": {
+                                "prose": 40,
+                                "sha256": "0e90e0cc6040f7d248fa9af4c6117312301992dc53a7d2435dd9301f77e15cfc"
+                              },
+                              "verb": "Reading"
+                            },
+                            "kind": "file_read"
+                          },
+                          "type": "function"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "keys": [
+                      "role",
+                      "content",
+                      "injected",
+                      "name",
+                      "tool_call_id",
+                      "tool_result"
+                    ],
+                    "message": {
+                      "content": {
+                        "prose": 175,
+                        "sha256": "368362459db88b258acde604a1dfa42f8da219adb0bbcf08dec06714124b720e"
+                      },
+                      "injected": false,
+                      "name": "read_file",
+                      "role": "tool",
+                      "tool_call_id": "call_r3",
+                      "tool_result": {
+                        "cancelled": false,
+                        "duration": "<rate>",
+                        "output": {
+                          "content": {
+                            "prose": 14,
+                            "sha256": "49ddeba8719ae47a84555c51e1e30f3bc2c0e394aad046993ad69c9acc3ecd41"
+                          },
+                          "file_path": "<root>/outside/data/nested/b.txt",
+                          "num_lines": 1,
+                          "requested_limit": 2000,
+                          "requested_offset": null,
+                          "start_line": 1,
+                          "total_lines": 1,
+                          "was_truncated": false
+                        },
+                        "presentation": {
+                          "display": {
+                            "message": {
+                              "prose": 44,
+                              "sha256": "69aac8c055712437bde68847bc99a9cfe1bd77c43c1446703f2f260731419eaa"
+                            },
+                            "success": true,
+                            "suffix": "",
+                            "verb": "Read",
+                            "warnings": []
+                          },
+                          "kind": "file_read"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "keys": [
+                      "role",
+                      "content",
+                      "injected",
+                      "message_id"
+                    ],
+                    "message": {
+                      "content": "Read them.",
+                      "injected": false,
+                      "message_id": "<id-11>",
+                      "role": "assistant"
+                    }
+                  }
+                ],
+                "meta": {
+                  "child_sessions": [],
+                  "parent_session_id": null,
+                  "stats": {
+                    "cached_input_price_per_million": 0.15,
+                    "context_tokens": 15,
+                    "input_price_per_million": 1.5,
+                    "last_turn_cached_tokens": 0,
+                    "last_turn_completion_tokens": 5,
+                    "last_turn_duration": "<rate>",
+                    "last_turn_prompt_tokens": 10,
+                    "last_turn_total_tokens": 15,
+                    "output_price_per_million": 7.5,
+                    "session_cached_tokens": 0,
+                    "session_completion_tokens": 20,
+                    "session_cost": 0.00021,
+                    "session_prompt_tokens": 40,
+                    "session_total_llm_tokens": 60,
+                    "steps": 5,
+                    "tokens_per_second": "<rate>",
+                    "tool_calls_agreed": 3,
+                    "tool_calls_failed": 0,
+                    "tool_calls_hook_denied": 0,
+                    "tool_calls_rejected": 0,
+                    "tool_calls_succeeded": 3
+                  },
+                  "title": null,
+                  "title_source": "auto",
+                  "total_messages": 8
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "scenario": {
+        "backend": [
+          {
+            "toolCalls": [
+              {
+                "arguments": {
+                  "file_path": "$ROOT/outside/data/a.txt"
+                },
+                "id": "call_r1",
+                "name": "read_file"
+              }
+            ]
+          },
+          {
+            "toolCalls": [
+              {
+                "arguments": {
+                  "file_path": "$ROOT/outside/data/a.txt"
+                },
+                "id": "call_r2",
+                "name": "read_file"
+              }
+            ]
+          },
+          {
+            "toolCalls": [
+              {
+                "arguments": {
+                  "file_path": "$ROOT/outside/data/nested/b.txt"
+                },
+                "id": "call_r3",
+                "name": "read_file"
+              }
+            ]
+          },
+          {
+            "text": "Read them."
+          }
+        ],
+        "callbacks": [
+          {
+            "output": {
+              "decision": {
+                "pathScope": "exact",
+                "type": "approve_for_session"
+              },
+              "type": "approval"
+            }
+          }
+        ],
+        "name": "approval/path-scope-exact",
+        "steps": [
+          {
+            "write": {
+              "$ROOT/outside/data/a.txt": "alpha\n",
+              "$ROOT/outside/data/nested/b.txt": "beta\n"
+            }
+          },
+          {
+            "start": {
+              "agent": "accept-edits"
+            }
+          },
+          {
+            "turn": "Look outside"
+          },
+          {
+            "persisted": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "approval/path-scope-not-offered",
+      "observed": {
+        "callbacks": [
+          {
+            "choices": [
+              "approve",
+              "approve_for_session",
+              "approve_permanently",
+              "deny",
+              "cancel_turn"
+            ],
+            "kind": "approval",
+            "requiredPermissions": [
+              {
+                "invocationPattern": "<root>/outside/data/a.txt",
+                "label": {
+                  "prose": 43,
+                  "sha256": "4210a1f3d45a0ae3b4e2f7559a6d08735269eb0603728733a86c1bc61dd4214d"
+                },
+                "pathScopeRoot": null,
+                "scope": "outside_directory",
+                "sessionPattern": "vibe-path:exact:<root>/outside/data/a.txt"
+              }
+            ]
+          }
+        ],
+        "requests": [
+          {
+            "conversation": [
+              {
+                "content": "Look outside",
+                "role": "user"
+              }
+            ],
+            "tools": [
+              "ask_user_question",
+              "bash",
+              "edit",
+              "grep",
+              "read_file",
+              "skill",
+              "task",
+              "todo",
+              "web_fetch",
+              "web_search",
+              "write_file"
+            ],
+            "utility": false
+          }
+        ],
+        "steps": [
+          {
+            "turn": [
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/bumpedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "turn/started",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "turn": {
+                    "completedAt": null,
+                    "error": null,
+                    "id": "<id-2>",
+                    "inputEntryId": null,
+                    "queueItemId": null,
+                    "sessionId": "<id-1>",
+                    "startedAt": "<time>",
+                    "status": "in_progress",
+                    "stopReason": null
+                  }
+                }
+              },
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/status",
+                      "value": {
+                        "activeTurnId": "<id-2>",
+                        "type": "running"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "session/statsUpdated",
+                "params": {
+                  "contextWindow": 200000,
+                  "sessionId": "<id-1>",
+                  "stats": {
+                    "cachedInputPricePerMillion": 0.15,
+                    "contextTokens": 0,
+                    "inputPricePerMillion": 1.5,
+                    "lastTurnCachedTokens": 0,
+                    "lastTurnCompletionTokens": 0,
+                    "lastTurnDuration": 0,
+                    "lastTurnPromptTokens": 0,
+                    "outputPricePerMillion": 7.5,
+                    "sessionCachedTokens": 0,
+                    "sessionCompletionTokens": 0,
+                    "sessionPromptTokens": 0,
+                    "steps": 0,
+                    "tokensPerSecond": 0,
+                    "toolCallsAgreed": 0,
+                    "toolCallsFailed": 0,
+                    "toolCallsRejected": 0,
+                    "toolCallsSucceeded": 0
+                  }
+                }
+              },
+              {
+                "method": "history/entryAdded",
+                "params": {
+                  "entry": {
+                    "content": [
+                      {
+                        "text": "Look outside",
+                        "type": "text"
+                      }
+                    ],
+                    "createdAt": "<time>",
+                    "generationStatus": "completed",
+                    "id": "<id-3>",
+                    "inputEntryId": null,
+                    "relatedEntryId": null,
+                    "role": "user",
+                    "sessionId": "<id-1>",
+                    "source": "turn_start",
+                    "turnId": "<id-2>",
+                    "type": "message",
+                    "updatedAt": "<time>",
+                    "userDisplayContent": null
+                  },
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/preview",
+                      "value": "Look outside"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "history/entryAdded",
+                "params": {
+                  "entry": {
+                    "createdAt": "<time>",
+                    "detail": {
+                      "display": {
+                        "content": null,
+                        "message": "read_file",
+                        "settledMessage": "read_file",
+                        "settledVerb": "Ran",
+                        "statusText": {
+                          "prose": 12,
+                          "sha256": "33e97951020dc75b1cd9cd3edb4d6f53b56fe454546289cf8c915287555f9d24"
+                        },
+                        "suffix": "",
+                        "summary": "read_file",
+                        "verb": "Running"
+                      },
+                      "input": null,
+                      "kind": "file_read",
+                      "toolName": "read_file"
+                    },
+                    "generationStatus": "in_progress",
+                    "id": "call_r1",
+                    "inputEntryId": null,
+                    "relatedEntryId": null,
+                    "sessionId": "<id-1>",
+                    "state": {
+                      "outputText": "",
+                      "status": "running"
+                    },
+                    "title": "read_file",
+                    "turnId": "<id-2>",
+                    "type": "effect",
+                    "updatedAt": "<time>"
+                  },
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "call_r1",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/detail",
+                      "value": {
+                        "display": {
+                          "content": null,
+                          "message": "<root>/outside/data/a.txt",
+                          "settledMessage": "<root>/outside/data/a.txt",
+                          "settledVerb": "Read",
+                          "statusText": {
+                            "prose": 12,
+                            "sha256": "33e97951020dc75b1cd9cd3edb4d6f53b56fe454546289cf8c915287555f9d24"
+                          },
+                          "suffix": "",
+                          "summary": {
+                            "prose": 33,
+                            "sha256": "fd945fb99e0fff69b8eff1f3cd532d47ed83cf6ec727d15ae9878beb2f72791d"
+                          },
+                          "verb": "Reading"
+                        },
+                        "input": {
+                          "filePath": "<root>/outside/data/a.txt",
+                          "limit": 2000,
+                          "offset": null
+                        },
+                        "kind": "file_read",
+                        "toolName": "read_file"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "session/statsUpdated",
+                "params": {
+                  "contextWindow": 200000,
+                  "sessionId": "<id-1>",
+                  "stats": {
+                    "cachedInputPricePerMillion": 0.15,
+                    "contextTokens": 15,
+                    "inputPricePerMillion": 1.5,
+                    "lastTurnCachedTokens": 0,
+                    "lastTurnCompletionTokens": 5,
+                    "lastTurnDuration": "<nonzero>",
+                    "lastTurnPromptTokens": 10,
+                    "outputPricePerMillion": 7.5,
+                    "sessionCachedTokens": 0,
+                    "sessionCompletionTokens": 5,
+                    "sessionPromptTokens": 10,
+                    "steps": 1,
+                    "tokensPerSecond": "<nonzero>",
+                    "toolCallsAgreed": 0,
+                    "toolCallsFailed": 0,
+                    "toolCallsRejected": 0,
+                    "toolCallsSucceeded": 0
+                  }
+                }
+              },
+              {
+                "method": "history/entryAdded",
+                "params": {
+                  "entry": {
+                    "callbackId": "<id-5>",
+                    "createdAt": "<time>",
+                    "detail": {
+                      "choices": [
+                        "approve",
+                        "approve_for_session",
+                        "approve_permanently",
+                        "deny",
+                        "cancel_turn"
+                      ],
+                      "effect": {
+                        "display": {
+                          "content": null,
+                          "message": "<root>/outside/data/a.txt",
+                          "settledMessage": "<root>/outside/data/a.txt",
+                          "settledVerb": "Read",
+                          "statusText": {
+                            "prose": 12,
+                            "sha256": "33e97951020dc75b1cd9cd3edb4d6f53b56fe454546289cf8c915287555f9d24"
+                          },
+                          "suffix": "",
+                          "summary": {
+                            "prose": 33,
+                            "sha256": "fd945fb99e0fff69b8eff1f3cd532d47ed83cf6ec727d15ae9878beb2f72791d"
+                          },
+                          "verb": "Reading"
+                        },
+                        "input": {
+                          "filePath": "<root>/outside/data/a.txt",
+                          "limit": 2000,
+                          "offset": null
+                        },
+                        "kind": "file_read",
+                        "toolName": "read_file"
+                      },
+                      "kind": "approval",
+                      "pathScopeChoices": [
+                        "exact"
+                      ],
+                      "reason": null,
+                      "relatedEntryId": "call_r1",
+                      "requiredPermissions": [
+                        {
+                          "invocationPattern": "<root>/outside/data/a.txt",
+                          "label": {
+                            "prose": 43,
+                            "sha256": "4210a1f3d45a0ae3b4e2f7559a6d08735269eb0603728733a86c1bc61dd4214d"
+                          },
+                          "pathScopeRoot": null,
+                          "scope": "outside_directory",
+                          "sessionPattern": "vibe-path:exact:<root>/outside/data/a.txt"
+                        }
+                      ]
+                    },
+                    "generationStatus": "in_progress",
+                    "id": "<id-6>",
+                    "inputEntryId": null,
+                    "relatedEntryId": "call_r1",
+                    "sessionId": "<id-1>",
+                    "state": {
+                      "status": "open"
+                    },
+                    "title": {
+                      "prose": 16,
+                      "sha256": "f7ad21c3a4577c1c9fc7ae5e478d628c766a77a118b9c6cbfd81ff111d6b8bb8"
+                    },
+                    "turnId": "<id-2>",
+                    "type": "callback",
+                    "updatedAt": "<time>"
+                  },
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "call_r1",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/state",
+                      "value": {
+                        "callbackId": "<id-5>",
+                        "outputText": "",
+                        "status": "blocked"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/status",
+                      "value": {
+                        "activeTurnId": "<id-2>",
+                        "callbackId": "<id-5>",
+                        "reason": "approval",
+                        "type": "blocked"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "<id-6>",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/state",
+                      "value": {
+                        "output": {
+                          "decision": {
+                            "pathScope": "directory_recursive",
+                            "type": "approve_for_session"
+                          },
+                          "feedback": null,
+                          "type": "approval"
+                        },
+                        "status": "answered"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/generationStatus",
+                      "value": "completed"
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "call_r1",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/state",
+                      "value": {
+                        "outputText": "",
+                        "status": "running"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/status",
+                      "value": {
+                        "activeTurnId": "<id-2>",
+                        "type": "running"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "history/entryUpdated",
+                "params": {
+                  "entryId": "call_r1",
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/state",
+                      "value": {
+                        "approvalSource": null,
+                        "approvalType": null,
+                        "decision": null,
+                        "display": {
+                          "approvalNote": null,
+                          "message": {
+                            "prose": 10,
+                            "sha256": "ce8389f3b06ba54731ac9d4586e1dff95015dc59ff250baa747a870ded34611e"
+                          },
+                          "success": false,
+                          "suffix": "",
+                          "verb": "",
+                          "warnings": []
+                        },
+                        "durationMs": 0,
+                        "error": {
+                          "code": null,
+                          "details": null,
+                          "message": {
+                            "prose": 10,
+                            "sha256": "ce8389f3b06ba54731ac9d4586e1dff95015dc59ff250baa747a870ded34611e"
+                          }
+                        },
+                        "output": null,
+                        "outputText": "",
+                        "status": "failed"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/generationStatus",
+                      "value": "completed"
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "turnId": "<id-2>"
+                }
+              },
+              {
+                "method": "session/statsUpdated",
+                "params": {
+                  "contextWindow": 200000,
+                  "sessionId": "<id-1>",
+                  "stats": {
+                    "cachedInputPricePerMillion": 0.15,
+                    "contextTokens": 15,
+                    "inputPricePerMillion": 1.5,
+                    "lastTurnCachedTokens": 0,
+                    "lastTurnCompletionTokens": 5,
+                    "lastTurnDuration": "<nonzero>",
+                    "lastTurnPromptTokens": 10,
+                    "outputPricePerMillion": 7.5,
+                    "sessionCachedTokens": 0,
+                    "sessionCompletionTokens": 5,
+                    "sessionPromptTokens": 10,
+                    "steps": 1,
+                    "tokensPerSecond": "<nonzero>",
+                    "toolCallsAgreed": 0,
+                    "toolCallsFailed": 0,
+                    "toolCallsRejected": 0,
+                    "toolCallsSucceeded": 0
+                  }
+                }
+              },
+              {
+                "method": "session/updated",
+                "params": {
+                  "patch": [
+                    {
+                      "op": "replace",
+                      "path": "/status",
+                      "value": {
+                        "type": "idle"
+                      }
+                    },
+                    {
+                      "op": "replace",
+                      "path": "/updatedAt",
+                      "value": "<time>"
+                    }
+                  ],
+                  "sessionId": "<id-1>"
+                }
+              },
+              {
+                "method": "turn/completed",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "turn": {
+                    "completedAt": "<time>",
+                    "error": {
+                      "code": "internal_error",
+                      "details": null,
+                      "message": {
+                        "prose": 48,
+                        "sha256": "d71846038c44f4b9c81dc689e19c52179f3925b4fdd94e7193137be8d3fe3995"
+                      }
+                    },
+                    "id": "<id-2>",
+                    "inputEntryId": null,
+                    "queueItemId": null,
+                    "sessionId": "<id-1>",
+                    "startedAt": "<time>",
+                    "status": "failed",
+                    "stopReason": null
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "persisted": [
+              {
+                "child": false,
+                "messages": [
+                  {
+                    "keys": [
+                      "role",
+                      "content",
+                      "injected",
+                      "message_id"
+                    ],
+                    "message": {
+                      "content": "Look outside",
+                      "injected": false,
+                      "message_id": "<id-3>",
+                      "role": "user"
+                    }
+                  },
+                  {
+                    "keys": [
+                      "role",
+                      "injected",
+                      "tool_calls",
+                      "message_id"
+                    ],
+                    "message": {
+                      "injected": false,
+                      "message_id": "<id-7>",
+                      "role": "assistant",
+                      "tool_calls": [
+                        {
+                          "function": {
+                            "arguments": {
+                              "prose": 42,
+                              "sha256": "ac5bb7f3627db0f8f357045912e2015ac9389ce2d7355fd8df6a07368648e8ea"
+                            },
+                            "name": "read_file"
+                          },
+                          "id": "call_r1",
+                          "index": 0,
+                          "presentation": {
+                            "display": {
+                              "message": "<root>/outside/data/a.txt",
+                              "settledMessage": "<root>/outside/data/a.txt",
+                              "settledVerb": "Read",
+                              "statusText": {
+                                "prose": 12,
+                                "sha256": "33e97951020dc75b1cd9cd3edb4d6f53b56fe454546289cf8c915287555f9d24"
+                              },
+                              "suffix": "",
+                              "summary": {
+                                "prose": 33,
+                                "sha256": "fd945fb99e0fff69b8eff1f3cd532d47ed83cf6ec727d15ae9878beb2f72791d"
+                              },
+                              "verb": "Reading"
+                            },
+                            "kind": "file_read"
+                          },
+                          "type": "function"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "keys": [
+                      "role",
+                      "content",
+                      "injected",
+                      "name",
+                      "tool_call_id"
+                    ],
+                    "message": {
+                      "content": {
+                        "prose": 91,
+                        "sha256": "8b64b7fbc45f9338f6425380b486c184326aaf1105b82c0d5f1a817edbabd445"
+                      },
+                      "injected": false,
+                      "name": "read_file",
+                      "role": "tool",
+                      "tool_call_id": "call_r1"
+                    }
+                  }
+                ],
+                "meta": {
+                  "child_sessions": [],
+                  "parent_session_id": null,
+                  "stats": {
+                    "cached_input_price_per_million": 0.15,
+                    "context_tokens": 15,
+                    "input_price_per_million": 1.5,
+                    "last_turn_cached_tokens": 0,
+                    "last_turn_completion_tokens": 5,
+                    "last_turn_duration": "<rate>",
+                    "last_turn_prompt_tokens": 10,
+                    "last_turn_total_tokens": 15,
+                    "output_price_per_million": 7.5,
+                    "session_cached_tokens": 0,
+                    "session_completion_tokens": 5,
+                    "session_cost": 5.25e-05,
+                    "session_prompt_tokens": 10,
+                    "session_total_llm_tokens": 15,
+                    "steps": 1,
+                    "tokens_per_second": "<rate>",
+                    "tool_calls_agreed": 0,
+                    "tool_calls_failed": 1,
+                    "tool_calls_hook_denied": 0,
+                    "tool_calls_rejected": 0,
+                    "tool_calls_succeeded": 0
+                  },
+                  "title": null,
+                  "title_source": "auto",
+                  "total_messages": 3
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "scenario": {
+        "backend": [
+          {
+            "toolCalls": [
+              {
+                "arguments": {
+                  "file_path": "$ROOT/outside/data/a.txt"
+                },
+                "id": "call_r1",
+                "name": "read_file"
+              }
+            ]
+          },
+          {
+            "text": "Read it."
+          }
+        ],
+        "callbacks": [
+          {
+            "output": {
+              "decision": {
+                "pathScope": "directory_recursive",
+                "type": "approve_for_session"
+              },
+              "type": "approval"
+            }
+          }
+        ],
+        "name": "approval/path-scope-not-offered",
+        "steps": [
+          {
+            "write": {
+              "$ROOT/outside/data/a.txt": "alpha\n",
+              "$ROOT/outside/data/nested/b.txt": "beta\n"
+            }
+          },
+          {
+            "start": {
+              "agent": "accept-edits"
+            }
+          },
+          {
+            "turn": "Look outside"
+          },
+          {
+            "persisted": true
+          }
+        ]
+      }
+    },
+    {
       "name": "steer/mention",
       "observed": {
         "callbacks": [],

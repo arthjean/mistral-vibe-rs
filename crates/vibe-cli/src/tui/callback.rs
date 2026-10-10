@@ -9,7 +9,7 @@ use vibe_app_server::client::{
     ApprovalDecisionType, CallbackDetail, EffectDetail, NoticeDetail, PublicCallbackState,
     PublicHistoryEntry, UserQuestionRequest,
 };
-use vibe_core::policy::PermissionRequirement;
+use vibe_core::policy::{PathGrantScope, PermissionRequirement, path_scope_target};
 
 use super::controls::{
     CallbackChoice, CallbackEffect, CallbackInput, CallbackInputOutcome, CallbackOption,
@@ -497,11 +497,12 @@ pub(super) fn pending_callback_from_entry(
             effect,
             required_permissions,
             choices,
+            path_scope_choices,
             ..
         } => (
             title.clone(),
             CallbackRequest::Approval {
-                options: approval_options(choices)?,
+                options: approval_options(choices, path_scope_choices, required_permissions)?,
                 effect: callback_effect(effect, required_permissions)?,
             },
         ),
@@ -591,35 +592,66 @@ fn callback_effect_content(tool_name: &str, value: &Value) -> String {
 /// The decisions the operator may pick from, labeled the way the reference
 /// labels them. `cancel_turn` is offered through the interrupt shortcut rather
 /// than as a list entry, so it never appears here.
-fn approval_options(choices: &[ApprovalDecisionType]) -> Result<Vec<CallbackOption>, String> {
+///
+/// Reference `ApprovalApp._build_options`: an approval that offers path scopes
+/// replaces the session and the permanent entry with one entry per scope,
+/// each naming what it grants, and its id carries the scope after a colon.
+pub(super) fn approval_options(
+    choices: &[ApprovalDecisionType],
+    path_scope_choices: &[PathGrantScope],
+    required_permissions: &[PermissionRequirement],
+) -> Result<Vec<CallbackOption>, String> {
     if choices.is_empty() || choices.len() > MAX_CALLBACK_OPTIONS {
         return Err("approval callback has an invalid choice count".to_owned());
     }
+    let option = |id: String, label: String, description: &str| CallbackOption {
+        id,
+        label,
+        description: description.to_owned(),
+    };
+    let lasting = |id: &str, for_session: bool, label: &str, description: &str| {
+        if path_scope_choices.is_empty() {
+            return vec![option(id.to_owned(), label.to_owned(), description)];
+        }
+        path_scope_choices
+            .iter()
+            .map(|scope| {
+                let target = path_scope_target(required_permissions, *scope, for_session);
+                let label = if for_session {
+                    format!("Allow {target} for this session")
+                } else {
+                    format!("Always allow {target}")
+                };
+                option(format!("{id}:{}", scope.label()), label, description)
+            })
+            .collect()
+    };
     Ok(choices
         .iter()
-        .filter_map(|choice| {
-            let (id, label, description) = match choice {
-                ApprovalDecisionType::Approve => {
-                    ("approve", "Allow once", "Approve this invocation")
-                }
-                ApprovalDecisionType::ApproveForSession => (
-                    "approve_for_session",
-                    "Allow for session",
-                    "Approve matching requests for this session",
-                ),
-                ApprovalDecisionType::ApprovePermanently => (
-                    "approve_permanently",
-                    "Always allow",
-                    "Persist approval for matching requests",
-                ),
-                ApprovalDecisionType::Deny => ("deny", "Deny", "Reject this invocation"),
-                ApprovalDecisionType::CancelTurn => return None,
-            };
-            Some(CallbackOption {
-                id: id.to_owned(),
-                label: label.to_owned(),
-                description: description.to_owned(),
-            })
+        .flat_map(|choice| match choice {
+            ApprovalDecisionType::Approve => vec![option(
+                "approve".to_owned(),
+                "Allow once".to_owned(),
+                "Approve this invocation",
+            )],
+            ApprovalDecisionType::ApproveForSession => lasting(
+                "approve_for_session",
+                true,
+                "Allow for session",
+                "Approve matching requests for this session",
+            ),
+            ApprovalDecisionType::ApprovePermanently => lasting(
+                "approve_permanently",
+                false,
+                "Always allow",
+                "Persist approval for matching requests",
+            ),
+            ApprovalDecisionType::Deny => vec![option(
+                "deny".to_owned(),
+                "Deny".to_owned(),
+                "Reject this invocation",
+            )],
+            ApprovalDecisionType::CancelTurn => Vec::new(),
         })
         .collect())
 }

@@ -27,6 +27,36 @@
       ]
     },
     {
+      "id": "approval-path-scope-folder-for-session",
+      "story": "US-024",
+      "events": [
+        {"kind": "present_path_approval", "target": "/srv/outside/data", "scope": "directory_recursive", "at_ms": 1000},
+        {"kind": "input", "input": {"kind": "down"}, "at_ms": 1500},
+        {"kind": "input", "input": {"kind": "select"}, "at_ms": 1500}
+      ],
+      "expected": [
+        "active:path:options=once,session:directory_recursive,permanent:directory_recursive,deny",
+        "updated",
+        "submit:session:directory_recursive"
+      ]
+    },
+    {
+      "id": "approval-path-scope-file-kept",
+      "story": "US-024",
+      "events": [
+        {"kind": "present_path_approval", "target": "/srv/outside/data/a.txt", "scope": "exact", "at_ms": 1000},
+        {"kind": "input", "input": {"kind": "down"}, "at_ms": 1500},
+        {"kind": "input", "input": {"kind": "down"}, "at_ms": 1500},
+        {"kind": "input", "input": {"kind": "select"}, "at_ms": 1500}
+      ],
+      "expected": [
+        "active:path:options=once,session:exact,permanent:exact,deny",
+        "updated",
+        "updated",
+        "submit:permanent:exact"
+      ]
+    },
+    {
       "id": "canonical-server-fifo-beats-identifier-order",
       "story": "US-025",
       "events": [

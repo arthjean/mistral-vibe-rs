@@ -11,6 +11,7 @@ use vibe_app_server::client::{
     CallbackDetail, PublicCallbackState, PublicHistoryEntry, TurnDriver,
 };
 use vibe_core::events::UserQuestionRequest;
+use vibe_core::policy::{PathGrantScope, PermissionRequirement, path_scope_target};
 
 use crate::agent::AcpAgent;
 use crate::projection::updated_entry_updates;
@@ -55,6 +56,7 @@ where
                 CallbackDetail::Approval {
                     effect,
                     required_permissions,
+                    path_scope_choices,
                     related_entry_id,
                     ..
                 } => {
@@ -77,7 +79,9 @@ where
                             meta
                         })
                         .collect::<Vec<_>>();
-                    self.answer_approval(harness, &tool_call_id, permissions)
+                    let scoped =
+                        scoped_permission_options(&required_permissions, &path_scope_choices);
+                    self.answer_approval(harness, &tool_call_id, permissions, scoped)
                         .await?
                 }
                 CallbackDetail::UserInput {
@@ -153,34 +157,53 @@ where
     }
 
     /// Reference `_answer_callback` for an approval.
+    ///
+    /// `scoped` holds the lasting options of an approval that offers path
+    /// scopes, which replace the plain session and permanent ones.
     async fn answer_approval(
         &self,
         harness: &Arc<AcpHarness<D>>,
         tool_call_id: &str,
         permissions: Vec<Value>,
+        scoped: Vec<ScopedOption>,
     ) -> Result<Value, AcpError> {
         let session_meta =
             (!permissions.is_empty()).then(|| json!({"required_permissions": permissions}));
-        let mut always = json!({
-            "optionId": "allow_always",
-            "name": "Allow for the rest of this session",
-            "kind": "allow_always",
-        });
-        let mut permanent = json!({
-            "optionId": "allow_always_permanent",
-            "name": "Always allow",
-            "kind": "allow_always",
-        });
-        if let Some(meta) = &session_meta {
-            always["_meta"] = meta.clone();
-            permanent["_meta"] = meta.clone();
-        }
-        let options = json!([
-            {"optionId": "allow_once", "name": "Allow once", "kind": "allow_once"},
-            always,
-            permanent,
-            {"optionId": "reject_once", "name": "Deny", "kind": "reject_once"},
-        ]);
+        let with_meta = |mut option: Value| {
+            if let Some(meta) = &session_meta {
+                option["_meta"] = meta.clone();
+            }
+            option
+        };
+        let lasting = if scoped.is_empty() {
+            vec![
+                with_meta(json!({
+                    "optionId": "allow_always",
+                    "name": "Allow for the rest of this session",
+                    "kind": "allow_always",
+                })),
+                with_meta(json!({
+                    "optionId": "allow_always_permanent",
+                    "name": "Always allow",
+                    "kind": "allow_always",
+                })),
+            ]
+        } else {
+            scoped
+                .iter()
+                .map(|option| {
+                    with_meta(json!({
+                        "optionId": option.id,
+                        "name": option.name,
+                        "kind": "allow_always",
+                    }))
+                })
+                .collect()
+        };
+        let mut options =
+            vec![json!({"optionId": "allow_once", "name": "Allow once", "kind": "allow_once"})];
+        options.extend(lasting);
+        options.push(json!({"optionId": "reject_once", "name": "Deny", "kind": "reject_once"}));
         let request = self.call_client(
             "session/request_permission",
             json!({
@@ -200,11 +223,15 @@ where
             .filter(|outcome| outcome.get("outcome").and_then(Value::as_str) == Some("selected"))
             .and_then(|outcome| outcome.get("optionId"))
             .and_then(Value::as_str);
-        let (decision, feedback) = match selected {
-            Some("allow_once") => ("approve", None),
-            Some("allow_always") => ("approve_for_session", None),
-            Some("allow_always_permanent") => ("approve_permanently", None),
-            Some("reject_once") => {
+        let picked =
+            selected.and_then(|selected| scoped.iter().find(|option| option.id == selected));
+        let path_scope = picked.map(|option| option.scope);
+        let (decision, feedback) = match (picked, selected) {
+            (Some(option), _) => (option.decision, None),
+            (None, Some("allow_once")) => ("approve", None),
+            (None, Some("allow_always")) => ("approve_for_session", None),
+            (None, Some("allow_always_permanent")) => ("approve_permanently", None),
+            (None, Some("reject_once")) => {
                 self.record(
                     harness,
                     "vibe.user_cancelled_action",
@@ -215,7 +242,10 @@ where
             }
             _ => ("deny", None),
         };
-        let mut output = json!({"type": "approval", "decision": {"type": decision}});
+        let mut output = json!({
+            "type": "approval",
+            "decision": {"type": decision, "pathScope": path_scope},
+        });
         if let Some(feedback) = feedback {
             output["feedback"] = json!(feedback);
         }
@@ -264,6 +294,44 @@ where
             })
         }))
     }
+}
+
+/// One lasting option of an approval that offers path scopes.
+struct ScopedOption {
+    id: String,
+    name: String,
+    /// The decision the option answers with.
+    decision: &'static str,
+    scope: PathGrantScope,
+}
+
+/// Reference `build_permission_options` for an approval that offers path
+/// scopes: one session option per scope, then one permanent option per scope,
+/// under the four option identifiers the reference's `ToolOption` declares.
+/// The names are this port's own, composed from [`path_scope_target`].
+fn scoped_permission_options(
+    required_permissions: &[PermissionRequirement],
+    path_scope_choices: &[PathGrantScope],
+) -> Vec<ScopedOption> {
+    let session = path_scope_choices.iter().map(|scope| ScopedOption {
+        id: format!("allow_session_{}", scope.label()),
+        name: format!(
+            "Allow {} for this session",
+            path_scope_target(required_permissions, *scope, true)
+        ),
+        decision: "approve_for_session",
+        scope: *scope,
+    });
+    let permanent = path_scope_choices.iter().map(|scope| ScopedOption {
+        id: format!("allow_permanent_{}", scope.label()),
+        name: format!(
+            "Always allow {}",
+            path_scope_target(required_permissions, *scope, false)
+        ),
+        decision: "approve_permanently",
+        scope: *scope,
+    });
+    session.chain(permanent).collect()
 }
 
 fn denied_question() -> Value {

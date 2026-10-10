@@ -11,6 +11,7 @@ pub(super) fn validate_choice(
 ) -> Result<(), ControlError> {
     match (&pending.request, choice) {
         (CallbackRequest::Approval { .. }, CallbackChoice::Approve { .. })
+        | (CallbackRequest::Approval { .. }, CallbackChoice::ApprovePath { .. })
         | (CallbackRequest::Approval { .. }, CallbackChoice::Deny { .. })
         | (CallbackRequest::Approval { .. }, CallbackChoice::Cancel)
         | (CallbackRequest::UserInput { .. }, CallbackChoice::Cancel)
@@ -126,6 +127,19 @@ pub(super) fn callback_params(
                 scope: ApprovalScope::Permanent,
             },
         ) => json!({"type": "approval", "decision": {"type": "approve_permanently"}}),
+        (CallbackRequest::Approval { .. }, CallbackChoice::ApprovePath { scope, path_scope }) => {
+            json!({
+                "type": "approval",
+                "decision": {
+                    "type": if *scope == ApprovalScope::Permanent {
+                        "approve_permanently"
+                    } else {
+                        "approve_for_session"
+                    },
+                    "pathScope": path_scope,
+                },
+            })
+        }
         (CallbackRequest::Approval { .. }, CallbackChoice::Deny { .. }) => {
             json!({"type": "approval", "decision": {"type": "deny"}})
         }

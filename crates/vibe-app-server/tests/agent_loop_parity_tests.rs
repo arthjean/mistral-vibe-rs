@@ -8,7 +8,8 @@
 //! statistics `meta.json` keeps and what a reload shows; `stats` the cached
 //! tokens and the session cost; `interrupt` a turn cut short while a tool
 //! runs, before it runs and while it waits on its approval; `approval` the
-//! session and permanent grants; `steer` and `inject` the context a running
+//! session and permanent grants, and the path scope an approval of an
+//! outside path offers; `steer` and `inject` the context a running
 //! or idle session takes; `plan` a plan reviewed and edited by hand; `titles`
 //! the background title, its cadence and the snapshots that announce it;
 //! `relocate` a session moved to another worktree; `children` a delegated
@@ -50,7 +51,7 @@ const CAPTURE_SCRIPT: &str = "scripts/parity/agent_loop.py";
 
 /// The scenarios the corpus may not fall below, so a recapture that lost
 /// coverage fails here and not only on the machine that made it.
-const SCENARIO_FLOOR: usize = 29;
+const SCENARIO_FLOOR: usize = 33;
 
 /// How many scenarios the capture script runs side by side. Each owns its
 /// directories, backend and server processes.
@@ -290,6 +291,23 @@ const LEDGER: &[Divergence] = &[
         row: "34",
         reason: "the same warning, as the session saves it",
     },
+    // ---------------------------------------------------------- row 12
+    Divergence {
+        scenarios: &["approval/path-scope-not-offered"],
+        pointer: "/steps/0/turn/18/params/turn/error/message",
+        row: "12",
+        reason: "the refusal of a path scope the approval did not offer is this port's own \
+                 sentence (`PathScopeRefusal`), which `NOTICE` keeps from reproducing \
+                 `approval_grant_permissions` (`vibe/app_server/_approval_permissions.py:55` \
+                 at 376f6a3); the turn fails with the same code",
+    },
+    Divergence {
+        scenarios: &["approval/path-scope-not-offered"],
+        pointer: "/steps/1/persisted/0/messages/2/message/content",
+        row: "12",
+        reason: "the same refusal, as the failed call's answer carries it inside the tool \
+                 error tag the reference wraps it in",
+    },
 ];
 
 /// A field this port answers differently wherever it appears, in any scenario,
@@ -305,10 +323,6 @@ const SESSION_ARCHIVE: &str = "v2.26.0 publishes each session's `archivedAt` and
      (`vibe/app_server/models.py:1185-1186` at 376f6a3), the state `session/archive` and \
      `session/markAsSeen` keep; this port routes neither method and omits both fields, which \
      read null and false in every scenario";
-
-const PATH_SCOPE: &str = "v2.26.0 approvals carry a path grant scope: `pathScopeChoices` on the \
-     request and `pathScope` on the decision (`vibe/app_server/models.py:312,322` at 376f6a3), \
-     empty or null for every call these scenarios approve; this port's payloads carry neither";
 
 const FIELDS: &[FieldDivergence] = &[
     FieldDivergence {
@@ -348,16 +362,6 @@ const FIELDS: &[FieldDivergence] = &[
         reason: "v2.26.0 names the agent a subagent call runs on its detail \
                  (`vibe/app_server/_effect_models.py:295` at 376f6a3), null until the call is \
                  known; this port omits the field",
-    },
-    FieldDivergence {
-        suffix: "/pathScopeChoices",
-        row: "17",
-        reason: PATH_SCOPE,
-    },
-    FieldDivergence {
-        suffix: "/pathScope",
-        row: "17",
-        reason: PATH_SCOPE,
     },
 ];
 

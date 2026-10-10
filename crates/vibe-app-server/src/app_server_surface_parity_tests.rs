@@ -1920,10 +1920,14 @@ fn every_callback_union_form_validates_against_the_census() {
                     "bash",
                     r#"{"command":"cargo test"}"#,
                 )),
-                required_permissions: vec![vibe_core::policy::PermissionRequirement::command(
-                    "cargo test",
-                )],
+                required_permissions: vec![
+                    vibe_core::policy::PermissionRequirement::command("cargo test"),
+                    vibe_core::policy::PermissionRequirement::outside_path(std::path::Path::new(
+                        "/srv/notes.txt",
+                    )),
+                ],
                 choices: ApprovalDecisionType::ALL.to_vec(),
+                path_scope_choices: vec![vibe_core::policy::PathGrantScope::Exact],
                 related_entry_id: Some("entry-1".to_owned()),
                 reason: None,
             },
@@ -1943,7 +1947,10 @@ fn every_callback_union_form_validates_against_the_census() {
             json!({
                 "status": "answered",
                 "output": CallbackOutput::Approval {
-                    decision: ApprovalDecision { decision: ApprovalDecisionType::Approve },
+                    decision: ApprovalDecision {
+                        decision: ApprovalDecisionType::ApproveForSession,
+                        path_scope: Some(vibe_core::policy::PathGrantScope::Exact),
+                    },
                     feedback: None,
                 },
             }),

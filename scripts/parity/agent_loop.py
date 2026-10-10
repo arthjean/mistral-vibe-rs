@@ -825,6 +825,11 @@ PERSISTED = {"persisted": True}
 TITLES = {"titles": True, "client": {"entrypoint": "cli"},
           "config": "", "tables": "\n[session_logging]\ngenerate_titles = true\n"}
 
+#: Files outside the workdir, a directory holding one and a nested one, which
+#: the path scope scenarios reach.
+OUTSIDE_FILES = {"write": {"$ROOT/outside/data/a.txt": "alpha\n",
+                           "$ROOT/outside/data/nested/b.txt": "beta\n"}}
+
 ECHO = [{"toolCalls": [call("bash", {"command": "echo hi"}, "call_b1")]}, {"text": "Finished."}]
 #: A step running a command outside the shell allowlist, which the `ask`
 #: agent sends to the operator.
@@ -1002,6 +1007,68 @@ def scenarios() -> list[dict[str, Any]]:
                         {"text": "Finished."}],
             "callbacks": [{"output": {"type": "approval", "decision": {"type": "approve_for_session"}}}],
             "steps": [{"start": {"agent": "ask"}}, {"turn": "Run echo"}, {"turn": "Again"},
+                      PERSISTED],
+        },
+        # -- path scopes ---------------------------------------------------
+        # An approval of a path outside the workdir offers the scope it may be
+        # granted under (reference `vibe/app_server/_approval_permissions.py`):
+        # a directory the recursive one, a file the exact one, and a scope it
+        # did not offer fails the turn once the answer is in.
+        {
+            "name": "approval/path-scope-recursive",
+            "backend": [
+                {"toolCalls": [call("grep", {"pattern": "alpha", "path": "$ROOT/outside/data"},
+                                    "call_g1")]},
+                # A grant is the tool's own, so the nested search is covered
+                # and asks nothing.
+                {"toolCalls": [call("grep", {"pattern": "beta",
+                                             "path": "$ROOT/outside/data/nested/b.txt"},
+                                    "call_g2")]},
+                {"text": "Searched both."},
+            ],
+            "callbacks": [{"output": {"type": "approval", "decision": {
+                "type": "approve_for_session", "pathScope": "directory_recursive"}}}],
+            "steps": [OUTSIDE_FILES, {"start": {"agent": "accept-edits"}}, {"turn": "Look outside"},
+                      PERSISTED],
+        },
+        {
+            "name": "approval/path-scope-permanent",
+            "backend": [
+                {"toolCalls": [call("grep", {"pattern": "alpha", "path": "$ROOT/outside/data"},
+                                    "call_g1")]},
+                {"text": "Searched."},
+            ],
+            "callbacks": [{"output": {"type": "approval", "decision": {
+                "type": "approve_permanently", "pathScope": "directory_recursive"}}}],
+            "steps": [OUTSIDE_FILES, {"start": {"agent": "accept-edits"}}, {"turn": "Look outside"},
+                      {"file": "$ROOT/vibe-home/config.toml"}],
+        },
+        {
+            "name": "approval/path-scope-exact",
+            "backend": [
+                {"toolCalls": [call("read_file", {"file_path": "$ROOT/outside/data/a.txt"},
+                                    "call_r1")]},
+                {"toolCalls": [call("read_file", {"file_path": "$ROOT/outside/data/a.txt"},
+                                    "call_r2")]},
+                {"toolCalls": [call("read_file", {"file_path": "$ROOT/outside/data/nested/b.txt"},
+                                    "call_r3")]},
+                {"text": "Read them."},
+            ],
+            "callbacks": [{"output": {"type": "approval", "decision": {
+                "type": "approve_for_session", "pathScope": "exact"}}}],
+            "steps": [OUTSIDE_FILES, {"start": {"agent": "accept-edits"}}, {"turn": "Look outside"},
+                      PERSISTED],
+        },
+        {
+            "name": "approval/path-scope-not-offered",
+            "backend": [
+                {"toolCalls": [call("read_file", {"file_path": "$ROOT/outside/data/a.txt"},
+                                    "call_r1")]},
+                {"text": "Read it."},
+            ],
+            "callbacks": [{"output": {"type": "approval", "decision": {
+                "type": "approve_for_session", "pathScope": "directory_recursive"}}}],
+            "steps": [OUTSIDE_FILES, {"start": {"agent": "accept-edits"}}, {"turn": "Look outside"},
                       PERSISTED],
         },
         # -- steering ------------------------------------------------------

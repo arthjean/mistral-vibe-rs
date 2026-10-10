@@ -16,7 +16,9 @@
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
+use super::{PermissionRequirement, PermissionScope};
 use crate::matching::pattern_matches;
 
 /// The word every encoded grant starts with.
@@ -154,6 +156,136 @@ fn traversable(path: &Path) -> bool {
 #[cfg(not(unix))]
 fn traversable(_path: &Path) -> bool {
     true
+}
+
+/// The scopes an approval of `requirements` offers its operator.
+///
+/// Reference `available_path_scopes` (`vibe/app_server/_approval_permissions.py`):
+/// nothing when no requirement reaches outside the workdir, and otherwise a
+/// single scope. The recursive one is offered only when every outside target
+/// is itself the root a recursive grant would reach, which is a directory the
+/// session can enter; one file among them leaves the exact scope alone.
+#[must_use]
+pub fn available_path_scopes(requirements: &[PermissionRequirement]) -> Vec<PathGrantScope> {
+    let mut outside = requirements
+        .iter()
+        .filter(|requirement| requirement.scope == PermissionScope::OutsideDirectory)
+        .peekable();
+    if outside.peek().is_none() {
+        return Vec::new();
+    }
+    let recursive = outside.all(|requirement| {
+        requirement.path_scope_root.as_deref().is_some_and(|root| {
+            path_pattern_matches(
+                root,
+                &path_grant_pattern(&requirement.invocation_pattern, PathGrantScope::Exact),
+            )
+        })
+    });
+    vec![if recursive {
+        PathGrantScope::DirectoryRecursive
+    } else {
+        PathGrantScope::Exact
+    }]
+}
+
+/// Why an operator's path scope cannot be applied to an approval.
+///
+/// The two refusals of reference `approval_grant_permissions`, raised once the
+/// callback is answered, which fails the turn rather than the answer. The
+/// sentences are this port's own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum PathScopeRefusal {
+    /// A scope was chosen for an approval that names no outside path.
+    #[error("no path outside the workdir was asked about, so no path scope can be chosen")]
+    WithoutPaths,
+    /// A scope was chosen that the approval did not offer.
+    #[error("the approval did not offer the `{}` path scope", .0.label())]
+    NotOffered(PathGrantScope),
+}
+
+/// The scope an approval of `requirements` is granted under, given what the
+/// operator chose.
+///
+/// Reference `approval_grant_permissions`: no choice means the exact scope,
+/// and a choice has to be one [`available_path_scopes`] offered. An approval
+/// that offered none is granted as asked, which the exact scope leaves
+/// untouched since it names no outside path.
+///
+/// # Errors
+///
+/// The [`PathScopeRefusal`] the reference raises for that choice.
+pub fn approval_path_scope(
+    requirements: &[PermissionRequirement],
+    selected: Option<PathGrantScope>,
+) -> Result<PathGrantScope, PathScopeRefusal> {
+    let offered = available_path_scopes(requirements);
+    match selected {
+        Some(_) if offered.is_empty() => Err(PathScopeRefusal::WithoutPaths),
+        None => Ok(PathGrantScope::Exact),
+        Some(scope) if offered.contains(&scope) => Ok(scope),
+        Some(scope) => Err(PathScopeRefusal::NotOffered(scope)),
+    }
+}
+
+/// `requirements` with every outside path granted under `scope`.
+///
+/// Reference `scope_required_permissions`: only an outside-directory
+/// requirement changes, and only its session pattern, which becomes the exact
+/// grant of its target or the recursive grant of its root, the target itself
+/// standing in for a root it lacks.
+#[must_use]
+pub fn scope_required_permissions(
+    requirements: &[PermissionRequirement],
+    scope: PathGrantScope,
+) -> Vec<PermissionRequirement> {
+    requirements
+        .iter()
+        .map(|requirement| {
+            if requirement.scope != PermissionScope::OutsideDirectory {
+                return requirement.clone();
+            }
+            let root = match scope {
+                PathGrantScope::Exact => &requirement.invocation_pattern,
+                PathGrantScope::DirectoryRecursive => requirement
+                    .path_scope_root
+                    .as_ref()
+                    .unwrap_or(&requirement.invocation_pattern),
+            };
+            PermissionRequirement {
+                session_pattern: path_grant_pattern(root, scope),
+                ..requirement.clone()
+            }
+        })
+        .collect()
+}
+
+/// What an approval option granting `scope` names, for an option that lasts
+/// the session or one that is kept.
+///
+/// Reference `path_scope_label` (`vibe/utils/tool_presentation.py`), which
+/// both the terminal and the editor compose their option names from: one
+/// target or several, and for the exact scope a session option that stresses
+/// it reaches nothing more. The words are this port's own.
+#[must_use]
+pub fn path_scope_target(
+    requirements: &[PermissionRequirement],
+    scope: PathGrantScope,
+    for_session: bool,
+) -> &'static str {
+    let several = requirements
+        .iter()
+        .filter(|requirement| requirement.scope == PermissionScope::OutsideDirectory)
+        .nth(1)
+        .is_some();
+    match (scope, several, for_session) {
+        (PathGrantScope::DirectoryRecursive, true, _) => "these folders and their contents",
+        (PathGrantScope::DirectoryRecursive, false, _) => "this folder and its contents",
+        (PathGrantScope::Exact, true, true) => "only these paths",
+        (PathGrantScope::Exact, false, true) => "only this file",
+        (PathGrantScope::Exact, true, false) => "these paths",
+        (PathGrantScope::Exact, false, false) => "this file",
+    }
 }
 
 /// The scope and the normalized path an encoded grant names, or [`None`] for

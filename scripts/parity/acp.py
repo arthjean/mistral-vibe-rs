@@ -529,6 +529,7 @@ def run_scenario(
         (world.vibe_home / "config.toml").write_text(config, encoding="utf-8")
         write_tree(world.workspace, scenario.get("files", {}))
         write_tree(world.vibe_home, scenario.get("vibeHomeFiles", {}))
+        write_tree(world.home, scenario.get("homeFiles", {}))
         env = {
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "HOME": str(world.home),
@@ -862,6 +863,13 @@ APPROVE_ONCE = {"outcome": {"outcome": "selected", "optionId": "allow_once"}}
 APPROVE_SESSION = {"outcome": {"outcome": "selected", "optionId": "allow_always"}}
 REJECT = {"outcome": {"outcome": "selected", "optionId": "reject_once"}}
 DISMISS = {"outcome": {"outcome": "cancelled"}}
+#: The scoped options an approval of a path outside the workdir offers
+#: (reference `ToolOption` in `vibe/acp/utils.py`).
+APPROVE_FOLDER_SESSION = {"outcome": {"outcome": "selected",
+                                      "optionId": "allow_session_directory_recursive"}}
+APPROVE_FILE_PERMANENT = {"outcome": {"outcome": "selected", "optionId": "allow_permanent_exact"}}
+#: Files outside the workdir, under the scenario's home directory.
+OUTSIDE_FILES = {"outside/data/a.txt": "alpha\n", "outside/data/nested/b.txt": "beta\n"}
 BASE = [INITIALIZE, NEW_SESSION]
 SKILL = (
     "---\nname: greet\ndescription: Greets the user politely\n---\n\n"
@@ -1218,6 +1226,29 @@ def scenarios() -> list[dict[str, Any]]:
             "backend": [call("bash", {"command": "echo hi > made.txt"}), call("bash", {"command": "echo hi > made.txt"}, "call_2"), {"text": "Ran twice"}],
             "client": {"session/request_permission": APPROVE_SESSION},
             "steps": [*BASE, prompt(2, "Run twice")],
+        },
+        {
+            # A folder outside the workdir offers its recursive grant, which
+            # covers the nested search that follows.
+            "name": "prompt/grep-outside-folder",
+            "homeFiles": OUTSIDE_FILES,
+            "backend": [call("grep", {"pattern": "alpha", "path": "$HOME/outside/data"}),
+                        call("grep", {"pattern": "beta", "path": "$HOME/outside/data/nested/b.txt"},
+                             "call_2"),
+                        {"text": "Found"}],
+            "client": {"session/request_permission": APPROVE_FOLDER_SESSION},
+            "steps": [*BASE, prompt(2, "Search outside")],
+        },
+        {
+            # A file outside the workdir offers its exact grant, kept in the
+            # configuration, which covers the same file again.
+            "name": "prompt/read-outside-file",
+            "homeFiles": OUTSIDE_FILES,
+            "backend": [call("read_file", {"file_path": "$HOME/outside/data/a.txt"}),
+                        call("read_file", {"file_path": "$HOME/outside/data/a.txt"}, "call_2"),
+                        {"text": "Read"}],
+            "client": {"session/request_permission": APPROVE_FILE_PERMANENT},
+            "steps": [*BASE, prompt(2, "Read outside")],
         },
         {
             "name": "prompt/bash-rejected",

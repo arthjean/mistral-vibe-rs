@@ -92,7 +92,17 @@ pub(super) fn validate_callback_output(output: &Value) -> Result<EngineCallbackK
             let Some(decision) = output.get("decision").and_then(Value::as_object) else {
                 return Err("Approval decision must be an object");
             };
-            if decision.len() != 1
+            // Reference `ApprovalDecision` declares the path scope beside the
+            // type, null or one of the two scopes. Whether it was offered is
+            // decided once the policy grants it, as the reference decides it
+            // after accepting the answer.
+            if decision
+                .keys()
+                .any(|key| !matches!(key.as_str(), "type" | "pathScope"))
+                || decision.get("pathScope").is_some_and(|scope| {
+                    !scope.is_null()
+                        && !matches!(scope.as_str(), Some("exact" | "directory_recursive"))
+                })
                 || !matches!(
                     decision.get("type").and_then(Value::as_str),
                     Some(
@@ -211,6 +221,18 @@ pub(super) fn validate_callback_request(
                 ) || !seen.insert(choice)
                 {
                     return Err("Approval callback choice is unsupported or duplicated");
+                }
+            }
+            if let Some(scopes) = detail.get("pathScopeChoices") {
+                let Some(scopes) = scopes.as_array() else {
+                    return Err("Approval callback path scopes must be an array");
+                };
+                let mut seen = BTreeSet::new();
+                if scopes.iter().any(|scope| {
+                    !matches!(scope.as_str(), Some("exact" | "directory_recursive"))
+                        || !seen.insert(scope.as_str())
+                }) {
+                    return Err("Approval callback path scope is unsupported or duplicated");
                 }
             }
             if let Some(permissions) = detail.get("requiredPermissions") {

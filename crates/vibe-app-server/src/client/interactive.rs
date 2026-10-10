@@ -15,7 +15,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use vibe_core::policy::{
-    ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PolicyError,
+    ApprovalAgent, ApprovalDecision, ApprovalFuture, ApprovalRequest, PathGrantScope, PolicyError,
+    available_path_scopes,
 };
 use vibe_core::schema::{ObjectSchema, Property};
 use vibe_core::tools::{
@@ -295,6 +296,10 @@ pub(crate) fn approval_callback_detail(
         ],
         // Reference `ApprovalCallbackDetail.related_entry_id`: the effect the
         // approval gates, which is keyed on its tool call.
+        // Reference `ApprovalCallbackDetail.path_scope_choices`: how far an
+        // approval of an outside path may reach, offered by the server so the
+        // client never derives a grant itself.
+        "pathScopeChoices": available_path_scopes(&request.requirements),
         "relatedEntryId": request.call_id,
         // Reference `ApprovalCallbackDetail.reason` is left unset by the static
         // per-tool gate, which is the only one this port raises.
@@ -316,10 +321,20 @@ pub(crate) fn approval_decision_from_output(
             "approval callback returned a non-approval output".to_owned(),
         ));
     }
+    // Reference `ApprovalDecision.path_scope`, checked against what was
+    // offered once the policy knows the requirements it grants.
+    let path_scope = match output.pointer("/decision/pathScope") {
+        None | Some(Value::Null) => None,
+        Some(scope) => Some(
+            serde_json::from_value::<PathGrantScope>(scope.clone()).map_err(|_| {
+                ClientError::InvalidResponse(format!("unknown approval path scope `{scope}`"))
+            })?,
+        ),
+    };
     match output.pointer("/decision/type").and_then(Value::as_str) {
         Some("approve") => Ok(ApprovalDecision::ApproveOnce),
-        Some("approve_for_session") => Ok(ApprovalDecision::ApproveForSession),
-        Some("approve_permanently") => Ok(ApprovalDecision::ApprovePermanently),
+        Some("approve_for_session") => Ok(ApprovalDecision::ApproveForSession(path_scope)),
+        Some("approve_permanently") => Ok(ApprovalDecision::ApprovePermanently(path_scope)),
         // Reference `_resolve_approval`: a refusal skips the call with the
         // user's reason, or with the tagged operation-cancelled notice when
         // they gave none, which ends the turn.

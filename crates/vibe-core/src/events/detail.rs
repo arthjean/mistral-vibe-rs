@@ -19,7 +19,7 @@ use serde::de::{IgnoredAny, MapAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Value, json};
 
-use crate::policy::PermissionRequirement;
+use crate::policy::{PathGrantScope, PermissionRequirement};
 use crate::scratchpad::SCRATCHPAD_PREFIX;
 use crate::workspace::tool_path;
 
@@ -1766,6 +1766,10 @@ pub struct UserQuestionResult {
 pub struct ApprovalDecision {
     #[serde(rename = "type")]
     pub decision: ApprovalDecisionType,
+    /// Reference `ApprovalDecision.path_scope`: how far the operator chose to
+    /// grant the outside paths an approval names, null when they chose none.
+    #[serde(default)]
+    pub path_scope: Option<PathGrantScope>,
 }
 
 /// What a callback is asking the client for.
@@ -1785,6 +1789,11 @@ pub enum CallbackDetail {
         required_permissions: Vec<PermissionRequirement>,
         #[serde(default)]
         choices: Vec<ApprovalDecisionType>,
+        /// Reference `ApprovalCallbackDetail.path_scope_choices`: the scopes
+        /// an approval of outside paths may be granted under, empty when it
+        /// names none.
+        #[serde(default)]
+        path_scope_choices: Vec<PathGrantScope>,
         #[serde(default)]
         related_entry_id: Option<String>,
         /// Reference `ApprovalCallbackDetail.reason`: why an approval is asked
@@ -1842,6 +1851,7 @@ impl CallbackOutput {
             Self::Approval {
                 decision: ApprovalDecision {
                     decision: ApprovalDecisionType::CancelTurn,
+                    ..
                 },
                 ..
             }

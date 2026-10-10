@@ -1,5 +1,7 @@
 use std::collections::BTreeSet;
 
+use vibe_core::policy::PathGrantScope;
+
 use super::{
     ApprovalScope, CallbackChoice, CallbackInput, CallbackInputOutcome, CallbackOption,
     CallbackQuestion, QuestionInteraction, UserInputChoice,
@@ -53,7 +55,20 @@ pub(super) fn approval_input(
 }
 
 fn approval_choice(options: &[CallbackOption], index: usize) -> Option<CallbackChoice> {
-    match options.get(index)?.id.as_str() {
+    let id = options.get(index)?.id.as_str();
+    // An option granting outside paths names its decision and its scope.
+    if let Some((decision, path_scope)) = id.split_once(':') {
+        let scope = match decision {
+            "approve_for_session" => ApprovalScope::Session,
+            "approve_permanently" => ApprovalScope::Permanent,
+            _ => return None,
+        };
+        let path_scope = PathGrantScope::ALL
+            .into_iter()
+            .find(|candidate| candidate.label() == path_scope)?;
+        return Some(CallbackChoice::ApprovePath { scope, path_scope });
+    }
+    match id {
         "approve" => Some(CallbackChoice::Approve {
             scope: ApprovalScope::Once,
         }),

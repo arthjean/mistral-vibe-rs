@@ -128,6 +128,65 @@ async def capture_approval_trace() -> list[str]:
     return observations
 
 
+async def capture_path_scope_trace(target: str, scope: str, steps: int) -> list[str]:
+    """The options an approval of an outside path offers, and what picking the
+    one ``steps`` rows down submits.
+
+    Reference ``ApprovalApp._build_options`` replaces the session and the
+    permanent row with one row per offered path scope; the submission carries
+    the scope the row names. Each row is recorded by its action and scope,
+    never by its label.
+    """
+    from textual.app import App, ComposeResult
+    from vibe.permissions import PathGrantScope, RequiredPermission, path_grant_pattern
+    from vibe.cli.textual_ui.widgets.approval_app import ApprovalApp
+
+    path_scope = PathGrantScope(scope)
+    permission = RequiredPermission(
+        scope="outside_directory",
+        invocation_pattern=target,
+        session_pattern=path_grant_pattern(target, PathGrantScope.EXACT),
+        label=f"outside workdir ({target})",
+        path_scope_root=target if path_scope is PathGrantScope.DIRECTORY_RECURSIVE else None,
+    )
+    submitted: list[str] = []
+
+    class Harness(App):
+
+        def compose(self) -> ComposeResult:
+            yield ApprovalApp(approval_effect(), config_view(), [permission], [path_scope])
+
+        def on_approval_app_approval_granted(self, _event: Any) -> None:
+            submitted.append("approve_once")
+
+        def on_approval_app_approval_granted_always_tool(self, event: Any) -> None:
+            submitted.append(f"session:{event.path_scope.value}")
+
+        def on_approval_app_approval_granted_always_permanent(self, event: Any) -> None:
+            submitted.append(f"permanent:{event.path_scope.value}")
+
+    observations: list[str] = []
+    app = Harness()
+    async with app.run_test() as pilot:
+        approval = app.query_one(ApprovalApp)
+        await pilot.pause()
+        rows = ",".join(
+            action if row_scope is None else f"{action}:{row_scope.value}"
+            for _, _, action, row_scope in approval.options
+        )
+        observations.append(f"active:path:options={rows}")
+        approval._mount_time = time.monotonic() - 0.5  # noqa: SLF001
+        for _ in range(steps):
+            before = approval.selected_option
+            approval.action_move_down()
+            await pilot.pause()
+            observations.append("updated" if approval.selected_option != before else "ignored")
+        approval.action_select()
+        await pilot.pause()
+        observations.append(f"submit:{submitted[-1]}" if submitted else "grace_blocked")
+    return observations
+
+
 def title_text(widget: Any) -> str:
     return str(getattr(widget, "title_widget", ""))
 
@@ -650,6 +709,12 @@ async def capture(workdir: Path) -> dict[str, list[str]]:
         "plan-review-live-file-refresh": await capture_plan_trace(workdir),
         "typed-queue-rollback-and-shell-boundaries": await capture_queue_trace(),
         "shell-stream-and-identity-cancellation": await capture_shell_trace(),
+        "approval-path-scope-folder-for-session": await capture_path_scope_trace(
+            "/srv/outside/data", "directory_recursive", 1
+        ),
+        "approval-path-scope-file-kept": await capture_path_scope_trace(
+            "/srv/outside/data/a.txt", "exact", 2
+        ),
     }
 
 

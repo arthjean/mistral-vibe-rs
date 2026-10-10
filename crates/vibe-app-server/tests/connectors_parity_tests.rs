@@ -134,23 +134,6 @@ const LEDGER: &[Divergence] = &[
                  answers (`vibe/app_server/models.py:949` at `376f6a3`), null on these entries; \
                  this port's entries do not carry the field",
     },
-    Divergence {
-        scenarios: &["call/ask-approval"],
-        pointer: "/callbacks/0/pathScopeChoices",
-        row: "17",
-        reason: "since v2.26.0 an approval callback lists the path grant scopes it offers \
-                 (`vibe/app_server/models.py:322`, filled by `vibe/app_server/_turns.py:863` at \
-                 `376f6a3`), empty for a connector call; this port's callback does not carry the \
-                 field",
-    },
-    Divergence {
-        scenarios: &["call/ask-approval"],
-        pointer: "/steps/1/turn/4/patch/0/value/output/decision/pathScope",
-        row: "17",
-        reason: "since v2.26.0 the approval decision an effect records holds the path grant \
-                 scope it chose (`vibe/app_server/models.py:312` at `376f6a3`), null for a plain \
-                 approval; this port's decision does not carry the field",
-    },
 ];
 
 fn repository() -> PathBuf {

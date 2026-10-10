@@ -142,20 +142,6 @@ const LEDGER: &[Divergence] = &[
     },
     Divergence {
         scenario: "*",
-        suffix: "/detail/pathScopeChoices",
-        reason: "since v2.26.0 an approval callback lists the path grant scopes it offers \
-                 (`vibe/app_server/models.py:322`, filled by `vibe/app_server/_turns.py:863` at \
-                 `376f6a3`); this port's callback does not carry the field",
-    },
-    Divergence {
-        scenario: "*",
-        suffix: "/decision/pathScope",
-        reason: "since v2.26.0 the approval decision an effect records holds the path grant scope \
-                 it chose (`vibe/app_server/models.py:312` at `376f6a3`), null for a plain \
-                 approval; this port's decision does not carry the field",
-    },
-    Divergence {
-        scenario: "*",
         suffix: "/output/fileExisted",
         reason: "since v2.26.0 a file write's output says whether it replaced an existing file \
                  (`vibe/app_server/_effect_models.py:158` at `376f6a3`); this port's output does \

@@ -39,7 +39,7 @@ const CAPTURE_SCRIPT: &str = "scripts/parity/acp.py";
 
 /// The scenarios the corpus may not fall below, so a recapture that lost
 /// coverage fails here and not only on the machine that made it.
-const SCENARIO_FLOOR: usize = 79;
+const SCENARIO_FLOOR: usize = 81;
 const ARGV_FLOOR: usize = 23;
 
 /// How many scenarios the capture script runs side by side. Each owns its

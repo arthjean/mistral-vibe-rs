@@ -411,7 +411,7 @@ async fn a_permanent_approval_writes_the_allowlist_a_session_one_does_not() {
             "bash",
             Value::Null,
             PermissionContext::asking(vec![PermissionRequirement::command("npm run build")]),
-            &FixedApproval(ApprovalDecision::ApproveForSession),
+            &FixedApproval(ApprovalDecision::ApproveForSession(None)),
         )
         .await
         .expect("session approval");
@@ -425,7 +425,7 @@ async fn a_permanent_approval_writes_the_allowlist_a_session_one_does_not() {
             "bash",
             Value::Null,
             PermissionContext::asking(vec![PermissionRequirement::command("cargo test")]),
-            &FixedApproval(ApprovalDecision::ApprovePermanently),
+            &FixedApproval(ApprovalDecision::ApprovePermanently(None)),
         )
         .await
         .expect("permanent approval");
@@ -452,6 +452,128 @@ async fn a_permanent_approval_writes_the_allowlist_a_session_one_does_not() {
     }
 }
 
+/// Reference `approval_grant_permissions`: a folder outside the workdir granted
+/// recursively covers what lies under it for the same tool, and a permanent
+/// grant writes the recursive encoding to the allowlist.
+#[tokio::test]
+async fn a_recursive_path_grant_covers_what_lies_under_the_folder() {
+    let outside = tempfile::tempdir().expect("outside directory");
+    let folder = outside.path().join("data");
+    std::fs::create_dir_all(folder.join("nested")).expect("folder");
+    let written = Arc::new(StdRwLock::new(Vec::<(String, Vec<String>)>::new()));
+    let recorder = written.clone();
+    let store = PermissionStore::default().with_allowlist_persistence(Arc::new(
+        move |tool: &str, patterns: &[String]| {
+            recorder
+                .write()
+                .expect("record")
+                .push((tool.to_owned(), patterns.to_vec()));
+            Ok(())
+        },
+    ));
+    let requirement = PermissionRequirement::outside_path(&folder);
+    assert_eq!(
+        available_path_scopes(std::slice::from_ref(&requirement)),
+        [PathGrantScope::DirectoryRecursive]
+    );
+
+    store
+        .authorize(
+            "grep",
+            Value::Null,
+            PermissionContext::asking(vec![requirement]),
+            &FixedApproval(ApprovalDecision::ApprovePermanently(Some(
+                PathGrantScope::DirectoryRecursive,
+            ))),
+        )
+        .await
+        .expect("recursive approval");
+    let granted = path_grant_pattern(
+        &folder.display().to_string(),
+        PathGrantScope::DirectoryRecursive,
+    );
+    assert_eq!(
+        *written.read().expect("written"),
+        [("grep".to_owned(), vec![granted])]
+    );
+
+    let nested = PermissionContext::asking(vec![PermissionRequirement::outside_path(
+        &folder.join("nested/b.txt"),
+    )]);
+    assert_eq!(
+        store
+            .resolve("grep", &nested)
+            .await
+            .expect("resolution")
+            .mode,
+        PermissionMode::Always,
+        "the nested file is covered for the tool that was granted"
+    );
+    assert_eq!(
+        store
+            .resolve("read_file", &nested)
+            .await
+            .expect("resolution")
+            .mode,
+        PermissionMode::Ask,
+        "a grant is the tool's own"
+    );
+}
+
+/// A scope the approval did not offer, or one chosen for an approval naming
+/// no outside path, fails the turn and grants nothing.
+#[tokio::test]
+async fn a_path_scope_the_approval_did_not_offer_fails_the_turn() {
+    let outside = tempfile::tempdir().expect("outside directory");
+    let file = outside.path().join("a.txt");
+    std::fs::write(&file, "alpha\n").expect("file");
+    let store = PermissionStore::default();
+    let asking = || PermissionContext::asking(vec![PermissionRequirement::outside_path(&file)]);
+
+    let refused = store
+        .authorize(
+            "read_file",
+            Value::Null,
+            asking(),
+            &FixedApproval(ApprovalDecision::ApproveForSession(Some(
+                PathGrantScope::DirectoryRecursive,
+            ))),
+        )
+        .await;
+    assert!(
+        matches!(&refused, Err(PolicyError::TurnFailed(message))
+            if *message == PathScopeRefusal::NotOffered(PathGrantScope::DirectoryRecursive).to_string()),
+        "{:?}",
+        refused.err()
+    );
+    assert_eq!(
+        store
+            .resolve("read_file", &asking())
+            .await
+            .expect("resolution")
+            .mode,
+        PermissionMode::Ask,
+        "the refused approval granted nothing"
+    );
+
+    let refused = store
+        .authorize(
+            "bash",
+            Value::Null,
+            PermissionContext::asking(vec![PermissionRequirement::command("cargo test")]),
+            &FixedApproval(ApprovalDecision::ApproveForSession(Some(
+                PathGrantScope::Exact,
+            ))),
+        )
+        .await;
+    assert!(
+        matches!(&refused, Err(PolicyError::TurnFailed(message))
+            if *message == PathScopeRefusal::WithoutPaths.to_string()),
+        "{:?}",
+        refused.err()
+    );
+}
+
 /// A persistence failure keeps the approval for the session and is reported
 /// rather than failing the call the operator just approved.
 #[tokio::test]
@@ -465,7 +587,7 @@ async fn a_failed_permanent_write_is_reported_without_failing_the_call() {
             "bash",
             Value::Null,
             PermissionContext::asking(vec![PermissionRequirement::command("cargo test")]),
-            &FixedApproval(ApprovalDecision::ApprovePermanently),
+            &FixedApproval(ApprovalDecision::ApprovePermanently(None)),
         )
         .await
         .expect("the call still runs");
@@ -761,7 +883,7 @@ async fn an_approval_without_a_requirement_grants_the_tool_for_the_session() {
             "web_fetch",
             Value::Null,
             PermissionContext::deferred(),
-            &FixedApproval(ApprovalDecision::ApproveForSession),
+            &FixedApproval(ApprovalDecision::ApproveForSession(None)),
         )
         .await
         .expect("the operator approves");

@@ -21270,6 +21270,1858 @@
       }
     },
     {
+      "name": "prompt/grep-outside-folder",
+      "observed": [
+        {
+          "detached": [],
+          "response": {
+            "id": 0,
+            "result": {
+              "agentCapabilities": {
+                "loadSession": true,
+                "promptCapabilities": {
+                  "audio": false,
+                  "embeddedContext": true,
+                  "image": true
+                },
+                "sessionCapabilities": {
+                  "close": {},
+                  "fork": {},
+                  "list": {}
+                }
+              },
+              "agentInfo": {
+                "name": "@mistralai/mistral-vibe",
+                "title": {
+                  "prose": 12,
+                  "sha256": "15e2b9ce10aed6a159af76c7f3358396ccb3072f95bc2eb677bd70d97896859c"
+                },
+                "version": "<version>"
+              },
+              "authMethods": [
+                {
+                  "description": {
+                    "prose": 62,
+                    "sha256": "c34ee5e81b75d1b8c430e1ba3eba1a15c799a541bc1dc98234463b10e81d9c02"
+                  },
+                  "id": "browser-auth",
+                  "name": {
+                    "prose": 33,
+                    "sha256": "c8ba6d8de5fd9b503014f01a69a4f8ea9a6fc7fbac45907407918700a5c3257b"
+                  }
+                }
+              ],
+              "protocolVersion": 1
+            }
+          },
+          "stream": []
+        },
+        {
+          "detached": [
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "_meta": {
+                    "cachedTokens": 0,
+                    "completionTokens": 0,
+                    "lastTurnDuration": 0,
+                    "lastTurnTotalTokens": 0,
+                    "promptTokens": 0,
+                    "steps": 0,
+                    "tokensPerSecond": 0,
+                    "totalTokens": 0
+                  },
+                  "sessionUpdate": "usage_update",
+                  "size": 200000,
+                  "used": 0
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "availableCommands": [
+                    {
+                      "description": {
+                        "prose": 94,
+                        "sha256": "cb99aa7bc0a9c46ea80a2280ddca7ba7d5a431a92e81cd697eb9b8f607433141"
+                      },
+                      "input": {
+                        "hint": {
+                          "prose": 53,
+                          "sha256": "6b560e23ed6ece1ed88f1ad80621690679bbf83f8ee38d00bfb6e36197128f49"
+                        }
+                      },
+                      "name": "compact"
+                    },
+                    {
+                      "description": {
+                        "prose": 31,
+                        "sha256": "f0a6879946d4c76247b6368dcf478e775053712f503f0ddcafd31b19dc3f2e1c"
+                      },
+                      "name": "data-retention"
+                    },
+                    {
+                      "description": {
+                        "prose": 46,
+                        "sha256": "d1fbe269c147eddff8b630cbe9fe3654da03f0eafa29928563f7babcc4af82f3"
+                      },
+                      "name": "help"
+                    },
+                    {
+                      "description": {
+                        "prose": 36,
+                        "sha256": "fbb6015e086b387a10c1db084922af6b4826b95dc69135f63d29a9e3da10b7fc"
+                      },
+                      "name": "leanstall"
+                    },
+                    {
+                      "description": {
+                        "prose": 42,
+                        "sha256": "2f44067b79aace1de81fe2e814915f348e81b30e81aa519b9b5a0c1d45be30e0"
+                      },
+                      "name": "log"
+                    },
+                    {
+                      "description": {
+                        "prose": 69,
+                        "sha256": "b8bb2d84ce629b5b8006621ab2cc4aa7e312ee33cff295440831b2bd41096e7d"
+                      },
+                      "input": {
+                        "hint": {
+                          "prose": 39,
+                          "sha256": "af9b0eb064c7207d988b058448e12336bad151aea058524e9159fe8219496d92"
+                        }
+                      },
+                      "name": "mcp"
+                    },
+                    {
+                      "description": {
+                        "prose": 44,
+                        "sha256": "fb13a484057b1cb8410d990218bebf72b5d9ffc625c5d0229c1a2e33a657807f"
+                      },
+                      "input": {
+                        "hint": {
+                          "prose": 49,
+                          "sha256": "d18d9b9775c0c626268d02c4b4c78283efbff11545289342d5d9c130ffa13f61"
+                        }
+                      },
+                      "name": "proxy-setup"
+                    },
+                    {
+                      "description": {
+                        "prose": 62,
+                        "sha256": "3a8f15da69d7e24248d63556fd5217bcca46919e2b9a42bfd8b4c39578d33c4b"
+                      },
+                      "name": "reload"
+                    },
+                    {
+                      "description": {
+                        "prose": 79,
+                        "sha256": "0502e1c8a1ca9f7d7326d687cdcb274349ffe7a77bf7c4914fe2db8c9cceaa3b"
+                      },
+                      "input": {
+                        "hint": {
+                          "prose": 53,
+                          "sha256": "c05069b71000770521f00f44c1f5346e80939decb357fd03b377feb86e8f3dd4"
+                        }
+                      },
+                      "name": "retry"
+                    },
+                    {
+                      "description": {
+                        "prose": 245,
+                        "sha256": "c6e85bed9c5d1c1fc9d3320bd3e06a6685563dfd363539cbd5b8aebf9cab49f3"
+                      },
+                      "input": {
+                        "hint": {
+                          "prose": 26,
+                          "sha256": "d28fbfb4ab11c21dc5bd4e6fee496fa3dea4843455b9e675c713dc604c73a446"
+                        }
+                      },
+                      "name": "skill-creator"
+                    },
+                    {
+                      "description": {
+                        "prose": 33,
+                        "sha256": "b6e336cb43b5c8e271436f624c21de6b73eea5ba9e7b61392c2e788d2944582d"
+                      },
+                      "name": "teleport"
+                    },
+                    {
+                      "description": {
+                        "prose": 26,
+                        "sha256": "5dd2d6668dd9c42c039edc24e3b2c4f18ebc51995766c0e56ee2470cff7994f7"
+                      },
+                      "name": "unleanstall"
+                    }
+                  ],
+                  "sessionUpdate": "available_commands_update"
+                }
+              }
+            }
+          ],
+          "response": {
+            "id": 1,
+            "result": {
+              "_meta": {
+                "workspace_trust": {
+                  "details": null,
+                  "status": "untrusted"
+                }
+              },
+              "configOptions": [
+                {
+                  "category": "mode",
+                  "currentValue": "accept-edits",
+                  "id": "mode",
+                  "name": {
+                    "prose": 12,
+                    "sha256": "af75e7fd34b80165d64ae07cf6ed35a0514ac79cd078964f554d123b7cfaa74a"
+                  },
+                  "options": [
+                    {
+                      "description": {
+                        "prose": 37,
+                        "sha256": "ec3f3847a6fe91415c4632318966ae655e97939d869e3a68d081bd837ec8751e"
+                      },
+                      "name": "Ask",
+                      "value": "ask"
+                    },
+                    {
+                      "description": {
+                        "prose": 44,
+                        "sha256": "49c72c68ec4ce47bd30042c8a9a129b2857a1b43a450b0a3e34e5b96bb246488"
+                      },
+                      "name": "Plan",
+                      "value": "plan"
+                    },
+                    {
+                      "description": {
+                        "prose": 29,
+                        "sha256": "5397ced791532d3eec9f6e9099cefe1534b19367031050832d9c955a4385020f"
+                      },
+                      "name": {
+                        "prose": 12,
+                        "sha256": "7d3dc49ca9aa50802a828bc29e2643173340ea7ea1e5d1365eb1ae286e529868"
+                      },
+                      "value": "accept-edits"
+                    },
+                    {
+                      "description": {
+                        "prose": 33,
+                        "sha256": "46db4059b46ac5104646872011c4f006bfbfcbf96096e678b0919fb3ebc2b1cd"
+                      },
+                      "name": {
+                        "prose": 12,
+                        "sha256": "f38e7a50d0e155c641fa9da95701dab50f00143ea8e55226eb6ae9ded5cf32d9"
+                      },
+                      "value": "auto-approve"
+                    }
+                  ],
+                  "type": "select"
+                },
+                {
+                  "category": "model",
+                  "currentValue": "mistral-medium-3.5",
+                  "id": "model",
+                  "name": "Model",
+                  "options": [
+                    {
+                      "description": "mistral-vibe-cli-latest",
+                      "name": {
+                        "prose": 18,
+                        "sha256": "ed5f601030c3af101b219f07990f4f575c98b30b1d0fe2be303d83fd450e3bed"
+                      },
+                      "value": "mistral-medium-3.5"
+                    },
+                    {
+                      "description": "devstral",
+                      "name": {
+                        "prose": 16,
+                        "sha256": "fc1d0f1b9ba45ab90794ab6ff118018ca56c0558e405e72350792114fbb89ad8"
+                      },
+                      "value": "local"
+                    }
+                  ],
+                  "type": "select"
+                },
+                {
+                  "category": "thinking",
+                  "currentValue": "high",
+                  "id": "thinking",
+                  "name": "Thinking",
+                  "options": [
+                    {
+                      "name": "Off",
+                      "value": "off"
+                    },
+                    {
+                      "name": "Low",
+                      "value": "low"
+                    },
+                    {
+                      "name": "Medium",
+                      "value": "medium"
+                    },
+                    {
+                      "name": "High",
+                      "value": "high"
+                    },
+                    {
+                      "name": "Max",
+                      "value": "max"
+                    }
+                  ],
+                  "type": "select"
+                }
+              ],
+              "modes": {
+                "availableModes": [
+                  {
+                    "description": {
+                      "prose": 37,
+                      "sha256": "ec3f3847a6fe91415c4632318966ae655e97939d869e3a68d081bd837ec8751e"
+                    },
+                    "id": "ask",
+                    "name": "Ask"
+                  },
+                  {
+                    "description": {
+                      "prose": 44,
+                      "sha256": "49c72c68ec4ce47bd30042c8a9a129b2857a1b43a450b0a3e34e5b96bb246488"
+                    },
+                    "id": "plan",
+                    "name": "Plan"
+                  },
+                  {
+                    "description": {
+                      "prose": 29,
+                      "sha256": "5397ced791532d3eec9f6e9099cefe1534b19367031050832d9c955a4385020f"
+                    },
+                    "id": "accept-edits",
+                    "name": {
+                      "prose": 12,
+                      "sha256": "7d3dc49ca9aa50802a828bc29e2643173340ea7ea1e5d1365eb1ae286e529868"
+                    }
+                  },
+                  {
+                    "description": {
+                      "prose": 33,
+                      "sha256": "46db4059b46ac5104646872011c4f006bfbfcbf96096e678b0919fb3ebc2b1cd"
+                    },
+                    "id": "auto-approve",
+                    "name": {
+                      "prose": 12,
+                      "sha256": "f38e7a50d0e155c641fa9da95701dab50f00143ea8e55226eb6ae9ded5cf32d9"
+                    }
+                  }
+                ],
+                "currentModeId": "accept-edits"
+              },
+              "sessionId": "<id-1>"
+            }
+          },
+          "stream": []
+        },
+        {
+          "detached": [
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "_meta": {
+                    "cachedTokens": 0,
+                    "completionTokens": 0,
+                    "lastTurnDuration": 0,
+                    "lastTurnTotalTokens": 0,
+                    "promptTokens": 0,
+                    "steps": 0,
+                    "tokensPerSecond": 0,
+                    "totalTokens": 0
+                  },
+                  "sessionUpdate": "usage_update",
+                  "size": 200000,
+                  "used": 0
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "_meta": {
+                    "cachedTokens": 0,
+                    "completionTokens": 15,
+                    "lastTurnDuration": "<nonzero>",
+                    "lastTurnTotalTokens": 15,
+                    "promptTokens": 30,
+                    "steps": 4,
+                    "tokensPerSecond": "<nonzero>",
+                    "totalTokens": 45
+                  },
+                  "cost": {
+                    "amount": 0.0001575,
+                    "currency": "USD"
+                  },
+                  "sessionUpdate": "usage_update",
+                  "size": 200000,
+                  "used": 15
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "_meta": {
+                    "cachedTokens": 0,
+                    "completionTokens": 5,
+                    "lastTurnDuration": "<nonzero>",
+                    "lastTurnTotalTokens": 15,
+                    "promptTokens": 10,
+                    "steps": 1,
+                    "tokensPerSecond": "<nonzero>",
+                    "totalTokens": 15
+                  },
+                  "cost": {
+                    "amount": 5.25e-05,
+                    "currency": "USD"
+                  },
+                  "sessionUpdate": "usage_update",
+                  "size": 200000,
+                  "used": 15
+                }
+              }
+            }
+          ],
+          "response": {
+            "id": 2,
+            "result": {
+              "stopReason": "end_turn",
+              "usage": {
+                "inputTokens": 30,
+                "outputTokens": 15,
+                "totalTokens": 45
+              }
+            }
+          },
+          "stream": [
+            {
+              "after": false,
+              "message": {
+                "method": "session/update",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "update": {
+                    "content": {
+                      "text": "Search outside",
+                      "type": "text"
+                    },
+                    "messageId": "<id-2>",
+                    "sessionUpdate": "user_message_chunk"
+                  }
+                }
+              }
+            },
+            {
+              "after": false,
+              "message": {
+                "method": "session/update",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "update": {
+                    "sessionUpdate": "session_info_update",
+                    "title": "Search outside",
+                    "updatedAt": "<time>"
+                  }
+                }
+              }
+            },
+            {
+              "after": false,
+              "message": {
+                "method": "session/update",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "update": {
+                    "_meta": {
+                      "effect_kind": "file_search",
+                      "tool_name": "grep"
+                    },
+                    "kind": "search",
+                    "sessionUpdate": "tool_call",
+                    "status": "in_progress",
+                    "title": "grep",
+                    "toolCallId": "<id-3>"
+                  }
+                }
+              }
+            },
+            {
+              "after": false,
+              "message": {
+                "method": "session/update",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "update": {
+                    "_meta": {
+                      "effect_kind": "file_search",
+                      "query": "alpha",
+                      "search_path": "<home>/outside/data",
+                      "tool_name": "grep"
+                    },
+                    "kind": "search",
+                    "rawInput": {
+                      "maxMatches": null,
+                      "path": "<home>/outside/data",
+                      "pattern": "alpha"
+                    },
+                    "sessionUpdate": "tool_call_update",
+                    "status": "in_progress",
+                    "title": {
+                      "prose": 39,
+                      "sha256": "405271d82e2e7b1ef3583b11bf303c5ddb501b546fac43e737c527a3347a7d1b"
+                    },
+                    "toolCallId": "<id-3>"
+                  }
+                }
+              }
+            },
+            {
+              "after": false,
+              "message": {
+                "method": "session/update",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "update": {
+                    "_meta": {
+                      "effect_kind": "file_search",
+                      "query": "alpha",
+                      "search_path": "<home>/outside/data",
+                      "tool_name": "grep"
+                    },
+                    "kind": "search",
+                    "sessionUpdate": "tool_call_update",
+                    "status": "in_progress",
+                    "toolCallId": "<id-3>"
+                  }
+                }
+              }
+            },
+            {
+              "after": false,
+              "message": {
+                "id": 0,
+                "method": "session/request_permission",
+                "params": {
+                  "options": [
+                    {
+                      "kind": "allow_once",
+                      "name": {
+                        "prose": 10,
+                        "sha256": "168511d24d9ee03122b3200f929be11eaaedad45cb0ecb20a95f549b3e3f4d0f"
+                      },
+                      "optionId": "allow_once"
+                    },
+                    {
+                      "_meta": {
+                        "required_permissions": [
+                          {
+                            "invocation_pattern": "<home>/outside/data",
+                            "label": {
+                              "prose": 37,
+                              "sha256": "3c19f17fdf361e39ac0399bf5c6e599f139b32ef05b8938f70d6e3b6c4e06897"
+                            },
+                            "path_scope_root": "<home>/outside/data",
+                            "scope": "outside_directory",
+                            "session_pattern": "vibe-path:exact:<home>/outside/data"
+                          }
+                        ]
+                      },
+                      "kind": "allow_always",
+                      "name": {
+                        "prose": 34,
+                        "sha256": "c53a957f9135755ef7d84715aaf1c381a0378ee412101bbda0fd9135a2b1923c"
+                      },
+                      "optionId": "allow_session_directory_recursive"
+                    },
+                    {
+                      "_meta": {
+                        "required_permissions": [
+                          {
+                            "invocation_pattern": "<home>/outside/data",
+                            "label": {
+                              "prose": 37,
+                              "sha256": "3c19f17fdf361e39ac0399bf5c6e599f139b32ef05b8938f70d6e3b6c4e06897"
+                            },
+                            "path_scope_root": "<home>/outside/data",
+                            "scope": "outside_directory",
+                            "session_pattern": "vibe-path:exact:<home>/outside/data"
+                          }
+                        ]
+                      },
+                      "kind": "allow_always",
+                      "name": {
+                        "prose": 24,
+                        "sha256": "2db1108daf00536a7c76bce8f2d730b3756ae91a53f972749f0a4d88b26dd6a6"
+                      },
+                      "optionId": "allow_permanent_directory_recursive"
+                    },
+                    {
+                      "kind": "reject_once",
+                      "name": "Deny",
+                      "optionId": "reject_once"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "toolCall": {
+                    "toolCallId": "<id-3>"
+                  }
+                }
+              }
+            },
+            {
+              "after": false,
+              "message": {
+                "method": "session/update",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "update": {
+                    "_meta": {
+                      "effect_kind": "file_search",
+                      "query": "alpha",
+                      "search_path": "<home>/outside/data",
+                      "tool_name": "grep"
+                    },
+                    "kind": "search",
+                    "sessionUpdate": "tool_call_update",
+                    "status": "in_progress",
+                    "toolCallId": "<id-3>"
+                  }
+                }
+              }
+            },
+            {
+              "after": false,
+              "message": {
+                "method": "session/update",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "update": {
+                    "_meta": {
+                      "effect_kind": "file_search",
+                      "query": "alpha",
+                      "search_path": "<home>/outside/data",
+                      "tool_name": "grep"
+                    },
+                    "content": [
+                      {
+                        "content": {
+                          "text": {
+                            "prose": 24,
+                            "sha256": "a733c415bde29be0682932ddfbd0d1e45ab317a8678ea40690182df75560abde"
+                          },
+                          "type": "text"
+                        },
+                        "type": "content"
+                      }
+                    ],
+                    "kind": "search",
+                    "locations": [
+                      {
+                        "line": 1,
+                        "path": "<home>/outside/data/a.txt"
+                      }
+                    ],
+                    "rawOutput": {
+                      "matchCount": 1,
+                      "matches": "<home>/outside/data/a.txt:1:alpha",
+                      "parsedMatches": [
+                        {
+                          "line": 1,
+                          "path": "<home>/outside/data/a.txt"
+                        }
+                      ],
+                      "wasTruncated": false
+                    },
+                    "sessionUpdate": "tool_call_update",
+                    "status": "completed",
+                    "toolCallId": "<id-3>"
+                  }
+                }
+              }
+            },
+            {
+              "after": false,
+              "message": {
+                "method": "session/update",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "update": {
+                    "_meta": {
+                      "effect_kind": "file_search",
+                      "tool_name": "grep"
+                    },
+                    "kind": "search",
+                    "sessionUpdate": "tool_call",
+                    "status": "in_progress",
+                    "title": "grep",
+                    "toolCallId": "<id-4>"
+                  }
+                }
+              }
+            },
+            {
+              "after": false,
+              "message": {
+                "method": "session/update",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "update": {
+                    "_meta": {
+                      "effect_kind": "file_search",
+                      "query": "beta",
+                      "search_path": "<home>/outside/data/nested/b.txt",
+                      "tool_name": "grep"
+                    },
+                    "kind": "search",
+                    "rawInput": {
+                      "maxMatches": null,
+                      "path": "<home>/outside/data/nested/b.txt",
+                      "pattern": "beta"
+                    },
+                    "sessionUpdate": "tool_call_update",
+                    "status": "in_progress",
+                    "title": {
+                      "prose": 51,
+                      "sha256": "5c32fd93ef4341cadd6835ce8ba8b46e37cd1136f9e7eed64ea3b8f63781993d"
+                    },
+                    "toolCallId": "<id-4>"
+                  }
+                }
+              }
+            },
+            {
+              "after": false,
+              "message": {
+                "method": "session/update",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "update": {
+                    "_meta": {
+                      "effect_kind": "file_search",
+                      "query": "beta",
+                      "search_path": "<home>/outside/data/nested/b.txt",
+                      "tool_name": "grep"
+                    },
+                    "content": [
+                      {
+                        "content": {
+                          "text": {
+                            "prose": 23,
+                            "sha256": "a8eb5e5503d6fb7f49c9d119106e332b1a0e86dd119ac42c9eee1f1523c29f10"
+                          },
+                          "type": "text"
+                        },
+                        "type": "content"
+                      }
+                    ],
+                    "kind": "search",
+                    "locations": [
+                      {
+                        "line": 1,
+                        "path": "<home>/outside/data/nested/b.txt"
+                      }
+                    ],
+                    "rawOutput": {
+                      "matchCount": 1,
+                      "matches": "<home>/outside/data/nested/b.txt:1:beta",
+                      "parsedMatches": [
+                        {
+                          "line": 1,
+                          "path": "<home>/outside/data/nested/b.txt"
+                        }
+                      ],
+                      "wasTruncated": false
+                    },
+                    "sessionUpdate": "tool_call_update",
+                    "status": "completed",
+                    "toolCallId": "<id-4>"
+                  }
+                }
+              }
+            },
+            {
+              "after": false,
+              "message": {
+                "method": "session/update",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "update": {
+                    "content": {
+                      "text": "Found",
+                      "type": "text"
+                    },
+                    "messageId": "<id-5>",
+                    "sessionUpdate": "agent_message_chunk"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "scenario": {
+        "backend": [
+          {
+            "toolCalls": [
+              {
+                "arguments": {
+                  "path": "$HOME/outside/data",
+                  "pattern": "alpha"
+                },
+                "id": "call_1",
+                "name": "grep"
+              }
+            ]
+          },
+          {
+            "toolCalls": [
+              {
+                "arguments": {
+                  "path": "$HOME/outside/data/nested/b.txt",
+                  "pattern": "beta"
+                },
+                "id": "call_2",
+                "name": "grep"
+              }
+            ]
+          },
+          {
+            "text": "Found"
+          }
+        ],
+        "client": {
+          "session/request_permission": {
+            "outcome": {
+              "optionId": "allow_session_directory_recursive",
+              "outcome": "selected"
+            }
+          }
+        },
+        "homeFiles": {
+          "outside/data/a.txt": "alpha\n",
+          "outside/data/nested/b.txt": "beta\n"
+        },
+        "name": "prompt/grep-outside-folder",
+        "steps": [
+          {
+            "send": {
+              "id": 0,
+              "method": "initialize",
+              "params": {
+                "clientCapabilities": {
+                  "fs": {
+                    "readTextFile": true,
+                    "writeTextFile": true
+                  },
+                  "terminal": true
+                },
+                "clientInfo": {
+                  "name": "oracle-client",
+                  "version": "1.0.0"
+                },
+                "protocolVersion": 1
+              }
+            }
+          },
+          {
+            "send": {
+              "id": 1,
+              "method": "session/new",
+              "params": {
+                "cwd": "$WS",
+                "mcpServers": []
+              }
+            }
+          },
+          {
+            "send": {
+              "id": 2,
+              "method": "session/prompt",
+              "params": {
+                "prompt": [
+                  {
+                    "text": "Search outside",
+                    "type": "text"
+                  }
+                ],
+                "sessionId": "$S1"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "prompt/read-outside-file",
+      "observed": [
+        {
+          "detached": [],
+          "response": {
+            "id": 0,
+            "result": {
+              "agentCapabilities": {
+                "loadSession": true,
+                "promptCapabilities": {
+                  "audio": false,
+                  "embeddedContext": true,
+                  "image": true
+                },
+                "sessionCapabilities": {
+                  "close": {},
+                  "fork": {},
+                  "list": {}
+                }
+              },
+              "agentInfo": {
+                "name": "@mistralai/mistral-vibe",
+                "title": {
+                  "prose": 12,
+                  "sha256": "15e2b9ce10aed6a159af76c7f3358396ccb3072f95bc2eb677bd70d97896859c"
+                },
+                "version": "<version>"
+              },
+              "authMethods": [
+                {
+                  "description": {
+                    "prose": 62,
+                    "sha256": "c34ee5e81b75d1b8c430e1ba3eba1a15c799a541bc1dc98234463b10e81d9c02"
+                  },
+                  "id": "browser-auth",
+                  "name": {
+                    "prose": 33,
+                    "sha256": "c8ba6d8de5fd9b503014f01a69a4f8ea9a6fc7fbac45907407918700a5c3257b"
+                  }
+                }
+              ],
+              "protocolVersion": 1
+            }
+          },
+          "stream": []
+        },
+        {
+          "detached": [
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "_meta": {
+                    "cachedTokens": 0,
+                    "completionTokens": 0,
+                    "lastTurnDuration": 0,
+                    "lastTurnTotalTokens": 0,
+                    "promptTokens": 0,
+                    "steps": 0,
+                    "tokensPerSecond": 0,
+                    "totalTokens": 0
+                  },
+                  "sessionUpdate": "usage_update",
+                  "size": 200000,
+                  "used": 0
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "availableCommands": [
+                    {
+                      "description": {
+                        "prose": 94,
+                        "sha256": "cb99aa7bc0a9c46ea80a2280ddca7ba7d5a431a92e81cd697eb9b8f607433141"
+                      },
+                      "input": {
+                        "hint": {
+                          "prose": 53,
+                          "sha256": "6b560e23ed6ece1ed88f1ad80621690679bbf83f8ee38d00bfb6e36197128f49"
+                        }
+                      },
+                      "name": "compact"
+                    },
+                    {
+                      "description": {
+                        "prose": 31,
+                        "sha256": "f0a6879946d4c76247b6368dcf478e775053712f503f0ddcafd31b19dc3f2e1c"
+                      },
+                      "name": "data-retention"
+                    },
+                    {
+                      "description": {
+                        "prose": 46,
+                        "sha256": "d1fbe269c147eddff8b630cbe9fe3654da03f0eafa29928563f7babcc4af82f3"
+                      },
+                      "name": "help"
+                    },
+                    {
+                      "description": {
+                        "prose": 36,
+                        "sha256": "fbb6015e086b387a10c1db084922af6b4826b95dc69135f63d29a9e3da10b7fc"
+                      },
+                      "name": "leanstall"
+                    },
+                    {
+                      "description": {
+                        "prose": 42,
+                        "sha256": "2f44067b79aace1de81fe2e814915f348e81b30e81aa519b9b5a0c1d45be30e0"
+                      },
+                      "name": "log"
+                    },
+                    {
+                      "description": {
+                        "prose": 69,
+                        "sha256": "b8bb2d84ce629b5b8006621ab2cc4aa7e312ee33cff295440831b2bd41096e7d"
+                      },
+                      "input": {
+                        "hint": {
+                          "prose": 39,
+                          "sha256": "af9b0eb064c7207d988b058448e12336bad151aea058524e9159fe8219496d92"
+                        }
+                      },
+                      "name": "mcp"
+                    },
+                    {
+                      "description": {
+                        "prose": 44,
+                        "sha256": "fb13a484057b1cb8410d990218bebf72b5d9ffc625c5d0229c1a2e33a657807f"
+                      },
+                      "input": {
+                        "hint": {
+                          "prose": 49,
+                          "sha256": "d18d9b9775c0c626268d02c4b4c78283efbff11545289342d5d9c130ffa13f61"
+                        }
+                      },
+                      "name": "proxy-setup"
+                    },
+                    {
+                      "description": {
+                        "prose": 62,
+                        "sha256": "3a8f15da69d7e24248d63556fd5217bcca46919e2b9a42bfd8b4c39578d33c4b"
+                      },
+                      "name": "reload"
+                    },
+                    {
+                      "description": {
+                        "prose": 79,
+                        "sha256": "0502e1c8a1ca9f7d7326d687cdcb274349ffe7a77bf7c4914fe2db8c9cceaa3b"
+                      },
+                      "input": {
+                        "hint": {
+                          "prose": 53,
+                          "sha256": "c05069b71000770521f00f44c1f5346e80939decb357fd03b377feb86e8f3dd4"
+                        }
+                      },
+                      "name": "retry"
+                    },
+                    {
+                      "description": {
+                        "prose": 245,
+                        "sha256": "c6e85bed9c5d1c1fc9d3320bd3e06a6685563dfd363539cbd5b8aebf9cab49f3"
+                      },
+                      "input": {
+                        "hint": {
+                          "prose": 26,
+                          "sha256": "d28fbfb4ab11c21dc5bd4e6fee496fa3dea4843455b9e675c713dc604c73a446"
+                        }
+                      },
+                      "name": "skill-creator"
+                    },
+                    {
+                      "description": {
+                        "prose": 33,
+                        "sha256": "b6e336cb43b5c8e271436f624c21de6b73eea5ba9e7b61392c2e788d2944582d"
+                      },
+                      "name": "teleport"
+                    },
+                    {
+                      "description": {
+                        "prose": 26,
+                        "sha256": "5dd2d6668dd9c42c039edc24e3b2c4f18ebc51995766c0e56ee2470cff7994f7"
+                      },
+                      "name": "unleanstall"
+                    }
+                  ],
+                  "sessionUpdate": "available_commands_update"
+                }
+              }
+            }
+          ],
+          "response": {
+            "id": 1,
+            "result": {
+              "_meta": {
+                "workspace_trust": {
+                  "details": null,
+                  "status": "untrusted"
+                }
+              },
+              "configOptions": [
+                {
+                  "category": "mode",
+                  "currentValue": "accept-edits",
+                  "id": "mode",
+                  "name": {
+                    "prose": 12,
+                    "sha256": "af75e7fd34b80165d64ae07cf6ed35a0514ac79cd078964f554d123b7cfaa74a"
+                  },
+                  "options": [
+                    {
+                      "description": {
+                        "prose": 37,
+                        "sha256": "ec3f3847a6fe91415c4632318966ae655e97939d869e3a68d081bd837ec8751e"
+                      },
+                      "name": "Ask",
+                      "value": "ask"
+                    },
+                    {
+                      "description": {
+                        "prose": 44,
+                        "sha256": "49c72c68ec4ce47bd30042c8a9a129b2857a1b43a450b0a3e34e5b96bb246488"
+                      },
+                      "name": "Plan",
+                      "value": "plan"
+                    },
+                    {
+                      "description": {
+                        "prose": 29,
+                        "sha256": "5397ced791532d3eec9f6e9099cefe1534b19367031050832d9c955a4385020f"
+                      },
+                      "name": {
+                        "prose": 12,
+                        "sha256": "7d3dc49ca9aa50802a828bc29e2643173340ea7ea1e5d1365eb1ae286e529868"
+                      },
+                      "value": "accept-edits"
+                    },
+                    {
+                      "description": {
+                        "prose": 33,
+                        "sha256": "46db4059b46ac5104646872011c4f006bfbfcbf96096e678b0919fb3ebc2b1cd"
+                      },
+                      "name": {
+                        "prose": 12,
+                        "sha256": "f38e7a50d0e155c641fa9da95701dab50f00143ea8e55226eb6ae9ded5cf32d9"
+                      },
+                      "value": "auto-approve"
+                    }
+                  ],
+                  "type": "select"
+                },
+                {
+                  "category": "model",
+                  "currentValue": "mistral-medium-3.5",
+                  "id": "model",
+                  "name": "Model",
+                  "options": [
+                    {
+                      "description": "mistral-vibe-cli-latest",
+                      "name": {
+                        "prose": 18,
+                        "sha256": "ed5f601030c3af101b219f07990f4f575c98b30b1d0fe2be303d83fd450e3bed"
+                      },
+                      "value": "mistral-medium-3.5"
+                    },
+                    {
+                      "description": "devstral",
+                      "name": {
+                        "prose": 16,
+                        "sha256": "fc1d0f1b9ba45ab90794ab6ff118018ca56c0558e405e72350792114fbb89ad8"
+                      },
+                      "value": "local"
+                    }
+                  ],
+                  "type": "select"
+                },
+                {
+                  "category": "thinking",
+                  "currentValue": "high",
+                  "id": "thinking",
+                  "name": "Thinking",
+                  "options": [
+                    {
+                      "name": "Off",
+                      "value": "off"
+                    },
+                    {
+                      "name": "Low",
+                      "value": "low"
+                    },
+                    {
+                      "name": "Medium",
+                      "value": "medium"
+                    },
+                    {
+                      "name": "High",
+                      "value": "high"
+                    },
+                    {
+                      "name": "Max",
+                      "value": "max"
+                    }
+                  ],
+                  "type": "select"
+                }
+              ],
+              "modes": {
+                "availableModes": [
+                  {
+                    "description": {
+                      "prose": 37,
+                      "sha256": "ec3f3847a6fe91415c4632318966ae655e97939d869e3a68d081bd837ec8751e"
+                    },
+                    "id": "ask",
+                    "name": "Ask"
+                  },
+                  {
+                    "description": {
+                      "prose": 44,
+                      "sha256": "49c72c68ec4ce47bd30042c8a9a129b2857a1b43a450b0a3e34e5b96bb246488"
+                    },
+                    "id": "plan",
+                    "name": "Plan"
+                  },
+                  {
+                    "description": {
+                      "prose": 29,
+                      "sha256": "5397ced791532d3eec9f6e9099cefe1534b19367031050832d9c955a4385020f"
+                    },
+                    "id": "accept-edits",
+                    "name": {
+                      "prose": 12,
+                      "sha256": "7d3dc49ca9aa50802a828bc29e2643173340ea7ea1e5d1365eb1ae286e529868"
+                    }
+                  },
+                  {
+                    "description": {
+                      "prose": 33,
+                      "sha256": "46db4059b46ac5104646872011c4f006bfbfcbf96096e678b0919fb3ebc2b1cd"
+                    },
+                    "id": "auto-approve",
+                    "name": {
+                      "prose": 12,
+                      "sha256": "f38e7a50d0e155c641fa9da95701dab50f00143ea8e55226eb6ae9ded5cf32d9"
+                    }
+                  }
+                ],
+                "currentModeId": "accept-edits"
+              },
+              "sessionId": "<id-1>"
+            }
+          },
+          "stream": []
+        },
+        {
+          "detached": [
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "_meta": {
+                    "cachedTokens": 0,
+                    "completionTokens": 0,
+                    "lastTurnDuration": 0,
+                    "lastTurnTotalTokens": 0,
+                    "promptTokens": 0,
+                    "steps": 0,
+                    "tokensPerSecond": 0,
+                    "totalTokens": 0
+                  },
+                  "sessionUpdate": "usage_update",
+                  "size": 200000,
+                  "used": 0
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "_meta": {
+                    "cachedTokens": 0,
+                    "completionTokens": 15,
+                    "lastTurnDuration": "<nonzero>",
+                    "lastTurnTotalTokens": 15,
+                    "promptTokens": 30,
+                    "steps": 4,
+                    "tokensPerSecond": "<nonzero>",
+                    "totalTokens": 45
+                  },
+                  "cost": {
+                    "amount": 0.0001575,
+                    "currency": "USD"
+                  },
+                  "sessionUpdate": "usage_update",
+                  "size": 200000,
+                  "used": 15
+                }
+              }
+            },
+            {
+              "method": "session/update",
+              "params": {
+                "sessionId": "<id-1>",
+                "update": {
+                  "_meta": {
+                    "cachedTokens": 0,
+                    "completionTokens": 5,
+                    "lastTurnDuration": "<nonzero>",
+                    "lastTurnTotalTokens": 15,
+                    "promptTokens": 10,
+                    "steps": 1,
+                    "tokensPerSecond": "<nonzero>",
+                    "totalTokens": 15
+                  },
+                  "cost": {
+                    "amount": 5.25e-05,
+                    "currency": "USD"
+                  },
+                  "sessionUpdate": "usage_update",
+                  "size": 200000,
+                  "used": 15
+                }
+              }
+            }
+          ],
+          "response": {
+            "id": 2,
+            "result": {
+              "stopReason": "end_turn",
+              "usage": {
+                "inputTokens": 30,
+                "outputTokens": 15,
+                "totalTokens": 45
+              }
+            }
+          },
+          "stream": [
+            {
+              "after": false,
+              "message": {
+                "method": "session/update",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "update": {
+                    "content": {
+                      "text": "Read outside",
+                      "type": "text"
+                    },
+                    "messageId": "<id-2>",
+                    "sessionUpdate": "user_message_chunk"
+                  }
+                }
+              }
+            },
+            {
+              "after": false,
+              "message": {
+                "method": "session/update",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "update": {
+                    "sessionUpdate": "session_info_update",
+                    "title": "Read outside",
+                    "updatedAt": "<time>"
+                  }
+                }
+              }
+            },
+            {
+              "after": false,
+              "message": {
+                "method": "session/update",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "update": {
+                    "_meta": {
+                      "effect_kind": "file_read",
+                      "tool_name": "read_file"
+                    },
+                    "kind": "read",
+                    "sessionUpdate": "tool_call",
+                    "status": "in_progress",
+                    "title": "read_file",
+                    "toolCallId": "<id-3>"
+                  }
+                }
+              }
+            },
+            {
+              "after": false,
+              "message": {
+                "method": "session/update",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "update": {
+                    "_meta": {
+                      "effect_kind": "file_read",
+                      "tool_name": "read_file"
+                    },
+                    "kind": "read",
+                    "locations": [
+                      {
+                        "_meta": {
+                          "type": "file"
+                        },
+                        "path": "<home>/outside/data/a.txt"
+                      }
+                    ],
+                    "rawInput": {
+                      "filePath": "<home>/outside/data/a.txt",
+                      "limit": 2000,
+                      "offset": null
+                    },
+                    "sessionUpdate": "tool_call_update",
+                    "status": "in_progress",
+                    "title": {
+                      "prose": 33,
+                      "sha256": "a3a45f4cbb129fe12f119fb7ced667cded188fe6f3d8b1702bf307182fc5dfa1"
+                    },
+                    "toolCallId": "<id-3>"
+                  }
+                }
+              }
+            },
+            {
+              "after": false,
+              "message": {
+                "method": "session/update",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "update": {
+                    "_meta": {
+                      "effect_kind": "file_read",
+                      "tool_name": "read_file"
+                    },
+                    "kind": "read",
+                    "locations": [
+                      {
+                        "_meta": {
+                          "type": "file"
+                        },
+                        "path": "<home>/outside/data/a.txt"
+                      }
+                    ],
+                    "sessionUpdate": "tool_call_update",
+                    "status": "in_progress",
+                    "toolCallId": "<id-3>"
+                  }
+                }
+              }
+            },
+            {
+              "after": false,
+              "message": {
+                "id": 0,
+                "method": "session/request_permission",
+                "params": {
+                  "options": [
+                    {
+                      "kind": "allow_once",
+                      "name": {
+                        "prose": 10,
+                        "sha256": "168511d24d9ee03122b3200f929be11eaaedad45cb0ecb20a95f549b3e3f4d0f"
+                      },
+                      "optionId": "allow_once"
+                    },
+                    {
+                      "_meta": {
+                        "required_permissions": [
+                          {
+                            "invocation_pattern": "<home>/outside/data/a.txt",
+                            "label": {
+                              "prose": 43,
+                              "sha256": "8c6c3210676fc171ca532420210aae571638a7561e9e546aaf8e5da33bb95778"
+                            },
+                            "scope": "outside_directory",
+                            "session_pattern": "vibe-path:exact:<home>/outside/data/a.txt"
+                          }
+                        ]
+                      },
+                      "kind": "allow_always",
+                      "name": {
+                        "prose": 37,
+                        "sha256": "53e887cabf3e013710ff583615f9279e56b85c73439fdf66b7adbf4153dea3fe"
+                      },
+                      "optionId": "allow_session_exact"
+                    },
+                    {
+                      "_meta": {
+                        "required_permissions": [
+                          {
+                            "invocation_pattern": "<home>/outside/data/a.txt",
+                            "label": {
+                              "prose": 43,
+                              "sha256": "8c6c3210676fc171ca532420210aae571638a7561e9e546aaf8e5da33bb95778"
+                            },
+                            "scope": "outside_directory",
+                            "session_pattern": "vibe-path:exact:<home>/outside/data/a.txt"
+                          }
+                        ]
+                      },
+                      "kind": "allow_always",
+                      "name": {
+                        "prose": 22,
+                        "sha256": "c55f891112682c9c3db82bb5f8ce9ee8d78370b83ef5c12f5a269cc9d91968ef"
+                      },
+                      "optionId": "allow_permanent_exact"
+                    },
+                    {
+                      "kind": "reject_once",
+                      "name": "Deny",
+                      "optionId": "reject_once"
+                    }
+                  ],
+                  "sessionId": "<id-1>",
+                  "toolCall": {
+                    "toolCallId": "<id-3>"
+                  }
+                }
+              }
+            },
+            {
+              "after": false,
+              "message": {
+                "method": "session/update",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "update": {
+                    "_meta": {
+                      "effect_kind": "file_read",
+                      "tool_name": "read_file"
+                    },
+                    "kind": "read",
+                    "locations": [
+                      {
+                        "_meta": {
+                          "type": "file"
+                        },
+                        "path": "<home>/outside/data/a.txt"
+                      }
+                    ],
+                    "sessionUpdate": "tool_call_update",
+                    "status": "in_progress",
+                    "toolCallId": "<id-3>"
+                  }
+                }
+              }
+            },
+            {
+              "after": false,
+              "message": {
+                "id": 1,
+                "method": "fs/read_text_file",
+                "params": {
+                  "limit": 2001,
+                  "path": "<home>/outside/data/a.txt",
+                  "sessionId": "<id-1>"
+                }
+              }
+            },
+            {
+              "after": false,
+              "message": {
+                "method": "session/update",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "update": {
+                    "_meta": {
+                      "effect_kind": "file_read",
+                      "tool_name": "read_file"
+                    },
+                    "content": [
+                      {
+                        "content": {
+                          "text": {
+                            "prose": 42,
+                            "sha256": "5c2554025f0a3b37b58f11d81afa9dcf56c95943239bc4ed6d257eea379956d4"
+                          },
+                          "type": "text"
+                        },
+                        "type": "content"
+                      }
+                    ],
+                    "kind": "read",
+                    "locations": [
+                      {
+                        "_meta": {
+                          "type": "file"
+                        },
+                        "path": "<home>/outside/data/a.txt"
+                      }
+                    ],
+                    "rawOutput": {
+                      "content": {
+                        "prose": 15,
+                        "sha256": "723f72d991177ffac1dd5f2b3438b2a6d70b74c74969ab10f9833fefc862f768"
+                      },
+                      "filePath": "<home>/outside/data/a.txt",
+                      "numLines": 1,
+                      "requestedLimit": 2000,
+                      "requestedOffset": null,
+                      "startLine": 1,
+                      "totalLines": null,
+                      "wasTruncated": false
+                    },
+                    "sessionUpdate": "tool_call_update",
+                    "status": "completed",
+                    "toolCallId": "<id-3>"
+                  }
+                }
+              }
+            },
+            {
+              "after": false,
+              "message": {
+                "method": "session/update",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "update": {
+                    "_meta": {
+                      "effect_kind": "file_read",
+                      "tool_name": "read_file"
+                    },
+                    "kind": "read",
+                    "sessionUpdate": "tool_call",
+                    "status": "in_progress",
+                    "title": "read_file",
+                    "toolCallId": "<id-4>"
+                  }
+                }
+              }
+            },
+            {
+              "after": false,
+              "message": {
+                "method": "session/update",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "update": {
+                    "_meta": {
+                      "effect_kind": "file_read",
+                      "tool_name": "read_file"
+                    },
+                    "kind": "read",
+                    "locations": [
+                      {
+                        "_meta": {
+                          "type": "file"
+                        },
+                        "path": "<home>/outside/data/a.txt"
+                      }
+                    ],
+                    "rawInput": {
+                      "filePath": "<home>/outside/data/a.txt",
+                      "limit": 2000,
+                      "offset": null
+                    },
+                    "sessionUpdate": "tool_call_update",
+                    "status": "in_progress",
+                    "title": {
+                      "prose": 33,
+                      "sha256": "a3a45f4cbb129fe12f119fb7ced667cded188fe6f3d8b1702bf307182fc5dfa1"
+                    },
+                    "toolCallId": "<id-4>"
+                  }
+                }
+              }
+            },
+            {
+              "after": false,
+              "message": {
+                "id": 2,
+                "method": "fs/read_text_file",
+                "params": {
+                  "limit": 2001,
+                  "path": "<home>/outside/data/a.txt",
+                  "sessionId": "<id-1>"
+                }
+              }
+            },
+            {
+              "after": false,
+              "message": {
+                "method": "session/update",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "update": {
+                    "_meta": {
+                      "effect_kind": "file_read",
+                      "tool_name": "read_file"
+                    },
+                    "content": [
+                      {
+                        "content": {
+                          "text": {
+                            "prose": 42,
+                            "sha256": "5c2554025f0a3b37b58f11d81afa9dcf56c95943239bc4ed6d257eea379956d4"
+                          },
+                          "type": "text"
+                        },
+                        "type": "content"
+                      }
+                    ],
+                    "kind": "read",
+                    "locations": [
+                      {
+                        "_meta": {
+                          "type": "file"
+                        },
+                        "path": "<home>/outside/data/a.txt"
+                      }
+                    ],
+                    "rawOutput": {
+                      "content": {
+                        "prose": 15,
+                        "sha256": "723f72d991177ffac1dd5f2b3438b2a6d70b74c74969ab10f9833fefc862f768"
+                      },
+                      "filePath": "<home>/outside/data/a.txt",
+                      "numLines": 1,
+                      "requestedLimit": 2000,
+                      "requestedOffset": null,
+                      "startLine": 1,
+                      "totalLines": null,
+                      "wasTruncated": false
+                    },
+                    "sessionUpdate": "tool_call_update",
+                    "status": "completed",
+                    "toolCallId": "<id-4>"
+                  }
+                }
+              }
+            },
+            {
+              "after": false,
+              "message": {
+                "method": "session/update",
+                "params": {
+                  "sessionId": "<id-1>",
+                  "update": {
+                    "content": {
+                      "text": "Read",
+                      "type": "text"
+                    },
+                    "messageId": "<id-5>",
+                    "sessionUpdate": "agent_message_chunk"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "scenario": {
+        "backend": [
+          {
+            "toolCalls": [
+              {
+                "arguments": {
+                  "file_path": "$HOME/outside/data/a.txt"
+                },
+                "id": "call_1",
+                "name": "read_file"
+              }
+            ]
+          },
+          {
+            "toolCalls": [
+              {
+                "arguments": {
+                  "file_path": "$HOME/outside/data/a.txt"
+                },
+                "id": "call_2",
+                "name": "read_file"
+              }
+            ]
+          },
+          {
+            "text": "Read"
+          }
+        ],
+        "client": {
+          "session/request_permission": {
+            "outcome": {
+              "optionId": "allow_permanent_exact",
+              "outcome": "selected"
+            }
+          }
+        },
+        "homeFiles": {
+          "outside/data/a.txt": "alpha\n",
+          "outside/data/nested/b.txt": "beta\n"
+        },
+        "name": "prompt/read-outside-file",
+        "steps": [
+          {
+            "send": {
+              "id": 0,
+              "method": "initialize",
+              "params": {
+                "clientCapabilities": {
+                  "fs": {
+                    "readTextFile": true,
+                    "writeTextFile": true
+                  },
+                  "terminal": true
+                },
+                "clientInfo": {
+                  "name": "oracle-client",
+                  "version": "1.0.0"
+                },
+                "protocolVersion": 1
+              }
+            }
+          },
+          {
+            "send": {
+              "id": 1,
+              "method": "session/new",
+              "params": {
+                "cwd": "$WS",
+                "mcpServers": []
+              }
+            }
+          },
+          {
+            "send": {
+              "id": 2,
+              "method": "session/prompt",
+              "params": {
+                "prompt": [
+                  {
+                    "text": "Read outside",
+                    "type": "text"
+                  }
+                ],
+                "sessionId": "$S1"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "prompt/bash-rejected",
       "observed": [
         {

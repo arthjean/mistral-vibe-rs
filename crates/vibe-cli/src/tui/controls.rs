@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use thiserror::Error;
+use vibe_core::policy::PathGrantScope;
 
 mod interaction;
 mod response;
@@ -24,13 +25,31 @@ pub enum ApprovalScope {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum CallbackChoice {
-    Approve { scope: ApprovalScope },
-    Deny { scope: ApprovalScope },
+    Approve {
+        scope: ApprovalScope,
+    },
+    /// An approval of outside paths, granted for the session or kept, under
+    /// one of the path scopes the server offered.
+    ApprovePath {
+        scope: ApprovalScope,
+        path_scope: PathGrantScope,
+    },
+    Deny {
+        scope: ApprovalScope,
+    },
     Cancel,
-    Option { id: String },
-    Options { ids: Vec<String> },
-    FreeText { value: String },
-    UserInput { answers: Vec<UserInputChoice> },
+    Option {
+        id: String,
+    },
+    Options {
+        ids: Vec<String>,
+    },
+    FreeText {
+        value: String,
+    },
+    UserInput {
+        answers: Vec<UserInputChoice>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -598,6 +617,37 @@ mod tests {
                 },
             },
         }
+    }
+
+    /// Reference `ApprovalApp._handle_selection`: a row granting outside
+    /// paths submits its decision with the scope it names.
+    #[test]
+    fn a_path_scoped_answer_carries_the_scope_it_names() {
+        let mut state = ControlState::new("session");
+        state.begin_turn("turn").expect("turn starts");
+        state
+            .present_callback(callback("callback", "turn"))
+            .expect("callback presents");
+        let dispatch = state
+            .answer(
+                "turn",
+                "callback",
+                CallbackChoice::ApprovePath {
+                    scope: ApprovalScope::Permanent,
+                    path_scope: PathGrantScope::DirectoryRecursive,
+                },
+            )
+            .expect("answer");
+        assert_eq!(
+            dispatch.params["output"],
+            json!({
+                "type": "approval",
+                "decision": {
+                    "type": "approve_permanently",
+                    "pathScope": "directory_recursive",
+                },
+            })
+        );
     }
 
     #[test]

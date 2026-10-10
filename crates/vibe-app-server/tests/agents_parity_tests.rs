@@ -97,11 +97,6 @@ const SUBAGENT_NAME: &str = "v2.26.0 names the agent a subagent call runs on its
      (`vibe/app_server/_effect_models.py:295` at 376f6a3), null until the call is known; this \
      port omits the field";
 
-const PATH_SCOPE: &str = "v2.26.0 approvals carry a path grant scope, `pathScopeChoices` on \
-     the request and `pathScope` on the decision (`vibe/app_server/models.py:312,322` at \
-     376f6a3), empty and null for the call the child asks about; this port's payloads carry \
-     neither";
-
 const MODEL_VIEW: &str = "v2.26.0 reports a model's `maxContextLength`, `thinkingLevels` and \
      `imageDelivery` (`vibe/app_server/config.py:25-33` at 376f6a3), unset, all five levels and \
      null for a model that names none of them; this port's model view omits the three";
@@ -246,18 +241,6 @@ const LEDGER: &[Divergence] = &[
         pointer: "/steps/1/turn/4/detail/effect/agentName",
         row: "17",
         reason: SUBAGENT_NAME,
-    },
-    Divergence {
-        scenarios: CHILD_APPROVALS,
-        pointer: "/steps/1/turn/4/detail/pathScopeChoices",
-        row: "17",
-        reason: PATH_SCOPE,
-    },
-    Divergence {
-        scenarios: CHILD_APPROVALS,
-        pointer: "/steps/1/turn/6/patch/0/value/output/decision/pathScope",
-        row: "17",
-        reason: PATH_SCOPE,
     },
     Divergence {
         scenarios: &["profile/custom-model"],

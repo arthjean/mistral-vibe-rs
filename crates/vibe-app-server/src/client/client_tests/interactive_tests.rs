@@ -357,6 +357,11 @@ async fn interactive_approval_callback_returns_the_exact_policy_decision() {
     );
     assert_eq!(detail["effect"]["input"], json!({"command": "cargo test"}));
     assert_eq!(detail["effect"]["kind"], "shell");
+    assert_eq!(
+        detail["pathScopeChoices"],
+        json!([]),
+        "a command reaches no outside path, so no path scope is offered"
+    );
     service
         .respond_callback(json!({
             "sessionId": session_id,
@@ -373,7 +378,7 @@ async fn interactive_approval_callback_returns_the_exact_policy_decision() {
             .expect("approval unblocks")
             .expect("approval task joins")
             .expect("approval succeeds"),
-        ApprovalDecision::ApproveForSession
+        ApprovalDecision::ApproveForSession(None)
     );
     service
         .fail_reserved(
@@ -465,4 +470,43 @@ async fn server_bound_observer_sequences_repeated_turns_without_replaying_histor
     service
         .finish_reserved(&second, second_outcome)
         .expect("second turn finishes");
+}
+
+/// Reference `available_path_scopes` and `ApprovalDecision.path_scope`: an
+/// approval of an outside folder offers its recursive grant, and the scope a
+/// client answers with reaches the policy as it was sent.
+#[test]
+fn an_outside_folder_approval_offers_its_scope_and_reads_the_answer_back() {
+    let outside = tempfile::tempdir().expect("outside directory");
+    let request = ApprovalRequest {
+        tool: "grep".to_owned(),
+        input: json!({"pattern": "alpha", "path": outside.path()}),
+        requirements: vec![vibe_core::policy::PermissionRequirement::outside_path(
+            outside.path(),
+        )],
+        rationale: String::new(),
+        call_id: Some("call-1".to_owned()),
+    };
+    let detail = crate::client::interactive::approval_callback_detail(&request, None, None);
+    assert_eq!(detail["pathScopeChoices"], json!(["directory_recursive"]));
+
+    let decision = |value: Value| {
+        crate::client::interactive::approval_decision_from_output(&json!({
+            "type": "approval",
+            "decision": value,
+        }))
+    };
+    assert_eq!(
+        decision(json!({"type": "approve_for_session", "pathScope": "directory_recursive"}))
+            .expect("a scoped answer reads"),
+        ApprovalDecision::ApproveForSession(Some(
+            vibe_core::policy::PathGrantScope::DirectoryRecursive
+        ))
+    );
+    assert_eq!(
+        decision(json!({"type": "approve_permanently", "pathScope": null}))
+            .expect("an unscoped answer reads"),
+        ApprovalDecision::ApprovePermanently(None)
+    );
+    assert!(decision(json!({"type": "approve_for_session", "pathScope": "everything"})).is_err());
 }

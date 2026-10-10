@@ -13,7 +13,10 @@ the questions whose answers are the contract EP-032 ports:
   list, so the two functions are replayed rather than re-read;
 * how a path grant is encoded and matched, what ``PermissionStore.covers``
   answers for a stored rule, and what the file-tool chain answers for a path
-  outside the working directory and for an allowlist or denylist entry.
+  outside the working directory and for an allowlist or denylist entry;
+* which path scopes an approval offers, what each choice of scope grants and
+  which choices are refused (``available_path_scopes``,
+  ``approval_grant_permissions`` and ``scope_required_permissions``).
 
 The corpus is committed, like the tool-configuration one: it records enum
 values, field names, command names, integers and the answers to cases this
@@ -46,7 +49,7 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 DEFAULT_OUTPUT = Path("crates/vibe-core/tests/permission-surface/vocabulary.json")
 INTERPRETER_VARIABLE = "VIBE_PARITY_PYTHON"
 
@@ -278,6 +281,35 @@ LIST_CHAIN_CASES: tuple[tuple[str, str, str], ...] = (
     ("allowlist", "vibe-path:exact:{outside}/secret.txt", "{outside}/secret.txt"),
     ("allowlist", "vibe-path:exact:{outside}/secret.txt", "{outside}/other.txt"),
 )
+
+#: Requirement lists an approval could carry, each requirement written as
+#: ``(scope, invocation pattern, path scope root)``. The initial session
+#: pattern is the exact encoded grant for an outside path and the invocation
+#: itself otherwise, as the tools raise them. They cover no outside path, a
+#: file, a directory that is its own root (spelled with a trailing separator
+#: and with ``.`` and ``..`` too), a root that is not the target, a file beside
+#: a directory, two directories, other scopes beside a directory, and a Windows
+#: directory whose root differs only in case and separators.
+PATH_SCOPE_CASES: tuple[tuple[tuple[str, str, str | None], ...], ...] = (
+    (),
+    (("command_pattern", "git status", None),),
+    (("outside_directory", "/srv/notes.txt", None),),
+    (("outside_directory", "/srv/app", "/srv/app"),),
+    (("outside_directory", "/srv/app/", "/srv/app"),),
+    (("outside_directory", "/srv/./app/../app", "/srv/app"),),
+    (("outside_directory", "/srv/app", "/srv"),),
+    (("outside_directory", "/srv/app", "/srv/app"), ("outside_directory", "/srv/notes.txt", None)),
+    (("outside_directory", "/srv/app", "/srv/app"), ("outside_directory", "/opt/data", "/opt/data")),
+    (("command_pattern", "cat", None), ("outside_directory", "/srv/app", "/srv/app")),
+    (("file_pattern", "/srv/app/.env", None), ("outside_directory", "/srv/app", "/srv/app")),
+    (("outside_directory", "C:\\Work\\Dir", "c:/work/dir"),),
+    (("outside_directory", "C:\\Work\\File.txt", None),),
+)
+
+#: The choices an operator can send with a lasting approval: none, then each
+#: scope.
+PATH_SCOPE_SELECTIONS: tuple[str | None, ...] = (None, "exact", "directory_recursive")
+
 
 #: The targets outside the working directory the chain is asked about: a file
 #: that does not exist, one that does, and a directory, the one shape that
@@ -709,6 +741,93 @@ def capture_list_chain(reference: Path) -> list[dict[str, Any]]:
     return captured
 
 
+def capture_path_scopes(reference: Path) -> list[dict[str, Any]]:
+    """Which scopes an approval offers and what each choice grants.
+
+    For every requirement list: what ``available_path_scopes`` offers, the
+    session patterns ``scope_required_permissions`` writes under each scope,
+    and, for each choice an operator may send, the session patterns
+    ``approval_grant_permissions`` grants or which of its two refusals it
+    raises. The refusal is recorded by its cause, never by its sentence.
+    """
+    sys.path.insert(0, str(reference))
+    from types import SimpleNamespace
+
+    from vibe.app_server._approval_permissions import (
+        approval_grant_permissions,
+        available_path_scopes,
+    )
+    from vibe.app_server.models import ApprovalDecision, ApprovalDecisionType
+    from vibe.permissions import (
+        PathGrantScope,
+        PermissionScope,
+        RequiredPermission,
+        path_grant_pattern,
+        scope_required_permissions,
+    )
+
+    captured: list[dict[str, Any]] = []
+    for case in PATH_SCOPE_CASES:
+        requirements = [
+            RequiredPermission(
+                scope=PermissionScope(scope),
+                invocation_pattern=invocation,
+                session_pattern=path_grant_pattern(invocation, PathGrantScope.EXACT)
+                if scope == "outside_directory"
+                else invocation,
+                label=invocation,
+                path_scope_root=root,
+            )
+            for scope, invocation, root in case
+        ]
+        offered = available_path_scopes(requirements)
+        detail = SimpleNamespace(
+            required_permissions=requirements, path_scope_choices=offered
+        )
+        choices: list[dict[str, Any]] = []
+        for selected in PATH_SCOPE_SELECTIONS:
+            decision = ApprovalDecision(
+                type=ApprovalDecisionType.APPROVE_FOR_SESSION,
+                path_scope=None if selected is None else PathGrantScope(selected),
+            )
+            try:
+                granted = approval_grant_permissions(detail, decision)
+            except ValueError:
+                choices.append(
+                    {
+                        "selected": selected,
+                        "granted": None,
+                        "refusal": "withoutPaths" if not offered else "notOffered",
+                    }
+                )
+                continue
+            choices.append(
+                {
+                    "selected": selected,
+                    "granted": [permission.session_pattern for permission in granted],
+                    "refusal": None,
+                }
+            )
+        captured.append(
+            {
+                "requirements": [
+                    {"scope": scope, "invocationPattern": invocation, "pathScopeRoot": root}
+                    for scope, invocation, root in case
+                ],
+                "offered": [str(scope.value) for scope in offered],
+                "scoped": {
+                    str(scope.value): [
+                        permission.session_pattern
+                        for permission in scope_required_permissions(requirements, scope)
+                    ]
+                    for scope in PathGrantScope
+                },
+                "choices": choices,
+            }
+        )
+    return captured
+
+
 def build_corpus(reference: Path, expected_commit: str | None) -> dict[str, Any]:
     pin = resolve_reference(reference, expected_commit)
     vocabulary = capture_vocabulary(reference)
@@ -720,8 +839,9 @@ def build_corpus(reference: Path, expected_commit: str | None) -> dict[str, Any]
             "Captured from the pinned reference by "
             "scripts/parity/permission_surface.py. Scope values, requirement "
             "field names, command names, arities and the answers to cases this "
-            "repository authored, path grant encodings and verdicts are "
-            "observations; no reference-authored "
+            "repository authored, path grant encodings and verdicts, and the "
+            "path scopes an approval offers and grants are observations; no "
+            "reference-authored "
             "description text is recorded here."
         ),
         "counts": {
@@ -736,6 +856,7 @@ def build_corpus(reference: Path, expected_commit: str | None) -> dict[str, Any]
             "coversCases": len(COVERS_CASES),
             "listChainCases": len(LIST_CHAIN_CASES),
             "outsideTargets": len(OUTSIDE_TARGETS),
+            "pathScopeCases": len(PATH_SCOPE_CASES),
         },
         "scopes": vocabulary["scopes"],
         "pathGrantScopes": vocabulary["pathGrantScopes"],
@@ -749,6 +870,7 @@ def build_corpus(reference: Path, expected_commit: str | None) -> dict[str, Any]
         "pathGrants": capture_path_grants(reference),
         "covers": capture_covers(reference),
         "listChain": capture_list_chain(reference),
+        "pathScopes": capture_path_scopes(reference),
     }
 
 
@@ -794,7 +916,8 @@ def main() -> int:
         f"{counts['pathGrantEncodingCases']} grant encodings, "
         f"{counts['pathMatchCases']} path matches, "
         f"{counts['coversCases']} covers cases, "
-        f"{counts['listChainCases']} list chain cases)"
+        f"{counts['listChainCases']} list chain cases, "
+        f"{counts['pathScopeCases']} path scope cases)"
     )
     return 0
 

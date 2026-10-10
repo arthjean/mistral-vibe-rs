@@ -9,9 +9,11 @@
 //! the answers; this module replays them against [`PermissionScope`],
 //! [`PathGrantScope`], [`PermissionRequirement`], [`arity::ARITY`],
 //! [`arity::build_session_pattern`], [`wildcard_match`],
-//! [`path_grant_pattern`], [`path_pattern_matches`], [`PermissionRule::covers`]
-//! and the file-tool chain, [`resolve_file_tool_permission`] composed with the
-//! store's working-directory check.
+//! [`path_grant_pattern`], [`path_pattern_matches`], [`PermissionRule::covers`],
+//! the file-tool chain, [`resolve_file_tool_permission`] composed with the
+//! store's working-directory check, and the path scopes an approval offers and
+//! grants, [`available_path_scopes`], [`approval_path_scope`] and
+//! [`scope_required_permissions`].
 //!
 //! The corpus is committed: it carries enum values, field names, command names,
 //! integers and the answers to cases this repository authored, all of which are
@@ -39,7 +41,7 @@ const CAPTURE_SCRIPT: &str = "scripts/parity/permission_surface.py";
 const CORPUS_RELATIVE: &str = "tests/permission-surface/vocabulary.json";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 5;
+const CORPUS_SCHEMA_VERSION: u32 = 6;
 
 /// One observed difference from the reference, scoped to the corpus pointer
 /// it contradicts.
@@ -117,6 +119,7 @@ struct Corpus {
     path_grants: PathGrants,
     covers: Vec<CoversCase>,
     list_chain: Vec<ListChainCase>,
+    path_scopes: Vec<PathScopeCase>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -139,6 +142,7 @@ struct Counts {
     covers_cases: usize,
     list_chain_cases: usize,
     outside_targets: usize,
+    path_scope_cases: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -271,6 +275,36 @@ struct ListChainCase {
     path: String,
     permission: Option<String>,
     scopes: Vec<String>,
+}
+
+/// Which scopes an approval of these requirements offers and what each
+/// choice grants, as `available_path_scopes`, `scope_required_permissions` and
+/// `approval_grant_permissions` answer.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PathScopeCase {
+    requirements: Vec<PathScopeRequirement>,
+    offered: Vec<PathGrantScope>,
+    scoped: BTreeMap<String, Vec<String>>,
+    choices: Vec<PathScopeChoice>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PathScopeRequirement {
+    scope: PermissionScope,
+    invocation_pattern: String,
+    path_scope_root: Option<String>,
+}
+
+/// One choice an operator may send, and the session patterns it grants or the
+/// cause of its refusal.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PathScopeChoice {
+    selected: Option<PathGrantScope>,
+    granted: Option<Vec<String>>,
+    refusal: Option<String>,
 }
 
 /// The value `scope` crosses the wire as.
@@ -869,6 +903,84 @@ fn every_path_grant_verdict_matches_the_reference() {
         "permission surface: path grant verdicts {}/{}",
         matches.len(),
         corpus.counts.path_match_cases
+    );
+}
+
+/// The requirement a tool raises for one case: an outside path under its
+/// exact encoded grant, anything else under its own text.
+fn path_scope_requirement(case: &PathScopeRequirement) -> PermissionRequirement {
+    let outside = case.scope == PermissionScope::OutsideDirectory;
+    PermissionRequirement {
+        scope: case.scope,
+        session_pattern: if outside {
+            path_grant_pattern(&case.invocation_pattern, PathGrantScope::Exact)
+        } else {
+            case.invocation_pattern.clone()
+        },
+        label: case.invocation_pattern.clone(),
+        literal: false,
+        path_scope_root: case.path_scope_root.clone(),
+        invocation_pattern: case.invocation_pattern.clone(),
+    }
+}
+
+/// An approval offers the scopes the reference offers, rewrites its outside
+/// paths under each scope as the reference does, and grants or refuses each
+/// choice an operator can send as `approval_grant_permissions` does.
+#[test]
+fn every_path_scope_offer_and_grant_matches_the_reference() {
+    let corpus = corpus();
+    let cases = &corpus.path_scopes;
+    assert_eq!(cases.len(), corpus.counts.path_scope_cases);
+    let patterns = |requirements: &[PermissionRequirement]| {
+        requirements
+            .iter()
+            .map(|requirement| requirement.session_pattern.clone())
+            .collect::<Vec<_>>()
+    };
+    let mut choices = 0;
+    for (index, case) in cases.iter().enumerate() {
+        let requirements = case
+            .requirements
+            .iter()
+            .map(path_scope_requirement)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            available_path_scopes(&requirements),
+            case.offered,
+            "case {index} offers other scopes here"
+        );
+        for scope in PathGrantScope::ALL {
+            assert_eq!(
+                Some(&patterns(&scope_required_permissions(&requirements, scope))),
+                case.scoped.get(scope.label()),
+                "case {index} is scoped differently under `{}` here",
+                scope.label()
+            );
+        }
+        for choice in &case.choices {
+            let answer = approval_path_scope(&requirements, choice.selected)
+                .map(|scope| patterns(&scope_required_permissions(&requirements, scope)));
+            match (&answer, &choice.granted, choice.refusal.as_deref()) {
+                (Ok(granted), Some(expected), None) => assert_eq!(
+                    granted, expected,
+                    "case {index} grants {:?} differently here",
+                    choice.selected
+                ),
+                (Err(PathScopeRefusal::WithoutPaths), None, Some("withoutPaths"))
+                | (Err(PathScopeRefusal::NotOffered(_)), None, Some("notOffered")) => {}
+                _ => panic!(
+                    "case {index} answers {:?} with {answer:?}, the reference with {:?} or {:?}",
+                    choice.selected, choice.granted, choice.refusal
+                ),
+            }
+            choices += 1;
+        }
+    }
+    eprintln!(
+        "permission surface: path scope cases {}/{}, choices {choices}/{choices}",
+        cases.len(),
+        corpus.counts.path_scope_cases
     );
 }
 

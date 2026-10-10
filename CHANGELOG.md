@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Offer how far an approval of a path outside the workdir reaches, as the
+  reference does since v2.25.8: the approval publishes `pathScopeChoices`, the
+  recursive grant for a folder and the exact one for a file, and reads the
+  `pathScope` a client answers with. Granting a folder recursively covers what
+  lies under it for the same tool, a permanent grant writes
+  `vibe-path:directory_recursive:<folder>` to the tool's allowlist, and a
+  scope the approval did not offer fails the turn, the refused call kept in
+  the transcript as a failure of the tool. The terminal and the editor offer
+  one session and one permanent option per scope, the editor under the
+  reference's `allow_session_*` and `allow_permanent_*` identifiers.
+
 - Keep a call whose approval or question was refused in the transcript and
   the session statistics as a failed call before its turn fails, as the
   reference records it.

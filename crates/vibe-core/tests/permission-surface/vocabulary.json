@@ -146,6 +146,7 @@
     "outsideTargets": 3,
     "pathGrantEncodingCases": 17,
     "pathMatchCases": 47,
+    "pathScopeCases": 13,
     "scopes": 4,
     "sensitiveCases": 20,
     "sensitiveChainCases": 6,
@@ -390,7 +391,7 @@
       ]
     }
   ],
-  "note": "Captured from the pinned reference by scripts/parity/permission_surface.py. Scope values, requirement field names, command names, arities and the answers to cases this repository authored, path grant encodings and verdicts are observations; no reference-authored description text is recorded here.",
+  "note": "Captured from the pinned reference by scripts/parity/permission_surface.py. Scope values, requirement field names, command names, arities and the answers to cases this repository authored, path grant encodings and verdicts, and the path scopes an approval offers and grants are observations; no reference-authored description text is recorded here.",
   "pathGrantScopes": [
     "exact",
     "directory_recursive"
@@ -721,6 +722,557 @@
       }
     ]
   },
+  "pathScopes": [
+    {
+      "choices": [
+        {
+          "granted": [],
+          "refusal": null,
+          "selected": null
+        },
+        {
+          "granted": null,
+          "refusal": "withoutPaths",
+          "selected": "exact"
+        },
+        {
+          "granted": null,
+          "refusal": "withoutPaths",
+          "selected": "directory_recursive"
+        }
+      ],
+      "offered": [],
+      "requirements": [],
+      "scoped": {
+        "directory_recursive": [],
+        "exact": []
+      }
+    },
+    {
+      "choices": [
+        {
+          "granted": [
+            "git status"
+          ],
+          "refusal": null,
+          "selected": null
+        },
+        {
+          "granted": null,
+          "refusal": "withoutPaths",
+          "selected": "exact"
+        },
+        {
+          "granted": null,
+          "refusal": "withoutPaths",
+          "selected": "directory_recursive"
+        }
+      ],
+      "offered": [],
+      "requirements": [
+        {
+          "invocationPattern": "git status",
+          "pathScopeRoot": null,
+          "scope": "command_pattern"
+        }
+      ],
+      "scoped": {
+        "directory_recursive": [
+          "git status"
+        ],
+        "exact": [
+          "git status"
+        ]
+      }
+    },
+    {
+      "choices": [
+        {
+          "granted": [
+            "vibe-path:exact:/srv/notes.txt"
+          ],
+          "refusal": null,
+          "selected": null
+        },
+        {
+          "granted": [
+            "vibe-path:exact:/srv/notes.txt"
+          ],
+          "refusal": null,
+          "selected": "exact"
+        },
+        {
+          "granted": null,
+          "refusal": "notOffered",
+          "selected": "directory_recursive"
+        }
+      ],
+      "offered": [
+        "exact"
+      ],
+      "requirements": [
+        {
+          "invocationPattern": "/srv/notes.txt",
+          "pathScopeRoot": null,
+          "scope": "outside_directory"
+        }
+      ],
+      "scoped": {
+        "directory_recursive": [
+          "vibe-path:directory_recursive:/srv/notes.txt"
+        ],
+        "exact": [
+          "vibe-path:exact:/srv/notes.txt"
+        ]
+      }
+    },
+    {
+      "choices": [
+        {
+          "granted": [
+            "vibe-path:exact:/srv/app"
+          ],
+          "refusal": null,
+          "selected": null
+        },
+        {
+          "granted": null,
+          "refusal": "notOffered",
+          "selected": "exact"
+        },
+        {
+          "granted": [
+            "vibe-path:directory_recursive:/srv/app"
+          ],
+          "refusal": null,
+          "selected": "directory_recursive"
+        }
+      ],
+      "offered": [
+        "directory_recursive"
+      ],
+      "requirements": [
+        {
+          "invocationPattern": "/srv/app",
+          "pathScopeRoot": "/srv/app",
+          "scope": "outside_directory"
+        }
+      ],
+      "scoped": {
+        "directory_recursive": [
+          "vibe-path:directory_recursive:/srv/app"
+        ],
+        "exact": [
+          "vibe-path:exact:/srv/app"
+        ]
+      }
+    },
+    {
+      "choices": [
+        {
+          "granted": [
+            "vibe-path:exact:/srv/app"
+          ],
+          "refusal": null,
+          "selected": null
+        },
+        {
+          "granted": null,
+          "refusal": "notOffered",
+          "selected": "exact"
+        },
+        {
+          "granted": [
+            "vibe-path:directory_recursive:/srv/app"
+          ],
+          "refusal": null,
+          "selected": "directory_recursive"
+        }
+      ],
+      "offered": [
+        "directory_recursive"
+      ],
+      "requirements": [
+        {
+          "invocationPattern": "/srv/app/",
+          "pathScopeRoot": "/srv/app",
+          "scope": "outside_directory"
+        }
+      ],
+      "scoped": {
+        "directory_recursive": [
+          "vibe-path:directory_recursive:/srv/app"
+        ],
+        "exact": [
+          "vibe-path:exact:/srv/app"
+        ]
+      }
+    },
+    {
+      "choices": [
+        {
+          "granted": [
+            "vibe-path:exact:/srv/app"
+          ],
+          "refusal": null,
+          "selected": null
+        },
+        {
+          "granted": null,
+          "refusal": "notOffered",
+          "selected": "exact"
+        },
+        {
+          "granted": [
+            "vibe-path:directory_recursive:/srv/app"
+          ],
+          "refusal": null,
+          "selected": "directory_recursive"
+        }
+      ],
+      "offered": [
+        "directory_recursive"
+      ],
+      "requirements": [
+        {
+          "invocationPattern": "/srv/./app/../app",
+          "pathScopeRoot": "/srv/app",
+          "scope": "outside_directory"
+        }
+      ],
+      "scoped": {
+        "directory_recursive": [
+          "vibe-path:directory_recursive:/srv/app"
+        ],
+        "exact": [
+          "vibe-path:exact:/srv/app"
+        ]
+      }
+    },
+    {
+      "choices": [
+        {
+          "granted": [
+            "vibe-path:exact:/srv/app"
+          ],
+          "refusal": null,
+          "selected": null
+        },
+        {
+          "granted": [
+            "vibe-path:exact:/srv/app"
+          ],
+          "refusal": null,
+          "selected": "exact"
+        },
+        {
+          "granted": null,
+          "refusal": "notOffered",
+          "selected": "directory_recursive"
+        }
+      ],
+      "offered": [
+        "exact"
+      ],
+      "requirements": [
+        {
+          "invocationPattern": "/srv/app",
+          "pathScopeRoot": "/srv",
+          "scope": "outside_directory"
+        }
+      ],
+      "scoped": {
+        "directory_recursive": [
+          "vibe-path:directory_recursive:/srv"
+        ],
+        "exact": [
+          "vibe-path:exact:/srv/app"
+        ]
+      }
+    },
+    {
+      "choices": [
+        {
+          "granted": [
+            "vibe-path:exact:/srv/app",
+            "vibe-path:exact:/srv/notes.txt"
+          ],
+          "refusal": null,
+          "selected": null
+        },
+        {
+          "granted": [
+            "vibe-path:exact:/srv/app",
+            "vibe-path:exact:/srv/notes.txt"
+          ],
+          "refusal": null,
+          "selected": "exact"
+        },
+        {
+          "granted": null,
+          "refusal": "notOffered",
+          "selected": "directory_recursive"
+        }
+      ],
+      "offered": [
+        "exact"
+      ],
+      "requirements": [
+        {
+          "invocationPattern": "/srv/app",
+          "pathScopeRoot": "/srv/app",
+          "scope": "outside_directory"
+        },
+        {
+          "invocationPattern": "/srv/notes.txt",
+          "pathScopeRoot": null,
+          "scope": "outside_directory"
+        }
+      ],
+      "scoped": {
+        "directory_recursive": [
+          "vibe-path:directory_recursive:/srv/app",
+          "vibe-path:directory_recursive:/srv/notes.txt"
+        ],
+        "exact": [
+          "vibe-path:exact:/srv/app",
+          "vibe-path:exact:/srv/notes.txt"
+        ]
+      }
+    },
+    {
+      "choices": [
+        {
+          "granted": [
+            "vibe-path:exact:/srv/app",
+            "vibe-path:exact:/opt/data"
+          ],
+          "refusal": null,
+          "selected": null
+        },
+        {
+          "granted": null,
+          "refusal": "notOffered",
+          "selected": "exact"
+        },
+        {
+          "granted": [
+            "vibe-path:directory_recursive:/srv/app",
+            "vibe-path:directory_recursive:/opt/data"
+          ],
+          "refusal": null,
+          "selected": "directory_recursive"
+        }
+      ],
+      "offered": [
+        "directory_recursive"
+      ],
+      "requirements": [
+        {
+          "invocationPattern": "/srv/app",
+          "pathScopeRoot": "/srv/app",
+          "scope": "outside_directory"
+        },
+        {
+          "invocationPattern": "/opt/data",
+          "pathScopeRoot": "/opt/data",
+          "scope": "outside_directory"
+        }
+      ],
+      "scoped": {
+        "directory_recursive": [
+          "vibe-path:directory_recursive:/srv/app",
+          "vibe-path:directory_recursive:/opt/data"
+        ],
+        "exact": [
+          "vibe-path:exact:/srv/app",
+          "vibe-path:exact:/opt/data"
+        ]
+      }
+    },
+    {
+      "choices": [
+        {
+          "granted": [
+            "cat",
+            "vibe-path:exact:/srv/app"
+          ],
+          "refusal": null,
+          "selected": null
+        },
+        {
+          "granted": null,
+          "refusal": "notOffered",
+          "selected": "exact"
+        },
+        {
+          "granted": [
+            "cat",
+            "vibe-path:directory_recursive:/srv/app"
+          ],
+          "refusal": null,
+          "selected": "directory_recursive"
+        }
+      ],
+      "offered": [
+        "directory_recursive"
+      ],
+      "requirements": [
+        {
+          "invocationPattern": "cat",
+          "pathScopeRoot": null,
+          "scope": "command_pattern"
+        },
+        {
+          "invocationPattern": "/srv/app",
+          "pathScopeRoot": "/srv/app",
+          "scope": "outside_directory"
+        }
+      ],
+      "scoped": {
+        "directory_recursive": [
+          "cat",
+          "vibe-path:directory_recursive:/srv/app"
+        ],
+        "exact": [
+          "cat",
+          "vibe-path:exact:/srv/app"
+        ]
+      }
+    },
+    {
+      "choices": [
+        {
+          "granted": [
+            "/srv/app/.env",
+            "vibe-path:exact:/srv/app"
+          ],
+          "refusal": null,
+          "selected": null
+        },
+        {
+          "granted": null,
+          "refusal": "notOffered",
+          "selected": "exact"
+        },
+        {
+          "granted": [
+            "/srv/app/.env",
+            "vibe-path:directory_recursive:/srv/app"
+          ],
+          "refusal": null,
+          "selected": "directory_recursive"
+        }
+      ],
+      "offered": [
+        "directory_recursive"
+      ],
+      "requirements": [
+        {
+          "invocationPattern": "/srv/app/.env",
+          "pathScopeRoot": null,
+          "scope": "file_pattern"
+        },
+        {
+          "invocationPattern": "/srv/app",
+          "pathScopeRoot": "/srv/app",
+          "scope": "outside_directory"
+        }
+      ],
+      "scoped": {
+        "directory_recursive": [
+          "/srv/app/.env",
+          "vibe-path:directory_recursive:/srv/app"
+        ],
+        "exact": [
+          "/srv/app/.env",
+          "vibe-path:exact:/srv/app"
+        ]
+      }
+    },
+    {
+      "choices": [
+        {
+          "granted": [
+            "vibe-path:exact:c:\\work\\dir"
+          ],
+          "refusal": null,
+          "selected": null
+        },
+        {
+          "granted": null,
+          "refusal": "notOffered",
+          "selected": "exact"
+        },
+        {
+          "granted": [
+            "vibe-path:directory_recursive:c:\\work\\dir"
+          ],
+          "refusal": null,
+          "selected": "directory_recursive"
+        }
+      ],
+      "offered": [
+        "directory_recursive"
+      ],
+      "requirements": [
+        {
+          "invocationPattern": "C:\\Work\\Dir",
+          "pathScopeRoot": "c:/work/dir",
+          "scope": "outside_directory"
+        }
+      ],
+      "scoped": {
+        "directory_recursive": [
+          "vibe-path:directory_recursive:c:\\work\\dir"
+        ],
+        "exact": [
+          "vibe-path:exact:c:\\work\\dir"
+        ]
+      }
+    },
+    {
+      "choices": [
+        {
+          "granted": [
+            "vibe-path:exact:c:\\work\\file.txt"
+          ],
+          "refusal": null,
+          "selected": null
+        },
+        {
+          "granted": [
+            "vibe-path:exact:c:\\work\\file.txt"
+          ],
+          "refusal": null,
+          "selected": "exact"
+        },
+        {
+          "granted": null,
+          "refusal": "notOffered",
+          "selected": "directory_recursive"
+        }
+      ],
+      "offered": [
+        "exact"
+      ],
+      "requirements": [
+        {
+          "invocationPattern": "C:\\Work\\File.txt",
+          "pathScopeRoot": null,
+          "scope": "outside_directory"
+        }
+      ],
+      "scoped": {
+        "directory_recursive": [
+          "vibe-path:directory_recursive:c:\\work\\file.txt"
+        ],
+        "exact": [
+          "vibe-path:exact:c:\\work\\file.txt"
+        ]
+      }
+    }
+  ],
   "reference": {
     "commit": "376f6a33413a3eec9b3795b0c0e004066c47b5c1"
   },
@@ -765,7 +1317,7 @@
     ],
     "forbidsExtra": true
   },
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "scopes": [
     "command_pattern",
     "outside_directory",

@@ -204,7 +204,11 @@ impl vibe_core::policy::ApprovalAgent for AlwaysPermanently {
         &'a self,
         _request: vibe_core::policy::ApprovalRequest,
     ) -> vibe_core::policy::ApprovalFuture<'a> {
-        Box::pin(async move { Ok(vibe_core::policy::ApprovalDecision::ApprovePermanently) })
+        Box::pin(async move {
+            Ok(vibe_core::policy::ApprovalDecision::ApprovePermanently(
+                None,
+            ))
+        })
     }
 }
 

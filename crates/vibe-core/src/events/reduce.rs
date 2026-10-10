@@ -924,6 +924,7 @@ fn engine_callback_detail(kind: CallbackKind, prompt: &str) -> CallbackDetail {
             effect: Box::new(EffectDetail::for_call("callback", &json!({}))),
             required_permissions: Vec::new(),
             choices: ApprovalDecisionType::ALL.to_vec(),
+            path_scope_choices: Vec::new(),
             related_entry_id: None,
             reason: None,
         },
@@ -938,6 +939,7 @@ fn accepted_callback_output(detail: &CallbackDetail, value: Option<&str>) -> Cal
         CallbackDetail::Approval { .. } => CallbackOutput::Approval {
             decision: ApprovalDecision {
                 decision: ApprovalDecisionType::Approve,
+                path_scope: None,
             },
             feedback: value.map(str::to_owned),
         },
