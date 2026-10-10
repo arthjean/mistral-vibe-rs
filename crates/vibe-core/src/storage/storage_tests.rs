@@ -348,8 +348,48 @@ fn metadata_is_written_pretty_in_reference_key_order_without_a_trailing_newline(
         "\"username\":",
         "\"title\":",
         "\"title_source\":",
+        "\"pinned_at\":",
+        "\"archived_at\":",
+        "\"unseen_at\":",
+        "\"seen_at\":",
+        "\"experiments\":",
         "\"total_messages\":",
         "\"system_prompt\":",
+    ]
+    .map(|key| text.find(key).unwrap_or_else(|| panic!("{key} is written")));
+    assert!(positions.windows(2).all(|pair| pair[0] < pair[1]));
+}
+
+#[test]
+fn archive_and_seen_marks_another_writer_set_survive_a_rewrite_in_place() {
+    let temporary = tempfile::tempdir().expect("temporary session root");
+    let store = store_in(temporary.path());
+    let metadata = persisted(&store, "marked-session", WORKSPACE, 10);
+    let fresh = read_meta(&store, &metadata);
+    for key in ["archived_at", "unseen_at", "seen_at"] {
+        assert_eq!(fresh[key], Value::Null, "{key} is written null");
+    }
+    // The reference's Unified Harness archives and marks a session in place.
+    let mut meta = fresh;
+    meta["archived_at"] = json!("2026-10-10T08:00:00+00:00");
+    meta["unseen_at"] = json!("2026-10-10T07:00:00+00:00");
+    meta["seen_at"] = json!("2026-10-10T07:30:00+00:00");
+    write_meta(&store, &metadata, &meta);
+
+    store
+        .update_title("marked-session", "Renamed")
+        .expect("title updates");
+    let renamed = read_meta(&store, &metadata);
+    assert_eq!(renamed["archived_at"], "2026-10-10T08:00:00+00:00");
+    assert_eq!(renamed["unseen_at"], "2026-10-10T07:00:00+00:00");
+    assert_eq!(renamed["seen_at"], "2026-10-10T07:30:00+00:00");
+    let text = fs::read_to_string(store.session_path(&metadata).join(METADATA_FILE))
+        .expect("meta.json reads");
+    let positions = [
+        "\"pinned_at\":",
+        "\"archived_at\":",
+        "\"seen_at\":",
+        "\"experiments\":",
     ]
     .map(|key| text.find(key).unwrap_or_else(|| panic!("{key} is written")));
     assert!(positions.windows(2).all(|pair| pair[0] < pair[1]));

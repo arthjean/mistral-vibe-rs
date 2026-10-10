@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Write a saved session's archive and seen marks, as the reference does since
+  v2.26.0: `meta.json` carries `archived_at`, `unseen_at` and `seen_at` after
+  `pinned_at`, null on every session this port saves, and a session the
+  reference archived or marked keeps those values in place when this port
+  rewrites it.
+
 - Offer how far an approval of a path outside the workdir reaches, as the
   reference does since v2.25.8: the approval publishes `pathScopeChoices`, the
   recursive grant for a folder and the exact one for a file, and reads the

@@ -215,6 +215,17 @@ pub struct SessionMetadata {
     /// When the session was pinned, or `None` while it is not.
     #[serde(default)]
     pub pinned_at: Option<String>,
+    /// When the session was archived, or `None` while it is visible. Only the
+    /// reference's Unified Harness sets it; this port keeps what it reads.
+    #[serde(default)]
+    pub archived_at: Option<String>,
+    /// When the session last finished something its user has not looked at.
+    /// Both marks stay `None` on a session written before unseen tracking.
+    #[serde(default)]
+    pub unseen_at: Option<String>,
+    /// When the user last looked at the session.
+    #[serde(default)]
+    pub seen_at: Option<String>,
     #[serde(default, rename = "experiments")]
     pub experiment_state: Value,
     #[serde(default, deserialize_with = "null_as_default")]
@@ -490,6 +501,9 @@ impl SessionStore {
             title_source: default_title_source(),
             bumped_at: None,
             pinned_at: None,
+            archived_at: None,
+            unseen_at: None,
+            seen_at: None,
             experiment_state: Value::Null,
             config: BTreeMap::new(),
             import_provenance: None,

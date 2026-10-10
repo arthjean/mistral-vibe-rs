@@ -65,21 +65,6 @@ const SESSION_ARCHIVE: &str = "v2.26.0 publishes each session's `archivedAt` and
      `session/markAsSeen` keep; this port routes neither method and omits both fields, which \
      read null and false in every scenario";
 
-const SAVED_ARCHIVE: &str = "every session the reference saves keeps `archived_at`, \
-     `unseen_at` and `seen_at` in `meta.json` after `pinned_at` since v2.26.0 \
-     (`vibe/core/types.py:209-213` at 376f6a3), null until it is archived or seen; this port \
-     writes none of them, so every later key of the list sits three places earlier";
-
-/// The suffixes the row guard lets name row 16. The v2.26.0 re-pin reopened
-/// the row for them: they are a persisted-state gap of sessions, which this
-/// corpus measures, kept until the port writes the three keys.
-const ROW_16_REOPENED: &[&str] = &[
-    "/meta/keys",
-    "/meta/values/archived_at",
-    "/meta/values/unseen_at",
-    "/meta/values/seen_at",
-];
-
 const LEDGER: &[Divergence] = &[
     Divergence {
         suffix: "/inputEntryId",
@@ -111,26 +96,6 @@ const LEDGER: &[Divergence] = &[
         reason: "v2.26.0 session state lists the Unified Harness's background processes \
                  (`vibe/app_server/models.py:1263` at 376f6a3), empty on the legacy backend; \
                  this port omits the field",
-    },
-    Divergence {
-        suffix: "/meta/keys",
-        row: "16",
-        reason: SAVED_ARCHIVE,
-    },
-    Divergence {
-        suffix: "/meta/values/archived_at",
-        row: "16",
-        reason: SAVED_ARCHIVE,
-    },
-    Divergence {
-        suffix: "/meta/values/unseen_at",
-        row: "16",
-        reason: SAVED_ARCHIVE,
-    },
-    Divergence {
-        suffix: "/meta/values/seen_at",
-        row: "16",
-        reason: SAVED_ARCHIVE,
     },
 ];
 
@@ -309,10 +274,10 @@ fn every_ledger_entry_names_another_scorecard_row() {
             entry.suffix,
             entry.row
         );
-        assert!(
-            entry.row != "16" || ROW_16_REOPENED.contains(&entry.suffix),
+        assert_ne!(
+            entry.row, "16",
             "row 16 is what this corpus measures, so a difference it keeps is a gap, not a \
-             ledger entry, unless the re-pin reopened the row for it: {}",
+             ledger entry: {}",
             entry.suffix
         );
         assert!(
