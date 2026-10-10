@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Keep a call whose approval or question was refused in the transcript and
+  the session statistics as a failed call before its turn fails, as the
+  reference records it.
+
 - Complete an MCP sign-in started before any session opens, as the reference
   does since v2.25.8: `mcp_catalog/login` on an app-server connection whose
   server holds no session now publishes `mcp_catalog/authUrl` and

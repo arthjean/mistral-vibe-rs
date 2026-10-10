@@ -1252,6 +1252,28 @@ where
                     persist(&self.sink, &mut messages, recorder.state()).await?;
                     return Err(EngineError::ToolFailure(message));
                 }
+                ToolRound::Refused {
+                    message,
+                    answers,
+                    patched,
+                    presentations,
+                    steered,
+                } => {
+                    patch_tool_call_arguments(&mut messages, &completion.tool_calls, &patched);
+                    record_tool_call_presentations(
+                        &mut messages,
+                        &completion.tool_calls,
+                        presentations,
+                    );
+                    push_answers_around(&mut messages, &completion.tool_calls, answers, steered);
+                    recorder.emit(EngineEvent::Lifecycle {
+                        state: LifecycleState::Failed,
+                        message: Some(message.clone()),
+                    })?;
+                    persist(&self.sink, &mut messages, recorder.state()).await?;
+                    persist_stats(&self.sink, &ledger.session_stats(recorder.tool_calls())).await?;
+                    return Err(EngineError::ToolFailure(message));
+                }
             };
             push_answers_around(&mut messages, &completion.tool_calls, answers, steered);
             persist(&self.sink, &mut messages, recorder.state()).await?;
@@ -1486,7 +1508,9 @@ where
                     record_tool_call_presentations(messages, &calls, presentations);
                     push_answers(messages, &calls, answers);
                 }
-                ToolRound::Failed(message) => return Ok(Some(message)),
+                ToolRound::Failed(message) | ToolRound::Refused { message, .. } => {
+                    return Ok(Some(message));
+                }
             }
         }
         Ok(None)
@@ -2112,7 +2136,7 @@ where
                             .apply_steer(recorder, steering.messages, content, inject_implicit, cancellation)
                             .await?
                         {
-                            failure = Some(message);
+                            failure = Some((None, message));
                             break;
                         }
                         steered.push((order.len(), steering.messages.len() - before));
@@ -2142,7 +2166,7 @@ where
                     }
                     match settled {
                         CallSettled::TurnFailure(message) => {
-                            failure = Some(message);
+                            failure = Some((Some(index), message));
                             break;
                         }
                         CallSettled::Answered {
@@ -2167,8 +2191,35 @@ where
         while let Ok(signal) = signal_rx.try_recv() {
             apply_signal(recorder, signal, &mut results, &mut prepared_inputs)?;
         }
-        if let Some(message) = failure {
-            return Ok(ToolRound::Failed(message));
+        match failure {
+            // Reference `_execute_tool_call` answers a refused call as a
+            // failure of the tool, which the transcript keeps, before the
+            // refusal fails the turn.
+            Some((Some(index), message)) => {
+                let content = self
+                    .abandon_tool_call(
+                        recorder,
+                        &tool_calls[index],
+                        prepared_inputs[index].take(),
+                        &session_id,
+                        &message,
+                    )
+                    .await?;
+                results[index] = Some(Answer::text(content, true));
+                order.push(index);
+                return Ok(ToolRound::Refused {
+                    message,
+                    answers: order
+                        .into_iter()
+                        .filter_map(|index| results[index].take().map(|answer| (index, answer)))
+                        .collect(),
+                    patched,
+                    presentations,
+                    steered,
+                });
+            }
+            Some((None, message)) => return Ok(ToolRound::Failed(message)),
+            None => {}
         }
 
         // A call whose result was published but whose post-tool hooks were
@@ -2194,6 +2245,7 @@ where
                         &tool_calls[index],
                         prepared_inputs[index].take(),
                         &session_id,
+                        TURN_ENDED,
                     )
                     .await?;
                 results[index] = Some(Answer::text(content, true));
@@ -2274,22 +2326,24 @@ where
         })
     }
 
-    /// A call still waiting on its approval when the turn ended. Reference
-    /// `_finalize_turn` rejects the pending request with `CallbackRejectedError`
-    /// ("Turn ended"), which `_execute_tool_call` answers as a failure of the
-    /// tool and shows to the post-tool hooks.
+    /// A call whose pending answer was rejected with `rejection`: still
+    /// waiting on its approval when the turn ended, where reference
+    /// `_finalize_turn` rejects the request with `CallbackRejectedError`
+    /// ("Turn ended"), or refused by an answer that fails the turn. Reference
+    /// `_execute_tool_call` answers either as a failure of the tool and shows
+    /// it to the post-tool hooks.
     async fn abandon_tool_call(
         &self,
         recorder: &mut TurnRecorder<'_>,
         call: &ModelToolCall,
         tool_input: Option<Value>,
         session_id: &str,
+        rejection: &str,
     ) -> Result<String, EngineError> {
-        const REJECTION: &str = "Turn ended";
         recorder.emit(EngineEvent::ToolCallAbandoned {
             call_id: call.id.clone(),
         })?;
-        let mut content = format!("<tool_error>{} failed: {REJECTION}</tool_error>", call.name);
+        let mut content = format!("<tool_error>{} failed: {rejection}</tool_error>", call.name);
         if let (Some(hooks), Some(tool_input)) = (self.settings.hooks.as_ref(), tool_input) {
             // Only the text survives, as for an interrupted call.
             hooks
@@ -2303,7 +2357,7 @@ where
                         tool_status: ToolStatus::Failure,
                         tool_output: None,
                         tool_output_text: content.clone(),
-                        tool_error: Some(REJECTION.to_owned()),
+                        tool_error: Some(rejection.to_owned()),
                         duration_ms: 0.0,
                     },
                     |item| {
@@ -2730,6 +2784,10 @@ impl Answer {
     }
 }
 
+/// What reference `_finalize_turn` rejects a call still waiting on its gate
+/// with.
+const TURN_ENDED: &str = "Turn ended";
+
 /// How one call settled.
 enum CallSettled {
     Answered {
@@ -2787,8 +2845,18 @@ enum ToolRound {
         /// settled.
         injections: Vec<String>,
     },
-    /// A call's answer failed the turn.
+    /// A steer failed the turn.
     Failed(String),
+    /// A call's answer was refused, which fails the turn: the refusal, and
+    /// the answers settled by then, the refused call's failure among them, as
+    /// `Settled` names them.
+    Refused {
+        message: String,
+        answers: Vec<(usize, Answer)>,
+        patched: Vec<Option<String>>,
+        presentations: Vec<Option<Value>>,
+        steered: Vec<(usize, usize)>,
+    },
 }
 
 /// Appends each call's answer as a tool message, in the order given.
