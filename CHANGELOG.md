@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Complete an MCP sign-in started before any session opens, as the reference
+  does since v2.25.8: `mcp_catalog/login` on an app-server connection whose
+  server holds no session now publishes `mcp_catalog/authUrl` and
+  `mcp/authUrl`, so the client can open the authorization page and the login
+  stores its tokens instead of waiting on a URL nobody received.
+
 - Learn whether the deployment serves a fast model before titling a session,
   as the reference does since v2.26.0: a terminal or desktop session opened
   with `generate_titles` on first sends the Mistral provider a one-token

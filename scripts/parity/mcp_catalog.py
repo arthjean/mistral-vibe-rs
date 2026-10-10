@@ -742,8 +742,10 @@ def scenarios() -> list[dict[str, Any]]:
             ],
         },
         {
-            # Before a session attaches the server publishes no notification,
-            # so the authorization URL of a sessionless sign-in reaches no one.
+            # Since v2.25.8 a server holding no session still publishes the
+            # authorization URL of a sign-in, so the sessionless login
+            # completes; the name predates that change and stays with the
+            # corpus until the next re-pin.
             "name": "sessionless/login-publishes-nothing",
             "servers": {"secure": SECURE},
             "config": SECURE_SERVER,

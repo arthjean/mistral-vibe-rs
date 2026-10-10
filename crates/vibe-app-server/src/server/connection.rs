@@ -732,6 +732,10 @@ impl ServerConnection {
                 !self.attached_sessions.is_empty(),
             )
         };
+        // Reference `_route_notification`: an attached connection receives
+        // the URL a sign-in publishes, and so does one with no root session,
+        // the reference's `_root is None` (`vibe/app_server/server.py:1436-1441`).
+        let publish = !self.attached_sessions.is_empty() || self.root_key().is_none();
         match target {
             Ok(target) => DispatchBatch {
                 outbound: Vec::new(),
@@ -739,7 +743,7 @@ impl ServerConnection {
                     request_id: request.id,
                     call,
                     target,
-                    publish: !self.attached_sessions.is_empty(),
+                    publish,
                 }],
                 close_after_flush: false,
             },

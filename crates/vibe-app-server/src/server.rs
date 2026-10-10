@@ -498,8 +498,8 @@ pub enum DeferredWork {
         configs: Vec<McpServerConfig>,
     },
     /// One MCP catalog call. `publish` says whether a notification it raises
-    /// mid-flight reaches the client: the reference publishes nothing to a
-    /// connection no session is attached to.
+    /// mid-flight reaches the client: the reference delivers a sign-in's URL
+    /// to an attached connection, and to one whose server holds no session.
     McpCatalog {
         request_id: RequestId,
         call: McpCatalogCall,
