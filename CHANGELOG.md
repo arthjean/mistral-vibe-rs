@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Run plugins as the reference does since v2.26.0 under the unified mode
+  (`--experimental-harness`). `/mcp` lists a plugin MCP server through the
+  session's own connection to it: `enabled` with every tool its paginated
+  `tools/list` holds, or `unavailable` with the runtime's failure code, where
+  it used to show every plugin server refused. A script a plugin launches
+  from its own `mcp.json` with a `./` command stays runnable in the pinned
+  checkout, so that server is kept instead of dropped. A session whose
+  connector catalog cannot be loaded reports why in `/mcp`. `skill` and
+  `subagent` are reserved plugin namespaces and `agent` no longer is, and a
+  plugin's published URLs keep IPv6 brackets and an unreadable port.
+
 - Delete the experiment eval cache (`experiment_eval_cache.json` under the
   vibe home) when a session starts with telemetry or `[experiments] enable`
   turned off, as the reference does since v2.26.0, so no later launch applies

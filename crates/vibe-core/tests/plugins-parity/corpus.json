@@ -2876,6 +2876,95 @@
    "skills": [],
    "unsupported": []
   },
+  "native-namespaces": {
+   "agents": [],
+   "connectors": [],
+   "hooks": [],
+   "issues": [
+    [
+     "plugin.namespace.reserved",
+     "error",
+     true,
+     "manifest",
+     "user/subagent/.claude-plugin/plugin.json"
+    ],
+    [
+     null,
+     "error",
+     false,
+     null,
+     "user/nested/plugin.json"
+    ],
+    [
+     null,
+     "error",
+     false,
+     null,
+     "user/skill/plugin.json"
+    ]
+   ],
+   "knowledge": [],
+   "libraries": [],
+   "materialized": {
+    "environment": {},
+    "issues": [
+     [
+      "plugin.namespace.reserved",
+      "error",
+      true,
+      "manifest",
+      "user/subagent/.claude-plugin/plugin.json"
+     ],
+     [
+      null,
+      "error",
+      false,
+      null,
+      "user/nested/plugin.json"
+     ],
+     [
+      null,
+      "error",
+      false,
+      null,
+      "user/skill/plugin.json"
+     ]
+    ],
+    "knowledge": [],
+    "libraries": [],
+    "staged": []
+   },
+   "mcp": [],
+   "plugins": [
+    {
+     "author": null,
+     "content_digest": "a61a4dff236a65163b1b512610602626a3a54e83509413fe8d5da9d3385e9a7d",
+     "data_root": "plugin-data/agent",
+     "description": "Capabilities provided by agent.",
+     "manifest_digest": "ee6823d5fb09a0f1128210e06f3b06bc31e5776d383f4995b3c92084bc8ecf2b",
+     "manifest_path": "user/agent/plugin.json",
+     "name": "agent",
+     "namespace": "agent",
+     "root": "user/agent",
+     "scope": "global",
+     "source_format": "agent_plugins_1_0",
+     "version": null
+    }
+   ],
+   "skills": [
+    {
+     "alias": "agent:ask",
+     "allowed_tools": [],
+     "description": "Asks the agent namespace",
+     "metadata": {},
+     "model_invocable": true,
+     "path": "user/agent/skills/ask/SKILL.md",
+     "prompt": "Asks the agent namespace.",
+     "user_invocable": true
+    }
+   ],
+   "unsupported": []
+  },
   "native-scopes": {
    "agents": [],
    "connectors": [],

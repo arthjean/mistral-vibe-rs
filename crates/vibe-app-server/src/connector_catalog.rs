@@ -106,6 +106,9 @@ pub(crate) struct SessionConnectors {
     /// once the turn ends (reference `_accept_candidate` and the
     /// `turn/completed` convergence in `vibe/app_server/server.py`).
     pub(crate) pending: Option<(ResolvedCatalog, ConnectorSelection)>,
+    /// Why a unified session's catalog could not be loaded, which its MCP
+    /// view reports as `connectorError` until a catalog is accepted.
+    pub(crate) load_error: Option<String>,
 }
 
 /// Where a read found the catalog.
@@ -1159,6 +1162,7 @@ impl SessionConnectors {
         selection: ConnectorSelection,
     ) -> Value {
         self.accepted = Some((catalog, selection));
+        self.load_error = None;
         self.route_revision = self.route_revision.saturating_add(1);
         self.view()
     }

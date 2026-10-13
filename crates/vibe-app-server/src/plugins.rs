@@ -20,7 +20,7 @@ use vibe_core::plugins::catalog::{PluginConnectorCatalog, PluginMcpDiscovery};
 use vibe_core::plugins::compatibility::{
     PluginMcpHttpAuth, PluginMcpServer, plugin_runtime_state_names,
 };
-use vibe_core::plugins::content::digest_plugin_tree;
+use vibe_core::plugins::content::{digest_plugin_tree, launched_executables};
 use vibe_core::plugins::drift::{
     PluginRouteKey, PluginRouteStatus, reconcile_plugin_routes, retain_pinned_tools,
 };
@@ -162,8 +162,9 @@ pub async fn start(
 
 /// [`start`] with a [`RecordingMcpDiscovery`], run to completion on a thread
 /// and runtime of its own so a caller on the request loop can wait for it, as
-/// the reference's `session/start` waits for its plugin discovery. `None`
-/// when that runtime could not be built.
+/// the reference's `session/start` waits for its plugin discovery. The
+/// session's own connection to each plugin server follows, as the reference
+/// hands them to its runtime. `None` when that runtime could not be built.
 #[must_use]
 pub fn start_discovering(sources: &PluginSources, session_id: &str) -> Option<SessionPlugins> {
     let discovery = RecordingMcpDiscovery::default();
@@ -171,8 +172,12 @@ pub fn start_discovering(sources: &PluginSources, session_id: &str) -> Option<Se
         mcp_discovery: Some(&discovery),
         connector_catalog: None,
     };
-    let mut plugins = block_on_own_runtime(start(sources, session_id, ports))?;
-    plugins.mcp_sources = plugin_mcp_sources(&plugins, &discovery.records());
+    let (mut plugins, connections) = block_on_own_runtime(async {
+        let plugins = start(sources, session_id, ports).await;
+        let connections = connect_plugin_servers(&plugins, &sources.configured_mcp_names).await;
+        (plugins, connections)
+    })?;
+    plugins.mcp_sources = plugin_mcp_sources(&plugins, &discovery.records(), &connections);
     Some(plugins)
 }
 
@@ -188,8 +193,12 @@ pub fn reload_discovering(
         mcp_discovery: Some(&discovery),
         connector_catalog: None,
     };
-    let mut plugins = block_on_own_runtime(reload(sources, session_id, previous, ports))?;
-    plugins.mcp_sources = plugin_mcp_sources(&plugins, &discovery.records());
+    let (mut plugins, connections) = block_on_own_runtime(async {
+        let plugins = reload(sources, session_id, previous, ports).await;
+        let connections = connect_plugin_servers(&plugins, &sources.configured_mcp_names).await;
+        (plugins, connections)
+    })?;
+    plugins.mcp_sources = plugin_mcp_sources(&plugins, &discovery.records(), &connections);
     Some(plugins)
 }
 
@@ -390,7 +399,7 @@ impl PackageStore {
             match fs::rename(&staging, &target) {
                 Err(_) if target.is_dir() => Ok(()),
                 Err(error) => Err(error),
-                Ok(()) => harden(&target),
+                Ok(()) => harden(&target, &launched_executables(&target)),
             }
         });
         let _ = fs::remove_dir_all(&staging);
@@ -400,25 +409,30 @@ impl PackageStore {
 
 /// Leaves a checkout readable by its owner alone and writable by nobody:
 /// files `0400`, directories `0500`, as the reference's store leaves them.
-/// Nothing is executable, so a stdio server a plugin ships as a script in its
-/// tree cannot be launched from the checkout.
+/// Only the files the package's own `mcp.json` launches with a `./` command
+/// stay runnable, at `0500`, as the reference's executable blobs are.
 #[cfg(unix)]
-fn harden(root: &Path) -> io::Result<()> {
+fn harden(root: &Path, executables: &BTreeSet<PathBuf>) -> io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
     for entry in fs::read_dir(root)? {
         let entry = entry?;
         let kind = entry.file_type()?;
         if kind.is_dir() {
-            harden(&entry.path())?;
+            harden(&entry.path(), executables)?;
         } else if kind.is_file() {
-            fs::set_permissions(entry.path(), fs::Permissions::from_mode(0o400))?;
+            let mode = if executables.contains(&entry.path()) {
+                0o500
+            } else {
+                0o400
+            };
+            fs::set_permissions(entry.path(), fs::Permissions::from_mode(mode))?;
         }
     }
     fs::set_permissions(root, fs::Permissions::from_mode(0o500))
 }
 
 #[cfg(not(unix))]
-fn harden(_root: &Path) -> io::Result<()> {
+fn harden(_root: &Path, _executables: &BTreeSet<PathBuf>) -> io::Result<()> {
     Ok(())
 }
 
@@ -530,16 +544,46 @@ pub fn order_skill_rows(plugins: &SessionPlugins, rows: Vec<Value>) -> Vec<Value
 }
 
 /// The MCP servers a session's plugins declare, as `/mcp` lists them: under
-/// their catalog names, sorted by them, with what `records` holds for each. A
-/// declared source id is its catalog name unless a second plugin declared it
-/// too, when each takes a digest-suffixed form (reference
-/// `PluginMCPCatalog.bind` over `_catalog_names`, and `sources`, which reports
-/// a server never discovered as `unavailable`).
+/// their catalog names, sorted by them, with what `records` holds for each and
+/// the session's connection `connections` holds. A declared source id is its
+/// catalog name unless a second plugin declared it too, when each takes a
+/// digest-suffixed form (reference `PluginMCPCatalog.bind` over
+/// `_catalog_names`, and `sources`, which reports a server never discovered
+/// as `unavailable`).
 #[must_use]
 pub fn plugin_mcp_sources(
     plugins: &SessionPlugins,
     records: &BTreeMap<(String, String), McpDiscoveryRecord>,
+    connections: &BTreeMap<(String, String), crate::resources::PluginMcpConnection>,
 ) -> Vec<crate::resources::PluginMcpSource> {
+    let mut sources: Vec<crate::resources::PluginMcpSource> = catalog_names(plugins)
+        .into_iter()
+        .filter_map(|(definition, name)| {
+            let key = (definition.plugin_name.clone(), definition.source_id.clone());
+            let record = records.get(&key);
+            Some(crate::resources::PluginMcpSource {
+                name: name?,
+                plugin_name: definition.plugin_name.clone(),
+                transport: plugin_mcp_transport(&definition.server).to_owned(),
+                status: record.map_or("unavailable", |record| record.status),
+                tools: record
+                    .map(|record| record.tools.clone())
+                    .unwrap_or_default(),
+                connection: connections.get(&key).cloned(),
+            })
+        })
+        .collect();
+    sources.sort_by(|left, right| left.name.cmp(&right.name));
+    sources
+}
+
+/// Each plugin MCP server definition with its catalog name.
+fn catalog_names(
+    plugins: &SessionPlugins,
+) -> Vec<(
+    &vibe_core::plugins::native::PluginMcpServerDefinition,
+    Option<String>,
+)> {
     use vibe_core::plugins::naming::{ToolGroupIdentity, resolve_tool_group_names};
     let definitions = &plugins.materialized.resolution.mcp_servers;
     let identities: Vec<ToolGroupIdentity> = definitions
@@ -551,25 +595,73 @@ pub fn plugin_mcp_sources(
         })
         .collect();
     let names = resolve_tool_group_names(identities.iter(), Vec::<String>::new());
-    let mut sources: Vec<crate::resources::PluginMcpSource> = definitions
+    definitions
         .iter()
         .zip(&identities)
-        .filter_map(|(definition, identity)| {
-            let record =
-                records.get(&(definition.plugin_name.clone(), definition.source_id.clone()));
-            Some(crate::resources::PluginMcpSource {
-                name: names.get(identity)?.clone(),
-                plugin_name: definition.plugin_name.clone(),
-                transport: plugin_mcp_transport(&definition.server).to_owned(),
-                status: record.map_or("unavailable", |record| record.status),
-                tools: record
-                    .map(|record| record.tools.clone())
-                    .unwrap_or_default(),
-            })
-        })
-        .collect();
-    sources.sort_by(|left, right| left.name.cmp(&right.name));
-    sources
+        .map(|(definition, identity)| (definition, names.get(identity).cloned()))
+        .collect()
+}
+
+/// The session's own connection to every plugin MCP server whose catalog name
+/// no configured server holds, keyed by plugin and source id. Reference
+/// `merge_plugin_mcp_into_catalog` hands those servers to the unified
+/// harness, whose runtime discovers each through every page of `tools/list`
+/// and reports it `enabled`, or `unavailable` with the code of its failure
+/// (`_resolve_server` in
+/// `harness/runtimes/python/python/mistralai_vibe_local_harness/vibe/_mcp_runtime.py`).
+/// An OAuth server awaits its authorization, as one without credentials does
+/// there: this port keeps no plugin credentials to send it.
+async fn connect_plugin_servers(
+    plugins: &SessionPlugins,
+    configured: &BTreeSet<String>,
+) -> BTreeMap<(String, String), crate::resources::PluginMcpConnection> {
+    use crate::resources::PluginMcpConnection;
+    use vibe_core::mcp::{McpAuthConfig, RuntimeDiscoveryFailure, discover_every_page};
+    let pending = catalog_names(plugins)
+        .into_iter()
+        .filter(|(_, name)| name.as_ref().is_some_and(|name| !configured.contains(name)))
+        .map(|(definition, _)| async move {
+            let key = (definition.plugin_name.clone(), definition.source_id.clone());
+            let unavailable = |error| PluginMcpConnection {
+                status: "unavailable",
+                tools: Vec::new(),
+                error: Some(error),
+            };
+            let Some(config) = plugin_mcp_config(&definition.private_alias, &definition.server)
+            else {
+                return (key, unavailable("mcp_transport_failed"));
+            };
+            if matches!(config.auth, McpAuthConfig::Oauth(_)) {
+                return (
+                    key,
+                    PluginMcpConnection {
+                        status: "needs_auth",
+                        tools: Vec::new(),
+                        error: None,
+                    },
+                );
+            }
+            let headers = vibe_core::mcp::authorization::http_headers(&config);
+            let connection = match discover_every_page(&config, &headers).await {
+                Ok(tools) => PluginMcpConnection {
+                    status: "enabled",
+                    tools: tools
+                        .into_iter()
+                        .map(|tool| (tool.name, tool.description))
+                        .collect(),
+                    error: None,
+                },
+                Err(RuntimeDiscoveryFailure::Unauthorized) => {
+                    unavailable("authentication was rejected")
+                }
+                Err(RuntimeDiscoveryFailure::Failed(code)) => unavailable(code),
+            };
+            (key, connection)
+        });
+    futures_util::future::join_all(pending)
+        .await
+        .into_iter()
+        .collect()
 }
 
 fn plugin_mcp_transport(server: &PluginMcpServer) -> &str {

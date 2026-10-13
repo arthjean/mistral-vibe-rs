@@ -267,7 +267,8 @@ installed as directories under `~/.vibe/plugins/` and, in a trusted project,
 `.vibe/plugins/`. They load only in the unified mode (`--experimental-harness`).
 Each package is an Agent Plugins manifest, optionally with a Vibe extension;
 Claude Code, Codex, Kimi Code and OpenCode plugins are read through adapters.
-A session pins every package it loads, so editing a plugin directory changes
+A plugin whose tool namespace is `file_system`, `self`, `process`, `skill`,
+`subagent` or `vibe` is rejected. A session pins every package it loads, so editing a plugin directory changes
 nothing until `/reload-plugins` (or the `plugin/reload` method) re-pins it.
 `/plugins` lists what loaded, what drifted since the pin and what was dropped,
 with a detail view per plugin. Plugin skills replace the built-in ones of the

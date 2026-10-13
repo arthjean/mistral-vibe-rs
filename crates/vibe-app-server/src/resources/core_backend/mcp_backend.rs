@@ -722,9 +722,11 @@ pub(crate) fn overlay_plugin_sources(
     }
 }
 
-/// The session's harness runtime is handed the same servers and refuses every
-/// one of them, so each row carries that refusal as its discovery error,
-/// ahead of anything the plugin's own discovery recorded.
+/// Each plugin server is listed through the session's own connection to it,
+/// with that connection's status, tools and error, and through what its
+/// discovery answered while the session holds no connection to it (reference
+/// `project_mcp_sources` and `_project_plugin_source` in
+/// `vibe/app_server/mcp_catalog.py`).
 fn push_plugin_sources(
     held: &[&str],
     plugin_sources: &[crate::resources::PluginMcpSource],
@@ -735,40 +737,64 @@ fn push_plugin_sources(
         if held.contains(&source.name.as_str()) {
             continue;
         }
-        let tools: Vec<Value> = source
-            .tools
-            .iter()
-            .map(|(name, description)| {
-                json!({
-                    "name": name,
-                    // No alias to strip: only the first line is kept.
-                    "description": description
-                        .as_deref()
-                        .unwrap_or_default()
-                        .split('\n')
-                        .next()
-                        .unwrap_or_default()
-                        .trim(),
-                    "enabled": true,
-                })
-            })
-            .collect();
+        let (status, tools): (&str, Vec<Value>) = match &source.connection {
+            Some(connection) => (
+                connection.status,
+                connection
+                    .tools
+                    .iter()
+                    .map(|(name, description)| {
+                        json!({
+                            "name": name,
+                            "description": display_description(
+                                description.as_deref().unwrap_or_default(),
+                                &source.name,
+                            ),
+                            "enabled": true,
+                        })
+                    })
+                    .collect(),
+            ),
+            None => (
+                source.status,
+                source
+                    .tools
+                    .iter()
+                    .map(|(name, description)| {
+                        json!({
+                            "name": name,
+                            // No alias to strip: only the first line is kept.
+                            "description": description
+                                .as_deref()
+                                .unwrap_or_default()
+                                .split('\n')
+                                .next()
+                                .unwrap_or_default()
+                                .trim(),
+                            "enabled": true,
+                        })
+                    })
+                    .collect(),
+            ),
+        };
         sources.push(json!({
             "name": source.name,
             "displayName": source.name,
             "kind": McpSourceKind::Server,
             "transport": source.transport,
-            "status": source.status,
+            "status": status,
             "tools": tools,
             "error": null,
             "pluginName": source.plugin_name,
         }));
-        discovery_errors
-            .entry(source.name.clone())
-            .or_insert_with(|| json!(PLUGIN_RUNTIME_REFUSAL));
+        if let Some(error) = source
+            .connection
+            .as_ref()
+            .and_then(|connection| connection.error)
+        {
+            discovery_errors
+                .entry(source.name.clone())
+                .or_insert_with(|| json!(error));
+        }
     }
 }
-
-/// What the reference's harness runtime answers for every plugin server it is
-/// handed (observed against the pinned reference).
-const PLUGIN_RUNTIME_REFUSAL: &str = "authentication was rejected";

@@ -32,7 +32,14 @@ use crate::skills::parser::parse_skill_markdown;
 use crate::skills::schema::SkillMetadata;
 use crate::skills::{SkillScope, SkillSource};
 
-const RESERVED_NAMESPACES: [&str; 5] = ["file_system", "self", "process", "agent", "vibe"];
+const RESERVED_NAMESPACES: [&str; 6] = [
+    "file_system",
+    "self",
+    "process",
+    "skill",
+    "subagent",
+    "vibe",
+];
 pub const VIBE_EXTENSION: &str = "ai.mistral.vibe";
 const VIBE_EXTENSION_DIRECTORY: &str = "ai.mistral.vibe";
 pub const MCP_SCHEMA: &str = "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json";

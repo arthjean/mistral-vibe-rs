@@ -28,7 +28,7 @@ const FIXTURES: &str = include_str!("../../tests/plugins-parity/fixtures.json");
 const CORPUS: &str = include_str!("../../tests/plugins-parity/corpus.json");
 
 /// The cases the corpus may not fall below.
-const CASE_FLOOR: usize = 11;
+const CASE_FLOOR: usize = 12;
 
 /// A difference this port keeps in one case: every difference whose JSON
 /// pointer starts with `pointer` is covered.

@@ -8,11 +8,12 @@
 //! directories are not followed, paths are NFC-normalized POSIX spellings, and
 //! mode bits are left out, so one tree digests the same on every host.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use super::canonical::{normalize_nfc, sha256_hex};
@@ -65,6 +66,82 @@ pub fn digest_plugin_tree(root: &Path, ignored_names: &BTreeSet<String>) -> io::
         entry(&mut digest, b"f", &relative, &digest_file(&path)?);
     }
     Ok(hex::encode(digest.finalize()))
+}
+
+/// The package files the package's own root `mcp.json` launches through a
+/// `./` command of a `stdio` server, which a checkout keeps runnable. Reference
+/// `PluginPackageStore._launched_executables`
+/// (`harness/runtimes/python/python/mistralai_vibe_local_harness/vibe/plugins/_store.py`):
+/// the command loses its `./`, is normalized as `posixpath.normpath` and then
+/// NFC, and counts only when it names a regular file of the tree. A missing or
+/// unreadable configuration launches nothing.
+#[must_use]
+pub fn launched_executables(root: &Path) -> BTreeSet<PathBuf> {
+    let mut entries = Vec::new();
+    if collect(root, &mut entries).is_err() {
+        return BTreeSet::new();
+    }
+    let files: BTreeMap<String, PathBuf> = entries
+        .into_iter()
+        .filter(|path| fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_file()))
+        .map(|path| {
+            let relative = path.strip_prefix(root).unwrap_or(&path).to_path_buf();
+            (posix_relative(&relative), path)
+        })
+        .collect();
+    let Some(configuration) = files.get("mcp.json") else {
+        return BTreeSet::new();
+    };
+    let Ok(bytes) = fs::read(configuration) else {
+        return BTreeSet::new();
+    };
+    let text = bytes.strip_prefix(b"\xef\xbb\xbf").unwrap_or(&bytes);
+    let Ok(document) = serde_json::from_slice::<Value>(text) else {
+        return BTreeSet::new();
+    };
+    let Some(servers) = document.get("mcpServers").and_then(Value::as_object) else {
+        return BTreeSet::new();
+    };
+    servers
+        .values()
+        .filter(|server| server.get("type").and_then(Value::as_str) == Some("stdio"))
+        .filter_map(|server| server.get("command")?.as_str()?.strip_prefix("./"))
+        .filter_map(|command| files.get(&normalize_nfc(&posix_normpath(command))))
+        .cloned()
+        .collect()
+}
+
+/// Python `posixpath.normpath`.
+fn posix_normpath(path: &str) -> String {
+    if path.is_empty() {
+        return ".".to_owned();
+    }
+    let initial = if path.starts_with("//") && !path.starts_with("///") {
+        "//"
+    } else if path.starts_with('/') {
+        "/"
+    } else {
+        ""
+    };
+    let mut components: Vec<&str> = Vec::new();
+    for component in path.split('/') {
+        match component {
+            "" | "." => {}
+            ".." if initial.is_empty() && components.last().is_none_or(|last| *last == "..") => {
+                components.push(component);
+            }
+            ".." => {
+                components.pop();
+            }
+            _ => components.push(component),
+        }
+    }
+    let normalized = format!("{initial}{}", components.join("/"));
+    if normalized.is_empty() {
+        ".".to_owned()
+    } else {
+        normalized
+    }
 }
 
 /// The NFC POSIX spelling of a path relative to a plugin root.

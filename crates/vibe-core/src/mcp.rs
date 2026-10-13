@@ -431,6 +431,84 @@ impl McpPeer for ServerPeer {
     }
 }
 
+/// Why the unified harness's runtime could not discover a server: an
+/// authorization the server rejected, or the code its runtime records.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeDiscoveryFailure {
+    Unauthorized,
+    Failed(&'static str),
+}
+
+/// The pages `tools/list` may take before the discovery gives up, and the
+/// tools it may hold. Reference `_MAX_TOOLS_LIST_PAGES` and
+/// `_MAX_DISCOVERED_TOOLS`.
+const MAX_TOOLS_LIST_PAGES: usize = 1_000;
+const MAX_DISCOVERED_TOOLS: usize = 1_000;
+
+/// Discovers `config` as the unified harness's MCP runtime does: one session,
+/// every page of `tools/list` followed through its cursors, and a failure
+/// reduced to the code the runtime records for the source. Reference
+/// `_list_all_tools` and `_translate_failure` in
+/// `harness/runtimes/python/python/mistralai_vibe_local_harness/vibe/_mcp_transport.py`.
+///
+/// # Errors
+///
+/// The reduced failure.
+pub async fn discover_every_page(
+    config: &McpServerConfig,
+    headers: &BTreeMap<String, String>,
+) -> Result<Vec<RemoteTool>, RuntimeDiscoveryFailure> {
+    let peer = ServerPeer::new(config, None);
+    let mut session = Session::open(peer.endpoint(headers), Some(peer.startup_timeout), None)
+        .await
+        .map_err(runtime_failure)?;
+    let mut tools = Vec::new();
+    let mut cursor: Option<String> = None;
+    let mut seen = BTreeSet::new();
+    let listed = loop {
+        if seen.len() >= MAX_TOOLS_LIST_PAGES {
+            break Err(RuntimeDiscoveryFailure::Failed("mcp_pagination_limit"));
+        }
+        let (page, next) = match session.list_tools_page(cursor.as_deref()).await {
+            Ok(page) => page,
+            Err(error) => {
+                let terminate = Session::terminates(&error);
+                session.close(terminate).await;
+                return Err(runtime_failure(error));
+            }
+        };
+        tools.extend(page);
+        if tools.len() > MAX_DISCOVERED_TOOLS {
+            break Err(RuntimeDiscoveryFailure::Failed("mcp_descriptor_limit"));
+        }
+        match next {
+            None => break Ok(()),
+            Some(next) if !seen.insert(next.clone()) => {
+                break Err(RuntimeDiscoveryFailure::Failed("mcp_invalid_pagination"));
+            }
+            Some(next) => cursor = Some(next),
+        }
+    };
+    session.close(true).await;
+    listed.map(|()| tools)
+}
+
+/// Reference `_translate_failure`: a 401 is an authorization the server
+/// rejected, another failing status an HTTP error, a lapsed deadline a
+/// timeout, and everything else, a server that never started or went away
+/// included, a failed transport.
+fn runtime_failure(error: SessionError) -> RuntimeDiscoveryFailure {
+    RuntimeDiscoveryFailure::Failed(match error {
+        SessionError::Unauthorized => return RuntimeDiscoveryFailure::Unauthorized,
+        SessionError::Status(_) => "mcp_http_error",
+        SessionError::Timeout(_) => "mcp_timeout",
+        SessionError::Rpc { .. }
+        | SessionError::Closed
+        | SessionError::Transport(_)
+        | SessionError::Protocol(_) => "mcp_transport_failed",
+    })
+}
+
 fn session_error(error: SessionError) -> McpError {
     match error {
         SessionError::Unauthorized => McpError::AuthRequired,

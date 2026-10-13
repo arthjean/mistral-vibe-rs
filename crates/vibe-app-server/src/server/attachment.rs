@@ -571,15 +571,19 @@ impl AppServer {
             .config_snapshot()
             .map(|snapshot| crate::connector_catalog::connector_settings(&snapshot))
             .unwrap_or_default();
-        let (connector_sources, counts) = {
+        let (connector_sources, counts, load_error) = {
             let sessions = self.lock_sessions().ok()?;
             let session = sessions.get(session_id)?;
             (
                 session.connectors.mcp_sources(&settings),
                 session.connectors.runtime_counts(),
+                session.connectors.load_error.clone(),
             )
         };
         if let Some(Value::Object(mcp)) = mcp {
+            if let Some(error) = load_error {
+                mcp.insert("connectorError".to_owned(), Value::String(error));
+            }
             let mut replaced = Vec::new();
             if let Some(Value::Array(sources)) = mcp.get_mut("sources") {
                 sources.retain(|source| {

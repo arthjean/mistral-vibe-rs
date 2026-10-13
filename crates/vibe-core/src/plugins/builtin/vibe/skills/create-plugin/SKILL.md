@@ -83,7 +83,8 @@ it (see below).
 - `schemaVersion` must be `1`.
 - `toolNamespace` is an identifier (`[A-Za-z_$][A-Za-z0-9_$]*`). Without it the
   namespace is the plugin name with every non-identifier character turned into
-  `_`. `file_system`, `self`, `process`, `agent` and `vibe` are reserved.
+  `_`. `file_system`, `self`, `process`, `skill`, `subagent` and `vibe` are
+  reserved.
 - `toolOverrides` renames a source's tool or sets its `exposure` to
   `programmatic` (the default), `direct` or `direct_and_programmatic`. A key
   that matches no tool once its source answered is reported as unused.

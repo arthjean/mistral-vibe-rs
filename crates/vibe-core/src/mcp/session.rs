@@ -306,6 +306,23 @@ impl Session {
         Ok(tools)
     }
 
+    /// One page of `tools/list`, from `cursor` or from the start, with the
+    /// cursor of the next page when the server announced one.
+    pub(crate) async fn list_tools_page(
+        &mut self,
+        cursor: Option<&str>,
+    ) -> Result<(Vec<RemoteTool>, Option<String>), SessionError> {
+        let params = cursor.map(|cursor| json!({"cursor": cursor}));
+        let (result, _) = self.request("tools/list", params, self.timeout).await?;
+        let tools = parse_tools(&result)?;
+        let next = match result.get("nextCursor") {
+            None | Some(Value::Null) => None,
+            Some(Value::String(cursor)) => Some(cursor.clone()),
+            Some(_) => return Err(protocol("the tools/list answer carries an invalid cursor")),
+        };
+        Ok((tools, next))
+    }
+
     /// `tools/call`, validated the way SDK `ClientSession.call_tool` does.
     pub(crate) async fn call_tool(
         &mut self,

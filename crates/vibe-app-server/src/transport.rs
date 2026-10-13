@@ -241,13 +241,15 @@ where
                 // A fork copies its source and does not probe for a fast
                 // model (`vibe/app_server/_runtime.py:1073`).
                 let forks = requests_fork(&bytes);
-                let batch = connection.dispatch(&bytes);
+                let mut batch = connection.dispatch(&bytes);
                 // A session this request attached opens with its connector
                 // catalog resolved, as the reference resolves it while it
                 // builds the session, before the opening is answered.
                 for session_id in connection.attached_session_ids() {
                     if !attached.contains(&session_id) {
-                        let _ = server.open_session_connectors(&session_id).await;
+                        if let Ok(Some(frame)) = server.open_session_connectors(&session_id).await {
+                            batch.outbound.push(frame);
+                        }
                         if !forks && server.session_titles_itself(&session_id) {
                             let driver = Arc::clone(&driver);
                             let _ = tokio::task::spawn_blocking(move || {

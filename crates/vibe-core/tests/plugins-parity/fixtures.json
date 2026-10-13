@@ -157,6 +157,18 @@
     "user/twin/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"twin\"}\n"
    }
   },
+  "native-namespaces": {
+   "files": {
+    "user/agent/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"agent\"}\n",
+    "user/agent/skills/ask/SKILL.md": "---\nname: ask\ndescription: Asks the agent namespace\n---\nAsks the agent namespace.\n",
+    "user/skill/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"skill\"}\n",
+    "user/skill/skills/use/SKILL.md": "---\nname: use\ndescription: Uses the skill namespace\n---\nUses the skill namespace.\n",
+    "user/nested/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"nested\", \"extensions\": {\"ai.mistral.vibe\": {\"schemaVersion\": 1, \"toolNamespace\": \"subagent\"}}}\n",
+    "user/nested/skills/spawn/SKILL.md": "---\nname: spawn\ndescription: Spawns under subagent\n---\nSpawns under subagent.\n",
+    "user/subagent/.claude-plugin/plugin.json": "{\"name\": \"subagent\"}",
+    "user/subagent/skills/child/SKILL.md": "---\nname: child\ndescription: A Claude Code child skill\n---\nA Claude Code child skill.\n"
+   }
+  },
   "native-scopes": {
    "files": {
     "builtin/core/plugin.json": "{\"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\", \"name\": \"core\", \"description\": \"Builtin copy\"}\n",

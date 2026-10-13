@@ -31,6 +31,10 @@ plugin carries, and one command that does not exist. Driving the
 ``--server`` yields observations normalized the same way, and
 ``crates/vibe-app-server/tests/plugins_parity_tests.rs`` compares the two.
 
+Every home holds a ``config.toml`` that moves the Mistral provider to a closed
+local port, so the connector bootstrap a unified session fetches fails with
+the same transport error on every host rather than reaching the network.
+
 Normalization replaces every absolute path with a placeholder for the root it
 sits under, reduces a server-authored diagnostic message to ``<prose>``, and
 records a skill prompt as a byte length and a SHA-256. The shipped ``vibe``
@@ -83,6 +87,20 @@ BUILTIN_PLUGIN = "vibe"
 ANSWER_SECONDS = 120.0
 #: How long notifications that trail an answer are collected.
 QUIET_SECONDS = 0.5
+#: The default providers with the Mistral one moved to a closed local port, so
+#: the connector bootstrap a unified session fetches fails the same way on
+#: every host instead of reaching ``api.mistral.ai`` with the oracle's key.
+PROVIDERS_CONFIG = """[[providers]]
+name = "mistral"
+api_base = "http://127.0.0.1:9/v1"
+api_key_env_var = "MISTRAL_API_KEY"
+backend = "mistral"
+
+[[providers]]
+name = "llamacpp"
+api_base = "http://127.0.0.1:8080/v1"
+api_key_env_var = ""
+"""
 
 
 class OracleError(RuntimeError):
@@ -642,7 +660,7 @@ def run_scenario(
     workspace = root / "workspace"
     for directory in (vibe_home, workspace):
         directory.mkdir(parents=True)
-    write_tree(vibe_home, scenario.get("home", {}))
+    write_tree(vibe_home, {"config.toml": PROVIDERS_CONFIG, **scenario.get("home", {})})
     write_tree(workspace, scenario.get("workspace", {}))
     for relative in scenario.get("executable", []):
         os.chmod(vibe_home / relative, 0o755)

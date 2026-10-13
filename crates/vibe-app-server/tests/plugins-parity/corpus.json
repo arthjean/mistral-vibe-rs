@@ -251,7 +251,7 @@
       "experimentalHarness": true,
       "issues": [],
       "mcp": {
-       "connectorError": "Failed to load connectors (HTTP 401).",
+       "connectorError": "Failed to load connectors: ConnectError",
        "discoveryErrors": {},
        "manageConnectorsUrl": null,
        "sources": []
@@ -338,7 +338,7 @@
     {
      "answer": {
       "mcp": {
-       "connectorError": "Failed to load connectors (HTTP 401).",
+       "connectorError": "Failed to load connectors: ConnectError",
        "discoveryErrors": {},
        "manageConnectorsUrl": null,
        "sources": []
@@ -640,7 +640,7 @@
       "experimentalHarness": true,
       "issues": [],
       "mcp": {
-       "connectorError": "Failed to load connectors (HTTP 401).",
+       "connectorError": "Failed to load connectors: ConnectError",
        "discoveryErrors": {},
        "manageConnectorsUrl": null,
        "sources": []
@@ -699,7 +699,7 @@
     {
      "answer": {
       "mcp": {
-       "connectorError": "Failed to load connectors (HTTP 401).",
+       "connectorError": "Failed to load connectors: ConnectError",
        "discoveryErrors": {},
        "manageConnectorsUrl": null,
        "sources": []
@@ -824,7 +824,7 @@
        }
       ],
       "mcp": {
-       "connectorError": "Failed to load connectors (HTTP 401).",
+       "connectorError": "Failed to load connectors: ConnectError",
        "discoveryErrors": {},
        "manageConnectorsUrl": null,
        "sources": []
@@ -1188,7 +1188,7 @@
        }
       ],
       "mcp": {
-       "connectorError": "Failed to load connectors (HTTP 401).",
+       "connectorError": "Failed to load connectors: ConnectError",
        "discoveryErrors": {
         "missing": "mcp_transport_failed"
        },
@@ -1302,7 +1302,7 @@
     {
      "answer": {
       "mcp": {
-       "connectorError": "Failed to load connectors (HTTP 401).",
+       "connectorError": "Failed to load connectors: ConnectError",
        "discoveryErrors": {
         "missing": "mcp_transport_failed"
        },
@@ -1592,7 +1592,7 @@
       "experimentalHarness": true,
       "issues": [],
       "mcp": {
-       "connectorError": "Failed to load connectors (HTTP 401).",
+       "connectorError": "Failed to load connectors: ConnectError",
        "discoveryErrors": {},
        "manageConnectorsUrl": null,
        "sources": []

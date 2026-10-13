@@ -87,13 +87,18 @@ impl AppServer {
     /// tools. A catalog that cannot be had leaves the session with none, as
     /// the reference logs it and starts anyway.
     ///
-    /// The reference resolves the catalog twice while it opens a session,
-    /// once to build the registry and once to bind it, so a bootstrap that
-    /// fails is fetched a second time.
+    /// The legacy reference resolves the catalog twice while it opens a
+    /// session, once to build the registry and once to bind it, so a bootstrap
+    /// that fails is fetched a second time. A unified session resolves it once
+    /// and keeps why it failed, which its MCP view reports as `connectorError`
+    /// (`_resolve_connectors_background` and `_connector_load_failed` in
+    /// `vibe/app_server/_unified_harness_backend_adapter.py`). Answers the
+    /// `runtime/updated` that failure publishes, which the caller sends once
+    /// the opening is answered.
     pub(crate) async fn open_session_connectors(
         &self,
         session_id: &str,
-    ) -> Result<(), ProtocolFault> {
+    ) -> Result<Option<Vec<u8>>, ProtocolFault> {
         let (snapshot, provider) = self.connector_provider()?;
         let account = catalog::mistral_account(&snapshot, |variable| {
             self.workspace.resolve_credential(variable)
@@ -104,20 +109,37 @@ impl AppServer {
                 .get_mut(session_id)
                 .ok_or_else(|| session_missing("Session not found"))?;
             if session.connectors.opened {
-                return Ok(());
+                return Ok(None);
             }
             session.connectors.opened = true;
             session.connectors.registry = account.is_some();
             session.connectors.account = account;
         }
         let Some(provider) = provider else {
-            return Ok(());
+            return Ok(None);
         };
+        let unified = self.harness_selection().use_unified;
         let resolved = match self.resolve_connector_catalog(&provider, false).await {
             Ok(resolved) => resolved,
+            Err(error) if unified => {
+                let message = if error.0.is_empty() {
+                    "The connector catalog is unavailable".to_owned()
+                } else {
+                    error.0
+                };
+                if let Some(session) = self.lock_sessions()?.get_mut(session_id) {
+                    session.connectors.load_error = Some(message);
+                }
+                return Ok(self.runtime_snapshot(session_id).map(|runtime| {
+                    encode_notification(
+                        "runtime/updated",
+                        result_map([("sessionId", json!(session_id)), ("runtime", runtime)]),
+                    )
+                }));
+            }
             Err(_) => match self.resolve_connector_catalog(&provider, false).await {
                 Ok(resolved) => resolved,
-                Err(_) => return Ok(()),
+                Err(_) => return Ok(None),
             },
         };
         let selection = catalog::resolve_selection(&snapshot, Some(&resolved));
@@ -127,7 +149,7 @@ impl AppServer {
             // tool surface is gone, which nothing here can repair.
             let _ = session.connectors.publish_tools(&session.tools);
         }
-        Ok(())
+        Ok(None)
     }
 
     /// Reference `reconfigure_connectors` on the legacy backend, which

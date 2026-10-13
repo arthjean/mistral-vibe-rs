@@ -65,25 +65,68 @@ pub fn argv_values(argv: &[String]) -> Vec<String> {
 }
 
 /// A URL without its user information, query and fragment. Reference
-/// `redact_url`, which rebuilds the network location from the host and port
-/// alone.
+/// `redact_url`, which publishes `display_url_or_raw`
+/// (`vibe/utils/url.py`): the network location rebuilt from the host, an IPv6
+/// host bracketed again, and the port; a location that cannot be rebuilt is
+/// stripped as text, and a URL that cannot even be split publishes as empty.
 #[must_use]
 pub fn redact_url(url: &str) -> String {
-    let parts = crate::pyurl::PyUrl::split(url);
+    display_url(url).unwrap_or_else(|| strip_url_credentials(url).unwrap_or_default())
+}
+
+/// Reference `display_url` over `urlsplit`: `None` where either raises.
+fn display_url(url: &str) -> Option<String> {
+    let parts = crate::pyurl::PyUrl::try_split(url).ok()?;
     let host = parts.hostname().unwrap_or_default();
-    // A port Python cannot read raises there; the host alone is kept here.
-    let netloc = match parts.port() {
-        Ok(Some(port)) => format!("{host}:{port}"),
-        _ => host,
+    let mut netloc = if host.contains(':') {
+        format!("[{host}]")
+    } else {
+        host
     };
-    crate::pyurl::PyUrl {
+    if let Some(port) = parts.port().ok()? {
+        netloc = format!("{netloc}:{port}");
+    }
+    Some(
+        crate::pyurl::PyUrl {
+            scheme: parts.scheme.clone(),
+            netloc,
+            path: parts.path.clone(),
+            query: String::new(),
+            fragment: String::new(),
+        }
+        .unsplit(),
+    )
+}
+
+/// Reference `strip_url_credentials`: the user information, query and
+/// fragment dropped as text, a value without a scheme read as
+/// protocol-relative and published without the `//` that reading added.
+fn strip_url_credentials(value: &str) -> Option<String> {
+    let schemeless = !value.contains("://") && !value.starts_with("//");
+    let parts = crate::pyurl::PyUrl::try_split(&if schemeless {
+        format!("//{value}")
+    } else {
+        value.to_owned()
+    })
+    .ok()?;
+    let netloc = parts
+        .netloc
+        .rsplit_once('@')
+        .map_or(parts.netloc.as_str(), |(_, host)| host)
+        .to_owned();
+    let stripped = crate::pyurl::PyUrl {
         scheme: parts.scheme.clone(),
-        netloc,
+        netloc: netloc.clone(),
         path: parts.path.clone(),
         query: String::new(),
         fragment: String::new(),
     }
-    .unsplit()
+    .unsplit();
+    Some(if schemeless && !netloc.is_empty() {
+        stripped.get(2..).unwrap_or_default().to_owned()
+    } else {
+        stripped
+    })
 }
 
 /// Free text with every URL rewritten and every known secret removed,
@@ -116,3 +159,6 @@ pub fn redact_values(values: &BTreeMap<String, String>) -> BTreeMap<String, Stri
         .map(|name| (name.clone(), REDACTED.to_owned()))
         .collect()
 }
+
+#[cfg(test)]
+mod redaction_tests;

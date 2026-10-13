@@ -180,6 +180,21 @@ pub struct PluginMcpSource {
     pub status: &'static str,
     /// Each tool's name and description, in the order the server listed them.
     pub tools: Vec<(String, Option<String>)>,
+    /// The session's own connection to the server, which `/mcp` lists in
+    /// place of the discovery above once the session holds one.
+    pub connection: Option<PluginMcpConnection>,
+}
+
+/// What a unified session's runtime holds for one plugin MCP server it was
+/// handed (reference `SessionMCPSourceState`, read off the harness runtime).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginMcpConnection {
+    /// `enabled`, `needs_auth` or `unavailable`.
+    pub status: &'static str,
+    /// Every tool the server lists across its pages, with its description.
+    pub tools: Vec<(String, Option<String>)>,
+    /// The code the runtime records when it could not discover the server.
+    pub error: Option<&'static str>,
 }
 
 pub trait ResourceBackend: Send + Sync {
