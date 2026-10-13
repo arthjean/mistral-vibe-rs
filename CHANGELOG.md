@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Delete the experiment eval cache (`experiment_eval_cache.json` under the
+  vibe home) when a session starts with telemetry or `[experiments] enable`
+  turned off, as the reference does since v2.26.0, so no later launch applies
+  a rollout the operator opted out of. The cache also keeps the reference's
+  `vibe_cli_rust_tui_rollout` assignment, which this port used to drop when it
+  rewrote a cache shared with the reference.
+
 - Read the model configuration as the reference does since v2.26.0. A model
   that sets no compaction threshold compacts at the global one, or at 80% of
   its `max_context_length`, or at 200000; a threshold its window cannot reach

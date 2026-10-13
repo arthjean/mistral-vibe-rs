@@ -66,67 +66,11 @@ const FIELDS: [&str; 5] = [
 /// instead of reporting a clean but empty run.
 const MINIMUM_COMPARISONS: usize = 180;
 
-/// v2.26.0 deletes the eval cache when a session opts out.
-const OPT_OUT_CLEARS_THE_CACHE: &str = "v2.26.0 deletes the whole eval cache file when telemetry or experiments are off, \
-     before the lookup is skipped (vibe/core/experiments/session.py:118, cache.py:63), because \
-     the reference's launcher reads that cache without the configuration; this port skips the \
-     lookup and leaves the seeded entry in place";
-
 /// Comparisons where this build answers something other than the reference,
 /// keyed `startup/{field}/{case}` as a divergence prints, each with the
 /// reason. A divergence no entry names fails the replay, and so does an entry
-/// whose divergence stopped reproducing. Every entry dates from the v2.26.0
-/// re-pin (`376f6a3`).
-const DIVERGENCES: &[(&str, &str)] = &[
-    (
-        "startup/cachedAfterLookup/telemetry-disabled/cached/new",
-        OPT_OUT_CLEARS_THE_CACHE,
-    ),
-    (
-        "startup/cachedAfterLookup/telemetry-disabled/cached/resumed",
-        OPT_OUT_CLEARS_THE_CACHE,
-    ),
-    (
-        "startup/cachedAfterLookup/telemetry-disabled/cached-past-the-bound/new",
-        OPT_OUT_CLEARS_THE_CACHE,
-    ),
-    (
-        "startup/cachedAfterLookup/telemetry-disabled/cached-past-the-bound/resumed",
-        OPT_OUT_CLEARS_THE_CACHE,
-    ),
-    (
-        "startup/cachedAfterLookup/telemetry-disabled/cached-at-the-baseline/new",
-        OPT_OUT_CLEARS_THE_CACHE,
-    ),
-    (
-        "startup/cachedAfterLookup/telemetry-disabled/cached-at-the-baseline/resumed",
-        OPT_OUT_CLEARS_THE_CACHE,
-    ),
-    (
-        "startup/cachedAfterLookup/experiments-disabled/cached/new",
-        OPT_OUT_CLEARS_THE_CACHE,
-    ),
-    (
-        "startup/cachedAfterLookup/experiments-disabled/cached/resumed",
-        OPT_OUT_CLEARS_THE_CACHE,
-    ),
-    (
-        "startup/cachedAfterLookup/experiments-disabled/cached-past-the-bound/new",
-        OPT_OUT_CLEARS_THE_CACHE,
-    ),
-    (
-        "startup/cachedAfterLookup/experiments-disabled/cached-past-the-bound/resumed",
-        OPT_OUT_CLEARS_THE_CACHE,
-    ),
-    (
-        "startup/cachedAfterLookup/experiments-disabled/cached-at-the-baseline/new",
-        OPT_OUT_CLEARS_THE_CACHE,
-    ),
-    (
-        "startup/cachedAfterLookup/experiments-disabled/cached-at-the-baseline/resumed",
-        OPT_OUT_CLEARS_THE_CACHE,
-    ),
-];
+/// whose divergence stopped reproducing.
+const DIVERGENCES: &[(&str, &str)] = &[];
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

@@ -126,11 +126,19 @@ pub enum ExperimentName {
     RegistrySkills,
     /// Which harness a launch selects.
     UnifiedHarnessRollout,
+    /// Which terminal client the reference's launcher starts.
+    ///
+    /// Nothing in this port reads the variant: it has one client, so the
+    /// choice belongs to the reference's distribution (`vibe/cli/_rust.py`).
+    /// The name is declared so that a response keeps the feature through every
+    /// filter, which is what lets an eval cache this port writes under a vibe
+    /// home it shares with the reference keep the user's assignment.
+    RustTuiRollout,
 }
 
 impl ExperimentName {
     /// Every name, in the order the reference declares them.
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::SystemPrompt,
         Self::ManagedShellTools,
         Self::CliModelRouting,
@@ -139,6 +147,7 @@ impl ExperimentName {
         Self::CliExtraModels,
         Self::RegistrySkills,
         Self::UnifiedHarnessRollout,
+        Self::RustTuiRollout,
     ];
 
     /// The feature key a rollout is defined under.
@@ -153,6 +162,7 @@ impl ExperimentName {
             Self::CliExtraModels => "vibe_cli_extra_models",
             Self::RegistrySkills => "vibe_cli_registry_skills",
             Self::UnifiedHarnessRollout => "vibe_cli_unified_harness_rollout",
+            Self::RustTuiRollout => "vibe_cli_rust_tui_rollout",
         }
     }
 
@@ -170,6 +180,7 @@ impl ExperimentName {
     pub fn default_variant(self) -> JsonValue {
         match self {
             Self::SystemPrompt => JsonValue::String("cli".to_owned()),
+            Self::RustTuiRollout => JsonValue::String("python".to_owned()),
             Self::ManagedShellTools | Self::UnifiedHarnessRollout => {
                 JsonValue::String("legacy".to_owned())
             }
@@ -184,17 +195,24 @@ impl ExperimentName {
     /// inferred: the managed shell family is read by the legacy tool manager
     /// alone, and smart approve's classifier lives in the Unified Harness.
     ///
+    /// The harness rollout declares none: the reference's startup no longer
+    /// reads it, so an exposure would claim a treatment never served. This
+    /// port's launch still reads it to pick its unified mode, which the
+    /// accepted divergence on that mode records; the declaration follows the
+    /// reference, and nothing reports an exposure from it either way.
+    ///
     /// Reference `EXPERIMENT_SURFACES`.
     #[must_use]
     pub const fn surfaces(self) -> &'static [ExperimentSurface] {
         match self {
             Self::ManagedShellTools => &[ExperimentSurface::Legacy],
             Self::SmartApprove | Self::SmartApproveDefault => &[ExperimentSurface::Unified],
+            Self::UnifiedHarnessRollout => &[],
             Self::SystemPrompt
             | Self::CliModelRouting
             | Self::CliExtraModels
             | Self::RegistrySkills
-            | Self::UnifiedHarnessRollout => &ExperimentSurface::ALL,
+            | Self::RustTuiRollout => &ExperimentSurface::ALL,
         }
     }
 

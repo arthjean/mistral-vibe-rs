@@ -21,6 +21,7 @@ fn every_name_carries_a_key_and_a_typed_default() {
             "vibe_cli_extra_models",
             "vibe_cli_registry_skills",
             "vibe_cli_unified_harness_rollout",
+            "vibe_cli_rust_tui_rollout",
         ]
     );
     assert_eq!(
@@ -34,6 +35,7 @@ fn every_name_carries_a_key_and_a_typed_default() {
             "{}",
             "false",
             "\"legacy\"",
+            "\"python\"",
         ]
     );
     let keys = ExperimentName::ALL
@@ -64,10 +66,13 @@ fn an_exposure_is_eligible_only_on_a_surface_with_a_consumer() {
         ExperimentName::CliModelRouting,
         ExperimentName::CliExtraModels,
         ExperimentName::RegistrySkills,
-        ExperimentName::UnifiedHarnessRollout,
+        ExperimentName::RustTuiRollout,
     ] {
         assert!(both.is_exposure_eligible(Legacy) && both.is_exposure_eligible(Unified));
     }
+    // The reference's startup no longer reads the harness rollout, so no
+    // surface reports an exposure to it.
+    assert!(ExperimentName::UnifiedHarnessRollout.surfaces().is_empty());
     assert_eq!(Legacy.as_str(), "legacy");
     assert_eq!(Unified.as_str(), "unified");
 }

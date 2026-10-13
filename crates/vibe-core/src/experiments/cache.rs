@@ -134,6 +134,18 @@ impl EvalCache {
         self.write_entries(&entries);
     }
 
+    /// Deletes the file and every entry it holds, whichever credential stored
+    /// them.
+    ///
+    /// A file that is already gone, or that cannot be removed, is not an
+    /// error: what is left behind is read again under the same gates, so the
+    /// worst a failure costs is the deletion itself.
+    ///
+    /// Reference `clear_cached_eval_responses`.
+    pub fn clear(&self) {
+        drop(fs::remove_file(&self.path));
+    }
+
     /// The variant of `feature` in the first recent entry that carries it,
     /// whichever credential stored the entry. Reference `_load_rollout_cache`
     /// and `_rollout_variant_from_cache`, which read the harness rollout before

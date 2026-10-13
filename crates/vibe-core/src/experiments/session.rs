@@ -114,6 +114,9 @@ const DEFAULT_CONSOLE_BASE_URL: &str = "https://console.mistral.ai";
 /// session and records what it resolved: in `cache` for the next session of
 /// the same user, and through `sink` for this one.
 ///
+/// A configuration with telemetry or the experiments turned off deletes
+/// `cache` outright, every user's entry with it, before anything else.
+///
 /// Answers whether the variants changed, which is what decides a configuration
 /// refresh, beside the plan label the account lookup derived. A missing
 /// credential, the sentinel, the experiments opt-out and a failed eval all
@@ -131,6 +134,14 @@ pub async fn initialize_experiments(
     sink: &dyn ExperimentStateSink,
     cache: Option<&EvalCache>,
 ) -> (bool, Option<String>) {
+    // A launch reads the cache before any configuration exists, so it cannot
+    // tell an operator who opted out; opting out has to remove what an
+    // earlier session stored, before the telemetry gate stops everything else.
+    if !experiments_allowed(effective)
+        && let Some(cache) = cache
+    {
+        cache.clear();
+    }
     if !telemetry_enabled(effective) {
         return (false, None);
     }

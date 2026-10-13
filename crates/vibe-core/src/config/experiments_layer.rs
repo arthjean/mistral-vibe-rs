@@ -33,8 +33,8 @@ use super::effective::validate_model_definition;
 pub const EXPERIMENTS_LAYER_NAME: &str = "growthbook";
 
 /// The experiments that write a field, in the order the reference declares
-/// their mappings. The harness rollout is read before any configuration
-/// exists, so it maps to none.
+/// their mappings. The harness rollout and the terminal client rollout are
+/// read before any configuration exists, so they map to none.
 ///
 /// Reference `GROWTHBOOK_CONFIG_MAPPINGS`.
 pub const MAPPED_EXPERIMENTS: [ExperimentName; 7] = [
@@ -61,7 +61,7 @@ pub const fn configured_fields(name: ExperimentName) -> &'static [&'static str] 
         ExperimentName::SmartApprove => &["smart_approve_available"],
         ExperimentName::SmartApproveDefault => &["smart_approve_default"],
         ExperimentName::RegistrySkills => &["experimental_enable_registry_skills"],
-        ExperimentName::UnifiedHarnessRollout => &[],
+        ExperimentName::UnifiedHarnessRollout | ExperimentName::RustTuiRollout => &[],
     }
 }
 

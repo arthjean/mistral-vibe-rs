@@ -12,6 +12,7 @@ use crate::telemetry::{HARNESS_LEGACY, LaunchContext};
 use crate::whoami::recorder::Unanswered;
 use crate::whoami::{NO_PLAN_DATA, WhoAmIResult};
 
+use super::cache::EvalCache;
 use super::client::RemoteEvalClient;
 use super::manager::ExperimentManager;
 use super::models::{EvalResponse, ExperimentAttributes};
@@ -208,6 +209,64 @@ fn the_experiments_opt_out_keeps_the_snapshot_and_skips_the_lookup() {
     assert_eq!(run.persisted, 0);
     let attributes = run.manager.attributes().expect("the snapshot is kept");
     assert_eq!(attributes.organization_id.as_deref(), Some("oracle"));
+}
+
+/// Either opt-out deletes the whole eval cache, every user's entry with it,
+/// because a launch reads that file before any configuration exists. A
+/// configuration that allows the lookup leaves it alone even when it has no
+/// credential to resolve one with.
+#[test]
+fn an_opt_out_deletes_the_eval_cache_and_an_allowed_session_keeps_it() {
+    let seeded = r#"{"another-user":{"stored_at_timestamp":1,"payload":{"features":{}}}}"#;
+    for (document, deleted) in [
+        (
+            format!("enable_telemetry = false\n{MISTRAL_PROVIDER}"),
+            true,
+        ),
+        (
+            format!("[experiments]\nenable = false\n{MISTRAL_PROVIDER}"),
+            true,
+        ),
+        (MISTRAL_PROVIDER.to_owned(), false),
+        (
+            MISTRAL_PROVIDER.replace(ORACLE_VARIABLE, "ORACLE_ABSENT_KEY"),
+            false,
+        ),
+    ] {
+        let home = tempfile::tempdir().expect("a vibe home");
+        let cache = EvalCache::new(home.path());
+        std::fs::write(cache.path(), seeded).expect("the seed writes");
+        let mut manager = ExperimentManager::new(RemoteEvalClient::with_transport(
+            Some(ORACLE_URL.to_owned()),
+            Arc::new(RecordingTransport::new(Outcome::ok(ORACLE_RESPONSE))) as _,
+        ));
+        let resolver = RecordingResolver::answering(None, ORACLE_KEY);
+        let sources = PlanSources {
+            identity: &resolver,
+            whoami: &Unanswered,
+            harness: HARNESS_LEGACY,
+        };
+        runtime().block_on(initialize_experiments(
+            &effective(&document),
+            &credentials,
+            &mut manager,
+            None,
+            &sources,
+            &RecordingSink::default(),
+            Some(&cache),
+        ));
+        assert_eq!(!cache.path().exists(), deleted, "{document}");
+        if !deleted {
+            let kept = std::fs::read_to_string(cache.path()).expect("the cache reads");
+            assert!(kept.contains("\"another-user\""), "{document}");
+        }
+    }
+
+    // Deleting a cache that was never written is not an error.
+    let home = tempfile::tempdir().expect("a vibe home");
+    let cache = EvalCache::new(home.path());
+    cache.clear();
+    assert!(!cache.path().exists());
 }
 
 #[test]
