@@ -666,6 +666,8 @@ fn config_fields_read_describes_the_published_surface_and_its_targets() {
             "`{hidden}` is filled by a runtime and has no editor on either side"
         );
     }
+    // Every published field, then the active model's context window, which
+    // lives only on models.
     assert_eq!(
         fields.len(),
         vibe_core::config::registry::FIELDS
@@ -674,6 +676,7 @@ fn config_fields_read_describes_the_published_surface_and_its_targets() {
                 spec.published && !vibe_core::config::HIDDEN_FIELDS.contains(&spec.name)
             })
             .count()
+            + 1
     );
 
     let theme = fields
@@ -697,8 +700,8 @@ fn config_fields_read_describes_the_published_surface_and_its_targets() {
     assert_eq!(
         theme["layerValues"],
         json!([
-            {"layer": "user_toml", "value": "nord"},
-            {"layer": "defaults", "value": "auto"},
+            {"layer": "user-toml", "value": "nord"},
+            {"layer": "default", "value": "auto"},
         ]),
         "layer values run from the highest priority down to the defaults"
     );
@@ -742,10 +745,9 @@ fn config_schema_publishes_every_declared_field_with_a_version_token() {
         properties["auto_compact_threshold"]["type"],
         json!("integer")
     );
-    assert_eq!(
-        properties["auto_compact_threshold"]["default"],
-        json!(200_000)
-    );
+    // The unset sentinel resolves to a rule rather than a number, so the
+    // schema advertises no default for it.
+    assert_eq!(properties["auto_compact_threshold"].get("default"), None);
     assert_eq!(properties["api_timeout"]["type"], json!("number"));
     assert_eq!(
         properties["otel_redaction"]["enum"],
@@ -779,7 +781,16 @@ fn config_read_composes_the_shipped_defaults_without_a_configuration_file() {
         Some("mistral-medium-3.5")
     );
     assert_eq!(config["theme"], json!("auto"));
-    assert_eq!(config["auto_compact_threshold"], json!(200_000));
+    assert_eq!(
+        config["auto_compact_threshold"],
+        json!(-1),
+        "no layer set a threshold, so the global key carries the unset sentinel"
+    );
+    assert_eq!(
+        config["models"]["mistral-medium-3.5"]["auto_compact_threshold"],
+        json!(200_000),
+        "a model with no threshold and no window compacts at the shipped one"
+    );
     assert_eq!(
         config["models"]["local"]["provider"],
         json!("llamacpp"),

@@ -207,10 +207,10 @@ pub(super) fn reset_config_value_at(
     let field = path.join(".");
     // A value the target file does not carry has nothing to clear in the
     // target the write would go to.
-    let target_layer = format!("{target}_toml");
+    let target_layer = format!("{target}-toml");
     if !written_in_layer(&surface, &field, &target_layer) {
         match top_config_origin(&surface, &field) {
-            Some(origin) if origin != "defaults" && origin != target_layer => {
+            Some(origin) if origin != "default" && origin != target_layer => {
                 push_local_notice(
                     state,
                     &format!("`{field}` is pinned by {origin}; nothing to clear."),
@@ -539,17 +539,17 @@ mod tests {
                 "name": "theme",
                 "layerValues": [
                     {"layer": "environment", "value": "pinned"},
-                    {"layer": "user_toml", "value": "light"},
-                    {"layer": "defaults", "value": "dark"}
+                    {"layer": "user-toml", "value": "light"},
+                    {"layer": "default", "value": "dark"}
                 ]
             }],
             "targets": ["user"]
         });
         assert_eq!(top_config_origin(&surface, "theme"), Some("environment"));
         assert_eq!(top_config_origin(&surface, "missing"), None);
-        assert!(written_in_layer(&surface, "theme", "user_toml"));
-        assert!(!written_in_layer(&surface, "theme", "project_toml"));
-        assert!(!written_in_layer(&surface, "missing", "user_toml"));
+        assert!(written_in_layer(&surface, "theme", "user-toml"));
+        assert!(!written_in_layer(&surface, "theme", "project-toml"));
+        assert!(!written_in_layer(&surface, "missing", "user-toml"));
     }
 
     /// US-202: `file_watcher_for_autocomplete` is read from the published

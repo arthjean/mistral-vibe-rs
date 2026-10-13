@@ -297,26 +297,48 @@ fn a_compaction_model_on_an_unconfigured_provider_fails_naming_both() {
     assert!(message.contains("absent"), "{message}");
 }
 
-/// The reference also refuses a compaction model served by a different provider
-/// than the active model, because the two share one client.
+/// A compaction model served by a different provider than the active model
+/// would be sent to the wrong endpoint, since compaction rides the active
+/// model's connection: the reference loads the configuration, reports it, and
+/// compacts with the active model instead.
 #[test]
-fn a_compaction_model_on_another_provider_than_the_active_one_fails() {
-    let error = shipped(concat!(
+fn a_compaction_model_on_another_provider_than_the_active_one_compacts_with_the_active_model() {
+    let crossed = shipped(concat!(
         "[compaction_model]\n",
         "name = \"devstral\"\n",
         "provider = \"llamacpp\"\n",
         "alias = \"local-summarizer\"\n",
     ))
-    .expect_err("the two providers differ");
-    assert!(
-        matches!(
-            &error,
-            ConfigError::CompactionModelProviderMismatch { alias, provider, active_provider }
-                if alias == "local-summarizer"
-                    && provider == "llamacpp"
-                    && active_provider == "mistral"
-        ),
-        "{error}"
+    .expect("a compaction model on another provider still loads");
+    assert_eq!(crossed.validation_warnings.len(), 1);
+    let warning = &crossed.validation_warnings[0];
+    assert!(warning.contains("local-summarizer"), "{warning}");
+    assert!(warning.contains("llamacpp"), "{warning}");
+    let settings = crossed.compaction_settings();
+    assert_eq!(
+        settings.compaction_model_alias.as_deref(),
+        Some("mistral-medium-3.5")
+    );
+    assert_eq!(
+        settings.compaction_model.as_deref(),
+        Some("mistral-vibe-cli-latest")
+    );
+
+    let pinned_alongside = shipped(concat!(
+        "active_model = \"local\"\n",
+        "[compaction_model]\n",
+        "name = \"devstral\"\n",
+        "provider = \"llamacpp\"\n",
+        "alias = \"local-summarizer\"\n",
+    ))
+    .expect("the same provider as the pinned model loads");
+    assert!(pinned_alongside.validation_warnings.is_empty());
+    assert_eq!(
+        pinned_alongside
+            .compaction_settings()
+            .compaction_model_alias
+            .as_deref(),
+        Some("local-summarizer")
     );
 
     let agreed = shipped(concat!(

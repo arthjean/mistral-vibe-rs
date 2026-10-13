@@ -535,6 +535,10 @@ fn a_session_carries_the_compaction_policy_its_configuration_declares() {
         ),
     )
     .expect("configuration fixture");
+    // The prompt the fixture selects: an identifier naming no prompt refuses
+    // the configuration.
+    std::fs::create_dir_all(home.join("prompts")).expect("prompt directory");
+    std::fs::write(home.join("prompts/terse.md"), "Summarize tersely.\n").expect("prompt fixture");
     let workspace_service = WorkspaceService::new(
         crate::workspace::WorkspacePaths {
             vibe_home: home,

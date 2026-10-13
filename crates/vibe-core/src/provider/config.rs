@@ -242,6 +242,20 @@ pub enum UtilityFeature {
     SmartApprove,
 }
 
+impl UtilityFeature {
+    /// Every feature, in the order the reference declares them.
+    pub const ALL: [Self; 2] = [Self::Title, Self::SmartApprove];
+
+    /// The `[utility_models]` key that configures the feature.
+    #[must_use]
+    pub const fn key(self) -> &'static str {
+        match self {
+            Self::Title => "title",
+            Self::SmartApprove => "smart_approve",
+        }
+    }
+}
+
 /// Written in `[utility_models]`, runs the feature on whatever model the
 /// session runs on.
 /// Reference `ACTIVE_MODEL_SELECTOR`.
@@ -265,8 +279,8 @@ impl UtilityModels {
                 .unwrap_or_default()
         };
         Self {
-            title: read("title"),
-            smart_approve: read("smart_approve"),
+            title: read(UtilityFeature::Title.key()),
+            smart_approve: read(UtilityFeature::SmartApprove.key()),
         }
     }
 
@@ -488,13 +502,6 @@ impl ModelRouting {
             provider.region = entry.region;
         }
         Some(provider)
-    }
-
-    /// Whether the allowlist admits an alias, as `name_matches` reads it; an
-    /// empty allowlist admits every model.
-    #[must_use]
-    pub fn allows(&self, alias: &str) -> bool {
-        self.allowed_models.is_empty() || NameFilter::new(&self.allowed_models).matches(alias)
     }
 }
 

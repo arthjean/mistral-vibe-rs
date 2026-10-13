@@ -39,6 +39,7 @@ use serde_json::{Map, Value as JsonValue};
 
 use super::registry::{FIELDS, MergeStrategy};
 use super::*;
+use crate::provider::config::{ModelRouting, UtilityFeature};
 
 use crate::parity::{REFERENCE_COMMIT, off_pin_reason, pinned_interpreter, reference_root};
 
@@ -46,7 +47,7 @@ const CAPTURE_SCRIPT: &str = "scripts/parity/config_surface.py";
 const CORPUS_RELATIVE: &str = "tests/config-surface/corpus.json";
 /// The corpus layout this runner reads, matching `SCHEMA_VERSION` in the
 /// capture script.
-const CORPUS_SCHEMA_VERSION: u32 = 5;
+const CORPUS_SCHEMA_VERSION: u32 = 6;
 /// The scenario floor this epic commits to.
 const MINIMUM_SCENARIOS: usize = 24;
 /// What the capture writes where the vibe home is machine-dependent.
@@ -91,226 +92,20 @@ const STRATEGY_DIVERGENCES: &[(&str, &str, &str, &str)] = &[];
 /// strategy any more or the port implements it.
 const UNIMPLEMENTED_STRATEGIES: &[(&str, &str)] = &[];
 
-/// v2.26.0 made "no threshold set" a value a model entry carries.
-const UNSET_THRESHOLD_DROPPED: &str = "v2.26.0 defaults a model's `auto_compact_threshold` to the unset sentinel -1 \
-     (models.py:492; _defaults.py:30) and drops the sentinel when it writes a model entry out \
-     (models.py:563); the port's default models ship 200000";
-
-/// v2.26.0 lets the global threshold reach the shipped default models.
-const GLOBAL_THRESHOLD: &str = "v2.26.0 materializes the unset sentinel for a model that sets no threshold \
-     (models.py:492), so a layer's global `auto_compact_threshold` now reaches the shipped \
-     default models as well (vibe_schema.py:949); the port's default models carry their own \
-     200000, which counts as set and keeps the global value out";
-
-/// v2.26.0 resolves the threshold sentinel for `models` entries alone.
-const UNSET_THRESHOLD: &str = "v2.26.0 resolves the unset threshold sentinel only for entries of `models` \
-     (vibe_schema.py:949), so a `compaction_model`, `vision_model` or routed extra entry that \
-     sets no threshold validates to -1 (models.py:492); the port completes it to 200000";
-
-/// v2.26.0 matches the model allowlist against names.
-const ALLOWLIST_BY_NAME: &str = "v2.26.0 matches `allowed_models` against model names rather than aliases \
-     (vibe_schema.py:690, :1004), so a pattern written for the `local` alias matches no name, \
-     warns, and admits every model; the port still matches aliases";
-
-/// v2.26.0 warns when the allowlist excludes the pinned model.
-const DISALLOWED_ACTIVE_MODEL: &str = "v2.26.0 records a warning when `allowed_models` excludes the pinned \
-     `active_model` (vibe_schema.py:1016); the port falls back to the default alias without \
-     one";
-
 /// Pointers at which the document this port ships diverges from the reference
 /// default document, as `(pointer, reason)`. A key the port ships and the
 /// reference does not is named at its own pointer.
-const DEFAULT_DIVERGENCES: &[(&str, &str)] = &[
-    (
-        "/auto_compact_threshold",
-        "v2.26.0 defaults the global threshold to the unset sentinel -1 (vibe_schema.py:386) \
-         and drops it from the document `create_default_config` ships (vibe_schema.py:1119); \
-         registry.rs ships 200000",
-    ),
-    (
-        "/models/local/auto_compact_threshold",
-        UNSET_THRESHOLD_DROPPED,
-    ),
-    (
-        "/models/mistral-medium-3.5/auto_compact_threshold",
-        UNSET_THRESHOLD_DROPPED,
-    ),
-];
+const DEFAULT_DIVERGENCES: &[(&str, &str)] = &[];
 
 /// Pointers at which a merge scenario diverges, as `(scenario, pointer, reason)`.
 const SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[];
 
 /// Pointers at which a model scenario diverges, as `(scenario, pointer,
 /// reason)`. `/active_model` and `/validation_warnings` name the validated alias
-/// and the warning count; every other pointer lies under `/models` or
-/// `/compaction_model`. Every entry dates from the v2.26.0 re-pin (`376f6a3`).
-const MODEL_SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[
-    (
-        "models-added-entry-inherits-the-global-threshold",
-        "/models/local/auto_compact_threshold",
-        GLOBAL_THRESHOLD,
-    ),
-    (
-        "models-added-entry-inherits-the-global-threshold",
-        "/models/mistral-medium-3.5/auto_compact_threshold",
-        GLOBAL_THRESHOLD,
-    ),
-    (
-        "models-entry-keeps-its-own-threshold",
-        "/models/local/auto_compact_threshold",
-        GLOBAL_THRESHOLD,
-    ),
-    (
-        "models-entry-keeps-its-own-threshold",
-        "/models/mistral-medium-3.5/auto_compact_threshold",
-        GLOBAL_THRESHOLD,
-    ),
-    (
-        "models-compaction-model-without-an-alias-borrows-its-name",
-        "/compaction_model/auto_compact_threshold",
-        UNSET_THRESHOLD,
-    ),
-    (
-        "models-allowed-models-regex-is-case-insensitive",
-        "/validation_warnings",
-        ALLOWLIST_BY_NAME,
-    ),
-    (
-        "models-allowed-models-regex-is-case-insensitive",
-        "/available_models",
-        ALLOWLIST_BY_NAME,
-    ),
-    (
-        "models-allowed-models-regex-is-case-insensitive",
-        "/default_model_alias",
-        ALLOWLIST_BY_NAME,
-    ),
-    (
-        "models-allowed-models-regex-is-case-insensitive",
-        "/active_model_alias",
-        ALLOWLIST_BY_NAME,
-    ),
-    (
-        "models-allowed-models-matching-nothing-warns-and-admits-all",
-        "/validation_warnings",
-        ALLOWLIST_BY_NAME,
-    ),
-    (
-        "models-allowed-models-matching-nothing-warns-and-admits-all",
-        "/available_models",
-        ALLOWLIST_BY_NAME,
-    ),
-    (
-        "models-allowed-models-matching-nothing-warns-and-admits-all",
-        "/default_model_alias",
-        ALLOWLIST_BY_NAME,
-    ),
-    (
-        "models-allowed-models-matching-nothing-warns-and-admits-all",
-        "/active_model_alias",
-        ALLOWLIST_BY_NAME,
-    ),
-    (
-        "models-allowed-models-excluding-the-pin-falls-back",
-        "/validation_warnings",
-        DISALLOWED_ACTIVE_MODEL,
-    ),
-    (
-        "models-allowed-models-excluding-the-default",
-        "/validation_warnings",
-        ALLOWLIST_BY_NAME,
-    ),
-    (
-        "models-allowed-models-excluding-the-default",
-        "/available_models",
-        ALLOWLIST_BY_NAME,
-    ),
-    (
-        "models-allowed-models-excluding-the-default",
-        "/default_model_alias",
-        ALLOWLIST_BY_NAME,
-    ),
-    (
-        "models-allowed-models-excluding-the-default",
-        "/active_model_alias",
-        ALLOWLIST_BY_NAME,
-    ),
-    (
-        "models-routed-extra-models-from-json-text",
-        "/routed_extra_models/0/auto_compact_threshold",
-        UNSET_THRESHOLD,
-    ),
-    (
-        "models-routed-extra-models-from-json-text",
-        "/routed_extra_models/1/auto_compact_threshold",
-        UNSET_THRESHOLD,
-    ),
-    (
-        "models-routed-extra-models-keep-what-the-operator-wrote",
-        "/models/local/auto_compact_threshold",
-        GLOBAL_THRESHOLD,
-    ),
-    (
-        "models-routed-extra-models-keep-what-the-operator-wrote",
-        "/models/mistral-medium-3.5/auto_compact_threshold",
-        GLOBAL_THRESHOLD,
-    ),
-    (
-        "models-routed-extra-models-keep-what-the-operator-wrote",
-        "/routed_extra_models/0/auto_compact_threshold",
-        UNSET_THRESHOLD,
-    ),
-    (
-        "models-routed-extra-models-keep-what-the-operator-wrote",
-        "/routed_extra_models/1/auto_compact_threshold",
-        UNSET_THRESHOLD,
-    ),
-    (
-        "models-vision-model-is-completed-like-a-model",
-        "/models/local/auto_compact_threshold",
-        GLOBAL_THRESHOLD,
-    ),
-    (
-        "models-vision-model-is-completed-like-a-model",
-        "/models/mistral-medium-3.5/auto_compact_threshold",
-        GLOBAL_THRESHOLD,
-    ),
-    (
-        "models-vision-model-is-completed-like-a-model",
-        "/vision_model/auto_compact_threshold",
-        UNSET_THRESHOLD,
-    ),
-    (
-        "models-compaction-model-ignores-the-global-threshold",
-        "/models/local/auto_compact_threshold",
-        GLOBAL_THRESHOLD,
-    ),
-    (
-        "models-compaction-model-ignores-the-global-threshold",
-        "/models/mistral-medium-3.5/auto_compact_threshold",
-        GLOBAL_THRESHOLD,
-    ),
-    (
-        "models-compaction-model-ignores-the-global-threshold",
-        "/compaction_model/auto_compact_threshold",
-        UNSET_THRESHOLD,
-    ),
-    (
-        "models-user-threshold-keeps-a-model-threshold",
-        "/models/local/auto_compact_threshold",
-        GLOBAL_THRESHOLD,
-    ),
-    (
-        "models-user-threshold-keeps-a-model-threshold",
-        "/models/mistral-medium-3.5/auto_compact_threshold",
-        GLOBAL_THRESHOLD,
-    ),
-    (
-        "models-compaction-model-keeps-the-alias-it-declares",
-        "/compaction_model/auto_compact_threshold",
-        UNSET_THRESHOLD,
-    ),
-];
+/// and the warning count; `/fields` names the settings rows; every other
+/// pointer lies under the model field it names. Empty since the v2.26.0 model
+/// configuration pass.
+const MODEL_SCENARIO_DIVERGENCES: &[(&str, &str, &str)] = &[];
 
 /// One divergence a replay observed: the case, the pointer, and both values
 /// rendered with sensitive values redacted.
@@ -386,6 +181,8 @@ struct Corpus {
     defaults: Defaults,
     scenarios: Vec<Scenario>,
     model_scenarios: Vec<ModelScenario>,
+    /// The rows `config/fields/read` lists over the shipped defaults, in order.
+    settings_order: Vec<String>,
     /// Replayed by `mcp_parity_tests`, which reads the same file through its
     /// own view; named here because the corpus denies unknown fields.
     #[expect(dead_code, reason = "the MCP section is replayed by its own module")]
@@ -437,6 +234,17 @@ struct ModelScenario {
     default_model_alias: Option<String>,
     active_model_alias: Option<String>,
     validation_warnings: Option<usize>,
+    /// The validated `routed_model_config`, a field of its own beside the copy
+    /// injected into `models`.
+    routed_model_config: Option<JsonValue>,
+    /// The alias a compaction runs on, reference `get_compaction_model`.
+    compaction_model_alias: Option<String>,
+    /// Per `[utility_models]` key, the alias reference `get_utility_model`
+    /// resolves, or `null` for automatic selection.
+    utility_models: Option<BTreeMap<String, Option<String>>>,
+    /// The `config/fields/read` rows some layer above the defaults sets, and
+    /// the two read off the active model, without their prose.
+    fields: Option<Vec<JsonValue>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -672,7 +480,8 @@ fn a_load_with_no_configuration_file_composes_the_reference_default_document() {
     )
     .load()
     .expect("the shipped defaults load on their own");
-    let actual = serde_json::to_value(&snapshot.effective).expect("effective serializes");
+    let actual =
+        as_written_by_create_default_config(&snapshot.effective, &registry::default_document());
 
     let recorded = ledger(UNDECLARED_FIELDS);
     let mut unpinned_observed = false;
@@ -732,13 +541,14 @@ fn a_load_with_no_configuration_file_composes_the_reference_default_document() {
     // own pointer. A field the reference withdrew still ships here, and the
     // census test is what records it; this check would report it a second time.
     let retired = ledger(WITHDRAWN_FIELDS);
-    for (key, value) in snapshot
-        .effective
+    for (key, value) in actual
+        .as_object()
+        .expect("a document is a table")
         .iter()
         .filter(|(key, _)| !corpus.defaults.document.contains_key(key.as_str()))
         .filter(|(key, _)| !retired.contains_key(key.as_str()))
     {
-        let value = serde_json::to_value(value).expect("a field serializes");
+        let value = value.clone();
         observed.push(Observed {
             case: "defaults".to_owned(),
             pointer: format!("/{}", escape_pointer_token(key)),
@@ -768,6 +578,127 @@ fn a_load_with_no_configuration_file_composes_the_reference_default_document() {
         !snapshot.effective.contains_key("tools"),
         "tool discovery owns `tools`; the registry must not ship one"
     );
+}
+
+/// The settings rows that carry an observation, as the capture keeps them:
+/// every row some layer above the defaults sets, without its prose, and the two
+/// read off the active model with their values.
+fn settings_rows(snapshot: &ConfigSnapshot) -> Vec<JsonValue> {
+    const MODEL_SCOPED: [&str; 2] = ["auto_compact_threshold", "max_context_length"];
+    introspect::describe_fields(snapshot)
+        .into_iter()
+        .filter_map(|field| {
+            let layers = field
+                .layer_values
+                .iter()
+                .map(|entry| entry.layer)
+                .collect::<Vec<_>>();
+            let mut row = serde_json::json!({
+                "name": field.name,
+                "path": field.path,
+                "layers": layers,
+            });
+            if MODEL_SCOPED.contains(&field.name) {
+                row["value"] = field.value;
+                row["layerValues"] = field
+                    .layer_values
+                    .into_iter()
+                    .map(|entry| entry.value)
+                    .collect();
+            } else if layers == ["default"] {
+                return None;
+            }
+            Some(row)
+        })
+        .collect()
+}
+
+/// Settings rows keyed by name, so a divergence names the row it lies in.
+fn settings_rows_by_name(rows: Vec<JsonValue>) -> JsonValue {
+    JsonValue::Object(
+        rows.into_iter()
+            .map(|row| {
+                let name = row["name"].as_str().unwrap_or_default().to_owned();
+                (name, row)
+            })
+            .collect(),
+    )
+}
+
+/// `config/fields/read` lists the same rows in the same order: every published
+/// field the settings screen offers, then the active model's context window.
+#[test]
+fn the_settings_rows_are_listed_in_the_reference_order() {
+    let corpus = corpus();
+    let temporary = tempfile::tempdir().expect("temporary root");
+    let home = temporary.path().join("home/.vibe");
+    fs::create_dir_all(&home).expect("home directory");
+    let snapshot = LayeredConfig::new(
+        ConfigPaths {
+            vibe_home: home,
+            working_directory: temporary.path().join("project"),
+        },
+        registry::default_document(),
+    )
+    .load()
+    .expect("the shipped defaults load on their own");
+    // The four keys only this port declares are published like any other; the
+    // ledger row `4 configuration keys with no upstream counterpart` keeps them.
+    let rows = introspect::describe_fields(&snapshot)
+        .into_iter()
+        .filter(|field| registry::field(field.name).is_none_or(|spec| !spec.local))
+        .map(|field| field.name.to_owned())
+        .collect::<Vec<_>>();
+    assert_eq!(rows, corpus.settings_order);
+}
+
+/// What reference `create_default_config` writes for a loaded document: it
+/// dumps the schema's declaration without running the model validators, and
+/// drops the unset compaction threshold on the way out (`vibe_schema.py:1119`,
+/// `models.py:563`). The load runs the validators, which resolve a threshold
+/// on every model; the document shows the one the Defaults layer declares, so
+/// that is what the projection reads, and the resolved ones are replayed by the
+/// `models-defaults-only` model scenario.
+fn as_written_by_create_default_config(effective: &Table, declared: &Table) -> JsonValue {
+    let mut document = serde_json::to_value(effective).expect("effective serializes");
+    let unset = JsonValue::from(registry::UNSET_AUTO_COMPACT_THRESHOLD);
+    if document.get("auto_compact_threshold") == Some(&unset) {
+        document
+            .as_object_mut()
+            .expect("a document is a table")
+            .remove("auto_compact_threshold");
+    }
+    let declared_threshold = |alias: &str| {
+        declared
+            .get("models")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_table)
+            .find(|entry| entry.get("alias").and_then(Value::as_str) == Some(alias))
+            .and_then(|entry| entry.get("auto_compact_threshold"))
+            .and_then(Value::as_integer)
+            .filter(|threshold| *threshold != registry::UNSET_AUTO_COMPACT_THRESHOLD)
+    };
+    if let Some(models) = document
+        .get_mut("models")
+        .and_then(JsonValue::as_object_mut)
+    {
+        for (alias, entry) in models.iter_mut() {
+            let Some(entry) = entry.as_object_mut() else {
+                continue;
+            };
+            match declared_threshold(alias) {
+                Some(threshold) => {
+                    entry.insert("auto_compact_threshold".to_owned(), threshold.into());
+                }
+                None => {
+                    entry.remove("auto_compact_threshold");
+                }
+            }
+        }
+    }
+    document
 }
 
 /// Reads the persisted list form the corpus records into the alias-keyed map
@@ -954,6 +885,47 @@ fn every_model_scenario_validates_to_the_document_the_reference_validates() {
             "/active_model_alias",
             text(scenario.active_model_alias.as_deref()),
             text(active_model_alias(effective)),
+        );
+        compare(
+            "/routed_model_config",
+            expected(&scenario.routed_model_config),
+            field("routed_model_config"),
+        );
+        // The runtime reads the compaction model off the settings a session
+        // is built with, so that is what is compared.
+        compare(
+            "/compaction_model_alias",
+            text(scenario.compaction_model_alias.as_deref()),
+            text(
+                snapshot
+                    .compaction_settings()
+                    .compaction_model_alias
+                    .as_deref(),
+            ),
+        );
+        let routing = ModelRouting::from_effective(effective, snapshot.active_model_alias());
+        compare(
+            "/utility_models",
+            serde_json::to_value(scenario.utility_models.clone().unwrap_or_default())
+                .expect("utility models serialize"),
+            JsonValue::Object(
+                UtilityFeature::ALL
+                    .into_iter()
+                    .map(|feature| {
+                        let alias = routing
+                            .utility_model(feature)
+                            .ok()
+                            .flatten()
+                            .map(|model| model.alias);
+                        (feature.key().to_owned(), text(alias.as_deref()))
+                    })
+                    .collect(),
+            ),
+        );
+        compare(
+            "/fields",
+            settings_rows_by_name(scenario.fields.clone().unwrap_or_default()),
+            settings_rows_by_name(settings_rows(&snapshot)),
         );
     }
     reconcile(

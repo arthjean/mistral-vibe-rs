@@ -60,9 +60,9 @@ fn each_field_carries_what_a_settings_screen_renders_it_with() {
             .map(|entry| (entry.layer, entry.value.clone()))
             .collect::<Vec<_>>(),
         vec![
-            (ConfigLayerKind::Runtime, JsonValue::from("dracula")),
-            (ConfigLayerKind::UserToml, JsonValue::from("nord")),
-            (ConfigLayerKind::Defaults, JsonValue::from("auto")),
+            ("overrides", JsonValue::from("dracula")),
+            ("user-toml", JsonValue::from("nord")),
+            ("default", JsonValue::from("auto")),
         ]
     );
 
@@ -77,13 +77,13 @@ fn each_field_carries_what_a_settings_screen_renders_it_with() {
             .iter()
             .map(|entry| (entry.layer, entry.value.clone()))
             .collect::<Vec<_>>(),
-        vec![(ConfigLayerKind::Defaults, JsonValue::Null)]
+        vec![("default", JsonValue::Null)]
     );
     let thinking = field(&described, "thinking");
     assert_eq!(
         thinking.layer_values,
         vec![ConfigLayerValue {
-            layer: ConfigLayerKind::Defaults,
+            layer: "default",
             value: JsonValue::from("off"),
         }],
         "a key only this port declares still reports its registry default"
@@ -95,10 +95,13 @@ fn the_described_surface_is_the_published_registry_without_the_tool_table() {
     let (_temporary, described) = described("", Table::new());
 
     let described_names: Vec<&str> = described.fields.iter().map(|field| field.name).collect();
+    // The active model's context window closes the list: it lives only on
+    // models, so it has no field of its own.
     let expected: Vec<&str> = registry::FIELDS
         .iter()
         .filter(|spec| spec.published && !introspect::HIDDEN_FIELDS.contains(&spec.name))
         .map(|spec| spec.name)
+        .chain(["max_context_length"])
         .collect();
     assert_eq!(described_names, expected);
     for hidden in introspect::HIDDEN_FIELDS {

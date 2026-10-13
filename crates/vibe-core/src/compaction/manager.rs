@@ -82,11 +82,12 @@ impl Default for CompactionPrompts {
 
 /// What resolving `compaction_prompt_id` produced.
 ///
-/// The reference resolves the request lazily, at each compaction, so an
-/// identifier that names nothing is an error the operator meets when a
-/// compaction runs rather than when the session opens. This port resolves once
-/// per session and carries the failure instead, which raises it at the same
-/// moment without rereading the filesystem every cycle.
+/// An identifier that names nothing refuses the configuration when it loads,
+/// as reference `_check_compaction_prompt` refuses it, so a session normally
+/// resolves. The prompt file can still disappear between the load and the
+/// session: this port resolves once per session and carries that failure to
+/// the compaction, where the reference's lazy read would meet it too, without
+/// rereading the filesystem every cycle.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompactionPromptResolution {
     Resolved(CompactionPrompts),

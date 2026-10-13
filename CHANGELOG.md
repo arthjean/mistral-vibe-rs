@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Read the model configuration as the reference does since v2.26.0. A model
+  that sets no compaction threshold compacts at the global one, or at 80% of
+  its `max_context_length`, or at 200000; a threshold its window cannot reach
+  is ignored, and a hand-written `-1` means unset instead of disabling
+  compaction. `allowed_models` matches model names rather than aliases, so the
+  `lean` profile now lists `labs-leanstral-1-5`, and an allowlist an
+  organization enforces that admits no model refuses the configuration. The
+  load warns when the allowlist excludes the pinned model or a
+  `[utility_models]` alias names no selectable model, a compaction model on
+  another provider than the active one warns and the active model compacts
+  instead of the load failing, and a `compaction_prompt_id` that names no
+  prompt fails the load. `config/fields/read` names a value's layer as the
+  reference does (`user-toml`, `default`, ...), reads the threshold row off the
+  active model, and adds a row for its context window.
+
 - Answer the app-server surface v2.26.0 added, as the reference's legacy
   backend does: every model a configuration view lists states
   `maxContextLength`, `thinkingLevels` and `imageDelivery`, the view states

@@ -537,9 +537,10 @@ impl WorkspaceService {
     /// message saying why the identifier named nothing.
     ///
     /// The chain is the reference's: a `.md` file in a project prompt directory
-    /// wins, then one in the user prompt directory, then the built-in. A failure
-    /// is carried rather than raised, because the reference resolves lazily and
-    /// the operator meets the error when a compaction runs.
+    /// wins, then one in the user prompt directory, then the built-in. The load
+    /// already refused an identifier naming nothing; a prompt file removed since
+    /// is carried rather than raised, so the operator meets it when a
+    /// compaction runs.
     #[must_use]
     pub fn compaction_prompts(&self) -> CompactionPromptResolution {
         CompactionPromptResolution::resolve(

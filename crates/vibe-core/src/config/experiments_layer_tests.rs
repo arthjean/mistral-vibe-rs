@@ -446,7 +446,10 @@ fn an_assignment_alone_is_effective_and_reports_the_experiments_layer() {
             .iter()
             .map(|entry| entry.layer)
             .collect::<Vec<_>>(),
-        [ConfigLayerKind::Experiments, ConfigLayerKind::Defaults]
+        [
+            ConfigLayerKind::Experiments.reference_name(),
+            ConfigLayerKind::Defaults.reference_name()
+        ]
     );
 }
 
@@ -511,8 +514,8 @@ fn a_global_threshold_reaches_the_injected_model_and_not_the_routed_definition()
     );
     assert_eq!(
         snapshot.effective["routed_model_config"]["auto_compact_threshold"].as_integer(),
-        Some(registry::DEFAULT_AUTO_COMPACT_THRESHOLD),
-        "the published definition keeps the shipped threshold"
+        Some(registry::UNSET_AUTO_COMPACT_THRESHOLD),
+        "the published definition keeps the unset threshold `ModelConfig` declares"
     );
 }
 

@@ -193,6 +193,9 @@ pub struct FieldSpec {
     /// A JSON object literal merged over the generated property schema, for the
     /// constraints a kind alone cannot express.
     pub schema_extra: &'static str,
+    /// Whether `config/schema` publishes [`Self::default`]. A sentinel default
+    /// that resolves to a rule rather than a number stays out of the schema.
+    pub advertises_default: bool,
 }
 
 impl FieldSpec {
@@ -209,6 +212,7 @@ impl FieldSpec {
             published: false,
             local: false,
             schema_extra: "",
+            advertises_default: true,
         }
     }
 
@@ -222,6 +226,15 @@ impl FieldSpec {
     const fn popular(self) -> Self {
         Self {
             popular: true,
+            ..self
+        }
+    }
+
+    /// Reference `_suppress_unset_default`: the default is composed into the
+    /// Defaults layer and kept out of the published schema.
+    const fn unadvertised_default(self) -> Self {
+        Self {
+            advertises_default: false,
             ..self
         }
     }
@@ -540,8 +553,7 @@ const DEFAULT_MODELS: &str = r#"[
         "cached_input_price": 0.15,
         "thinking": "high",
         "thinking_levels": ["off", "low", "medium", "high", "max"],
-        "supports_images": true,
-        "auto_compact_threshold": 200000
+        "supports_images": true
     },
     {
         "name": "devstral",
@@ -553,8 +565,7 @@ const DEFAULT_MODELS: &str = r#"[
         "output_price": 0.0,
         "thinking": "off",
         "thinking_levels": ["off", "low", "medium", "high", "max"],
-        "supports_images": false,
-        "auto_compact_threshold": 200000
+        "supports_images": false
     }
 ]"#;
 
@@ -613,12 +624,23 @@ const DEFAULT_EXPERIMENTS: &str = r#"{
 
 const EMPTY_LIST: &str = "[]";
 
-/// The compaction threshold this build ships, which the reference declares once
-/// and reads in two places: as the default of the global `auto_compact_threshold`
-/// field, and as the default of the same field on one model.
-///
-/// Reference `DEFAULT_AUTO_COMPACT_THRESHOLD`.
+/// The compaction threshold a model compacts at when no layer set one and it
+/// declares no context window. Reference `DEFAULT_AUTO_COMPACT_THRESHOLD`.
 pub const DEFAULT_AUTO_COMPACT_THRESHOLD: i64 = 200_000;
+
+/// "No layer set a threshold", the default of the global
+/// `auto_compact_threshold` and of the same field on every model. The Defaults
+/// layer composes field defaults into the merge, so unset-ness has to survive
+/// it as a value; a `-1` written by hand is read the same way, and `0` stays a
+/// cap meaning "never compact". The load resolves it on every entry of
+/// `models`, and no written document carries it. Reference
+/// `UNSET_AUTO_COMPACT_THRESHOLD`.
+pub const UNSET_AUTO_COMPACT_THRESHOLD: i64 = -1;
+
+/// The share of a declared context window a model that sets no threshold
+/// compacts at: compaction is itself a call carrying the conversation, so it
+/// needs room below the ceiling. Reference `AUTO_COMPACT_WINDOW_RATIO`.
+pub const AUTO_COMPACT_WINDOW_RATIO: f64 = 0.8;
 
 /// The per-entry defaults the reference `ModelConfig` fills in once a merged
 /// model reaches validation. A merged entry only carries what its layers set,
@@ -626,17 +648,17 @@ pub const DEFAULT_AUTO_COMPACT_THRESHOLD: i64 = 200_000;
 ///
 /// `cached_input_price` and `max_context_length` are absent on purpose: they
 /// default to null upstream and TOML carries no null, so an entry that sets
-/// none stays without the key. `auto_compact_threshold` is absent too: an entry of `models` is filled from
-/// the global value rather than from a per-model constant. The one definition
-/// that is not an entry of `models` falls back to
-/// [`DEFAULT_AUTO_COMPACT_THRESHOLD`] instead.
+/// none stays without the key. `auto_compact_threshold` defaults to
+/// [`UNSET_AUTO_COMPACT_THRESHOLD`], which the load resolves on the entries of
+/// `models` and leaves on the model fields that are not entries of it.
 pub const MODEL_DEFAULTS: &str = r#"{
     "temperature": 0.2,
     "input_price": 0.0,
     "output_price": 0.0,
     "thinking": "off",
     "thinking_levels": ["off", "low", "medium", "high", "max"],
-    "supports_images": false
+    "supports_images": false,
+    "auto_compact_threshold": -1
 }"#;
 
 /// The JSON Schema for one `mcp_servers` entry, which no field kind describes.
@@ -737,7 +759,7 @@ pub static FIELDS: &[FieldSpec] = &[
     ),
     FieldSpec::declared("allowed_models", FieldKind::List, REPLACE).published(
         FieldDefault::Strings(&[]),
-        "Model aliases, glob or `re:` patterns, that may be selected. Empty allows every model.",
+        "Model names, glob or `re:` patterns, that may be selected. Empty allows every model.",
         "",
     ),
     FieldSpec::declared("compaction_model", FieldKind::Complex, SHALLOW_MERGE).published(
@@ -759,10 +781,13 @@ pub static FIELDS: &[FieldSpec] = &[
     FieldSpec::declared("auto_compact_threshold", FieldKind::Int, REPLACE)
         .popular()
         .published(
-            FieldDefault::Int(DEFAULT_AUTO_COMPACT_THRESHOLD),
-            "Token count above which a conversation is compacted. A model may set its own.",
-            r#"{"minimum": 0}"#,
-        ),
+            FieldDefault::Int(UNSET_AUTO_COMPACT_THRESHOLD),
+            "Token count above which a conversation is compacted, for a model that sets no \
+             threshold of its own and declares no context window; one with a window compacts \
+             at 80% of it. 0 never compacts.",
+            "",
+        )
+        .unadvertised_default(),
     FieldSpec::declared("active_transcribe_model", FieldKind::Str, REPLACE).published(
         FieldDefault::Str("voxtral-realtime"),
         "Alias of the model voice input is transcribed with.",
@@ -1284,7 +1309,7 @@ fn property_schema(spec: &FieldSpec) -> JsonValue {
         // carried by `schema_extra` instead of generated.
         FieldKind::Complex => {}
     }
-    if let Some(default) = spec.default.to_json() {
+    if let Some(default) = spec.default.to_json().filter(|_| spec.advertises_default) {
         property.insert("default".to_owned(), default);
     }
     if !spec.description.is_empty() {

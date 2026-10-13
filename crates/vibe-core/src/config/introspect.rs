@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
 
+use super::merge;
 use super::patch::JsonPointer;
 use super::registry::{self, FieldDefault};
 use super::{ConfigLayerKind, ConfigSnapshot, ConfigTarget};
@@ -30,11 +31,17 @@ pub const HIDDEN_FIELDS: [&str; 7] = [
     "tools",
 ];
 
-/// One field's value in one layer.
+/// The compaction threshold, whose settings row is the active model's.
+const AUTO_COMPACT_THRESHOLD: &str = "auto_compact_threshold";
+/// The context window, which lives only on models and gets a row of its own.
+const MAX_CONTEXT_LENGTH: &str = "max_context_length";
+
+/// One field's value in one layer, the layer named as the reference names it
+/// ([`ConfigLayerKind::reference_name`]).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigLayerValue {
-    pub layer: ConfigLayerKind,
+    pub layer: &'static str,
     pub value: JsonValue,
 }
 
@@ -66,59 +73,225 @@ pub struct ConfigFields {
     pub targets: Vec<ConfigTarget>,
 }
 
-/// Describes every published field of `snapshot`.
+/// Describes every published field of `snapshot`, then the active model's
+/// context window, which lives only on models and so has no field of its own
+/// to describe it. Reference `build_field_wires`.
 #[must_use]
 pub fn describe_fields(snapshot: &ConfigSnapshot) -> Vec<ConfigFieldView> {
-    registry::FIELDS
+    let active = ActiveModel::of(snapshot);
+    let mut fields: Vec<ConfigFieldView> = registry::FIELDS
         .iter()
         .filter(|spec| spec.published && !HIDDEN_FIELDS.contains(&spec.name))
-        .map(|spec| ConfigFieldView {
-            name: spec.name,
-            kind: spec.kind.as_str(),
-            description: spec.description,
-            value: snapshot.public_value(spec.name),
-            path: JsonPointer::from_segments([spec.name]).as_str().to_owned(),
-            popular: spec.popular,
-            enum_choices: spec.choices.to_vec(),
-            value_labels: BTreeMap::new(),
-            layer_values: layer_values(snapshot, spec.name, spec.default),
+        .map(|spec| {
+            let mut field = ConfigFieldView {
+                name: spec.name,
+                kind: spec.kind.as_str(),
+                description: spec.description,
+                value: snapshot.public_value(spec.name),
+                path: JsonPointer::from_segments([spec.name]).as_str().to_owned(),
+                popular: spec.popular,
+                enum_choices: spec.choices.to_vec(),
+                value_labels: BTreeMap::new(),
+                layer_values: layer_values(snapshot, spec.name),
+            };
+            if spec.name == AUTO_COMPACT_THRESHOLD {
+                scope_threshold(active.as_ref(), snapshot, &mut field);
+            } else if !field
+                .layer_values
+                .iter()
+                .any(|entry| entry.layer == ConfigLayerKind::Defaults.reference_name())
+            {
+                // The defaults layer closes the list even when it does not
+                // carry the field: a client showing where a value comes from
+                // needs the registry default to fall back on.
+                field.layer_values.push(ConfigLayerValue {
+                    layer: ConfigLayerKind::Defaults.reference_name(),
+                    value: default_value(spec.name, spec.default),
+                });
+            }
+            field
         })
-        .collect()
+        .collect();
+    fields.push(window_row(active.as_ref(), snapshot));
+    fields
+}
+
+/// The model the settings rows scoped to a model describe: reference
+/// `get_active_model`.
+struct ActiveModel {
+    alias: String,
+    entry: toml::Table,
+}
+
+impl ActiveModel {
+    fn of(snapshot: &ConfigSnapshot) -> Option<Self> {
+        Some(Self {
+            alias: snapshot.active_model_alias()?.to_owned(),
+            entry: snapshot.active_model()?,
+        })
+    }
+
+    fn value(&self, field: &str) -> JsonValue {
+        self.entry.get(field).map_or(JsonValue::Null, redact_value)
+    }
+
+    fn path(&self, field: &str) -> String {
+        JsonPointer::from_segments([merge::MODELS_FIELD, self.alias.as_str(), field])
+            .as_str()
+            .to_owned()
+    }
+}
+
+/// The threshold row describes what the active model compacts at, the
+/// threshold the load resolved for it. An organization enforcing the
+/// global threshold keeps the row on the global field, so its provenance
+/// stays visible; a layer setting the model's own threshold moves the row
+/// onto that threshold, which is what an edit should change.
+fn scope_threshold(
+    active: Option<&ActiveModel>,
+    snapshot: &ConfigSnapshot,
+    field: &mut ConfigFieldView,
+) {
+    let Some(active) = active else {
+        return;
+    };
+    field.value = active.value(AUTO_COMPACT_THRESHOLD);
+    let enforced = field
+        .layer_values
+        .first()
+        .filter(|entry| entry.layer == ConfigLayerKind::Admin.reference_name())
+        .map(|entry| entry.value.clone());
+    if let Some(enforced) = enforced {
+        field.value = enforced;
+        return;
+    }
+    let own = model_layer_values(snapshot, &active.alias, AUTO_COMPACT_THRESHOLD);
+    if !own.is_empty() {
+        field.path = active.path(AUTO_COMPACT_THRESHOLD);
+        field.layer_values = own;
+    } else if field.layer_values.is_empty() {
+        field.layer_values.push(ConfigLayerValue {
+            layer: ConfigLayerKind::Defaults.reference_name(),
+            value: field.value.clone(),
+        });
+    }
+}
+
+/// The active model's context window, as a row of its own.
+fn window_row(active: Option<&ActiveModel>, snapshot: &ConfigSnapshot) -> ConfigFieldView {
+    let (value, path, mut layer_values) = match active {
+        Some(active) => (
+            active.value(MAX_CONTEXT_LENGTH),
+            active.path(MAX_CONTEXT_LENGTH),
+            model_layer_values(snapshot, &active.alias, MAX_CONTEXT_LENGTH),
+        ),
+        None => (JsonValue::Null, String::new(), Vec::new()),
+    };
+    if layer_values.is_empty() {
+        layer_values.push(ConfigLayerValue {
+            layer: ConfigLayerKind::Defaults.reference_name(),
+            value: value.clone(),
+        });
+    }
+    ConfigFieldView {
+        name: MAX_CONTEXT_LENGTH,
+        kind: registry::FieldKind::Int.as_str(),
+        description: "Context window of the active model, in tokens. A model that sets no \
+                          compaction threshold compacts at 80% of it.",
+        value,
+        path,
+        popular: false,
+        enum_choices: Vec::new(),
+        value_labels: BTreeMap::new(),
+        layer_values,
+    }
 }
 
 /// The value `name` holds in each layer that sets it, highest priority first.
-///
-/// The defaults layer closes the list even when it does not carry the field: a
-/// client showing where a value comes from needs the registry default to fall
-/// back on, which is what the reference appends.
-fn layer_values(
-    snapshot: &ConfigSnapshot,
-    name: &str,
-    default: FieldDefault,
-) -> Vec<ConfigLayerValue> {
-    let mut values: Vec<ConfigLayerValue> = snapshot
+/// The unset compaction threshold the defaults compose means "no layer set
+/// one", so it is no value to show.
+fn layer_values(snapshot: &ConfigSnapshot, name: &str) -> Vec<ConfigLayerValue> {
+    snapshot
         .layer_values
         .iter()
         .rev()
         .filter_map(|layer| {
-            layer.values.get(name).map(|value| ConfigLayerValue {
-                layer: layer.kind,
+            let value = layer.values.get(name)?;
+            if name == AUTO_COMPACT_THRESHOLD && is_unset_threshold(value) {
+                return None;
+            }
+            Some(ConfigLayerValue {
+                layer: layer.kind.reference_name(),
                 value: redacted(name, value),
             })
         })
-        .collect();
-    if !values
+        .collect()
+}
+
+/// The value `field` holds on the model `alias` in each layer whose entry for
+/// that model sets it, highest priority first, in either persisted shape of
+/// `models`.
+///
+/// The reference's defaults layer materializes every model field, so a model
+/// the shipped document declares carries an unknown window there, and its
+/// unset threshold is no value to show.
+fn model_layer_values(
+    snapshot: &ConfigSnapshot,
+    alias: &str,
+    field: &str,
+) -> Vec<ConfigLayerValue> {
+    snapshot
+        .layer_values
         .iter()
-        .any(|entry| entry.layer == ConfigLayerKind::Defaults)
-    {
-        values.push(ConfigLayerValue {
-            layer: ConfigLayerKind::Defaults,
-            value: default
-                .to_toml()
-                .map_or(JsonValue::Null, |value| redacted(name, &value)),
-        });
+        .rev()
+        .filter_map(|layer| {
+            let entry = model_entry(layer.values.get(merge::MODELS_FIELD)?, alias)?;
+            let value = match entry.get(field) {
+                Some(value) if field == AUTO_COMPACT_THRESHOLD && is_unset_threshold(value) => {
+                    return None;
+                }
+                Some(value) => redact_value(value),
+                None if layer.kind == ConfigLayerKind::Defaults && field == MAX_CONTEXT_LENGTH => {
+                    JsonValue::Null
+                }
+                None => return None,
+            };
+            Some(ConfigLayerValue {
+                layer: layer.kind.reference_name(),
+                value,
+            })
+        })
+        .collect()
+}
+
+/// The entry for `alias` in a layer's `models`, keyed by alias or listed.
+fn model_entry<'a>(models: &'a toml::Value, alias: &str) -> Option<&'a toml::Table> {
+    match models {
+        toml::Value::Table(models) => models.get(alias)?.as_table(),
+        toml::Value::Array(entries) => {
+            entries
+                .iter()
+                .filter_map(toml::Value::as_table)
+                .find(|entry| {
+                    entry
+                        .get("alias")
+                        .or_else(|| entry.get("name"))
+                        .and_then(toml::Value::as_str)
+                        == Some(alias)
+                })
+        }
+        _ => None,
     }
-    values
+}
+
+fn is_unset_threshold(value: &toml::Value) -> bool {
+    value.as_integer() == Some(registry::UNSET_AUTO_COMPACT_THRESHOLD)
+}
+
+fn default_value(name: &str, default: FieldDefault) -> JsonValue {
+    default
+        .to_toml()
+        .map_or(JsonValue::Null, |value| redacted(name, &value))
 }
 
 fn redacted(name: &str, value: &toml::Value) -> JsonValue {

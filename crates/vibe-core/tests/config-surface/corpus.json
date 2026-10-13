@@ -1650,7 +1650,32 @@
         "local"
       ],
       "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
       "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [],
       "models": {
         "local": {
@@ -1699,6 +1724,11 @@
       "name": "models-defaults-only",
       "rejected": false,
       "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
       "validationWarnings": 0,
       "visionModel": null
     },
@@ -1710,7 +1740,40 @@
         "local"
       ],
       "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
       "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "models",
+          "path": "/models"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [
         {
           "name": "user",
@@ -1764,6 +1827,11 @@
       "name": "models-sparse-override-of-a-default-model",
       "rejected": false,
       "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
       "validationWarnings": 0,
       "visionModel": null
     },
@@ -1775,7 +1843,40 @@
         "local"
       ],
       "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
       "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "models",
+          "path": "/models"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [
         {
           "name": "user",
@@ -1829,6 +1930,11 @@
       "name": "models-alias-map-form",
       "rejected": false,
       "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
       "validationWarnings": 0,
       "visionModel": null
     },
@@ -1841,7 +1947,40 @@
         "scratch"
       ],
       "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
       "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "models",
+          "path": "/models"
+        },
+        {
+          "layerValues": [
+            50000
+          ],
+          "layers": [
+            "user-toml"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 50000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [
         {
           "name": "user",
@@ -1916,6 +2055,11 @@
       "name": "models-added-entry-inherits-the-global-threshold",
       "rejected": false,
       "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
       "validationWarnings": 0,
       "visionModel": null
     },
@@ -1928,7 +2072,40 @@
         "scratch"
       ],
       "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
       "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "models",
+          "path": "/models"
+        },
+        {
+          "layerValues": [
+            50000
+          ],
+          "layers": [
+            "user-toml"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 50000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [
         {
           "name": "user",
@@ -2003,6 +2180,11 @@
       "name": "models-entry-keeps-its-own-threshold",
       "rejected": false,
       "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
       "validationWarnings": 0,
       "visionModel": null
     },
@@ -2014,7 +2196,40 @@
         "local"
       ],
       "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
       "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "active_model",
+          "path": "/active_model"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [
         {
           "name": "user",
@@ -2068,6 +2283,11 @@
       "name": "models-unknown-active-model-falls-back",
       "rejected": false,
       "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
       "validationWarnings": 1,
       "visionModel": null
     },
@@ -2080,7 +2300,48 @@
         "scratch"
       ],
       "compactionModel": null,
+      "compactionModelAlias": "scratch",
       "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "active_model",
+          "path": "/active_model"
+        },
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "models",
+          "path": "/models"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/scratch/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [
         {
           "name": "user",
@@ -2155,6 +2416,11 @@
       "name": "models-active-model-selects-an-added-entry",
       "rejected": false,
       "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
       "validationWarnings": 0,
       "visionModel": null
     },
@@ -2166,7 +2432,41 @@
         "local"
       ],
       "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
       "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "project-toml",
+            "user-toml",
+            "default"
+          ],
+          "name": "models",
+          "path": "/models"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [
         {
           "name": "user",
@@ -2224,6 +2524,11 @@
       "name": "models-two-layers-deep-merge-one-entry",
       "rejected": false,
       "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
       "validationWarnings": 0,
       "visionModel": null
     },
@@ -2236,7 +2541,48 @@
         "scratch"
       ],
       "compactionModel": null,
+      "compactionModelAlias": "scratch",
       "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "active_model",
+          "path": "/active_model"
+        },
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "models",
+          "path": "/models"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/scratch/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [
         {
           "name": "user",
@@ -2311,6 +2657,11 @@
       "name": "models-entry-without-an-alias-borrows-its-name",
       "rejected": false,
       "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
       "validationWarnings": 0,
       "visionModel": null
     },
@@ -2342,7 +2693,40 @@
           "max"
         ]
       },
+      "compactionModelAlias": "devstral-small-latest",
       "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "compaction_model",
+          "path": "/compaction_model"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [
         {
           "name": "user",
@@ -2396,6 +2780,11 @@
       "name": "models-compaction-model-without-an-alias-borrows-its-name",
       "rejected": false,
       "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
       "validationWarnings": 0,
       "visionModel": null
     },
@@ -2406,7 +2795,40 @@
         "mistral-medium-3.5"
       ],
       "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
       "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "allowed_models",
+          "path": "/allowed_models"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [
         {
           "name": "user",
@@ -2460,6 +2882,11 @@
       "name": "models-allowed-models-glob-narrows-the-available-set",
       "rejected": false,
       "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
       "validationWarnings": 0,
       "visionModel": null
     },
@@ -2471,7 +2898,40 @@
         "local"
       ],
       "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
       "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "allowed_models",
+          "path": "/allowed_models"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [
         {
           "name": "user",
@@ -2525,6 +2985,11 @@
       "name": "models-allowed-models-regex-is-case-insensitive",
       "rejected": false,
       "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
       "validationWarnings": 1,
       "visionModel": null
     },
@@ -2536,7 +3001,40 @@
         "local"
       ],
       "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
       "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "allowed_models",
+          "path": "/allowed_models"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [
         {
           "name": "user",
@@ -2590,6 +3088,11 @@
       "name": "models-allowed-models-matching-nothing-warns-and-admits-all",
       "rejected": false,
       "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
       "validationWarnings": 2,
       "visionModel": null
     },
@@ -2600,7 +3103,48 @@
         "mistral-medium-3.5"
       ],
       "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
       "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "active_model",
+          "path": "/active_model"
+        },
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "allowed_models",
+          "path": "/allowed_models"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [
         {
           "name": "user",
@@ -2654,6 +3198,11 @@
       "name": "models-allowed-models-excluding-the-pin-falls-back",
       "rejected": false,
       "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
       "validationWarnings": 1,
       "visionModel": null
     },
@@ -2665,7 +3214,40 @@
         "local"
       ],
       "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
       "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "allowed_models",
+          "path": "/allowed_models"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [
         {
           "name": "user",
@@ -2719,6 +3301,11 @@
       "name": "models-allowed-models-excluding-the-default",
       "rejected": false,
       "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
       "validationWarnings": 1,
       "visionModel": null
     },
@@ -2731,7 +3318,32 @@
         "extra"
       ],
       "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
       "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [
         {
           "name": "user",
@@ -2849,6 +3461,11 @@
           ]
         }
       ],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
       "validationWarnings": 0,
       "visionModel": null
     },
@@ -2861,7 +3478,40 @@
         "fresh"
       ],
       "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
       "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "models",
+          "path": "/models"
+        },
+        {
+          "layerValues": [
+            64000
+          ],
+          "layers": [
+            "user-toml"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 64000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [
         {
           "name": "user",
@@ -2979,6 +3629,11 @@
           ]
         }
       ],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
       "validationWarnings": 0,
       "visionModel": null
     },
@@ -2990,7 +3645,32 @@
         "local"
       ],
       "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
       "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [
         {
           "name": "user",
@@ -3044,6 +3724,11 @@
       "name": "models-routed-extra-models-not-a-list",
       "rejected": false,
       "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
       "validationWarnings": 0,
       "visionModel": null
     },
@@ -3056,7 +3741,40 @@
         "routed"
       ],
       "compactionModel": null,
+      "compactionModelAlias": "local",
       "defaultModelAlias": "routed",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "active_model",
+          "path": "/active_model"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/local/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [
         {
           "name": "user",
@@ -3131,6 +3849,31 @@
       "name": "models-routed-default-reaches-a-pinned-installation",
       "rejected": false,
       "routedExtraModels": [],
+      "routedModelConfig": {
+        "alias": "routed",
+        "auto_compact_threshold": -1,
+        "cached_input_price": null,
+        "display_name": null,
+        "input_price": 0.0,
+        "max_context_length": null,
+        "name": "vibe-routed",
+        "output_price": 0.0,
+        "provider": "mistral",
+        "supports_images": false,
+        "temperature": 0.2,
+        "thinking": "off",
+        "thinking_levels": [
+          "off",
+          "low",
+          "medium",
+          "high",
+          "max"
+        ]
+      },
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
       "validationWarnings": 0,
       "visionModel": null
     },
@@ -3142,7 +3885,40 @@
         "local"
       ],
       "compactionModel": null,
+      "compactionModelAlias": "local",
       "defaultModelAlias": "local",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "models",
+          "path": "/models"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/local/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [
         {
           "name": "user",
@@ -3196,6 +3972,31 @@
       "name": "models-routed-definition-keeps-the-operator-overrides",
       "rejected": false,
       "routedExtraModels": [],
+      "routedModelConfig": {
+        "alias": "local",
+        "auto_compact_threshold": -1,
+        "cached_input_price": null,
+        "display_name": null,
+        "input_price": 0.0,
+        "max_context_length": null,
+        "name": "local-routed",
+        "output_price": 0.0,
+        "provider": "llamacpp",
+        "supports_images": true,
+        "temperature": 0.1,
+        "thinking": "off",
+        "thinking_levels": [
+          "off",
+          "low",
+          "medium",
+          "high",
+          "max"
+        ]
+      },
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
       "validationWarnings": 0,
       "visionModel": null
     },
@@ -3208,7 +4009,40 @@
         "routed"
       ],
       "compactionModel": null,
+      "compactionModelAlias": "routed",
       "defaultModelAlias": "routed",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "active_model",
+          "path": "/active_model"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/routed/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [
         {
           "name": "user",
@@ -3283,6 +4117,31 @@
       "name": "models-unknown-active-model-resolves-to-the-routed-default",
       "rejected": false,
       "routedExtraModels": [],
+      "routedModelConfig": {
+        "alias": "routed",
+        "auto_compact_threshold": -1,
+        "cached_input_price": null,
+        "display_name": null,
+        "input_price": 0.0,
+        "max_context_length": null,
+        "name": "vibe-routed",
+        "output_price": 0.0,
+        "provider": "mistral",
+        "supports_images": false,
+        "temperature": 0.2,
+        "thinking": "off",
+        "thinking_levels": [
+          "off",
+          "low",
+          "medium",
+          "high",
+          "max"
+        ]
+      },
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
       "validationWarnings": 1,
       "visionModel": null
     },
@@ -3294,7 +4153,40 @@
         "local"
       ],
       "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
       "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "vision_model",
+          "path": "/vision_model"
+        },
+        {
+          "layerValues": [
+            70000
+          ],
+          "layers": [
+            "user-toml"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 70000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [
         {
           "name": "user",
@@ -3348,6 +4240,11 @@
       "name": "models-vision-model-is-completed-like-a-model",
       "rejected": false,
       "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
       "validationWarnings": 0,
       "visionModel": {
         "alias": "pixtral-large-latest",
@@ -3419,7 +4316,40 @@
           "max"
         ]
       },
+      "compactionModelAlias": "devstral-small-latest",
       "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "compaction_model",
+          "path": "/compaction_model"
+        },
+        {
+          "layerValues": [
+            70000
+          ],
+          "layers": [
+            "user-toml"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 70000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [
         {
           "name": "user",
@@ -3473,6 +4403,11 @@
       "name": "models-compaction-model-ignores-the-global-threshold",
       "rejected": false,
       "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
       "validationWarnings": 0,
       "visionModel": null
     },
@@ -3485,7 +4420,40 @@
         "scratch"
       ],
       "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
       "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "models",
+          "path": "/models"
+        },
+        {
+          "layerValues": [
+            32000
+          ],
+          "layers": [
+            "admin"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 32000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [
         {
           "name": "user",
@@ -3564,6 +4532,11 @@
       "name": "models-admin-threshold-overrides-every-model",
       "rejected": false,
       "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
       "validationWarnings": 0,
       "visionModel": null
     },
@@ -3576,7 +4549,40 @@
         "scratch"
       ],
       "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
       "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "models",
+          "path": "/models"
+        },
+        {
+          "layerValues": [
+            32000
+          ],
+          "layers": [
+            "project-toml"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 32000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [
         {
           "name": "user",
@@ -3655,6 +4661,11 @@
       "name": "models-user-threshold-keeps-a-model-threshold",
       "rejected": false,
       "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
       "validationWarnings": 0,
       "visionModel": null
     },
@@ -3686,7 +4697,40 @@
           "max"
         ]
       },
+      "compactionModelAlias": "compactor",
       "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "compaction_model",
+          "path": "/compaction_model"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
       "layers": [
         {
           "name": "user",
@@ -3740,6 +4784,2256 @@
       "name": "models-compaction-model-keeps-the-alias-it-declares",
       "rejected": false,
       "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
+      "validationWarnings": 0,
+      "visionModel": null
+    },
+    {
+      "activeModel": "",
+      "activeModelAlias": "mistral-medium-3.5",
+      "availableModels": [
+        "mistral-medium-3.5",
+        "local",
+        "windowed",
+        "odd-window"
+      ],
+      "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
+      "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "models",
+          "path": "/models"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "[[models]]\nname = \"windowed\"\nprovider = \"mistral\"\nmax_context_length = 128000\n\n[[models]]\nname = \"odd-window\"\nprovider = \"mistral\"\nmax_context_length = 1001\n"
+        }
+      ],
+      "models": {
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": null,
+          "display_name": "Devstral (local)",
+          "input_price": 0.0,
+          "max_context_length": null,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
+          "input_price": 1.5,
+          "max_context_length": null,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "odd-window": {
+          "alias": "odd-window",
+          "auto_compact_threshold": 800,
+          "cached_input_price": null,
+          "display_name": null,
+          "input_price": 0.0,
+          "max_context_length": 1001,
+          "name": "odd-window",
+          "output_price": 0.0,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "windowed": {
+          "alias": "windowed",
+          "auto_compact_threshold": 102400,
+          "cached_input_price": null,
+          "display_name": null,
+          "input_price": 0.0,
+          "max_context_length": 128000,
+          "name": "windowed",
+          "output_price": 0.0,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        }
+      },
+      "name": "models-window-derives-the-threshold",
+      "rejected": false,
+      "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
+      "validationWarnings": 0,
+      "visionModel": null
+    },
+    {
+      "activeModel": "",
+      "activeModelAlias": "mistral-medium-3.5",
+      "availableModels": [
+        "mistral-medium-3.5",
+        "local",
+        "capped-above",
+        "capped-at",
+        "capped-below",
+        "wide",
+        "never"
+      ],
+      "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
+      "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "models",
+          "path": "/models"
+        },
+        {
+          "layerValues": [
+            150000
+          ],
+          "layers": [
+            "user-toml"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 150000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "auto_compact_threshold = 150000\n\n[[models]]\nname = \"capped-above\"\nprovider = \"mistral\"\nmax_context_length = 128000\nauto_compact_threshold = 300000\n\n[[models]]\nname = \"capped-at\"\nprovider = \"mistral\"\nmax_context_length = 128000\nauto_compact_threshold = 128000\n\n[[models]]\nname = \"capped-below\"\nprovider = \"mistral\"\nmax_context_length = 128000\nauto_compact_threshold = 90000\n\n[[models]]\nname = \"wide\"\nprovider = \"mistral\"\nmax_context_length = 400000\n\n[[models]]\nname = \"never\"\nprovider = \"mistral\"\nmax_context_length = 128000\nauto_compact_threshold = 0\n"
+        }
+      ],
+      "models": {
+        "capped-above": {
+          "alias": "capped-above",
+          "auto_compact_threshold": 102400,
+          "cached_input_price": null,
+          "display_name": null,
+          "input_price": 0.0,
+          "max_context_length": 128000,
+          "name": "capped-above",
+          "output_price": 0.0,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "capped-at": {
+          "alias": "capped-at",
+          "auto_compact_threshold": 102400,
+          "cached_input_price": null,
+          "display_name": null,
+          "input_price": 0.0,
+          "max_context_length": 128000,
+          "name": "capped-at",
+          "output_price": 0.0,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "capped-below": {
+          "alias": "capped-below",
+          "auto_compact_threshold": 90000,
+          "cached_input_price": null,
+          "display_name": null,
+          "input_price": 0.0,
+          "max_context_length": 128000,
+          "name": "capped-below",
+          "output_price": 0.0,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 150000,
+          "cached_input_price": null,
+          "display_name": "Devstral (local)",
+          "input_price": 0.0,
+          "max_context_length": null,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 150000,
+          "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
+          "input_price": 1.5,
+          "max_context_length": null,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "never": {
+          "alias": "never",
+          "auto_compact_threshold": 0,
+          "cached_input_price": null,
+          "display_name": null,
+          "input_price": 0.0,
+          "max_context_length": 128000,
+          "name": "never",
+          "output_price": 0.0,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "wide": {
+          "alias": "wide",
+          "auto_compact_threshold": 150000,
+          "cached_input_price": null,
+          "display_name": null,
+          "input_price": 0.0,
+          "max_context_length": 400000,
+          "name": "wide",
+          "output_price": 0.0,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        }
+      },
+      "name": "models-cap-the-window-cannot-reach-is-ignored",
+      "rejected": false,
+      "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
+      "validationWarnings": 0,
+      "visionModel": null
+    },
+    {
+      "activeModel": "",
+      "activeModelAlias": "mistral-medium-3.5",
+      "availableModels": [
+        "mistral-medium-3.5",
+        "local",
+        "windowed"
+      ],
+      "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
+      "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "models",
+          "path": "/models"
+        },
+        {
+          "layerValues": [
+            128000
+          ],
+          "layers": [
+            "user-toml"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 128000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "auto_compact_threshold = 128000\n\n[[models]]\nname = \"windowed\"\nprovider = \"mistral\"\nmax_context_length = 128000\n"
+        }
+      ],
+      "models": {
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 128000,
+          "cached_input_price": null,
+          "display_name": "Devstral (local)",
+          "input_price": 0.0,
+          "max_context_length": null,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 128000,
+          "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
+          "input_price": 1.5,
+          "max_context_length": null,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "windowed": {
+          "alias": "windowed",
+          "auto_compact_threshold": 102400,
+          "cached_input_price": null,
+          "display_name": null,
+          "input_price": 0.0,
+          "max_context_length": 128000,
+          "name": "windowed",
+          "output_price": 0.0,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        }
+      },
+      "name": "models-global-cap-at-the-window-falls-back-to-the-ratio",
+      "rejected": false,
+      "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
+      "validationWarnings": 0,
+      "visionModel": null
+    },
+    {
+      "activeModel": "",
+      "activeModelAlias": "mistral-medium-3.5",
+      "availableModels": [
+        "mistral-medium-3.5",
+        "local",
+        "windowed",
+        "plain"
+      ],
+      "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
+      "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "models",
+          "path": "/models"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "auto_compact_threshold = -1\n\n[[models]]\nname = \"windowed\"\nprovider = \"mistral\"\nmax_context_length = 64000\nauto_compact_threshold = -1\n\n[[models]]\nname = \"plain\"\nprovider = \"mistral\"\nauto_compact_threshold = -1\n"
+        }
+      ],
+      "models": {
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": null,
+          "display_name": "Devstral (local)",
+          "input_price": 0.0,
+          "max_context_length": null,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
+          "input_price": 1.5,
+          "max_context_length": null,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "plain": {
+          "alias": "plain",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": null,
+          "display_name": null,
+          "input_price": 0.0,
+          "max_context_length": null,
+          "name": "plain",
+          "output_price": 0.0,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "windowed": {
+          "alias": "windowed",
+          "auto_compact_threshold": 51200,
+          "cached_input_price": null,
+          "display_name": null,
+          "input_price": 0.0,
+          "max_context_length": 64000,
+          "name": "windowed",
+          "output_price": 0.0,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        }
+      },
+      "name": "models-a-hand-written-unset-threshold-is-unset",
+      "rejected": false,
+      "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
+      "validationWarnings": 0,
+      "visionModel": null
+    },
+    {
+      "activeModel": "",
+      "activeModelAlias": "mistral-medium-3.5",
+      "availableModels": [
+        "mistral-medium-3.5",
+        "local",
+        "windowed"
+      ],
+      "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
+      "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "project-toml",
+            "default"
+          ],
+          "name": "models",
+          "path": "/models"
+        },
+        {
+          "layerValues": [
+            0
+          ],
+          "layers": [
+            "project-toml"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 0
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
+      "layers": [
+        {
+          "name": "project",
+          "toml": "auto_compact_threshold = 0\n\n[[models]]\nname = \"windowed\"\nprovider = \"mistral\"\nmax_context_length = 64000\n"
+        }
+      ],
+      "models": {
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 0,
+          "cached_input_price": null,
+          "display_name": "Devstral (local)",
+          "input_price": 0.0,
+          "max_context_length": null,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 0,
+          "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
+          "input_price": 1.5,
+          "max_context_length": null,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "windowed": {
+          "alias": "windowed",
+          "auto_compact_threshold": 0,
+          "cached_input_price": null,
+          "display_name": null,
+          "input_price": 0.0,
+          "max_context_length": 64000,
+          "name": "windowed",
+          "output_price": 0.0,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        }
+      },
+      "name": "models-global-threshold-of-zero-disables-every-model",
+      "rejected": false,
+      "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
+      "validationWarnings": 0,
+      "visionModel": null
+    },
+    {
+      "activeModel": "",
+      "activeModelAlias": "mistral-medium-3.5",
+      "availableModels": [
+        "mistral-medium-3.5",
+        "local",
+        "windowed"
+      ],
+      "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
+      "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "models",
+          "path": "/models"
+        },
+        {
+          "layerValues": [
+            96000
+          ],
+          "layers": [
+            "admin"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 96000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "[[models]]\nname = \"windowed\"\nprovider = \"mistral\"\nmax_context_length = 64000\n"
+        },
+        {
+          "name": "admin",
+          "toml": "auto_compact_threshold = 96000\n"
+        }
+      ],
+      "models": {
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 96000,
+          "cached_input_price": null,
+          "display_name": "Devstral (local)",
+          "input_price": 0.0,
+          "max_context_length": null,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 96000,
+          "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
+          "input_price": 1.5,
+          "max_context_length": null,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "windowed": {
+          "alias": "windowed",
+          "auto_compact_threshold": 96000,
+          "cached_input_price": null,
+          "display_name": null,
+          "input_price": 0.0,
+          "max_context_length": 64000,
+          "name": "windowed",
+          "output_price": 0.0,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        }
+      },
+      "name": "models-admin-threshold-overrides-a-window",
+      "rejected": false,
+      "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
+      "validationWarnings": 0,
+      "visionModel": null
+    },
+    {
+      "activeModel": "scratch",
+      "activeModelAlias": "scratch",
+      "availableModels": [
+        "mistral-medium-3.5",
+        "local",
+        "scratch"
+      ],
+      "compactionModel": null,
+      "compactionModelAlias": "scratch",
+      "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "active_model",
+          "path": "/active_model"
+        },
+        {
+          "layers": [
+            "project-toml",
+            "user-toml",
+            "default"
+          ],
+          "name": "models",
+          "path": "/models"
+        },
+        {
+          "layerValues": [
+            4096
+          ],
+          "layers": [
+            "user-toml"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/models/scratch/auto_compact_threshold",
+          "value": 4096
+        },
+        {
+          "layerValues": [
+            48000,
+            32000
+          ],
+          "layers": [
+            "project-toml",
+            "user-toml"
+          ],
+          "name": "max_context_length",
+          "path": "/models/scratch/max_context_length",
+          "value": 48000
+        }
+      ],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "active_model = \"scratch\"\nauto_compact_threshold = 50000\n\n[[models]]\nname = \"scratch\"\nprovider = \"llamacpp\"\nmax_context_length = 32000\nauto_compact_threshold = 4096\n"
+        },
+        {
+          "name": "project",
+          "toml": "[[models]]\nalias = \"scratch\"\nmax_context_length = 48000\n"
+        }
+      ],
+      "models": {
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 50000,
+          "cached_input_price": null,
+          "display_name": "Devstral (local)",
+          "input_price": 0.0,
+          "max_context_length": null,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 50000,
+          "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
+          "input_price": 1.5,
+          "max_context_length": null,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "scratch": {
+          "alias": "scratch",
+          "auto_compact_threshold": 4096,
+          "cached_input_price": null,
+          "display_name": null,
+          "input_price": 0.0,
+          "max_context_length": 48000,
+          "name": "scratch",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        }
+      },
+      "name": "models-active-model-threshold-and-window-are-its-own-rows",
+      "rejected": false,
+      "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
+      "validationWarnings": 0,
+      "visionModel": null
+    },
+    {
+      "activeModel": "local",
+      "activeModelAlias": "local",
+      "availableModels": [
+        "mistral-medium-3.5",
+        "local"
+      ],
+      "compactionModel": null,
+      "compactionModelAlias": "local",
+      "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "active_model",
+          "path": "/active_model"
+        },
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "models",
+          "path": "/models"
+        },
+        {
+          "layerValues": [
+            24000
+          ],
+          "layers": [
+            "admin"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 24000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/local/max_context_length",
+          "value": null
+        }
+      ],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "active_model = \"local\"\n\n[[models]]\nalias = \"local\"\nauto_compact_threshold = 4096\n"
+        },
+        {
+          "name": "admin",
+          "toml": "auto_compact_threshold = 24000\n"
+        }
+      ],
+      "models": {
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 24000,
+          "cached_input_price": null,
+          "display_name": "Devstral (local)",
+          "input_price": 0.0,
+          "max_context_length": null,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 24000,
+          "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
+          "input_price": 1.5,
+          "max_context_length": null,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        }
+      },
+      "name": "models-admin-threshold-keeps-the-global-row",
+      "rejected": false,
+      "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
+      "validationWarnings": 0,
+      "visionModel": null
+    },
+    {
+      "activeModel": "",
+      "activeModelAlias": "routed",
+      "availableModels": [
+        "mistral-medium-3.5",
+        "local",
+        "routed"
+      ],
+      "compactionModel": null,
+      "compactionModelAlias": "routed",
+      "defaultModelAlias": "routed",
+      "fields": [
+        {
+          "layerValues": [
+            50000
+          ],
+          "layers": [
+            "user-toml"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 25600
+        },
+        {
+          "layerValues": [
+            32000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/routed/max_context_length",
+          "value": 32000
+        }
+      ],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "auto_compact_threshold = 50000\nrouted_default_model = \"routed\"\nrouted_model_config = '{\"name\": \"vibe-routed\", \"provider\": \"mistral\", \"alias\": \"routed\", \"max_context_length\": 32000}'\n"
+        }
+      ],
+      "models": {
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 50000,
+          "cached_input_price": null,
+          "display_name": "Devstral (local)",
+          "input_price": 0.0,
+          "max_context_length": null,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 50000,
+          "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
+          "input_price": 1.5,
+          "max_context_length": null,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "routed": {
+          "alias": "routed",
+          "auto_compact_threshold": 25600,
+          "cached_input_price": null,
+          "display_name": null,
+          "input_price": 0.0,
+          "max_context_length": 32000,
+          "name": "vibe-routed",
+          "output_price": 0.0,
+          "provider": "mistral",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        }
+      },
+      "name": "models-routed-definition-keeps-the-unset-threshold",
+      "rejected": false,
+      "routedExtraModels": [],
+      "routedModelConfig": {
+        "alias": "routed",
+        "auto_compact_threshold": -1,
+        "cached_input_price": null,
+        "display_name": null,
+        "input_price": 0.0,
+        "max_context_length": 32000,
+        "name": "vibe-routed",
+        "output_price": 0.0,
+        "provider": "mistral",
+        "supports_images": false,
+        "temperature": 0.2,
+        "thinking": "off",
+        "thinking_levels": [
+          "off",
+          "low",
+          "medium",
+          "high",
+          "max"
+        ]
+      },
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
+      "validationWarnings": 0,
+      "visionModel": null
+    },
+    {
+      "activeModel": "local",
+      "activeModelAlias": "local",
+      "availableModels": [
+        "local"
+      ],
+      "compactionModel": null,
+      "compactionModelAlias": "local",
+      "defaultModelAlias": "local",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "active_model",
+          "path": "/active_model"
+        },
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "allowed_models",
+          "path": "/allowed_models"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/local/max_context_length",
+          "value": null
+        }
+      ],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "active_model = \"local\"\nallowed_models = [\"devstral\"]\n"
+        }
+      ],
+      "models": {
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": null,
+          "display_name": "Devstral (local)",
+          "input_price": 0.0,
+          "max_context_length": null,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
+          "input_price": 1.5,
+          "max_context_length": null,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        }
+      },
+      "name": "models-allowed-models-match-the-model-name",
+      "rejected": false,
+      "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
+      "validationWarnings": 0,
+      "visionModel": null
+    },
+    {
+      "activeModel": "mistral-medium-3.5",
+      "activeModelAlias": "local",
+      "availableModels": [
+        "local"
+      ],
+      "compactionModel": null,
+      "compactionModelAlias": "local",
+      "defaultModelAlias": "local",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "active_model",
+          "path": "/active_model"
+        },
+        {
+          "layers": [
+            "admin",
+            "default"
+          ],
+          "name": "allowed_models",
+          "path": "/allowed_models"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/local/max_context_length",
+          "value": null
+        }
+      ],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "active_model = \"mistral-medium-3.5\"\n"
+        },
+        {
+          "name": "admin",
+          "toml": "allowed_models = [\"DEVSTRAL\"]\n"
+        }
+      ],
+      "models": {
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": null,
+          "display_name": "Devstral (local)",
+          "input_price": 0.0,
+          "max_context_length": null,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
+          "input_price": 1.5,
+          "max_context_length": null,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        }
+      },
+      "name": "models-admin-allowlist-narrows-by-name",
+      "rejected": false,
+      "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
+      "validationWarnings": 1,
+      "visionModel": null
+    },
+    {
+      "layers": [
+        {
+          "name": "admin",
+          "toml": "allowed_models = [\"nothing-*\"]\n"
+        }
+      ],
+      "name": "models-admin-allowlist-matching-nothing-is-refused",
+      "rejected": true
+    },
+    {
+      "layers": [
+        {
+          "name": "admin",
+          "toml": "allowed_models = [\"  \"]\n"
+        }
+      ],
+      "name": "models-admin-allowlist-of-blanks-is-refused",
+      "rejected": true
+    },
+    {
+      "activeModel": "",
+      "activeModelAlias": "mistral-medium-3.5",
+      "availableModels": [
+        "mistral-medium-3.5",
+        "local"
+      ],
+      "compactionModel": {
+        "alias": "devstral-small",
+        "auto_compact_threshold": -1,
+        "cached_input_price": null,
+        "display_name": null,
+        "input_price": 0.0,
+        "max_context_length": null,
+        "name": "devstral-small",
+        "output_price": 0.0,
+        "provider": "llamacpp",
+        "supports_images": false,
+        "temperature": 0.2,
+        "thinking": "off",
+        "thinking_levels": [
+          "off",
+          "low",
+          "medium",
+          "high",
+          "max"
+        ]
+      },
+      "compactionModelAlias": "mistral-medium-3.5",
+      "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "compaction_model",
+          "path": "/compaction_model"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "[compaction_model]\nname = \"devstral-small\"\nprovider = \"llamacpp\"\n"
+        }
+      ],
+      "models": {
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": null,
+          "display_name": "Devstral (local)",
+          "input_price": 0.0,
+          "max_context_length": null,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
+          "input_price": 1.5,
+          "max_context_length": null,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        }
+      },
+      "name": "models-compaction-model-on-another-provider-warns",
+      "rejected": false,
+      "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
+      "validationWarnings": 1,
+      "visionModel": null
+    },
+    {
+      "activeModel": "local",
+      "activeModelAlias": "local",
+      "availableModels": [
+        "mistral-medium-3.5",
+        "local"
+      ],
+      "compactionModel": {
+        "alias": "devstral-small",
+        "auto_compact_threshold": -1,
+        "cached_input_price": null,
+        "display_name": null,
+        "input_price": 0.0,
+        "max_context_length": null,
+        "name": "devstral-small",
+        "output_price": 0.0,
+        "provider": "llamacpp",
+        "supports_images": false,
+        "temperature": 0.2,
+        "thinking": "off",
+        "thinking_levels": [
+          "off",
+          "low",
+          "medium",
+          "high",
+          "max"
+        ]
+      },
+      "compactionModelAlias": "devstral-small",
+      "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "active_model",
+          "path": "/active_model"
+        },
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "compaction_model",
+          "path": "/compaction_model"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/local/max_context_length",
+          "value": null
+        }
+      ],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "active_model = \"local\"\n\n[compaction_model]\nname = \"devstral-small\"\nprovider = \"llamacpp\"\n"
+        }
+      ],
+      "models": {
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": null,
+          "display_name": "Devstral (local)",
+          "input_price": 0.0,
+          "max_context_length": null,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
+          "input_price": 1.5,
+          "max_context_length": null,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        }
+      },
+      "name": "models-compaction-model-follows-the-active-provider",
+      "rejected": false,
+      "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
+      "validationWarnings": 0,
+      "visionModel": null
+    },
+    {
+      "layers": [
+        {
+          "name": "user",
+          "toml": "[compaction_model]\nname = \"devstral-small\"\nprovider = \"nowhere\"\n"
+        }
+      ],
+      "name": "models-compaction-model-on-an-unknown-provider-is-refused",
+      "rejected": true
+    },
+    {
+      "layers": [
+        {
+          "name": "user",
+          "toml": "compaction_prompt_id = \"names-no-prompt\"\n"
+        }
+      ],
+      "name": "models-compaction-prompt-naming-nothing-is-refused",
+      "rejected": true
+    },
+    {
+      "activeModel": "",
+      "activeModelAlias": "mistral-medium-3.5",
+      "availableModels": [
+        "mistral-medium-3.5",
+        "local"
+      ],
+      "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
+      "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "utility_models",
+          "path": "/utility_models"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "[utility_models]\ntitle = \" local \"\nsmart_approve = \"active\"\n"
+        }
+      ],
+      "models": {
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": null,
+          "display_name": "Devstral (local)",
+          "input_price": 0.0,
+          "max_context_length": null,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
+          "input_price": 1.5,
+          "max_context_length": null,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        }
+      },
+      "name": "models-utility-models-resolve-an-alias-and-the-active-selector",
+      "rejected": false,
+      "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": "mistral-medium-3.5",
+        "title": "local"
+      },
+      "validationWarnings": 0,
+      "visionModel": null
+    },
+    {
+      "activeModel": "",
+      "activeModelAlias": "mistral-medium-3.5",
+      "availableModels": [
+        "mistral-medium-3.5",
+        "local"
+      ],
+      "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
+      "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "utility_models",
+          "path": "/utility_models"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "[utility_models]\ntitle = \"ghost\"\n"
+        }
+      ],
+      "models": {
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": null,
+          "display_name": "Devstral (local)",
+          "input_price": 0.0,
+          "max_context_length": null,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
+          "input_price": 1.5,
+          "max_context_length": null,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        }
+      },
+      "name": "models-utility-model-naming-nothing-warns",
+      "rejected": false,
+      "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": null,
+        "title": null
+      },
+      "validationWarnings": 1,
+      "visionModel": null
+    },
+    {
+      "activeModel": "",
+      "activeModelAlias": "mistral-medium-3.5",
+      "availableModels": [
+        "mistral-medium-3.5"
+      ],
+      "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
+      "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "allowed_models",
+          "path": "/allowed_models"
+        },
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "utility_models",
+          "path": "/utility_models"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "allowed_models = [\"mistral-vibe-cli-latest\"]\n\n[utility_models]\ntitle = \"local\"\nsmart_approve = \"mistral-medium-3.5\"\n"
+        }
+      ],
+      "models": {
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": null,
+          "display_name": "Devstral (local)",
+          "input_price": 0.0,
+          "max_context_length": null,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
+          "input_price": 1.5,
+          "max_context_length": null,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        }
+      },
+      "name": "models-utility-model-the-allowlist-excludes-warns",
+      "rejected": false,
+      "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": "mistral-medium-3.5",
+        "title": null
+      },
+      "validationWarnings": 1,
+      "visionModel": null
+    },
+    {
+      "activeModel": "",
+      "activeModelAlias": "mistral-medium-3.5",
+      "availableModels": [
+        "mistral-medium-3.5",
+        "local",
+        "active"
+      ],
+      "compactionModel": null,
+      "compactionModelAlias": "mistral-medium-3.5",
+      "defaultModelAlias": "mistral-medium-3.5",
+      "fields": [
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "models",
+          "path": "/models"
+        },
+        {
+          "layers": [
+            "user-toml",
+            "default"
+          ],
+          "name": "utility_models",
+          "path": "/utility_models"
+        },
+        {
+          "layerValues": [
+            200000
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "auto_compact_threshold",
+          "path": "/auto_compact_threshold",
+          "value": 200000
+        },
+        {
+          "layerValues": [
+            null
+          ],
+          "layers": [
+            "default"
+          ],
+          "name": "max_context_length",
+          "path": "/models/mistral-medium-3.5/max_context_length",
+          "value": null
+        }
+      ],
+      "layers": [
+        {
+          "name": "user",
+          "toml": "[[models]]\nname = \"devstral\"\nprovider = \"llamacpp\"\nalias = \"active\"\n\n[utility_models]\nsmart_approve = \"active\"\n"
+        }
+      ],
+      "models": {
+        "active": {
+          "alias": "active",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": null,
+          "display_name": null,
+          "input_price": 0.0,
+          "max_context_length": null,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "local": {
+          "alias": "local",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": null,
+          "display_name": "Devstral (local)",
+          "input_price": 0.0,
+          "max_context_length": null,
+          "name": "devstral",
+          "output_price": 0.0,
+          "provider": "llamacpp",
+          "supports_images": false,
+          "temperature": 0.2,
+          "thinking": "off",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "mistral-medium-3.5": {
+          "alias": "mistral-medium-3.5",
+          "auto_compact_threshold": 200000,
+          "cached_input_price": 0.15,
+          "display_name": "Mistral Medium 3.5",
+          "input_price": 1.5,
+          "max_context_length": null,
+          "name": "mistral-vibe-cli-latest",
+          "output_price": 7.5,
+          "provider": "mistral",
+          "supports_images": true,
+          "temperature": 1.0,
+          "thinking": "high",
+          "thinking_levels": [
+            "off",
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        }
+      },
+      "name": "models-a-model-aliased-active-wins-over-the-selector",
+      "rejected": false,
+      "routedExtraModels": [],
+      "routedModelConfig": null,
+      "utilityModels": {
+        "smart_approve": "active",
+        "title": null
+      },
       "validationWarnings": 0,
       "visionModel": null
     }
@@ -4674,7 +7968,82 @@
       "name": "four-layer-every-strategy"
     }
   ],
-  "schemaVersion": 5,
+  "schemaVersion": 6,
+  "settingsOrder": [
+    "active_model",
+    "providers",
+    "models",
+    "allowed_models",
+    "compaction_model",
+    "vision_model",
+    "utility_models",
+    "auto_compact_threshold",
+    "active_transcribe_model",
+    "transcribe_providers",
+    "transcribe_models",
+    "active_tts_model",
+    "tts_providers",
+    "tts_models",
+    "tool_paths",
+    "enabled_tools",
+    "disabled_tools",
+    "mcp_servers",
+    "enable_connectors",
+    "connectors",
+    "agent_paths",
+    "enabled_agents",
+    "disabled_agents",
+    "installed_agents",
+    "default_agent",
+    "skill_paths",
+    "enabled_skills",
+    "disabled_skills",
+    "experimental_enable_registry_skills",
+    "enable_otel",
+    "otel_endpoint",
+    "otel_redaction",
+    "console_base_url",
+    "theme",
+    "applied_migrations",
+    "disable_welcome_banner_animation",
+    "show_greeting",
+    "autocopy_to_clipboard",
+    "file_watcher_for_autocomplete",
+    "ask_confirmation_on_exit",
+    "displayed_workdir",
+    "context_warnings",
+    "voice_mode_enabled",
+    "narrator_enabled",
+    "show_thinking_nodes",
+    "show_subagent_status_list",
+    "worktree_limit",
+    "bypass_tool_permissions",
+    "raise_on_compaction_failure",
+    "enable_telemetry",
+    "system_prompt_id",
+    "compaction_prompt_id",
+    "include_commit_signature",
+    "include_model_info",
+    "include_project_context",
+    "include_prompt_detail",
+    "enable_update_checks",
+    "enable_auto_update",
+    "enable_notifications",
+    "experimental_enable_tab_status",
+    "enable_system_trust_store",
+    "api_timeout",
+    "api_retry_max_elapsed_time",
+    "api_connect_timeout",
+    "api_write_timeout",
+    "api_pool_timeout",
+    "vibe_base_url",
+    "vibe_code_sessions_base_url",
+    "log_level",
+    "project_context",
+    "session_logging",
+    "experiments",
+    "max_context_length"
+  ],
   "stack": {
     "stacks": [
       {

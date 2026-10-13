@@ -143,6 +143,28 @@ pub enum ConfigLayerKind {
     Admin,
 }
 
+impl ConfigLayerKind {
+    /// The name the reference gives the layer, which is what `config/fields/read`
+    /// reports a value's origin by: `ConfigLayer.name` of `DefaultConfigLayer`,
+    /// `DiscoveredConfigLayer`, `GrowthbookLayer`, `UserConfigLayer`,
+    /// `ProjectConfigLayer`, `EnvironmentLayer`, `OverridesLayer`,
+    /// `AgentProfileLayer` and `AdminConfigLayer` (`vibe/core/config/layers/`).
+    #[must_use]
+    pub const fn reference_name(self) -> &'static str {
+        match self {
+            Self::Defaults => "default",
+            Self::Discovered => "discovered",
+            Self::Experiments => "growthbook",
+            Self::UserToml => "user-toml",
+            Self::ProjectToml => "project-toml",
+            Self::Environment => "environment",
+            Self::Runtime => "overrides",
+            Self::Agent => "agent-profile",
+            Self::Admin => "admin",
+        }
+    }
+}
+
 /// A runtime discovery pass, run once per [`LayeredConfig::load`].
 ///
 /// It answers with the document its layer composes, or with the reason it could
@@ -885,27 +907,40 @@ impl LayeredConfig {
         // that the discovered layer is empty and why, not every item it failed
         // to reach.
         validation_warnings.extend(discovery_failure);
-        // Reference `validate_merged` reads the origin of the global threshold:
-        // the admin layer is the highest, so it is the origin exactly when it
-        // sets the key.
-        let admin_threshold = layers.iter().any(|layer| {
-            layer.kind == ConfigLayerKind::Admin
-                && layer.values.contains_key("auto_compact_threshold")
-        });
+        // Reference `validate_merged` reads the origin of the allowlist and of
+        // the global threshold: the admin layer is the highest, so it is the
+        // origin of a key exactly when it sets it.
+        let admin = layers
+            .iter()
+            .find(|layer| layer.kind == ConfigLayerKind::Admin)
+            .map(|layer| layer.values.clone())
+            .unwrap_or_default();
         validation_warnings.extend(finalize_effective(
             &mut effective,
             &self.paths.vibe_home,
-            admin_threshold,
+            &admin,
         )?);
+        let prompts_dirs = self.harness_files().prompts_dirs();
         if let Some(prompt_id) = effective
             .get(crate::system_prompt::SYSTEM_PROMPT_SETTING)
             .and_then(toml::Value::as_str)
         {
-            crate::system_prompt::load_system_prompt(
+            crate::system_prompt::load_system_prompt(prompt_id, &prompts_dirs)
+                .map_err(ConfigError::SystemPrompt)?;
+        }
+        // Reference `_check_compaction_prompt`: an identifier that names no
+        // prompt refuses the configuration rather than the first compaction.
+        if let Some(prompt_id) = effective
+            .get(crate::compaction::manager::CompactionPromptResolution::SETTING)
+            .and_then(toml::Value::as_str)
+        {
+            crate::prompt::library::load_prompt(
                 prompt_id,
-                &self.harness_files().prompts_dirs(),
+                crate::compaction::manager::CompactionPromptResolution::SETTING,
+                &prompts_dirs,
+                &[crate::prompt::library::UtilityPrompt::Compact],
             )
-            .map_err(ConfigError::SystemPrompt)?;
+            .map_err(|error| ConfigError::CompactionPrompt(Box::new(error)))?;
         }
 
         let mut fingerprints = BTreeMap::from([
@@ -1454,6 +1489,12 @@ pub enum ConfigError {
     /// refuses the configuration rather than the first session using it.
     #[error(transparent)]
     SystemPrompt(crate::prompt::library::PromptFileError),
+    /// `compaction_prompt_id` names no prompt. Reference
+    /// `_check_compaction_prompt` refuses the configuration rather than the
+    /// first compaction. Boxed so the error stays as small as the variant
+    /// beside it that carries the same failure.
+    #[error(transparent)]
+    CompactionPrompt(Box<crate::prompt::library::PromptFileError>),
     /// The session did not enable the source backing this target, so writing to
     /// it would persist to a file the caller opted out of. Reference
     /// `persist_allowed`.
@@ -1514,14 +1555,11 @@ pub enum ConfigError {
         "compaction model `{alias}` names provider `{provider}`, which is not configured under `[[providers]]`"
     )]
     CompactionModelProviderMissing { alias: String, provider: String },
-    #[error(
-        "compaction model `{alias}` uses provider `{provider}` but the active model uses provider `{active_provider}`; they must share one"
-    )]
-    CompactionModelProviderMismatch {
-        alias: String,
-        provider: String,
-        active_provider: String,
-    },
+    /// An allowlist the organization's managed layer enforces admits none of
+    /// the configured models. Reference `validate_merged`, which fails closed
+    /// rather than letting a model the operator configured run.
+    #[error("the enforced `allowed_models` matches none of the configured models")]
+    AdminAllowlistMatchesNothing,
     #[error("vision model `{alias}` must set `supports_images = true`")]
     VisionModelCannotSee { alias: String },
     #[error(

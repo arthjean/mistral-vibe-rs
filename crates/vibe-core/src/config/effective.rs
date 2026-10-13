@@ -21,6 +21,7 @@ use super::{
     ROUTED_MODEL_CONFIG_FIELD, merge, registry,
 };
 use crate::matching::NameFilter;
+use crate::provider::config::{ACTIVE_MODEL_SELECTOR, UtilityFeature, UtilityModels};
 
 /// The models an experiment adds to the picker without changing the default.
 const ROUTED_EXTRA_MODELS_FIELD: &str = "routed_extra_models";
@@ -30,18 +31,26 @@ const ALLOWED_MODELS_FIELD: &str = "allowed_models";
 const VISION_MODEL_FIELD: &str = "vision_model";
 /// The model conversations are compacted with.
 const COMPACTION_MODEL_FIELD: &str = "compaction_model";
+/// The per-feature model aliases for secondary completions.
+const UTILITY_MODELS_FIELD: &str = "utility_models";
+/// The compaction threshold, global and per model.
+const AUTO_COMPACT_THRESHOLD_FIELD: &str = "auto_compact_threshold";
 
 /// The rules the reference applies once the merged document is validated, in
 /// the order its validators run: the routed definitions are coerced and
 /// injected, the session log directory is resolved, an emptied model set is
-/// rejected, the global compaction threshold reaches the models that set none,
-/// the routed definitions keep the shipped one instead, an `active_model`
-/// naming nothing configured is unpinned, an `allowed_models` pattern matching
-/// nothing is reported, and the compaction and vision models are checked.
+/// rejected, every entry of `models` resolves its compaction threshold, an
+/// `active_model` naming nothing configured is unpinned, an `allowed_models`
+/// pattern matching nothing, a pinned model the allowlist excludes and a
+/// `[utility_models]` alias that names no selectable model are reported, a
+/// compaction model on another provider than the active one is reported, and
+/// the vision model is checked.
 ///
-/// `admin_threshold` says the global compaction threshold came from the
-/// organization's managed layer, which reference `validate_merged` then imposes
-/// on every model, a threshold the model declares itself included.
+/// `admin` is what the organization's managed layer sets, which reference
+/// `validate_merged` reads once the validators ran: an allowlist it enforces
+/// that admits no model refuses the configuration, and a global compaction
+/// threshold it sets is imposed on every model, a threshold the model declares
+/// itself included.
 ///
 /// Every rule is skipped when the key it governs is absent. A stack composed
 /// without the shipped defaults, which is what a fixture builds, therefore
@@ -50,7 +59,7 @@ const COMPACTION_MODEL_FIELD: &str = "compaction_model";
 pub(super) fn finalize_effective(
     effective: &mut Table,
     vibe_home: &Path,
-    admin_threshold: bool,
+    admin: &Table,
 ) -> Result<Vec<String>, ConfigError> {
     resolve_session_log_dir(effective, vibe_home, user_home_directory())?;
     // The reference coerces both routed fields in a `BeforeValidator`, so the
@@ -64,17 +73,21 @@ pub(super) fn finalize_effective(
     complete_model_entries(effective);
     complete_model_field(effective, COMPACTION_MODEL_FIELD);
     complete_model_field(effective, VISION_MODEL_FIELD);
-    propagate_auto_compact_threshold(effective);
-    complete_routed_threshold(effective);
+    apply_auto_compact_threshold(effective);
     publish_routed_extra_models(effective, extra_models);
     warnings.extend(apply_active_model_fallback(effective));
     warnings.extend(unmatched_allowed_models(effective));
+    warnings.extend(disallowed_active_model(effective));
+    warnings.extend(unknown_utility_models(effective));
     // The active-model fallback runs first so the provider comparison reads the
     // model the session will actually use, which is the order the reference's
     // validators run in.
-    check_compaction_model_provider(effective)?;
+    warnings.extend(cross_provider_compaction_model(effective)?);
     check_vision_model(effective)?;
-    if admin_threshold {
+    if admin.contains_key(ALLOWED_MODELS_FIELD) {
+        require_admin_allowlist_match(effective)?;
+    }
+    if admin.contains_key(AUTO_COMPACT_THRESHOLD_FIELD) {
         impose_global_threshold(effective);
     }
     Ok(warnings)
@@ -106,9 +119,9 @@ fn coerce_routed_extra_models(effective: &mut Table) -> Option<Vec<Table>> {
 }
 
 /// Publishes the coerced extra models on their own field, each completed as the
-/// reference `ModelConfig` completes it: the field defaults and the shipped
-/// compaction threshold, which the global one never reaches because the field
-/// is not an entry of `models`. A field no layer set stays absent.
+/// reference `ModelConfig` completes it, the unset compaction threshold
+/// included: the field is not an entry of `models`, so the threshold is never
+/// resolved on it. A field no layer set stays absent.
 fn publish_routed_extra_models(effective: &mut Table, models: Option<Vec<Table>>) {
     let Some(models) = models else {
         return;
@@ -117,9 +130,6 @@ fn publish_routed_extra_models(effective: &mut Table, models: Option<Vec<Table>>
         .into_iter()
         .map(|mut entry| {
             complete_model_definition(&mut entry);
-            entry
-                .entry("auto_compact_threshold".to_owned())
-                .or_insert(Value::Integer(registry::DEFAULT_AUTO_COMPACT_THRESHOLD));
             Value::Table(entry)
         })
         .collect();
@@ -209,9 +219,8 @@ fn coerce_routed_model_config(effective: &mut Table) -> Option<String> {
 /// and it is a representation gap rather than a value gap: it defaults to null
 /// upstream and TOML carries no null, so an entry that sets none stays without
 /// the key, exactly as `registry::MODEL_DEFAULTS` documents for every other
-/// model. `auto_compact_threshold` is filled by
-/// [`complete_routed_threshold`], after the injected copy has taken the global
-/// value the reference gives it.
+/// model. Its compaction threshold stays unset: the copy injected into
+/// `models` resolves one, and the field itself keeps the `ModelConfig` default.
 fn complete_model_definition(entry: &mut Table) {
     // Unreachable in a passing suite: `registry_tests` parses the literal.
     let Some(defaults) = serde_json::from_str::<JsonValue>(registry::MODEL_DEFAULTS)
@@ -225,30 +234,6 @@ fn complete_model_definition(entry: &mut Table) {
         entry.entry(key.clone()).or_insert_with(|| value.clone());
     }
     settle_thinking(entry);
-}
-
-/// The compaction threshold the routed definition itself publishes, which is
-/// the shipped one rather than the operator's global value.
-///
-/// The reference splits the two: `_apply_global_auto_compact_threshold`
-/// rewrites the entries of `models`, and the copy `_inject_routed_model` put
-/// there is one of them, but `routed_model_config` is a field of the schema
-/// rather than an entry of the map, so it keeps the default `ModelConfig`
-/// declares. Measured against the pinned reference: a document setting
-/// `auto_compact_threshold = 50000` publishes 50000 on the injected model and
-/// 200000 on `routed_model_config`. Running after the propagation is what keeps
-/// the two apart, since a threshold written before the injection would travel
-/// into the map with the definition.
-fn complete_routed_threshold(effective: &mut Table) {
-    let Some(entry) = effective
-        .get_mut(ROUTED_MODEL_CONFIG_FIELD)
-        .and_then(Value::as_table_mut)
-    else {
-        return;
-    };
-    entry
-        .entry("auto_compact_threshold".to_owned())
-        .or_insert(Value::Integer(registry::DEFAULT_AUTO_COMPACT_THRESHOLD));
 }
 
 /// One JSON object read as reference `ModelConfig`, or `None` where the model
@@ -423,10 +408,15 @@ fn inject_routed_model(effective: &mut Table) {
     models.insert(alias, Value::Table(injected));
 }
 
-/// Reference `available_models`: the configured models `allowed_models`
-/// admits, in the order they are configured. An empty list admits every model,
-/// and so does a list that admits none, which the load reports as a warning
-/// rather than leaving no model to select.
+/// Reference `available_models`: the aliases of the configured models whose
+/// name `allowed_models` admits, in the order they are configured. An empty
+/// list admits every model, and so does a list that admits none, which the
+/// load reports as a warning rather than leaving no model to select.
+///
+/// The reference fails closed instead where the organization's managed layer
+/// enforces the list, and the load refuses such a list before any reader sees
+/// it ([`require_admin_allowlist_match`]), so a loaded document never reaches
+/// the degraded branch under an enforced list.
 #[must_use]
 pub fn available_model_aliases(effective: &Table) -> Vec<&str> {
     let Some(models) = effective.get(merge::MODELS_FIELD).and_then(Value::as_table) else {
@@ -437,13 +427,25 @@ pub fn available_model_aliases(effective: &Table) -> Vec<&str> {
     if patterns.is_empty() {
         return every;
     }
-    let filter = NameFilter::new(&patterns);
-    let allowed = every
-        .iter()
-        .copied()
-        .filter(|alias| filter.matches(alias))
-        .collect::<Vec<_>>();
+    let allowed = allowed_aliases(models, &patterns);
     if allowed.is_empty() { every } else { allowed }
+}
+
+/// The aliases of the models whose name one of `patterns` admits.
+fn allowed_aliases<'a>(models: &'a Table, patterns: &[String]) -> Vec<&'a str> {
+    let filter = NameFilter::new(patterns);
+    models
+        .iter()
+        .filter(|(alias, entry)| filter.matches(model_name(alias, entry)))
+        .map(|(alias, _)| alias.as_str())
+        .collect()
+}
+
+/// The API name of a merged entry, which is what `allowed_models` matches. An
+/// entry is completed from its layers before any reader runs; a hand-built one
+/// naming nothing is addressed by its alias.
+fn model_name<'a>(alias: &'a str, entry: &'a Value) -> &'a str {
+    entry.get("name").and_then(Value::as_str).unwrap_or(alias)
 }
 
 /// The `allowed_models` entries, blank ones included: the filter skips them.
@@ -508,17 +510,22 @@ pub fn active_model_alias(effective: &Table) -> Option<&str> {
     default_model_alias(effective)
 }
 
-/// Reference `_check_compaction_model_provider`: a configured compaction model
-/// must name a provider the configuration declares, and it must be the provider
-/// the active model is served from.
+/// Reference `_warn_cross_provider_compaction_model`: a configured compaction
+/// model must name a provider the configuration declares, and one served from
+/// another provider than the active model is reported, since compaction rides
+/// the active model's connection and [`usable_compaction_model`] compacts with
+/// the active model instead.
 ///
-/// Both refusals name the alias, because that is what an operator wrote in the
-/// file. A configuration that names no compaction model is left alone, and so is
-/// one whose active model has no resolvable provider: the reference gives up on
-/// the comparison there rather than reporting the compaction model for it.
-fn check_compaction_model_provider(effective: &Table) -> Result<(), ConfigError> {
-    let Some(compaction) = effective.get("compaction_model").and_then(Value::as_table) else {
-        return Ok(());
+/// The refusal and the warning name the alias, because that is what an
+/// operator wrote in the file. A configuration that names no compaction model
+/// is left alone, and so is one whose active model has no resolvable provider:
+/// the reference counts the two as sharing one there.
+fn cross_provider_compaction_model(effective: &Table) -> Result<Option<String>, ConfigError> {
+    let Some(compaction) = effective
+        .get(COMPACTION_MODEL_FIELD)
+        .and_then(Value::as_table)
+    else {
+        return Ok(None);
     };
     let alias = compaction
         .get("alias")
@@ -534,23 +541,55 @@ fn check_compaction_model_provider(effective: &Table) -> Result<(), ConfigError>
     if !declares_provider(effective, &provider) {
         return Err(ConfigError::CompactionModelProviderMissing { alias, provider });
     }
+    if shares_active_provider(effective, &provider) {
+        return Ok(None);
+    }
     let active = active_model_entry(effective);
-    let Some(active_provider) = active
+    let field = |key: &str| {
+        active
+            .as_ref()
+            .and_then(|entry| entry.get(key))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_owned()
+    };
+    let (active_alias, active_provider) = (
+        active_model_alias(effective).unwrap_or_default().to_owned(),
+        field("provider"),
+    );
+    Ok(Some(format!(
+        "Compaction model `{alias}` is served by provider `{provider}`, not by \
+         `{active_provider}` like the active model; compacting with `{active_alias}` instead."
+    )))
+}
+
+/// Reference `_shares_active_provider`: whether `provider` is the one the active
+/// model is served from. An active model whose provider does not resolve shares
+/// it with anything, which is the reference's answer when looking it up raises.
+fn shares_active_provider(effective: &Table, provider: &str) -> bool {
+    active_model_entry(effective)
         .as_ref()
         .and_then(|entry| entry.get("provider"))
         .and_then(Value::as_str)
         .filter(|name| declares_provider(effective, name))
-    else {
-        return Ok(());
-    };
-    if active_provider != provider {
-        return Err(ConfigError::CompactionModelProviderMismatch {
-            alias,
-            provider,
-            active_provider: active_provider.to_owned(),
-        });
-    }
-    Ok(())
+        .is_none_or(|active| active == provider)
+}
+
+/// The configured compaction model a compaction may run on: reference
+/// `get_compaction_model` takes it while it shares the active model's provider
+/// and compacts with the active model otherwise, so `None` means "the active
+/// model".
+pub(super) fn usable_compaction_model(effective: &Table) -> Option<&Table> {
+    effective
+        .get(COMPACTION_MODEL_FIELD)
+        .and_then(Value::as_table)
+        .filter(|entry| {
+            let provider = entry
+                .get("provider")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            shares_active_provider(effective, provider)
+        })
 }
 
 /// Whether `providers` holds an entry named `name`.
@@ -655,8 +694,8 @@ fn settle_thinking(model: &mut Table) {
 /// Reference `_default_alias_to_name`, bound to `ModelConfig`, which is what
 /// `compaction_model` and `vision_model` are typed as: a table carrying a name
 /// and a provider is published with an alias and the `ModelConfig` field
-/// defaults. The global compaction threshold stays out: the reference
-/// propagates it to the entries of `models` only, so a model field keeps the
+/// defaults. Its compaction threshold stays unset: the reference resolves the
+/// threshold on the entries of `models` only, so a model field keeps the
 /// `ModelConfig` default it was declared with.
 fn complete_model_field(effective: &mut Table, field: &str) {
     // Unreachable in a passing suite: `registry_tests` parses the literal.
@@ -682,9 +721,6 @@ fn complete_model_field(effective: &mut Table, field: &str) {
             .or_insert_with(|| value.clone());
     }
     settle_thinking(compaction);
-    compaction
-        .entry("auto_compact_threshold".to_owned())
-        .or_insert(Value::Integer(registry::DEFAULT_AUTO_COMPACT_THRESHOLD));
 }
 
 /// Reference `SessionLoggingConfig`: an unset directory falls back to the vibe
@@ -780,25 +816,68 @@ pub(super) fn require_configured_model(effective: &Table) -> Result<(), ConfigEr
     }
 }
 
-/// Reference `_apply_global_auto_compact_threshold`: a model that declares no
-/// threshold inherits the global one, and a model that declares its own keeps it.
-fn propagate_auto_compact_threshold(effective: &mut Table) {
-    let Some(global) = effective
-        .get("auto_compact_threshold")
+/// Reference `_apply_auto_compact_threshold`: every entry of `models` resolves
+/// the threshold it compacts at.
+///
+/// A threshold some layer set is a cap, honored while the model can reach it:
+/// at or above a declared context window the provider refuses the request
+/// before compaction ever runs, so such a cap is ignored, and `0` stays a cap
+/// meaning "never compact". A model without a usable cap of its own takes the
+/// global one under the same condition, then 80% of its window, then the
+/// shipped threshold. [`registry::UNSET_AUTO_COMPACT_THRESHOLD`] is how "no layer
+/// set one" survives the merge, on the global key and on every entry.
+fn apply_auto_compact_threshold(effective: &mut Table) {
+    let global_cap = effective
+        .get(AUTO_COMPACT_THRESHOLD_FIELD)
         .and_then(Value::as_integer)
+        .unwrap_or(registry::UNSET_AUTO_COMPACT_THRESHOLD);
+    let global_set = global_cap != registry::UNSET_AUTO_COMPACT_THRESHOLD;
+    let global_value = if global_set {
+        global_cap
+    } else {
+        registry::DEFAULT_AUTO_COMPACT_THRESHOLD
+    };
+    let Some(models) = effective
+        .get_mut(merge::MODELS_FIELD)
+        .and_then(Value::as_table_mut)
     else {
         return;
     };
-    let Some(models) = effective.get_mut("models").and_then(Value::as_table_mut) else {
-        return;
-    };
     for (_, entry) in models.iter_mut() {
-        if let Some(model) = entry.as_table_mut()
-            && !model.contains_key("auto_compact_threshold")
-        {
-            model.insert("auto_compact_threshold".to_owned(), Value::Integer(global));
+        let Some(model) = entry.as_table_mut() else {
+            continue;
+        };
+        let window = model.get("max_context_length").and_then(Value::as_integer);
+        let below_window = |cap: i64| window.is_none_or(|window| cap < window);
+        let cap = model
+            .get(AUTO_COMPACT_THRESHOLD_FIELD)
+            .and_then(Value::as_integer)
+            .unwrap_or(registry::UNSET_AUTO_COMPACT_THRESHOLD);
+        if cap != registry::UNSET_AUTO_COMPACT_THRESHOLD && below_window(cap) {
+            continue;
         }
+        let threshold = match window {
+            _ if global_set && below_window(global_value) => global_value,
+            Some(window) if window != 0 => window_threshold(window),
+            _ => global_value,
+        };
+        model.insert(
+            AUTO_COMPACT_THRESHOLD_FIELD.to_owned(),
+            Value::Integer(threshold),
+        );
     }
+}
+
+/// The share of a context window a model compacts at, truncated as the
+/// reference's `int(window * AUTO_COMPACT_WINDOW_RATIO)` truncates it.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    reason = "the reference computes in binary floating point and truncates toward zero; \
+              a window is a token count far inside the exactly representable range"
+)]
+fn window_threshold(window: i64) -> i64 {
+    (window as f64 * registry::AUTO_COMPACT_WINDOW_RATIO) as i64
 }
 
 /// Reference `_apply_active_model_fallback`: an `active_model` naming nothing
@@ -842,12 +921,81 @@ fn unmatched_allowed_models(effective: &Table) -> Vec<String> {
     allowed_model_patterns(effective)
         .into_iter()
         .filter(|pattern| !pattern.trim().is_empty())
-        .filter(|pattern| {
-            let filter = NameFilter::new(std::slice::from_ref(pattern));
-            !models.keys().any(|alias| filter.matches(alias))
-        })
+        .filter(|pattern| allowed_aliases(models, std::slice::from_ref(pattern)).is_empty())
         .map(|pattern| format!("Allowed model `{pattern}` matches no configured model."))
         .collect()
+}
+
+/// Reference `_warn_disallowed_active_model`: a pinned model `allowed_models`
+/// excludes never runs, and the load says which model runs instead.
+fn disallowed_active_model(effective: &Table) -> Option<String> {
+    effective
+        .get(merge::MODELS_FIELD)
+        .and_then(Value::as_table)?;
+    let pinned = effective
+        .get(ACTIVE_MODEL_FIELD)
+        .and_then(Value::as_str)
+        .filter(|alias| !alias.is_empty())?;
+    if available_model_aliases(effective).contains(&pinned) {
+        return None;
+    }
+    let fallback = default_model_alias(effective).unwrap_or(registry::DEFAULT_ACTIVE_MODEL_ALIAS);
+    Some(format!(
+        "Active model `{pinned}` is excluded by `allowed_models`; using the default model \
+         `{fallback}`."
+    ))
+}
+
+/// Reference `_warn_unknown_utility_models`: a `[utility_models]` alias that
+/// names no selectable model leaves its feature on automatic selection, which
+/// the load reports, feature by feature in the order the reference declares
+/// them. `active` selects the active model unless a model carries that alias.
+fn unknown_utility_models(effective: &Table) -> Vec<String> {
+    let utility = UtilityModels::from_table(
+        effective
+            .get(UTILITY_MODELS_FIELD)
+            .and_then(Value::as_table),
+    );
+    let configured = effective.get(merge::MODELS_FIELD).and_then(Value::as_table);
+    let available = available_model_aliases(effective);
+    UtilityFeature::ALL
+        .into_iter()
+        .filter_map(|feature| {
+            let alias = utility.alias_for(feature);
+            let declared = configured.is_some_and(|models| models.contains_key(alias));
+            if alias.is_empty()
+                || available.contains(&alias)
+                || (alias == ACTIVE_MODEL_SELECTOR && !declared)
+            {
+                return None;
+            }
+            let reason = if declared {
+                "is excluded by `allowed_models`"
+            } else {
+                "names no configured model"
+            };
+            Some(format!(
+                "Utility model `{alias}` for `{}` {reason}; that feature selects its model \
+                 automatically.",
+                feature.key()
+            ))
+        })
+        .collect()
+}
+
+/// Reference `VibeConfigSchema.validate_merged`: an allowlist the
+/// organization's managed layer enforces must fail closed, so one that admits
+/// none of the configured models refuses the configuration rather than letting
+/// a model the operator configured run.
+fn require_admin_allowlist_match(effective: &Table) -> Result<(), ConfigError> {
+    let patterns = allowed_model_patterns(effective);
+    let Some(models) = effective.get(merge::MODELS_FIELD).and_then(Value::as_table) else {
+        return Ok(());
+    };
+    if patterns.is_empty() || !allowed_aliases(models, &patterns).is_empty() {
+        return Ok(());
+    }
+    Err(ConfigError::AdminAllowlistMatchesNothing)
 }
 
 /// Reference `_check_vision_model`: a configured vision model must be able to

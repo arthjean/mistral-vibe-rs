@@ -226,12 +226,6 @@ const UNIFIED_HARNESS_SURFACES: &str = "v2.26.0 gives `vibe_cli_unified_harness_
      (vibe/core/experiments/active.py:63): the variant still resolves, but no surface reports \
      an exposure for it; `ExperimentName::surfaces` still lists both surfaces";
 
-/// v2.26.0 changed what a validated model entry carries.
-const ROUTED_MODEL_CONFIG: &str = "v2.26.0 gives every model entry the unset compaction threshold sentinel -1 \
-     and the per-model `thinking_levels` set (vibe/core/config/models.py:485, :492); the \
-     routed model config this port composes carries its 200000 default and no level set, as \
-     the configuration replay records";
-
 /// Cases where this build answers something other than the reference, each
 /// with the reason: the reference behavior, where it lives at the pin, and what
 /// this build does instead. One entry per case and field, so a row goes stale
@@ -318,10 +312,6 @@ const DIVERGENCES: &[(&str, &str)] = &[
     (
         "variantResolution/variantsOrNone/every-known-feature",
         RUST_TUI_ROLLOUT,
-    ),
-    (
-        "layerPrecedence/effective/routing-variant-for-an-unpinned-user",
-        ROUTED_MODEL_CONFIG,
     ),
     (
         "surfaces/surfaces/vibe_cli_unified_harness_rollout",

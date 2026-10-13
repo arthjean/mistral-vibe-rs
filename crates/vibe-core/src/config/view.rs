@@ -143,16 +143,17 @@ impl ConfigSnapshot {
 
     /// The five compaction keys, read as one policy.
     ///
-    /// The threshold is the active model's, which the load already filled from
-    /// the global value for a model that declares none
-    /// (`_apply_global_auto_compact_threshold`); the global key is still read
-    /// as a fallback, because a document composed without the shipped defaults
-    /// never went through that propagation. A negative threshold cannot be
-    /// represented and reads as zero, which is the value that disables
+    /// The threshold is the active model's, which the load resolved from its
+    /// own cap, the global one and its context window
+    /// (`_apply_auto_compact_threshold`); the global key is still read as a
+    /// fallback for a document that configures no model. A negative threshold,
+    /// which only an organization imposing the unset sentinel leaves on a
+    /// model, cannot be represented and reads as zero, the value that disables
     /// compaction.
     ///
     /// The model is resolved the way `get_compaction_model` resolves it: the
-    /// configured `compaction_model` first, the active model otherwise.
+    /// configured `compaction_model` while it shares the active model's
+    /// provider, the active model otherwise.
     #[must_use]
     pub fn compaction_settings(&self) -> CompactionSettings {
         let active = self.active_model();
@@ -163,10 +164,7 @@ impl ConfigSnapshot {
             .and_then(Value::as_integer)
             .and_then(|threshold| u64::try_from(threshold).ok())
             .unwrap_or_default();
-        let configured = self
-            .effective
-            .get("compaction_model")
-            .and_then(Value::as_table);
+        let configured = super::effective::usable_compaction_model(&self.effective);
         let compaction_field = |field: &str| {
             configured
                 .and_then(|entry| entry.get(field))
@@ -224,7 +222,7 @@ impl ConfigSnapshot {
     /// `models` is written as an array and read back keyed by alias, so both
     /// forms are resolved here rather than at every call site, and so is the
     /// unpinned sentinel the merged document carries.
-    fn active_model(&self) -> Option<Table> {
+    pub(super) fn active_model(&self) -> Option<Table> {
         let alias = self.active_model_alias()?;
         match self.effective.get("models") {
             Some(Value::Table(models)) => {

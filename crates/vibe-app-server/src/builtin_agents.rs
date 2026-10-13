@@ -158,7 +158,7 @@ pub(crate) fn profiles(vibe_home: &Path) -> Vec<AgentProfile> {
             toml_table([
                 ("system_prompt_id", TomlValue::String("lean".to_owned())),
                 ("active_model", TomlValue::String("leanstral".to_owned())),
-                ("allowed_models", string_array(["leanstral"])),
+                ("allowed_models", string_array(["labs-leanstral-1-5"])),
                 (
                     "providers",
                     TomlValue::Array(vec![TomlValue::Table(toml_table([
@@ -246,3 +246,6 @@ fn string_array<const N: usize>(values: [&str; N]) -> TomlValue {
             .collect(),
     )
 }
+
+#[cfg(test)]
+mod builtin_agents_tests;

@@ -40,7 +40,7 @@ from typing import Any
 #: them, so a re-pin does not have to find this script.
 from pin import DEFAULT_REFERENCE, EXPECTED_COMMIT
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 DEFAULT_OUTPUT = Path("crates/vibe-core/tests/config-surface/corpus.json")
 #: The strategies the reference vocabulary declares but no field adopts. The
 #: census asserts this stays true. v2.25.5 gave four fields ``WithShallowMerge``
@@ -1677,6 +1677,212 @@ MODEL_SCENARIOS: list[dict[str, Any]] = [
             )
         ],
     },
+    # A model's threshold resolves against its context window: no layer
+    # setting one leaves 80% of the window, a cap the window cannot reach is
+    # ignored, and 0 stays a cap meaning "never compact".
+    {
+        "name": "models-window-derives-the-threshold",
+        "layers": [
+            (
+                "user",
+                '[[models]]\nname = "windowed"\nprovider = "mistral"\nmax_context_length = 128000\n\n'
+                '[[models]]\nname = "odd-window"\nprovider = "mistral"\nmax_context_length = 1001\n',
+            )
+        ],
+    },
+    {
+        "name": "models-cap-the-window-cannot-reach-is-ignored",
+        "layers": [
+            (
+                "user",
+                'auto_compact_threshold = 150000\n\n'
+                '[[models]]\nname = "capped-above"\nprovider = "mistral"\nmax_context_length = 128000\n'
+                'auto_compact_threshold = 300000\n\n'
+                '[[models]]\nname = "capped-at"\nprovider = "mistral"\nmax_context_length = 128000\n'
+                'auto_compact_threshold = 128000\n\n'
+                '[[models]]\nname = "capped-below"\nprovider = "mistral"\nmax_context_length = 128000\n'
+                'auto_compact_threshold = 90000\n\n'
+                '[[models]]\nname = "wide"\nprovider = "mistral"\nmax_context_length = 400000\n\n'
+                '[[models]]\nname = "never"\nprovider = "mistral"\nmax_context_length = 128000\n'
+                'auto_compact_threshold = 0\n',
+            )
+        ],
+    },
+    {
+        "name": "models-global-cap-at-the-window-falls-back-to-the-ratio",
+        "layers": [
+            (
+                "user",
+                'auto_compact_threshold = 128000\n\n'
+                '[[models]]\nname = "windowed"\nprovider = "mistral"\nmax_context_length = 128000\n',
+            )
+        ],
+    },
+    {
+        "name": "models-a-hand-written-unset-threshold-is-unset",
+        "layers": [
+            (
+                "user",
+                'auto_compact_threshold = -1\n\n'
+                '[[models]]\nname = "windowed"\nprovider = "mistral"\nmax_context_length = 64000\n'
+                'auto_compact_threshold = -1\n\n'
+                '[[models]]\nname = "plain"\nprovider = "mistral"\nauto_compact_threshold = -1\n',
+            )
+        ],
+    },
+    {
+        "name": "models-global-threshold-of-zero-disables-every-model",
+        "layers": [
+            (
+                "project",
+                'auto_compact_threshold = 0\n\n'
+                '[[models]]\nname = "windowed"\nprovider = "mistral"\nmax_context_length = 64000\n',
+            )
+        ],
+    },
+    {
+        "name": "models-admin-threshold-overrides-a-window",
+        "layers": [
+            (
+                "user",
+                '[[models]]\nname = "windowed"\nprovider = "mistral"\nmax_context_length = 64000\n',
+            ),
+            ("admin", "auto_compact_threshold = 96000\n"),
+        ],
+    },
+    # The settings screen edits the active model's own threshold and window
+    # where a layer set them, and the global threshold where an administrator
+    # enforces it.
+    {
+        "name": "models-active-model-threshold-and-window-are-its-own-rows",
+        "layers": [
+            (
+                "user",
+                'active_model = "scratch"\nauto_compact_threshold = 50000\n\n'
+                '[[models]]\nname = "scratch"\nprovider = "llamacpp"\nmax_context_length = 32000\n'
+                'auto_compact_threshold = 4096\n',
+            ),
+            ("project", '[[models]]\nalias = "scratch"\nmax_context_length = 48000\n'),
+        ],
+    },
+    {
+        "name": "models-admin-threshold-keeps-the-global-row",
+        "layers": [
+            (
+                "user",
+                'active_model = "local"\n\n[[models]]\nalias = "local"\nauto_compact_threshold = 4096\n',
+            ),
+            ("admin", "auto_compact_threshold = 24000\n"),
+        ],
+    },
+    # The routed definition is a field rather than an entry of `models`, so it
+    # keeps the unset threshold while its injected copy resolves.
+    {
+        "name": "models-routed-definition-keeps-the-unset-threshold",
+        "layers": [
+            (
+                "user",
+                'auto_compact_threshold = 50000\nrouted_default_model = "routed"\n'
+                "routed_model_config = '"
+                '{"name": "vibe-routed", "provider": "mistral", "alias": "routed", '
+                '"max_context_length": 32000}'
+                "'\n",
+            )
+        ],
+    },
+    # The allowlist matches model names; an administrator's allowlist fails
+    # closed where the operator's degrades to every model.
+    {
+        "name": "models-allowed-models-match-the-model-name",
+        "layers": [
+            ("user", 'active_model = "local"\nallowed_models = ["devstral"]\n')
+        ],
+    },
+    {
+        "name": "models-admin-allowlist-narrows-by-name",
+        "layers": [
+            ("user", 'active_model = "mistral-medium-3.5"\n'),
+            ("admin", 'allowed_models = ["DEVSTRAL"]\n'),
+        ],
+    },
+    {
+        "name": "models-admin-allowlist-matching-nothing-is-refused",
+        "layers": [("admin", 'allowed_models = ["nothing-*"]\n')],
+    },
+    {
+        "name": "models-admin-allowlist-of-blanks-is-refused",
+        "layers": [("admin", 'allowed_models = ["  "]\n')],
+    },
+    # Compaction rides the active model's connection, so a compaction model on
+    # another provider warns and the active model compacts instead.
+    {
+        "name": "models-compaction-model-on-another-provider-warns",
+        "layers": [
+            (
+                "user",
+                '[compaction_model]\nname = "devstral-small"\nprovider = "llamacpp"\n',
+            )
+        ],
+    },
+    {
+        "name": "models-compaction-model-follows-the-active-provider",
+        "layers": [
+            (
+                "user",
+                'active_model = "local"\n\n[compaction_model]\nname = "devstral-small"\n'
+                'provider = "llamacpp"\n',
+            )
+        ],
+    },
+    {
+        "name": "models-compaction-model-on-an-unknown-provider-is-refused",
+        "layers": [
+            (
+                "user",
+                '[compaction_model]\nname = "devstral-small"\nprovider = "nowhere"\n',
+            )
+        ],
+    },
+    {
+        "name": "models-compaction-prompt-naming-nothing-is-refused",
+        "layers": [("user", 'compaction_prompt_id = "names-no-prompt"\n')],
+    },
+    # `[utility_models]` names a model alias, or `active` for the session's
+    # model; an alias the allowlist excludes or no model carries warns and
+    # leaves the feature on automatic selection.
+    {
+        "name": "models-utility-models-resolve-an-alias-and-the-active-selector",
+        "layers": [
+            (
+                "user",
+                '[utility_models]\ntitle = " local "\nsmart_approve = "active"\n',
+            )
+        ],
+    },
+    {
+        "name": "models-utility-model-naming-nothing-warns",
+        "layers": [("user", '[utility_models]\ntitle = "ghost"\n')],
+    },
+    {
+        "name": "models-utility-model-the-allowlist-excludes-warns",
+        "layers": [
+            (
+                "user",
+                'allowed_models = ["mistral-vibe-cli-latest"]\n\n[utility_models]\n'
+                'title = "local"\nsmart_approve = "mistral-medium-3.5"\n',
+            )
+        ],
+    },
+    {
+        "name": "models-a-model-aliased-active-wins-over-the-selector",
+        "layers": [
+            (
+                "user",
+                '[[models]]\nname = "devstral"\nprovider = "llamacpp"\nalias = "active"\n\n'
+                '[utility_models]\nsmart_approve = "active"\n',
+            )
+        ],
+    },
 ]
 
 
@@ -1687,6 +1893,7 @@ async def validated_models(
     from vibe.core.config.builder import ConfigBuilder
     from vibe.core.config.layers.default import DefaultConfigLayer
     from vibe.core.config.layers.overrides import OverridesLayer
+    from vibe.core.config.models import normalize_model_configs
     from vibe.core.config.vibe_schema import VibeConfigSchema
 
     # No validation context: the builder stopped taking one, and the API-key
@@ -1707,20 +1914,40 @@ async def validated_models(
         if name == "admin":
             builder.add_layer(AdminConfigLayer(data=data))
         else:
-            builder.add_layer(OverridesLayer(data=data, name=name))
+            # Named and read as the file layers the stack stands for, which
+            # load `[[models]]` as an alias map (`layers/_base.py:107`), so the
+            # settings rows below report the origin a client reads.
+            if "models" in data:
+                data["models"] = normalize_model_configs(data["models"])
+            builder.add_layer(OverridesLayer(data=data, name=FILE_LAYER_NAMES[name]))
     try:
         config = await builder.build()
     except (ValidationError, ValueError):
         # Only the verdict: the message is reference-authored prose.
         return {"rejected": True}
+    fields = await settings_rows(config, builder.layers)
 
     def dump(model: Any) -> Any:
         return None if model is None else model.model_dump(mode="json")
+
+    from vibe.core.config.models import UtilityFeature
 
     try:
         active_alias: str | None = config.get_active_model().alias
     except ValueError:
         active_alias = None
+    try:
+        compaction_alias: str | None = config.get_compaction_model().alias
+    except ValueError:
+        compaction_alias = None
+
+    def utility_alias(feature: Any) -> str | None:
+        try:
+            model = config.get_utility_model(feature)
+        except ValueError:
+            return None
+        return None if model is None else model.alias
+
     return {
         "rejected": False,
         "activeModel": config.active_model,
@@ -1737,10 +1964,94 @@ async def validated_models(
         "availableModels": list(config.available_models()),
         "defaultModelAlias": config.resolve_default_model_alias(),
         "activeModelAlias": active_alias,
+        # The routed definition is a field of its own, which keeps the
+        # `ModelConfig` defaults its injected copy in `models` resolves.
+        "routedModelConfig": dump(config.routed_model_config),
+        # The model a compaction runs on: the configured one while it shares
+        # the active model's provider, the active model otherwise.
+        "compactionModelAlias": compaction_alias,
+        "utilityModels": {
+            feature.value: utility_alias(feature) for feature in UtilityFeature
+        },
         # Only the count: the warning text is reference-authored prose and
         # ``NOTICE`` forbids committing it.
         "validationWarnings": len(config.validation_warnings),
+        "fields": fields,
     }
+
+
+#: The layer each scenario layer name stands for, by its reference name.
+FILE_LAYER_NAMES = {"user": "user-toml", "project": "project-toml"}
+
+#: The settings rows whose value the reference reads off the active model
+#: rather than off the field, compared by value as well as by origin.
+MODEL_SCOPED_ROWS = ("auto_compact_threshold", "max_context_length")
+
+
+async def settings_rows(config: Any, layers: list[Any]) -> list[dict[str, Any]]:
+    """What ``config/fields/read`` answers over the validated stack, without
+    the descriptions, which are reference-authored prose: the name, path and
+    the layers its value comes from of every row some layer above the defaults
+    sets, plus the value and the per-layer values of the two rows read off the
+    active model. Which rows exist and in what order is recorded once, by
+    ``capture_settings_order``."""
+    from vibe.app_server._config_introspect import (
+        HIDDEN_SETTINGS,
+        POPULAR_SETTINGS,
+        build_field_wires,
+        collect_layer_values,
+    )
+
+    layer_values = await collect_layer_values(layers)
+    rows = []
+    for wire in build_field_wires(config, layer_values, popular=POPULAR_SETTINGS):
+        if wire.name in HIDDEN_SETTINGS:
+            continue
+        row: dict[str, Any] = {
+            "name": wire.name,
+            "path": wire.path,
+            "layers": [entry.layer for entry in wire.layer_values],
+        }
+        if wire.name in MODEL_SCOPED_ROWS:
+            row["value"] = wire.value
+            row["layerValues"] = [entry.value for entry in wire.layer_values]
+        elif row["layers"] == ["default"]:
+            continue
+        rows.append(row)
+    return rows
+
+
+def capture_settings_order(reference: Path) -> list[str]:
+    """The rows ``config/fields/read`` answers over the shipped defaults, in
+    the order it lists them."""
+    sys.path.insert(0, str(reference))
+    from vibe.app_server._config_introspect import (
+        HIDDEN_SETTINGS,
+        POPULAR_SETTINGS,
+        build_field_wires,
+        collect_layer_values,
+    )
+    from vibe.core.config.builder import ConfigBuilder
+    from vibe.core.config.harness_files import init_harness_files_manager
+    from vibe.core.config.layers.default import DefaultConfigLayer
+    from vibe.core.config.vibe_schema import VibeConfigSchema
+
+    init_harness_files_manager()
+
+    async def run() -> list[str]:
+        builder = ConfigBuilder(VibeConfigSchema)
+        builder.add_layer(DefaultConfigLayer(schema=VibeConfigSchema))
+        config = await builder.build()
+        layer_values = await collect_layer_values(builder.layers)
+        return [
+            wire.name
+            for wire in build_field_wires(
+                config, layer_values, popular=POPULAR_SETTINGS
+            )
+            if wire.name not in HIDDEN_SETTINGS
+        ]
+
+    return asyncio.run(run())
 
 
 def capture_model_scenarios(reference: Path) -> list[dict[str, Any]]:
@@ -1833,6 +2144,7 @@ def build_corpus(reference: Path, expected_commit: str | None) -> dict[str, Any]
         "defaults": capture_defaults(reference),
         "scenarios": capture_scenarios(reference),
         "modelScenarios": capture_model_scenarios(reference),
+        "settingsOrder": capture_settings_order(reference),
         "mcp": capture_mcp(reference),
         "stack": capture_stack(reference),
         "environment": capture_environment(reference),

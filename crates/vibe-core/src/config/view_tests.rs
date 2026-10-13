@@ -16,6 +16,10 @@ fn loaded(user: &str) -> (tempfile::TempDir, ConfigSnapshot) {
     if !user.is_empty() {
         fs::write(home.join(CONFIG_FILE), user).expect("user fixture");
     }
+    // A user prompt a fixture may select: an identifier naming no prompt
+    // refuses the configuration.
+    fs::create_dir_all(home.join("prompts")).expect("prompt directory");
+    fs::write(home.join("prompts/terse.md"), "Summarize tersely.\n").expect("prompt fixture");
     let snapshot = LayeredConfig::new(
         ConfigPaths {
             vibe_home: home,

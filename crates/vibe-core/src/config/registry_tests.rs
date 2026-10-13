@@ -258,7 +258,7 @@ fn the_schema_publishes_every_declared_field() {
         }
         assert_eq!(
             property.get("default").cloned(),
-            spec.default.to_json(),
+            spec.default.to_json().filter(|_| spec.advertises_default),
             "field `{}` publishes another default",
             spec.name
         );
